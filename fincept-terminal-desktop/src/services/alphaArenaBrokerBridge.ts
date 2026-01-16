@@ -8,7 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { IExchangeAdapter } from '../brokers/crypto/types';
-import type { PaperTradingAdapter } from '../paper-trading/PaperTradingAdapter';
+import type { PaperTradingAdapter } from '../paper-trading';
 
 export interface AlphaArenaExecutionConfig {
   competitionId: string;

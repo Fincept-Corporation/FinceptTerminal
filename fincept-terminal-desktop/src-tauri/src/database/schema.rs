@@ -179,6 +179,8 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             iceberg_qty REAL,
             leverage REAL,
             margin_mode TEXT,
+            product TEXT CHECK (product IN ('CNC', 'MIS', 'NRML')),
+            exchange TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             filled_at TEXT,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -208,6 +210,88 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_paper_orders_portfolio ON paper_trading_orders(portfolio_id);
         CREATE INDEX IF NOT EXISTS idx_paper_orders_status ON paper_trading_orders(status);
         CREATE INDEX IF NOT EXISTS idx_paper_trades_portfolio ON paper_trading_trades(portfolio_id);
+
+        -- Paper trading margin blocks table (for pending order margin)
+        CREATE TABLE IF NOT EXISTS paper_trading_margin_blocks (
+            id TEXT PRIMARY KEY,
+            portfolio_id TEXT NOT NULL,
+            order_id TEXT NOT NULL UNIQUE,
+            symbol TEXT NOT NULL,
+            blocked_amount REAL NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE,
+            FOREIGN KEY (order_id) REFERENCES paper_trading_orders(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_margin_blocks_portfolio ON paper_trading_margin_blocks(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_margin_blocks_order ON paper_trading_margin_blocks(order_id);
+
+        -- Paper trading holdings table (T+1 settled positions for equity)
+        CREATE TABLE IF NOT EXISTS paper_trading_holdings (
+            id TEXT PRIMARY KEY,
+            portfolio_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            quantity REAL NOT NULL DEFAULT 0,
+            average_price REAL NOT NULL DEFAULT 0,
+            invested_value REAL NOT NULL DEFAULT 0,
+            current_price REAL NOT NULL DEFAULT 0,
+            current_value REAL NOT NULL DEFAULT 0,
+            pnl REAL DEFAULT 0,
+            pnl_percent REAL DEFAULT 0,
+            t1_quantity REAL DEFAULT 0,
+            available_quantity REAL DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE,
+            UNIQUE(portfolio_id, symbol)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_paper_holdings_portfolio ON paper_trading_holdings(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_paper_holdings_symbol ON paper_trading_holdings(symbol);
+
+        -- Stock positions table (for equity trading)
+        CREATE TABLE IF NOT EXISTS stock_positions (
+            id TEXT PRIMARY KEY,
+            portfolio_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            exchange TEXT NOT NULL,
+            product TEXT NOT NULL CHECK (product IN ('CNC', 'MIS', 'NRML')),
+            quantity REAL NOT NULL DEFAULT 0,
+            average_price REAL NOT NULL DEFAULT 0,
+            current_price REAL,
+            unrealized_pnl REAL,
+            realized_pnl REAL DEFAULT 0,
+            today_realized_pnl REAL DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE,
+            UNIQUE(portfolio_id, symbol, exchange, product)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_stock_positions_portfolio ON stock_positions(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_stock_positions_symbol ON stock_positions(symbol);
+        CREATE INDEX IF NOT EXISTS idx_stock_positions_product ON stock_positions(product);
+
+        -- Stock holdings table (T+1 settled positions)
+        CREATE TABLE IF NOT EXISTS stock_holdings (
+            id TEXT PRIMARY KEY,
+            portfolio_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            exchange TEXT NOT NULL,
+            quantity REAL NOT NULL DEFAULT 0,
+            average_price REAL NOT NULL DEFAULT 0,
+            current_price REAL,
+            pnl REAL,
+            pnl_percent REAL,
+            settlement_date TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE,
+            UNIQUE(portfolio_id, symbol, exchange)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_stock_holdings_portfolio ON stock_holdings(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_stock_holdings_symbol ON stock_holdings(symbol);
 
         -- MCP servers table
         CREATE TABLE IF NOT EXISTS mcp_servers (
@@ -523,6 +607,40 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_agent_configs_category ON agent_configs(category);
         CREATE INDEX IF NOT EXISTS idx_agent_configs_is_default ON agent_configs(is_default);
         CREATE INDEX IF NOT EXISTS idx_agent_configs_is_active ON agent_configs(is_active);
+
+        -- Broker Credentials table (Encrypted storage for broker API keys)
+        CREATE TABLE IF NOT EXISTS broker_credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            broker_id TEXT NOT NULL UNIQUE,
+            api_key TEXT,
+            api_secret TEXT,
+            access_token TEXT,
+            refresh_token TEXT,
+            additional_data TEXT,
+            encrypted INTEGER DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_broker_credentials_broker_id ON broker_credentials(broker_id);
+
+        -- Master Contract Cache table (Broker symbol data)
+        CREATE TABLE IF NOT EXISTS master_contract_cache (
+            broker_id TEXT PRIMARY KEY,
+            symbols_data TEXT NOT NULL,
+            symbol_count INTEGER NOT NULL,
+            last_updated INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+
+        -- Generic Key-Value Storage table (localStorage replacement)
+        CREATE TABLE IF NOT EXISTS key_value_storage (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_key_value_storage_updated ON key_value_storage(updated_at DESC);
         ",
     )?;
 

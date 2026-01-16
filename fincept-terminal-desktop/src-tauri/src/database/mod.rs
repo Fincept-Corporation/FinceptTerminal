@@ -8,7 +8,11 @@ pub mod operations;
 pub mod queries;
 pub mod cache;
 pub mod paper_trading;
+pub mod stock_paper_trading;
 pub mod notes_excel;
+pub mod broker_credentials;
+pub mod master_contract;
+pub mod storage;
 
 pub use pool::init_database;
 pub use types::*;

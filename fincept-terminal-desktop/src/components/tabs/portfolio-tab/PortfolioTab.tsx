@@ -7,8 +7,9 @@ import React, { useState, useEffect } from 'react';
 import {
   Briefcase, TrendingUp, TrendingDown, DollarSign, BarChart3,
   RefreshCw, Plus, Download, Trash2, PieChart, Activity,
-  Clock, AlertCircle, Target, RotateCcw, ArrowUpRight, ArrowDownRight
+  Clock, AlertCircle, Target, RotateCcw, ArrowUpRight, ArrowDownRight, Info
 } from 'lucide-react';
+import { createPortfolioTabTour } from '../tours/portfolioTabTour';
 import PositionsView from './portfolio/PositionsView';
 import HistoryView from './portfolio/HistoryView';
 import AnalyticsView from './portfolio/AnalyticsView';
@@ -174,10 +175,34 @@ const PortfolioTab: React.FC = () => {
           </span>
         </div>
 
+        <button
+          onClick={() => {
+            const tour = createPortfolioTabTour((tab: string) => setActiveSubTab(tab as any));
+            tour.drive();
+          }}
+          style={{
+            backgroundColor: BLOOMBERG.BLUE,
+            color: BLOOMBERG.DARK_BG,
+            border: 'none',
+            padding: '2px 6px',
+            fontSize: '8px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            borderRadius: '2px'
+          }}
+          title="Start portfolio tour"
+        >
+          <Info size={10} />
+          HELP
+        </button>
+
         <div style={{ ...COMMON_STYLES.verticalDivider, height: '14px' }} />
 
         {/* Sub-tab Navigation */}
-        <div style={{ display: 'flex', gap: '3px', flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
+        <div id="portfolio-subtabs" style={{ display: 'flex', gap: '3px', flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
           {subTabs.map(tab => {
             const Icon = tab.icon;
             const isActive = activeSubTab === tab.id;
@@ -231,6 +256,7 @@ const PortfolioTab: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           {portfolios.length > 0 && (
             <select
+              id="portfolio-selector"
               value={selectedPortfolio?.id || ''}
               onChange={(e) => {
                 const portfolio = portfolios.find(p => p.id === e.target.value);
@@ -261,6 +287,7 @@ const PortfolioTab: React.FC = () => {
           )}
 
           <button
+            id="portfolio-create"
             onClick={() => setShowCreatePortfolio(true)}
             style={{
               padding: '2px 4px',
@@ -282,6 +309,7 @@ const PortfolioTab: React.FC = () => {
           {selectedPortfolio && (
             <>
               <button
+                id="portfolio-buy"
                 onClick={() => setShowAddAsset(true)}
                 style={{
                   padding: '2px 4px',
@@ -300,6 +328,7 @@ const PortfolioTab: React.FC = () => {
               </button>
 
               <button
+                id="portfolio-sell"
                 onClick={() => setShowSellAsset(true)}
                 style={{
                   padding: '2px 4px',
@@ -318,6 +347,7 @@ const PortfolioTab: React.FC = () => {
               </button>
 
               <button
+                id="portfolio-refresh"
                 onClick={refreshPortfolioData}
                 disabled={refreshing}
                 style={{
@@ -332,6 +362,24 @@ const PortfolioTab: React.FC = () => {
                 }}
               >
                 <RefreshCw size={9} className={refreshing ? 'animate-spin' : ''} />
+              </button>
+
+              <button
+                id="portfolio-export"
+                onClick={exportToCSV}
+                style={{
+                  padding: '2px 4px',
+                  backgroundColor: BLOOMBERG.DARK_BG,
+                  border: BORDERS.STANDARD,
+                  color: BLOOMBERG.CYAN,
+                  fontSize: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '2px'
+                }}
+              >
+                <Download size={9} />
               </button>
             </>
           )}
@@ -408,25 +456,27 @@ const PortfolioTab: React.FC = () => {
           </div>
         ) : (
           <>
-            {activeSubTab === 'positions' && <PositionsView portfolioSummary={portfolioSummary} />}
-            {activeSubTab === 'history' && <HistoryView transactions={transactions} currency={currency} />}
-            {activeSubTab === 'analytics' && <AnalyticsView portfolioSummary={portfolioSummary} />}
-            {activeSubTab === 'sectors' && <SectorsView portfolioSummary={portfolioSummary} />}
-            {activeSubTab === 'performance' && <PerformanceView portfolioSummary={portfolioSummary} />}
-            {activeSubTab === 'risk' && <RiskMetricsView portfolioSummary={portfolioSummary} />}
-            {activeSubTab === 'optimization' && <PortfolioOptimizationView portfolioSummary={portfolioSummary} />}
-            {activeSubTab === 'reports' && <ReportsView portfolioSummary={portfolioSummary} transactions={transactions} />}
-            {activeSubTab === 'alerts' && <AlertsView portfolioSummary={portfolioSummary} />}
+            {activeSubTab === 'positions' && <div id="positions-view"><PositionsView portfolioSummary={portfolioSummary} /></div>}
+            {activeSubTab === 'history' && <div id="history-view"><HistoryView transactions={transactions} currency={currency} /></div>}
+            {activeSubTab === 'analytics' && <div id="analytics-view"><AnalyticsView portfolioSummary={portfolioSummary} /></div>}
+            {activeSubTab === 'sectors' && <div id="sectors-view"><SectorsView portfolioSummary={portfolioSummary} /></div>}
+            {activeSubTab === 'performance' && <div id="performance-view"><PerformanceView portfolioSummary={portfolioSummary} /></div>}
+            {activeSubTab === 'risk' && <div id="risk-view"><RiskMetricsView portfolioSummary={portfolioSummary} /></div>}
+            {activeSubTab === 'optimization' && <div id="optimization-view"><PortfolioOptimizationView portfolioSummary={portfolioSummary} /></div>}
+            {activeSubTab === 'reports' && <div id="reports-view"><ReportsView portfolioSummary={portfolioSummary} transactions={transactions} /></div>}
+            {activeSubTab === 'alerts' && <div id="alerts-view"><AlertsView portfolioSummary={portfolioSummary} /></div>}
             {activeSubTab === 'active-mgmt' && (
-              <ActiveManagementView
-                portfolioId={selectedPortfolio.id}
-                portfolioData={{
-                  returns: portfolioSummary.holdings.length > 0
-                    ? portfolioSummary.holdings.map(h => (h.day_change_percent || 0) / 100)
-                    : [],
-                  weights: portfolioSummary.holdings.map(h => h.weight / 100)
-                }}
-              />
+              <div id="active-mgmt-view">
+                <ActiveManagementView
+                  portfolioId={selectedPortfolio.id}
+                  portfolioData={{
+                    returns: portfolioSummary.holdings.length > 0
+                      ? portfolioSummary.holdings.map(h => (h.day_change_percent || 0) / 100)
+                      : [],
+                    weights: portfolioSummary.holdings.map(h => h.weight / 100)
+                  }}
+                />
+              </div>
             )}
           </>
         )}

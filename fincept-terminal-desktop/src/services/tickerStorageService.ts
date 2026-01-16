@@ -1,5 +1,7 @@
-// Ticker Storage Service - localStorage-based user preferences
+// Ticker Storage Service - user preferences storage
 // Stores user's custom ticker lists, panel arrangements, and watchlists
+
+import { saveSetting, getSetting } from './sqliteService';
 
 export interface TickerList {
   category: string;
@@ -105,11 +107,11 @@ const DEFAULT_PREFERENCES: UserMarketPreferences = {
 
 class TickerStorageService {
   /**
-   * Load user preferences from localStorage
+   * Load user preferences from storage
    */
-  loadPreferences(): UserMarketPreferences {
+  async loadPreferences(): Promise<UserMarketPreferences> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = await getSetting(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         return parsed;
@@ -123,12 +125,12 @@ class TickerStorageService {
   }
 
   /**
-   * Save user preferences to localStorage
+   * Save user preferences to storage
    */
-  savePreferences(preferences: UserMarketPreferences): boolean {
+  async savePreferences(preferences: UserMarketPreferences): Promise<boolean> {
     try {
       preferences.lastUpdated = Date.now();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+      await saveSetting(STORAGE_KEY, JSON.stringify(preferences), 'market_preferences');
       return true;
     } catch (error) {
       console.error('[TickerStorage] Failed to save preferences:', error);
@@ -139,8 +141,8 @@ class TickerStorageService {
   /**
    * Get tickers for a specific category
    */
-  getCategoryTickers(category: string): string[] {
-    const prefs = this.loadPreferences();
+  async getCategoryTickers(category: string): Promise<string[]> {
+    const prefs = await this.loadPreferences();
     const found = prefs.globalMarkets.find(m => m.category === category);
     return found?.tickers || [];
   }
@@ -148,13 +150,13 @@ class TickerStorageService {
   /**
    * Update tickers for a specific category
    */
-  updateCategoryTickers(category: string, tickers: string[]): boolean {
-    const prefs = this.loadPreferences();
+  async updateCategoryTickers(category: string, tickers: string[]): Promise<boolean> {
+    const prefs = await this.loadPreferences();
     const index = prefs.globalMarkets.findIndex(m => m.category === category);
 
     if (index !== -1) {
       prefs.globalMarkets[index].tickers = tickers;
-      return this.savePreferences(prefs);
+      return await this.savePreferences(prefs);
     }
 
     return false;
@@ -163,11 +165,11 @@ class TickerStorageService {
   /**
    * Add ticker to category
    */
-  addTickerToCategory(category: string, ticker: string): boolean {
-    const tickers = this.getCategoryTickers(category);
+  async addTickerToCategory(category: string, ticker: string): Promise<boolean> {
+    const tickers = await this.getCategoryTickers(category);
     if (!tickers.includes(ticker)) {
       tickers.push(ticker);
-      return this.updateCategoryTickers(category, tickers);
+      return await this.updateCategoryTickers(category, tickers);
     }
     return false;
   }
@@ -175,11 +177,11 @@ class TickerStorageService {
   /**
    * Remove ticker from category
    */
-  removeTickerFromCategory(category: string, ticker: string): boolean {
-    const tickers = this.getCategoryTickers(category);
+  async removeTickerFromCategory(category: string, ticker: string): Promise<boolean> {
+    const tickers = await this.getCategoryTickers(category);
     const filtered = tickers.filter(t => t !== ticker);
     if (filtered.length !== tickers.length) {
-      return this.updateCategoryTickers(category, filtered);
+      return await this.updateCategoryTickers(category, filtered);
     }
     return false;
   }
@@ -187,18 +189,18 @@ class TickerStorageService {
   /**
    * Reorder tickers in category
    */
-  reorderCategoryTickers(category: string, fromIndex: number, toIndex: number): boolean {
-    const tickers = this.getCategoryTickers(category);
+  async reorderCategoryTickers(category: string, fromIndex: number, toIndex: number): Promise<boolean> {
+    const tickers = await this.getCategoryTickers(category);
     const [removed] = tickers.splice(fromIndex, 1);
     tickers.splice(toIndex, 0, removed);
-    return this.updateCategoryTickers(category, tickers);
+    return await this.updateCategoryTickers(category, tickers);
   }
 
   /**
    * Get regional market tickers
    */
-  getRegionalTickers(region: string): Array<{ symbol: string; name: string }> {
-    const prefs = this.loadPreferences();
+  async getRegionalTickers(region: string): Promise<Array<{ symbol: string; name: string }>> {
+    const prefs = await this.loadPreferences();
     const found = prefs.regionalMarkets.find(m => m.region === region);
     return found?.tickers || [];
   }
@@ -206,13 +208,13 @@ class TickerStorageService {
   /**
    * Update regional market tickers
    */
-  updateRegionalTickers(region: string, tickers: Array<{ symbol: string; name: string }>): boolean {
-    const prefs = this.loadPreferences();
+  async updateRegionalTickers(region: string, tickers: Array<{ symbol: string; name: string }>): Promise<boolean> {
+    const prefs = await this.loadPreferences();
     const index = prefs.regionalMarkets.findIndex(m => m.region === region);
 
     if (index !== -1) {
       prefs.regionalMarkets[index].tickers = tickers;
-      return this.savePreferences(prefs);
+      return await this.savePreferences(prefs);
     }
 
     return false;
@@ -221,25 +223,25 @@ class TickerStorageService {
   /**
    * Reset to defaults
    */
-  resetToDefaults(): boolean {
-    return this.savePreferences(DEFAULT_PREFERENCES);
+  async resetToDefaults(): Promise<boolean> {
+    return await this.savePreferences(DEFAULT_PREFERENCES);
   }
 
   /**
    * Export preferences as JSON
    */
-  exportPreferences(): string {
-    const prefs = this.loadPreferences();
+  async exportPreferences(): Promise<string> {
+    const prefs = await this.loadPreferences();
     return JSON.stringify(prefs, null, 2);
   }
 
   /**
    * Import preferences from JSON
    */
-  importPreferences(json: string): boolean {
+  async importPreferences(json: string): Promise<boolean> {
     try {
       const parsed = JSON.parse(json);
-      return this.savePreferences(parsed);
+      return await this.savePreferences(parsed);
     } catch (error) {
       console.error('[TickerStorage] Failed to import preferences:', error);
       return false;

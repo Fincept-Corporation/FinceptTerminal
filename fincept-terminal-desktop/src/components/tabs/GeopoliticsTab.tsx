@@ -1,890 +1,1047 @@
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, BarChart, Bar } from 'recharts';
+import React, { useState, useEffect, useMemo } from 'react';
+import DeckGL from '@deck.gl/react';
+import { ScatterplotLayer } from '@deck.gl/layers';
+import { TileLayer } from '@deck.gl/geo-layers';
+import { BitmapLayer } from '@deck.gl/layers';
+import { useAuth } from '@/contexts/AuthContext';
+import { NewsEventsService, NewsEvent, UniqueCity, UniqueCountry, UniqueCategory } from '@/services/newsEventsService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { geopoliticsService } from '@/services/geopoliticsService';
 import { TabFooter } from '@/components/common/TabFooter';
-import { useTranslation } from 'react-i18next';
-import GeopoliticsHDXPanel from './GeopoliticsHDXPanel';
+
+const INITIAL_VIEW_STATE = {
+  longitude: 30.0,
+  latitude: 20.0,
+  zoom: 2,
+  pitch: 0,
+  bearing: 0
+};
+
+const THEME = {
+  ORANGE: '#FF6600',
+  BLACK: '#000000',
+  DARK_BG: '#0F0F0F',
+  BORDER: '#333333',
+  WHITE: '#FFFFFF',
+  GREEN: '#00FF00',
+  RED: '#FF0000',
+  YELLOW: '#FFD700',
+  CYAN: '#00E5FF',
+  GRAY: '#888888',
+  PURPLE: '#9333EA'
+};
+
+interface EventPoint {
+  position: [number, number, number];
+  color: [number, number, number, number];
+  event: NewsEvent;
+}
 
 const GeopoliticsTab: React.FC = () => {
-  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
-  const { t } = useTranslation('geopolitics');
+  const { colors, fontFamily } = useTerminalTheme();
+  const { session } = useAuth();
+  const apiKey = session?.api_key || null;
+
+  const [events, setEvents] = useState<NewsEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
+  const [selectedEvent, setSelectedEvent] = useState<NewsEvent | null>(null);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+
+  // Filter controls
+  const [countryFilter, setCountryFilter] = useState('Ukraine'); // Default to Ukraine to avoid NaN issues
+  const [cityFilter, setCityFilter] = useState('');
+  const [selectedCities, setSelectedCities] = useState<string[]>([]); // Multiple cities
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'trade' | 'hdx'>('trade');
-  const [qrNotifications, setQrNotifications] = useState<any[]>([]);
-  const [epingNotifications, setEpingNotifications] = useState<any[]>([]);
-  const [tariffData, setTariffData] = useState<any[]>([]);
-  const [qrRestrictions, setQrRestrictions] = useState<any[]>([]);
-  const [qrProducts, setQrProducts] = useState<any[]>([]);
-  const [tradeFlow, setTradeFlow] = useState<any[]>([]);
-  const [tfadData, setTfadData] = useState<any>(null);
-  const [selectedCountry, setSelectedCountry] = useState('840');
-  const [expandedQR, setExpandedQR] = useState<number | null>(null);
-  const [expandedEPing, setExpandedEPing] = useState<number | null>(null);
-  const [expandedRestriction, setExpandedRestriction] = useState<number | null>(null);
 
-  const countries = [
-    { code: '840', name: 'United States' },
-    { code: '156', name: 'China' },
-    { code: '276', name: 'Germany' },
-    { code: '392', name: 'Japan' },
-    { code: '826', name: 'United Kingdom' },
-    { code: '356', name: 'India' },
-    { code: '124', name: 'Canada' },
-    { code: '076', name: 'Brazil' },
-    { code: '036', name: 'Australia' }
-  ];
+  // City search
+  const [uniqueCities, setUniqueCities] = useState<UniqueCity[]>([]);
+  const [citySearchInput, setCitySearchInput] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState<UniqueCity[]>([]);
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
 
+  // Country search
+  const [uniqueCountries, setUniqueCountries] = useState<UniqueCountry[]>([]);
+  const [countrySuggestions, setCountrySuggestions] = useState<UniqueCountry[]>([]);
+  const [showCountrySuggestions, setShowCountrySuggestions] = useState(false);
+
+  // Category search
+  const [uniqueCategories, setUniqueCategories] = useState<UniqueCategory[]>([]);
+  const [categorySuggestions, setCategorySuggestions] = useState<UniqueCategory[]>([]);
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+
+  // Event category colors - comprehensive mapping
+  const getCategoryColor = (category?: string): [number, number, number, number] => {
+    if (!category) return [136, 136, 136, 200]; // Gray
+    const cat = category.toLowerCase();
+
+    // Main categories
+    if (cat.includes('armed_conflict')) return [255, 0, 0, 220]; // Red
+    if (cat.includes('terrorism')) return [255, 69, 0, 220]; // Orange-red
+    if (cat.includes('protests')) return [255, 215, 0, 200]; // Gold
+    if (cat.includes('civilian_violence')) return [255, 100, 100, 200]; // Light red
+    if (cat.includes('riots')) return [255, 165, 0, 200]; // Orange
+    if (cat.includes('political_violence')) return [147, 51, 234, 200]; // Purple
+    if (cat.includes('crisis')) return [0, 229, 255, 200]; // Cyan
+    if (cat.includes('explosions')) return [255, 20, 147, 220]; // Deep pink
+    if (cat.includes('strategic')) return [100, 149, 237, 200]; // Cornflower blue
+
+    return [136, 136, 136, 200]; // Default gray for unclassified
+  };
+
+  // Load events from API
+  const loadEvents = async () => {
+    if (!apiKey) {
+      setError('No API key available');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Load more events to get better map coverage
+      const response = await NewsEventsService.getNewsEvents(apiKey, {
+        country: countryFilter || undefined,
+        city: cityFilter || undefined,
+        cities: selectedCities.length > 0 ? selectedCities.join(',') : undefined,
+        event_category: categoryFilter || undefined,
+        limit: 100
+      });
+
+      if (response.success) {
+        if (response.events && response.events.length > 0) {
+          setEvents(response.events);
+          setError(null);
+
+          // Auto-zoom to the events location
+          const firstEvent = response.events[0];
+          if (firstEvent.latitude && firstEvent.longitude) {
+            setViewState({
+              longitude: firstEvent.longitude,
+              latitude: firstEvent.latitude,
+              zoom: cityFilter ? 12 : (countryFilter ? 6 : 4),
+              pitch: 0,
+              bearing: 0
+            });
+          }
+        } else if (response.events && response.events.length === 0) {
+          setEvents([]);
+          const filterDesc = countryFilter || cityFilter || categoryFilter
+            ? `No events found for: ${[countryFilter, cityFilter, categoryFilter].filter(f => f).join(', ')}`
+            : 'No events found with valid coordinates. Try filtering by country (e.g., Ukraine, Syria, Israel)';
+          setError(filterDesc);
+        } else {
+          setEvents([]);
+          setError('No events found. Try using filters.');
+        }
+      } else {
+        setError(response.message || 'API Error: Try filtering by country to avoid data issues');
+        setEvents([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      setEvents([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load unique data on mount
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 2000);
+    const loadUniqueData = async () => {
+      if (apiKey) {
+        const [cities, countries, categories] = await Promise.all([
+          NewsEventsService.getUniqueCities(apiKey),
+          NewsEventsService.getUniqueCountries(apiKey),
+          NewsEventsService.getUniqueCategories(apiKey)
+        ]);
+        setUniqueCities(cities);
+        setUniqueCountries(countries);
+        setUniqueCategories(categories);
+      }
+    };
+    loadUniqueData();
+  }, [apiKey]);
+
+  // Filter city suggestions
+  useEffect(() => {
+    if (citySearchInput.length >= 2) {
+      const filtered = uniqueCities
+        .filter(c => c.city && c.city.toLowerCase().includes(citySearchInput.toLowerCase()))
+        .slice(0, 10);
+      setCitySuggestions(filtered);
+      setShowCitySuggestions(filtered.length > 0);
+    } else {
+      setCitySuggestions([]);
+      setShowCitySuggestions(false);
+    }
+  }, [citySearchInput, uniqueCities]);
+
+  // Filter country suggestions
+  useEffect(() => {
+    if (countryFilter.length >= 2) {
+      const filtered = uniqueCountries
+        .filter(c => c.country && c.country.toLowerCase().includes(countryFilter.toLowerCase()))
+        .slice(0, 10);
+      setCountrySuggestions(filtered);
+      setShowCountrySuggestions(filtered.length > 0);
+    } else {
+      setCountrySuggestions([]);
+      setShowCountrySuggestions(false);
+    }
+  }, [countryFilter, uniqueCountries]);
+
+  // Filter category suggestions
+  useEffect(() => {
+    if (categoryFilter.length >= 2) {
+      const filtered = uniqueCategories
+        .filter(c => c.event_category && c.event_category.toLowerCase().includes(categoryFilter.toLowerCase()))
+        .slice(0, 10);
+      setCategorySuggestions(filtered);
+      setShowCategorySuggestions(filtered.length > 0);
+    } else {
+      setCategorySuggestions([]);
+      setShowCategorySuggestions(false);
+    }
+  }, [categoryFilter, uniqueCategories]);
+
+  // Update clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-load events on mount (only when APPLY button is clicked, not on filter change)
   useEffect(() => {
-    loadGeopoliticsData();
-  }, [selectedCountry]);
-
-  const loadGeopoliticsData = async () => {
-    try {
-      setLoading(true);
-      const data = await geopoliticsService.getComprehensiveGeopoliticsData(selectedCountry);
-      setQrNotifications(data.qrNotifications);
-      setEpingNotifications(data.epingNotifications);
-      setTariffData(data.tariffData);
-      setQrRestrictions(data.qrRestrictions);
-      setQrProducts(data.qrProducts);
-      setTradeFlow(data.tradeFlowData);
-      setTfadData(data.tfadData);
-    } catch (error) {
-      console.error('Failed to load geopolitics data:', error);
-    } finally {
-      setLoading(false);
+    if (apiKey && countryFilter === 'Ukraine' && !cityFilter && selectedCities.length === 0 && !categoryFilter) {
+      // Only auto-load on initial mount with default filter
+      loadEvents();
     }
-  };
+    const interval = setInterval(loadEvents, 300000); // Refresh every 5 minutes
+    return () => clearInterval(interval);
+  }, [apiKey]);
 
-  // Calculate threat levels with improved methodology
-  const calculateThreatLevel = () => {
-    // Trade Restrictions Threat
-    // Based on: QR notification count (recent restrictions indicate protectionism)
-    // Scale: 0 notifications = 0, 50+ = 10 (critical)
-    const qrCount = qrNotifications.length;
-    let tradeLevel = 0;
-    if (qrCount > 0) {
-      tradeLevel = Math.min(2 + (qrCount / 50) * 8, 10); // Base 2 if any exist
-    }
+  // Memoized event points with random spread within city bounds
+  const eventPoints: EventPoint[] = useMemo(() => {
+    // Group events by coordinate to spread them properly
+    const coordGroups = new Map<string, NewsEvent[]>();
 
-    // Tariff Threat
-    // Based on: Tariff rate level + trend
-    // Scale: 0% = 0, 20%+ = 10, plus trend multiplier
-    let tariffLevel = 0;
-    if (tariffData.length > 0) {
-      const values = tariffData.map(d => d.Value || 0);
-      const latest = values[values.length - 1] || 0;
-      const previous = values[values.length - 2] || latest;
-      const trend = latest - previous;
-
-      // Base level from tariff rate (0-20% range)
-      const baseLevel = Math.min((latest / 20) * 7, 7);
-
-      // Trend adjustment (+/- 3 points based on direction)
-      let trendAdjustment = 0;
-      if (trend > 0.5) trendAdjustment = 3; // Rising tariffs
-      else if (trend > 0.1) trendAdjustment = 1.5;
-      else if (trend < -0.5) trendAdjustment = -2; // Falling tariffs
-      else if (trend < -0.1) trendAdjustment = -1;
-
-      tariffLevel = Math.max(0, Math.min(baseLevel + trendAdjustment, 10));
-    }
-
-    // Regulatory Threat
-    // Based on: Recent notifications + pending deadlines + affected sectors
-    let regulatoryLevel = 0;
-    if (epingNotifications.length > 0) {
-      // Recent activity (0-4 points)
-      const activityScore = Math.min((epingNotifications.length / 100) * 4, 4);
-
-      // Pending deadlines urgency (0-3 points)
-      const now = new Date();
-      const urgentDeadlines = epingNotifications.filter(n => {
-        if (!n.commentDeadlineDate) return false;
-        const deadline = new Date(n.commentDeadlineDate);
-        const daysUntil = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-        return daysUntil > 0 && daysUntil <= 60; // Within 60 days
-      }).length;
-      const urgencyScore = Math.min((urgentDeadlines / 20) * 3, 3);
-
-      // Critical regulations (SPS/TBT human health/safety) (0-3 points)
-      const criticalCount = epingNotifications.filter(n =>
-        n.objectives?.some((o: any) =>
-          o.name?.toLowerCase().includes('health') ||
-          o.name?.toLowerCase().includes('safety')
-        )
-      ).length;
-      const criticalScore = Math.min((criticalCount / 10) * 3, 3);
-
-      regulatoryLevel = Math.min(activityScore + urgencyScore + criticalScore, 10);
-    }
-
-    // Market Access Threat (NEW)
-    // Based on: Countries affected + notification types
-    let marketAccessLevel = 0;
-    const affectedCountriesCount = new Set(
-      epingNotifications.flatMap(n =>
-        (n.countriesAffected || []).map((c: any) => c.id || c.name)
-      )
-    ).size;
-
-    if (affectedCountriesCount > 0) {
-      // More countries affected = higher threat
-      marketAccessLevel = Math.min((affectedCountriesCount / 50) * 6, 6);
-
-      // Add points if many SPS measures (stricter than TBT)
-      const spsCount = epingNotifications.filter(n => n.area === 'SPS').length;
-      const spsRatio = epingNotifications.length > 0 ? spsCount / epingNotifications.length : 0;
-      marketAccessLevel += spsRatio * 4;
-
-      marketAccessLevel = Math.min(marketAccessLevel, 10);
-    }
-
-    // Supply Chain Disruption (NEW)
-    // Based on: Recent QR notifications + tariff volatility
-    let supplyChainLevel = 0;
-    if (qrNotifications.length > 0 || tariffData.length > 0) {
-      // Recent QR activity
-      const recentQR = qrNotifications.filter(n => {
-        if (!n.notification_dt) return false;
-        const notifDate = new Date(n.notification_dt);
-        const monthsAgo = (new Date().getTime() - notifDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
-        return monthsAgo <= 12; // Within last year
-      }).length;
-
-      const qrScore = Math.min((recentQR / 20) * 5, 5);
-
-      // Tariff volatility
-      let volatilityScore = 0;
-      if (tariffData.length >= 3) {
-        const recentValues = tariffData.slice(-3).map(d => d.Value || 0);
-        const volatility = Math.max(...recentValues) - Math.min(...recentValues);
-        volatilityScore = Math.min((volatility / 5) * 5, 5);
+    events.forEach(event => {
+      const coordKey = `${event.latitude},${event.longitude}`;
+      if (!coordGroups.has(coordKey)) {
+        coordGroups.set(coordKey, []);
       }
+      coordGroups.get(coordKey)!.push(event);
+    });
 
-      supplyChainLevel = Math.min(qrScore + volatilityScore, 10);
-    }
+    const points: EventPoint[] = [];
 
-    return [
-      { threat: 'Trade Restrictions', current: Number(tradeLevel.toFixed(1)), max: 10 },
-      { threat: 'Tariff Pressure', current: Number(tariffLevel.toFixed(1)), max: 10 },
-      { threat: 'Regulatory Burden', current: Number(regulatoryLevel.toFixed(1)), max: 10 },
-      { threat: 'Market Access', current: Number(marketAccessLevel.toFixed(1)), max: 10 },
-      { threat: 'Supply Chain', current: Number(supplyChainLevel.toFixed(1)), max: 10 }
-    ];
-  };
+    coordGroups.forEach((groupEvents, coordKey) => {
+      groupEvents.forEach((event) => {
+        // Spread events randomly within city bounds (~2-5km radius)
+        const randomOffset = Math.random() * 0.05; // Random distance up to 5km
+        const randomAngle = Math.random() * Math.PI * 2; // Random direction
 
-  // Calculate tariff statistics
-  const getTariffStats = () => {
-    if (tariffData.length === 0) return { min: 0, max: 0, avg: 0, latest: 0, change: 0 };
-
-    const values = tariffData.map(d => d.Value || 0);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    const latest = values[values.length - 1];
-    const previous = values[values.length - 2] || latest;
-    const change = latest - previous;
-
-    return { min, max, avg, latest, change };
-  };
-
-  // Get upcoming deadlines
-  const getUpcomingDeadlines = () => {
-    return epingNotifications
-      .filter(n => n.commentDeadlineDate || n.proposedEntryIntoForceDate)
-      .map(n => ({
-        title: n.documentSymbol || 'N/A',
-        member: n.notifyingMember || 'N/A',
-        commentDeadline: n.commentDeadlineDate,
-        entryIntoForce: n.proposedEntryIntoForceDate,
-        area: n.area
-      }))
-      .slice(0, 10);
-  };
-
-  // Get affected countries
-  const getAffectedCountries = () => {
-    const countryMap: { [key: string]: number } = {};
-
-    epingNotifications.forEach(n => {
-      if (n.countriesAffected && Array.isArray(n.countriesAffected)) {
-        n.countriesAffected.forEach((c: any) => {
-          const name = c.name || c.id || 'Unknown';
-          countryMap[name] = (countryMap[name] || 0) + 1;
+        points.push({
+          position: [
+            event.longitude! + randomOffset * Math.cos(randomAngle),
+            event.latitude! + randomOffset * Math.sin(randomAngle),
+            0
+          ] as [number, number, number],
+          color: getCategoryColor(event.event_category),
+          event
         });
-      }
+      });
     });
 
-    return Object.entries(countryMap)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-  };
+    return points;
+  }, [events]);
 
-  // Get notification types breakdown
-  const getNotificationTypes = () => {
-    const types: { [key: string]: number } = {};
+  // Memoized layers
+  const layers = useMemo(() => {
+    const allLayers: any[] = [
+      new TileLayer({
+        id: 'basemap',
+        data: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        minZoom: 0,
+        maxZoom: 19,
+        tileSize: 256,
+        renderSubLayers: (props: any) => {
+          const { boundingBox } = props.tile;
+          return new BitmapLayer(props, {
+            data: null,
+            image: props.data,
+            bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]
+          });
+        }
+      })
+    ];
 
-    epingNotifications.forEach(n => {
-      const type = n.area || 'Unknown';
-      types[type] = (types[type] || 0) + 1;
+    if (eventPoints.length > 0) {
+      allLayers.push(
+        new ScatterplotLayer({
+          id: 'events',
+          data: eventPoints,
+          getPosition: (d: any) => d.position,
+          getFillColor: (d: any) => d.color,
+          getRadius: 150,
+          radiusMinPixels: 5,
+          radiusMaxPixels: 30,
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 150],
+          onClick: (info: any) => {
+            if (info.object) {
+              setSelectedEvent(info.object.event);
+              // Don't change zoom, just center on the event
+              setViewState({
+                ...viewState,
+                longitude: info.object.event.longitude,
+                latitude: info.object.event.latitude
+              });
+            }
+          }
+        })
+      );
+    }
+
+    return allLayers;
+  }, [eventPoints, viewState]);
+
+  // Get category statistics
+  const categoryStats = useMemo(() => {
+    const stats: { [key: string]: number } = {};
+    events.forEach(e => {
+      const cat = e.event_category || 'Unknown';
+      stats[cat] = (stats[cat] || 0) + 1;
     });
+    return Object.entries(stats)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [events]);
 
-    return Object.entries(types).map(([name, value]) => ({ name, value }));
-  };
-
-  const threatRadarData = calculateThreatLevel();
-  const tariffStats = getTariffStats();
-  const upcomingDeadlines = getUpcomingDeadlines();
-  const affectedCountries = getAffectedCountries();
-  const notificationTypes = getNotificationTypes();
-
-  if (loading) {
-    return (
-      <div style={{
-        height: '100%',
-        backgroundColor: colors.background,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: colors.text,
-        fontFamily
-      }}>
-        {t('messages.loading')}
-      </div>
-    );
-  }
+  // Get country statistics
+  const countryStats = useMemo(() => {
+    const stats: { [key: string]: number } = {};
+    events.forEach(e => {
+      const country = e.country || 'Unknown';
+      stats[country] = (stats[country] || 0) + 1;
+    });
+    return Object.entries(stats)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [events]);
 
   return (
     <div style={{
+      width: '100%',
       height: '100%',
-      backgroundColor: colors.background,
-      color: colors.text,
-      fontFamily,
-      fontWeight,
-      fontStyle,
-      overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
-      fontSize: fontSize.body
+      background: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      position: 'relative',
+      overflow: 'hidden'
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: colors.panel,
-        borderBottom: `1px solid ${colors.textMuted}`,
-        padding: '8px',
-        flexShrink: 0
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        background: THEME.BLACK,
+        borderBottom: `2px solid ${THEME.ORANGE}`,
+        zIndex: 1000,
+        fontFamily: 'Consolas, monospace',
+        fontSize: '12px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: colors.primary, fontWeight: 'bold' }}>{t('title')} INTELLIGENCE</span>
-            <span style={{ color: colors.text }}>|</span>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              <button
-                onClick={() => setActiveTab('trade')}
-                style={{
-                  backgroundColor: activeTab === 'trade' ? colors.primary : colors.background,
-                  color: activeTab === 'trade' ? colors.background : colors.text,
-                  border: `1px solid ${colors.textMuted}`,
-                  padding: '2px 10px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  borderRadius: '2px',
-                  fontWeight: 'bold'
-                }}
-              >
-                TRADE DATA
-              </button>
-              <button
-                onClick={() => setActiveTab('hdx')}
-                style={{
-                  backgroundColor: activeTab === 'hdx' ? colors.primary : colors.background,
-                  color: activeTab === 'hdx' ? colors.background : colors.text,
-                  border: `1px solid ${colors.textMuted}`,
-                  padding: '2px 10px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  borderRadius: '2px',
-                  fontWeight: 'bold'
-                }}
-              >
-                HDX DATA
-              </button>
-            </div>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.secondary }}>● LIVE</span>
-            {activeTab === 'trade' && (
-              <>
-                <span style={{ color: colors.text }}>|</span>
-                <select
-                  value={selectedCountry}
-                  onChange={(e) => setSelectedCountry(e.target.value)}
-                  style={{
-                    backgroundColor: colors.background,
-                    color: colors.text,
-                    border: `1px solid ${colors.textMuted}`,
-                    padding: '2px 8px',
-                    fontSize: '12px',
-                    borderRadius: '2px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {countries.map(c => (
-                    <option key={c.code} value={c.code}>{c.name}</option>
-                  ))}
-                </select>
-                <span style={{ color: colors.text }}>|</span>
-                <span style={{ color: colors.info }}>QR: {qrNotifications.length}</span>
-                <span style={{ color: colors.text }}>|</span>
-                <span style={{ color: colors.warning }}>ePing: {epingNotifications.length}</span>
-              </>
-            )}
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.text }}>{currentTime.toISOString().substring(0, 19)} UTC</span>
+        {/* Title Bar */}
+        <div style={{
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          borderBottom: `1px solid ${THEME.BORDER}`,
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ color: THEME.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
+            GEO&gt;
           </div>
-          {activeTab === 'trade' && (
-            <button
-              onClick={loadGeopoliticsData}
-              disabled={loading}
+          <div style={{ color: THEME.WHITE, fontWeight: 'bold', fontSize: '12px' }}>
+            GEOPOLITICAL CONFLICT MONITOR
+          </div>
+          <div style={{ color: events.length > 0 ? THEME.GREEN : THEME.RED, fontWeight: 'bold', fontSize: '11px' }}>
+            {events.length} EVENTS
+          </div>
+          <div style={{ color: THEME.CYAN, fontSize: '10px' }}>
+            {currentTime.toISOString().substring(0, 19)} UTC
+          </div>
+        </div>
+
+        {/* Filter Controls */}
+        <div style={{
+          padding: '6px 12px',
+          display: 'flex',
+          gap: '6px',
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ position: 'relative', minWidth: '100px', flex: '0 1 auto' }}>
+            <input
+              type="text"
+              placeholder="Country..."
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && countrySuggestions.length > 0) {
+                  setCountryFilter(countrySuggestions[0].country);
+                  setShowCountrySuggestions(false);
+                  loadEvents();
+                } else if (e.key === 'Enter') {
+                  loadEvents();
+                } else if (e.key === 'Escape') {
+                  setShowCountrySuggestions(false);
+                }
+              }}
+              onFocus={() => countrySuggestions.length > 0 && setShowCountrySuggestions(true)}
               style={{
-                backgroundColor: loading ? colors.textMuted : colors.primary,
-                color: colors.background,
-                border: 'none',
-                padding: '4px 12px',
-                fontSize: '12px',
-                cursor: loading ? 'not-allowed' : 'pointer',
+                padding: '5px 8px',
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                color: '#fff',
+                fontFamily: 'Consolas, monospace',
+                fontSize: '11px',
+                width: '100%',
+                outline: 'none',
+                borderRadius: '2px'
+              }}
+            />
+            {showCountrySuggestions && countrySuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '200px',
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                borderTop: 'none',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                zIndex: 2000,
+                marginTop: '1px'
+              }}>
+                {countrySuggestions.map((suggestion, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setCountryFilter(suggestion.country);
+                      setShowCountrySuggestions(false);
+                    }}
+                    style={{
+                      padding: '6px 8px',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      borderBottom: idx < countrySuggestions.length - 1 ? '1px solid #333' : 'none',
+                      color: '#ccc',
+                      background: '#1a1a1a'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#2a2a2a';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#1a1a1a';
+                      e.currentTarget.style.color = '#ccc';
+                    }}
+                  >
+                    {suggestion.country} ({suggestion.event_count} events)
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ position: 'relative', minWidth: '100px', flex: '0 1 auto' }}>
+            <input
+              type="text"
+              placeholder={selectedCities.length > 0 ? `${selectedCities.length} cities` : "Cities..."}
+              value={citySearchInput}
+              onChange={(e) => setCitySearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && citySuggestions.length > 0) {
+                  const city = citySuggestions[0].city;
+                  if (!selectedCities.includes(city)) {
+                    setSelectedCities([...selectedCities, city]);
+                  }
+                  setCitySearchInput('');
+                  setShowCitySuggestions(false);
+                } else if (e.key === 'Escape') {
+                  setShowCitySuggestions(false);
+                }
+              }}
+              onFocus={() => citySuggestions.length > 0 && setShowCitySuggestions(true)}
+              style={{
+                padding: '5px 8px',
+                paddingRight: selectedCities.length > 0 ? '24px' : '8px',
+                background: '#1a1a1a',
+                border: `1px solid ${selectedCities.length > 0 ? THEME.PURPLE : '#333'}`,
+                color: '#fff',
+                fontFamily: 'Consolas, monospace',
+                fontSize: '11px',
+                width: '100%',
+                outline: 'none',
+                borderRadius: '2px'
+              }}
+            />
+            {selectedCities.length > 0 && (
+              <div
+                onClick={() => setSelectedCities([])}
+                style={{
+                  position: 'absolute',
+                  right: '4px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  cursor: 'pointer',
+                  color: THEME.RED,
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  lineHeight: '1',
+                  padding: '2px'
+                }}
+                title="Clear all cities"
+              >
+                ×
+              </div>
+            )}
+            {showCitySuggestions && citySuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '240px',
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                borderTop: 'none',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                zIndex: 2000,
+                marginTop: '1px'
+              }}>
+                {citySuggestions.map((suggestion, idx) => {
+                  const isSelected = selectedCities.includes(suggestion.city);
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedCities(selectedCities.filter(c => c !== suggestion.city));
+                        } else {
+                          setSelectedCities([...selectedCities, suggestion.city]);
+                        }
+                        setCitySearchInput('');
+                        setShowCitySuggestions(false);
+                      }}
+                      style={{
+                        padding: '6px 8px',
+                        cursor: 'pointer',
+                        fontSize: '10px',
+                        borderBottom: idx < citySuggestions.length - 1 ? '1px solid #333' : 'none',
+                        color: isSelected ? THEME.PURPLE : '#ccc',
+                        background: isSelected ? 'rgba(147, 51, 234, 0.2)' : '#1a1a1a',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = '#2a2a2a';
+                          e.currentTarget.style.color = '#fff';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = '#1a1a1a';
+                          e.currentTarget.style.color = '#ccc';
+                        }
+                      }}
+                    >
+                      <span>{suggestion.city}, {suggestion.country}</span>
+                      {isSelected && <span style={{ color: THEME.PURPLE }}>✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div style={{ position: 'relative', minWidth: '110px', flex: '0 1 auto' }}>
+            <input
+              type="text"
+              placeholder="Category..."
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && categorySuggestions.length > 0) {
+                  setCategoryFilter(categorySuggestions[0].event_category);
+                  setShowCategorySuggestions(false);
+                  loadEvents();
+                } else if (e.key === 'Enter') {
+                  loadEvents();
+                } else if (e.key === 'Escape') {
+                  setShowCategorySuggestions(false);
+                }
+              }}
+              onFocus={() => categorySuggestions.length > 0 && setShowCategorySuggestions(true)}
+              style={{
+                padding: '5px 8px',
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                color: '#fff',
+                fontFamily: 'Consolas, monospace',
+                fontSize: '11px',
+                width: '100%',
+                outline: 'none',
+                borderRadius: '2px'
+              }}
+            />
+            {showCategorySuggestions && categorySuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '200px',
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                borderTop: 'none',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                zIndex: 2000,
+                marginTop: '1px'
+              }}>
+                {categorySuggestions.map((suggestion, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setCategoryFilter(suggestion.event_category);
+                      setShowCategorySuggestions(false);
+                    }}
+                    style={{
+                      padding: '6px 8px',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      borderBottom: idx < categorySuggestions.length - 1 ? '1px solid #333' : 'none',
+                      color: '#ccc',
+                      background: '#1a1a1a'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#2a2a2a';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#1a1a1a';
+                      e.currentTarget.style.color = '#ccc';
+                    }}
+                  >
+                    {suggestion.event_category} ({suggestion.event_count} events)
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={loadEvents}
+            disabled={isLoading}
+            style={{
+              padding: '5px 14px',
+              background: THEME.ORANGE,
+              border: 'none',
+              color: '#000',
+              fontFamily: 'Consolas, monospace',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.5 : 1,
+              borderRadius: '2px',
+              minWidth: '60px'
+            }}
+          >
+            {isLoading ? 'LOADING...' : 'APPLY'}
+          </button>
+
+          {(countryFilter || cityFilter || selectedCities.length > 0 || categoryFilter) && (
+            <button
+              onClick={() => {
+                setCountryFilter('Ukraine');
+                setCityFilter('');
+                setSelectedCities([]);
+                setCitySearchInput('');
+                setCategoryFilter('');
+              }}
+              style={{
+                padding: '5px 12px',
+                background: '#000',
+                border: '1px solid #666',
+                color: '#fff',
+                fontFamily: 'Consolas, monospace',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
                 borderRadius: '2px',
-                fontWeight: 'bold'
+                minWidth: '55px'
               }}
             >
-              {loading ? 'LOADING...' : '↻ REFRESH'}
+              CLEAR
             </button>
+          )}
+
+          {/* Selected Cities Display */}
+          {selectedCities.length > 0 && (
+            <div style={{
+              display: 'flex',
+              gap: '4px',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              flex: '1 1 100%',
+              marginTop: '4px'
+            }}>
+              <span style={{ fontSize: '9px', color: THEME.GRAY }}>Selected:</span>
+              {selectedCities.map((city, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '3px 8px',
+                    background: THEME.PURPLE,
+                    color: THEME.WHITE,
+                    fontSize: '9px',
+                    borderRadius: '3px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  {city}
+                  <span
+                    onClick={() => setSelectedCities(selectedCities.filter(c => c !== city))}
+                    style={{ cursor: 'pointer', fontWeight: 'bold', color: THEME.WHITE, fontSize: '11px' }}
+                  >
+                    ×
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Main Content */}
-      {activeTab === 'hdx' ? (
-        <GeopoliticsHDXPanel selectedRegion={selectedCountry} />
-      ) : (
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px', backgroundColor: '#050505' }}>
-
-        {/* Row 1: Statistics Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '8px' }}>
-
-          {/* Tariff Stats Card */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              TARIFF STATISTICS
-            </div>
-            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
-              <div>Latest: <span style={{ color: colors.secondary, fontWeight: 'bold' }}>{tariffStats.latest.toFixed(2)}%</span></div>
-              <div>Avg: <span style={{ color: colors.text }}>{tariffStats.avg.toFixed(2)}%</span></div>
-              <div>Min: <span style={{ color: colors.success }}>{tariffStats.min.toFixed(2)}%</span></div>
-              <div>Max: <span style={{ color: colors.alert }}>{tariffStats.max.toFixed(2)}%</span></div>
-              <div>Change: <span style={{ color: tariffStats.change >= 0 ? colors.alert : colors.success }}>
-                {tariffStats.change >= 0 ? '+' : ''}{tariffStats.change.toFixed(2)}%
-              </span></div>
-            </div>
-          </div>
-
-          {/* QR Summary */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              QR RESTRICTIONS
-            </div>
-            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
-              <div>Total: <span style={{ color: colors.warning, fontWeight: 'bold' }}>{qrNotifications.length}</span></div>
-              <div>Type: Complete Notifications</div>
-              <div>Coverage: Global</div>
-              <div>Updated: Live</div>
-            </div>
-          </div>
-
-          {/* ePing Summary */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              REGULATORY ALERTS
-            </div>
-            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
-              <div>Total: <span style={{ color: colors.info, fontWeight: 'bold' }}>{epingNotifications.length}</span></div>
-              <div>SPS: {epingNotifications.filter(n => n.area === 'SPS').length}</div>
-              <div>TBT: {epingNotifications.filter(n => n.area === 'TBT').length}</div>
-              <div>Pending Comments: {epingNotifications.filter(n => n.commentDeadlineDate).length}</div>
-            </div>
-          </div>
-
-          {/* Threat Level */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              THREAT LEVEL
-            </div>
-            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
-              {threatRadarData.map(t => (
-                <div key={t.threat}>
-                  {t.threat}: <span style={{
-                    color: t.current > 7 ? colors.alert : t.current > 5 ? colors.warning : colors.success,
-                    fontWeight: 'bold'
-                  }}>{t.current.toFixed(1)}/10</span>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Error Display - only show meaningful errors, not filter-related */}
+      {error && !error.includes('No events found for:') && (
+        <div style={{
+          position: 'absolute',
+          top: '80px',
+          left: '20px',
+          right: '20px',
+          padding: '12px 20px',
+          background: 'rgba(255, 0, 0, 0.2)',
+          border: '1px solid #ff0000',
+          borderRadius: '4px',
+          color: '#ff6b6b',
+          fontFamily: 'Consolas, monospace',
+          fontSize: '13px',
+          zIndex: 10
+        }}>
+          ERROR: {error}
         </div>
-
-        {/* Row 2: Charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '8px', marginBottom: '8px', height: '280px' }}>
-
-          {/* Tariff Time Series */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              MFN TARIFF RATES - {countries.find(c => c.code === selectedCountry)?.name.toUpperCase()}
-            </div>
-            <ResponsiveContainer width="100%" height={230}>
-              <LineChart data={tariffData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={colors.textMuted} opacity={0.3} />
-                <XAxis dataKey="Year" stroke={colors.text} fontSize={9} />
-                <YAxis stroke={colors.text} fontSize={9} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: colors.background,
-                    border: `1px solid ${colors.textMuted}`,
-                    color: colors.text,
-                    fontSize: '10px'
-                  }}
-                />
-                <Line type="monotone" dataKey="Value" stroke={colors.secondary} strokeWidth={2} name="Tariff %" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Threat Radar */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              THREAT RADAR
-            </div>
-            <ResponsiveContainer width="100%" height={230}>
-              <RadarChart data={threatRadarData}>
-                <PolarGrid stroke={colors.textMuted} />
-                <PolarAngleAxis dataKey="threat" tick={{ fontSize: 9, fill: colors.text }} />
-                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 8, fill: colors.textMuted }} />
-                <Radar
-                  dataKey="current"
-                  stroke={colors.alert}
-                  fill={colors.alert}
-                  fillOpacity={0.3}
-                  strokeWidth={2}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Notification Types */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              NOTIFICATION TYPES
-            </div>
-            <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={notificationTypes}>
-                <CartesianGrid strokeDasharray="3 3" stroke={colors.textMuted} opacity={0.3} />
-                <XAxis dataKey="name" stroke={colors.text} fontSize={9} />
-                <YAxis stroke={colors.text} fontSize={9} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: colors.background,
-                    border: `1px solid ${colors.textMuted}`,
-                    color: colors.text,
-                    fontSize: '10px'
-                  }}
-                />
-                <Bar dataKey="value" fill={colors.info} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Row 3: Detailed Lists */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px', height: '320px' }}>
-
-          {/* QR Notifications Detailed */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              QR NOTIFICATIONS DETAILS
-            </div>
-            {qrNotifications.slice(0, 20).map((notif, index) => (
-              <div key={index} style={{
-                marginBottom: '8px',
-                fontSize: '10px',
-                borderLeft: `2px solid ${colors.warning}`,
-                paddingLeft: '6px',
-                backgroundColor: expandedQR === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                cursor: 'pointer'
-              }}
-                onClick={() => setExpandedQR(expandedQR === index ? null : index)}
-              >
-                <div style={{ color: colors.text, fontWeight: 'bold' }}>
-                  {notif.reporter_member?.name?.en || notif.reporter_member?.code || 'N/A'}
-                </div>
-                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
-                  {notif.document_symbol || 'N/A'} | {notif.notification_dt || 'N/A'}
-                </div>
-                {expandedQR === index && (
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: colors.textMuted }}>
-                    <div>Type: {notif.type || 'N/A'}</div>
-                    <div>Language: {notif.original_language || 'N/A'}</div>
-                    <div>Periods: {notif.covered_periods?.join(', ') || 'N/A'}</div>
-                    {notif.document_url && (
-                      <a href={notif.document_url} target="_blank" rel="noopener noreferrer"
-                        style={{ color: colors.info, textDecoration: 'underline' }}>
-                        View Document
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* ePing Notifications Detailed */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              EPING NOTIFICATIONS DETAILS
-            </div>
-            {epingNotifications.slice(0, 20).map((notif, index) => (
-              <div key={index} style={{
-                marginBottom: '8px',
-                fontSize: '10px',
-                borderLeft: `2px solid ${notif.area === 'SPS' ? colors.success : colors.info}`,
-                paddingLeft: '6px',
-                backgroundColor: expandedEPing === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                cursor: 'pointer'
-              }}
-                onClick={() => setExpandedEPing(expandedEPing === index ? null : index)}
-              >
-                <div style={{ color: colors.text, fontWeight: 'bold' }}>
-                  {notif.documentSymbol?.trim() || 'N/A'}
-                </div>
-                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
-                  {notif.notifyingMember} | {notif.area} | {notif.distributionDate?.substring(0, 10)}
-                </div>
-                {expandedEPing === index && (
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: colors.textMuted }}>
-                    <div style={{ marginBottom: '2px', fontWeight: 'bold' }}>
-                      {notif.titlePlain?.substring(0, 100)}...
-                    </div>
-                    <div>Type: {notif.notificationType || 'N/A'}</div>
-                    {notif.commentDeadlineDate && (
-                      <div>Comment Deadline: {notif.commentDeadlineDate.substring(0, 10)}</div>
-                    )}
-                    {notif.proposedEntryIntoForceDate && (
-                      <div>Entry into Force: {notif.proposedEntryIntoForceDate.substring(0, 10)}</div>
-                    )}
-                    {notif.keywords && notif.keywords.length > 0 && (
-                      <div>Keywords: {notif.keywords.map((k: any) => k.name).join(', ')}</div>
-                    )}
-                    {notif.objectives && notif.objectives.length > 0 && (
-                      <div>Objectives: {notif.objectives.map((o: any) => o.name).join(', ')}</div>
-                    )}
-                    {notif.linkToNotification && (
-                      <a href={notif.linkToNotification} target="_blank" rel="noopener noreferrer"
-                        style={{ color: colors.info, textDecoration: 'underline' }}>
-                        View Document
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Upcoming Deadlines */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              UPCOMING DEADLINES
-            </div>
-            {upcomingDeadlines.length > 0 ? upcomingDeadlines.map((item, index) => (
-              <div key={index} style={{
-                marginBottom: '8px',
-                fontSize: '10px',
-                borderLeft: `2px solid ${item.area === 'SPS' ? colors.success : colors.info}`,
-                paddingLeft: '6px',
-                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
-              }}>
-                <div style={{ color: colors.text, fontWeight: 'bold' }}>
-                  {item.title}
-                </div>
-                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
-                  {item.member} | {item.area}
-                </div>
-                {item.commentDeadline && (
-                  <div style={{ color: colors.warning, fontSize: '9px' }}>
-                    Comment by: {item.commentDeadline.substring(0, 10)}
-                  </div>
-                )}
-                {item.entryIntoForce && (
-                  <div style={{ color: colors.alert, fontSize: '9px' }}>
-                    Effective: {item.entryIntoForce.substring(0, 10)}
-                  </div>
-                )}
-              </div>
-            )) : (
-              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No upcoming deadlines</div>
-            )}
-          </div>
-        </div>
-
-        {/* Row 4: Affected Countries */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', height: '200px', marginBottom: '8px' }}>
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              AFFECTED COUNTRIES & REGIONS
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-              {affectedCountries.length > 0 ? affectedCountries.map((country, index) => (
-                <div key={index} style={{
-                  padding: '6px',
-                  backgroundColor: 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${colors.textMuted}`,
-                  fontSize: '10px'
-                }}>
-                  <div style={{ color: colors.text, fontWeight: 'bold' }}>{country.name}</div>
-                  <div style={{ color: colors.warning, fontSize: '9px' }}>
-                    {country.count} notification{country.count > 1 ? 's' : ''}
-                  </div>
-                </div>
-              )) : (
-                <div style={{ color: colors.textMuted, fontSize: '10px', gridColumn: '1 / -1' }}>
-                  No specific country restrictions identified
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Row 5: QR Restrictions & Trade Flow */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px', height: '320px' }}>
-
-          {/* Active QR Restrictions */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              ACTIVE QR RESTRICTIONS - {countries.find(c => c.code === selectedCountry)?.name.toUpperCase()}
-            </div>
-            {qrRestrictions.length > 0 ? qrRestrictions.slice(0, 20).map((item, index) => (
-              <div key={index} style={{
-                marginBottom: '8px',
-                fontSize: '10px',
-                borderLeft: `2px solid ${colors.alert}`,
-                paddingLeft: '6px',
-                backgroundColor: expandedRestriction === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                cursor: 'pointer'
-              }}
-                onClick={() => setExpandedRestriction(expandedRestriction === index ? null : index)}
-              >
-                <div style={{ color: colors.text, fontWeight: 'bold' }}>
-                  {item.measure_description || 'Restriction'}
-                </div>
-                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
-                  HS Code: {item.product_code || 'N/A'} | {item.in_force ? 'In Force' : 'Not Active'}
-                </div>
-                {expandedRestriction === index && (
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: colors.textMuted }}>
-                    <div>Entry: {item.date_of_entry_into_force || 'N/A'}</div>
-                    <div>Legal Basis: {item.legal_basis || 'N/A'}</div>
-                    <div>Measure Type: {item.measure_type || 'N/A'}</div>
-                  </div>
-                )}
-              </div>
-            )) : (
-              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No active restrictions for this country</div>
-            )}
-          </div>
-
-          {/* Trade Flow Data */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              TRADE FLOW (MERCHANDISE)
-            </div>
-            {tradeFlow.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={tradeFlow}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={colors.textMuted} opacity={0.3} />
-                  <XAxis dataKey="Year" stroke={colors.text} fontSize={9} />
-                  <YAxis stroke={colors.text} fontSize={9} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: colors.background,
-                      border: `1px solid ${colors.textMuted}`,
-                      color: colors.text,
-                      fontSize: '10px'
-                    }}
-                  />
-                  <Line type="monotone" dataKey="Value" stroke={colors.info} strokeWidth={2} name="Trade Value" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No trade flow data available</div>
-            )}
-          </div>
-
-          {/* TFAD Trade Facilitation */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              TRADE FACILITATION (TFAD)
-            </div>
-            {tfadData ? (
-              <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
-                <div style={{ marginBottom: '8px' }}>
-                  <div style={{ color: colors.secondary, fontWeight: 'bold', marginBottom: '4px' }}>Single Window</div>
-                  <div style={{ color: colors.text }}>{tfadData.single_window_available ? 'Available' : 'Not Available'}</div>
-                  {tfadData.single_window_url && (
-                    <a href={tfadData.single_window_url} target="_blank" rel="noopener noreferrer"
-                      style={{ color: colors.info, textDecoration: 'underline', fontSize: '9px' }}>
-                      Visit Single Window
-                    </a>
-                  )}
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                  <div style={{ color: colors.secondary, fontWeight: 'bold', marginBottom: '4px' }}>Enquiry Points</div>
-                  <div style={{ color: colors.text }}>
-                    {tfadData.enquiry_points?.length || 0} contact(s) available
-                  </div>
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                  <div style={{ color: colors.secondary, fontWeight: 'bold', marginBottom: '4px' }}>Procedures</div>
-                  <div style={{ color: colors.text }}>
-                    {tfadData.procedures?.length || 0} procedure(s) documented
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No TFAD data available for this country</div>
-            )}
-          </div>
-        </div>
-
-        {/* Row 6: QR Products Affected */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', height: '250px' }}>
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              PRODUCTS AFFECTED BY QR (HS CODES)
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-              {qrProducts.length > 0 ? qrProducts.slice(0, 40).map((product, index) => (
-                <div key={index} style={{
-                  padding: '6px',
-                  backgroundColor: 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${colors.textMuted}`,
-                  fontSize: '9px'
-                }}>
-                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>{product.code || 'N/A'}</div>
-                  <div style={{ color: colors.textMuted }}>{product.description?.substring(0, 40) || 'No description'}...</div>
-                </div>
-              )) : (
-                <div style={{ color: colors.textMuted, fontSize: '10px', gridColumn: '1 / -1' }}>
-                  No product data available
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-      </div>
       )}
 
-      {/* Status Bar */}
-      <TabFooter
-        tabName="GEOPOLITICS"
-        leftInfo={
-          activeTab === 'trade'
-            ? [
-                { label: 'WTO Real-time Data', color: colors.textMuted },
-                { label: `${qrNotifications.length + epingNotifications.length} Total Notifications`, color: colors.textMuted },
-              ]
-            : [
-                { label: 'HDX Humanitarian Data', color: colors.textMuted },
-                { label: 'Global Crisis Intelligence', color: colors.textMuted },
-              ]
-        }
-        statusInfo={`Last Updated: ${currentTime.toTimeString().substring(0, 8)}`}
-        backgroundColor={colors.panel}
-        borderColor={colors.textMuted}
-      />
+      {/* Side Panel */}
+      <div style={{
+        position: 'absolute',
+        top: '110px',
+        right: '10px',
+        bottom: '60px',
+        width: isPanelCollapsed ? '40px' : 'min(280px, calc(100vw - 20px))',
+        maxWidth: isPanelCollapsed ? '40px' : '90vw',
+        background: 'rgba(0, 0, 0, 0.95)',
+        border: `1px solid ${THEME.BORDER}`,
+        borderRadius: '4px',
+        zIndex: 999,
+        overflowY: isPanelCollapsed ? 'hidden' : 'auto',
+        overflowX: 'hidden',
+        fontFamily: 'Consolas, monospace',
+        fontSize: '10px',
+        backdropFilter: 'blur(10px)',
+        transition: 'width 0.3s ease'
+      }}>
+        {/* Collapse Button */}
+        <div style={{
+          padding: '8px',
+          borderBottom: `1px solid ${THEME.BORDER}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          {!isPanelCollapsed && (
+            <div style={{ color: THEME.ORANGE, fontWeight: 'bold', fontSize: '11px' }}>
+              INFO PANEL
+            </div>
+          )}
+          <button
+            onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: THEME.ORANGE,
+              cursor: 'pointer',
+              fontSize: '14px',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            title={isPanelCollapsed ? 'Expand panel' : 'Collapse panel'}
+          >
+            {isPanelCollapsed ? '◀' : '▶'}
+          </button>
+        </div>
+
+        {!isPanelCollapsed && (
+          <>
+            {/* Events Loaded - First */}
+            <div style={{ padding: '10px', borderBottom: `1px solid ${THEME.BORDER}` }}>
+              <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
+                EVENTS LOADED
+              </div>
+              <div style={{ color: THEME.YELLOW, fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+                {events.length} events
+              </div>
+              <div style={{ color: THEME.GRAY, fontSize: '9px' }}>
+                on map visualization
+              </div>
+            </div>
+
+        {/* Statistics */}
+        <div style={{ padding: '10px', borderBottom: `1px solid ${THEME.BORDER}` }}>
+          <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
+            TOP CATEGORIES
+          </div>
+          {categoryStats.map(([cat, count], idx) => (
+            <div key={idx} style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '4px',
+              color: THEME.WHITE,
+              gap: '8px'
+            }}>
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1
+              }}>{cat}</span>
+              <span style={{ color: THEME.YELLOW, flexShrink: 0 }}>{count}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: '10px', borderBottom: `1px solid ${THEME.BORDER}` }}>
+          <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
+            TOP COUNTRIES
+          </div>
+          {countryStats.map(([country, count], idx) => (
+            <div key={idx} style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '4px',
+              color: THEME.WHITE,
+              gap: '8px'
+            }}>
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1
+              }}>{country}</span>
+              <span style={{ color: THEME.YELLOW, flexShrink: 0 }}>{count}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Selected Event Details */}
+        {selectedEvent && (
+          <div style={{ padding: '10px' }}>
+            <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
+              EVENT DETAILS
+            </div>
+            <div style={{ color: THEME.WHITE, lineHeight: '1.6', wordBreak: 'break-word' }}>
+              {selectedEvent.event_category && (
+                <div style={{ marginBottom: '6px', fontWeight: 'bold', color: THEME.YELLOW, fontSize: '10px' }}>
+                  {selectedEvent.event_category.toUpperCase().replace(/_/g, ' ')}
+                </div>
+              )}
+              {selectedEvent.country && (
+                <div style={{ marginBottom: '4px', fontSize: '9px' }}>
+                  <span style={{ color: THEME.GRAY }}>Country:</span> {selectedEvent.country}
+                </div>
+              )}
+              {selectedEvent.city && (
+                <div style={{ marginBottom: '4px', fontSize: '9px' }}>
+                  <span style={{ color: THEME.GRAY }}>City:</span> {selectedEvent.city}
+                </div>
+              )}
+              {selectedEvent.matched_keywords && (
+                <div style={{ marginBottom: '4px', fontSize: '9px' }}>
+                  <span style={{ color: THEME.GRAY }}>Keywords:</span> {selectedEvent.matched_keywords}
+                </div>
+              )}
+              {selectedEvent.latitude !== undefined && selectedEvent.longitude !== undefined && (
+                <div style={{ marginBottom: '4px', fontSize: '8px' }}>
+                  <span style={{ color: THEME.GRAY }}>Coords:</span> {selectedEvent.latitude.toFixed(4)}, {selectedEvent.longitude.toFixed(4)}
+                </div>
+              )}
+              {selectedEvent.extracted_date && (
+                <div style={{ marginBottom: '4px', fontSize: '8px' }}>
+                  <span style={{ color: THEME.GRAY }}>Date:</span> {new Date(selectedEvent.extracted_date).toLocaleString()}
+                </div>
+              )}
+              {selectedEvent.url && (
+                <div style={{ marginBottom: '4px', fontSize: '8px' }}>
+                  <span style={{ color: THEME.GRAY }}>Source:</span>{' '}
+                  <a
+                    href={selectedEvent.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: THEME.CYAN,
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      wordBreak: 'break-all'
+                    }}
+                  >
+                    View Article
+                  </a>
+                </div>
+              )}
+              <button
+                onClick={() => setSelectedEvent(null)}
+                style={{
+                  marginTop: '8px',
+                  padding: '6px 10px',
+                  background: THEME.BORDER,
+                  border: 'none',
+                  color: THEME.WHITE,
+                  fontFamily: 'Consolas, monospace',
+                  fontSize: '9px',
+                  cursor: 'pointer',
+                  width: '100%',
+                  borderRadius: '2px'
+                }}
+              >
+                CLOSE
+              </button>
+            </div>
+          </div>
+        )}
+
+            {/* Legend */}
+            <div style={{ padding: '10px', borderTop: `1px solid ${THEME.BORDER}` }}>
+              <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
+                EVENT CATEGORIES
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF0000', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Armed Conflict</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF4500', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Terrorism</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FFD700', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Protests</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF6464', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Civilian Violence</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FFA500', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Riots</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#9333EA', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Political Violence</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00E5FF', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Crisis</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF1493', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Explosions</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#6495ED', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Strategic</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#888888', flexShrink: 0 }}></div>
+                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Unclassified</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Deck.gl Map */}
+      <div style={{ flex: 1, position: 'relative', background: '#000', minHeight: 0 }}>
+        <DeckGL
+          viewState={viewState}
+          onViewStateChange={({ viewState: vs }: any) => setViewState(vs)}
+          controller={true}
+          layers={layers}
+          width="100%"
+          height="100%"
+          style={{ position: 'absolute', inset: 0 }}
+          getTooltip={({ object }: any) => object && {
+            html: `<div style="max-width: 250px;">
+                   <strong>${object.event.event_category?.toUpperCase() || 'EVENT'}</strong><br/>
+                   ${object.event.country || ''}${object.event.city ? ', ' + object.event.city : ''}<br/>
+                   Keywords: ${object.event.matched_keywords || 'N/A'}<br/>
+                   ${object.event.extracted_date ? new Date(object.event.extracted_date).toLocaleDateString() : ''}</div>`,
+            style: {
+              backgroundColor: '#000',
+              color: '#fff',
+              padding: '8px',
+              borderRadius: '4px',
+              border: '1px solid #ff6600',
+              fontFamily: 'Consolas, monospace',
+              fontSize: '10px'
+            }
+          }}
+        />
+      </div>
+
+      {/* Footer */}
+      <div style={{ flexShrink: 0 }}>
+        <TabFooter
+          tabName="GEOPOLITICAL CONFLICT MONITOR"
+          leftInfo={[
+            { label: 'EVENTS', value: `${events.length}`, color: events.length > 0 ? '#10b981' : '#ef4444' },
+            { label: 'ENGINE', value: 'DECK.GL v9.2', color: '#06b6d4' },
+            { label: 'SOURCE', value: 'NEWS-EVENTS API', color: '#fbbf24' },
+            ...(selectedEvent ? [{ label: 'SELECTED', value: selectedEvent.country || 'N/A', color: '#ffd700' }] : [])
+          ]}
+          statusInfo={`REAL-TIME GLOBAL INTELLIGENCE | AUTO-REFRESH: 5MIN | ${currentTime.toLocaleTimeString()}`}
+          backgroundColor="#000000"
+          borderColor="#ff6600"
+        />
+      </div>
     </div>
   );
 };

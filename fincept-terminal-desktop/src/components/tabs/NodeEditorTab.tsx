@@ -1,5 +1,6 @@
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { saveSetting, getSetting } from '@/services/sqliteService';
 import ReactFlow, {
   Node,
   Edge,
@@ -256,10 +257,10 @@ export default function NodeEditorTab() {
   const [mcpNodeConfigs, setMcpNodeConfigs] = useState<MCPNodeConfig[]>([]);
   const [agentConfigs, setAgentConfigs] = useState<AgentMetadata[]>([]);
 
-  // Load saved workflow from localStorage or start with blank slate
-  const loadSavedWorkflow = useCallback(() => {
+  // Load saved workflow from storage or start with blank slate
+  const loadSavedWorkflow = useCallback(async () => {
     try {
-      const saved = localStorage.getItem('nodeEditorWorkflow');
+      const saved = await getSetting('nodeEditorWorkflow');
       if (saved) {
         const workflow = JSON.parse(saved);
         console.log('[NodeEditor] Loaded saved workflow:', workflow.nodes.length, 'nodes');
@@ -271,15 +272,25 @@ export default function NodeEditorTab() {
     return { nodes: [], edges: [] };
   }, []);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(loadSavedWorkflow().nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(loadSavedWorkflow().edges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Auto-save workflow to localStorage whenever nodes or edges change
+  // Load workflow on mount
   useEffect(() => {
-    const saveWorkflow = () => {
+    const initWorkflow = async () => {
+      const workflow = await loadSavedWorkflow();
+      setNodes(workflow.nodes);
+      setEdges(workflow.edges);
+    };
+    initWorkflow();
+  }, [loadSavedWorkflow]);
+
+  // Auto-save workflow to storage whenever nodes or edges change
+  useEffect(() => {
+    const saveWorkflow = async () => {
       try {
         const workflow = { nodes, edges };
-        localStorage.setItem('nodeEditorWorkflow', JSON.stringify(workflow));
+        await saveSetting('nodeEditorWorkflow', JSON.stringify(workflow), 'node_editor');
         console.log('[NodeEditor] Auto-saved workflow:', nodes.length, 'nodes,', edges.length, 'edges');
       } catch (error) {
         console.error('[NodeEditor] Failed to save workflow:', error);
@@ -631,10 +642,10 @@ export default function NodeEditorTab() {
   }, [handleKeyDown]);
 
   // Save workflow manually
-  const saveWorkflow = useCallback(() => {
+  const saveWorkflow = useCallback(async () => {
     try {
       const workflow = { nodes, edges };
-      localStorage.setItem('nodeEditorWorkflow', JSON.stringify(workflow));
+      await saveSetting('nodeEditorWorkflow', JSON.stringify(workflow), 'node_editor');
       console.log('[NodeEditor] Manually saved workflow:', nodes.length, 'nodes,', edges.length, 'edges');
       // Could add visual feedback here
     } catch (error) {
@@ -684,10 +695,10 @@ export default function NodeEditorTab() {
   }, [setNodes, setEdges]);
 
   // Clear workflow (start fresh)
-  const clearWorkflow = useCallback(() => {
+  const clearWorkflow = useCallback(async () => {
     setNodes([]);
     setEdges([]);
-    localStorage.removeItem('nodeEditorWorkflow');
+    await saveSetting('nodeEditorWorkflow', '', 'node_editor');
     setWorkflowMode('new');
     setCurrentWorkflowId(null);
     setEditingDraftId(null);
@@ -771,7 +782,7 @@ export default function NodeEditorTab() {
           // Clear the canvas after successful deployment
           setNodes([]);
           setEdges([]);
-          localStorage.removeItem('nodeEditorWorkflow');
+          await saveSetting('nodeEditorWorkflow', '', 'node_editor');
 
           // Reset to new workflow mode
           setCurrentWorkflowId(null);

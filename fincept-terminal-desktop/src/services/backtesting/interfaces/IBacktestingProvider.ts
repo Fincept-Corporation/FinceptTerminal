@@ -31,7 +31,7 @@ import {
 /**
  * IBacktestingProvider - Provider-agnostic interface
  *
- * All backtesting engines (Lean, Backtrader, VectorBT, QuantLib, custom)
+ * All backtesting engines (Backtrader, VectorBT, QuantLib, Backtesting.py, custom)
  * must implement this interface to work with Fincept Terminal.
  *
  * This is the ONLY interface the terminal core uses for backtesting.
@@ -43,7 +43,7 @@ export interface IBacktestingProvider {
   // ============================================================================
 
   /**
-   * Provider name (e.g., "QuantConnect Lean", "Backtrader", "VectorBT")
+   * Provider name (e.g., "Backtrader", "VectorBT", "Backtesting.py")
    */
   readonly name: string;
 

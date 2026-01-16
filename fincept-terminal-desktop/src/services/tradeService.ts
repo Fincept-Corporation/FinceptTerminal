@@ -2,6 +2,7 @@
 // Trade Data Service - Integrates with Fincept Backend Trade API
 
 // import { loggerService } from './loggerService';
+import { getSetting } from './sqliteService';
 
 const API_BASE = 'https://finceptbackend.share.zrok.io';
 
@@ -72,11 +73,11 @@ class TradeService {
   /**
    * Get API key from session storage (AuthContext)
    */
-  private getApiKey(): string {
+  private async getApiKey(): Promise<string> {
     try {
-      const sessionData = localStorage.getItem('fincept_session');
+      const sessionData = await getSetting('fincept_session');
       if (!sessionData) {
-        console.warn('[TradeService] No session found in localStorage');
+        console.warn('[TradeService] No session found');
         return '';
       }
 
@@ -98,7 +99,7 @@ class TradeService {
    * Make authenticated API request
    */
   private async apiRequest<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    const apiKey = this.getApiKey();
+    const apiKey = await this.getApiKey();
     const url = new URL(`${API_BASE}${endpoint}`);
 
     // Add query parameters

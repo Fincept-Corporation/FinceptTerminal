@@ -1,5 +1,7 @@
 // LLM Configuration Service
-// Manages settings for different LLM providers with localStorage persistence
+// Manages settings for different LLM providers
+
+import { saveLLMConfig, getLLMConfigs, saveLLMGlobalSettings, getLLMGlobalSettings } from './sqliteService';
 
 export type LLMProvider = 'openai' | 'gemini' | 'deepseek' | 'ollama' | 'openrouter';
 
@@ -62,8 +64,6 @@ export const DEFAULT_BASE_URLS = {
   openrouter: 'https://openrouter.ai/api/v1'
 };
 
-const STORAGE_KEY = 'fincept-llm-settings';
-
 // Default settings
 const getDefaultSettings = (): LLMSettings => ({
   openai: {
@@ -96,30 +96,88 @@ const getDefaultSettings = (): LLMSettings => ({
 
 class LLMConfigService {
   private settings: LLMSettings;
+  private initialized: boolean = false;
 
   constructor() {
-    this.settings = this.loadSettings();
+    this.settings = getDefaultSettings();
+    this.init();
   }
 
-  // Load settings from localStorage
-  private loadSettings(): LLMSettings {
+  private async init() {
+    if (!this.initialized) {
+      this.settings = await this.loadSettings();
+      this.initialized = true;
+    }
+  }
+
+  // Load settings from storage
+  private async loadSettings(): Promise<LLMSettings> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Merge with defaults to ensure all fields exist
-        return { ...getDefaultSettings(), ...parsed };
-      }
+      const configs = await getLLMConfigs();
+      const globalSettings = await getLLMGlobalSettings();
+
+      const defaults = getDefaultSettings();
+      const settings: LLMSettings = { ...defaults };
+
+      // Map database configs to settings structure
+      configs.forEach(config => {
+        const provider = config.provider as LLMProvider;
+        if (provider in settings) {
+          const providerSettings: any = settings[provider];
+          if ('apiKey' in providerSettings) {
+            providerSettings.apiKey = config.api_key || '';
+          }
+          if ('baseUrl' in providerSettings && config.base_url) {
+            providerSettings.baseUrl = config.base_url;
+          }
+          providerSettings.model = config.model;
+          if (config.is_active) {
+            settings.activeProvider = provider;
+          }
+        }
+      });
+
+      // Apply global settings
+      settings.globalSettings = {
+        temperature: globalSettings.temperature,
+        maxTokens: globalSettings.max_tokens,
+        systemPrompt: globalSettings.system_prompt
+      };
+
+      return settings;
     } catch (error) {
       console.error('Failed to load LLM settings:', error);
+      return getDefaultSettings();
     }
-    return getDefaultSettings();
   }
 
-  // Save settings to localStorage
-  private saveSettings(): void {
+  // Save settings to storage
+  private async saveSettings(): Promise<void> {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
+      // Save each provider config
+      const providers: LLMProvider[] = ['openai', 'gemini', 'deepseek', 'ollama', 'openrouter'];
+
+      for (const provider of providers) {
+        const providerSettings = this.settings[provider];
+        const config: any = {
+          provider,
+          api_key: 'apiKey' in providerSettings ? providerSettings.apiKey : '',
+          base_url: 'baseUrl' in providerSettings ? providerSettings.baseUrl : undefined,
+          model: providerSettings.model,
+          is_active: this.settings.activeProvider === provider,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        await saveLLMConfig(config);
+      }
+
+      // Save global settings
+      await saveLLMGlobalSettings({
+        temperature: this.settings.globalSettings.temperature,
+        max_tokens: this.settings.globalSettings.maxTokens,
+        system_prompt: this.settings.globalSettings.systemPrompt
+      });
     } catch (error) {
       console.error('Failed to save LLM settings:', error);
     }

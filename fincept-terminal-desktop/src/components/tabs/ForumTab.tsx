@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '../../services/forumApi';
-import { sqliteService } from '../../services/sqliteService';
+import { sqliteService, getSetting, saveSetting } from '../../services/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 
@@ -115,9 +115,9 @@ const ForumTab: React.FC = () => {
   ];
 
   // Get API credentials
-  const getApiCredentials = () => {
-    const apiKey = session?.api_key || localStorage.getItem('fincept_api_key') || undefined;
-    const deviceId = session?.device_id || localStorage.getItem('fincept_device_id') || undefined;
+  const getApiCredentials = async () => {
+    const apiKey = session?.api_key || await getSetting('fincept_api_key') || undefined;
+    const deviceId = session?.device_id || await getSetting('fincept_device_id') || undefined;
     return { apiKey, deviceId };
   };
 
@@ -177,7 +177,7 @@ const ForumTab: React.FC = () => {
       }
 
       // Fetch from API
-      const { apiKey, deviceId } = getApiCredentials();
+      const { apiKey, deviceId } = await getApiCredentials();
       const response = await ForumApiService.getCategories(apiKey, deviceId);
 
       if (response.success && response.data?.data?.categories) {
@@ -219,7 +219,7 @@ const ForumTab: React.FC = () => {
       console.log('[Forum] Fetching posts - Category:', activeCategory, 'ID:', categoryId, 'Sort:', sortBy);
 
       // Fetch from API
-      const { apiKey, deviceId } = getApiCredentials();
+      const { apiKey, deviceId } = await getApiCredentials();
       let response;
 
       if (activeCategory === 'ALL') {
@@ -294,7 +294,7 @@ const ForumTab: React.FC = () => {
       }
 
       // Fetch from API
-      const { apiKey, deviceId } = getApiCredentials();
+      const { apiKey, deviceId } = await getApiCredentials();
       const response = await ForumApiService.getForumStats(apiKey, deviceId);
 
       if (response.success && response.data?.data) {
@@ -337,7 +337,7 @@ const ForumTab: React.FC = () => {
       return;
     }
 
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     if (!apiKey) {
       alert('You must be logged in to create posts');
       return;
@@ -373,7 +373,7 @@ const ForumTab: React.FC = () => {
     setSelectedPost(post);
     setShowPostDetail(true);
 
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     try {
       const response = await ForumApiService.getPostDetails(post.id, apiKey, deviceId);
 
@@ -392,7 +392,7 @@ const ForumTab: React.FC = () => {
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedPost) return;
 
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     if (!apiKey) {
       alert('You must be logged in to comment');
       return;
@@ -421,7 +421,7 @@ const ForumTab: React.FC = () => {
 
   // ENDPOINT 9: Vote on post
   const handleVotePost = async (postId: string, voteType: 'up' | 'down') => {
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     if (!apiKey) {
       alert('You must be logged in to vote');
       return;
@@ -445,7 +445,7 @@ const ForumTab: React.FC = () => {
 
   // ENDPOINT 10: Vote on comment
   const handleVoteComment = async (commentId: string, voteType: 'up' | 'down') => {
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     if (!apiKey) {
       alert('You must be logged in to vote');
       return;
@@ -466,7 +466,7 @@ const ForumTab: React.FC = () => {
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     setIsLoading(true);
 
     try {
@@ -486,7 +486,7 @@ const ForumTab: React.FC = () => {
 
   // ENDPOINT 12: Get my profile
   const handleViewMyProfile = async () => {
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     if (!apiKey) {
       alert('You must be logged in to view profile');
       return;
@@ -514,7 +514,7 @@ const ForumTab: React.FC = () => {
 
   // ENDPOINT 11: Get user profile
   const handleViewUserProfile = async (username: string) => {
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     if (!apiKey) {
       alert('You must be logged in to view profiles');
       return;
@@ -537,7 +537,7 @@ const ForumTab: React.FC = () => {
 
   // ENDPOINT 13: Update profile
   const handleUpdateProfile = async () => {
-    const { apiKey, deviceId } = getApiCredentials();
+    const { apiKey, deviceId } = await getApiCredentials();
     if (!apiKey) return;
 
     try {
@@ -622,37 +622,40 @@ const ForumTab: React.FC = () => {
 
   // Initial load
   useEffect(() => {
-    fetchCategories();
-    fetchForumStats();
+    const initForum = async () => {
+      fetchCategories();
+      fetchForumStats();
 
-    // Check if navigated from dashboard widget with post ID
-    const selectedPostId = localStorage.getItem('forum_selected_post_id');
-    if (selectedPostId) {
-      localStorage.removeItem('forum_selected_post_id');
-      // Find and open the post
-      setTimeout(async () => {
-        const post = forumPosts.find(p => p.id === selectedPostId);
-        if (post) {
-          handleViewPost(post);
-        } else {
-          // Try to fetch the post details directly
-          try {
-            const { apiKey, deviceId } = getApiCredentials();
-            const response = await ForumApiService.getPostDetails(selectedPostId, apiKey, deviceId);
-            if (response.success && response.data) {
-              const apiPost = (response.data as any).data?.post || (response.data as any).post;
-              const post = convertApiPostToUIFormat(apiPost);
-              setSelectedPost(post);
-              const comments = ((response.data as any).data?.comments || (response.data as any).comments || []).map(convertApiCommentToUIFormat);
-              setPostComments(comments);
-              setShowPostDetail(true);
+      // Check if navigated from dashboard widget with post ID
+      const selectedPostId = await getSetting('forum_selected_post_id');
+      if (selectedPostId) {
+        await saveSetting('forum_selected_post_id', '', 'forum');
+        // Find and open the post
+        setTimeout(async () => {
+          const post = forumPosts.find(p => p.id === selectedPostId);
+          if (post) {
+            handleViewPost(post);
+          } else {
+            // Try to fetch the post details directly
+            try {
+              const { apiKey, deviceId } = await getApiCredentials();
+              const response = await ForumApiService.getPostDetails(selectedPostId, apiKey, deviceId);
+              if (response.success && response.data) {
+                const apiPost = (response.data as any).data?.post || (response.data as any).post;
+                const post = convertApiPostToUIFormat(apiPost);
+                setSelectedPost(post);
+                const comments = ((response.data as any).data?.comments || (response.data as any).comments || []).map(convertApiCommentToUIFormat);
+                setPostComments(comments);
+                setShowPostDetail(true);
+              }
+            } catch (err) {
+              console.error('Failed to load post:', err);
             }
-          } catch (err) {
-            console.error('Failed to load post:', err);
           }
-        }
-      }, 1000);
-    }
+        }, 1000);
+      }
+    };
+    initForum();
   }, []);
 
   // Fetch posts when category or sort changes

@@ -3,6 +3,7 @@ import { RefreshCw, Download, Plus, Minus, Trash2 } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { getSetting, saveSetting } from '@/services/sqliteService';
 
 interface Provider {
   code: string;
@@ -64,12 +65,12 @@ export default function DBnomicsTab() {
     restoreState();
   }, []);
 
-  // Save state to localStorage whenever important data changes
+  // Save state whenever important data changes
   React.useEffect(() => {
     saveState();
   }, [singleViewSeries, slots, slotChartTypes, singleChartType, activeView]);
 
-  const saveState = () => {
+  const saveState = async () => {
     try {
       const state = {
         singleViewSeries,
@@ -79,15 +80,18 @@ export default function DBnomicsTab() {
         activeView,
         timestamp: Date.now()
       };
-      localStorage.setItem('dbnomics_state', JSON.stringify(state));
+      // PURE SQLite - No localStorage fallback
+      await saveSetting('dbnomics_state', JSON.stringify(state), 'dbnomics_tab');
+      console.log('[DBnomicsTab] State saved to SQLite');
     } catch (error) {
-      console.error('Failed to save DBnomics state:', error);
+      console.error('[DBnomicsTab] Failed to save state to SQLite:', error);
     }
   };
 
-  const restoreState = () => {
+  const restoreState = async () => {
     try {
-      const saved = localStorage.getItem('dbnomics_state');
+      // PURE SQLite - No localStorage fallback
+      const saved = await getSetting('dbnomics_state');
       if (saved) {
         const state = JSON.parse(saved);
         // Only restore if saved within last 24 hours
@@ -97,11 +101,16 @@ export default function DBnomicsTab() {
           if (state.slotChartTypes) setSlotChartTypes(state.slotChartTypes);
           if (state.singleChartType) setSingleChartType(state.singleChartType);
           if (state.activeView) setActiveView(state.activeView);
-          setStatus('Restored previous session');
+          setStatus('Restored from SQLite');
+          console.log('[DBnomicsTab] State restored from SQLite');
+        } else {
+          console.log('[DBnomicsTab] Cached state expired (>24h)');
         }
+      } else {
+        console.log('[DBnomicsTab] No cached state in SQLite');
       }
     } catch (error) {
-      console.error('Failed to restore DBnomics state:', error);
+      console.error('[DBnomicsTab] Failed to restore state from SQLite:', error);
     }
   };
 
@@ -280,12 +289,14 @@ export default function DBnomicsTab() {
     setSingleViewSeries(singleViewSeries.filter((_, i) => i !== index));
   };
 
-  const clearAllSlots = () => {
+  const clearAllSlots = async () => {
     setSlots([[]]);
     setSlotChartTypes(['line']);
     setSingleViewSeries([]);
-    localStorage.removeItem('dbnomics_state'); // Clear cache
+    // PURE SQLite - Clear by saving empty state
+    await saveSetting('dbnomics_state', '', 'dbnomics_tab');
     setStatus('Cleared all');
+    console.log('[DBnomicsTab] State cleared from SQLite');
   };
 
   const exportData = () => {

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
-import { sqliteService } from './sqliteService';
+import { sqliteService, saveSetting, getSetting } from './sqliteService';
 import { reportLogger } from './loggerService';
 
 export interface ReportComponent {
@@ -194,9 +194,8 @@ class ReportService {
       styles: templateData.styles
     });
 
-    // For now, use localStorage until SQLite service is fully integrated
     try {
-      const templates = this.getTemplatesFromLocalStorage();
+      const templates = await this.getTemplatesFromStorage();
       const existingIndex = templates.findIndex(t => t.id === template.id);
 
       if (existingIndex >= 0) {
@@ -205,15 +204,15 @@ class ReportService {
         templates.push(templateData);
       }
 
-      localStorage.setItem('financial_report_templates', JSON.stringify(templates));
+      await saveSetting('financial_report_templates', JSON.stringify(templates), 'reports');
     } catch (error) {
       reportLogger.error('Failed to save template:', error);
       throw error;
     }
   }
 
-  private getTemplatesFromLocalStorage(): ReportTemplate[] {
-    const stored = localStorage.getItem('financial_report_templates');
+  private async getTemplatesFromStorage(): Promise<ReportTemplate[]> {
+    const stored = await getSetting('financial_report_templates');
     return stored ? JSON.parse(stored) : [];
   }
 
@@ -221,14 +220,14 @@ class ReportService {
    * Get all saved templates
    */
   async getTemplates(): Promise<ReportTemplate[]> {
-    return this.getTemplatesFromLocalStorage();
+    return await this.getTemplatesFromStorage();
   }
 
   /**
    * Get template by ID
    */
   async getTemplate(id: string): Promise<ReportTemplate | null> {
-    const templates = this.getTemplatesFromLocalStorage();
+    const templates = await this.getTemplatesFromStorage();
     return templates.find(t => t.id === id) || null;
   }
 
@@ -236,9 +235,9 @@ class ReportService {
    * Delete template
    */
   async deleteTemplate(id: string): Promise<void> {
-    const templates = this.getTemplatesFromLocalStorage();
+    const templates = await this.getTemplatesFromStorage();
     const filtered = templates.filter(t => t.id !== id);
-    localStorage.setItem('financial_report_templates', JSON.stringify(filtered));
+    await saveSetting('financial_report_templates', JSON.stringify(filtered), 'reports');
   }
 
   /**

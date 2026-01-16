@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Star, Zap, Crown, Rocket, Shield, Loader2, AlertCircl
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 import { PaymentUtils } from '@/services/paymentApi';
+import { saveSetting } from '@/services/sqliteService';
 
 interface PricingScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -153,9 +154,9 @@ const handleSelectPlan = async () => {
       const checkoutUrl = result.data.checkout_url;
 
       if (checkoutUrl && checkoutUrl !== 'undefined' && checkoutUrl !== 'null') {
-        // Store transaction_id in localStorage for payment processing screen
+        // PURE SQLite - Store payment UUID for payment processing screen
         if (result.data.payment_uuid) {
-          localStorage.setItem('pending_payment_order_id', result.data.payment_uuid);
+          await saveSetting('pending_payment_order_id', result.data.payment_uuid, 'payment');
         }
 
         try {

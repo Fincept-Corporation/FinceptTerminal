@@ -7,6 +7,7 @@
 
 import { KrakenAdapter } from './crypto/kraken/KrakenAdapter';
 import { HyperLiquidAdapter } from './crypto/hyperliquid/HyperLiquidAdapter';
+import { ZerodhaAdapter } from './stocks/zerodha/ZerodhaAdapter';
 import type { IExchangeAdapter, ExchangeConfig } from './crypto/types';
 
 // ============================================================================
@@ -198,6 +199,75 @@ export const BROKER_REGISTRY: Record<string, BrokerMetadata> = {
     fees: {
       maker: 0.00015,
       taker: 0.00035,
+    },
+  },
+
+  zerodha: {
+    id: 'zerodha',
+    name: 'zerodha',
+    displayName: 'Zerodha',
+    type: 'stocks',
+    category: 'centralized',
+    region: 'india',
+    adapterClass: ZerodhaAdapter,
+
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      perpetuals: false,
+      options: true,
+      staking: false,
+      vaults: false,
+      subaccounts: false,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: false,
+      icebergOrders: true,
+      batchOrders: true,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 5,
+      marginMode: true,
+      transfers: false,
+      withdrawals: false,
+      deposits: false,
+    },
+
+    defaultSymbols: [
+      'SBIN',
+      'RELIANCE',
+      'TCS',
+      'INFY',
+      'HDFCBANK',
+      'ICICIBANK',
+      'WIPRO',
+      'ITC',
+      'AXISBANK',
+      'LT',
+      'BHARTIARTL',
+      'ASIANPAINT',
+      'MARUTI',
+      'HINDUNILVR',
+      'KOTAKBANK',
+    ],
+
+    websocket: {
+      enabled: false, // WebSocket not yet implemented
+      endpoint: 'wss://ws.kite.trade',
+    },
+
+    fees: {
+      maker: 0.0003, // 0.03% for equity delivery
+      taker: 0.0003,
     },
   },
 };

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import GridLayout, { Layout } from 'react-grid-layout';
-import { Plus, RotateCcw, Save } from 'lucide-react';
+import { Plus, RotateCcw, Save, Info } from 'lucide-react';
+import { createDashboardTabTour } from './tours/dashboardTabTour';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { sqliteService } from '../../services/sqliteService';
+import { sqliteService, saveSetting, getSetting } from '../../services/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
 import {
   NewsWidget,
@@ -143,21 +144,24 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
     initDatabase();
   }, []);
 
-  // Load widgets from localStorage on mount
+  // Load widgets from storage on mount
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    const loadWidgets = async () => {
       try {
-        const parsed = JSON.parse(saved);
-        setWidgets(parsed.widgets);
-        setNextId(parsed.nextId || 1);
+        const saved = await getSetting(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setWidgets(parsed.widgets);
+          setNextId(parsed.nextId || 1);
+        } else {
+          setWidgets(DEFAULT_LAYOUT);
+        }
       } catch (error) {
         console.error('Failed to load dashboard layout:', error);
         setWidgets(DEFAULT_LAYOUT);
       }
-    } else {
-      setWidgets(DEFAULT_LAYOUT);
-    }
+    };
+    loadWidgets();
   }, []);
 
   // Update time
@@ -202,17 +206,22 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
     };
   }, []);
 
-  // Save layout to localStorage
-  const saveLayout = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ widgets, nextId }));
-    alert(t('messages.layoutSaved'));
+  // Save layout to storage
+  const saveLayout = async () => {
+    try {
+      await saveSetting(STORAGE_KEY, JSON.stringify({ widgets, nextId }), 'dashboard');
+      alert(t('messages.layoutSaved'));
+    } catch (error) {
+      console.error('Failed to save dashboard layout:', error);
+      alert('Failed to save layout');
+    }
   };
 
   // Reset to default layout
-  const resetLayout = () => {
+  const resetLayout = async () => {
     if (confirm(t('messages.resetConfirm'))) {
       setWidgets(DEFAULT_LAYOUT);
-      localStorage.removeItem(STORAGE_KEY);
+      await saveSetting(STORAGE_KEY, '', 'dashboard');
     }
   };
 
@@ -546,6 +555,30 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
+              onClick={() => {
+                const tour = createDashboardTabTour();
+                tour.drive();
+              }}
+              style={{
+                background: colors.info,
+                color: colors.background,
+                border: 'none',
+                padding: '6px 10px',
+                fontSize: fontSize.small,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '2px'
+              }}
+              title="Start dashboard tour"
+            >
+              <Info size={14} />
+              HELP
+            </button>
+            <button
+              id="dashboard-add-widget"
               onClick={() => setShowAddModal(true)}
               style={{
                 background: colors.secondary,
@@ -565,6 +598,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
               {t('buttons.addWidget')}
             </button>
             <button
+              id="dashboard-save"
               onClick={saveLayout}
               style={{
                 background: colors.primary,
@@ -584,6 +618,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
               {t('buttons.saveLayout')}
             </button>
             <button
+              id="dashboard-reset"
               onClick={resetLayout}
               style={{
                 background: colors.textMuted,
@@ -625,6 +660,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
       {/* Main Content - Grid Layout */}
       <div
+        id="dashboard-grid"
         ref={containerRef}
         style={{
           flex: 1,
@@ -676,7 +712,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             preventCollision={false}
           >
             {widgets.map(widget => (
-              <div key={widget.id}>
+              <div key={widget.id} className={`widget-${widget.type}`}>
                 {renderWidget(widget)}
               </div>
             ))}

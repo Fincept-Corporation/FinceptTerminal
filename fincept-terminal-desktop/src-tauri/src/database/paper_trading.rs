@@ -832,3 +832,559 @@ pub fn delete_trade(id: &str) -> Result<()> {
 
     Ok(())
 }
+
+// ============================================================================
+// Margin Block Operations (for pending orders)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarginBlock {
+    pub id: String,
+    pub portfolio_id: String,
+    pub order_id: String,
+    pub symbol: String,
+    pub blocked_amount: f64,
+    pub created_at: String,
+}
+
+pub fn create_margin_block(
+    id: &str,
+    portfolio_id: &str,
+    order_id: &str,
+    symbol: &str,
+    blocked_amount: f64,
+) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    conn.execute(
+        "INSERT INTO paper_trading_margin_blocks
+         (id, portfolio_id, order_id, symbol, blocked_amount)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, portfolio_id, order_id, symbol, blocked_amount],
+    )?;
+
+    Ok(())
+}
+
+pub fn get_margin_blocks(portfolio_id: &str) -> Result<Vec<MarginBlock>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, portfolio_id, order_id, symbol, blocked_amount, created_at
+         FROM paper_trading_margin_blocks WHERE portfolio_id = ?1"
+    )?;
+
+    let blocks = stmt
+        .query_map(params![portfolio_id], |row| {
+            Ok(MarginBlock {
+                id: row.get(0)?,
+                portfolio_id: row.get(1)?,
+                order_id: row.get(2)?,
+                symbol: row.get(3)?,
+                blocked_amount: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(blocks)
+}
+
+pub fn get_margin_block_by_order(order_id: &str) -> Result<Option<MarginBlock>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let block = conn.query_row(
+        "SELECT id, portfolio_id, order_id, symbol, blocked_amount, created_at
+         FROM paper_trading_margin_blocks WHERE order_id = ?1",
+        params![order_id],
+        |row| {
+            Ok(MarginBlock {
+                id: row.get(0)?,
+                portfolio_id: row.get(1)?,
+                order_id: row.get(2)?,
+                symbol: row.get(3)?,
+                blocked_amount: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        },
+    );
+
+    match block {
+        Ok(b) => Ok(Some(b)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub fn delete_margin_block(order_id: &str) -> Result<f64> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    // Get blocked amount before deleting
+    let blocked_amount: f64 = conn
+        .query_row(
+            "SELECT blocked_amount FROM paper_trading_margin_blocks WHERE order_id = ?1",
+            params![order_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0.0);
+
+    conn.execute(
+        "DELETE FROM paper_trading_margin_blocks WHERE order_id = ?1",
+        params![order_id],
+    )?;
+
+    Ok(blocked_amount)
+}
+
+pub fn get_total_blocked_margin(portfolio_id: &str) -> Result<f64> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let total: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(blocked_amount), 0) FROM paper_trading_margin_blocks WHERE portfolio_id = ?1",
+            params![portfolio_id],
+            |row| row.get(0),
+        )?;
+
+    Ok(total)
+}
+
+// ============================================================================
+// Holdings Operations (T+1 settled positions)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaperTradingHolding {
+    pub id: String,
+    pub portfolio_id: String,
+    pub symbol: String,
+    pub quantity: f64,
+    pub average_price: f64,
+    pub invested_value: f64,
+    pub current_price: f64,
+    pub current_value: f64,
+    pub pnl: f64,
+    pub pnl_percent: f64,
+    pub t1_quantity: f64, // Shares pending T+1 settlement
+    pub available_quantity: f64, // Shares available for selling
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+pub fn create_holding(
+    id: &str,
+    portfolio_id: &str,
+    symbol: &str,
+    quantity: f64,
+    average_price: f64,
+) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let invested_value = average_price * quantity;
+
+    conn.execute(
+        "INSERT INTO paper_trading_holdings
+         (id, portfolio_id, symbol, quantity, average_price, invested_value, current_price, current_value, pnl, pnl_percent, t1_quantity, available_quantity)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, 0, 0, ?9)",
+        params![id, portfolio_id, symbol, quantity, average_price, invested_value, average_price, invested_value, quantity],
+    )?;
+
+    Ok(())
+}
+
+pub fn get_holdings(portfolio_id: &str) -> Result<Vec<PaperTradingHolding>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, portfolio_id, symbol, quantity, average_price, invested_value, current_price,
+                current_value, pnl, pnl_percent, t1_quantity, available_quantity, created_at, updated_at
+         FROM paper_trading_holdings WHERE portfolio_id = ?1 AND quantity > 0"
+    )?;
+
+    let holdings = stmt
+        .query_map(params![portfolio_id], |row| {
+            Ok(PaperTradingHolding {
+                id: row.get(0)?,
+                portfolio_id: row.get(1)?,
+                symbol: row.get(2)?,
+                quantity: row.get(3)?,
+                average_price: row.get(4)?,
+                invested_value: row.get(5)?,
+                current_price: row.get(6)?,
+                current_value: row.get(7)?,
+                pnl: row.get(8)?,
+                pnl_percent: row.get(9)?,
+                t1_quantity: row.get(10)?,
+                available_quantity: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(holdings)
+}
+
+pub fn get_holding_by_symbol(portfolio_id: &str, symbol: &str) -> Result<Option<PaperTradingHolding>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let holding = conn.query_row(
+        "SELECT id, portfolio_id, symbol, quantity, average_price, invested_value, current_price,
+                current_value, pnl, pnl_percent, t1_quantity, available_quantity, created_at, updated_at
+         FROM paper_trading_holdings WHERE portfolio_id = ?1 AND symbol = ?2",
+        params![portfolio_id, symbol],
+        |row| {
+            Ok(PaperTradingHolding {
+                id: row.get(0)?,
+                portfolio_id: row.get(1)?,
+                symbol: row.get(2)?,
+                quantity: row.get(3)?,
+                average_price: row.get(4)?,
+                invested_value: row.get(5)?,
+                current_price: row.get(6)?,
+                current_value: row.get(7)?,
+                pnl: row.get(8)?,
+                pnl_percent: row.get(9)?,
+                t1_quantity: row.get(10)?,
+                available_quantity: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
+            })
+        },
+    );
+
+    match holding {
+        Ok(h) => Ok(Some(h)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub fn update_holding(
+    id: &str,
+    quantity: Option<f64>,
+    average_price: Option<f64>,
+    current_price: Option<f64>,
+    t1_quantity: Option<f64>,
+    available_quantity: Option<f64>,
+) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let mut updates = vec!["updated_at = CURRENT_TIMESTAMP".to_string()];
+    let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+    if let Some(q) = quantity {
+        updates.push("quantity = ?".to_string());
+        params_vec.push(Box::new(q));
+    }
+    if let Some(ap) = average_price {
+        updates.push("average_price = ?".to_string());
+        params_vec.push(Box::new(ap));
+        // Recalculate invested_value if we have quantity
+        if let Some(q) = quantity {
+            updates.push("invested_value = ?".to_string());
+            params_vec.push(Box::new(ap * q));
+        }
+    }
+    if let Some(cp) = current_price {
+        updates.push("current_price = ?".to_string());
+        params_vec.push(Box::new(cp));
+    }
+    if let Some(t1q) = t1_quantity {
+        updates.push("t1_quantity = ?".to_string());
+        params_vec.push(Box::new(t1q));
+    }
+    if let Some(aq) = available_quantity {
+        updates.push("available_quantity = ?".to_string());
+        params_vec.push(Box::new(aq));
+    }
+
+    params_vec.push(Box::new(id.to_string()));
+    let sql = format!("UPDATE paper_trading_holdings SET {} WHERE id = ?", updates.join(", "));
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, params_refs.as_slice())?;
+
+    // Update derived fields
+    conn.execute(
+        "UPDATE paper_trading_holdings SET
+         current_value = current_price * quantity,
+         pnl = (current_price * quantity) - invested_value,
+         pnl_percent = CASE WHEN invested_value > 0 THEN ((current_price * quantity) - invested_value) / invested_value * 100 ELSE 0 END
+         WHERE id = ?1",
+        params![id],
+    )?;
+
+    Ok(())
+}
+
+pub fn delete_holding(id: &str) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    conn.execute(
+        "DELETE FROM paper_trading_holdings WHERE id = ?1",
+        params![id],
+    )?;
+
+    Ok(())
+}
+
+// Process T+1 settlement (move t1_quantity to available_quantity)
+pub fn process_t1_settlement(portfolio_id: &str) -> Result<i32> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let affected = conn.execute(
+        "UPDATE paper_trading_holdings SET
+         available_quantity = available_quantity + t1_quantity,
+         t1_quantity = 0,
+         updated_at = CURRENT_TIMESTAMP
+         WHERE portfolio_id = ?1 AND t1_quantity > 0",
+        params![portfolio_id],
+    )?;
+
+    Ok(affected as i32)
+}
+
+// ============================================================================
+// Execution Engine Operations
+// ============================================================================
+
+/// Fill an order and update position
+pub fn fill_order(
+    order_id: &str,
+    fill_price: f64,
+    fill_quantity: f64,
+    fee: f64,
+    fee_rate: f64,
+) -> Result<String> {
+    let pool = get_pool()?;
+    let _conn = pool.get()?;
+
+    // Get order details
+    let order = get_order(order_id)?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Create trade record
+    let trade_id = format!("trade_{}_{}", chrono::Utc::now().timestamp_millis(), rand::random::<u32>() % 100000);
+    create_trade(
+        &trade_id,
+        &order.portfolio_id,
+        order_id,
+        &order.symbol,
+        &order.side,
+        fill_price,
+        fill_quantity,
+        fee,
+        fee_rate,
+        order.order_type == "limit",
+    )?;
+
+    // Update order status
+    let new_filled = order.filled_quantity + fill_quantity;
+    let new_status = if new_filled >= order.quantity { "filled" } else { "partial" };
+
+    update_order(
+        order_id,
+        Some(new_filled),
+        Some(fill_price),
+        Some(new_status),
+        if new_status == "filled" { Some(&now) } else { None },
+    )?;
+
+    // Delete margin block for this order
+    let _ = delete_margin_block(order_id);
+
+    // Update position
+    update_position_after_fill(
+        &order.portfolio_id,
+        &order.symbol,
+        &order.side,
+        fill_price,
+        fill_quantity,
+    )?;
+
+    // Deduct fees from portfolio balance
+    let portfolio = get_portfolio(&order.portfolio_id)?;
+    update_portfolio_balance(&order.portfolio_id, portfolio.current_balance - fee)?;
+
+    Ok(trade_id)
+}
+
+/// Update position after order fill (handles netting)
+fn update_position_after_fill(
+    portfolio_id: &str,
+    symbol: &str,
+    side: &str,
+    fill_price: f64,
+    fill_quantity: f64,
+) -> Result<()> {
+    // Determine position side from order side
+    let position_side = if side == "buy" { "long" } else { "short" };
+    let opposite_side = if side == "buy" { "short" } else { "long" };
+
+    // Check for opposite position to close first
+    if let Some(opposite_pos) = get_position_by_symbol_and_side(portfolio_id, symbol, opposite_side, "open")? {
+        let close_qty = fill_quantity.min(opposite_pos.quantity);
+
+        // Calculate P&L
+        let pnl = if opposite_side == "long" {
+            (fill_price - opposite_pos.entry_price) * close_qty
+        } else {
+            (opposite_pos.entry_price - fill_price) * close_qty
+        };
+
+        // Update portfolio balance with P&L
+        let portfolio = get_portfolio(portfolio_id)?;
+        update_portfolio_balance(portfolio_id, portfolio.current_balance + pnl)?;
+
+        if close_qty >= opposite_pos.quantity {
+            // Fully close position
+            let now = chrono::Utc::now().to_rfc3339();
+            update_position(
+                &opposite_pos.id,
+                Some(0.0),
+                None,
+                Some(fill_price),
+                Some(0.0),
+                Some(opposite_pos.realized_pnl + pnl),
+                None,
+                Some("closed"),
+                Some(&now),
+            )?;
+
+            // Create new position with excess quantity if any
+            let excess = fill_quantity - opposite_pos.quantity;
+            if excess > 0.0 {
+                let pos_id = format!("pos_{}_{}", chrono::Utc::now().timestamp_millis(), rand::random::<u32>() % 100000);
+                create_position(&pos_id, portfolio_id, symbol, position_side, fill_price, excess, 1.0, "cross")?;
+            }
+        } else {
+            // Partially close position
+            let remaining = opposite_pos.quantity - close_qty;
+            update_position(
+                &opposite_pos.id,
+                Some(remaining),
+                None,
+                Some(fill_price),
+                None,
+                Some(opposite_pos.realized_pnl + pnl),
+                None,
+                None,
+                None,
+            )?;
+        }
+
+        return Ok(());
+    }
+
+    // No opposite position - add to or create same-side position
+    if let Some(existing_pos) = get_position_by_symbol_and_side(portfolio_id, symbol, position_side, "open")? {
+        // Average into existing position (VWAP)
+        let total_qty = existing_pos.quantity + fill_quantity;
+        let avg_price = (existing_pos.entry_price * existing_pos.quantity + fill_price * fill_quantity) / total_qty;
+
+        update_position(
+            &existing_pos.id,
+            Some(total_qty),
+            Some(avg_price),
+            Some(fill_price),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )?;
+    } else {
+        // Create new position
+        let pos_id = format!("pos_{}_{}", chrono::Utc::now().timestamp_millis(), rand::random::<u32>() % 100000);
+        create_position(&pos_id, portfolio_id, symbol, position_side, fill_price, fill_quantity, 1.0, "cross")?;
+    }
+
+    Ok(())
+}
+
+/// Calculate available margin (balance - blocked margin)
+pub fn get_available_margin(portfolio_id: &str) -> Result<f64> {
+    let portfolio = get_portfolio(portfolio_id)?;
+    let blocked = get_total_blocked_margin(portfolio_id)?;
+    Ok((portfolio.current_balance - blocked).max(0.0))
+}
+
+/// Get portfolio statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortfolioStats {
+    pub total_value: f64,
+    pub available_margin: f64,
+    pub blocked_margin: f64,
+    pub realized_pnl: f64,
+    pub unrealized_pnl: f64,
+    pub total_pnl: f64,
+    pub open_positions: i32,
+    pub total_trades: i32,
+}
+
+pub fn get_portfolio_stats(portfolio_id: &str) -> Result<PortfolioStats> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let portfolio = get_portfolio(portfolio_id)?;
+    let blocked = get_total_blocked_margin(portfolio_id)?;
+    let positions = get_portfolio_positions(portfolio_id, Some("open"))?;
+
+    let mut realized_pnl = 0.0;
+    let mut unrealized_pnl = 0.0;
+
+    for pos in &positions {
+        realized_pnl += pos.realized_pnl;
+        unrealized_pnl += pos.unrealized_pnl.unwrap_or(0.0);
+    }
+
+    let total_trades: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM paper_trading_trades WHERE portfolio_id = ?1",
+        params![portfolio_id],
+        |row| row.get(0),
+    )?;
+
+    Ok(PortfolioStats {
+        total_value: portfolio.current_balance + unrealized_pnl,
+        available_margin: (portfolio.current_balance - blocked).max(0.0),
+        blocked_margin: blocked,
+        realized_pnl,
+        unrealized_pnl,
+        total_pnl: realized_pnl + unrealized_pnl,
+        open_positions: positions.len() as i32,
+        total_trades,
+    })
+}
+
+/// Reset portfolio (delete all data and reset balance)
+pub fn reset_portfolio(portfolio_id: &str, initial_balance: f64) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    // Delete all related data
+    conn.execute("DELETE FROM paper_trading_trades WHERE portfolio_id = ?1", params![portfolio_id])?;
+    conn.execute("DELETE FROM paper_trading_orders WHERE portfolio_id = ?1", params![portfolio_id])?;
+    conn.execute("DELETE FROM paper_trading_positions WHERE portfolio_id = ?1", params![portfolio_id])?;
+    conn.execute("DELETE FROM paper_trading_margin_blocks WHERE portfolio_id = ?1", params![portfolio_id])?;
+    conn.execute("DELETE FROM paper_trading_holdings WHERE portfolio_id = ?1", params![portfolio_id])?;
+
+    // Reset portfolio balance
+    conn.execute(
+        "UPDATE paper_trading_portfolios SET current_balance = ?1, initial_balance = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+        params![initial_balance, portfolio_id],
+    )?;
+
+    Ok(())
+}

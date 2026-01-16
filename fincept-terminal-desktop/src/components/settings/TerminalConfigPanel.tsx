@@ -3,7 +3,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { tabConfigService } from '@/services/tabConfigService';
-import { TabConfiguration, MenuSection, DEFAULT_TABS } from '@/types/tabConfig';
+import { TabConfiguration, MenuSection, DEFAULT_TABS, DEFAULT_TAB_CONFIG } from '@/types/tabConfig';
 import { GripVertical, Plus, Trash2, RotateCcw, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -45,9 +45,18 @@ const SortableTab = ({ id, label, colors }: { id: string; label: string; colors:
 export const TerminalConfigPanel: React.FC = () => {
   const { t } = useTranslation('settings');
   const { colors } = useTerminalTheme();
-  const [config, setConfig] = useState<TabConfiguration>(tabConfigService.getConfiguration());
+  const [config, setConfig] = useState<TabConfiguration>(DEFAULT_TAB_CONFIG);
   const [newSectionName, setNewSectionName] = useState('');
   const [showNewSection, setShowNewSection] = useState(false);
+
+  // Load configuration on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      const loadedConfig = await tabConfigService.getConfiguration();
+      setConfig(loadedConfig);
+    };
+    loadConfig();
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -152,10 +161,11 @@ export const TerminalConfigPanel: React.FC = () => {
     });
   };
 
-  const resetToDefault = () => {
+  const resetToDefault = async () => {
     if (confirm('Reset tab configuration to default? This cannot be undone.')) {
-      tabConfigService.resetToDefault();
-      setConfig(tabConfigService.getConfiguration());
+      await tabConfigService.resetToDefault();
+      const loadedConfig = await tabConfigService.getConfiguration();
+      setConfig(loadedConfig);
     }
   };
 

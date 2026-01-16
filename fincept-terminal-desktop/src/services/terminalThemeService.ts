@@ -1,6 +1,8 @@
 // Terminal Theme Service
 // Manages terminal appearance settings: fonts, sizes, colors
 
+import { saveSetting, getSetting } from './sqliteService';
+
 export interface FontSettings {
   family: string;
   baseSize: number;
@@ -130,33 +132,15 @@ const STORAGE_KEY = 'terminal-theme-settings';
 
 class TerminalThemeService {
   private theme: TerminalTheme;
+  private themeLoaded: boolean = false;
 
   constructor() {
-    this.theme = this.loadTheme();
+    this.theme = this.getDefaultTheme();
+    this.loadTheme();
   }
 
-  // Load theme from localStorage or use defaults
-  private loadTheme(): TerminalTheme {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Merge with defaults to handle missing properties
-        return {
-          font: {
-            family: parsed.font?.family || 'Consolas',
-            baseSize: parsed.font?.baseSize || 11,
-            weight: parsed.font?.weight || 'normal',
-            italic: parsed.font?.italic || false
-          },
-          colors: parsed.colors || COLOR_THEMES['bloomberg-classic']
-        };
-      }
-    } catch (error) {
-      console.error('Failed to load theme from localStorage:', error);
-    }
-
-    // Default theme
+  // Get default theme
+  private getDefaultTheme(): TerminalTheme {
     return {
       font: {
         family: 'Consolas',
@@ -168,13 +152,37 @@ class TerminalThemeService {
     };
   }
 
-  // Save theme to localStorage
-  saveTheme(theme: TerminalTheme): void {
+  // Load theme from storage or use defaults (async)
+  private async loadTheme(): Promise<void> {
+    try {
+      const stored = await getSetting(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Merge with defaults to handle missing properties
+        this.theme = {
+          font: {
+            family: parsed.font?.family || 'Consolas',
+            baseSize: parsed.font?.baseSize || 11,
+            weight: parsed.font?.weight || 'normal',
+            italic: parsed.font?.italic || false
+          },
+          colors: parsed.colors || COLOR_THEMES['bloomberg-classic']
+        };
+      }
+    } catch (error) {
+      console.error('Failed to load theme from storage:', error);
+    } finally {
+      this.themeLoaded = true;
+    }
+  }
+
+  // Save theme to storage
+  async saveTheme(theme: TerminalTheme): Promise<void> {
     this.theme = theme;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(theme));
+      await saveSetting(STORAGE_KEY, JSON.stringify(theme), 'theme');
     } catch (error) {
-      console.error('Failed to save theme to localStorage:', error);
+      console.error('Failed to save theme to storage:', error);
     }
   }
 

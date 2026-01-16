@@ -1,8 +1,11 @@
 // Encryption Service - Secure credential storage
+// PURE SQLite - No localStorage fallback
+
+import { getSetting, saveSetting } from '@/services/sqliteService';
 
 /**
  * Simple encryption/decryption service using Web Crypto API
- * Stores a random key in localStorage (can be enhanced with user password)
+ * Stores a random key in storage (can be enhanced with user password)
  */
 class EncryptionService {
   private static readonly STORAGE_KEY = 'data_mapping_encryption_key';
@@ -16,8 +19,8 @@ class EncryptionService {
     const enabled = await this.isEncryptionEnabled();
     if (!enabled) return;
 
-    // Get or generate encryption key
-    let keyData = localStorage.getItem(EncryptionService.STORAGE_KEY);
+    // PURE SQLite - Get or generate encryption key
+    let keyData = await getSetting(EncryptionService.STORAGE_KEY);
 
     if (!keyData) {
       // Generate new key
@@ -30,13 +33,13 @@ class EncryptionService {
         ['encrypt', 'decrypt']
       );
 
-      // Export and store key
+      // Export and store key in SQLite
       const exported = await window.crypto.subtle.exportKey('jwk', key);
-      localStorage.setItem(EncryptionService.STORAGE_KEY, JSON.stringify(exported));
+      await saveSetting(EncryptionService.STORAGE_KEY, JSON.stringify(exported), 'encryption');
 
       this.cryptoKey = key;
     } else {
-      // Import existing key
+      // Import existing key from SQLite
       const keyObject = JSON.parse(keyData);
       this.cryptoKey = await window.crypto.subtle.importKey(
         'jwk',
@@ -144,7 +147,8 @@ class EncryptionService {
    * Check if encryption is enabled
    */
   async isEncryptionEnabled(): Promise<boolean> {
-    const preference = localStorage.getItem(EncryptionService.PREFERENCE_KEY);
+    // PURE SQLite - Check encryption preference
+    const preference = await getSetting(EncryptionService.PREFERENCE_KEY);
     return preference === 'true' || preference === null; // Default to enabled
   }
 
@@ -152,7 +156,8 @@ class EncryptionService {
    * Enable or disable encryption
    */
   async setEncryptionEnabled(enabled: boolean): Promise<void> {
-    localStorage.setItem(EncryptionService.PREFERENCE_KEY, String(enabled));
+    // PURE SQLite - Save encryption preference
+    await saveSetting(EncryptionService.PREFERENCE_KEY, String(enabled), 'encryption');
 
     if (enabled) {
       await this.initialize();
@@ -186,8 +191,9 @@ class EncryptionService {
   /**
    * Clear encryption key (useful for reset/logout)
    */
-  clearKey(): void {
-    localStorage.removeItem(EncryptionService.STORAGE_KEY);
+  async clearKey(): Promise<void> {
+    // PURE SQLite - Clear encryption key
+    await saveSetting(EncryptionService.STORAGE_KEY, '', 'encryption');
     this.cryptoKey = null;
   }
 }

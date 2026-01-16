@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Info } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/newsService';
 import { contextRecorderService } from '../../services/contextRecorderService';
@@ -6,6 +7,7 @@ import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TimezoneSelector } from '../common/TimezoneSelector';
 import { useTranslation } from 'react-i18next';
 import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '../../services/newsAnalysisService';
+import { createNewsTabTour } from './tours/newsTabTour';
 
 // Extend Window interface for Tauri
 declare global {
@@ -283,6 +285,31 @@ const NewsTab: React.FC = () => {
           <TimezoneSelector compact />
           <span style={{ color: colors.text }}>|</span>
           <button
+            onClick={() => {
+              const tour = createNewsTabTour();
+              tour.drive();
+            }}
+            style={{
+              backgroundColor: colors.info,
+              color: colors.background,
+              border: 'none',
+              padding: '2px 8px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              borderRadius: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="Start news tour"
+          >
+            <Info size={12} />
+            HELP
+          </button>
+          <span style={{ color: colors.text }}>|</span>
+          <button
+            id="news-refresh"
             onClick={handleRefresh}
             disabled={loading}
             style={{
@@ -304,6 +331,7 @@ const NewsTab: React.FC = () => {
           </button>
           <span style={{ color: colors.text }}>|</span>
           <button
+            id="news-interval-settings"
             onClick={() => setShowIntervalSettings(!showIntervalSettings)}
             style={{
               backgroundColor: colors.info,
@@ -406,7 +434,7 @@ const NewsTab: React.FC = () => {
       </div>
 
       {/* Function Keys Bar */}
-      <div style={{
+      <div id="news-filters" style={{
         backgroundColor: colors.panel,
         borderBottom: `1px solid ${colors.textMuted}`,
         padding: '2px 4px',
@@ -466,7 +494,7 @@ const NewsTab: React.FC = () => {
         <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
 
           {/* Left Panel - Breaking News Stream (Primary Feed) */}
-          <div style={{
+          <div id="news-primary-feed" style={{
             flex: 1,
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
@@ -574,7 +602,7 @@ const NewsTab: React.FC = () => {
           </div>
 
           {/* Right Panel - AI Analytics */}
-          <div style={{
+          <div id="news-ai-analysis" style={{
             width: '500px',
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
@@ -1055,7 +1083,7 @@ const NewsTab: React.FC = () => {
         }}
           onClick={() => setSelectedArticle(null)}
         >
-          <div style={{
+          <div id="news-article-detail" style={{
             backgroundColor: colors.panel,
             border: `2px solid ${colors.primary}`,
             borderRadius: '4px',

@@ -1,6 +1,6 @@
 /**
  * TimezoneContext.tsx
- * 
+ *
  * Global timezone state management for Fincept Terminal.
  * Provides dual-timezone support:
  * - Default Timezone: Persisted in localStorage, used by navigation bar
@@ -8,6 +8,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { saveSetting, getSetting } from '@/services/sqliteService';
 
 // ============================================================================
 // Types & Constants
@@ -110,57 +111,60 @@ interface TimezoneProviderProps {
 }
 
 export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) => {
-  // Initialize default timezone from localStorage
-  const [defaultTimezoneId, setDefaultTimezoneId] = useState<string>(() => {
-    try {
-      const stored = localStorage.getItem(DEFAULT_STORAGE_KEY);
-      if (stored && TIMEZONE_OPTIONS.find(tz => tz.id === stored)) {
-        return stored;
-      }
-    } catch (e) {
-      console.warn('[TimezoneContext] Failed to read default timezone from localStorage:', e);
-    }
-    return DEFAULT_TIMEZONE_ID;
-  });
+  // Initialize default timezone
+  const [defaultTimezoneId, setDefaultTimezoneId] = useState<string>(DEFAULT_TIMEZONE_ID);
 
-  // Initialize session timezone (can be same as default or different)
-  const [sessionTimezoneId, setSessionTimezoneId] = useState<string>(() => {
-    try {
-      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (stored && TIMEZONE_OPTIONS.find(tz => tz.id === stored)) {
-        return stored;
-      }
-      // Fall back to default timezone
-      const defaultStored = localStorage.getItem(DEFAULT_STORAGE_KEY);
-      if (defaultStored && TIMEZONE_OPTIONS.find(tz => tz.id === defaultStored)) {
-        return defaultStored;
-      }
-    } catch (e) {
-      console.warn('[TimezoneContext] Failed to read session timezone from localStorage:', e);
-    }
-    return DEFAULT_TIMEZONE_ID;
-  });
+  // Initialize session timezone
+  const [sessionTimezoneId, setSessionTimezoneId] = useState<string>(DEFAULT_TIMEZONE_ID);
 
   // Get the full timezone option objects
   const defaultTimezone = TIMEZONE_OPTIONS.find(tz => tz.id === defaultTimezoneId) || TIMEZONE_OPTIONS[0];
   const timezone = TIMEZONE_OPTIONS.find(tz => tz.id === sessionTimezoneId) || TIMEZONE_OPTIONS[0];
 
-  // Persist default timezone to localStorage when it changes
+  // Load timezones from storage on mount
   useEffect(() => {
-    try {
-      localStorage.setItem(DEFAULT_STORAGE_KEY, defaultTimezoneId);
-    } catch (e) {
-      console.warn('[TimezoneContext] Failed to save default timezone to localStorage:', e);
-    }
+    const loadTimezones = async () => {
+      try {
+        const storedDefault = await getSetting(DEFAULT_STORAGE_KEY);
+        if (storedDefault && TIMEZONE_OPTIONS.find(tz => tz.id === storedDefault)) {
+          setDefaultTimezoneId(storedDefault);
+        }
+
+        const storedSession = await getSetting(SESSION_STORAGE_KEY);
+        if (storedSession && TIMEZONE_OPTIONS.find(tz => tz.id === storedSession)) {
+          setSessionTimezoneId(storedSession);
+        } else if (storedDefault && TIMEZONE_OPTIONS.find(tz => tz.id === storedDefault)) {
+          setSessionTimezoneId(storedDefault);
+        }
+      } catch (e) {
+        console.warn('[TimezoneContext] Failed to load timezones from storage:', e);
+      }
+    };
+    loadTimezones();
+  }, []);
+
+  // Persist default timezone to storage when it changes
+  useEffect(() => {
+    const saveDefaultTimezone = async () => {
+      try {
+        await saveSetting(DEFAULT_STORAGE_KEY, defaultTimezoneId, 'timezone');
+      } catch (e) {
+        console.warn('[TimezoneContext] Failed to save default timezone:', e);
+      }
+    };
+    saveDefaultTimezone();
   }, [defaultTimezoneId]);
 
-  // Persist session timezone to localStorage when it changes
+  // Persist session timezone to storage when it changes
   useEffect(() => {
-    try {
-      localStorage.setItem(SESSION_STORAGE_KEY, sessionTimezoneId);
-    } catch (e) {
-      console.warn('[TimezoneContext] Failed to save session timezone to localStorage:', e);
-    }
+    const saveSessionTimezone = async () => {
+      try {
+        await saveSetting(SESSION_STORAGE_KEY, sessionTimezoneId, 'timezone');
+      } catch (e) {
+        console.warn('[TimezoneContext] Failed to save session timezone:', e);
+      }
+    };
+    saveSessionTimezone();
   }, [sessionTimezoneId]);
 
   // Set default timezone by ID (used in Settings)

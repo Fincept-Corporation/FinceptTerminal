@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { saveSetting, getSetting } from '@/services/sqliteService';
 
 interface Language {
   code: string;
@@ -54,11 +55,14 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
   const [isRTL, setIsRTL] = useState(false);
 
   useEffect(() => {
-    // Load saved language from localStorage on mount
-    const savedLanguage = localStorage.getItem('i18nextLng');
-    if (savedLanguage && languages.find(lang => lang.code === savedLanguage)) {
-      changeLanguage(savedLanguage);
-    }
+    // Load saved language from storage on mount
+    const loadLanguage = async () => {
+      const savedLanguage = await getSetting('i18nextLng');
+      if (savedLanguage && languages.find(lang => lang.code === savedLanguage)) {
+        changeLanguage(savedLanguage);
+      }
+    };
+    loadLanguage();
   }, []);
 
   useEffect(() => {
@@ -74,7 +78,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     try {
       await i18n.changeLanguage(lng);
       setCurrentLanguage(lng);
-      localStorage.setItem('i18nextLng', lng);
+      await saveSetting('i18nextLng', lng, 'i18n');
     } catch (error) {
       console.error('Failed to change language:', error);
     }

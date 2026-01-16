@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { AuthApiService } from '@/services/authApi';
 import { PaymentApiService } from '@/services/paymentApi';
 import { UserApiService } from '@/services/userApi';
+import { saveSetting, getSetting } from '@/services/sqliteService';
 
 // Response types to match your API
 export interface LoginResponse {
@@ -202,26 +203,26 @@ const generateDeviceId = (): string => {
 // Session storage utilities
 const STORAGE_KEY = 'fincept_session';
 
-const saveSession = (session: SessionData) => {
+const saveSession = async (session: SessionData) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    await saveSetting(STORAGE_KEY, JSON.stringify({
       ...session,
       saved_at: new Date().toISOString()
-    }));
+    }), 'auth');
   } catch (error) {
     console.error('Failed to save session:', error);
   }
 };
 
-const loadSession = (): SessionData | null => {
+const loadSession = async (): Promise<SessionData | null> => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = await getSetting(STORAGE_KEY);
     if (!stored) return null;
 
     const session = JSON.parse(stored);
     if (session.user_type === 'guest' && session.expires_at) {
       if (new Date() > new Date(session.expires_at)) {
-        clearSession();
+        await clearSession();
         return null;
       }
     }
@@ -229,21 +230,22 @@ const loadSession = (): SessionData | null => {
     return session;
   } catch (error) {
     console.error('Failed to load session:', error);
-    clearSession();
+    await clearSession();
     return null;
   }
 };
 
-const clearSession = () => {
+const clearSession = async () => {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    await saveSetting(STORAGE_KEY, '', 'auth');
   } catch (error) {
     console.error('Failed to clear session:', error);
   }
 };
 
-const checkIsFirstTimeUser = (): boolean => {
-  return !localStorage.getItem(STORAGE_KEY);
+const checkIsFirstTimeUser = async (): Promise<boolean> => {
+  const session = await getSetting(STORAGE_KEY);
+  return !session;
 };
 
 interface AuthProviderProps {
@@ -313,7 +315,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         };
 
         setSession(updatedSession);
-        saveSession(updatedSession);
+        await saveSession(updatedSession);
       }
     } catch (error) {
       console.error('Failed to refresh user data:', error);
@@ -370,18 +372,19 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   useEffect(() => {
     const initializeSession = async () => {
       try {
-        setIsFirstTimeUser(checkIsFirstTimeUser());
+        const isFirstTime = await checkIsFirstTimeUser();
+        setIsFirstTimeUser(isFirstTime);
 
-        const savedSession = loadSession();
+        const savedSession = await loadSession();
 
         if (savedSession) {
           if (savedSession.user_type === 'registered') {
             const validatedSession = await validateSession(savedSession);
             if (validatedSession) {
               setSession(validatedSession);
-              saveSession(validatedSession);
+              await saveSession(validatedSession);
             } else {
-              clearSession();
+              await clearSession();
             }
           } else {
             setSession(savedSession);
@@ -587,8 +590,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         };
 
         setSession(newSession);
-        saveSession(newSession);
-        setIsFirstTimeUser(checkIsFirstTimeUser());
+        await saveSession(newSession);
+        const isFirstTime = await checkIsFirstTimeUser();
+        setIsFirstTimeUser(isFirstTime);
 
         return { success: true };
       } else {
@@ -677,8 +681,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         };
 
         setSession(newSession);
-        saveSession(newSession);
-        setIsFirstTimeUser(checkIsFirstTimeUser());
+        await saveSession(newSession);
+        const isFirstTime = await checkIsFirstTimeUser();
+        setIsFirstTimeUser(isFirstTime);
 
         return { success: true };
       } else {
@@ -732,8 +737,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         };
 
         setSession(newSession);
-        saveSession(newSession);
-        setIsFirstTimeUser(checkIsFirstTimeUser());
+        await saveSession(newSession);
+        const isFirstTime = await checkIsFirstTimeUser();
+        setIsFirstTimeUser(isFirstTime);
 
         return { success: true };
       } else {
@@ -800,8 +806,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         };
 
         setSession(mockGuestSession);
-        saveSession(mockGuestSession);
-        setIsFirstTimeUser(checkIsFirstTimeUser());
+        await saveSession(mockGuestSession);
+        const isFirstTime = await checkIsFirstTimeUser();
+        setIsFirstTimeUser(isFirstTime);
 
         return { success: true };
       }
@@ -836,7 +843,8 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
         setSession(guestSession);
         saveSession(guestSession);
-        setIsFirstTimeUser(checkIsFirstTimeUser());
+        const isFirstTime = await checkIsFirstTimeUser();
+        setIsFirstTimeUser(isFirstTime);
 
         return { success: true };
       }
@@ -856,8 +864,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   // Logout function
   const logout = async (): Promise<void> => {
     setSession(null);
-    clearSession();
-    setIsFirstTimeUser(checkIsFirstTimeUser());
+    await clearSession();
+    const isFirstTime = await checkIsFirstTimeUser();
+    setIsFirstTimeUser(isFirstTime);
   };
 
   const value: AuthContextType = {

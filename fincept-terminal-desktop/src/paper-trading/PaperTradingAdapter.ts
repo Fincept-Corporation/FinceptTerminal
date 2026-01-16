@@ -1,360 +1,243 @@
 /**
- * Universal Paper Trading Adapter
+ * Paper Trading Adapter
  *
- * Full IExchangeAdapter implementation for realistic paper trading
- * Works with ANY broker: crypto, stocks, forex, commodities, etc.
- * Uses real market data from underlying broker adapter for execution simulation
+ * Thin wrapper that uses Rust backend for all business logic.
+ * Implements IExchangeAdapter interface for compatibility with BrokerContext.
  */
 
-import type { Market, Ticker, OrderBook, Trade, OHLCV, Balance, Order, Position } from 'ccxt';
-import { BaseExchangeAdapter } from '../brokers/crypto/BaseExchangeAdapter';
 import type {
   IExchangeAdapter,
+  Order,
+  Position,
+  Balance,
+  Ticker,
+  OrderBook,
+  Trade,
+  OHLCV,
+  Market,
+  OrderType,
+  OrderSide,
+  OrderParams,
   ExchangeCredentials,
-  ExchangeConfig,
   ExchangeCapabilities,
+  ExchangeEvent,
+  ExchangeEventData,
 } from '../brokers/crypto/types';
-import type { PaperTradingConfig, OrderType, OrderSide, OrderParams } from './types';
+import type { PaperTradingConfig, PaperTradingStats } from './types';
 import { paperTradingDatabase } from './PaperTradingDatabase';
-import { PaperTradingBalance } from './PaperTradingBalance';
-import { OrderMatchingEngine } from './OrderMatchingEngine';
 
-export class PaperTradingAdapter extends BaseExchangeAdapter {
-  private paperConfig: PaperTradingConfig;
+export class PaperTradingAdapter implements IExchangeAdapter {
+  // Required interface properties
+  public id: string;
+  public name: string;
+
+  private config: PaperTradingConfig;
   private realAdapter: IExchangeAdapter;
-  private balanceManager: PaperTradingBalance;
-  private matchingEngine: OrderMatchingEngine;
-  private initialized: boolean = false;
-  // NO CACHING - Real-time data only
+  private connected: boolean = false;
+  private authenticated: boolean = false;
+  private priceUpdateInterval: NodeJS.Timeout | null = null;
+  private eventListeners: Map<ExchangeEvent, Set<(data: ExchangeEventData) => void>> = new Map();
 
-  constructor(config: ExchangeConfig & { paperTradingConfig: PaperTradingConfig; realAdapter: IExchangeAdapter }) {
-    // Initialize base with real exchange name (CCXT doesn't support "_paper" suffix)
-    super({ ...config, exchange: config.paperTradingConfig.provider });
-
-    this.paperConfig = config.paperTradingConfig;
-    this.realAdapter = config.realAdapter;
-    this.balanceManager = new PaperTradingBalance(this.paperConfig);
-    this.matchingEngine = new OrderMatchingEngine(this.paperConfig, this.realAdapter);
-
-    // Set name (using Object.defineProperty to override readonly)
-    Object.defineProperty(this, 'name', {
-      value: `${this.realAdapter.name} (Paper Trading)`,
-      writable: false,
-      configurable: true
-    });
+  constructor(config: PaperTradingConfig, realAdapter: IExchangeAdapter) {
+    this.config = config;
+    this.realAdapter = realAdapter;
+    this.id = `paper_${config.provider}`;
+    this.name = `Paper Trading (${config.provider})`;
   }
 
   // ============================================================================
-  // INITIALIZATION
+  // CONNECTION & AUTHENTICATION
   // ============================================================================
 
   async connect(): Promise<void> {
+    // Ensure portfolio exists in Rust backend
     try {
-
-      // Try to connect to real exchange for market data, but don't fail if it doesn't work
-      if (!this.realAdapter.isConnected()) {
-        try {
-          await this.realAdapter.connect();
-        } catch (error) {
-          console.warn('[PaperTradingAdapter] [WARN] Real adapter connection failed:', error);
-          // Don't throw - continue with paper adapter in offline mode
-        }
-      } else {
+      const existing = await paperTradingDatabase.getPortfolio(this.config.portfolioId);
+      if (!existing) {
+        await paperTradingDatabase.createPortfolio({
+          id: this.config.portfolioId,
+          name: this.config.portfolioName,
+          provider: this.config.provider,
+          initialBalance: this.config.initialBalance,
+          currency: this.config.currency || 'USD',
+          marginMode: this.config.marginMode || 'cross',
+          leverage: this.config.defaultLeverage || 1,
+        });
       }
-
-      // Initialize or load portfolio
-      await this.initializePortfolio();
-
-      // Start order monitoring only if real adapter is connected
-      // (Without real adapter, we can't get market prices for matching)
-      if (this.realAdapter.isConnected() && this.paperConfig.enableRealtimeUpdates !== false) {
-        // Reduced from 1000ms to 200ms for more responsive limit order fills
-        this.matchingEngine.startMonitoring(this.paperConfig.priceUpdateInterval || 200);
-      } else {
-      }
-
-      this._isConnected = true;
-      this._isAuthenticated = true; // Paper trading doesn't require real auth
-      this.initialized = true;
-
-      this.emit('connected', { exchange: this.id });
-      this.emit('authenticated', { exchange: this.id });
     } catch (error) {
-      this._isConnected = false;
-      console.error('[PaperTradingAdapter] [FAIL] Connection failed:', error);
-      throw this.handleError(error);
+      console.error('[PaperTradingAdapter] Failed to create portfolio:', error);
     }
+
+    // Start price update loop if enabled
+    if (this.config.enableRealtimeUpdates !== false) {
+      this.startPriceUpdates();
+    }
+
+    this.connected = true;
+    this.authenticated = true; // Paper trading is always "authenticated"
   }
 
   async disconnect(): Promise<void> {
-    // Clean up all resources (stop monitoring + clear caches)
-    this.matchingEngine.cleanup();
-    this._isConnected = false;
-    this._isAuthenticated = false;
-    this.initialized = false;
-    this.emit('disconnected', { exchange: this.id });
+    this.stopPriceUpdates();
+    this.connected = false;
   }
 
-  /**
-   * Reset paper trading account to initial state
-   * - Closes all positions
-   * - Cancels all orders
-   * - Resets balance to initial capital
-   * - Clears trade history
-   */
-  async resetAccount(): Promise<void> {
-    const portfolioId = this.paperConfig.portfolioId;
-
-    try {
-      // 1. Close all open positions
-      const openPositions = await paperTradingDatabase.getPortfolioPositions(portfolioId, 'open');
-      for (const position of openPositions) {
-        await paperTradingDatabase.updatePosition(position.id, {
-          status: 'closed',
-          closedAt: new Date().toISOString(),
-        });
-      }
-
-      // 2. Cancel all pending orders
-      const pendingOrders = await paperTradingDatabase.getPendingOrders(portfolioId);
-      for (const order of pendingOrders) {
-        await paperTradingDatabase.updateOrder(order.id, { status: 'canceled' });
-      }
-
-      // 3. Delete all positions (to clean up)
-      const allPositions = await paperTradingDatabase.getPortfolioPositions(portfolioId);
-      for (const position of allPositions) {
-        await paperTradingDatabase.deletePosition(position.id);
-      }
-
-      // 4. Delete all orders (to clean up)
-      const allOrders = await paperTradingDatabase.getPortfolioOrders(portfolioId);
-      for (const order of allOrders) {
-        await paperTradingDatabase.deleteOrder(order.id);
-      }
-
-      // 5. Delete all trades (to clean up)
-      const allTrades = await paperTradingDatabase.getPortfolioTrades(portfolioId);
-      for (const trade of allTrades) {
-        await paperTradingDatabase.deleteTrade(trade.id);
-      }
-
-      // 6. Reset balance to initial capital
-      const initialBalance = this.paperConfig.initialBalance;
-      await paperTradingDatabase.updatePortfolioBalance(portfolioId, initialBalance);
-
-      // 7. Reinitialize balance manager
-      this.balanceManager = new PaperTradingBalance(this.paperConfig);
-
-      this.emit('reset', { exchange: this.id, portfolioId });
-    } catch (error) {
-      console.error('[PaperTradingAdapter] [FAIL] Reset failed:', error);
-      throw error;
-    }
+  isConnected(): boolean {
+    return this.connected;
   }
 
-  async authenticate(credentials: ExchangeCredentials): Promise<void> {
-    // Paper trading doesn't require authentication
-    // but we'll mark as authenticated for consistency
-    this._isAuthenticated = true;
-    this.emit('authenticated', { exchange: this.id });
+  async authenticate(_credentials: ExchangeCredentials): Promise<void> {
+    // Paper trading doesn't need real authentication
+    this.authenticated = true;
   }
 
-  private async initializePortfolio(): Promise<void> {
-    // Check database health first
-    const isHealthy = await paperTradingDatabase.checkHealth();
+  isAuthenticated(): boolean {
+    return this.authenticated;
+  }
 
-    if (!isHealthy) {
-      throw new Error(
-        'Paper trading database is not accessible. The Rust database backend may have failed to initialize. ' +
-        'Please check the terminal/console for database initialization errors and restart the application.'
-      );
-    }
+  // ============================================================================
+  // PRICE UPDATES
+  // ============================================================================
 
+  private startPriceUpdates(): void {
+    const interval = this.config.priceUpdateInterval || 1000;
+    this.priceUpdateInterval = setInterval(async () => {
+      try {
+        // Get all open positions
+        const positions = await paperTradingDatabase.getPortfolioPositions(
+          this.config.portfolioId,
+          'open'
+        );
 
-    const existing = await paperTradingDatabase.getPortfolio(this.paperConfig.portfolioId);
+        // Update each position with current price
+        for (const pos of positions) {
+          try {
+            const ticker = await this.realAdapter.fetchTicker(pos.symbol);
+            if (ticker?.last) {
+              const pnl = pos.side === 'long'
+                ? (ticker.last - pos.entryPrice) * pos.quantity
+                : (pos.entryPrice - ticker.last) * pos.quantity;
 
-    if (!existing) {
-      // Create new portfolio
-      await paperTradingDatabase.createPortfolio({
-        id: this.paperConfig.portfolioId,
-        name: this.paperConfig.portfolioName,
-        provider: this.paperConfig.provider,
-        initialBalance: this.paperConfig.initialBalance,
-        currency: this.paperConfig.currency,
-        marginMode: this.paperConfig.marginMode,
-        leverage: this.paperConfig.defaultLeverage,
-      });
-    } else {
+              await paperTradingDatabase.updatePosition(pos.id, {
+                currentPrice: ticker.last,
+                unrealizedPnl: pnl,
+              });
+            }
+          } catch {
+            // Ignore individual price fetch errors
+          }
+        }
+      } catch (error) {
+        console.error('[PaperTradingAdapter] Price update error:', error);
+      }
+    }, interval);
+  }
+
+  private stopPriceUpdates(): void {
+    if (this.priceUpdateInterval) {
+      clearInterval(this.priceUpdateInterval);
+      this.priceUpdateInterval = null;
     }
   }
 
   // ============================================================================
-  // MARKET DATA (Delegate to real exchange)
+  // MARKET DATA (delegated to real adapter)
   // ============================================================================
 
   async fetchMarkets(): Promise<Market[]> {
-    return await this.realAdapter.fetchMarkets();
+    return this.realAdapter.fetchMarkets();
   }
 
   async fetchTicker(symbol: string): Promise<Ticker> {
-    return await this.realAdapter.fetchTicker(symbol);
+    return this.realAdapter.fetchTicker(symbol);
   }
 
   async fetchTickers(symbols?: string[]): Promise<Record<string, Ticker>> {
-    return await this.realAdapter.fetchTickers(symbols);
+    return this.realAdapter.fetchTickers(symbols);
   }
 
   async fetchOrderBook(symbol: string, limit?: number): Promise<OrderBook> {
-    return await this.realAdapter.fetchOrderBook(symbol, limit);
+    return this.realAdapter.fetchOrderBook(symbol, limit);
   }
 
   async fetchTrades(symbol: string, limit?: number): Promise<Trade[]> {
-    return await this.realAdapter.fetchTrades(symbol, limit);
+    return this.realAdapter.fetchTrades(symbol, limit);
   }
 
   async fetchOHLCV(symbol: string, timeframe: string, limit?: number): Promise<OHLCV[]> {
-    return await this.realAdapter.fetchOHLCV(symbol, timeframe, limit);
-  }
-
-  getMarkets(): Record<string, Market> {
-    return this.exchange.markets || {};
-  }
-
-  async fetchStatus(): Promise<any> {
-    if ('fetchStatus' in this.realAdapter && typeof this.realAdapter.fetchStatus === 'function') {
-      return await this.realAdapter.fetchStatus();
-    }
-    return { status: 'ok', updated: Date.now() };
-  }
-
-  async fetchCurrencies(): Promise<any> {
-    if ('fetchCurrencies' in this.realAdapter && typeof this.realAdapter.fetchCurrencies === 'function') {
-      return await this.realAdapter.fetchCurrencies();
-    }
-    return {};
-  }
-
-  async fetchTime(): Promise<number> {
-    if ('fetchTime' in this.realAdapter && typeof this.realAdapter.fetchTime === 'function') {
-      return await this.realAdapter.fetchTime();
-    }
-    return Date.now();
+    return this.realAdapter.fetchOHLCV(symbol, timeframe, limit);
   }
 
   // ============================================================================
-  // ACCOUNT & BALANCE (Paper trading specific)
+  // BALANCE
   // ============================================================================
 
   async fetchBalance(): Promise<Balance> {
-    if (!this.initialized) {
-      throw new Error('Paper trading adapter not initialized. Call connect() first.');
+    const portfolio = await paperTradingDatabase.getPortfolio(this.config.portfolioId);
+    const currency = this.config.currency || 'USD';
+
+    if (!portfolio) {
+      return {
+        free: { [currency]: this.config.initialBalance } as any,
+        used: { [currency]: 0 } as any,
+        total: { [currency]: this.config.initialBalance } as any,
+        info: {},
+      } as unknown as Balance;
     }
 
-    const balance = await this.balanceManager.getBalance(this.paperConfig.portfolioId);
-    this.emit('balance', { exchange: this.id, data: balance });
-    return balance;
-  }
+    const stats = await paperTradingDatabase.getPortfolioStats(this.config.portfolioId);
 
-  async fetchPositions(symbols?: string[]): Promise<Position[]> {
-    if (!this.initialized) {
-      throw new Error('Paper trading adapter not initialized. Call connect() first.');
-    }
-
-    const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId, 'open');
-
-    // Update PnL with current market prices
-    for (const p of positions) {
-      // Fetch live market price for each position
-      let currentPrice = p.currentPrice || p.entryPrice;
-      try {
-        const ticker = await this.realAdapter.fetchTicker(p.symbol);
-        if (ticker && ticker.last) {
-          currentPrice = ticker.last;
-          // Update the database with the current price
-          await paperTradingDatabase.updatePosition(p.id, {
-            currentPrice: currentPrice
-          });
-        }
-      } catch (error) {
-        console.warn(`[PaperTrading] Failed to fetch current price for ${p.symbol}, using cached price:`, error);
-      }
-
-      const unrealizedPnl = p.side === 'long'
-        ? (currentPrice - p.entryPrice) * p.quantity
-        : (p.entryPrice - currentPrice) * p.quantity;
-
-      p.currentPrice = currentPrice;
-      p.unrealizedPnl = unrealizedPnl;
-    }
-
-    // Convert to CCXT Position format
-    const ccxtPositions: Position[] = positions
-      .filter(p => !symbols || symbols.includes(p.symbol))
-      .map(p => ({
-        info: p,
-        id: p.id,
-        symbol: p.symbol,
-        timestamp: new Date(p.openedAt).getTime(),
-        datetime: p.openedAt,
-        initialMargin: (p.quantity * p.entryPrice) / p.leverage,
-        initialMarginPercentage: 1 / p.leverage,
-        maintenanceMargin: ((p.quantity * p.entryPrice) / p.leverage) * 0.5,
-        maintenanceMarginPercentage: 0.5 / p.leverage,
-        entryPrice: p.entryPrice,
-        notional: p.quantity * (p.currentPrice || p.entryPrice),
-        leverage: p.leverage,
-        unrealizedPnl: p.unrealizedPnl || 0,
-        contracts: p.quantity,
-        contractSize: 1,
-        marginRatio: undefined,
-        liquidationPrice: p.liquidationPrice || 0,
-        markPrice: p.currentPrice || p.entryPrice,
-        collateral: (p.quantity * p.entryPrice) / p.leverage,
-        marginMode: p.marginMode,
-        side: p.side === 'long' ? 'long' : 'short',
-        percentage: p.unrealizedPnl ? (p.unrealizedPnl / ((p.quantity * p.entryPrice) / p.leverage)) * 100 : 0,
-      } as Position));
-
-    this.emit('position', { exchange: this.id, data: ccxtPositions });
-    return ccxtPositions;
-  }
-
-  async fetchLedger(code?: string, since?: number, limit?: number): Promise<any> {
-    // Return trades as ledger entries
-    const trades = await paperTradingDatabase.getPortfolioTrades(this.paperConfig.portfolioId, limit);
-    return trades.map(t => ({
-      id: t.id,
-      timestamp: new Date(t.timestamp).getTime(),
-      datetime: t.timestamp,
-      direction: t.side === 'buy' ? 'in' : 'out',
-      account: this.paperConfig.portfolioId,
-      referenceId: t.orderId,
-      referenceAccount: t.symbol,
-      type: 'trade',
-      currency: code || this.paperConfig.currency || 'USD',
-      amount: t.quantity,
-      before: null,
-      after: null,
-      status: 'ok',
-      fee: { cost: t.fee, currency: this.paperConfig.currency || 'USD' },
-      info: t,
-    }));
-  }
-
-  async fetchTradingFee(symbol: string): Promise<any> {
     return {
-      info: {},
-      symbol,
-      maker: this.paperConfig.fees.maker,
-      taker: this.paperConfig.fees.taker,
-      percentage: true,
-      tierBased: false,
-    };
+      free: { [currency]: stats.available_margin } as any,
+      used: { [currency]: stats.blocked_margin } as any,
+      total: { [currency]: stats.total_value } as any,
+      info: {
+        realizedPnl: stats.realized_pnl,
+        unrealizedPnl: stats.unrealized_pnl,
+      },
+    } as unknown as Balance;
   }
 
   // ============================================================================
-  // TRADING OPERATIONS (Paper trading specific)
+  // POSITIONS
+  // ============================================================================
+
+  async fetchPositions(symbols?: string[]): Promise<Position[]> {
+    const positions = await paperTradingDatabase.getPortfolioPositions(
+      this.config.portfolioId,
+      'open'
+    );
+
+    return positions.map(pos => ({
+      id: pos.id,
+      symbol: pos.symbol,
+      timestamp: new Date(pos.openedAt).getTime(),
+      datetime: pos.openedAt,
+      isolated: pos.marginMode === 'isolated',
+      hedged: false,
+      side: pos.side,
+      contracts: pos.quantity,
+      contractSize: 1,
+      entryPrice: pos.entryPrice,
+      markPrice: pos.currentPrice || pos.entryPrice,
+      notional: pos.positionValue,
+      leverage: pos.leverage,
+      collateral: pos.positionValue / pos.leverage,
+      initialMargin: pos.positionValue / pos.leverage,
+      maintenanceMargin: (pos.positionValue / pos.leverage) * 0.5,
+      initialMarginPercentage: 1 / pos.leverage,
+      maintenanceMarginPercentage: 0.5 / pos.leverage,
+      unrealizedPnl: pos.unrealizedPnl || 0,
+      liquidationPrice: pos.liquidationPrice || undefined,
+      marginMode: pos.marginMode,
+      marginRatio: undefined,
+      percentage: pos.unrealizedPnl ? (pos.unrealizedPnl / pos.entryPrice / pos.quantity) * 100 : 0,
+      info: pos,
+    })) as Position[];
+  }
+
+  // ============================================================================
+  // ORDERS
   // ============================================================================
 
   async createOrder(
@@ -365,135 +248,102 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
     price?: number,
     params?: OrderParams
   ): Promise<Order> {
-    if (!this.initialized) {
-      throw new Error('Paper trading adapter not initialized. Call connect() first.');
-    }
+    const orderId = crypto.randomUUID();
 
-    const result = await this.matchingEngine.placeOrder(symbol, type, side, amount, price, params);
+    // Normalize order type for paper trading
+    const normalizedType = this.normalizeOrderType(type);
 
-    if (!result.success) {
-      throw new Error(result.error || 'Order placement failed');
-    }
+    // Get current market price for market orders
+    let executionPrice = price;
+    if (normalizedType === 'market') {
+      const ticker = await this.realAdapter.fetchTicker(symbol);
+      executionPrice = side === 'buy' ? ticker.ask || ticker.last : ticker.bid || ticker.last;
 
-    this.emit('order', { exchange: this.id, data: result.order });
-    if (result.position) {
-      this.emit('position', { exchange: this.id, data: result.position });
-    }
-
-    return result.order as Order;
-  }
-
-  async editOrder(
-    orderId: string,
-    symbol: string,
-    type?: OrderType,
-    side?: OrderSide,
-    amount?: number,
-    price?: number,
-    params?: OrderParams
-  ): Promise<Order> {
-    if (!this.initialized) {
-      throw new Error('Paper trading adapter not initialized. Call connect() first.');
-    }
-
-    // Import the lock manager locally to avoid circular dependency
-    const { transactionLockManager } = await import('./TransactionLockManager');
-
-    // Execute atomically with locks
-    return await transactionLockManager.withMultipleLocks(
-      [
-        { type: 'portfolio', id: this.paperConfig.portfolioId },
-        { type: 'order', id: orderId },
-        { type: 'symbol', id: this.paperConfig.portfolioId, symbol },
-      ],
-      async () => {
-        // Fetch the original order first
-        const originalOrder = await paperTradingDatabase.getOrder(orderId);
-        if (!originalOrder) {
-          throw new Error(`Order ${orderId} not found`);
-        }
-
-        if (originalOrder.status === 'filled') {
-          throw new Error(`Cannot edit filled order ${orderId}`);
-        }
-
-        if (originalOrder.status === 'cancelled') {
-          throw new Error(`Cannot edit cancelled order ${orderId}`);
-        }
-
-        // Validate new parameters
-        if (!type || !side || !amount) {
-          throw new Error('Edit order requires type, side, and amount');
-        }
-
-        // Try to create new order FIRST (validates sufficient funds, etc.)
-        let newOrder: Order;
-        try {
-          newOrder = await this.createOrder(symbol, type, side, amount, price, params);
-        } catch (error) {
-          // If new order fails, don't cancel the original
-          throw new Error(`Failed to create replacement order: ${error instanceof Error ? error.message : String(error)}`);
-        }
-
-        // Only after new order succeeds, cancel the original
-        try {
-          await this.matchingEngine.cancelOrder(orderId);
-        } catch (cancelError) {
-          // If cancel fails after new order created, we have a problem
-          // Try to cancel the new order to maintain atomicity
-          console.error('[PaperTradingAdapter] Failed to cancel original order after creating new one:', cancelError);
-          try {
-            await this.matchingEngine.cancelOrder(newOrder.id);
-          } catch (cleanupError) {
-            console.error('[PaperTradingAdapter] Failed to cleanup new order:', cleanupError);
-          }
-          throw new Error(`Edit order failed: ${cancelError instanceof Error ? cancelError.message : String(cancelError)}`);
-        }
-
-        this.emit('order', { exchange: this.id, data: newOrder });
-        return newOrder;
+      // Apply slippage
+      const slippage = this.config.slippage?.market || 0.001;
+      if (executionPrice) {
+        executionPrice = side === 'buy'
+          ? executionPrice * (1 + slippage)
+          : executionPrice * (1 - slippage);
       }
-    );
+    }
+
+    // Calculate order value and check margin
+    const orderValue = amount * (executionPrice || 0);
+    const availableMargin = await paperTradingDatabase.getAvailableMargin(this.config.portfolioId);
+
+    if (orderValue > availableMargin) {
+      throw new Error(`Insufficient margin. Required: ${orderValue}, Available: ${availableMargin}`);
+    }
+
+    // Create order in database
+    await paperTradingDatabase.createOrder({
+      id: orderId,
+      portfolioId: this.config.portfolioId,
+      symbol,
+      side,
+      type: normalizedType,
+      quantity: amount,
+      price: executionPrice || null,
+      timeInForce: params?.timeInForce || 'GTC',
+    });
+
+    // For market orders, execute immediately
+    if (normalizedType === 'market' && executionPrice) {
+      const fee = orderValue * this.config.fees.taker;
+
+      // Fill order via Rust backend (creates trade, updates position, deducts fees)
+      await paperTradingDatabase.fillOrder(
+        orderId,
+        executionPrice,
+        amount,
+        fee,
+        this.config.fees.taker
+      );
+    } else if (normalizedType === 'limit' && executionPrice) {
+      // Block margin for limit orders
+      await paperTradingDatabase.createMarginBlock({
+        id: crypto.randomUUID(),
+        portfolioId: this.config.portfolioId,
+        orderId,
+        symbol,
+        blockedAmount: orderValue,
+      });
+    }
+
+    // Return order
+    const order = await paperTradingDatabase.getOrder(orderId);
+    return this.mapOrder(order!);
   }
 
   async cancelOrder(orderId: string, symbol: string): Promise<Order> {
-    if (!this.initialized) {
-      throw new Error('Paper trading adapter not initialized. Call connect() first.');
+    const order = await paperTradingDatabase.getOrder(orderId);
+    if (!order) {
+      throw new Error(`Order ${orderId} not found`);
     }
 
-    const canceledOrder = await this.matchingEngine.cancelOrder(orderId);
-    this.emit('order', { exchange: this.id, data: canceledOrder });
-    return canceledOrder as Order;
-  }
+    // Release margin block
+    await paperTradingDatabase.deleteMarginBlock(orderId);
 
-  async cancelOrders(orderIds: string[], symbol?: string): Promise<Order[]> {
-    const canceled: Order[] = [];
-    for (const orderId of orderIds) {
-      const order = await this.cancelOrder(orderId, symbol || '');
-      canceled.push(order);
-    }
-    return canceled;
+    // Update order status
+    await paperTradingDatabase.updateOrder(orderId, { status: 'canceled' });
+
+    const updatedOrder = await paperTradingDatabase.getOrder(orderId);
+    return this.mapOrder(updatedOrder!);
   }
 
   async cancelAllOrders(symbol?: string): Promise<Order[]> {
-    if (!this.initialized) {
-      throw new Error('Paper trading adapter not initialized. Call connect() first.');
+    const pendingOrders = await paperTradingDatabase.getPendingOrders(this.config.portfolioId);
+    const cancelledOrders: Order[] = [];
+
+    for (const order of pendingOrders) {
+      if (!symbol || order.symbol === symbol) {
+        const cancelled = await this.cancelOrder(order.id, order.symbol);
+        cancelledOrders.push(cancelled);
+      }
     }
 
-    const canceledOrders = await this.matchingEngine.cancelAllOrders(symbol);
-    for (const order of canceledOrders) {
-      this.emit('order', { exchange: this.id, data: order });
-    }
-    return canceledOrders as Order[];
-  }
-
-  async cancelAllOrdersAfter(timeout: number): Promise<any> {
-    // Implement dead man's switch
-    setTimeout(async () => {
-      await this.cancelAllOrders();
-    }, timeout);
-
-    return { timeout, status: 'scheduled' };
+    return cancelledOrders;
   }
 
   async fetchOrder(orderId: string, symbol: string): Promise<Order> {
@@ -501,250 +351,69 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
     if (!order) {
       throw new Error(`Order ${orderId} not found`);
     }
-    return order as Order;
-  }
-
-  async fetchOrdersByIds(orderIds: string[], symbol?: string): Promise<Order[]> {
-    const orders: Order[] = [];
-    for (const orderId of orderIds) {
-      const order = await paperTradingDatabase.getOrder(orderId);
-      if (order) orders.push(order as Order);
-    }
-    return orders;
-  }
-
-  async fetchOrderTrades(orderId: string, symbol: string): Promise<Trade[]> {
-    const trades = await paperTradingDatabase.getOrderTrades(orderId);
-
-    return trades.map(t => ({
-      id: t.id,
-      order: orderId,
-      info: t,
-      timestamp: new Date(t.timestamp).getTime(),
-      datetime: t.timestamp,
-      symbol: t.symbol,
-      type: 'limit',
-      side: t.side,
-      takerOrMaker: t.isMaker ? 'maker' : 'taker',
-      price: t.price,
-      amount: t.quantity,
-      cost: t.price * t.quantity,
-      fee: {
-        cost: t.fee,
-        currency: (this.paperConfig.currency || 'USD') as string,
-        rate: t.feeRate,
-      },
-    } as Trade));
+    return this.mapOrder(order);
   }
 
   async fetchOpenOrders(symbol?: string): Promise<Order[]> {
-    const orders = await paperTradingDatabase.getPortfolioOrders(this.paperConfig.portfolioId);
-    const openOrders = orders.filter(o => ['pending', 'triggered', 'partial'].includes(o.status)) as Order[];
-
-    if (symbol) {
-      return openOrders.filter(o => o.symbol === symbol);
-    }
-
-    return openOrders;
+    const orders = await paperTradingDatabase.getPendingOrders(this.config.portfolioId);
+    return orders.map(o => this.mapOrder(o));
   }
 
   async fetchClosedOrders(symbol?: string, limit?: number): Promise<Order[]> {
-    const orders = await paperTradingDatabase.getPortfolioOrders(this.paperConfig.portfolioId);
-
-    let closedOrders = orders.filter(o => ['filled', 'canceled', 'rejected'].includes(o.status));
-
-    if (symbol) {
-      closedOrders = closedOrders.filter(o => o.symbol === symbol);
-    }
-
-    if (limit) {
-      closedOrders = closedOrders.slice(0, limit);
-    }
-
-    return closedOrders as Order[];
+    const orders = await paperTradingDatabase.getPortfolioOrders(this.config.portfolioId, 'filled');
+    return orders.slice(0, limit).map(o => this.mapOrder(o));
   }
 
+  // ============================================================================
+  // TRADES
+  // ============================================================================
+
   async fetchMyTrades(symbol?: string, since?: number, limit?: number): Promise<Trade[]> {
-    const trades = await paperTradingDatabase.getPortfolioTrades(this.paperConfig.portfolioId, limit);
-
-    let filteredTrades = trades;
-
-    if (symbol) {
-      filteredTrades = filteredTrades.filter(t => t.symbol === symbol);
-    }
-
-    if (since) {
-      filteredTrades = filteredTrades.filter(t => new Date(t.timestamp).getTime() >= since);
-    }
-
-    return filteredTrades.map(t => ({
+    const trades = await paperTradingDatabase.getPortfolioTrades(this.config.portfolioId, limit);
+    return trades.map(t => ({
       id: t.id,
       order: t.orderId,
-      info: t,
-      timestamp: new Date(t.timestamp).getTime(),
-      datetime: t.timestamp,
       symbol: t.symbol,
-      type: 'limit',
-      side: t.side,
+      side: t.side as OrderSide,
+      type: t.isMaker ? 'maker' : 'taker',
       takerOrMaker: t.isMaker ? 'maker' : 'taker',
       price: t.price,
       amount: t.quantity,
       cost: t.price * t.quantity,
       fee: {
         cost: t.fee,
-        currency: (this.paperConfig.currency || 'USD') as string,
+        currency: this.config.currency || 'USD',
         rate: t.feeRate,
       },
-    } as Trade));
+      timestamp: new Date(t.timestamp).getTime(),
+      datetime: t.timestamp,
+      info: t,
+    })) as Trade[];
   }
 
   // ============================================================================
-  // ADVANCED ORDER TYPES
+  // EVENT SYSTEM
   // ============================================================================
 
-  async createStopLossOrder(
-    symbol: string,
-    side: OrderSide,
-    amount: number,
-    stopPrice: number,
-    limitPrice?: number
-  ): Promise<Order> {
-    return await this.createOrder(
-      symbol,
-      limitPrice ? 'stop_limit' : 'stop',
-      side,
-      amount,
-      limitPrice,
-      { stopPrice }
-    );
-  }
-
-  async createTakeProfitOrder(
-    symbol: string,
-    side: OrderSide,
-    amount: number,
-    stopPrice: number,
-    limitPrice?: number
-  ): Promise<Order> {
-    return await this.createOrder(
-      symbol,
-      limitPrice ? 'stop_limit' : 'stop',
-      side,
-      amount,
-      limitPrice,
-      { stopPrice }
-    );
-  }
-
-  async createTrailingStopOrder(
-    symbol: string,
-    side: OrderSide,
-    amount: number,
-    trailingPercent: number
-  ): Promise<Order> {
-    return await this.createOrder(symbol, 'trailing_stop', side, amount, undefined, { trailingPercent });
-  }
-
-  async createIcebergOrder(
-    symbol: string,
-    side: OrderSide,
-    amount: number,
-    price: number,
-    visibleAmount: number
-  ): Promise<Order> {
-    return await this.createOrder(symbol, 'iceberg', side, amount, price, { icebergQty: visibleAmount });
-  }
-
-  async createMarketOrderWithCost(symbol: string, side: OrderSide, cost: number): Promise<Order> {
-    const ticker = await this.fetchTicker(symbol);
-    const price = side === 'buy' ? ticker.ask || ticker.last || 0 : ticker.bid || ticker.last || 0;
-    const amount = cost / price;
-
-    return await this.createOrder(symbol, 'market', side, amount);
-  }
-
-  async createPostOnlyOrder(symbol: string, side: OrderSide, amount: number, price: number): Promise<Order> {
-    return await this.createOrder(symbol, 'limit', side, amount, price, { postOnly: true });
-  }
-
-  async createReduceOnlyOrder(
-    symbol: string,
-    type: OrderType,
-    side: OrderSide,
-    amount: number,
-    price?: number
-  ): Promise<Order> {
-    return await this.createOrder(symbol, type, side, amount, price, { reduceOnly: true });
-  }
-
-  // ============================================================================
-  // MARGIN & LEVERAGE (Paper trading specific)
-  // ============================================================================
-
-  async setLeverage(symbol: string, leverage: number): Promise<any> {
-    // Update portfolio default leverage
-    const portfolio = await paperTradingDatabase.getPortfolio(this.paperConfig.portfolioId);
-    if (portfolio) {
-      this.paperConfig.defaultLeverage = leverage;
+  on(event: ExchangeEvent, callback: (data: ExchangeEventData) => void): void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, new Set());
     }
-
-    return { symbol, leverage };
+    this.eventListeners.get(event)!.add(callback);
   }
 
-  async setMarginMode(symbol: string, marginMode: 'cross' | 'isolated'): Promise<any> {
-    this.paperConfig.marginMode = marginMode;
-    return { symbol, marginMode };
+  off(event: ExchangeEvent, callback: (data: ExchangeEventData) => void): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      listeners.delete(callback);
+    }
   }
 
-  // ============================================================================
-  // DEPOSITS & WITHDRAWALS (Not applicable for paper trading)
-  // ============================================================================
-
-  async fetchDeposits(code?: string, since?: number, limit?: number): Promise<any> {
-    return []; // No deposits in paper trading
-  }
-
-  async fetchWithdrawals(code?: string, since?: number, limit?: number): Promise<any> {
-    return []; // No withdrawals in paper trading
-  }
-
-  async fetchDepositAddress(code: string, params?: any): Promise<any> {
-    throw new Error('Deposits not supported in paper trading');
-  }
-
-  async createDepositAddress(code: string, params?: any): Promise<any> {
-    throw new Error('Deposits not supported in paper trading');
-  }
-
-  async fetchDepositMethods(code?: string): Promise<any> {
-    return [];
-  }
-
-  async withdraw(code: string, amount: number, address: string, tag?: string, params?: any): Promise<any> {
-    throw new Error('Withdrawals not supported in paper trading');
-  }
-
-  // ============================================================================
-  // TRANSFERS
-  // ============================================================================
-
-  async transfer(code: string, amount: number, fromAccount: string, toAccount: string): Promise<any> {
-    // Paper trading doesn't have sub-accounts, but we'll return success for compatibility
-    return {
-      info: {},
-      id: `transfer_${Date.now()}`,
-      timestamp: Date.now(),
-      datetime: new Date().toISOString(),
-      currency: code,
-      amount,
-      fromAccount,
-      toAccount,
-      status: 'ok',
-    };
-  }
-
-  async transferOut(code: string, amount: number, params?: any): Promise<any> {
-    return await this.transfer(code, amount, 'main', 'external');
+  emit(event: ExchangeEvent, data: ExchangeEventData): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      listeners.forEach(callback => callback(data));
+    }
   }
 
   // ============================================================================
@@ -752,161 +421,144 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
   // ============================================================================
 
   getCapabilities(): ExchangeCapabilities {
-    const realCapabilities = ('getCapabilities' in this.realAdapter && typeof this.realAdapter.getCapabilities === 'function')
-      ? this.realAdapter.getCapabilities()
-      : {} as ExchangeCapabilities;
-
     return {
-      ...realCapabilities,
-      // Paper trading specific overrides
-      spot: this.paperConfig.enableMarginTrading ? true : realCapabilities.spot,
-      margin: this.paperConfig.enableMarginTrading || false,
-      futures: this.paperConfig.enableMarginTrading || false,
-      leverageTrading: this.paperConfig.enableMarginTrading || false,
+      spot: true,
+      margin: this.config.enableMarginTrading || false,
+      futures: false,
+      options: false,
+      swap: false,
+      supportedOrderTypes: ['market', 'limit', 'stop', 'stop_limit'],
+      supportedTimeInForce: ['GTC', 'IOC', 'FOK'],
+      leverageTrading: this.config.enableMarginTrading || false,
+      stopOrders: true,
+      conditionalOrders: false,
+      algoOrders: false,
+      realtimeData: true,
+      historicalData: true,
+      websocketSupport: false,
       multiAccount: false,
       subAccounts: false,
+      portfolioMargin: false,
+      restApi: true,
+      websocketApi: false,
+      fixApi: false,
+      rateLimits: {
+        public: 1000,
+        private: 100,
+        trading: 50,
+      },
     };
   }
 
   // ============================================================================
-  // WEBSOCKET (Optional - delegate to real adapter if available)
+  // STATISTICS
   // ============================================================================
 
-  async *watchTicker(symbol: string): AsyncGenerator<Ticker> {
-    if (this.realAdapter.watchTicker) {
-      yield* this.realAdapter.watchTicker(symbol);
-    } else {
-      throw new Error('WebSocket not supported by underlying adapter');
+  async getStatistics(): Promise<PaperTradingStats> {
+    const stats = await paperTradingDatabase.getPortfolioStats(this.config.portfolioId);
+    const trades = await paperTradingDatabase.getPortfolioTrades(this.config.portfolioId);
+
+    // Calculate win/loss stats
+    let totalFees = 0;
+
+    for (const trade of trades) {
+      totalFees += trade.fee;
     }
-  }
-
-  async *watchOrderBook(symbol: string, limit?: number): AsyncGenerator<OrderBook> {
-    if (this.realAdapter.watchOrderBook) {
-      yield* this.realAdapter.watchOrderBook(symbol, limit);
-    } else {
-      throw new Error('WebSocket not supported by underlying adapter');
-    }
-  }
-
-  async *watchTrades(symbol: string): AsyncGenerator<Trade[]> {
-    if (this.realAdapter.watchTrades) {
-      yield* this.realAdapter.watchTrades(symbol);
-    } else {
-      throw new Error('WebSocket not supported by underlying adapter');
-    }
-  }
-
-  async *watchBalance(): AsyncGenerator<Balance> {
-    // Emit paper trading balance periodically
-    while (true) {
-      const balance = await this.fetchBalance();
-      yield balance;
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-
-  async *watchOrders(symbol?: string): AsyncGenerator<Order[]> {
-    // Emit paper trading orders periodically
-    while (true) {
-      const orders = await this.fetchOpenOrders(symbol);
-      yield orders;
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-
-  // ============================================================================
-  // UTILITIES
-  // ============================================================================
-
-  /**
-   * Reset portfolio to initial state
-   */
-  async resetPortfolio(): Promise<void> {
-    // Cancel all orders
-    await this.cancelAllOrders();
-
-    // Close all positions
-    const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId, 'open');
-    for (const position of positions) {
-      const closeSide = position.side === 'long' ? 'sell' : 'buy';
-      await this.createOrder(position.symbol, 'market', closeSide, position.quantity, undefined, { reduceOnly: true });
-    }
-
-    // Reset balance
-    await paperTradingDatabase.updatePortfolioBalance(
-      this.paperConfig.portfolioId,
-      this.paperConfig.initialBalance
-    );
-  }
-
-  /**
-   * Get paper trading statistics (improved with comprehensive metrics)
-   */
-  async getStatistics(): Promise<any> {
-    const { StatisticsCalculator } = await import('./StatisticsCalculator');
-    const statsCalculator = new StatisticsCalculator();
-
-    const portfolio = await paperTradingDatabase.getPortfolio(this.paperConfig.portfolioId);
-    const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId);
-    const totalValue = await this.balanceManager.calculateTotalValue(this.paperConfig.portfolioId);
-
-    // Get comprehensive statistics
-    const performanceSummary = await statsCalculator.getPerformanceSummary(
-      this.paperConfig.portfolioId,
-      this.paperConfig.initialBalance
-    );
 
     return {
-      // Portfolio info
-      portfolioId: this.paperConfig.portfolioId,
-      portfolioName: this.paperConfig.portfolioName,
-      initialBalance: this.paperConfig.initialBalance,
-      currentBalance: portfolio?.currentBalance || 0,
-      totalValue,
-
-      // P&L metrics
-      totalPnL: performanceSummary.stats.totalPnL,
-      realizedPnL: performanceSummary.stats.realizedPnL,
-      unrealizedPnL: performanceSummary.stats.unrealizedPnL,
-      returnPercent: performanceSummary.returnPercent.toFixed(2),
-
-      // Trade metrics
-      totalTrades: performanceSummary.stats.totalTrades,
-      winningTrades: performanceSummary.stats.winningTrades,
-      losingTrades: performanceSummary.stats.losingTrades,
-      winRate: performanceSummary.stats.winRate.toFixed(2),
-
-      // Position metrics
-      openPositions: positions.filter(p => p.status === 'open').length,
-      closedPositions: positions.filter(p => p.status === 'closed').length,
-
-      // Performance metrics
-      averageWin: performanceSummary.stats.averageWin.toFixed(2),
-      averageLoss: performanceSummary.stats.averageLoss.toFixed(2),
-      largestWin: performanceSummary.stats.largestWin.toFixed(2),
-      largestLoss: performanceSummary.stats.largestLoss.toFixed(2),
-      profitFactor: performanceSummary.stats.profitFactor.toFixed(2),
-      riskRewardRatio: performanceSummary.riskRewardRatio.toFixed(2),
-
-      // Advanced metrics
-      sharpeRatio: performanceSummary.stats.sharpeRatio?.toFixed(2) || null,
-      maxDrawdown: performanceSummary.stats.maxDrawdown?.toFixed(2) || null,
-      expectancy: performanceSummary.expectancy.toFixed(2),
-      kellyCriterion: (performanceSummary.kellyCriterion * 100).toFixed(2), // as percentage
-
-      // Timing metrics
-      avgHoldingPeriod: performanceSummary.stats.avgHoldingPeriod?.toFixed(0) || null, // in minutes
-
-      // Fees
-      totalFees: performanceSummary.stats.totalFees.toFixed(2),
+      portfolioId: this.config.portfolioId,
+      totalTrades: stats.total_trades,
+      winningTrades: 0,
+      losingTrades: 0,
+      winRate: 0,
+      totalPnL: stats.total_pnl,
+      realizedPnL: stats.realized_pnl,
+      unrealizedPnL: stats.unrealized_pnl,
+      totalFees,
+      averageWin: 0,
+      averageLoss: 0,
+      largestWin: 0,
+      largestLoss: 0,
+      profitFactor: 0,
+      sharpeRatio: null,
+      maxDrawdown: null,
+      avgHoldingPeriod: null,
     };
   }
 
-  /**
-   * Cleanup resources
-   */
-  async destroy(): Promise<void> {
-    this.matchingEngine.destroy();
-    await this.disconnect();
+  // ============================================================================
+  // ACCOUNT MANAGEMENT
+  // ============================================================================
+
+  async resetAccount(): Promise<void> {
+    await paperTradingDatabase.resetPortfolio(
+      this.config.portfolioId,
+      this.config.initialBalance
+    );
   }
+
+  // ============================================================================
+  // HELPERS
+  // ============================================================================
+
+  private normalizeOrderType(type: OrderType): 'market' | 'limit' | 'stop' | 'stop_limit' {
+    switch (type) {
+      case 'market':
+        return 'market';
+      case 'limit':
+        return 'limit';
+      case 'stop':
+      case 'stop_market':
+        return 'stop';
+      case 'stop_limit':
+        return 'stop_limit';
+      default:
+        return 'market';
+    }
+  }
+
+  private mapOrder(order: any): Order {
+    return {
+      id: order.id,
+      clientOrderId: order.clientOrderId,
+      timestamp: new Date(order.createdAt || order.created_at).getTime(),
+      datetime: order.createdAt || order.created_at,
+      lastTradeTimestamp: order.filledAt ? new Date(order.filledAt).getTime() : undefined,
+      symbol: order.symbol,
+      type: order.type || order.order_type,
+      side: order.side,
+      price: order.price || 0,
+      amount: order.amount || order.quantity,
+      cost: (order.average || order.avg_fill_price || 0) * (order.filled || order.filled_quantity || 0),
+      average: order.average || order.avg_fill_price,
+      filled: order.filled || order.filled_quantity || 0,
+      remaining: order.remaining || (order.quantity - (order.filled_quantity || 0)),
+      status: order.status,
+      fee: undefined,
+      trades: [],
+      reduceOnly: order.reduce_only || false,
+      postOnly: order.post_only || false,
+      info: order,
+    } as unknown as Order;
+  }
+
+  // Get provider name
+  getProvider(): string {
+    return this.config.provider;
+  }
+
+  // Get portfolio ID
+  getPortfolioId(): string {
+    return this.config.portfolioId;
+  }
+}
+
+/**
+ * Create a paper trading adapter
+ */
+export function createPaperTradingAdapter(
+  config: PaperTradingConfig,
+  realAdapter: IExchangeAdapter
+): PaperTradingAdapter {
+  return new PaperTradingAdapter(config, realAdapter);
 }

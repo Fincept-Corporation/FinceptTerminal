@@ -1,18 +1,22 @@
 import { invoke } from '@tauri-apps/api/core';
+import { getSetting, saveSetting } from './sqliteService';
 
 // Alpha Vantage Service Layer - Fault-Tolerant Modular Design
 // Each endpoint works independently with comprehensive error handling
+// PURE SQLite - No localStorage fallback
 class AlphaVantageService {
   private apiKey: string = '';
 
-  setApiKey(key: string) {
+  async setApiKey(key: string) {
     this.apiKey = key;
-    localStorage.setItem('alphavantage_api_key', key);
+    // PURE SQLite - Save API key to database
+    await saveSetting('alphavantage_api_key', key, 'api_keys');
   }
 
-  getApiKey(): string {
+  async getApiKey(): Promise<string> {
     if (!this.apiKey) {
-      this.apiKey = localStorage.getItem('alphavantage_api_key') || 'demo';
+      // PURE SQLite - Load API key from database
+      this.apiKey = await getSetting('alphavantage_api_key') || 'demo';
     }
     return this.apiKey;
   }
@@ -283,6 +287,7 @@ class AlphaVantageService {
     try {
       // Try to get a quote for a known symbol (AAPL)
       const testResult = await this.getQuote('AAPL');
+      const apiKey = await this.getApiKey();
 
       return {
         success: testResult.success,
@@ -290,14 +295,15 @@ class AlphaVantageService {
           'Alpha Vantage API is working' :
           `Alpha Vantage API error: ${testResult.error}`,
         timestamp: Date.now(),
-        api_key_configured: this.getApiKey() !== 'demo'
+        api_key_configured: apiKey !== 'demo'
       };
     } catch (error) {
+      const apiKey = await this.getApiKey();
       return {
         success: false,
         message: `Health check failed: ${error}`,
         timestamp: Date.now(),
-        api_key_configured: this.getApiKey() !== 'demo'
+        api_key_configured: apiKey !== 'demo'
       };
     }
   }

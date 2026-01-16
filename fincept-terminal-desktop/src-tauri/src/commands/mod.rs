@@ -133,3 +133,15 @@ pub mod screener_commands;
 
 // Geocoding - Location search and reverse geocoding
 pub mod geocoding;
+
+// Stock Paper Trading - Equity trading with product types (CNC/MIS/NRML)
+pub mod stock_paper_trading;
+
+// Broker Credentials - Secure encrypted storage for broker API credentials
+pub mod broker_credentials;
+
+// Master Contract Cache - Broker symbol data caching
+pub mod master_contract;
+
+// Generic Storage - localStorage replacement with SQLite
+pub mod storage;

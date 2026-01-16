@@ -8,7 +8,8 @@ import { FinancialAnalysisPanel } from './equity-research/components/FinancialAn
 import { PeerComparisonPanel } from './equity-research/components/PeerComparisonPanel';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
-import { Search, TrendingUp, BarChart3, FileText, Users, Newspaper, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, TrendingUp, BarChart3, FileText, Users, Newspaper, RefreshCw, AlertCircle, Info } from 'lucide-react';
+import { createEquityResearchTabTour } from './tours/equityResearchTabTour';
 
 // Import Bloomberg styles
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, LAYOUT, EFFECTS, COMMON_STYLES } from './portfolio-tab/bloombergStyles';
@@ -1370,11 +1371,36 @@ const EquityResearchTab: React.FC = () => {
             </span>
           </div>
 
+          {/* Help Button */}
+          <button
+            onClick={() => {
+              const tour = createEquityResearchTabTour((tab: string) => setActiveTab(tab as any));
+              tour.drive();
+            }}
+            style={{
+              backgroundColor: COLORS.BLUE,
+              color: COLORS.DARK_BG,
+              border: 'none',
+              padding: '4px 8px',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '0'
+            }}
+            title="Start interactive tour"
+          >
+            <Info size={12} />
+            HELP
+          </button>
+
           {/* Divider */}
           <div style={COMMON_STYLES.verticalDivider} />
 
           {/* Symbol Search */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+          <div id="research-search" style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Search size={14} style={{
                 position: 'absolute',
@@ -1438,7 +1464,7 @@ const EquityResearchTab: React.FC = () => {
           <div style={COMMON_STYLES.verticalDivider} />
 
           {/* Tab Navigation Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+          <div id="research-tabs" style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
             {[
               { id: 'overview', label: 'OVERVIEW', icon: TrendingUp },
               { id: 'financials', label: 'FINANCIALS', icon: BarChart3 },
@@ -1646,7 +1672,7 @@ const EquityResearchTab: React.FC = () => {
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div style={{
+          <div id="research-overview" style={{
             display: 'flex',
             flexDirection: 'column',
             gap: SPACING.MEDIUM,
@@ -1665,7 +1691,7 @@ const EquityResearchTab: React.FC = () => {
               {/* Column 1 - Trading & Valuation */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
                 {/* Today's Trading */}
-                <div style={{
+                <div id="overview-trading" style={{
                   ...COMMON_STYLES.panel,
                   padding: SPACING.MEDIUM,
                 }}>
@@ -1703,7 +1729,7 @@ const EquityResearchTab: React.FC = () => {
                 </div>
 
                 {/* Valuation Metrics */}
-                <div style={{
+                <div id="overview-valuation" style={{
                   ...COMMON_STYLES.panel,
                   padding: SPACING.MEDIUM,
                 }}>
@@ -1797,7 +1823,7 @@ const EquityResearchTab: React.FC = () => {
               </div>
 
               {/* Column 2 - Price Chart */}
-              <div style={{
+              <div id="overview-price-chart" style={{
                 display: 'flex',
                 flexDirection: 'column',
                 gap: SPACING.MEDIUM,
@@ -1918,7 +1944,7 @@ const EquityResearchTab: React.FC = () => {
               {/* Column 3 - Analyst & Performance */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
                 {/* Analyst Targets */}
-                <div style={{
+                <div id="research-analyst-ratings" style={{
                   ...COMMON_STYLES.panel,
                   padding: SPACING.MEDIUM,
                 }}>
@@ -1988,7 +2014,7 @@ const EquityResearchTab: React.FC = () => {
                 </div>
 
                 {/* Profitability */}
-                <div style={{
+                <div id="overview-profitability" style={{
                   ...COMMON_STYLES.panel,
                   padding: SPACING.MEDIUM,
                   flex: 1,
@@ -2148,7 +2174,7 @@ const EquityResearchTab: React.FC = () => {
 
         {/* Financials Tab */}
         {activeTab === 'financials' && (
-          <div style={{ padding: '8px' }}>
+          <div id="research-financials" style={{ padding: '8px' }}>
             {!financials ? (
               <div style={{
                 display: 'flex',
@@ -2178,7 +2204,7 @@ const EquityResearchTab: React.FC = () => {
             ) : (
               <div style={{ padding: '0' }}>
                 {/* Controls Panel */}
-                <div style={{
+                <div id="financials-controls" style={{
                   backgroundColor: COLORS.PANEL_BG,
                   border: `1px solid ${COLORS.BORDER}`,
                   padding: '10px 12px',
@@ -2574,9 +2600,9 @@ const EquityResearchTab: React.FC = () => {
 
         {/* Analysis Tab */}
         {activeTab === 'analysis' && (
-          <div style={{ padding: SPACING.DEFAULT }}>
+          <div id="analysis-tab-content" style={{ padding: SPACING.DEFAULT }}>
             {/* Financial Analysis Panel - CFA-Compliant Analysis */}
-            <div style={{ marginBottom: SPACING.MEDIUM }}>
+            <div id="analysis-cfa-panel" style={{ marginBottom: SPACING.MEDIUM }}>
               <FinancialAnalysisPanel
                 ticker={currentSymbol}
                 companyName={stockInfo?.company_name || currentSymbol}
@@ -2584,9 +2610,9 @@ const EquityResearchTab: React.FC = () => {
             </div>
 
             {/* Financial Metrics Grid - 2x2 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM }}>
+            <div id="analysis-metrics-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM }}>
               {/* Financial Health */}
-              <div style={{
+              <div id="analysis-financial-health" style={{
                 ...COMMON_STYLES.panel,
                 padding: SPACING.LARGE,
               }}>
@@ -3007,7 +3033,7 @@ const EquityResearchTab: React.FC = () => {
 
         {/* News Tab */}
         {activeTab === 'news' && (
-          <div style={{ padding: '8px', height: 'calc(100vh - 280px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div id="news-tab-content" style={{ padding: '8px', height: 'calc(100vh - 280px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {newsLoading ? (
               <div style={{
                 display: 'flex',
@@ -3217,14 +3243,14 @@ const EquityResearchTab: React.FC = () => {
 
         {/* Peers Tab */}
         {activeTab === 'peers' && (
-          <div style={{ padding: '8px' }}>
+          <div id="research-peer-comparison" style={{ padding: '8px' }}>
             <PeerComparisonPanel initialSymbol={currentSymbol} />
           </div>
         )}
 
         {/* Technicals Tab */}
         {activeTab === 'technicals' && (
-          <div style={{ padding: '8px' }}>
+          <div id="research-chart" style={{ padding: '8px' }}>
             {technicalsLoading ? (
               <div style={{
                 display: 'flex',

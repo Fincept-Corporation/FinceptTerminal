@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { getSetting, saveSetting } from '@/services/sqliteService';
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // Check every 30 minutes
 const LAST_CHECK_KEY = 'hook_updater_last_check';
@@ -46,8 +47,8 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
       if (update?.available) {
         console.log('[AutoUpdater] Update available:', update.version);
 
-        // Check if this version was previously dismissed
-        const dismissedVersion = localStorage.getItem(DISMISSED_VERSION_KEY);
+        // PURE SQLite - Check if this version was previously dismissed
+        const dismissedVersion = await getSetting(DISMISSED_VERSION_KEY);
         if (dismissedVersion === update.version) {
           console.log('[AutoUpdater] Update was dismissed by user');
           if (!silent) {
@@ -60,8 +61,8 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
         setUpdateInfo(update);
         setUpdateAvailable(true);
 
-        // Update last check timestamp
-        localStorage.setItem(LAST_CHECK_KEY, Date.now().toString());
+        // PURE SQLite - Update last check timestamp
+        await saveSetting(LAST_CHECK_KEY, Date.now().toString(), 'auto_updater');
       } else {
         console.log('[AutoUpdater] No updates available');
         if (!silent) {
@@ -153,10 +154,10 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
     }
   }, [updateInfo]);
 
-  const dismissUpdate = useCallback(() => {
+  const dismissUpdate = useCallback(async () => {
     if (updateInfo?.version) {
-      // Store the dismissed version so we don't show it again
-      localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.version);
+      // PURE SQLite - Store the dismissed version so we don't show it again
+      await saveSetting(DISMISSED_VERSION_KEY, updateInfo.version, 'auto_updater');
       console.log('[AutoUpdater] Update dismissed:', updateInfo.version);
     }
     setUpdateAvailable(false);

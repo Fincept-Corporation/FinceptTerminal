@@ -1,6 +1,8 @@
 // File: src/services/chatModeApi.ts
 // API service for Chat Mode - integrates with Fincept API
 
+import { getSetting } from './sqliteService';
+
 export interface ChatModeMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -39,12 +41,12 @@ class ChatModeApiService {
   }
 
   /**
-   * Initialize API key from localStorage
+   * Initialize API key from storage
    */
   private async initialize() {
     try {
-      // Get session from localStorage
-      const sessionStr = localStorage.getItem('fincept_session');
+      // Get session from storage
+      const sessionStr = await getSetting('fincept_session');
       if (sessionStr) {
         const session = JSON.parse(sessionStr);
         this.apiKey = session.api_key || null;

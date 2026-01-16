@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff, TrendingUp } from 'lucide-react';
-import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys } from '@/services/sqliteService';
+import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys, saveSetting, getSetting } from '@/services/sqliteService';
 import { ollamaService } from '@/services/ollamaService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/terminalThemeService';
@@ -560,7 +560,7 @@ export default function SettingsTab() {
   const getCurrentLLMConfig = () => llmConfigs.find(c => c.provider === activeProvider);
 
   // Terminal appearance handlers
-  const handleSaveTerminalAppearance = () => {
+  const handleSaveTerminalAppearance = async () => {
     const newTheme = {
       font: {
         family: fontFamily,
@@ -572,13 +572,13 @@ export default function SettingsTab() {
     };
     updateTheme(newTheme);
 
-    // Save key mappings to localStorage
-    localStorage.setItem('fincept_key_mappings', JSON.stringify(keyMappings));
+    // Save key mappings to storage
+    await saveSetting('fincept_key_mappings', JSON.stringify(keyMappings), 'settings');
 
     showMessage('success', 'Terminal appearance and key mappings saved successfully');
   };
 
-  const handleResetTerminalAppearance = () => {
+  const handleResetTerminalAppearance = async () => {
     resetTheme();
     const defaultTheme = terminalThemeService.getTheme();
     setFontFamily(defaultTheme.font.family);
@@ -589,21 +589,24 @@ export default function SettingsTab() {
 
     // Reset key mappings to defaults
     setKeyMappings(DEFAULT_KEY_MAPPINGS);
-    localStorage.removeItem('fincept_key_mappings');
+    await saveSetting('fincept_key_mappings', '', 'settings');
 
     showMessage('success', 'Reset to default appearance and key mappings');
   };
 
   // Load saved key mappings on mount
   useEffect(() => {
-    const savedMappings = localStorage.getItem('fincept_key_mappings');
-    if (savedMappings) {
-      try {
-        setKeyMappings(JSON.parse(savedMappings));
-      } catch (err) {
-        console.error('Failed to load key mappings:', err);
+    const loadKeyMappings = async () => {
+      const savedMappings = await getSetting('fincept_key_mappings');
+      if (savedMappings) {
+        try {
+          setKeyMappings(JSON.parse(savedMappings));
+        } catch (err) {
+          console.error('Failed to load key mappings:', err);
+        }
       }
-    }
+    };
+    loadKeyMappings();
   }, []);
 
   return (

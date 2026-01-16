@@ -5,6 +5,45 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import Backend from 'i18next-http-backend';
+import { invoke } from '@tauri-apps/api/core';
+
+// Custom storage backend using SQLite (no localStorage)
+const sqliteStorage = {
+  name: 'sqliteStorage',
+  async: true,
+
+  // Async read
+  read: async (language: string, namespace: string, callback: (error: any, data: any) => void) => {
+    // Not used by i18next-browser-languagedetector
+    callback(null, null);
+  },
+
+  // Async write
+  save: async (language: string, namespace: string, data: any) => {
+    // Not used by i18next-browser-languagedetector
+  }
+};
+
+// Custom language detector using SQLite
+const sqliteLanguageDetector = {
+  name: 'sqliteDetector',
+  lookup: async (): Promise<string | undefined> => {
+    try {
+      const lang = await invoke<string>('storage_get_optional', { key: 'i18nextLng' });
+      return lang || undefined;
+    } catch (error) {
+      console.error('[i18n] Failed to get language from SQLite:', error);
+      return undefined;
+    }
+  },
+  cacheUserLanguage: async (lng: string) => {
+    try {
+      await invoke('storage_set', { key: 'i18nextLng', value: lng });
+    } catch (error) {
+      console.error('[i18n] Failed to save language to SQLite:', error);
+    }
+  }
+};
 
 i18next
   .use(Backend) // Load translations from public folder
@@ -19,9 +58,8 @@ i18next
     },
 
     detection: {
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
-      lookupLocalStorage: 'i18nextLng',
+      order: ['querystring', 'cookie', 'navigator'],
+      caches: [], // Disable localStorage caching, we'll handle it manually
     },
 
     interpolation: {
@@ -43,5 +81,28 @@ i18next
       useSuspense: false, // Prevent suspense issues with Tauri
     },
   });
+
+// Load saved language from SQLite on init
+(async () => {
+  try {
+    const savedLang = await invoke<string>('storage_get_optional', { key: 'i18nextLng' });
+    const supportedLngs = i18next.options.supportedLngs;
+    if (savedLang && Array.isArray(supportedLngs) && supportedLngs.includes(savedLang)) {
+      await i18next.changeLanguage(savedLang);
+    }
+  } catch (error) {
+    console.error('[i18n] Failed to load saved language:', error);
+  }
+})();
+
+// Save language to SQLite on change
+i18next.on('languageChanged', async (lng) => {
+  try {
+    await invoke('storage_set', { key: 'i18nextLng', value: lng });
+    console.log(`[i18n] Language saved to SQLite: ${lng}`);
+  } catch (error) {
+    console.error('[i18n] Failed to save language:', error);
+  }
+});
 
 export default i18next;

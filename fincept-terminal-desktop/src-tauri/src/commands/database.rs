@@ -492,6 +492,136 @@ pub async fn db_delete_trade(id: String) -> Result<String, String> {
 }
 
 // ============================================================================
+// Paper Trading Margin Block Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn db_create_margin_block(
+    id: String,
+    portfolio_id: String,
+    order_id: String,
+    symbol: String,
+    blocked_amount: f64,
+) -> Result<String, String> {
+    paper_trading::create_margin_block(&id, &portfolio_id, &order_id, &symbol, blocked_amount)
+        .map_err(|e| e.to_string())?;
+    Ok("Margin block created successfully".to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_margin_blocks(portfolio_id: String) -> Result<Vec<paper_trading::MarginBlock>, String> {
+    paper_trading::get_margin_blocks(&portfolio_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_margin_block_by_order(order_id: String) -> Result<Option<paper_trading::MarginBlock>, String> {
+    paper_trading::get_margin_block_by_order(&order_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_delete_margin_block(order_id: String) -> Result<f64, String> {
+    paper_trading::delete_margin_block(&order_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_total_blocked_margin(portfolio_id: String) -> Result<f64, String> {
+    paper_trading::get_total_blocked_margin(&portfolio_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_available_margin(portfolio_id: String) -> Result<f64, String> {
+    paper_trading::get_available_margin(&portfolio_id).map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// Paper Trading Holdings Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn db_create_holding(
+    id: String,
+    portfolio_id: String,
+    symbol: String,
+    quantity: f64,
+    average_price: f64,
+) -> Result<String, String> {
+    paper_trading::create_holding(&id, &portfolio_id, &symbol, quantity, average_price)
+        .map_err(|e| e.to_string())?;
+    Ok("Holding created successfully".to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_holdings(portfolio_id: String) -> Result<Vec<paper_trading::PaperTradingHolding>, String> {
+    paper_trading::get_holdings(&portfolio_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_holding_by_symbol(
+    portfolio_id: String,
+    symbol: String,
+) -> Result<Option<paper_trading::PaperTradingHolding>, String> {
+    paper_trading::get_holding_by_symbol(&portfolio_id, &symbol).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_update_holding(
+    id: String,
+    quantity: Option<f64>,
+    average_price: Option<f64>,
+    current_price: Option<f64>,
+    t1_quantity: Option<f64>,
+    available_quantity: Option<f64>,
+) -> Result<String, String> {
+    paper_trading::update_holding(
+        &id,
+        quantity,
+        average_price,
+        current_price,
+        t1_quantity,
+        available_quantity,
+    ).map_err(|e| e.to_string())?;
+    Ok("Holding updated successfully".to_string())
+}
+
+#[tauri::command]
+pub async fn db_delete_holding(id: String) -> Result<String, String> {
+    paper_trading::delete_holding(&id).map_err(|e| e.to_string())?;
+    Ok("Holding deleted successfully".to_string())
+}
+
+#[tauri::command]
+pub async fn db_process_t1_settlement(portfolio_id: String) -> Result<i32, String> {
+    paper_trading::process_t1_settlement(&portfolio_id).map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// Paper Trading Execution Engine Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn db_fill_order(
+    order_id: String,
+    fill_price: f64,
+    fill_quantity: f64,
+    fee: f64,
+    fee_rate: f64,
+) -> Result<String, String> {
+    paper_trading::fill_order(&order_id, fill_price, fill_quantity, fee, fee_rate)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_portfolio_stats(portfolio_id: String) -> Result<paper_trading::PortfolioStats, String> {
+    paper_trading::get_portfolio_stats(&portfolio_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_reset_portfolio(portfolio_id: String, initial_balance: f64) -> Result<String, String> {
+    paper_trading::reset_portfolio(&portfolio_id, initial_balance).map_err(|e| e.to_string())?;
+    Ok("Portfolio reset successfully".to_string())
+}
+
+// ============================================================================
 // Notes Commands
 // ============================================================================
 

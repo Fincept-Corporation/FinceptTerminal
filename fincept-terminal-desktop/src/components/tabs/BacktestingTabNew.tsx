@@ -3,8 +3,8 @@
  *
  * Clean, provider-aware backtesting UI that works with:
  * - Backtesting.py (Python strategies, fast event-driven)
- * - QuantConnect Lean (C# strategies, institutional-grade)
  * - VectorBT (NumPy vectorized, ultra-fast)
+ * - Backtrader (Python-based backtesting framework)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -150,12 +150,6 @@ const BacktestingTabNew: React.FC = () => {
         strategyType: 'sma_crossover',
         parameters: { fastPeriod: 10, slowPeriod: 20 },
         commission: 0.001,
-      }));
-    } else if (providerName === 'QuantConnect Lean') {
-      setConfig(prev => ({
-        ...prev,
-        strategyType: 'custom',
-        commission: 0.0,
       }));
     } else if (providerName === 'VectorBT') {
       setConfig(prev => ({

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
-import { sqliteService } from './sqliteService';
+import { sqliteService, saveSetting } from './sqliteService';
 import { polygonLogger } from './loggerService';
 import type {
   PolygonResponse,
@@ -116,7 +116,7 @@ class PolygonService {
       if (polygonCred?.api_key) {
         this.apiKey = polygonCred.api_key;
         // Set environment variable for Python script
-        localStorage.setItem('POLYGON_API_KEY', polygonCred.api_key);
+        await saveSetting('POLYGON_API_KEY', polygonCred.api_key, 'api_keys');
         polygonLogger.info('API key loaded successfully, length:', polygonCred.api_key.length);
         return polygonCred.api_key;
       }

@@ -16,6 +16,7 @@ import {
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 import { PaymentApiService, PaymentUtils } from '@/services/paymentApi';
+import { getSetting, saveSetting } from '@/services/sqliteService';
 
 interface PaymentProcessingScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -51,8 +52,8 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     }
 
     try {
-      // Check if we have a transaction_id from localStorage (set by PricingScreen)
-      const pendingTransactionId = localStorage.getItem('pending_payment_order_id');
+      // PURE SQLite - Check if we have a transaction_id (set by PricingScreen)
+      const pendingTransactionId = await getSetting('pending_payment_order_id');
 
       if (pendingTransactionId) {
         // Use the new transaction status endpoint
@@ -68,7 +69,8 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
           if (transactionStatus === 'completed' || transactionStatus === 'success' || transactionStatus === 'paid') {
             setStatus('completed');
             setPaymentData(transactionData);
-            localStorage.removeItem('pending_payment_order_id');
+            // PURE SQLite - Clear payment order ID
+            await saveSetting('pending_payment_order_id', '', 'payment');
 
             // Refresh user data to get updated credits
             await refreshUserData();
@@ -80,7 +82,8 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
           } else if (transactionStatus === 'failed' || transactionStatus === 'cancelled') {
             setStatus(transactionStatus as PaymentStatus);
             setPaymentData(transactionData);
-            localStorage.removeItem('pending_payment_order_id');
+            // PURE SQLite - Clear payment order ID
+            await saveSetting('pending_payment_order_id', '', 'payment');
 
             // Clear intervals
             if (intervalRef.current) clearInterval(intervalRef.current);

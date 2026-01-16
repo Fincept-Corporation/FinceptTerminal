@@ -4,8 +4,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::services::stock_screener_service::{
-    StockScreenerService, ScreenCriteria, FilterCondition, MetricType,
-    FilterOperator, FilterValue, ScreenResult, StockData,
+    StockScreenerService, ScreenCriteria, MetricType,
+    ScreenResult, StockData,
 };
 
 // ============================================================================
@@ -131,7 +131,7 @@ pub async fn get_momentum_screen() -> ScreenerCommandResponse<ScreenCriteria> {
 /// Save a custom screen (to local storage or database)
 #[tauri::command]
 pub async fn save_custom_screen(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     name: String,
     criteria: ScreenCriteria,
 ) -> ScreenerCommandResponse<SavedScreen> {
@@ -157,7 +157,7 @@ pub async fn save_custom_screen(
 /// Load all saved custom screens
 #[tauri::command]
 pub async fn load_custom_screens(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
 ) -> ScreenerCommandResponse<Vec<SavedScreen>> {
     // TODO: Load from database or local storage
     // For now, return empty list
@@ -172,8 +172,8 @@ pub async fn load_custom_screens(
 /// Delete a saved custom screen
 #[tauri::command]
 pub async fn delete_custom_screen(
-    app: tauri::AppHandle,
-    screen_id: String,
+    _app: tauri::AppHandle,
+    _screen_id: String,
 ) -> ScreenerCommandResponse<bool> {
     // TODO: Delete from database or local storage
 

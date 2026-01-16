@@ -344,6 +344,146 @@ export class PaperTradingDatabase {
   }
 
   // ============================================================================
+  // MARGIN BLOCK OPERATIONS
+  // ============================================================================
+
+  async createMarginBlock(block: {
+    id: string;
+    portfolioId: string;
+    orderId: string;
+    symbol: string;
+    blockedAmount: number;
+  }): Promise<void> {
+    await invoke('db_create_margin_block', {
+      id: block.id,
+      portfolioId: block.portfolioId,
+      orderId: block.orderId,
+      symbol: block.symbol,
+      blockedAmount: block.blockedAmount,
+    });
+  }
+
+  async getMarginBlocks(portfolioId: string): Promise<any[]> {
+    return await invoke<any[]>('db_get_margin_blocks', { portfolioId });
+  }
+
+  async getMarginBlockByOrder(orderId: string): Promise<any | null> {
+    return await invoke('db_get_margin_block_by_order', { orderId });
+  }
+
+  async deleteMarginBlock(orderId: string): Promise<number> {
+    return await invoke<number>('db_delete_margin_block', { orderId });
+  }
+
+  async getTotalBlockedMargin(portfolioId: string): Promise<number> {
+    return await invoke<number>('db_get_total_blocked_margin', { portfolioId });
+  }
+
+  async getAvailableMargin(portfolioId: string): Promise<number> {
+    return await invoke<number>('db_get_available_margin', { portfolioId });
+  }
+
+  // ============================================================================
+  // HOLDINGS OPERATIONS (T+1 Settlement)
+  // ============================================================================
+
+  async createHolding(holding: {
+    id: string;
+    portfolioId: string;
+    symbol: string;
+    quantity: number;
+    averagePrice: number;
+  }): Promise<void> {
+    await invoke('db_create_holding', {
+      id: holding.id,
+      portfolioId: holding.portfolioId,
+      symbol: holding.symbol,
+      quantity: holding.quantity,
+      averagePrice: holding.averagePrice,
+    });
+  }
+
+  async getHoldings(portfolioId: string): Promise<any[]> {
+    return await invoke<any[]>('db_get_holdings', { portfolioId });
+  }
+
+  async getHoldingBySymbol(portfolioId: string, symbol: string): Promise<any | null> {
+    return await invoke('db_get_holding_by_symbol', { portfolioId, symbol });
+  }
+
+  async updateHolding(holdingId: string, updates: {
+    quantity?: number;
+    averagePrice?: number;
+    currentPrice?: number;
+    t1Quantity?: number;
+    availableQuantity?: number;
+  }): Promise<void> {
+    await invoke('db_update_holding', {
+      id: holdingId,
+      quantity: updates.quantity || null,
+      averagePrice: updates.averagePrice || null,
+      currentPrice: updates.currentPrice || null,
+      t1Quantity: updates.t1Quantity || null,
+      availableQuantity: updates.availableQuantity || null,
+    });
+  }
+
+  async deleteHolding(holdingId: string): Promise<void> {
+    await invoke('db_delete_holding', { id: holdingId });
+  }
+
+  async processT1Settlement(portfolioId: string): Promise<number> {
+    return await invoke<number>('db_process_t1_settlement', { portfolioId });
+  }
+
+  // ============================================================================
+  // EXECUTION ENGINE OPERATIONS
+  // ============================================================================
+
+  /**
+   * Fill an order - creates trade, updates position, deducts fees
+   * All business logic handled in Rust backend
+   */
+  async fillOrder(
+    orderId: string,
+    fillPrice: number,
+    fillQuantity: number,
+    fee: number,
+    feeRate: number
+  ): Promise<string> {
+    return await invoke<string>('db_fill_order', {
+      orderId,
+      fillPrice,
+      fillQuantity,
+      fee,
+      feeRate,
+    });
+  }
+
+  /**
+   * Get portfolio statistics (total value, margin, P&L, etc.)
+   */
+  async getPortfolioStats(portfolioId: string): Promise<{
+    total_value: number;
+    available_margin: number;
+    blocked_margin: number;
+    realized_pnl: number;
+    unrealized_pnl: number;
+    total_pnl: number;
+    open_positions: number;
+    total_trades: number;
+  }> {
+    return await invoke('db_get_portfolio_stats', { portfolioId });
+  }
+
+  /**
+   * Reset portfolio - deletes all trades, orders, positions and resets balance
+   */
+  async resetPortfolio(portfolioId: string, initialBalance: number): Promise<void> {
+    await invoke('db_reset_portfolio', { portfolioId, initialBalance });
+  }
+
+  // ============================================================================
   // MAPPING FUNCTIONS
   // ============================================================================
 

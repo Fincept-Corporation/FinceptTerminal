@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::{Mutex, Semaphore, mpsc};
+use tokio::sync::{Mutex, mpsc};
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::GenericNamespaced;
 use serde::{Deserialize, Serialize};

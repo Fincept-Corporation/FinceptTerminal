@@ -1,6 +1,3 @@
-// MaritimeTabDeck.tsx - High-Performance Maritime Intelligence with Deck.gl
-// NO DUMMY DATA - Only real vessel data from Marine API
-
 import React, { useState, useEffect, useMemo } from 'react';
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, PathLayer } from '@deck.gl/layers';
@@ -20,23 +17,48 @@ const INITIAL_VIEW_STATE = {
   bearing: 0
 };
 
+const BLOOMBERG = {
+  ORANGE: '#FF6600',
+  BLACK: '#000000',
+  DARK_BG: '#0F0F0F',
+  BORDER: '#333333',
+  WHITE: '#FFFFFF',
+  GREEN: '#00FF00',
+  RED: '#FF0000',
+  YELLOW: '#FFD700',
+  CYAN: '#00E5FF',
+  GRAY: '#888888'
+};
+
+interface VesselPoint {
+  position: [number, number, number];
+  color: [number, number, number, number];
+  imo: string;
+  name: string;
+  speed: number;
+}
+
 export default function MaritimeTabDeck() {
-  const { colors, fontFamily, fontSize } = useTerminalTheme();
+  const { colors, fontFamily } = useTerminalTheme();
   const { session } = useAuth();
   const apiKey = session?.api_key || null;
 
   const [vessels, setVessels] = useState<VesselData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchImo, setSearchImo] = useState('');
-  const [searchingVessel, setSearchingVessel] = useState(false);
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
   const [selectedVessel, setSelectedVessel] = useState<VesselData | null>(null);
   const [vesselHistory, setVesselHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [healthStatus, setHealthStatus] = useState<any>(null);
-  const [multiImoInput, setMultiImoInput] = useState('');
+
+  // Search controls
   const [searchMode, setSearchMode] = useState<'single' | 'multi'>('single');
+  const [searchImo, setSearchImo] = useState('');
+  const [multiImoInput, setMultiImoInput] = useState('');
+  const [searchingVessel, setSearchingVessel] = useState(false);
+
+  // Location search
   const [locationSearch, setLocationSearch] = useState('');
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [suggestions, setSuggestions] = useState<GeocodeLocation[]>([]);
@@ -54,12 +76,7 @@ export default function MaritimeTabDeck() {
 
     try {
       const response = await MarineApiService.searchVesselsByArea(
-        {
-          min_lat: 18.5,
-          max_lat: 19.5,
-          min_lng: 72.0,
-          max_lng: 73.5
-        },
+        { min_lat: 18.5, max_lat: 19.5, min_lng: 72.0, max_lng: 73.5 },
         apiKey
       );
 
@@ -68,7 +85,6 @@ export default function MaritimeTabDeck() {
           v => v.last_pos_latitude && v.last_pos_longitude
         );
         setVessels(validVessels);
-        console.log(`Loaded ${validVessels.length} vessels`);
       } else {
         setError(response.error || 'Failed to load vessels');
       }
@@ -79,7 +95,7 @@ export default function MaritimeTabDeck() {
     }
   };
 
-  // Search specific vessel by IMO
+  // Search vessel by IMO
   const searchVessel = async () => {
     if (!apiKey || !searchImo.trim()) return;
 
@@ -91,15 +107,12 @@ export default function MaritimeTabDeck() {
 
       if (response.success && response.data) {
         const vessel = response.data.vessel;
-
-        // Add to vessel list if not exists
         setVessels(prev => {
           const exists = prev.find(v => v.imo === vessel.imo);
           if (exists) return prev;
           return [...prev, vessel];
         });
 
-        // Zoom to vessel
         setViewState({
           longitude: parseFloat(vessel.last_pos_longitude),
           latitude: parseFloat(vessel.last_pos_latitude),
@@ -109,7 +122,6 @@ export default function MaritimeTabDeck() {
         });
 
         setSearchImo('');
-        console.log(`Found vessel: ${vessel.name}`);
       } else {
         setError(response.error || 'Vessel not found');
       }
@@ -157,7 +169,6 @@ export default function MaritimeTabDeck() {
         });
 
         setMultiImoInput('');
-        console.log(`Found ${response.data.found_count || 0} vessels, ${response.data.not_found_count || 0} not found`);
 
         if (response.data.not_found_count > 0 && response.data.not_found) {
           setError(`${response.data.not_found_count} vessels not found: ${response.data.not_found.join(', ')}`);
@@ -185,7 +196,6 @@ export default function MaritimeTabDeck() {
 
       if (response.success && response.data && response.data.history && response.data.history.positions) {
         setVesselHistory(response.data.history.positions);
-        console.log(`Loaded history: ${response.data.history.positions.length} positions`);
       } else {
         setError(response.error || 'Failed to load vessel history');
         setVesselHistory([]);
@@ -202,17 +212,15 @@ export default function MaritimeTabDeck() {
 
     try {
       const response = await MarineApiService.getMarineHealth(apiKey);
-
       if (response.success && response.data) {
         setHealthStatus(response.data);
-        console.log('Marine API Health:', response.data.status);
       }
     } catch (err) {
-      console.error('Health check failed:', err);
+      // Silent fail
     }
   };
 
-  // Fetch autocomplete suggestions using Python geopy
+  // Fetch autocomplete suggestions
   const fetchSuggestions = async (query: string) => {
     if (query.length < 3) {
       setSuggestions([]);
@@ -227,7 +235,6 @@ export default function MaritimeTabDeck() {
         setShowSuggestions(results.suggestions.length > 0);
       }
     } catch (err) {
-      console.error('Autocomplete failed:', err);
       setSuggestions([]);
       setShowSuggestions(false);
     }
@@ -247,10 +254,8 @@ export default function MaritimeTabDeck() {
     try {
       let bounds;
       if (locationData) {
-        // Use location from suggestions
         bounds = locationData.bbox;
       } else {
-        // Search new location
         const results = await GeocodingService.searchLocation(locationSearch, 1);
         if (!results.success || !results.suggestions || results.suggestions.length === 0) {
           setError('Location not found');
@@ -260,7 +265,6 @@ export default function MaritimeTabDeck() {
         bounds = results.suggestions[0].bbox;
       }
 
-      // Search vessels in this area
       const vesselResponse = await MarineApiService.searchVesselsByArea(bounds, apiKey);
 
       if (vesselResponse.success && vesselResponse.data) {
@@ -269,7 +273,6 @@ export default function MaritimeTabDeck() {
         );
         setVessels(validVessels);
 
-        // Pan to center
         const centerLat = (bounds.min_lat + bounds.max_lat) / 2;
         const centerLng = (bounds.min_lng + bounds.max_lng) / 2;
         setViewState({
@@ -279,8 +282,6 @@ export default function MaritimeTabDeck() {
           pitch: 0,
           bearing: 0
         });
-
-        console.log(`Found ${validVessels.length} vessels in area`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Geocoding failed');
@@ -297,12 +298,10 @@ export default function MaritimeTabDeck() {
     setError(null);
 
     try {
-      // Calculate bounds from viewport
       const zoom = viewState.zoom;
       const lat = viewState.latitude;
       const lng = viewState.longitude;
 
-      // Approximate bounds based on zoom level
       const latDelta = 180 / Math.pow(2, zoom);
       const lngDelta = 360 / Math.pow(2, zoom);
 
@@ -320,7 +319,6 @@ export default function MaritimeTabDeck() {
           v => v.last_pos_latitude && v.last_pos_longitude
         );
         setVessels(validVessels);
-        console.log(`Loaded ${validVessels.length} vessels in current view`);
       } else {
         setError(response.error || 'Failed to load vessels');
       }
@@ -335,11 +333,11 @@ export default function MaritimeTabDeck() {
   useEffect(() => {
     loadVessels();
     loadHealthStatus();
-    const interval = setInterval(loadVessels, 300000); // Refresh every 5 minutes
+    const interval = setInterval(loadVessels, 300000);
     return () => clearInterval(interval);
   }, [apiKey]);
 
-  // Memoized vessel data - precompute positions and colors
+  // Memoized vessel points
   const vesselPoints = useMemo(() => {
     return vessels.map(v => {
       const speed = parseFloat(v.last_pos_speed) || 0;
@@ -358,7 +356,7 @@ export default function MaritimeTabDeck() {
     });
   }, [vessels]);
 
-  // Memoized layers with static accessors for performance
+  // Memoized layers
   const layers = useMemo(() => {
     const allLayers: any[] = [
       new TileLayer({
@@ -378,7 +376,6 @@ export default function MaritimeTabDeck() {
       })
     ];
 
-    // Add vessel history track
     if (showHistory && vesselHistory.length > 0) {
       const pathData = vesselHistory.map(pos => [
         parseFloat(pos.longitude),
@@ -429,71 +426,77 @@ export default function MaritimeTabDeck() {
   }, [vesselPoints, showHistory, vesselHistory, vessels]);
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        background: colors.background,
-        color: colors.text,
-        fontFamily: fontFamily,
-        fontSize: `${fontSize}px`,
-        position: 'relative',
-        overflow: 'hidden'
-      }}
-    >
-      {/* Header - Bloomberg Style */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          padding: '6px 12px',
-          background: '#000000',
-          borderBottom: '2px solid #ff6600',
+    <div style={{
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Header */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        background: BLOOMBERG.BLACK,
+        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        zIndex: 1000,
+        fontFamily: 'Consolas, monospace',
+        fontSize: '12px'
+      }}>
+        {/* Title Bar */}
+        <div style={{
+          padding: '4px 12px',
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          gap: '16px',
-          zIndex: 1000,
-          fontFamily: 'Consolas, monospace',
-          fontSize: '12px'
-        }}
-      >
-        {/* Left: Title + Stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ color: '#ff6600', fontWeight: 'bold', fontSize: '13px' }}>
+          gap: '12px',
+          borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+        }}>
+          <div style={{ color: BLOOMBERG.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
             MAR&gt;
           </div>
-          <div style={{ color: '#ffffff', fontWeight: 'bold' }}>
+          <div style={{ color: BLOOMBERG.WHITE, fontWeight: 'bold' }}>
             MARITIME TRACKING
           </div>
-          <div style={{ color: '#888888' }}>|</div>
-          <div style={{ color: vessels.length > 0 ? '#00ff00' : '#ff0000', fontWeight: 'bold' }}>
+          <div style={{ color: BLOOMBERG.GRAY }}>|</div>
+          <div style={{ color: vesselPoints.length > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED, fontWeight: 'bold' }}>
             {vesselPoints.length}/{vessels.length} VESSELS
           </div>
         </div>
 
-        {/* Right: Search + Actions */}
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Location Search with Autocomplete */}
+        {/* Search Controls */}
+        <div style={{
+          padding: '4px 12px',
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          {/* Location Search */}
           <div style={{ position: 'relative' }}>
             <input
               type="text"
-              placeholder="Search: Suez Canal, Singapore..."
+              placeholder="Search: Suez Canal..."
               value={locationSearch}
               onChange={(e) => {
                 setLocationSearch(e.target.value);
                 fetchSuggestions(e.target.value);
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  searchByLocation();
-                } else if (e.key === 'Escape') {
-                  setShowSuggestions(false);
-                }
+                if (e.key === 'Enter') searchByLocation();
+                else if (e.key === 'Escape') setShowSuggestions(false);
               }}
               onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
               disabled={searchingLocation}
@@ -504,32 +507,31 @@ export default function MaritimeTabDeck() {
                 color: '#fff',
                 fontFamily: 'Consolas, monospace',
                 fontSize: '11px',
-                width: '180px',
+                width: '160px',
                 outline: 'none'
               }}
             />
             {showSuggestions && suggestions.length > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  background: '#1a1a1a',
-                  border: '1px solid #333',
-                  borderTop: 'none',
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                  zIndex: 2000,
-                  marginTop: '1px'
-                }}
-              >
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '160px',
+                background: '#1a1a1a',
+                border: '1px solid #333',
+                borderTop: 'none',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                zIndex: 2000,
+                marginTop: '1px'
+              }}>
                 {suggestions.map((suggestion, idx) => (
                   <div
                     key={idx}
                     onClick={() => {
                       setLocationSearch(suggestion.name);
                       searchByLocation(suggestion);
+                      setShowSuggestions(false);
                     }}
                     style={{
                       padding: '6px 8px',
@@ -537,8 +539,7 @@ export default function MaritimeTabDeck() {
                       fontSize: '10px',
                       borderBottom: idx < suggestions.length - 1 ? '1px solid #333' : 'none',
                       color: '#ccc',
-                      background: '#1a1a1a',
-                      transition: 'background 0.1s'
+                      background: '#1a1a1a'
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.background = '#2a2a2a';
@@ -555,34 +556,35 @@ export default function MaritimeTabDeck() {
               </div>
             )}
           </div>
+
           <button
             onClick={() => searchByLocation()}
             disabled={searchingLocation || !locationSearch.trim()}
             style={{
-              padding: '4px 12px',
+              padding: '4px 10px',
               background: '#10b981',
               border: 'none',
               color: '#000',
               fontFamily: 'Consolas, monospace',
-              fontSize: '11px',
+              fontSize: '10px',
               fontWeight: 'bold',
               cursor: searchingLocation ? 'not-allowed' : 'pointer',
               opacity: searchingLocation ? 0.5 : 1
             }}
           >
-            {searchingLocation ? 'SEARCH...' : 'LOCATION'}
+            LOCATION
           </button>
 
           <button
             onClick={searchCurrentView}
             disabled={isLoading}
             style={{
-              padding: '4px 12px',
+              padding: '4px 10px',
               background: '#06b6d4',
               border: 'none',
               color: '#000',
               fontFamily: 'Consolas, monospace',
-              fontSize: '11px',
+              fontSize: '10px',
               fontWeight: 'bold',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               opacity: isLoading ? 0.5 : 1
@@ -591,19 +593,18 @@ export default function MaritimeTabDeck() {
             CURRENT VIEW
           </button>
 
-          <div style={{ width: '1px', height: '20px', background: '#333' }} />
+          <div style={{ width: '1px', height: '18px', background: '#333' }} />
 
-          {/* Mode Toggle */}
           <select
             value={searchMode}
             onChange={(e) => setSearchMode(e.target.value as 'single' | 'multi')}
             style={{
-              padding: '4px 8px',
+              padding: '4px 6px',
               background: '#1a1a1a',
               border: '1px solid #333',
               color: '#fff',
               fontFamily: 'Consolas, monospace',
-              fontSize: '11px',
+              fontSize: '10px',
               outline: 'none',
               cursor: 'pointer'
             }}
@@ -627,14 +628,14 @@ export default function MaritimeTabDeck() {
                 color: '#fff',
                 fontFamily: 'Consolas, monospace',
                 fontSize: '11px',
-                width: '120px',
+                width: '100px',
                 outline: 'none'
               }}
             />
           ) : (
             <input
               type="text"
-              placeholder="IMO1, IMO2, ..."
+              placeholder="IMO1, IMO2..."
               value={multiImoInput}
               onChange={(e) => setMultiImoInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && searchMultiVessels()}
@@ -646,7 +647,7 @@ export default function MaritimeTabDeck() {
                 color: '#fff',
                 fontFamily: 'Consolas, monospace',
                 fontSize: '11px',
-                width: '200px',
+                width: '120px',
                 outline: 'none'
               }}
             />
@@ -657,19 +658,18 @@ export default function MaritimeTabDeck() {
             disabled={searchingVessel || (searchMode === 'single' ? !searchImo.trim() : !multiImoInput.trim())}
             style={{
               padding: '4px 12px',
-              background: '#ff6600',
+              background: BLOOMBERG.ORANGE,
               border: 'none',
               color: '#000',
               fontFamily: 'Consolas, monospace',
-              fontSize: '11px',
+              fontSize: '10px',
               fontWeight: 'bold',
               cursor: searchingVessel ? 'not-allowed' : 'pointer',
               opacity: searchingVessel ? 0.5 : 1
             }}
           >
-            {searchingVessel ? 'SEARCH...' : 'GO'}
+            GO
           </button>
-
 
           {showHistory && (
             <button
@@ -679,17 +679,17 @@ export default function MaritimeTabDeck() {
                 setSelectedVessel(null);
               }}
               style={{
-                padding: '4px 12px',
+                padding: '4px 10px',
                 background: '#000',
                 border: '1px solid #ffd700',
                 color: '#ffd700',
                 fontFamily: 'Consolas, monospace',
-                fontSize: '11px',
+                fontSize: '10px',
                 fontWeight: 'bold',
                 cursor: 'pointer'
               }}
             >
-              CLEAR TRACK
+              CLEAR
             </button>
           )}
         </div>
@@ -697,22 +697,20 @@ export default function MaritimeTabDeck() {
 
       {/* Error Display */}
       {error && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '80px',
-            left: '20px',
-            right: '20px',
-            padding: '12px 20px',
-            background: 'rgba(255, 0, 0, 0.2)',
-            border: '1px solid #ff0000',
-            borderRadius: '4px',
-            color: '#ff6b6b',
-            fontFamily: 'Consolas, monospace',
-            fontSize: '13px',
-            zIndex: 10
-          }}
-        >
+        <div style={{
+          position: 'absolute',
+          top: '80px',
+          left: '20px',
+          right: '20px',
+          padding: '12px 20px',
+          background: 'rgba(255, 0, 0, 0.2)',
+          border: '1px solid #ff0000',
+          borderRadius: '4px',
+          color: '#ff6b6b',
+          fontFamily: 'Consolas, monospace',
+          fontSize: '13px',
+          zIndex: 10
+        }}>
           ERROR: {error}
         </div>
       )}

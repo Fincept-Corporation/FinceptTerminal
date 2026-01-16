@@ -43,8 +43,8 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       const portfolios = await sqliteService.listPortfolios();
 
       if (portfolios && portfolios.length > 0) {
-        const portfolio = portfolios[0];
-        const gain = portfolio?.total_pnl || 0;
+        const portfolio = portfolios[0] as any;
+        const gain = portfolio?.total_pnl || portfolio?.totalPnL || 0;
 
         const initialBalance = portfolio?.initial_balance || 100000;
         const gainPercent = initialBalance > 0 ? (gain / initialBalance) * 100 : 0;

@@ -1,5 +1,6 @@
 // Tab Configuration Service
 import { TabConfiguration, DEFAULT_TAB_CONFIG, DEFAULT_TABS, TabDefinition } from '@/types/tabConfig';
+import { saveSetting, getSetting } from './sqliteService';
 
 const STORAGE_KEY = 'terminal-tab-configuration';
 const STORAGE_EVENT = 'tab-config-changed';
@@ -7,9 +8,9 @@ const STORAGE_EVENT = 'tab-config-changed';
 class TabConfigService {
   private listeners: Set<(config: TabConfiguration) => void> = new Set();
 
-  getConfiguration(): TabConfiguration {
+  async getConfiguration(): Promise<TabConfiguration> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = await getSetting(STORAGE_KEY);
       if (stored) {
         return JSON.parse(stored);
       }
@@ -19,9 +20,9 @@ class TabConfigService {
     return DEFAULT_TAB_CONFIG;
   }
 
-  saveConfiguration(config: TabConfiguration): void {
+  async saveConfiguration(config: TabConfiguration): Promise<void> {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      await saveSetting(STORAGE_KEY, JSON.stringify(config), 'tab_config');
       // Notify all listeners
       this.notifyListeners(config);
       // Dispatch storage event for cross-window sync
@@ -31,8 +32,8 @@ class TabConfigService {
     }
   }
 
-  resetToDefault(): void {
-    localStorage.removeItem(STORAGE_KEY);
+  async resetToDefault(): Promise<void> {
+    await saveSetting(STORAGE_KEY, '', 'tab_config');
     this.notifyListeners(DEFAULT_TAB_CONFIG);
     window.dispatchEvent(new CustomEvent(STORAGE_EVENT, { detail: DEFAULT_TAB_CONFIG }));
   }

@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import { sqliteService, type BacktestingProvider } from '@/services/sqliteService';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
-import { LeanAdapter } from '@/services/backtesting/adapters/lean';
 import { PathService } from '@/services/backtesting/PathService';
 
 // Bloomberg Professional Color Palette
@@ -187,15 +186,11 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
   // New provider form - will be initialized with OS-specific paths
   const [newProviderForm, setNewProviderForm] = useState({
-    name: 'QuantConnect Lean',
-    adapter_type: 'LeanAdapter',
+    name: 'Backtrader',
+    adapter_type: 'BacktraderAdapter',
     config: JSON.stringify(
       {
-        leanCliPath: 'lean',
-        projectsPath: '',
-        dataPath: '',
-        resultsPath: '',
-        environment: 'backtesting',
+        // Provider-specific configuration
       },
       null,
       2
@@ -214,67 +209,29 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
    */
   const initializeDefaultPaths = async () => {
     try {
-      const defaultConfig = await PathService.getDefaultLeanConfig();
-
+      // No default configuration needed currently
       setNewProviderForm({
-        name: 'QuantConnect Lean',
-        adapter_type: 'LeanAdapter',
-        config: JSON.stringify(defaultConfig, null, 2),
+        name: 'Backtrader',
+        adapter_type: 'BacktraderAdapter',
+        config: JSON.stringify({}, null, 2),
       });
 
-      console.log('[Backtesting] Initialized OS-specific paths:', defaultConfig);
+      console.log('[Backtesting] Initialized default provider form');
     } catch (error) {
       console.error('[Backtesting] Failed to initialize default paths:', error);
     }
   };
 
   /**
-   * Migrate existing providers to use OS-specific paths
-   * This updates any providers that are using old project-directory paths
+   * Migrate existing providers if needed
    */
   const migrateExistingProviderPaths = async () => {
     try {
-      const dbProviders = await sqliteService.getBacktestingProviders();
-      const defaultConfig = await PathService.getDefaultLeanConfig();
-
-      for (const provider of dbProviders) {
-        try {
-          const config = JSON.parse(provider.config);
-
-          // Check if using old paths (containing project directory)
-          const needsMigration =
-            config.projectsPath?.includes('fincept-terminal-desktop') ||
-            config.dataPath?.includes('fincept-terminal-desktop') ||
-            config.resultsPath?.includes('fincept-terminal-desktop');
-
-          if (needsMigration) {
-            console.log(`[Backtesting] Migrating provider "${provider.name}" to new paths`);
-
-            // Update paths while preserving other config
-            const updatedConfig = {
-              ...config,
-              projectsPath: defaultConfig.projectsPath,
-              dataPath: defaultConfig.dataPath,
-              resultsPath: defaultConfig.resultsPath,
-            };
-
-            // Save updated provider
-            await sqliteService.saveBacktestingProvider({
-              ...provider,
-              config: JSON.stringify(updatedConfig, null, 2),
-            });
-
-            console.log(`[Backtesting] Migrated provider "${provider.name}" successfully`);
-          }
-        } catch (error) {
-          console.error(`[Backtesting] Failed to migrate provider "${provider.name}":`, error);
-        }
-      }
-
-      // Reload providers to show updated configs
-      await loadProviders();
+      // No migration needed currently
+      // This function can be used in the future for provider migrations
+      console.log('[Backtesting] No migration needed');
     } catch (error) {
-      console.error('[Backtesting] Failed to migrate provider paths:', error);
+      console.error('[Backtesting] Failed during migration check:', error);
     }
   };
 
@@ -283,14 +240,9 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
    */
   const registerDefaultProviders = () => {
     try {
-      // Check if already registered to avoid duplicates
-      if (!backtestingRegistry.getProvider('QuantConnect Lean')) {
-        // Register Lean adapter
-        const leanAdapter = new LeanAdapter();
-        backtestingRegistry.registerProvider(leanAdapter);
-
-        console.log('[Backtesting] Registered providers:', backtestingRegistry.listProviders());
-      }
+      // No default providers to register currently
+      // Add custom backtesting providers here when available
+      console.log('[Backtesting] Registered providers:', backtestingRegistry.listProviders());
     } catch (error) {
       console.error('[Backtesting] Failed to register providers:', error);
     }
@@ -538,7 +490,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
           margin: 0,
           lineHeight: '1.6'
         }}>
-          Manage backtesting engines. Switch between Lean, Backtrader, and other providers seamlessly.
+          Manage backtesting engines. Switch between Backtrader, VectorBT, and other providers seamlessly.
         </p>
       </div>
 
@@ -637,15 +589,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                   let defaultConfig = {};
 
                   // Set default config based on provider type
-                  if (selectedProvider === 'QuantConnect Lean') {
-                    defaultConfig = {
-                      leanCliPath: 'C:/Users/Tilak/AppData/Roaming/Python/Python313/Scripts/lean.exe',
-                      projectsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_projects',
-                      dataPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_data',
-                      resultsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_results',
-                      environment: 'backtesting',
-                    };
-                  } else if (selectedProvider === 'Backtesting.py') {
+                  if (selectedProvider === 'Backtesting.py') {
                     defaultConfig = {
                       // Backtesting.py doesn't require configuration
                       // Advanced options are set per-backtest
@@ -653,6 +597,10 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                   } else if (selectedProvider === 'VectorBT') {
                     defaultConfig = {
                       // VectorBT configuration
+                    };
+                  } else if (selectedProvider === 'Backtrader') {
+                    defaultConfig = {
+                      // Backtrader configuration
                     };
                   }
 
@@ -679,7 +627,6 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                   paddingRight: '32px'
                 }}
               >
-                <option value="QuantConnect Lean">QuantConnect Lean</option>
                 <option value="Backtrader">Backtrader</option>
                 <option value="VectorBT">VectorBT</option>
                 <option value="Backtesting.py">Backtesting.py</option>

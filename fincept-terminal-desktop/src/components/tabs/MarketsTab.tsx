@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2 } from 'lucide-react';
+import { Edit2, Info } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { marketDataService, QuoteData } from '../../services/marketDataService';
-import { tickerStorage } from '../../services/tickerStorageService';
+import { tickerStorage, UserMarketPreferences } from '../../services/tickerStorageService';
 import { sqliteService } from '../../services/sqliteService';
 import { contextRecorderService } from '../../services/contextRecorderService';
 import TickerEditModal from './TickerEditModal';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { createMarketsTabTour } from './tours/marketsTabTour';
 
 const MarketsTab: React.FC = () => {
   const { t } = useTranslation('markets');
@@ -31,8 +32,21 @@ const MarketsTab: React.FC = () => {
   const [editingType, setEditingType] = useState<'global' | 'regional'>('global');
 
   // User preferences
-  const [preferences, setPreferences] = useState(tickerStorage.loadPreferences());
+  const [preferences, setPreferences] = useState<UserMarketPreferences>({
+    globalMarkets: [],
+    regionalMarkets: [],
+    lastUpdated: Date.now()
+  });
   const [isRecording, setIsRecording] = useState(false);
+
+  // Load preferences on mount
+  useEffect(() => {
+    const loadPreferences = async () => {
+      const prefs = await tickerStorage.loadPreferences();
+      setPreferences(prefs);
+    };
+    loadPreferences();
+  }, []);
 
   // Function to record current market data
   const recordCurrentData = async () => {
@@ -190,8 +204,8 @@ const MarketsTab: React.FC = () => {
   }, [autoUpdate, updateInterval, preferences]);
 
   // Open edit modal for global markets
-  const openEditModal = (category: string) => {
-    const tickers = tickerStorage.getCategoryTickers(category);
+  const openEditModal = async (category: string) => {
+    const tickers = await tickerStorage.getCategoryTickers(category);
     setEditingCategory(category);
     setEditingTickers(tickers);
     setEditingType('global');
@@ -199,9 +213,9 @@ const MarketsTab: React.FC = () => {
   };
 
   // Open edit modal for regional markets
-  const openRegionalEditModal = (region: string) => {
-    const regionalTickers = tickerStorage.getRegionalTickers(region);
-    const symbols = regionalTickers.map(t => t.symbol);
+  const openRegionalEditModal = async (region: string) => {
+    const regionalTickers = await tickerStorage.getRegionalTickers(region);
+    const symbols = regionalTickers.map((t: { symbol: string; name: string }) => t.symbol);
     setEditingCategory(region);
     setEditingTickers(symbols);
     setEditingType('regional');
@@ -209,18 +223,19 @@ const MarketsTab: React.FC = () => {
   };
 
   // Save edited tickers
-  const handleSaveTickers = (tickers: string[]) => {
+  const handleSaveTickers = async (tickers: string[]) => {
     if (editingType === 'global') {
-      tickerStorage.updateCategoryTickers(editingCategory, tickers);
+      await tickerStorage.updateCategoryTickers(editingCategory, tickers);
     } else {
       // For regional markets, convert back to {symbol, name} format
       const tickersWithNames = tickers.map(symbol => ({
         symbol,
         name: symbol // Use symbol as name for new tickers, actual names will be fetched from API
       }));
-      tickerStorage.updateRegionalTickers(editingCategory, tickersWithNames);
+      await tickerStorage.updateRegionalTickers(editingCategory, tickersWithNames);
     }
-    setPreferences(tickerStorage.loadPreferences());
+    const prefs = await tickerStorage.loadPreferences();
+    setPreferences(prefs);
     fetchMarketData(); // Refresh data
   };
 
@@ -512,6 +527,7 @@ const MarketsTab: React.FC = () => {
       <div style={{
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         flexWrap: 'wrap',
         padding: '8px 12px',
         backgroundColor: colors.panel,
@@ -520,29 +536,57 @@ const MarketsTab: React.FC = () => {
         gap: '8px',
         flexShrink: 0
       }}>
-        <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT</span>
-        <span style={{ color: colors.text }}>{t('marketTerminalLive')}</span>
-        <span style={{ color: colors.textMuted }}>|</span>
-        <span style={{ color: colors.text, fontSize: '11px' }}>
-          {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT</span>
+          <span style={{ color: colors.text }}>{t('marketTerminalLive')}</span>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ color: colors.text, fontSize: '11px' }}>
+            {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            const tour = createMarketsTabTour();
+            tour.drive();
+          }}
+          style={{
+            backgroundColor: colors.info,
+            color: colors.background,
+            border: 'none',
+            padding: '4px 8px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            borderRadius: '2px'
+          }}
+          title="Start interactive tour"
+        >
+          <Info size={14} />
+          HELP
+        </button>
       </div>
 
       {/* Control Panel */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        padding: '8px 12px',
-        backgroundColor: colors.panel,
-        borderBottom: `1px solid ${colors.textMuted}`,
-        fontSize: '12px',
-        gap: '8px',
-        flexShrink: 0
-      }}>
+      <div
+        id="markets-control-panel"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          padding: '8px 12px',
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
+          fontSize: '12px',
+          gap: '8px',
+          flexShrink: 0
+        }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
+            id="markets-refresh"
             onClick={fetchMarketData}
             style={{
               backgroundColor: colors.primary,
@@ -557,6 +601,7 @@ const MarketsTab: React.FC = () => {
             {t('refresh')}
           </button>
           <button
+            id="markets-auto-update"
             onClick={() => setAutoUpdate(!autoUpdate)}
             style={{
               backgroundColor: autoUpdate ? colors.secondary : colors.textMuted,
@@ -571,6 +616,7 @@ const MarketsTab: React.FC = () => {
             {t('auto')} {autoUpdate ? t('on') : t('off')}
           </button>
           <select
+            id="markets-timeframe"
             value={updateInterval}
             onChange={(e) => setUpdateInterval(Number(e.target.value))}
             style={{
@@ -625,12 +671,14 @@ const MarketsTab: React.FC = () => {
         </div>
         <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
 
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '0',
-          marginBottom: '24px'
-        }}>
+        <div
+          id="markets-global-section"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0',
+            marginBottom: '24px'
+          }}>
           {preferences.globalMarkets.map(market =>
             createMarketPanel(market.category, marketData[market.category] || [])
           )}
@@ -649,11 +697,13 @@ const MarketsTab: React.FC = () => {
         </div>
         <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
 
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '0'
-        }}>
+        <div
+          id="markets-regional-section"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0'
+          }}>
           {preferences.regionalMarkets.map(market =>
             createRegionalPanel(market.region, regionalData[market.region] || [])
           )}

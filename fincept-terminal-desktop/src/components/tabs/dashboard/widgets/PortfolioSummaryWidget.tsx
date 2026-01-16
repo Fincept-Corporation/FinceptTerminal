@@ -70,7 +70,7 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
         name: targetPortfolio.name,
         totalValue: totalValue || targetPortfolio.current_balance || 0,
         totalCost: totalCost || targetPortfolio.initial_balance || 0,
-        totalGain: totalGain || targetPortfolio.total_pnl || 0,
+        totalGain: totalGain || (targetPortfolio as any).total_pnl || (targetPortfolio as any).totalPnL || 0,
         gainPercent: gainPercent,
         positions: positions?.length || 0,
         currency: targetPortfolio.currency || 'USD'

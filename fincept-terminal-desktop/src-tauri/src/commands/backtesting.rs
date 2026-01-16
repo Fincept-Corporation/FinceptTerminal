@@ -6,10 +6,9 @@
  */
 
 use serde::{Deserialize, Serialize};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use tauri::State;
 use crate::utils::python;
 
 // Windows-specific imports to hide console windows
@@ -56,52 +55,7 @@ impl Default for BacktestingState {
 // Commands
 // ============================================================================
 
-/**
- * Execute Lean CLI command
- *
- * Runs Lean backtesting engine and returns process information.
- */
-#[tauri::command]
-pub async fn execute_lean_cli(
-    command: String,
-    working_dir: String,
-    backtest_id: String,
-    state: State<'_, BacktestingState>,
-) -> Result<ProcessInfo, String> {
-    // Parse command into parts
-    let parts: Vec<&str> = command.split_whitespace().collect();
-    if parts.is_empty() {
-        return Err("Empty command".to_string());
-    }
-
-    let program = parts[0];
-    let args = &parts[1..];
-
-    // Execute command
-    let child = Command::new(program)
-        .args(args)
-        .current_dir(&working_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn Lean CLI: {}", e))?;
-
-    let pid = child.id();
-
-    // Store process info
-    {
-        let mut processes = state.running_processes.lock().unwrap();
-        processes.insert(
-            backtest_id.clone(),
-            RunningProcess { pid },
-        );
-    }
-
-    // In production, would spawn a thread to monitor output
-    // For now, we'll wait for completion in the background
-
-    Ok(ProcessInfo { process_id: pid })
-}
+// Removed execute_lean_cli - Lean support discontinued
 
 /**
  * Execute generic command
@@ -133,42 +87,7 @@ pub async fn execute_command(command: String) -> Result<CommandResult, String> {
     })
 }
 
-/**
- * Kill Lean process
- *
- * Terminates a running backtest by process ID.
- */
-#[tauri::command]
-pub async fn kill_lean_process(
-    process_id: u32,
-    state: State<'_, BacktestingState>,
-) -> Result<(), String> {
-    #[cfg(unix)]
-    {
-        use nix::sys::signal::{kill, Signal};
-        use nix::unistd::Pid;
-
-        let pid = Pid::from_raw(process_id as i32);
-        kill(pid, Signal::SIGTERM).map_err(|e| format!("Failed to kill process: {}", e))?;
-    }
-
-    #[cfg(windows)]
-    {
-        use std::process::Command;
-        Command::new("taskkill")
-            .args(&["/PID", &process_id.to_string(), "/F"])
-            .output()
-            .map_err(|e| format!("Failed to kill process: {}", e))?;
-    }
-
-    // Remove from tracking
-    {
-        let mut processes = state.running_processes.lock().unwrap();
-        processes.retain(|_, p| p.pid != process_id);
-    }
-
-    Ok(())
-}
+// Removed kill_lean_process - Lean support discontinued
 
 /**
  * Execute Python backtesting provider

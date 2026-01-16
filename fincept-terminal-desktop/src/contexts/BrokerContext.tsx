@@ -18,6 +18,7 @@ import { createPaperTradingAdapter } from '../paper-trading';
 import type { IExchangeAdapter } from '../brokers/crypto/types';
 import type { PaperTradingAdapter } from '../paper-trading/PaperTradingAdapter';
 import { websocketBridge, type ProviderConfig, type ConnectionStatus } from '../services/websocketBridge';
+import { saveSetting, getSetting } from '@/services/sqliteService';
 
 // Constants
 const CONNECTION_TIMEOUT = 10000; // 10 seconds
@@ -35,19 +36,21 @@ function validatePaperPortfolioMode(value: string | null): 'separate' | 'unified
   return 'separate';
 }
 
-// Helper to safely access localStorage
-function safeLocalStorageGet(key: string): string | null {
+// Helper to safely access storage (SQLite)
+async function safeStorageGet(key: string): Promise<string | null> {
   try {
-    return localStorage.getItem(key);
+    return await getSetting(key);
   } catch (error) {
+    console.error(`[BrokerContext] Failed to get storage key "${key}":`, error);
     return null;
   }
 }
 
-function safeLocalStorageSet(key: string, value: string): void {
+async function safeStorageSet(key: string, value: string): Promise<void> {
   try {
-    localStorage.setItem(key, value);
+    await saveSetting(key, value, 'broker');
   } catch (error) {
+    console.error(`[BrokerContext] Failed to set storage key "${key}":`, error);
   }
 }
 
@@ -121,13 +124,9 @@ interface BrokerProviderProps {
 
 export function BrokerProvider({ children }: BrokerProviderProps) {
 
-  const [activeBroker, setActiveBrokerState] = useState<string>(() => {
-    return safeLocalStorageGet('active_broker') || 'kraken';
-  });
+  const [activeBroker, setActiveBrokerState] = useState<string>('kraken');
   const [tradingMode, setTradingModeState] = useState<'live' | 'paper'>('paper');
-  const [paperPortfolioMode, setPaperPortfolioModeState] = useState<'separate' | 'unified'>(() => {
-    return validatePaperPortfolioMode(safeLocalStorageGet('paper_portfolio_mode'));
-  });
+  const [paperPortfolioMode, setPaperPortfolioModeState] = useState<'separate' | 'unified'>('separate');
   const [providerConfigs, setProviderConfigs] = useState<Map<string, ProviderConfig>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -217,8 +216,10 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         }
 
         // Load saved preferences with validation
-        const savedBroker = safeLocalStorageGet('active_trading_broker');
-        const savedMode = validateTradingMode(safeLocalStorageGet('trading_mode'));
+        const savedBroker = await safeStorageGet('active_trading_broker');
+        const savedModeStr = await safeStorageGet('trading_mode');
+        const savedMode = validateTradingMode(savedModeStr);
+        const savedPaperMode = await safeStorageGet('paper_portfolio_mode');
 
         if (savedBroker && BROKER_REGISTRY[savedBroker]) {
           setActiveBrokerState(savedBroker);
@@ -226,6 +227,10 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
         if (savedMode) {
           setTradingModeState(savedMode);
+        }
+
+        if (savedPaperMode) {
+          setPaperPortfolioModeState(validatePaperPortfolioMode(savedPaperMode));
         }
 
       } catch (error) {
@@ -388,16 +393,16 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     setActiveBrokerState(brokerId);
 
     // Save preference
-    safeLocalStorageSet('active_broker', brokerId);
+    await safeStorageSet('active_broker', brokerId);
 
     // Re-initialize adapters
     await initializeAdapters();
   }, [initializeAdapters]);
 
   // Set trading mode
-  const setTradingMode = useCallback((mode: 'live' | 'paper') => {
+  const setTradingMode = useCallback(async (mode: 'live' | 'paper') => {
     setTradingModeState(mode);
-    safeLocalStorageSet('trading_mode', mode);
+    await safeStorageSet('trading_mode', mode);
   }, []);
 
   // Set paper portfolio mode
@@ -408,7 +413,7 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
     // Update state
     setPaperPortfolioModeState(mode);
-    safeLocalStorageSet('paper_portfolio_mode', mode);
+    await safeStorageSet('paper_portfolio_mode', mode);
 
     // Re-initialize adapters
     await initializeAdapters();

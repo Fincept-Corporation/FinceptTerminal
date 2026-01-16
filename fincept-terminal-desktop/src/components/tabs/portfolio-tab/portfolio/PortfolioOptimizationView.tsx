@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { TrendingUp, BarChart3, PieChart, LineChart, Target, Shield, Calculator, Download } from 'lucide-react';
 import { PortfolioSummary } from '../../../../services/portfolioService';
 import { LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Scatter, ScatterChart, ZAxis } from 'recharts';
+import { getSetting, saveSetting } from '@/services/sqliteService';
 
 // Library selection
 const LIBRARIES = [
@@ -119,30 +120,27 @@ interface PortfolioOptimizationViewProps {
 }
 
 const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ portfolioSummary }) => {
-  // Load state from localStorage
-  const loadState = <T,>(key: string, defaultValue: T): T => {
+  // PURE SQLite - Load state from database
+  const loadState = async <T,>(key: string, defaultValue: T): Promise<T> => {
     try {
-      const saved = localStorage.getItem(`portfolio_optimization_${key}`);
+      const saved = await getSetting(`portfolio_optimization_${key}`);
       return saved ? JSON.parse(saved) : defaultValue;
     } catch {
       return defaultValue;
     }
   };
 
-  // Save state to localStorage
-  const saveState = <T,>(key: string, value: T) => {
+  // PURE SQLite - Save state to database
+  const saveState = async <T,>(key: string, value: T) => {
     try {
-      localStorage.setItem(`portfolio_optimization_${key}`, JSON.stringify(value));
+      await saveSetting(`portfolio_optimization_${key}`, JSON.stringify(value), 'portfolio_optimization');
     } catch {
-      // Ignore localStorage errors
+      // Ignore storage errors
     }
   };
 
-  const [library, setLibrary] = useState<'pyportfolioopt' | 'skfolio'>(() =>
-    loadState('library', 'skfolio')
-  );
-  const [config, setConfig] = useState<OptimizationConfig>(() =>
-    loadState('config', {
+  const [library, setLibrary] = useState<'pyportfolioopt' | 'skfolio'>('skfolio');
+  const [config, setConfig] = useState<OptimizationConfig>({
       optimization_method: 'mean_risk',
       objective: 'maximize_ratio',
       expected_returns_method: 'mean_historical_return',
@@ -152,29 +150,40 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       weight_bounds_max: 1,
       gamma: 0,
       total_portfolio_value: 10000,
-    })
-  );
+    });
 
-  const [skfolioConfig, setSkfolioConfig] = useState(() =>
-    loadState('skfolioConfig', {
-      risk_measure: 'cvar',
-      covariance_estimator: 'ledoit_wolf',
-      train_test_split: 0.7,
-      l1_coef: 0.0,
-      l2_coef: 0.0,
-    })
-  );
+  const [skfolioConfig, setSkfolioConfig] = useState({
+    risk_measure: 'cvar',
+    covariance_estimator: 'ledoit_wolf',
+    train_test_split: 0.7,
+    l1_coef: 0.0,
+    l2_coef: 0.0,
+  });
 
   const [assetSymbols, setAssetSymbols] = useState<string>('');
-  const [results, setResults] = useState<OptimizationResults | null>(() =>
-    loadState('results', null)
-  );
+  const [results, setResults] = useState<OptimizationResults | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null); // Track which action is loading
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'optimize' | 'frontier' | 'backtest' | 'allocation' | 'risk'>(() =>
-    loadState('activeTab', 'optimize')
-  );
+  const [activeTab, setActiveTab] = useState<'optimize' | 'frontier' | 'backtest' | 'allocation' | 'risk'>('optimize');
+
+  // Load initial state
+  useEffect(() => {
+    const loadInitialState = async () => {
+      const savedLibrary = await loadState('library', 'skfolio');
+      const savedConfig = await loadState('config', config);
+      const savedSkfolioConfig = await loadState('skfolioConfig', skfolioConfig);
+      const savedResults = await loadState('results', null);
+      const savedActiveTab = await loadState('activeTab', 'optimize');
+
+      setLibrary(savedLibrary as 'pyportfolioopt' | 'skfolio');
+      setConfig(savedConfig);
+      setSkfolioConfig(savedSkfolioConfig);
+      setResults(savedResults);
+      setActiveTab(savedActiveTab as 'optimize' | 'backtest' | 'frontier' | 'allocation' | 'risk');
+    };
+    loadInitialState();
+  }, []);
 
   // Save state when it changes
   useEffect(() => {

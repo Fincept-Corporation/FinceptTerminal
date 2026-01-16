@@ -218,15 +218,15 @@ pub async fn paper_trading_get_trades(
 pub async fn alpha_arena_record_decision(
     competition_id: String,
     model_name: String,
-    portfolio_id: String,
+    _portfolio_id: String,
     symbol: String,
     side: String,
     quantity: f64,
     price: f64,
     confidence: f64,
     reasoning: String,
-    order_id: String,
-    fee: f64,
+    _order_id: String,
+    _fee: f64,
     timestamp: String,
 ) -> Result<(), String> {
     use crate::database::pool::get_pool;

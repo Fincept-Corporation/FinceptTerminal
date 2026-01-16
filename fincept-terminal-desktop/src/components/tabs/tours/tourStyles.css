@@ -1,0 +1,191 @@
+/* Custom driver.js styles for Fincept Terminal theme - Bloomberg Classic */
+
+/* Main popover container - Multiple selectors for maximum specificity */
+.driver-popover.fincept-tour-popover,
+.fincept-tour-popover.driver-popover,
+.fincept-tour-popover .driver-popover,
+div.driver-popover {
+  background-color: #1a1a1a !important;
+  background: #1a1a1a !important;
+  border: 2px solid #FFA500 !important;
+  color: #e0e0e0 !important;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+  box-shadow: 0 0 20px rgba(255, 165, 0, 0.4), 0 0 40px rgba(255, 165, 0, 0.2) !important;
+  border-radius: 0 !important;
+  padding: 16px !important;
+}
+
+/* Title styling - Maximum specificity */
+.driver-popover .driver-popover-title,
+.fincept-tour-popover .driver-popover-title,
+div.driver-popover-title,
+.driver-popover-title {
+  color: #FFA500 !important;
+  font-weight: bold !important;
+  font-size: 13px !important;
+  border-bottom: 2px solid #404040 !important;
+  padding-bottom: 10px !important;
+  margin-bottom: 12px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  font-family: 'Consolas', monospace !important;
+  background: transparent !important;
+}
+
+/* Description text - Maximum specificity */
+.driver-popover .driver-popover-description,
+.fincept-tour-popover .driver-popover-description,
+div.driver-popover-description,
+.driver-popover-description {
+  color: #cccccc !important;
+  font-size: 12px !important;
+  line-height: 1.7 !important;
+  font-family: 'Consolas', monospace !important;
+  font-weight: 400 !important;
+  background: transparent !important;
+}
+
+/* Footer section */
+.fincept-tour-popover .driver-popover-footer {
+  border-top: 1px solid #404040 !important;
+  padding-top: 12px !important;
+  margin-top: 16px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+/* Button base styles */
+.fincept-tour-popover .driver-popover-next-btn,
+.fincept-tour-popover .driver-popover-prev-btn {
+  background-color: #FFA500 !important;
+  color: #000000 !important;
+  border: none !important;
+  font-weight: bold !important;
+  font-size: 10px !important;
+  padding: 6px 14px !important;
+  cursor: pointer !important;
+  text-transform: uppercase !important;
+  font-family: 'Consolas', monospace !important;
+  transition: all 0.15s ease !important;
+  letter-spacing: 0.5px !important;
+  border-radius: 0 !important;
+}
+
+/* Next button hover */
+.fincept-tour-popover .driver-popover-next-btn:hover {
+  background-color: #FFB833 !important;
+  box-shadow: 0 0 10px rgba(255, 165, 0, 0.5) !important;
+}
+
+/* Previous button styling */
+.fincept-tour-popover .driver-popover-prev-btn {
+  background-color: #787878 !important;
+  color: #FFFFFF !important;
+}
+
+.fincept-tour-popover .driver-popover-prev-btn:hover {
+  background-color: #969696 !important;
+  box-shadow: 0 0 10px rgba(120, 120, 120, 0.5) !important;
+}
+
+/* Close button */
+.fincept-tour-popover .driver-popover-close-btn {
+  color: #cccccc !important;
+  font-size: 20px !important;
+  opacity: 1 !important;
+  font-weight: bold !important;
+  transition: color 0.2s ease !important;
+}
+
+.fincept-tour-popover .driver-popover-close-btn:hover {
+  color: #FFA500 !important;
+}
+
+/* Progress text */
+.fincept-tour-popover .driver-popover-progress-text {
+  color: #00C800 !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  font-family: 'Consolas', monospace !important;
+  letter-spacing: 0.5px !important;
+}
+
+/* Active element highlight - Force higher stacking */
+.driver-active-element {
+  outline: 4px solid #FFA500 !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 8px rgba(255, 165, 0, 0.4), 0 0 30px rgba(255, 165, 0, 0.6) !important;
+  position: relative !important;
+  z-index: 10001 !important;
+  background-color: inherit !important;
+}
+
+/* Overlay backdrop - Dark but no blur */
+.driver-overlay {
+  background-color: rgba(0, 0, 0, 0.85) !important;
+}
+
+/* Arrow base */
+.fincept-tour-popover .driver-popover-arrow {
+  border-color: #FFA500 !important;
+}
+
+/* Arrow sides */
+.fincept-tour-popover .driver-popover-arrow-side-top .driver-popover-arrow {
+  border-bottom-color: #FFA500 !important;
+}
+
+.fincept-tour-popover .driver-popover-arrow-side-bottom .driver-popover-arrow {
+  border-top-color: #FFA500 !important;
+}
+
+.fincept-tour-popover .driver-popover-arrow-side-left .driver-popover-arrow {
+  border-right-color: #FFA500 !important;
+}
+
+.fincept-tour-popover .driver-popover-arrow-side-right .driver-popover-arrow {
+  border-left-color: #FFA500 !important;
+}
+
+/* Animation overrides */
+.driver-popover {
+  animation: none !important;
+}
+
+/* Ensure proper z-index stacking */
+.driver-popover-wrapper {
+  z-index: 10002 !important;
+}
+
+.driver-overlay {
+  z-index: 9998 !important;
+}
+
+/* Highlighted element should be above overlay but below popover */
+.driver-highlighted-element {
+  z-index: 10001 !important;
+  position: relative !important;
+}
+
+/* Stage element (cutout in overlay) */
+.driver-stage {
+  z-index: 10000 !important;
+}
+
+/* Force dark theme on all driver elements */
+[class*="driver-popover"] {
+  background-color: #1a1a1a !important;
+  background: #1a1a1a !important;
+  color: #cccccc !important;
+}
+
+/* Prevent any white backgrounds */
+.driver-popover *:not(button):not(.driver-popover-title):not(.driver-popover-progress-text) {
+  color: #cccccc !important;
+}
+
+/* Ensure buttons stay styled correctly */
+.driver-popover button {
+  font-family: 'Consolas', monospace !important;
+}

@@ -22,6 +22,7 @@ import {
   Link as LinkIcon
 } from 'lucide-react';
 import polymarketServiceEnhanced from '@/services/polymarketServiceEnhanced';
+import { getSetting, saveSetting } from '@/services/sqliteService';
 
 interface PolymarketCredentials {
   apiKey: string;
@@ -57,9 +58,10 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     loadSavedCredentials();
   }, []);
 
-  const loadSavedCredentials = () => {
+  const loadSavedCredentials = async () => {
     try {
-      const saved = localStorage.getItem('polymarket_credentials');
+      // PURE SQLite - Load credentials from database
+      const saved = await getSetting('polymarket_credentials');
       if (saved) {
         const parsed = JSON.parse(saved);
         setCredentials(parsed);
@@ -77,13 +79,14 @@ export const PolymarketCredentialsPanel: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Failed to load Polymarket credentials:', error);
+      console.error('[PolymarketCredentials] Failed to load credentials from SQLite:', error);
     }
   };
 
-  const saveCredentials = (creds: PolymarketCredentials) => {
+  const saveCredentials = async (creds: PolymarketCredentials) => {
     try {
-      localStorage.setItem('polymarket_credentials', JSON.stringify(creds));
+      // PURE SQLite - Save credentials to database
+      await saveSetting('polymarket_credentials', JSON.stringify(creds), 'polymarket');
       setCredentials(creds);
 
       // Set in service
@@ -93,7 +96,7 @@ export const PolymarketCredentialsPanel: React.FC = () => {
         apiPassphrase: creds.apiPassphrase
       });
     } catch (error) {
-      console.error('Failed to save Polymarket credentials:', error);
+      console.error('[PolymarketCredentials] Failed to save credentials to SQLite:', error);
       throw error;
     }
   };
@@ -274,9 +277,10 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (confirm('Are you sure you want to delete your Polymarket credentials?')) {
-      localStorage.removeItem('polymarket_credentials');
+      // PURE SQLite - Clear credentials from database
+      await saveSetting('polymarket_credentials', '', 'polymarket');
       setCredentials(null);
       setWalletConnected(false);
       setWalletAddress('');

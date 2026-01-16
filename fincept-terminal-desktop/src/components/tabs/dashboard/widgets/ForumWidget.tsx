@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { ForumApiService } from '../../../../services/forumApi';
+import { getSetting, saveSetting } from '@/services/sqliteService';
 
 const BLOOMBERG_WHITE = '#FFFFFF';
 const BLOOMBERG_GRAY = '#787878';
@@ -45,25 +46,14 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
     setLoading(true);
     setError(null);
     try {
-      // Get API credentials from session/localStorage
-      const apiKey = localStorage.getItem('fincept_api_key') || undefined;
-      const deviceId = localStorage.getItem('fincept_device_id') || undefined;
-
-      console.log('[ForumWidget] Loading posts with:', { categoryId, limit, apiKey: !!apiKey, deviceId: !!deviceId });
-
-      // If no categoryId is provided, default to category 3 (Crypto Corner - has posts)
-      // The backend requires a category ID, there is no "get all posts" endpoint
+      const apiKey = await getSetting('fincept_api_key') || undefined;
+      const deviceId = await getSetting('fincept_device_id') || undefined;
       const targetCategoryId = categoryId || 3;
 
       const response = await ForumApiService.getPostsByCategory(targetCategoryId, 'latest', limit, apiKey, deviceId);
 
-      console.log('[ForumWidget] Response:', response);
-
       if (response.success) {
-        // Handle both response formats
         const postsData = (response.data as any)?.data?.posts || (response.data as any)?.posts || [];
-        console.log('[ForumWidget] Posts data:', postsData);
-
         const formattedPosts = postsData.map((post: any) => ({
           id: post.post_uuid,
           title: post.title,
@@ -74,14 +64,11 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
           time: new Date(post.created_at).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
         }));
 
-        console.log('[ForumWidget] Formatted posts:', formattedPosts);
         setPosts(formattedPosts);
       } else {
-        console.error('[ForumWidget] Error response:', response);
         setError(response.error || `HTTP ${response.status_code || 'error'}`);
       }
     } catch (err) {
-      console.error('[ForumWidget] Exception:', err);
       setError(err instanceof Error ? err.message : 'Failed to load forum posts');
     } finally {
       setLoading(false);
@@ -107,8 +94,9 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
         {posts.map((post, index) => (
           <div
             key={post.id}
-            onClick={() => {
-              localStorage.setItem('forum_selected_post_id', post.id);
+            onClick={async () => {
+              // PURE SQLite - Save selected post ID to SQLite
+              await saveSetting('forum_selected_post_id', post.id, 'forum_widget');
               onNavigateToTab?.('Forum');
             }}
             style={{

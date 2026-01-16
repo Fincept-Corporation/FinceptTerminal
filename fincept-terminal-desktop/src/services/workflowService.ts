@@ -5,6 +5,7 @@ import {
   WorkflowStatus
 } from '@/types/workflow';
 import { workflowLogger } from './loggerService';
+import { saveSetting, getSetting } from './sqliteService';
 
 // Re-export the Workflow type for consumers
 export type { Workflow, WorkflowNode, WorkflowEdge, WorkflowStatus };
@@ -16,13 +17,13 @@ class WorkflowService {
   private readonly STORAGE_KEY = 'fincept_workflows';
 
   constructor() {
-    // Load workflows from localStorage on startup
+    // Load workflows from storage on startup
     this.loadFromStorage();
   }
 
-  private loadFromStorage(): void {
+  private async loadFromStorage(): Promise<void> {
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
+      const stored = await getSetting(this.STORAGE_KEY);
       if (stored) {
         const workflows: Workflow[] = JSON.parse(stored);
         workflows.forEach(wf => this.workflows.set(wf.id, wf));
@@ -33,10 +34,10 @@ class WorkflowService {
     }
   }
 
-  private saveToStorage(): void {
+  private async saveToStorage(): Promise<void> {
     try {
       const workflows = Array.from(this.workflows.values());
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(workflows));
+      await saveSetting(this.STORAGE_KEY, JSON.stringify(workflows), 'workflows');
       workflowLogger.info(`Saved ${workflows.length} workflows to storage`);
     } catch (error) {
       workflowLogger.error('Failed to save workflows:', error);

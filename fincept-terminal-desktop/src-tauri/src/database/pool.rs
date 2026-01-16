@@ -25,23 +25,34 @@ pub fn get_pool() -> Result<DbPool> {
     Err(anyhow::anyhow!("Database not initialized. Call init_database first."))
 }
 
+/// Get a database connection from the pool
+pub fn get_db() -> Result<r2d2::PooledConnection<SqliteConnectionManager>> {
+    let pool = get_pool()?;
+    pool.get().context("Failed to get database connection from pool")
+}
+
 /// Initialize database connection pool with optimal settings
 pub async fn init_database() -> Result<DbPool> {
+    eprintln!("[Database] init_database() called");
     let pool_lock = POOL.get_or_init(|| RwLock::new(None));
 
     // Check if already initialized
     {
         let pool_read = pool_lock.read();
         if let Some(pool) = pool_read.as_ref() {
+            eprintln!("[Database] Pool already initialized, reusing");
             return Ok(Arc::clone(pool));
         }
     }
+
+    eprintln!("[Database] Initializing new pool");
 
     // Initialize pool
     let mut pool_write = pool_lock.write();
 
     // Get database path
     let db_path = get_db_path()?;
+    eprintln!("[Database] Database path resolved: {:?}", db_path);
 
     // Create connection manager with optimizations
     let manager = SqliteConnectionManager::file(&db_path)
@@ -65,6 +76,7 @@ pub async fn init_database() -> Result<DbPool> {
         });
 
     // Create pool with optimal settings
+    eprintln!("[Database] Building connection pool...");
     let pool = Pool::builder()
         .max_size(16) // Support 16 concurrent connections
         .min_idle(Some(2)) // Keep 2 connections warm
@@ -72,15 +84,23 @@ pub async fn init_database() -> Result<DbPool> {
         .build(manager)
         .context("Failed to create connection pool")?;
 
+    eprintln!("[Database] Connection pool created successfully");
+
     let pool_arc = Arc::new(pool);
 
     // Initialize schema
     {
+        eprintln!("[Database] Getting connection to initialize schema...");
         let conn = pool_arc.get().context("Failed to get connection")?;
+        eprintln!("[Database] Creating database schema...");
         crate::database::schema::create_schema(&conn)?;
+        eprintln!("[Database] Database schema created successfully");
     }
 
     *pool_write = Some(Arc::clone(&pool_arc));
+
+    eprintln!("[Database] ✓ Database initialization complete!");
+    eprintln!("[Database] Database location: {:?}", db_path);
 
     Ok(pool_arc)
 }
@@ -91,11 +111,13 @@ fn get_db_path() -> Result<std::path::PathBuf> {
         // Windows: %APPDATA%\fincept-terminal
         let appdata = std::env::var("APPDATA")
             .context("APPDATA environment variable not set")?;
+        eprintln!("[Database] APPDATA: {}", appdata);
         std::path::PathBuf::from(appdata).join("fincept-terminal")
     } else if cfg!(target_os = "macos") {
         // macOS: ~/Library/Application Support/fincept-terminal
         let home = std::env::var("HOME")
             .context("HOME environment variable not set")?;
+        eprintln!("[Database] HOME: {}", home);
         std::path::PathBuf::from(home)
             .join("Library")
             .join("Application Support")
@@ -106,11 +128,18 @@ fn get_db_path() -> Result<std::path::PathBuf> {
             .context("HOME environment variable not set")?;
         let xdg_data = std::env::var("XDG_DATA_HOME")
             .unwrap_or_else(|_| format!("{}/.local/share", home));
+        eprintln!("[Database] XDG_DATA_HOME: {}", xdg_data);
         std::path::PathBuf::from(xdg_data).join("fincept-terminal")
     };
 
+    eprintln!("[Database] Database directory: {:?}", db_dir);
     std::fs::create_dir_all(&db_dir).context("Failed to create database directory")?;
-    Ok(db_dir.join("fincept_terminal.db"))
+
+    let db_path = db_dir.join("fincept_terminal.db");
+    eprintln!("[Database] Database path: {:?}", db_path);
+    eprintln!("[Database] Database exists: {}", db_path.exists());
+
+    Ok(db_path)
 }
 
 /// Get separate database paths for notes and excel
