@@ -8,6 +8,8 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { DataSourceProvider } from './contexts/DataSourceContext';
 import { ProviderProvider } from './contexts/ProviderContext';
 import { workflowService } from './services/core/workflowService';
+import { initializeNodeSystem } from './services/nodeSystem';
+import { initializeStockBrokers } from './brokers/stocks';
 
 // Import screens
 import LoginScreen from './components/auth/LoginScreen';
@@ -51,7 +53,7 @@ const App: React.FC = () => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
 
-  // Check setup status on app initialization
+  // Check setup status on app initialization and initialize node system
   useEffect(() => {
     const checkSetup = async () => {
       try {
@@ -66,6 +68,18 @@ const App: React.FC = () => {
         setCheckingSetup(false);
       }
     };
+
+    // Initialize node system (loads all nodes into registry)
+    initializeNodeSystem().catch((err) => {
+      console.error('Failed to initialize node system:', err);
+    });
+
+    // Initialize stock broker adapters
+    try {
+      initializeStockBrokers();
+    } catch (err) {
+      console.error('Failed to initialize stock brokers:', err);
+    }
 
     checkSetup();
   }, []);

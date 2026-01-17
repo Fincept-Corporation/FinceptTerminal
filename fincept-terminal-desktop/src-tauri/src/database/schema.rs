@@ -50,6 +50,27 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         INSERT OR IGNORE INTO llm_global_settings (id, temperature, max_tokens, system_prompt)
         VALUES (1, 0.7, 2000, 'You are a helpful AI assistant specialized in financial analysis and market data.');
 
+        -- LLM model configurations table (user-added custom models)
+        CREATE TABLE IF NOT EXISTS llm_model_configs (
+            id TEXT PRIMARY KEY,
+            provider TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            api_key TEXT,
+            base_url TEXT,
+            is_enabled INTEGER DEFAULT 1,
+            is_default INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_llm_model_configs_provider ON llm_model_configs(provider);
+        CREATE INDEX IF NOT EXISTS idx_llm_model_configs_enabled ON llm_model_configs(is_enabled);
+
+        -- Insert default Fincept LLM config if not exists
+        INSERT OR IGNORE INTO llm_configs (provider, api_key, base_url, model, is_active)
+        VALUES ('fincept', '', 'https://finceptbackend.share.zrok.io/research/llm', 'fincept-llm', 1);
+
         -- Chat sessions table
         CREATE TABLE IF NOT EXISTS chat_sessions (
             session_uuid TEXT PRIMARY KEY,
@@ -624,7 +645,7 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_broker_credentials_broker_id ON broker_credentials(broker_id);
 
-        -- Master Contract Cache table (Broker symbol data)
+        -- Master Contract Cache table (Broker symbol data metadata)
         CREATE TABLE IF NOT EXISTS master_contract_cache (
             broker_id TEXT PRIMARY KEY,
             symbols_data TEXT NOT NULL,
@@ -632,6 +653,35 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             last_updated INTEGER NOT NULL,
             created_at INTEGER NOT NULL
         );
+
+        -- Symbols table (Searchable instrument database)
+        CREATE TABLE IF NOT EXISTS symbols (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            broker_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            br_symbol TEXT NOT NULL,
+            name TEXT,
+            exchange TEXT NOT NULL,
+            br_exchange TEXT,
+            token TEXT NOT NULL,
+            expiry TEXT,
+            strike REAL,
+            lot_size INTEGER,
+            instrument_type TEXT,
+            tick_size REAL,
+            segment TEXT,
+            created_at INTEGER NOT NULL
+        );
+
+        -- Symbols indices for fast search
+        CREATE INDEX IF NOT EXISTS idx_symbols_broker ON symbols(broker_id);
+        CREATE INDEX IF NOT EXISTS idx_symbols_symbol ON symbols(symbol);
+        CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+        CREATE INDEX IF NOT EXISTS idx_symbols_exchange ON symbols(exchange);
+        CREATE INDEX IF NOT EXISTS idx_symbols_token ON symbols(token);
+        CREATE INDEX IF NOT EXISTS idx_symbols_instrument_type ON symbols(instrument_type);
+        CREATE INDEX IF NOT EXISTS idx_symbols_broker_exchange ON symbols(broker_id, exchange);
+        CREATE INDEX IF NOT EXISTS idx_symbols_symbol_exchange ON symbols(symbol, exchange);
 
         -- Generic Key-Value Storage table (localStorage replacement)
         CREATE TABLE IF NOT EXISTS key_value_storage (

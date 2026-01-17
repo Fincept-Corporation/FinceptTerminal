@@ -1111,28 +1111,47 @@ class SqliteService {
 
   // LLM Model Configs
   async getLLMModelConfigs(): Promise<LLMModelConfig[]> {
-    // Stub - not implemented in Rust backend yet
-    console.warn('[SqliteService] getLLMModelConfigs not implemented');
-    return [];
+    try {
+      return await invoke<LLMModelConfig[]>('db_get_llm_model_configs');
+    } catch (error) {
+      console.error('[SqliteService] Failed to get LLM model configs:', error);
+      return [];
+    }
   }
 
   async saveLLMModelConfig(config: LLMModelConfig): Promise<{ success: boolean; message: string }> {
-    console.warn('[SqliteService] saveLLMModelConfig not implemented');
-    return { success: false, message: 'Not implemented' };
+    try {
+      return await invoke<{ success: boolean; message: string }>('db_save_llm_model_config', { config });
+    } catch (error) {
+      console.error('[SqliteService] Failed to save LLM model config:', error);
+      return { success: false, message: String(error) };
+    }
   }
 
   async deleteLLMModelConfig(id: string): Promise<{ success: boolean; message: string }> {
-    console.warn('[SqliteService] deleteLLMModelConfig not implemented');
-    return { success: false, message: 'Not implemented' };
+    try {
+      return await invoke<{ success: boolean; message: string }>('db_delete_llm_model_config', { id });
+    } catch (error) {
+      console.error('[SqliteService] Failed to delete LLM model config:', error);
+      return { success: false, message: String(error) };
+    }
   }
 
   async toggleLLMModelConfigEnabled(id: string): Promise<{ success: boolean; message: string }> {
-    console.warn('[SqliteService] toggleLLMModelConfigEnabled not implemented');
-    return { success: false, message: 'Not implemented' };
+    try {
+      return await invoke<{ success: boolean; message: string }>('db_toggle_llm_model_config_enabled', { id });
+    } catch (error) {
+      console.error('[SqliteService] Failed to toggle LLM model config:', error);
+      return { success: false, message: String(error) };
+    }
   }
 
   async setActiveLLMProvider(provider: string): Promise<void> {
-    console.warn('[SqliteService] setActiveLLMProvider not implemented');
+    try {
+      await invoke('db_set_active_llm_provider', { provider });
+    } catch (error) {
+      console.error('[SqliteService] Failed to set active LLM provider:', error);
+    }
   }
 
   // Alpha Arena

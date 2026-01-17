@@ -7,11 +7,13 @@ pub mod kraken;
 pub mod hyperliquid;
 pub mod binance;
 pub mod fyers;
+pub mod zerodha;
 
 pub use kraken::KrakenAdapter;
 pub use hyperliquid::HyperLiquidAdapter;
 pub use binance::BinanceAdapter;
 pub use fyers::FyersAdapter;
+pub use zerodha::ZerodhaAdapter;
 
 // ============================================================================
 // ADAPTER TRAIT
@@ -61,6 +63,7 @@ pub fn create_adapter(
         "hyperliquid" => Ok(Box::new(HyperLiquidAdapter::new(config))),
         "binance" => Ok(Box::new(BinanceAdapter::new(config))),
         "fyers" => Ok(Box::new(FyersAdapter::new(config))),
+        "zerodha" | "kite" => Ok(Box::new(ZerodhaAdapter::new(config))),
         _ => Err(anyhow::anyhow!("Unknown provider: {}", provider)),
     }
 }

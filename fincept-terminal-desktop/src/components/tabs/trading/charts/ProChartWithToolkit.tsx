@@ -60,9 +60,10 @@ export function ProChartWithToolkit({
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    const containerHeight = chartContainerRef.current.clientHeight || height;
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
-      height: height,
+      height: containerHeight,
       layout: {
         background: { type: ColorType.Solid, color: '#0a0a0a' },
         textColor: '#d1d5db',
@@ -219,10 +220,11 @@ export function ProChartWithToolkit({
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('mouseup', handleMouseUp);
 
-    // Handle resize
+    // Handle resize - use container height if no fixed height provided
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.resize(chartContainerRef.current.clientWidth, height, true);
+        const containerHeight = chartContainerRef.current.clientHeight || height;
+        chartRef.current.resize(chartContainerRef.current.clientWidth, containerHeight, true);
       }
     };
 

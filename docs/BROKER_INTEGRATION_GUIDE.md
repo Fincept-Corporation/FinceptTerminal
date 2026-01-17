@@ -1,230 +1,241 @@
-# Broker Integration Guide
+# Indian Stock Broker Integration Guide
 
-Guide for integrating new brokers into Fincept Terminal with paper trading support.
+Guide for integrating new Indian stock brokers (Zerodha, Fyers, Angel, Dhan, Upstox, etc.) into Fincept Terminal.
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MARKET DATA LAYER                            │
-│  Rust WebSocket (useRustTicker, useRustOrderBook, useRustTrades)│
-│  Feeds into UnifiedMarketDataService                            │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  │
-              ┌───────────────────┴───────────────────┐
-              ▼                                       ▼
-┌─────────────────────────────┐       ┌─────────────────────────────┐
-│     PAPER TRADING           │       │     LIVE TRADING            │
-│     PaperTradingAdapter     │       │     BrokerAdapter (CCXT)    │
-│     - Uses MarketDataService│       │     - Direct exchange API   │
-│     - Simulated orders      │       │     - Real order execution  │
-│     - Rust backend storage  │       │                             │
-└─────────────────────────────┘       └─────────────────────────────┘
+src/brokers/stocks/
+├── types.ts                    # IStockBrokerAdapter interface
+├── BaseStockBrokerAdapter.ts   # Abstract base class
+├── registry.ts                 # Broker metadata & registration
+├── init.ts                     # Adapter initialization at startup
+└── india/
+    ├── fyers/
+    │   ├── FyersAdapter.ts     # ~1287 lines
+    │   ├── constants.ts
+    │   └── mapper.ts
+    └── zerodha/
+        ├── ZerodhaAdapter.ts   # ~1295 lines
+        ├── constants.ts
+        └── mapper.ts
 ```
 
-## Key Principle: Separation of Concerns
+## Step 1: Add Broker Metadata
 
-- **Market Data**: Always from real exchange (WebSocket + REST)
-- **Paper Trading**: Only simulates orders/positions, NOT market data
-- **`realAdapter`**: Used for market data in BOTH live and paper modes
-- **`activeAdapter`**: Paper adapter in paper mode, real adapter in live mode
-
-## Step 1: Create Broker Adapter
-
-Create `src/stockBrokers/adapters/{broker}Adapter.ts`:
+Update `src/brokers/stocks/registry.ts`:
 
 ```typescript
-import { IExchangeAdapter, BrokerConfig } from '../types';
-
-export class MyBrokerAdapter implements IExchangeAdapter {
-  private exchange: any; // CCXT instance or custom client
-  private connected = false;
-  private config: BrokerConfig;
-
-  constructor(config: BrokerConfig) {
-    this.config = config;
-  }
-
-  async connect(): Promise<void> {
-    // Initialize exchange connection
-    this.exchange = new ccxt.mybroker({
-      apiKey: this.config.apiKey,
-      secret: this.config.apiSecret,
-    });
-    await this.exchange.loadMarkets();
-    this.connected = true;
-  }
-
-  async disconnect(): Promise<void> {
-    this.connected = false;
-  }
-
-  isConnected(): boolean {
-    return this.connected;
-  }
-
-  // Required methods
-  async fetchTicker(symbol: string): Promise<Ticker> { /* ... */ }
-  async fetchOrderBook(symbol: string, limit?: number): Promise<OrderBook> { /* ... */ }
-  async fetchOHLCV(symbol: string, timeframe: string, limit?: number): Promise<OHLCV[]> { /* ... */ }
-  async fetchBalance(): Promise<Balance> { /* ... */ }
-  async fetchPositions(symbols?: string[]): Promise<Position[]> { /* ... */ }
-  async fetchOpenOrders(symbol?: string): Promise<Order[]> { /* ... */ }
-  async createOrder(symbol: string, type: string, side: string, amount: number, price?: number, params?: any): Promise<Order> { /* ... */ }
-  async cancelOrder(orderId: string, symbol?: string): Promise<void> { /* ... */ }
-}
-```
-
-## Step 2: Register in Broker Registry
-
-Update `src/stockBrokers/registry.ts`:
-
-```typescript
-import { MyBrokerAdapter } from './adapters/myBrokerAdapter';
-
-export const BROKER_REGISTRY: BrokerMetadata[] = [
-  // ... existing brokers
-  {
-    id: 'mybroker',
-    name: 'My Broker',
-    type: 'crypto', // or 'stock', 'forex'
-    features: ['spot', 'margin', 'futures'],
-    requiredCredentials: ['apiKey', 'apiSecret'],
-    testnet: true,
-    defaultSymbols: ['BTC/USD', 'ETH/USD'],
+mybroker: {
+  id: 'mybroker',
+  name: 'mybroker',
+  displayName: 'My Broker',
+  website: 'https://mybroker.com',
+  region: 'india',
+  country: 'IN',
+  currency: 'INR',
+  exchanges: ['NSE', 'BSE', 'NFO', 'MCX'],
+  marketHours: { open: '09:15', close: '15:30', timezone: 'Asia/Kolkata' },
+  features: {
+    webSocket: true, amo: true, gtt: false, bracketOrder: true,
+    coverOrder: true, marginCalculator: false, optionsChain: true, paperTrading: false,
   },
-];
-
-export function createAdapter(brokerId: string, config: BrokerConfig): IExchangeAdapter {
-  switch (brokerId) {
-    case 'mybroker':
-      return new MyBrokerAdapter(config);
-    // ... other brokers
-  }
-}
+  tradingFeatures: {
+    marketOrders: true, limitOrders: true, stopOrders: true,
+    stopLimitOrders: true, trailingStopOrders: false,
+  },
+  productTypes: ['CASH', 'INTRADAY', 'MARGIN'],
+  authType: 'oauth',  // 'oauth' | 'totp' | 'password'
+  rateLimit: { ordersPerSecond: 10, quotesPerSecond: 5 },
+  defaultSymbols: ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK'],
+},
 ```
 
-## Step 3: Add WebSocket Support (Rust Backend)
+## Step 2: Create Adapter
 
-Add provider config in `src-tauri/src/websocket/providers/`:
-
-```rust
-// mybroker.rs
-pub fn get_mybroker_config() -> ProviderConfig {
-    ProviderConfig {
-        name: "mybroker".to_string(),
-        url: "wss://ws.mybroker.com".to_string(),
-        // ... config
-    }
-}
-```
-
-## Step 4: Paper Trading Integration
-
-Paper trading works automatically if your adapter implements `IExchangeAdapter`. The system:
-
-1. Creates `PaperTradingAdapter` wrapping market data service
-2. Uses `realAdapter` for all market data (ticker, OHLCV, orderbook)
-3. Simulates orders/positions in Rust backend
-
-### How Paper Trading Gets Prices
+Create `src/brokers/stocks/india/mybroker/MyBrokerAdapter.ts`:
 
 ```typescript
-// In TradingTab.tsx - feeds WebSocket data to market data service
-useEffect(() => {
-  if (tickerData && activeBroker) {
-    const marketDataService = getMarketDataService();
-    marketDataService.updatePrice(activeBroker, selectedSymbol, {
-      price: tickerData.price,
-      bid: tickerData.bid,
-      ask: tickerData.ask,
-      // ...
+import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
+import type { StockBrokerMetadata, BrokerCredentials, AuthResponse, OrderParams, OrderResponse,
+  ModifyOrderParams, Order, Trade, Position, Holding, Funds, Quote, OHLCV, MarketDepth,
+  TimeFrame, StockExchange, Instrument } from '../../types';
+import { STOCK_BROKER_REGISTRY } from '../../registry';
+
+export class MyBrokerAdapter extends BaseStockBrokerAdapter {
+  readonly brokerId = 'mybroker';
+  readonly brokerName = 'My Broker';
+  readonly region = 'india' as const;
+  readonly metadata: StockBrokerMetadata = STOCK_BROKER_REGISTRY.mybroker;
+
+  private apiKey = '';
+  private apiSecret = '';
+  private readonly BASE_URL = 'https://api.mybroker.com/v1';
+
+  // === AUTHENTICATION ===
+  setCredentials(apiKey: string, apiSecret: string): void {
+    this.apiKey = apiKey;
+    this.apiSecret = apiSecret;
+  }
+
+  getAuthUrl(): string {
+    return `https://api.mybroker.com/authorize?client_id=${this.apiKey}&redirect_uri=${encodeURIComponent('http://127.0.0.1/')}&response_type=code`;
+  }
+
+  async authenticate(credentials: BrokerCredentials): Promise<AuthResponse> {
+    const res = await fetch(`${this.BASE_URL}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        client_id: this.apiKey,
+        client_secret: this.apiSecret,
+        code: credentials.accessToken,
+      }),
     });
+    const data = await res.json();
+    if (data.access_token) {
+      this.accessToken = data.access_token;
+      this._isConnected = true;
+      await this.storeCredentials({ apiKey: this.apiKey, apiSecret: this.apiSecret, accessToken: data.access_token });
+      return { success: true, accessToken: data.access_token };
+    }
+    return { success: false, message: data.message || 'Auth failed' };
   }
-}, [tickerData]);
+
+  // === REQUIRED INTERNAL IMPLEMENTATIONS ===
+  protected async placeOrderInternal(params: OrderParams): Promise<OrderResponse> {
+    const res = await this.apiCall('POST', '/orders', { symbol: params.symbol, exchange: params.exchange,
+      side: params.side, qty: params.quantity, type: params.orderType, product: params.productType, price: params.price });
+    return { success: res.status === 'ok', orderId: res.data?.order_id, message: res.message };
+  }
+
+  protected async modifyOrderInternal(params: ModifyOrderParams): Promise<OrderResponse> {
+    const res = await this.apiCall('PUT', `/orders/${params.orderId}`, params);
+    return { success: res.status === 'ok', orderId: params.orderId };
+  }
+
+  protected async cancelOrderInternal(orderId: string): Promise<OrderResponse> {
+    const res = await this.apiCall('DELETE', `/orders/${orderId}`);
+    return { success: res.status === 'ok', orderId };
+  }
+
+  protected async getOrdersInternal(): Promise<Order[]> {
+    const res = await this.apiCall('GET', '/orders');
+    return res.data?.orders?.map((o: any) => this.mapOrder(o)) || [];
+  }
+
+  protected async getTradeBookInternal(): Promise<Trade[]> {
+    const res = await this.apiCall('GET', '/trades');
+    return res.data?.trades?.map((t: any) => this.mapTrade(t)) || [];
+  }
+
+  protected async getPositionsInternal(): Promise<Position[]> {
+    const res = await this.apiCall('GET', '/positions');
+    return res.data?.positions?.map((p: any) => this.mapPosition(p)) || [];
+  }
+
+  protected async getHoldingsInternal(): Promise<Holding[]> {
+    const res = await this.apiCall('GET', '/holdings');
+    return res.data?.holdings?.map((h: any) => this.mapHolding(h)) || [];
+  }
+
+  protected async getFundsInternal(): Promise<Funds> {
+    const res = await this.apiCall('GET', '/funds');
+    return { availableCash: res.data.available, usedMargin: res.data.used, availableMargin: res.data.available,
+      totalBalance: res.data.total, currency: 'INR' };
+  }
+
+  protected async getQuoteInternal(symbol: string, exchange: StockExchange): Promise<Quote> {
+    const res = await this.apiCall('GET', `/quote?symbol=${symbol}&exchange=${exchange}`);
+    return res.data;
+  }
+
+  protected async getQuotesInternal(instruments: Array<{ symbol: string; exchange: StockExchange }>): Promise<Quote[]> {
+    const symbols = instruments.map(i => `${i.exchange}:${i.symbol}`).join(',');
+    const res = await this.apiCall('GET', `/quotes?symbols=${symbols}`);
+    return res.data || [];
+  }
+
+  protected async getOHLCVInternal(symbol: string, exchange: StockExchange, tf: TimeFrame, from: Date, to: Date): Promise<OHLCV[]> {
+    const res = await this.apiCall('GET', `/historical?symbol=${symbol}&exchange=${exchange}&tf=${tf}&from=${from.getTime()}&to=${to.getTime()}`);
+    return res.data?.candles || [];
+  }
+
+  protected async getMarketDepthInternal(symbol: string, exchange: StockExchange): Promise<MarketDepth> {
+    const res = await this.apiCall('GET', `/depth?symbol=${symbol}&exchange=${exchange}`);
+    return { bids: res.data.bids, asks: res.data.asks };
+  }
+
+  protected async searchSymbolsInternal(query: string, exchange?: StockExchange): Promise<Instrument[]> {
+    const res = await this.apiCall('GET', `/search?q=${query}${exchange ? `&exchange=${exchange}` : ''}`);
+    return res.data || [];
+  }
+
+  // === HELPERS ===
+  private async apiCall(method: string, endpoint: string, body?: any): Promise<any> {
+    const res = await fetch(`${this.BASE_URL}${endpoint}`, {
+      method, headers: { 'Authorization': `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res.json();
+  }
+
+  private mapOrder(o: any): Order {
+    return { orderId: o.order_id, symbol: o.symbol, exchange: o.exchange, side: o.side, quantity: o.qty,
+      filledQuantity: o.filled_qty, pendingQuantity: o.pending_qty, price: o.price, averagePrice: o.avg_price,
+      orderType: o.type, productType: o.product, validity: 'DAY', status: o.status, placedAt: new Date(o.placed_at) };
+  }
+  private mapTrade(t: any): Trade {
+    return { tradeId: t.trade_id, orderId: t.order_id, symbol: t.symbol, exchange: t.exchange, side: t.side,
+      quantity: t.qty, price: t.price, productType: t.product, tradedAt: new Date(t.traded_at) };
+  }
+  private mapPosition(p: any): Position {
+    return { symbol: p.symbol, exchange: p.exchange, productType: p.product, quantity: p.qty, buyQuantity: p.buy_qty,
+      sellQuantity: p.sell_qty, buyValue: p.buy_value, sellValue: p.sell_value, averagePrice: p.avg_price,
+      lastPrice: p.ltp, pnl: p.pnl, pnlPercent: p.pnl_percent, dayPnl: p.day_pnl };
+  }
+  private mapHolding(h: any): Holding {
+    return { symbol: h.symbol, exchange: h.exchange, quantity: h.qty, averagePrice: h.avg_price, lastPrice: h.ltp,
+      investedValue: h.invested, currentValue: h.current, pnl: h.pnl, pnlPercent: h.pnl_percent };
+  }
+}
 ```
 
-### Paper Order Matching (Touch-Based)
+## Step 3: Register Adapter
 
-Orders fill when price touches limit:
-- **Buy Limit**: Fills when `ask <= limit_price`
-- **Sell Limit**: Fills when `bid >= limit_price`
-- **Buy Stop**: Fills when `price >= stop_price`
-- **Sell Stop**: Fills when `price <= stop_price`
-
-## Step 5: Market Data Hooks
-
-The hooks in `src/components/tabs/trading/hooks/useMarketData.ts` use `realAdapter`:
+Update `src/brokers/stocks/init.ts`:
 
 ```typescript
-// useOHLCV - fetches chart data
-const { realAdapter } = useBrokerContext();
-const rawData = await realAdapter.fetchOHLCV(symbol, timeframe, limit);
-
-// useTicker - gets live prices from MarketDataService
-const marketDataService = getMarketDataService();
-const cachedPrice = marketDataService.getCurrentPrice(symbol, activeBroker);
-
-// useOrderBook - fetches depth from realAdapter
-const rawBook = await realAdapter.fetchOrderBook(symbol, limit);
+import { MyBrokerAdapter } from './india/mybroker/MyBrokerAdapter';
+registerBrokerAdapter('mybroker', MyBrokerAdapter);
 ```
 
-## Key Files Reference
+## Paper Trading
+
+Paper trading is separate from adapters - handled by `StockBrokerContext.tsx` which routes to:
+- **Live mode**: `adapter.getPositions()`, `adapter.getFunds()`, etc.
+- **Paper mode**: `unifiedTradingService.ts` → Rust backend (SQLite)
+
+## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/stockBrokers/adapters/` | Broker adapter implementations |
-| `src/stockBrokers/registry.ts` | Broker registration and metadata |
-| `src/contexts/BrokerContext.tsx` | Adapter lifecycle, mode switching |
-| `src/paper-trading/index.ts` | PaperTradingAdapter implementation |
-| `src/paper-trading/OrderMatcher.ts` | Order fill logic |
-| `src/services/trading/UnifiedMarketDataService.ts` | Price cache and subscriptions |
-| `src/hooks/useRustWebSocket.ts` | WebSocket data hooks |
-| `src/components/tabs/trading/hooks/useMarketData.ts` | Market data hooks (OHLCV, ticker, orderbook) |
-
-## IExchangeAdapter Interface
-
-```typescript
-interface IExchangeAdapter {
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  isConnected(): boolean;
-
-  // Market Data
-  fetchTicker(symbol: string): Promise<Ticker>;
-  fetchOrderBook(symbol: string, limit?: number): Promise<OrderBook>;
-  fetchOHLCV(symbol: string, timeframe: string, limit?: number): Promise<OHLCV[]>;
-  fetchTickers(symbols?: string[]): Promise<Record<string, Ticker>>;
-  fetchMarkets(): Promise<Market[]>;
-
-  // Account
-  fetchBalance(): Promise<Balance>;
-  fetchPositions(symbols?: string[]): Promise<Position[]>;
-  fetchOpenOrders(symbol?: string): Promise<Order[]>;
-  fetchClosedOrders(symbol?: string, since?: number, limit?: number): Promise<Order[]>;
-
-  // Trading
-  createOrder(symbol: string, type: string, side: string, amount: number, price?: number, params?: any): Promise<Order>;
-  cancelOrder(orderId: string, symbol?: string): Promise<void>;
-  cancelAllOrders(symbol?: string): Promise<void>;
-}
-```
+| `src/brokers/stocks/types.ts` | `IStockBrokerAdapter` interface |
+| `src/brokers/stocks/BaseStockBrokerAdapter.ts` | Abstract base class |
+| `src/brokers/stocks/registry.ts` | Broker metadata |
+| `src/contexts/StockBrokerContext.tsx` | State management, paper/live routing |
+| `src/services/unifiedTradingService.ts` | Paper trading backend bridge |
 
 ## Testing Checklist
 
-- [ ] Adapter connects successfully with API credentials
-- [ ] `fetchTicker` returns valid price data
-- [ ] `fetchOHLCV` returns chart data (100+ candles)
-- [ ] `fetchOrderBook` returns 20+ levels for bids/asks
-- [ ] `fetchBalance` returns account balances
-- [ ] `createOrder` places orders correctly
-- [ ] Paper trading shows live P&L with your broker's prices
-- [ ] WebSocket streams real-time ticker data
-- [ ] Symbol format matches (e.g., `BTC/USD` vs `BTCUSD`)
+- [ ] Metadata added to `registry.ts`
+- [ ] Adapter registered in `init.ts`
+- [ ] OAuth: `getAuthUrl()` → `authenticate()` flow works
+- [ ] Credentials persist via `storeCredentials()`/`loadCredentials()`
+- [ ] `getPositions()`, `getHoldings()`, `getOrders()`, `getFunds()` return correct data
+- [ ] `placeOrder()` executes successfully
+- [ ] Paper mode shows paper data, Live mode shows broker data
 
-## Common Issues
-
-1. **Empty orderbook in paper mode**: Ensure WebSocket is connected and streaming
-2. **Chart not loading**: Check `realAdapter.fetchOHLCV()` returns data
-3. **Prices showing 0**: Verify `marketDataService.updatePrice()` is being called
-4. **Symbol mismatch**: Normalize symbols (remove `/`, `-`, uppercase)
+---
+**Last Updated**: January 2025

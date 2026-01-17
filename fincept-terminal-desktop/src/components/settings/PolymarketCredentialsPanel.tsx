@@ -1,5 +1,5 @@
 // File: src/components/settings/PolymarketCredentialsPanel.tsx
-// Polymarket API credentials management panel
+// Polymarket API credentials management panel - Bloomberg Terminal Style
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -23,6 +23,27 @@ import {
 } from 'lucide-react';
 import polymarketServiceEnhanced from '@/services/polymarket/polymarketServiceEnhanced';
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#888888',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  INPUT_BG: '#141414',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#666666',
+  FONT: '"IBM Plex Mono", "Consolas", monospace',
+};
 
 interface PolymarketCredentials {
   apiKey: string;
@@ -60,50 +81,43 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
   const loadSavedCredentials = async () => {
     try {
-      // PURE SQLite - Load credentials from database
       const saved = await getSetting('polymarket_credentials');
       if (saved) {
         const parsed = JSON.parse(saved);
         setCredentials(parsed);
-
-        // Set credentials in service
         polymarketServiceEnhanced.setCredentials({
           apiKey: parsed.apiKey,
           apiSecret: parsed.apiSecret,
           apiPassphrase: parsed.apiPassphrase
         });
-
         if (parsed.walletAddress) {
           setWalletAddress(parsed.walletAddress);
           setWalletConnected(true);
         }
       }
     } catch (error) {
-      console.error('[PolymarketCredentials] Failed to load credentials from SQLite:', error);
+      console.error('[PolymarketCredentials] Failed to load credentials:', error);
     }
   };
 
   const saveCredentials = async (creds: PolymarketCredentials) => {
     try {
-      // PURE SQLite - Save credentials to database
       await saveSetting('polymarket_credentials', JSON.stringify(creds), 'polymarket');
       setCredentials(creds);
-
-      // Set in service
       polymarketServiceEnhanced.setCredentials({
         apiKey: creds.apiKey,
         apiSecret: creds.apiSecret,
         apiPassphrase: creds.apiPassphrase
       });
     } catch (error) {
-      console.error('[PolymarketCredentials] Failed to save credentials to SQLite:', error);
+      console.error('[PolymarketCredentials] Failed to save credentials:', error);
       throw error;
     }
   };
 
   const handleManualSave = () => {
     if (!formData.apiKey || !formData.apiSecret || !formData.apiPassphrase) {
-      alert('All fields are required');
+      setTestResult({ success: false, message: 'All fields are required' });
       return;
     }
 
@@ -126,12 +140,10 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     setTestResult(null);
 
     try {
-      // Check if MetaMask is installed
       if (!window.ethereum) {
         throw new Error('MetaMask not detected. Please install MetaMask to continue.');
       }
 
-      // Request account access
       const accounts = await window.ethereum.request({
         method: 'eth_requestAccounts'
       });
@@ -143,8 +155,6 @@ export const PolymarketCredentialsPanel: React.FC = () => {
       const address = accounts[0];
       setWalletAddress(address);
       setWalletConnected(true);
-
-      // Now generate API credentials
       await generateAPICredentials(address);
 
     } catch (error: any) {
@@ -160,53 +170,34 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
   const generateAPICredentials = async (address: string) => {
     try {
-      // Import ethers dynamically (v6 API)
       const { BrowserProvider } = await import('ethers');
-
       const provider = new BrowserProvider(window.ethereum as any);
       const signer = await provider.getSigner();
 
-      // EIP-712 domain and types for Polymarket
       const domain = {
         name: 'ClobAuthDomain',
         version: '1',
-        chainId: 137 // Polygon Mainnet
+        chainId: 137
       };
 
       const types = {
-        ClobAuth: [
-          { name: 'message', type: 'string' }
-        ]
+        ClobAuth: [{ name: 'message', type: 'string' }]
       };
 
       const value = {
         message: 'This message attests that I control the given wallet'
       };
 
-      setTestResult({
-        success: true,
-        message: 'Please sign the message in MetaMask...'
-      });
+      setTestResult({ success: true, message: 'Please sign the message in MetaMask...' });
 
-      // Request signature from user (v6 API uses signTypedData)
       const signature = await signer.signTypedData(domain, types, value);
 
-      setTestResult({
-        success: true,
-        message: 'Generating API credentials...'
-      });
+      setTestResult({ success: true, message: 'Generating API credentials...' });
 
-      // Call Polymarket API to generate credentials
       const response = await fetch('https://clob.polymarket.com/auth/api-key', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          address: address,
-          signature: signature,
-          nonce: 0 // Use 0 for deterministic credentials
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, signature, nonce: 0 })
       });
 
       if (!response.ok) {
@@ -216,7 +207,6 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
       const apiCredentials = await response.json();
 
-      // Save credentials
       const newCredentials: PolymarketCredentials = {
         apiKey: apiCredentials.apiKey,
         apiSecret: apiCredentials.secret,
@@ -227,18 +217,11 @@ export const PolymarketCredentialsPanel: React.FC = () => {
       };
 
       saveCredentials(newCredentials);
-
-      setTestResult({
-        success: true,
-        message: 'API credentials generated and saved successfully!'
-      });
+      setTestResult({ success: true, message: 'API credentials generated and saved!' });
 
     } catch (error: any) {
       console.error('Failed to generate API credentials:', error);
-      setTestResult({
-        success: false,
-        message: error.message || 'Failed to generate API credentials'
-      });
+      setTestResult({ success: false, message: error.message || 'Failed to generate credentials' });
     }
   };
 
@@ -252,63 +235,47 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     setTestResult(null);
 
     try {
-      // Test by fetching CLOB markets (public endpoint that requires auth for rate limits)
       const markets = await polymarketServiceEnhanced.getCLOBMarkets();
-
       if (markets && (markets.length > 0 || Array.isArray(markets))) {
-        setTestResult({
-          success: true,
-          message: 'Connection successful! Credentials are valid.'
-        });
+        setTestResult({ success: true, message: 'Connection successful! Credentials valid.' });
       } else {
-        setTestResult({
-          success: false,
-          message: 'Invalid response from API'
-        });
+        setTestResult({ success: false, message: 'Invalid response from API' });
       }
     } catch (error: any) {
-      console.error('API test failed:', error);
-      setTestResult({
-        success: false,
-        message: `Test failed: ${error.message}`
-      });
+      setTestResult({ success: false, message: `Test failed: ${error.message}` });
     } finally {
       setIsTesting(false);
     }
   };
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete your Polymarket credentials?')) {
-      // PURE SQLite - Clear credentials from database
+    if (confirm('Delete Polymarket credentials?')) {
       await saveSetting('polymarket_credentials', '', 'polymarket');
       setCredentials(null);
       setWalletConnected(false);
       setWalletAddress('');
       polymarketServiceEnhanced.clearCredentials();
-      setTestResult({ success: true, message: 'Credentials deleted successfully' });
+      setTestResult({ success: true, message: 'Credentials deleted' });
     }
   };
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    setTestResult({ success: true, message: `${label} copied to clipboard!` });
+    setTestResult({ success: true, message: `${label} copied!` });
     setTimeout(() => setTestResult(null), 2000);
   };
 
   const handleExport = () => {
     if (!credentials) return;
-
     const dataStr = JSON.stringify(credentials, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
-
     const link = document.createElement('a');
     link.href = url;
     link.download = 'polymarket-credentials.json';
     link.click();
-
     URL.revokeObjectURL(url);
-    setTestResult({ success: true, message: 'Credentials exported successfully!' });
+    setTestResult({ success: true, message: 'Credentials exported!' });
   };
 
   const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -319,203 +286,258 @@ export const PolymarketCredentialsPanel: React.FC = () => {
     reader.onload = (e) => {
       try {
         const imported = JSON.parse(e.target?.result as string);
-
         if (imported.apiKey && imported.apiSecret && imported.apiPassphrase) {
           saveCredentials(imported);
-          setTestResult({ success: true, message: 'Credentials imported successfully!' });
+          setTestResult({ success: true, message: 'Credentials imported!' });
         } else {
-          throw new Error('Invalid credentials file');
+          throw new Error('Invalid file');
         }
-      } catch (error) {
+      } catch {
         setTestResult({ success: false, message: 'Failed to import credentials' });
       }
     };
     reader.readAsText(file);
   };
 
+  // Button style helper
+  const btnStyle = (color: string, isDisabled?: boolean) => ({
+    padding: '6px 12px',
+    backgroundColor: isDisabled ? BLOOMBERG.MUTED : color,
+    border: 'none',
+    color: color === BLOOMBERG.ORANGE ? '#000' : BLOOMBERG.WHITE,
+    cursor: isDisabled ? 'not-allowed' : 'pointer',
+    fontSize: '10px',
+    fontWeight: 600,
+    fontFamily: BLOOMBERG.FONT,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    opacity: isDisabled ? 0.5 : 1,
+    letterSpacing: '0.5px',
+  });
+
   return (
-    <div className="space-y-6">
+    <div style={{
+      fontFamily: BLOOMBERG.FONT,
+      color: BLOOMBERG.WHITE,
+      backgroundColor: BLOOMBERG.DARK_BG,
+    }}>
       {/* Header */}
-      <div className="border-b border-gray-700 pb-4">
-        <div className="flex items-center gap-3 mb-2">
-          <Shield className="text-orange-500" size={24} />
-          <h2 className="text-lg font-bold text-white">Polymarket API Credentials</h2>
+      <div style={{
+        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        padding: '12px 0',
+        marginBottom: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+      }}>
+        <Shield size={20} color={BLOOMBERG.ORANGE} />
+        <div>
+          <div style={{ color: BLOOMBERG.ORANGE, fontSize: '14px', fontWeight: 700, letterSpacing: '0.5px' }}>
+            POLYMARKET API CREDENTIALS
+          </div>
+          <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px', marginTop: '2px' }}>
+            Manage API credentials for trading and portfolio access
+          </div>
         </div>
-        <p className="text-sm text-gray-400">
-          Manage your Polymarket API credentials for trading and portfolio access
-        </p>
       </div>
 
       {/* Status Message */}
       {testResult && (
-        <div className={`flex items-start gap-3 p-3 rounded border ${
-          testResult.success
-            ? 'bg-green-900/20 border-green-700'
-            : 'bg-red-900/20 border-red-700'
-        }`}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '10px 12px',
+          marginBottom: '16px',
+          backgroundColor: testResult.success ? `${BLOOMBERG.GREEN}15` : `${BLOOMBERG.RED}15`,
+          border: `1px solid ${testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+        }}>
           {testResult.success ? (
-            <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
+            <CheckCircle size={16} color={BLOOMBERG.GREEN} />
           ) : (
-            <XCircle className="text-red-400 flex-shrink-0" size={20} />
+            <XCircle size={16} color={BLOOMBERG.RED} />
           )}
-          <p className={`text-sm ${testResult.success ? 'text-green-300' : 'text-red-300'}`}>
+          <span style={{ color: testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED, fontSize: '11px' }}>
             {testResult.message}
-          </p>
+          </span>
         </div>
       )}
 
-      {/* Info Alert */}
-      <div className="flex items-start gap-3 p-3 rounded border bg-blue-900/20 border-blue-700">
-        <AlertCircle className="text-blue-400 flex-shrink-0" size={20} />
-        <div className="text-sm text-blue-300 space-y-2">
-          <p>
-            <strong>Two ways to get credentials:</strong>
-          </p>
-          <ol className="list-decimal list-inside space-y-1 ml-2">
-            <li><strong>Wallet Connection</strong> - Automatic credential generation from MetaMask</li>
-            <li><strong>Manual Entry</strong> - Enter existing credentials from Polymarket</li>
-          </ol>
-          <p className="mt-2">
-            <a
-              href="https://docs.polymarket.com/developers/CLOB/authentication"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline inline-flex items-center gap-1"
-            >
-              Learn more about authentication <ExternalLink size={12} />
-            </a>
-          </p>
+      {/* Info Box */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '10px',
+        padding: '12px',
+        marginBottom: '16px',
+        backgroundColor: `${BLOOMBERG.BLUE}10`,
+        border: `1px solid ${BLOOMBERG.BLUE}40`,
+      }}>
+        <AlertCircle size={16} color={BLOOMBERG.BLUE} style={{ flexShrink: 0, marginTop: '2px' }} />
+        <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN, lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 600, marginBottom: '6px' }}>TWO WAYS TO GET CREDENTIALS:</div>
+          <div style={{ marginBottom: '4px' }}>1. <span style={{ color: BLOOMBERG.ORANGE }}>WALLET CONNECTION</span> - Auto-generate from MetaMask</div>
+          <div style={{ marginBottom: '8px' }}>2. <span style={{ color: BLOOMBERG.BLUE }}>MANUAL ENTRY</span> - Enter existing credentials</div>
+          <a
+            href="https://docs.polymarket.com/developers/CLOB/authentication"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: BLOOMBERG.CYAN, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+          >
+            Documentation <ExternalLink size={10} />
+          </a>
         </div>
       </div>
 
       {/* Current Credentials Display */}
       {credentials && !isEditing && (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="text-green-400" size={20} />
-              <h3 className="font-semibold text-white">Credentials Active</h3>
+        <div style={{
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          padding: '16px',
+          marginBottom: '16px',
+        }}>
+          {/* Status Header */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            paddingBottom: '12px',
+            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CheckCircle size={16} color={BLOOMBERG.GREEN} />
+              <span style={{ color: BLOOMBERG.GREEN, fontSize: '12px', fontWeight: 600 }}>CREDENTIALS ACTIVE</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">
-                Method: {credentials.method === 'wallet' ? 'Wallet' : 'Manual'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: BLOOMBERG.MUTED, fontSize: '9px' }}>
+                METHOD: {credentials.method === 'wallet' ? 'WALLET' : 'MANUAL'}
               </span>
-              {credentials.method === 'wallet' && (
-                <Wallet className="text-blue-400" size={16} />
-              )}
+              {credentials.method === 'wallet' && <Wallet size={12} color={BLOOMBERG.BLUE} />}
             </div>
           </div>
 
-          {/* Wallet Address */}
-          {credentials.walletAddress && (
+          {/* Credential Fields */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Wallet Address */}
+            {credentials.walletAddress && (
+              <div>
+                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>WALLET ADDRESS</div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: BLOOMBERG.INPUT_BG,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  padding: '8px 10px',
+                }}>
+                  <code style={{ flex: 1, color: BLOOMBERG.CYAN, fontSize: '11px' }}>{credentials.walletAddress}</code>
+                  <button onClick={() => handleCopy(credentials.walletAddress!, 'Address')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    <Copy size={12} color={BLOOMBERG.GRAY} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* API Key */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Wallet Address</label>
-              <div className="flex items-center gap-2 bg-gray-900 rounded px-3 py-2">
-                <code className="flex-1 text-sm text-white font-mono">
-                  {credentials.walletAddress}
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API KEY</div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: BLOOMBERG.INPUT_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                padding: '8px 10px',
+              }}>
+                <code style={{ flex: 1, color: BLOOMBERG.WHITE, fontSize: '11px' }}>
+                  {showSecrets ? credentials.apiKey : '••••••••••••••••••••'}
                 </code>
-                <button
-                  onClick={() => handleCopy(credentials.walletAddress!, 'Wallet address')}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <Copy size={14} />
+                <button onClick={() => handleCopy(credentials.apiKey, 'API Key')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  <Copy size={12} color={BLOOMBERG.GRAY} />
                 </button>
               </div>
             </div>
-          )}
 
-          {/* API Key */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">API Key</label>
-            <div className="flex items-center gap-2 bg-gray-900 rounded px-3 py-2">
-              <code className="flex-1 text-sm text-white font-mono">
-                {showSecrets ? credentials.apiKey : '••••••••••••••••'}
-              </code>
-              <button
-                onClick={() => handleCopy(credentials.apiKey, 'API Key')}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <Copy size={14} />
-              </button>
+            {/* API Secret */}
+            <div>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API SECRET</div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: BLOOMBERG.INPUT_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                padding: '8px 10px',
+              }}>
+                <code style={{ flex: 1, color: BLOOMBERG.WHITE, fontSize: '11px' }}>
+                  {showSecrets ? credentials.apiSecret : '••••••••••••••••••••'}
+                </code>
+                <button onClick={() => handleCopy(credentials.apiSecret, 'API Secret')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  <Copy size={12} color={BLOOMBERG.GRAY} />
+                </button>
+              </div>
             </div>
+
+            {/* API Passphrase */}
+            <div>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API PASSPHRASE</div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: BLOOMBERG.INPUT_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                padding: '8px 10px',
+              }}>
+                <code style={{ flex: 1, color: BLOOMBERG.WHITE, fontSize: '11px' }}>
+                  {showSecrets ? credentials.apiPassphrase : '••••••••••••••••••••'}
+                </code>
+                <button onClick={() => handleCopy(credentials.apiPassphrase, 'Passphrase')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  <Copy size={12} color={BLOOMBERG.GRAY} />
+                </button>
+              </div>
+            </div>
+
+            {/* Created Date */}
+            {credentials.createdAt && (
+              <div style={{ color: BLOOMBERG.MUTED, fontSize: '9px' }}>
+                CREATED: {new Date(credentials.createdAt).toLocaleString()}
+              </div>
+            )}
           </div>
-
-          {/* API Secret */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">API Secret</label>
-            <div className="flex items-center gap-2 bg-gray-900 rounded px-3 py-2">
-              <code className="flex-1 text-sm text-white font-mono">
-                {showSecrets ? credentials.apiSecret : '••••••••••••••••'}
-              </code>
-              <button
-                onClick={() => handleCopy(credentials.apiSecret, 'API Secret')}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <Copy size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* API Passphrase */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">API Passphrase</label>
-            <div className="flex items-center gap-2 bg-gray-900 rounded px-3 py-2">
-              <code className="flex-1 text-sm text-white font-mono">
-                {showSecrets ? credentials.apiPassphrase : '••••••••••••••••'}
-              </code>
-              <button
-                onClick={() => handleCopy(credentials.apiPassphrase, 'API Passphrase')}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <Copy size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Creation Date */}
-          {credentials.createdAt && (
-            <div className="text-xs text-gray-400">
-              Created: {new Date(credentials.createdAt).toLocaleString()}
-            </div>
-          )}
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-2 border-t border-gray-700">
-            <button
-              onClick={() => setShowSecrets(!showSecrets)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors"
-            >
-              {showSecrets ? <EyeOff size={14} /> : <Eye size={14} />}
-              {showSecrets ? 'Hide' : 'Show'}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: '16px',
+            paddingTop: '12px',
+            borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+            flexWrap: 'wrap',
+          }}>
+            <button onClick={() => setShowSecrets(!showSecrets)} style={btnStyle(BLOOMBERG.HEADER_BG)}>
+              {showSecrets ? <EyeOff size={12} /> : <Eye size={12} />}
+              {showSecrets ? 'HIDE' : 'SHOW'}
             </button>
-            <button
-              onClick={handleTest}
-              disabled={isTesting}
-              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded text-sm transition-colors"
-            >
-              {isTesting ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
-              Test Connection
+            <button onClick={handleTest} disabled={isTesting} style={btnStyle(BLOOMBERG.BLUE, isTesting)}>
+              {isTesting ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
+              TEST
             </button>
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors"
-            >
-              <Download size={14} />
-              Export
+            <button onClick={handleExport} style={btnStyle(BLOOMBERG.HEADER_BG)}>
+              <Download size={12} />
+              EXPORT
             </button>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 rounded text-sm transition-colors"
-            >
-              <Key size={14} />
-              Update
+            <button onClick={() => setIsEditing(true)} style={btnStyle(BLOOMBERG.ORANGE)}>
+              <Key size={12} />
+              UPDATE
             </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors ml-auto"
-            >
-              <Trash2 size={14} />
-              Delete
+            <button onClick={handleDelete} style={{ ...btnStyle(BLOOMBERG.RED), marginLeft: 'auto' }}>
+              <Trash2 size={12} />
+              DELETE
             </button>
           </div>
         </div>
@@ -523,190 +545,239 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
       {/* Setup/Edit Section */}
       {(!credentials || isEditing) && (
-        <div className="space-y-4">
-          {/* Method Selection */}
-          <div className="grid grid-cols-2 gap-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Method Selection Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             {/* Wallet Connection */}
             <button
               onClick={handleWalletConnect}
               disabled={isConnecting}
-              className="border border-gray-700 bg-gray-800 hover:bg-gray-700 rounded-lg p-6 text-left transition-all hover:border-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: BLOOMBERG.PANEL_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                padding: '20px',
+                textAlign: 'left',
+                cursor: isConnecting ? 'not-allowed' : 'pointer',
+                opacity: isConnecting ? 0.6 : 1,
+                transition: 'border-color 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
             >
-              <div className="flex items-center gap-3 mb-3">
-                <Wallet className="text-orange-500" size={24} />
-                <h3 className="font-semibold text-white">Wallet Connection</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <Wallet size={20} color={BLOOMBERG.ORANGE} />
+                <span style={{ color: BLOOMBERG.WHITE, fontSize: '12px', fontWeight: 600 }}>WALLET CONNECTION</span>
               </div>
-              <p className="text-sm text-gray-400 mb-3">
-                Connect MetaMask to automatically generate API credentials
-              </p>
-              <div className="flex items-center gap-2 text-xs text-green-400">
-                <CheckCircle size={14} />
-                <span>Recommended</span>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px', marginBottom: '10px', lineHeight: 1.4 }}>
+                Connect MetaMask to auto-generate API credentials
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.GREEN, fontSize: '9px' }}>
+                <CheckCircle size={12} />
+                RECOMMENDED
               </div>
               {isConnecting && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-orange-400">
-                  <RefreshCw size={14} className="animate-spin" />
-                  <span>Connecting...</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.ORANGE, fontSize: '10px', marginTop: '10px' }}>
+                  <RefreshCw size={12} className="animate-spin" />
+                  CONNECTING...
                 </div>
               )}
             </button>
 
             {/* Manual Entry */}
             <button
-              onClick={() => {
-                setIsEditing(true);
-                setTestResult(null);
+              onClick={() => { setIsEditing(true); setTestResult(null); }}
+              style={{
+                backgroundColor: BLOOMBERG.PANEL_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                padding: '20px',
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'border-color 0.2s',
               }}
-              className="border border-gray-700 bg-gray-800 hover:bg-gray-700 rounded-lg p-6 text-left transition-all hover:border-blue-500"
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BLUE; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
             >
-              <div className="flex items-center gap-3 mb-3">
-                <Key className="text-blue-500" size={24} />
-                <h3 className="font-semibold text-white">Manual Entry</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <Key size={20} color={BLOOMBERG.BLUE} />
+                <span style={{ color: BLOOMBERG.WHITE, fontSize: '12px', fontWeight: 600 }}>MANUAL ENTRY</span>
               </div>
-              <p className="text-sm text-gray-400 mb-3">
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px', marginBottom: '10px', lineHeight: 1.4 }}>
                 Enter existing API credentials from Polymarket
-              </p>
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <LinkIcon size={14} />
-                <span>For existing credentials</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.MUTED, fontSize: '9px' }}>
+                <LinkIcon size={12} />
+                FOR EXISTING CREDENTIALS
               </div>
             </button>
           </div>
 
           {/* Manual Entry Form */}
           {isEditing && (
-            <>
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 space-y-4">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                  <Key size={18} />
-                  Enter API Credentials
-                </h3>
+            <div style={{
+              backgroundColor: BLOOMBERG.PANEL_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              padding: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <Key size={16} color={BLOOMBERG.ORANGE} />
+                <span style={{ color: BLOOMBERG.WHITE, fontSize: '12px', fontWeight: 600 }}>ENTER API CREDENTIALS</span>
+              </div>
 
-                {/* API Key Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* API Key */}
                 <div>
-                  <label className="block text-sm text-gray-300 mb-2">
-                    API Key <span className="text-red-400">*</span>
-                  </label>
+                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                    API KEY <span style={{ color: BLOOMBERG.RED }}>*</span>
+                  </div>
                   <input
                     type="text"
                     value={formData.apiKey}
                     onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                     placeholder="Enter your API key"
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:border-orange-500 focus:outline-none"
+                    style={{
+                      width: '100%',
+                      backgroundColor: BLOOMBERG.INPUT_BG,
+                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      padding: '10px 12px',
+                      color: BLOOMBERG.WHITE,
+                      fontSize: '11px',
+                      fontFamily: BLOOMBERG.FONT,
+                      outline: 'none',
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
                   />
                 </div>
 
-                {/* API Secret Input */}
+                {/* API Secret */}
                 <div>
-                  <label className="block text-sm text-gray-300 mb-2">
-                    API Secret <span className="text-red-400">*</span>
-                  </label>
+                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                    API SECRET <span style={{ color: BLOOMBERG.RED }}>*</span>
+                  </div>
                   <input
                     type="password"
                     value={formData.apiSecret}
                     onChange={(e) => setFormData({ ...formData, apiSecret: e.target.value })}
                     placeholder="Enter your API secret"
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:border-orange-500 focus:outline-none"
+                    style={{
+                      width: '100%',
+                      backgroundColor: BLOOMBERG.INPUT_BG,
+                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      padding: '10px 12px',
+                      color: BLOOMBERG.WHITE,
+                      fontSize: '11px',
+                      fontFamily: BLOOMBERG.FONT,
+                      outline: 'none',
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
                   />
                 </div>
 
-                {/* API Passphrase Input */}
+                {/* API Passphrase */}
                 <div>
-                  <label className="block text-sm text-gray-300 mb-2">
-                    API Passphrase <span className="text-red-400">*</span>
-                  </label>
+                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                    API PASSPHRASE <span style={{ color: BLOOMBERG.RED }}>*</span>
+                  </div>
                   <input
                     type="password"
                     value={formData.apiPassphrase}
                     onChange={(e) => setFormData({ ...formData, apiPassphrase: e.target.value })}
                     placeholder="Enter your API passphrase"
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:border-orange-500 focus:outline-none"
+                    style={{
+                      width: '100%',
+                      backgroundColor: BLOOMBERG.INPUT_BG,
+                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      padding: '10px 12px',
+                      color: BLOOMBERG.WHITE,
+                      fontSize: '11px',
+                      fontFamily: BLOOMBERG.FONT,
+                      outline: 'none',
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
                   />
                 </div>
 
                 {/* Import Option */}
-                <div className="pt-3 border-t border-gray-700">
-                  <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer hover:text-white transition-colors">
-                    <Upload size={16} />
-                    <span>Or import from file</span>
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={handleImport}
-                      className="hidden"
-                    />
+                <div style={{ paddingTop: '8px', borderTop: `1px solid ${BLOOMBERG.BORDER}` }}>
+                  <label style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: BLOOMBERG.GRAY,
+                    fontSize: '10px',
+                    cursor: 'pointer',
+                  }}>
+                    <Upload size={14} />
+                    Or import from file
+                    <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
                   </label>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    onClick={handleManualSave}
-                    className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded text-sm font-semibold transition-colors"
-                  >
-                    <Save size={16} />
-                    Save Credentials
+                {/* Actions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                  <button onClick={handleManualSave} style={btnStyle(BLOOMBERG.ORANGE)}>
+                    <Save size={12} />
+                    SAVE CREDENTIALS
                   </button>
                   {credentials && (
                     <button
-                      onClick={() => {
-                        setIsEditing(false);
-                        setFormData({ apiKey: '', apiSecret: '', apiPassphrase: '' });
-                      }}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors"
+                      onClick={() => { setIsEditing(false); setFormData({ apiKey: '', apiSecret: '', apiPassphrase: '' }); }}
+                      style={btnStyle(BLOOMBERG.HEADER_BG)}
                     >
-                      Cancel
+                      CANCEL
                     </button>
                   )}
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       )}
 
       {/* Help Section */}
-      <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-4">
-        <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
-          <AlertCircle size={18} />
-          Need Help?
-        </h3>
-        <ul className="space-y-2 text-sm text-gray-300">
-          <li className="flex items-start gap-2">
-            <span className="text-orange-500">•</span>
-            <span>
-              <strong>No credentials?</strong> Use wallet connection to automatically generate them
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-orange-500">•</span>
-            <span>
-              <strong>Already have credentials?</strong> Enter them manually or import from file
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-orange-500">•</span>
-            <span>
-              <strong>Security:</strong> Credentials are stored locally and never sent to our servers
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-orange-500">•</span>
+      <div style={{
+        backgroundColor: `${BLOOMBERG.PANEL_BG}80`,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        padding: '16px',
+        marginTop: '16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <AlertCircle size={14} color={BLOOMBERG.ORANGE} />
+          <span style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 600 }}>NEED HELP?</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '10px', color: BLOOMBERG.GRAY, lineHeight: 1.5 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
+            <span><span style={{ color: BLOOMBERG.WHITE }}>No credentials?</span> Use wallet connection to auto-generate</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
+            <span><span style={{ color: BLOOMBERG.WHITE }}>Already have credentials?</span> Enter manually or import from file</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
+            <span><span style={{ color: BLOOMBERG.WHITE }}>Security:</span> Credentials stored locally, never sent to our servers</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
             <span>
               Visit{' '}
-              <a
-                href="https://docs.polymarket.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline"
-              >
+              <a href="https://docs.polymarket.com" target="_blank" rel="noopener noreferrer" style={{ color: BLOOMBERG.CYAN, textDecoration: 'underline' }}>
                 Polymarket Docs
               </a>
-              {' '}for more information
+              {' '}for more info
             </span>
-          </li>
-        </ul>
+          </div>
+        </div>
       </div>
+
+      {/* CSS for spin animation */}
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
   );
 };

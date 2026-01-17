@@ -147,9 +147,98 @@ pub async fn execute_python_agent(
     }
 }
 
+/// Struct for parsing agent definitions from JSON config files
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AgentDefinition {
+    id: String,
+    name: String,
+    role: Option<String>,
+    goal: Option<String>,
+    description: String,
+    #[serde(default)]
+    llm_config: Option<serde_json::Value>,
+    #[serde(default)]
+    tools: Vec<String>,
+    #[serde(default)]
+    instructions: Option<String>,
+    #[serde(default)]
+    enable_memory: bool,
+    #[serde(default)]
+    enable_agentic_memory: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentConfigFile {
+    agents: Vec<AgentDefinition>,
+}
+
+/// List all available agents from config files
 #[tauri::command]
-pub async fn list_available_agents() -> Result<Vec<AgentMetadata>, String> {
-    Ok(Vec::new())
+pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMetadata>, String> {
+    let mut all_agents = Vec::new();
+
+    // Define agent categories and their config files
+    let categories = vec![
+        ("TraderInvestorsAgent", "agent_definitions.json", "trader", "📈", "#22c55e"),
+        ("hedgeFundAgents", "team_config.json", "hedge-fund", "🏦", "#6366f1"),
+        ("EconomicAgents", "agent_definitions.json", "economic", "💹", "#eab308"),
+        ("GeopoliticsAgents", "agent_definitions.json", "geopolitics", "🌍", "#ef4444"),
+    ];
+
+    for (folder, config_file, category_id, icon, color) in categories {
+        let config_path = format!("resources/scripts/agents/{}/configs/{}", folder, config_file);
+
+        let full_path = if cfg!(debug_assertions) {
+            let current_dir = std::env::current_dir()
+                .map_err(|e| format!("Failed to get current directory: {}", e))?;
+            let base_dir = if current_dir.ends_with("src-tauri") {
+                current_dir
+            } else {
+                current_dir.join("src-tauri")
+            };
+            base_dir.join(&config_path)
+        } else {
+            let resource_dir = app.path().resource_dir()
+                .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+            resource_dir.join(&config_path)
+        };
+
+        // Read and parse the config file
+        if let Ok(content) = std::fs::read_to_string(&full_path) {
+            if let Ok(config) = serde_json::from_str::<AgentConfigFile>(&content) {
+                for agent_def in config.agents {
+                    all_agents.push(AgentMetadata {
+                        id: agent_def.id.clone(),
+                        name: agent_def.name,
+                        agent_type: "python-agent".to_string(),
+                        category: category_id.to_string(),
+                        description: agent_def.description,
+                        script_path: format!("agents/{}/", folder),
+                        parameters: vec![
+                            AgentParameter {
+                                name: "query".to_string(),
+                                label: "Query".to_string(),
+                                param_type: "string".to_string(),
+                                required: true,
+                                default_value: None,
+                                description: Some("The analysis query or question".to_string()),
+                            },
+                        ],
+                        required_inputs: vec![],
+                        outputs: vec!["analysis".to_string()],
+                        icon: icon.to_string(),
+                        color: color.to_string(),
+                    });
+                }
+            } else {
+                eprintln!("Failed to parse agent config: {}", full_path.display());
+            }
+        } else {
+            eprintln!("Agent config file not found: {}", full_path.display());
+        }
+    }
+
+    Ok(all_agents)
 }
 
 #[tauri::command]

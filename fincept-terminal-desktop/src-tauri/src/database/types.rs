@@ -77,6 +77,20 @@ pub struct LLMGlobalSettings {
     pub system_prompt: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LLMModelConfig {
+    pub id: String,
+    pub provider: String,
+    pub model_id: String,
+    pub display_name: String,
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+    pub is_enabled: bool,
+    pub is_default: bool,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
 // ============================================================================
 // Chat
 // ============================================================================

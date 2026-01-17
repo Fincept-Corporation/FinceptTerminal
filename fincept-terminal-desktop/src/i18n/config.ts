@@ -99,7 +99,6 @@ i18next
 i18next.on('languageChanged', async (lng) => {
   try {
     await invoke('storage_set', { key: 'i18nextLng', value: lng });
-    console.log(`[i18n] Language saved to SQLite: ${lng}`);
   } catch (error) {
     console.error('[i18n] Failed to save language:', error);
   }

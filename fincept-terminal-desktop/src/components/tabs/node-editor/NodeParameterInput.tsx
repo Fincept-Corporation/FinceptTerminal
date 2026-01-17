@@ -1,5 +1,5 @@
 /**
- * Node Parameter Input Component
+ * Node Parameter Input Component - Bloomberg Terminal Style
  *
  * Universal parameter input component that renders the appropriate UI control
  * based on the parameter type from the node system.
@@ -20,10 +20,50 @@ import type {
   NodeParameterValue,
   NodePropertyType,
   INodePropertyOptions,
-  INodePropertyCollectionValue,
 } from '@/services/nodeSystem';
-import { ExpressionEngine, isExpression } from '@/services/nodeSystem';
-import { Check, Code2, Calendar, Hash, Type, List, Settings2, Palette } from 'lucide-react';
+import { isExpression } from '@/services/nodeSystem';
+import { Check, Code2, Calendar, Hash, Type, List, Settings2, Palette, ChevronDown } from 'lucide-react';
+
+// Bloomberg Terminal Style Constants
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  YELLOW: '#FFD700',
+  CYAN: '#00E5FF',
+  GRAY: '#BBBBBB',
+  MUTED: '#888888',
+  DARK_BG: '#000000',
+  PANEL_BG: '#141414',
+  INPUT_BG: '#1A1A1A',
+  BORDER: '#3A3A3A',
+  FONT: '"IBM Plex Mono", "Consolas", monospace',
+};
+
+const inputBaseStyle: React.CSSProperties = {
+  width: '100%',
+  backgroundColor: BLOOMBERG.INPUT_BG,
+  border: `1px solid ${BLOOMBERG.BORDER}`,
+  padding: '10px 12px',
+  color: BLOOMBERG.WHITE,
+  fontSize: '13px',
+  fontFamily: BLOOMBERG.FONT,
+  outline: 'none',
+  transition: 'all 0.15s ease',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  color: BLOOMBERG.GRAY,
+  fontSize: '12px',
+  fontWeight: 600,
+  marginBottom: '8px',
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+};
 
 interface NodeParameterInputProps {
   parameter: INodeProperties;
@@ -41,12 +81,11 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
   onChange,
   onExpressionChange,
   disabled = false,
-  itemIndex = 0,
-  expressionContext,
 }) => {
   const [isExpressionMode, setIsExpressionMode] = useState(
     typeof value === 'string' && isExpression(value)
   );
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleToggleExpression = useCallback(() => {
     const newMode = !isExpressionMode;
@@ -54,10 +93,8 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
     onExpressionChange?.(newMode);
 
     if (newMode) {
-      // Convert to expression
       onChange(`={{${value}}}`);
     } else {
-      // Convert back to regular value
       const strValue = String(value);
       if (strValue.startsWith('={{') && strValue.endsWith('}}')) {
         onChange(strValue.slice(3, -2));
@@ -65,8 +102,13 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
     }
   }, [isExpressionMode, value, onChange, onExpressionChange]);
 
+  const getFocusStyle = (): React.CSSProperties => ({
+    borderColor: isFocused ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER,
+    boxShadow: isFocused ? `0 0 8px ${BLOOMBERG.ORANGE}30` : 'none',
+    backgroundColor: isFocused ? BLOOMBERG.PANEL_BG : BLOOMBERG.INPUT_BG,
+  });
+
   const renderInput = () => {
-    // Expression mode - show code editor
     if (isExpressionMode) {
       return (
         <textarea
@@ -74,47 +116,43 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           placeholder="={{$json.field}}"
-          className="w-full px-3 py-2 bg-gray-800 border border-yellow-500/30 rounded text-yellow-400 font-mono text-sm resize-y min-h-[60px]"
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          style={{
+            ...inputBaseStyle,
+            ...getFocusStyle(),
+            color: BLOOMBERG.YELLOW,
+            minHeight: '60px',
+            resize: 'vertical',
+          }}
         />
       );
     }
 
-    // Regular input based on type
     switch (parameter.type) {
       case 'string' as NodePropertyType:
         return renderStringInput();
-
       case 'number' as NodePropertyType:
         return renderNumberInput();
-
       case 'boolean' as NodePropertyType:
         return renderBooleanInput();
-
       case 'options' as NodePropertyType:
         return renderOptionsInput();
-
       case 'multiOptions' as NodePropertyType:
         return renderMultiOptionsInput();
-
       case 'color' as NodePropertyType:
         return renderColorInput();
-
       case 'dateTime' as NodePropertyType:
         return renderDateTimeInput();
-
       case 'json' as NodePropertyType:
       case 'code' as NodePropertyType:
         return renderCodeInput();
-
       case 'collection' as NodePropertyType:
         return renderCollectionInput();
-
       case 'fixedCollection' as NodePropertyType:
         return renderFixedCollectionInput();
-
       case 'resourceLocator' as NodePropertyType:
         return renderResourceLocatorInput();
-
       default:
         return renderStringInput();
     }
@@ -126,53 +164,144 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       value={String(value || '')}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      placeholder={parameter.placeholder}
-      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:border-blue-500 focus:outline-none"
+      placeholder={parameter.placeholder || 'Enter value...'}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      style={{
+        ...inputBaseStyle,
+        ...getFocusStyle(),
+      }}
     />
   );
 
   const renderNumberInput = () => (
-    <input
-      type="number"
-      value={Number(value || 0)}
-      onChange={(e) => onChange(Number(e.target.value))}
-      disabled={disabled}
-      placeholder={parameter.placeholder}
-      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:border-blue-500 focus:outline-none"
-    />
+    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+      <div style={{
+        backgroundColor: BLOOMBERG.PANEL_BG,
+        border: `1px solid ${isFocused ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+        borderRight: 'none',
+        padding: '0 10px',
+        display: 'flex',
+        alignItems: 'center',
+        color: BLOOMBERG.ORANGE,
+        fontSize: '13px',
+        transition: 'all 0.15s ease',
+      }}>
+        <Hash size={14} />
+      </div>
+      <input
+        type="number"
+        value={Number(value || 0)}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={disabled}
+        placeholder={parameter.placeholder}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        style={{
+          ...inputBaseStyle,
+          ...getFocusStyle(),
+          borderLeft: 'none',
+          flex: 1,
+        }}
+      />
+    </div>
   );
 
   const renderBooleanInput = () => (
-    <label className="flex items-center gap-2 cursor-pointer">
-      <input
-        type="checkbox"
-        checked={Boolean(value)}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-        className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-blue-500 focus:ring-blue-500"
-      />
-      <span className="text-sm text-gray-300">
-        {parameter.description || 'Enable'}
+    <div
+      onClick={() => !disabled && onChange(!Boolean(value))}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '8px 10px',
+        backgroundColor: BLOOMBERG.INPUT_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'all 0.15s ease',
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+      }}
+    >
+      <div style={{
+        width: '32px',
+        height: '16px',
+        backgroundColor: Boolean(value) ? BLOOMBERG.GREEN : BLOOMBERG.MUTED,
+        borderRadius: '8px',
+        position: 'relative',
+        transition: 'all 0.15s ease',
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: '2px',
+          left: Boolean(value) ? '16px' : '2px',
+          width: '12px',
+          height: '12px',
+          backgroundColor: BLOOMBERG.WHITE,
+          borderRadius: '50%',
+          transition: 'all 0.15s ease',
+        }} />
+      </div>
+      <span style={{
+        color: Boolean(value) ? BLOOMBERG.GREEN : BLOOMBERG.GRAY,
+        fontSize: '13px',
+        fontFamily: BLOOMBERG.FONT,
+        fontWeight: 600,
+        textTransform: 'uppercase',
+      }}>
+        {Boolean(value) ? 'ENABLED' : 'DISABLED'}
       </span>
-    </label>
+    </div>
   );
 
   const renderOptionsInput = () => {
     const options = parameter.options as INodePropertyOptions[] | undefined;
 
     return (
-      <select
-        value={String(value || parameter.default || '')}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:border-blue-500 focus:outline-none"
-      >
-        {options?.map((option) => (
-          <option key={String(option.value)} value={String(option.value)}>
-            {option.name}
-          </option>
-        ))}
-      </select>
+      <div style={{ position: 'relative' }}>
+        <select
+          value={String(value || parameter.default || '')}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          style={{
+            ...inputBaseStyle,
+            ...getFocusStyle(),
+            appearance: 'none',
+            paddingRight: '28px',
+            cursor: 'pointer',
+          }}
+        >
+          {options?.map((option) => (
+            <option
+              key={String(option.value)}
+              value={String(option.value)}
+              style={{
+                backgroundColor: BLOOMBERG.DARK_BG,
+                color: BLOOMBERG.WHITE,
+              }}
+            >
+              {option.name}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          size={16}
+          style={{
+            position: 'absolute',
+            right: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: BLOOMBERG.ORANGE,
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
     );
   };
 
@@ -181,56 +310,121 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
     const selectedValues = Array.isArray(value) ? value : [];
 
     return (
-      <div className="space-y-2">
+      <div style={{
+        backgroundColor: BLOOMBERG.INPUT_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        padding: '8px',
+      }}>
         {options?.map((option) => (
-          <label key={String(option.value)} className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={selectedValues.includes(option.value)}
-              onChange={(e) => {
-                const newValues = e.target.checked
-                  ? [...selectedValues, option.value]
-                  : selectedValues.filter((v) => v !== option.value);
-                onChange(newValues);
-              }}
-              disabled={disabled}
-              className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-blue-500"
-            />
-            <span className="text-sm text-gray-300">{option.name}</span>
-          </label>
+          <div
+            key={String(option.value)}
+            onClick={() => {
+              if (disabled) return;
+              const newValues = selectedValues.includes(option.value)
+                ? selectedValues.filter((v) => v !== option.value)
+                : [...selectedValues, option.value];
+              onChange(newValues);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 8px',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              backgroundColor: selectedValues.includes(option.value) ? `${BLOOMBERG.ORANGE}15` : 'transparent',
+              marginBottom: '4px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <div style={{
+              width: '18px',
+              height: '18px',
+              border: `2px solid ${selectedValues.includes(option.value) ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              backgroundColor: selectedValues.includes(option.value) ? BLOOMBERG.ORANGE : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {selectedValues.includes(option.value) && (
+                <Check size={14} style={{ color: BLOOMBERG.DARK_BG }} />
+              )}
+            </div>
+            <span style={{
+              color: selectedValues.includes(option.value) ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+              fontSize: '13px',
+              fontFamily: BLOOMBERG.FONT,
+            }}>
+              {option.name}
+            </span>
+          </div>
         ))}
       </div>
     );
   };
 
   const renderColorInput = () => (
-    <div className="flex items-center gap-2">
+    <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px' }}>
       <input
         type="color"
-        value={String(value || '#000000')}
+        value={String(value || '#FF8800')}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-12 h-10 rounded border border-gray-700 bg-gray-800 cursor-pointer"
+        style={{
+          width: '40px',
+          height: '32px',
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: BLOOMBERG.INPUT_BG,
+          cursor: 'pointer',
+          padding: '2px',
+        }}
       />
       <input
         type="text"
-        value={String(value || '#000000')}
+        value={String(value || '#FF8800')}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        placeholder="#000000"
-        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm font-mono focus:border-blue-500 focus:outline-none"
+        placeholder="#FF8800"
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        style={{
+          ...inputBaseStyle,
+          ...getFocusStyle(),
+          flex: 1,
+          textTransform: 'uppercase',
+        }}
       />
     </div>
   );
 
   const renderDateTimeInput = () => (
-    <input
-      type="datetime-local"
-      value={value ? new Date(value as string | number).toISOString().slice(0, 16) : ''}
-      onChange={(e) => onChange(new Date(e.target.value).toISOString())}
-      disabled={disabled}
-      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:border-blue-500 focus:outline-none"
-    />
+    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+      <div style={{
+        backgroundColor: BLOOMBERG.PANEL_BG,
+        border: `1px solid ${isFocused ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+        borderRight: 'none',
+        padding: '0 10px',
+        display: 'flex',
+        alignItems: 'center',
+        color: BLOOMBERG.ORANGE,
+        transition: 'all 0.15s ease',
+      }}>
+        <Calendar size={14} />
+      </div>
+      <input
+        type="datetime-local"
+        value={value ? new Date(value as string | number).toISOString().slice(0, 16) : ''}
+        onChange={(e) => onChange(new Date(e.target.value).toISOString())}
+        disabled={disabled}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        style={{
+          ...inputBaseStyle,
+          ...getFocusStyle(),
+          borderLeft: 'none',
+          flex: 1,
+        }}
+      />
+    </div>
   );
 
   const renderCodeInput = () => (
@@ -239,101 +433,170 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       placeholder={parameter.placeholder || '// Enter code here'}
-      className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-green-400 font-mono text-sm resize-y min-h-[120px] focus:border-blue-500 focus:outline-none"
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      style={{
+        ...inputBaseStyle,
+        ...getFocusStyle(),
+        color: BLOOMBERG.GREEN,
+        minHeight: '100px',
+        resize: 'vertical',
+        lineHeight: '1.5',
+      }}
     />
   );
 
   const renderCollectionInput = () => (
-    <div className="p-3 bg-gray-800/50 border border-gray-700 rounded">
-      <div className="text-sm text-gray-400 mb-2">Collection (Advanced)</div>
+    <div style={{
+      backgroundColor: BLOOMBERG.INPUT_BG,
+      border: `1px solid ${BLOOMBERG.BORDER}`,
+      padding: '12px',
+    }}>
+      <div style={{
+        color: BLOOMBERG.CYAN,
+        fontSize: '12px',
+        fontWeight: 700,
+        marginBottom: '10px',
+        textTransform: 'uppercase',
+      }}>
+        COLLECTION (JSON)
+      </div>
       <textarea
         value={JSON.stringify(value, null, 2)}
         onChange={(e) => {
           try {
             onChange(JSON.parse(e.target.value));
           } catch {
-            // Invalid JSON, keep as string
+            // Invalid JSON
           }
         }}
         disabled={disabled}
-        className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-gray-200 font-mono text-xs resize-y min-h-[100px]"
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        style={{
+          ...inputBaseStyle,
+          ...getFocusStyle(),
+          minHeight: '80px',
+          resize: 'vertical',
+          fontSize: '12px',
+        }}
       />
     </div>
   );
 
   const renderFixedCollectionInput = () => (
-    <div className="p-3 bg-gray-800/50 border border-gray-700 rounded">
-      <div className="text-sm text-gray-400 mb-2">Fixed Collection</div>
-      <div className="text-xs text-gray-500">
-        Complex input - configure in advanced editor
+    <div style={{
+      backgroundColor: BLOOMBERG.INPUT_BG,
+      border: `1px solid ${BLOOMBERG.BORDER}`,
+      padding: '14px',
+      textAlign: 'center',
+    }}>
+      <Settings2 size={20} style={{ color: BLOOMBERG.MUTED, margin: '0 auto 10px' }} />
+      <div style={{
+        color: BLOOMBERG.GRAY,
+        fontSize: '12px',
+        textTransform: 'uppercase',
+      }}>
+        ADVANCED CONFIGURATION
+      </div>
+      <div style={{ color: BLOOMBERG.MUTED, fontSize: '11px', marginTop: '6px' }}>
+        Configure in advanced editor
       </div>
     </div>
   );
 
   const renderResourceLocatorInput = () => {
-    // ResourceLocator typically has mode selector and value input
     const resourceValue = (value as any) || { mode: 'id', value: '' };
 
     return (
-      <div className="space-y-2">
-        <select
-          value={resourceValue.mode || 'id'}
-          onChange={(e) => onChange({ ...resourceValue, mode: e.target.value })}
-          disabled={disabled}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm"
-        >
-          <option value="id">By ID</option>
-          <option value="url">By URL</option>
-          <option value="list">From List</option>
-        </select>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ position: 'relative' }}>
+          <select
+            value={resourceValue.mode || 'id'}
+            onChange={(e) => onChange({ ...resourceValue, mode: e.target.value })}
+            disabled={disabled}
+            style={{
+              ...inputBaseStyle,
+              appearance: 'none',
+              paddingRight: '28px',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="id" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>BY ID</option>
+            <option value="url" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>BY URL</option>
+            <option value="list" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>FROM LIST</option>
+          </select>
+          <ChevronDown
+            size={16}
+            style={{
+              position: 'absolute',
+              right: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: BLOOMBERG.ORANGE,
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
         <input
           type="text"
           value={resourceValue.value || ''}
           onChange={(e) => onChange({ ...resourceValue, value: e.target.value })}
           disabled={disabled}
           placeholder={`Enter ${resourceValue.mode || 'ID'}...`}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:border-blue-500 focus:outline-none"
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          style={{
+            ...inputBaseStyle,
+            ...getFocusStyle(),
+          }}
         />
       </div>
     );
   };
 
   const getParameterIcon = () => {
+    const iconStyle = { color: BLOOMBERG.ORANGE };
     switch (parameter.type) {
       case 'string' as NodePropertyType:
-        return <Type size={14} />;
+        return <Type size={14} style={iconStyle} />;
       case 'number' as NodePropertyType:
-        return <Hash size={14} />;
+        return <Hash size={14} style={iconStyle} />;
       case 'boolean' as NodePropertyType:
-        return <Check size={14} />;
+        return <Check size={14} style={iconStyle} />;
       case 'options' as NodePropertyType:
       case 'multiOptions' as NodePropertyType:
-        return <List size={14} />;
+        return <List size={14} style={iconStyle} />;
       case 'color' as NodePropertyType:
-        return <Palette size={14} />;
+        return <Palette size={14} style={iconStyle} />;
       case 'dateTime' as NodePropertyType:
-        return <Calendar size={14} />;
+        return <Calendar size={14} style={iconStyle} />;
       case 'json' as NodePropertyType:
       case 'code' as NodePropertyType:
-        return <Code2 size={14} />;
+        return <Code2 size={14} style={iconStyle} />;
       case 'collection' as NodePropertyType:
       case 'fixedCollection' as NodePropertyType:
-        return <Settings2 size={14} />;
+        return <Settings2 size={14} style={iconStyle} />;
       default:
-        return <Type size={14} />;
+        return <Type size={14} style={iconStyle} />;
     }
   };
 
   return (
-    <div className="space-y-2">
+    <div style={{ marginBottom: '4px' }}>
       {/* Parameter Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400">{getParameterIcon()}</span>
-          <label className="text-sm font-medium text-gray-200">
-            {parameter.displayName}
-            {parameter.required && <span className="text-red-400 ml-1">*</span>}
-          </label>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '6px',
+      }}>
+        <div style={labelStyle}>
+          {getParameterIcon()}
+          <span>{parameter.displayName}</span>
+          {parameter.required && (
+            <span style={{ color: BLOOMBERG.RED, marginLeft: '2px' }}>*</span>
+          )}
         </div>
 
         {/* Expression Toggle */}
@@ -341,22 +604,38 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
           <button
             onClick={handleToggleExpression}
             disabled={disabled}
-            className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
-              isExpressionMode
-                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                : 'bg-gray-800 text-gray-400 border border-gray-700 hover:border-yellow-500/50'
-            }`}
-            title="Toggle expression mode"
+            style={{
+              padding: '4px 8px',
+              fontSize: '10px',
+              fontFamily: BLOOMBERG.FONT,
+              fontWeight: 600,
+              border: `1px solid ${isExpressionMode ? BLOOMBERG.YELLOW : BLOOMBERG.BORDER}`,
+              backgroundColor: isExpressionMode ? `${BLOOMBERG.YELLOW}20` : 'transparent',
+              color: isExpressionMode ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              textTransform: 'uppercase',
+              transition: 'all 0.15s ease',
+            }}
           >
             <Code2 size={12} />
-            {isExpressionMode ? 'Expression' : 'Fixed'}
+            {isExpressionMode ? 'EXPR' : 'FIXED'}
           </button>
         )}
       </div>
 
       {/* Parameter Description */}
       {parameter.description && (
-        <div className="text-xs text-gray-500">{parameter.description}</div>
+        <div style={{
+          fontSize: '11px',
+          color: BLOOMBERG.MUTED,
+          marginBottom: '8px',
+          lineHeight: '1.5',
+        }}>
+          {parameter.description}
+        </div>
       )}
 
       {/* Parameter Input */}
@@ -364,43 +643,15 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
       {/* Expression Hint */}
       {isExpressionMode && (
-        <div className="text-xs text-yellow-500/70">
-          Use expressions like: <code className="bg-gray-900 px-1 rounded">{'{{$json.field}}'}</code> or{' '}
-          <code className="bg-gray-900 px-1 rounded">={'{{1 + 2}}'}</code>
+        <div style={{
+          fontSize: '8px',
+          color: `${BLOOMBERG.YELLOW}90`,
+          marginTop: '4px',
+          fontFamily: BLOOMBERG.FONT,
+        }}>
+          SYNTAX: <code style={{ backgroundColor: BLOOMBERG.PANEL_BG, padding: '1px 4px' }}>{'{{$json.field}}'}</code>
         </div>
       )}
-
-      {/* Validation Error */}
-      {parameter.validateType && value && (
-        <ValidationMessage parameter={parameter} value={value} />
-      )}
-    </div>
-  );
-};
-
-/**
- * Validation Message Component
- */
-const ValidationMessage: React.FC<{ parameter: INodeProperties; value: NodeParameterValue }> = ({
-  parameter,
-  value,
-}) => {
-  const { validateParameterValue } = require('@/services/nodeSystem');
-
-  if (!parameter.validateType || parameter.ignoreValidationDuringExecution) {
-    return null;
-  }
-
-  const validation = validateParameterValue(value, parameter.validateType);
-
-  if (validation.valid) {
-    return null;
-  }
-
-  return (
-    <div className="text-xs text-red-400 flex items-center gap-1">
-      <span>[WARN]️</span>
-      <span>{validation.error}</span>
     </div>
   );
 };

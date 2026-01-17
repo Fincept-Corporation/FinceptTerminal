@@ -134,6 +134,9 @@ pub mod screener_commands;
 // Geocoding - Location search and reverse geocoding
 pub mod geocoding;
 
+// Indian Stock Brokers - Modular broker integrations
+pub mod brokers;
+
 // Paper Trading moved to src-tauri/src/paper_trading.rs (universal module)
 
 // Broker Credentials - Secure encrypted storage for broker API credentials
@@ -144,3 +147,6 @@ pub mod master_contract;
 
 // Generic Storage - localStorage replacement with SQLite
 pub mod storage;
+
+// Unified Trading - Live/Paper mode switching for all brokers
+pub mod unified_trading;

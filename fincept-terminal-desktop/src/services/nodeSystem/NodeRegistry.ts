@@ -60,10 +60,6 @@ class NodeRegistryClass {
     }
 
     this.loadedNodeTypes.add(nodeTypeName);
-
-    console.log(
-      `[NodeRegistry] Registered ${nodeTypeName} versions: ${versions.join(', ')}`
-    );
   }
 
   /**
@@ -86,10 +82,6 @@ class NodeRegistryClass {
     }
 
     this.loadedNodeTypes.add(nodeTypeName);
-
-    console.log(
-      `[NodeRegistry] Registered versioned node ${nodeTypeName} versions: ${versions.join(', ')}`
-    );
   }
 
   /**
@@ -203,7 +195,6 @@ class NodeRegistryClass {
   unregisterNodeType(nodeTypeName: string): void {
     delete this.registry[nodeTypeName];
     this.loadedNodeTypes.delete(nodeTypeName);
-    console.log(`[NodeRegistry] Unregistered ${nodeTypeName}`);
   }
 
   /**
@@ -212,7 +203,6 @@ class NodeRegistryClass {
   clear(): void {
     this.registry = {};
     this.loadedNodeTypes.clear();
-    console.log('[NodeRegistry] Cleared all node types');
   }
 
   /**

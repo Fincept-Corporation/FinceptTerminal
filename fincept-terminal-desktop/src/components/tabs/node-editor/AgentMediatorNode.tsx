@@ -2,7 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import { MessageSquare, Settings, CheckCircle, AlertCircle, Loader, Brain } from 'lucide-react';
-import { sqliteService, LLMConfig } from '@/services/core/sqliteService';
+import { sqliteService, LLMConfig, LLMModelConfig } from '@/services/core/sqliteService';
+
+// Combined LLM option for display
+interface LLMOption {
+  id: string;
+  provider: string;
+  model: string;
+  displayName: string;
+  type: 'provider' | 'model' | 'fincept';
+  isActive?: boolean;
+}
 
 interface AgentMediatorNodeProps {
   id: string;
@@ -22,7 +32,7 @@ interface AgentMediatorNodeProps {
 
 const AgentMediatorNode: React.FC<AgentMediatorNodeProps> = ({ id, data, selected }) => {
   const [showSettings, setShowSettings] = useState(false);
-  const [availableProviders, setAvailableProviders] = useState<LLMConfig[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<LLMOption[]>([]);
   const [localProvider, setLocalProvider] = useState(data.selectedProvider || 'active');
   const [localPrompt, setLocalPrompt] = useState(data.customPrompt || '');
 
@@ -37,14 +47,76 @@ const AgentMediatorNode: React.FC<AgentMediatorNodeProps> = ({ id, data, selecte
   const RED = '#ef4444';
   const BLUE = '#3b82f6';
 
-  // Load available LLM providers
+  // Load available LLM providers (both LLMConfig and LLMModelConfig)
   useEffect(() => {
     const loadProviders = async () => {
       try {
-        const configs = await sqliteService.getLLMConfigs();
-        setAvailableProviders(configs);
+        const options: LLMOption[] = [];
+
+        // Load provider-level configs (LLMConfig)
+        const providerConfigs = await sqliteService.getLLMConfigs();
+        for (const config of providerConfigs) {
+          // Fincept is special - always show it prominently
+          if (config.provider === 'fincept') {
+            options.unshift({
+              id: 'fincept',
+              provider: 'fincept',
+              model: config.model || 'fincept-llm',
+              displayName: 'FINCEPT (Pre-configured)',
+              type: 'fincept',
+              isActive: config.is_active
+            });
+          } else {
+            options.push({
+              id: config.provider,
+              provider: config.provider,
+              model: config.model,
+              displayName: `${config.provider.toUpperCase()} - ${config.model}`,
+              type: 'provider',
+              isActive: config.is_active
+            });
+          }
+        }
+
+        // Load custom model configs (LLMModelConfig) from Settings
+        const modelConfigs = await sqliteService.getLLMModelConfigs();
+        for (const model of modelConfigs) {
+          if (model.is_enabled) {
+            options.push({
+              id: model.id,
+              provider: model.provider,
+              model: model.model_id,
+              displayName: `${model.display_name} (${model.provider.toUpperCase()})`,
+              type: 'model',
+              isActive: model.is_default
+            });
+          }
+        }
+
+        // If Fincept wasn't in provider configs, add it as default
+        if (!options.find(o => o.provider === 'fincept')) {
+          options.unshift({
+            id: 'fincept',
+            provider: 'fincept',
+            model: 'fincept-llm',
+            displayName: 'FINCEPT (Pre-configured)',
+            type: 'fincept',
+            isActive: true
+          });
+        }
+
+        setAvailableProviders(options);
       } catch (error) {
         console.error('Failed to load LLM providers:', error);
+        // Default to Fincept if loading fails
+        setAvailableProviders([{
+          id: 'fincept',
+          provider: 'fincept',
+          model: 'fincept-llm',
+          displayName: 'FINCEPT (Pre-configured)',
+          type: 'fincept',
+          isActive: true
+        }]);
       }
     };
     loadProviders();
@@ -80,8 +152,8 @@ const AgentMediatorNode: React.FC<AgentMediatorNodeProps> = ({ id, data, selecte
     if (!data.selectedProvider || data.selectedProvider === 'active') {
       return 'Active Provider';
     }
-    const provider = availableProviders.find(p => p.provider === data.selectedProvider);
-    return provider ? `${provider.provider.toUpperCase()} - ${provider.model}` : data.selectedProvider;
+    const provider = availableProviders.find(p => p.id === data.selectedProvider);
+    return provider ? provider.displayName : data.selectedProvider;
   };
 
   return (
@@ -298,15 +370,17 @@ const AgentMediatorNode: React.FC<AgentMediatorNodeProps> = ({ id, data, selecte
                 backgroundColor: PANEL_BG,
                 border: `1px solid ${BORDER}`,
                 color: WHITE,
-                padding: '4px',
-                fontSize: '8px',
+                padding: '6px',
+                fontSize: '10px',
                 borderRadius: '3px'
               }}
             >
-              <option value="active">Use Active Provider</option>
+              <option value="active">Use Active Provider (from Settings)</option>
               {availableProviders.map(provider => (
-                <option key={provider.provider} value={provider.provider}>
-                  {provider.provider.toUpperCase()} - {provider.model}
+                <option key={provider.id} value={provider.id} style={{
+                  backgroundColor: provider.type === 'fincept' ? '#1a3a1a' : undefined
+                }}>
+                  {provider.displayName}{provider.isActive ? ' ✓' : ''}
                 </option>
               ))}
             </select>

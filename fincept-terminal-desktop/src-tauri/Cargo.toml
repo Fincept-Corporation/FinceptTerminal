@@ -84,6 +84,7 @@ quick-xml = "0.37"  # Fast XML/RSS parsing
 rand = "0.8"  # Random number generation for paper trading
 aes-gcm = "0.10"  # AES-256-GCM encryption for secure credential storage
 base64 = "0.22"  # Base64 encoding/decoding for encrypted data
+csv = "1.3"  # CSV parsing for master contract data
 
 [target.'cfg(target_os = "windows")'.dependencies]
 [target.'cfg(target_os = "macos")'.dependencies]

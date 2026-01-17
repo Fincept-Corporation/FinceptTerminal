@@ -11,6 +11,7 @@ pub mod notes_excel;
 pub mod broker_credentials;
 pub mod master_contract;
 pub mod storage;
+pub mod fyers_symbols;
 
 pub use pool::init_database;
 pub use types::*;
@@ -27,6 +28,14 @@ pub async fn initialize() -> Result<()> {
         eprintln!("[Database] Warning: Failed to initialize paper trading tables: {}", e);
     } else {
         eprintln!("[Database] ✓ Paper trading tables initialized");
+    }
+
+    // Initialize Fyers symbols table
+    eprintln!("[Database] Initializing Fyers symbols table...");
+    if let Err(e) = fyers_symbols::init_fyers_symbols_table() {
+        eprintln!("[Database] Warning: Failed to initialize Fyers symbols table: {}", e);
+    } else {
+        eprintln!("[Database] ✓ Fyers symbols table initialized");
     }
 
     Ok(())

@@ -105,7 +105,6 @@ impl WorkerPool {
 
         // Try each candidate path
         for path in candidate_paths.iter() {
-            eprintln!("[WorkerPool] Checking: {:?}", path);
             if path.exists() {
                 // Strip the \\?\ prefix that can cause issues on Windows
                 let path_str = path.to_string_lossy().to_string();
@@ -114,30 +113,22 @@ impl WorkerPool {
                 } else {
                     path.clone()
                 };
-                eprintln!("[WorkerPool] Found worker script at: {:?}", clean_path);
                 return Ok(clean_path);
             }
         }
 
-        Err(format!(
-            "Worker script 'worker.py' not found in any of {} candidate locations",
-            candidate_paths.len()
-        ))
+        Err("Worker script 'worker.py' not found".to_string())
     }
 
     /// Initialize the worker pool
     pub async fn new(python_base_path: PathBuf) -> Result<Self, String> {
-        eprintln!("[WorkerPool] Initializing with {} workers, {} threads each", NUM_WORKERS, NUM_THREADS);
-
         // Create socket name base
         let socket_name = format!("fincept-worker-{}", std::process::id());
-        eprintln!("[WorkerPool] Socket name base: {}", socket_name);
 
         // Start multiple worker processes
         let mut workers_vec = Vec::new();
         for i in 0..NUM_WORKERS {
             let worker_socket = format!("{}-{}", socket_name, i);
-            eprintln!("[WorkerPool] Starting worker {} with {} threads", i, NUM_THREADS);
 
             // Use venv-numpy2 as default (has most modern libraries)
             let worker = Self::spawn_worker(i, &python_base_path, "venv-numpy2", &worker_socket).await?;
@@ -150,8 +141,6 @@ impl WorkerPool {
         let (task_sender, task_receiver) = mpsc::unbounded_channel::<PrioritizedTask>();
         let response_senders = Arc::new(Mutex::new(std::collections::HashMap::new()));
         let sequence_counter = Arc::new(AtomicU64::new(0));
-
-        eprintln!("[WorkerPool] All {} workers started successfully", NUM_WORKERS);
 
         // Spawn queue processor task
         let workers_clone = workers.clone();
@@ -192,9 +181,6 @@ impl WorkerPool {
             return Err(format!("Worker script not found at: {:?}", worker_script));
         }
 
-        eprintln!("[Worker {}] Python: {:?}", worker_id, python_exe);
-        eprintln!("[Worker {}] Script: {:?}", worker_id, worker_script);
-        eprintln!("[Worker {}] Socket: {}", worker_id, socket_name);
 
         // Spawn Python process
         let mut cmd = Command::new(&python_exe);
@@ -212,8 +198,6 @@ impl WorkerPool {
         let process = cmd.spawn()
             .map_err(|e| format!("Failed to spawn worker {}: {}", worker_id, e))?;
 
-        eprintln!("[Worker {}] Process spawned, PID: {:?}", worker_id, process.id());
-
         // Wait for worker to start listening with retry logic
         // Python worker creates server socket, so we need to wait for it
         let mut socket: Option<LocalSocketStream> = None;
@@ -228,7 +212,6 @@ impl WorkerPool {
             ) {
                 Ok(s) => {
                     socket = Some(s);
-                    eprintln!("[Worker {}] Connected to socket after {} attempts", worker_id, attempt + 1);
                     break;
                 }
                 Err(e) => {
@@ -257,8 +240,6 @@ impl WorkerPool {
         let mut priority_queue: BinaryHeap<PrioritizedTask> = BinaryHeap::new();
         let mut worker_index = 0;  // Round-robin worker selection
 
-        eprintln!("[WorkerPool] Queue processor started with {} workers", NUM_WORKERS);
-
         // Spawn response reader tasks for each worker
         for i in 0..NUM_WORKERS {
             let workers_clone = workers.clone();
@@ -283,8 +264,6 @@ impl WorkerPool {
 
                         if worker.socket.read_exact(&mut response_buf).is_ok() {
                             if let Ok(response) = rmp_serde::from_slice::<WorkerResponse>(&response_buf) {
-                                eprintln!("[WorkerPool] Worker {} completed task {}: {}", i, response.task_id, response.status);
-
                                 // Send response back to caller
                                 let mut senders = response_senders_clone.lock().await;
                                 if let Some(sender) = senders.remove(&response.task_id) {
@@ -310,8 +289,6 @@ impl WorkerPool {
                     if let Some(prioritized_task) = priority_queue.pop() {
                         let task = prioritized_task.task;
 
-                        eprintln!("[WorkerPool] Dispatching task {} (priority {}) to worker {}", task.task_id, task.priority, worker_index);
-
                         // Send task to next worker (round-robin)
                         let mut workers_lock = workers.lock().await;
                         if worker_index < workers_lock.len() {
@@ -324,12 +301,8 @@ impl WorkerPool {
                                 if worker.socket.write_all(&len_bytes).is_ok()
                                     && worker.socket.write_all(&task_bytes).is_ok()
                                     && worker.socket.flush().is_ok() {
-                                    eprintln!("[WorkerPool] Task {} sent to worker {}", task.task_id, worker_index);
-
                                     // Round-robin to next worker
                                     worker_index = (worker_index + 1) % NUM_WORKERS;
-                                } else {
-                                    eprintln!("[WorkerPool] Failed to send task {} to worker {}", task.task_id, worker_index);
                                 }
                             }
                         }
@@ -343,8 +316,6 @@ impl WorkerPool {
     /// Execute a task using the worker pool
     pub async fn execute_task(&self, task: WorkerTask) -> Result<WorkerResponse, String> {
         let task_id = task.task_id.clone();
-
-        eprintln!("[WorkerPool] Queuing task {} with priority {}", task_id, task.priority);
 
         // Create response channel
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
@@ -373,22 +344,11 @@ impl WorkerPool {
 
     /// Shutdown all workers
     pub async fn shutdown(&self) {
-        eprintln!("[WorkerPool] Shutting down all workers");
-
         let mut workers = self.workers.lock().await;
 
-        for (i, worker) in workers.iter_mut().enumerate() {
-            eprintln!("[WorkerPool] Killing worker {}", i);
+        for (_i, worker) in workers.iter_mut().enumerate() {
             let _ = worker.process.kill();
         }
-
-        eprintln!("[WorkerPool] Shutdown complete");
-    }
-}
-
-impl Drop for WorkerPool {
-    fn drop(&mut self) {
-        eprintln!("[WorkerPool] Dropping worker pool");
     }
 }
 
@@ -398,13 +358,10 @@ static WORKER_POOL: OnceCell<Arc<Mutex<Option<WorkerPool>>>> = OnceCell::new();
 
 /// Initialize the global worker pool
 pub async fn initialize_worker_pool(python_base_path: PathBuf) -> Result<(), String> {
-    eprintln!("[WorkerPool] Initializing global worker pool");
-
     let pool = WorkerPool::new(python_base_path).await?;
 
     WORKER_POOL.get_or_init(|| Arc::new(Mutex::new(Some(pool))));
 
-    eprintln!("[WorkerPool] Global worker pool initialized");
     Ok(())
 }
 

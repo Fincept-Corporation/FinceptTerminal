@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff, TrendingUp } from 'lucide-react';
+import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff, TrendingUp, Key, X, Clock, Briefcase } from 'lucide-react';
 import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys, saveSetting, getSetting } from '@/services/core/sqliteService';
 import { ollamaService } from '@/services/chat/ollamaService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
@@ -10,8 +10,8 @@ import { BacktestingProvidersPanel } from '@/components/settings/BacktestingProv
 import { LanguageSelector } from '@/components/settings/LanguageSelector';
 import { TerminalConfigPanel } from '@/components/settings/TerminalConfigPanel';
 import { PolymarketCredentialsPanel } from '@/components/settings/PolymarketCredentialsPanel';
+import { MasterContractManager } from '@/components/tabs/equity-trading/components';
 import { useTimezone, TIMEZONE_OPTIONS } from '@/contexts/TimezoneContext';
-import { Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,7 +21,7 @@ export default function SettingsTab() {
   const { session } = useAuth();
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
   const { defaultTimezone, setDefaultTimezone, options: timezoneOptions } = useTimezone();
-  const [activeSection, setActiveSection] = useState<'credentials' | 'polymarket' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
+  const [activeSection, setActiveSection] = useState<'credentials' | 'polymarket' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'stockSymbols' | 'language'>('credentials');
   const [apiKeys, setApiKeys] = useState<ApiKeys>({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -690,6 +690,7 @@ export default function SettingsTab() {
               { id: 'llm', icon: Bot, label: t('sidebar.llm') },
               { id: 'dataConnections', icon: Database, label: t('sidebar.dataSources') },
               { id: 'backtesting', icon: Activity, label: t('sidebar.backtesting') },
+              { id: 'stockSymbols', icon: Briefcase, label: 'Stock Symbols' },
               { id: 'terminalConfig', icon: SettingsIcon, label: t('sidebar.tabLayout') },
               { id: 'terminal', icon: Terminal, label: t('sidebar.appearance') },
               { id: 'language', icon: Globe, label: t('sidebar.language') }
@@ -814,100 +815,167 @@ export default function SettingsTab() {
               <PolymarketCredentialsPanel />
             )}
 
-            {/* LLM Configuration Section */}
+            {/* LLM Configuration Section - Bloomberg Style */}
             {activeSection === 'llm' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {/* Top Bar */}
+              <div style={{
+                fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px'
+              }}>
+                {/* Header */}
                 <div style={{
-                  backgroundColor: '#1A1A1A',
                   borderBottom: `2px solid ${colors.primary}`,
-                  padding: '6px 12px',
+                  padding: '16px 0',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  boxShadow: `0 2px 8px ${colors.primary}20`
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Bot size={16} color={colors.primary} style={{ filter: `drop-shadow(0 0 4px ${colors.primary})` }} />
-                    <span style={{
-                      color: colors.primary,
-                      fontWeight: 700,
-                      fontSize: '11px',
-                      letterSpacing: '0.5px',
-                      textShadow: `0 0 10px ${colors.primary}40`
-                    }}>
-                      {t('llm.title').toUpperCase()}
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Bot size={24} color={colors.primary} />
+                    <div>
+                      <div style={{
+                        color: colors.primary,
+                        fontWeight: 700,
+                        fontSize: '16px',
+                        letterSpacing: '0.5px',
+                      }}>
+                        LLM CONFIGURATION
+                      </div>
+                      <div style={{ color: '#888', fontSize: '12px', marginTop: '2px' }}>
+                        Configure AI providers, models, and global settings
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ color: colors.text, fontSize: '9px' }}>
-                    {t('llm.description')}
+                  <button
+                    onClick={handleSaveLLMConfig}
+                    disabled={loading}
+                    style={{
+                      background: loading ? '#2A2A2A' : colors.primary,
+                      color: loading ? '#666' : '#000',
+                      border: 'none',
+                      padding: '10px 20px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      letterSpacing: '0.5px',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Save size={14} />
+                    {loading ? 'SAVING...' : 'SAVE ALL SETTINGS'}
+                  </button>
+                </div>
+
+                {/* Provider Selection */}
+                <div style={{
+                  backgroundColor: '#0F0F0F',
+                  border: `1px solid #2A2A2A`,
+                  padding: '20px'
+                }}>
+                  <div style={{
+                    color: colors.primary,
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    marginBottom: '16px',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <Zap size={16} color={colors.primary} />
+                    SELECT AI PROVIDER
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    {llmConfigs.map(config => (
+                      <button
+                        key={config.provider}
+                        onClick={() => setActiveProvider(config.provider)}
+                        style={{
+                          padding: '12px 20px',
+                          backgroundColor: activeProvider === config.provider ? colors.primary : '#1A1A1A',
+                          border: `2px solid ${activeProvider === config.provider ? colors.primary : '#2A2A2A'}`,
+                          color: activeProvider === config.provider ? '#000' : '#FFF',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          letterSpacing: '0.5px',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (activeProvider !== config.provider) {
+                            e.currentTarget.style.borderColor = colors.primary;
+                            e.currentTarget.style.backgroundColor = '#252525';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (activeProvider !== config.provider) {
+                            e.currentTarget.style.borderColor = '#2A2A2A';
+                            e.currentTarget.style.backgroundColor = '#1A1A1A';
+                          }
+                        }}
+                      >
+                        {config.provider === 'fincept' && <span style={{ color: activeProvider === config.provider ? '#000' : colors.success }}>●</span>}
+                        {config.provider.toUpperCase()}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 {/* Main Content Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  {/* Left Column */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Provider Selection */}
-                    <div style={{
-                      backgroundColor: '#0F0F0F',
-                      border: `1px solid #2A2A2A`,
-                      padding: '12px'
-                    }}>
-                      <div style={{
-                        color: colors.text,
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        marginBottom: '8px',
-                        letterSpacing: '0.5px'
-                      }}>
-                        {t('llm.provider')}
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        {llmConfigs.map(config => (
-                          <button
-                            key={config.provider}
-                            onClick={() => setActiveProvider(config.provider)}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: activeProvider === config.provider ? colors.primary : '#0F0F0F',
-                              border: `1px solid ${activeProvider === config.provider ? colors.primary : '#2A2A2A'}`,
-                              color: activeProvider === config.provider ? '#000' : colors.text,
-                              cursor: 'pointer',
-                              fontSize: '9px',
-                              fontWeight: 600,
-                              letterSpacing: '0.5px',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (activeProvider !== config.provider) {
-                                e.currentTarget.style.borderColor = colors.primary;
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (activeProvider !== config.provider) {
-                                e.currentTarget.style.borderColor = '#2A2A2A';
-                              }
-                            }}
-                          >
-                            {config.provider.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  {/* Left Column - Provider Config */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     {/* Fincept Auto-Configured */}
                     {getCurrentLLMConfig() && getCurrentLLMConfig()!.provider === 'fincept' && (
                       <div style={{
-                        backgroundColor: '#0a3a0a',
-                        border: `1px solid ${colors.success}`,
-                        padding: '8px 10px'
+                        backgroundColor: '#0a2a0a',
+                        border: `2px solid ${colors.success}`,
+                        padding: '20px'
                       }}>
-                        <div style={{ color: colors.success, fontSize: '9px', fontWeight: 600, marginBottom: '3px' }}>
-                          [OK] FINCEPT AUTO-CONFIGURED
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          marginBottom: '12px'
+                        }}>
+                          <Check size={20} color={colors.success} />
+                          <span style={{ color: colors.success, fontSize: '14px', fontWeight: 700 }}>
+                            FINCEPT LLM - AUTO CONFIGURED
+                          </span>
                         </div>
-                        <div style={{ color: '#888', fontSize: '8px' }}>
-                          Key: {session?.api_key?.substring(0, 8)}... • 5 credits/response
+                        <div style={{ color: '#AAA', fontSize: '12px', lineHeight: 1.6 }}>
+                          <div style={{ marginBottom: '8px' }}>
+                            Your Fincept API is automatically configured and ready to use.
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '16px',
+                            padding: '12px',
+                            backgroundColor: '#000',
+                            border: `1px solid #2A2A2A`
+                          }}>
+                            <div>
+                              <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>API KEY</div>
+                              <div style={{ color: colors.primary, fontSize: '12px', fontFamily: 'monospace' }}>
+                                {session?.api_key?.substring(0, 12)}...
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>COST</div>
+                              <div style={{ color: '#FFF', fontSize: '12px' }}>5 credits/response</div>
+                            </div>
+                            <div>
+                              <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>MODEL</div>
+                              <div style={{ color: '#FFF', fontSize: '12px' }}>fincept-llm</div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -917,41 +985,55 @@ export default function SettingsTab() {
                       <div style={{
                         backgroundColor: '#0F0F0F',
                         border: `1px solid #2A2A2A`,
-                        padding: '12px'
+                        padding: '20px'
                       }}>
                         <div style={{
                           color: colors.primary,
-                          fontSize: '10px',
+                          fontSize: '13px',
                           fontWeight: 700,
-                          marginBottom: '10px',
+                          marginBottom: '20px',
                           letterSpacing: '0.5px',
-                          borderBottom: `1px solid #2A2A2A`,
-                          paddingBottom: '6px'
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          paddingBottom: '12px',
+                          borderBottom: `1px solid #2A2A2A`
                         }}>
-                          {getCurrentLLMConfig()!.provider.toUpperCase()} CONFIG
+                          <Key size={16} color={colors.primary} />
+                          {getCurrentLLMConfig()!.provider.toUpperCase()} CONFIGURATION
                         </div>
 
-                        <div style={{ display: 'grid', gap: '8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                           {/* API Key */}
                           {getCurrentLLMConfig()!.provider !== 'ollama' && (
                             <div>
-                              <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                                API KEY *
+                              <label style={{
+                                color: '#FFF',
+                                fontSize: '11px',
+                                display: 'block',
+                                marginBottom: '8px',
+                                fontWeight: 600,
+                                letterSpacing: '0.5px'
+                              }}>
+                                API KEY <span style={{ color: colors.alert }}>*</span>
                               </label>
                               <input
                                 type="password"
                                 value={getCurrentLLMConfig()!.api_key || ''}
                                 onChange={(e) => updateLLMConfig(activeProvider, 'api_key', e.target.value)}
-                                placeholder={`Enter ${activeProvider} API key`}
+                                placeholder={`Enter your ${activeProvider} API key`}
                                 style={{
                                   width: '100%',
                                   background: '#000',
                                   border: `1px solid #2A2A2A`,
-                                  color: colors.text,
-                                  padding: '5px 6px',
-                                  fontSize: '9px',
-                                  fontFamily: 'monospace'
+                                  color: '#FFF',
+                                  padding: '12px 14px',
+                                  fontSize: '13px',
+                                  fontFamily: '"IBM Plex Mono", monospace',
+                                  outline: 'none'
                                 }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = colors.primary; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; }}
                               />
                             </div>
                           )}
@@ -959,69 +1041,91 @@ export default function SettingsTab() {
                           {/* Base URL */}
                           {(getCurrentLLMConfig()!.provider === 'ollama' || getCurrentLLMConfig()!.provider === 'deepseek' || getCurrentLLMConfig()!.provider === 'openrouter') && (
                             <div>
-                              <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
+                              <label style={{
+                                color: '#FFF',
+                                fontSize: '11px',
+                                display: 'block',
+                                marginBottom: '8px',
+                                fontWeight: 600,
+                                letterSpacing: '0.5px'
+                              }}>
                                 BASE URL
                               </label>
                               <input
                                 type="text"
                                 value={getCurrentLLMConfig()!.base_url || ''}
                                 onChange={(e) => updateLLMConfig(activeProvider, 'base_url', e.target.value)}
-                                placeholder={getCurrentLLMConfig()!.provider === 'ollama' ? 'http://localhost:11434' : 'Base URL'}
+                                placeholder={getCurrentLLMConfig()!.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com'}
                                 style={{
                                   width: '100%',
                                   background: '#000',
                                   border: `1px solid #2A2A2A`,
-                                  color: colors.text,
-                                  padding: '5px 6px',
-                                  fontSize: '9px',
-                                  fontFamily: 'monospace'
+                                  color: '#FFF',
+                                  padding: '12px 14px',
+                                  fontSize: '13px',
+                                  fontFamily: '"IBM Plex Mono", monospace',
+                                  outline: 'none'
                                 }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = colors.primary; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; }}
                               />
                             </div>
                           )}
 
                           {/* Model */}
                           <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                              <label style={{ color: colors.text, fontSize: '8px', fontWeight: 600 }}>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: '8px'
+                            }}>
+                              <label style={{
+                                color: '#FFF',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                letterSpacing: '0.5px'
+                              }}>
                                 MODEL
                               </label>
                               {getCurrentLLMConfig()!.provider === 'ollama' && (
-                                <div style={{ display: 'flex', gap: '4px' }}>
+                                <div style={{ display: 'flex', gap: '8px' }}>
                                   <button
                                     onClick={fetchOllamaModels}
                                     disabled={ollamaLoading}
                                     style={{
-                                      background: '#0F0F0F',
+                                      background: '#1A1A1A',
                                       border: `1px solid #2A2A2A`,
                                       color: colors.primary,
-                                      padding: '2px 6px',
-                                      fontSize: '8px',
+                                      padding: '6px 12px',
+                                      fontSize: '11px',
                                       cursor: ollamaLoading ? 'not-allowed' : 'pointer',
                                       display: 'flex',
                                       alignItems: 'center',
-                                      gap: '3px'
+                                      gap: '6px',
+                                      fontWeight: 600
                                     }}
                                   >
-                                    <RefreshCw size={8} />
-                                    {ollamaLoading ? 'LOAD' : 'REFR'}
+                                    <RefreshCw size={12} className={ollamaLoading ? 'animate-spin' : ''} />
+                                    {ollamaLoading ? 'LOADING...' : 'REFRESH MODELS'}
                                   </button>
                                   <button
                                     onClick={() => setUseManualEntry(!useManualEntry)}
                                     style={{
-                                      background: useManualEntry ? colors.primary : '#0F0F0F',
+                                      background: useManualEntry ? colors.primary : '#1A1A1A',
                                       border: `1px solid ${useManualEntry ? colors.primary : '#2A2A2A'}`,
-                                      color: useManualEntry ? '#000' : colors.text,
-                                      padding: '2px 6px',
-                                      fontSize: '8px',
+                                      color: useManualEntry ? '#000' : '#FFF',
+                                      padding: '6px 12px',
+                                      fontSize: '11px',
                                       cursor: 'pointer',
                                       display: 'flex',
                                       alignItems: 'center',
-                                      gap: '3px'
+                                      gap: '6px',
+                                      fontWeight: 600
                                     }}
                                   >
-                                    <Edit3 size={8} />
-                                    {useManualEntry ? 'DROP' : 'MAN'}
+                                    <Edit3 size={12} />
+                                    {useManualEntry ? 'USE DROPDOWN' : 'MANUAL ENTRY'}
                                   </button>
                                 </div>
                               )}
@@ -1037,33 +1141,41 @@ export default function SettingsTab() {
                                     width: '100%',
                                     background: '#000',
                                     border: `1px solid #2A2A2A`,
-                                    color: colors.text,
-                                    padding: '5px 6px',
-                                    fontSize: '9px',
+                                    color: '#FFF',
+                                    padding: '12px 14px',
+                                    fontSize: '13px',
                                     cursor: ollamaLoading || ollamaModels.length === 0 ? 'not-allowed' : 'pointer'
                                   }}
                                 >
-                                  {ollamaModels.length === 0 && !ollamaLoading && <option value="">No models found</option>}
-                                  {ollamaLoading && <option value="">Loading...</option>}
+                                  {ollamaModels.length === 0 && !ollamaLoading && <option value="">No models found - Click REFRESH</option>}
+                                  {ollamaLoading && <option value="">Loading models...</option>}
                                   {ollamaModels.map((model) => (
                                     <option key={model} value={model}>{model}</option>
                                   ))}
                                 </select>
                                 {ollamaError && (
                                   <div style={{
-                                    marginTop: '3px',
-                                    padding: '3px 5px',
+                                    marginTop: '8px',
+                                    padding: '10px 12px',
                                     background: '#3a0a0a',
                                     border: `1px solid ${colors.alert}`,
-                                    fontSize: '8px',
+                                    fontSize: '12px',
                                     color: colors.alert
                                   }}>
                                     {ollamaError}
                                   </div>
                                 )}
                                 {ollamaModels.length > 0 && (
-                                  <div style={{ marginTop: '3px', fontSize: '8px', color: colors.success }}>
-                                    [OK] {ollamaModels.length} model{ollamaModels.length !== 1 ? 's' : ''}
+                                  <div style={{
+                                    marginTop: '8px',
+                                    fontSize: '12px',
+                                    color: colors.success,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                  }}>
+                                    <Check size={14} />
+                                    {ollamaModels.length} model{ollamaModels.length !== 1 ? 's' : ''} available
                                   </div>
                                 )}
                               </div>
@@ -1072,15 +1184,18 @@ export default function SettingsTab() {
                                 type="text"
                                 value={getCurrentLLMConfig()!.model}
                                 onChange={(e) => updateLLMConfig(activeProvider, 'model', e.target.value)}
-                                placeholder="Model name"
+                                placeholder="Enter model name (e.g., gpt-4, claude-3-sonnet)"
                                 style={{
                                   width: '100%',
                                   background: '#000',
                                   border: `1px solid #2A2A2A`,
-                                  color: colors.text,
-                                  padding: '5px 6px',
-                                  fontSize: '9px'
+                                  color: '#FFF',
+                                  padding: '12px 14px',
+                                  fontSize: '13px',
+                                  outline: 'none'
                                 }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = colors.primary; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; }}
                               />
                             )}
                           </div>
@@ -1088,60 +1203,42 @@ export default function SettingsTab() {
                       </div>
                     )}
 
-                    {/* Save Button */}
-                    <button
-                      onClick={handleSaveLLMConfig}
-                      disabled={loading}
-                      style={{
-                        background: loading ? '#2A2A2A' : colors.primary,
-                        color: loading ? '#666' : '#000',
-                        border: 'none',
-                        padding: '6px 10px',
-                        fontSize: '9px',
-                        fontWeight: 700,
-                        letterSpacing: '0.5px',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '5px'
-                      }}
-                    >
-                      <Save size={10} />
-                      {loading ? 'SAVING...' : 'SAVE CONFIG'}
-                    </button>
-                  </div>
-
-                  {/* Right Column */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {/* Global Settings */}
                     <div style={{
                       backgroundColor: '#0F0F0F',
                       border: `1px solid #2A2A2A`,
-                      padding: '12px'
+                      padding: '20px'
                     }}>
                       <div style={{
-                        color: colors.text,
-                        fontSize: '10px',
+                        color: colors.primary,
+                        fontSize: '13px',
                         fontWeight: 700,
-                        marginBottom: '10px',
+                        marginBottom: '20px',
                         letterSpacing: '0.5px',
-                        borderBottom: `1px solid #2A2A2A`,
-                        paddingBottom: '6px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px'
+                        gap: '8px',
+                        paddingBottom: '12px',
+                        borderBottom: `1px solid #2A2A2A`
                       }}>
-                        <Zap size={12} color={colors.primary} />
-                        {t('llm.globalSettings')}
+                        <SettingsIcon size={16} color={colors.primary} />
+                        GLOBAL SETTINGS
                       </div>
 
-                      <div style={{ display: 'grid', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {/* Temperature */}
                         <div>
-                          <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            {t('llm.temperature')}
+                          <label style={{
+                            color: '#FFF',
+                            fontSize: '11px',
+                            display: 'block',
+                            marginBottom: '8px',
+                            fontWeight: 600,
+                            letterSpacing: '0.5px'
+                          }}>
+                            TEMPERATURE (Creativity)
                           </label>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <input
                               type="range"
                               min="0"
@@ -1149,26 +1246,37 @@ export default function SettingsTab() {
                               step="0.1"
                               value={llmGlobalSettings.temperature}
                               onChange={(e) => setLlmGlobalSettings({ ...llmGlobalSettings, temperature: parseFloat(e.target.value) })}
-                              style={{ flex: 1, height: '4px', cursor: 'pointer' }}
+                              style={{ flex: 1, height: '6px', cursor: 'pointer' }}
                             />
                             <div style={{
-                              minWidth: '35px',
-                              padding: '2px 5px',
+                              minWidth: '50px',
+                              padding: '8px 12px',
                               background: colors.primary + '20',
                               border: `1px solid ${colors.primary}`,
                               color: colors.primary,
-                              fontSize: '8px',
-                              fontWeight: 600,
+                              fontSize: '13px',
+                              fontWeight: 700,
                               textAlign: 'center'
                             }}>
                               {llmGlobalSettings.temperature.toFixed(1)}
                             </div>
                           </div>
+                          <div style={{ color: '#666', fontSize: '10px', marginTop: '6px' }}>
+                            Lower = More focused, Higher = More creative
+                          </div>
                         </div>
 
+                        {/* Max Tokens */}
                         <div>
-                          <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            {t('llm.maxTokens')}
+                          <label style={{
+                            color: '#FFF',
+                            fontSize: '11px',
+                            display: 'block',
+                            marginBottom: '8px',
+                            fontWeight: 600,
+                            letterSpacing: '0.5px'
+                          }}>
+                            MAX TOKENS (Response Length)
                           </label>
                           <input
                             type="number"
@@ -1180,335 +1288,385 @@ export default function SettingsTab() {
                               width: '100%',
                               background: '#000',
                               border: `1px solid #2A2A2A`,
-                              color: colors.text,
-                              padding: '5px 6px',
-                              fontSize: '9px'
+                              color: '#FFF',
+                              padding: '12px 14px',
+                              fontSize: '13px',
+                              outline: 'none'
                             }}
+                            onFocus={(e) => { e.currentTarget.style.borderColor = colors.primary; }}
+                            onBlur={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; }}
                           />
                         </div>
 
+                        {/* System Prompt */}
                         <div>
-                          <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            {t('llm.systemPrompt')}
+                          <label style={{
+                            color: '#FFF',
+                            fontSize: '11px',
+                            display: 'block',
+                            marginBottom: '8px',
+                            fontWeight: 600,
+                            letterSpacing: '0.5px'
+                          }}>
+                            SYSTEM PROMPT (Optional)
                           </label>
                           <textarea
                             value={llmGlobalSettings.system_prompt}
                             onChange={(e) => setLlmGlobalSettings({ ...llmGlobalSettings, system_prompt: e.target.value })}
-                            rows={3}
-                            placeholder="Custom system prompt (optional)"
+                            rows={4}
+                            placeholder="Custom instructions for the AI assistant..."
                             style={{
                               width: '100%',
                               background: '#000',
                               border: `1px solid #2A2A2A`,
-                              color: colors.text,
-                              padding: '5px 6px',
-                              fontSize: '8px',
+                              color: '#FFF',
+                              padding: '12px 14px',
+                              fontSize: '12px',
                               resize: 'vertical',
-                              fontFamily: 'monospace',
-                              lineHeight: '1.4'
+                              fontFamily: '"IBM Plex Mono", monospace',
+                              lineHeight: '1.5',
+                              outline: 'none'
                             }}
+                            onFocus={(e) => { e.currentTarget.style.borderColor = colors.primary; }}
+                            onBlur={(e) => { e.currentTarget.style.borderColor = '#2A2A2A'; }}
                           />
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Model Library */}
+                  {/* Right Column - Model Library */}
+                  <div style={{
+                    backgroundColor: '#0F0F0F',
+                    border: `1px solid #2A2A2A`,
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}>
+                    {/* Header */}
                     <div style={{
-                      backgroundColor: '#0F0F0F',
-                      border: `1px solid #2A2A2A`,
-                      padding: '12px'
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '20px',
+                      paddingBottom: '12px',
+                      borderBottom: `1px solid #2A2A2A`
                     }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '10px',
-                        paddingBottom: '6px',
-                        borderBottom: `1px solid #2A2A2A`
-                      }}>
-                        <div>
-                          <div style={{ color: colors.text, fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '2px' }}>
-                            {t('llm.modelLibrary')}
-                          </div>
-                          <div style={{ color: '#666', fontSize: '8px' }}>
-                            {t('llm.multiModelConfigs')}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setShowAddModel(!showAddModel)}
-                          style={{
-                            background: showAddModel ? '#3a0a0a' : colors.primary,
-                            color: showAddModel ? colors.alert : '#000',
-                            border: 'none',
-                            padding: '3px 8px',
-                            fontSize: '8px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '3px'
-                          }}
-                        >
-                          {showAddModel ? <><Trash2 size={8} /> CANCEL</> : <><Plus size={8} /> ADD</>}
-                        </button>
-                      </div>
-
-                  {/* Add Model Form */}
-                  {showAddModel && (
-                    <div style={{
-                      background: '#000',
-                      border: `1px solid #2A2A2A`,
-                      padding: '10px',
-                      marginBottom: '10px'
-                    }}>
-                      <div style={{ color: colors.primary, fontSize: '9px', fontWeight: 600, marginBottom: '8px' }}>
-                        ADD NEW MODEL
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                        <div>
-                          <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            PROVIDER
-                          </label>
-                          <select
-                            value={newModelConfig.provider}
-                            onChange={(e) => setNewModelConfig({ ...newModelConfig, provider: e.target.value })}
-                            style={{
-                              width: '100%',
-                              background: '#000',
-                              border: `1px solid #2A2A2A`,
-                              color: colors.text,
-                              padding: '5px 6px',
-                              fontSize: '9px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <option value="openai">OpenAI</option>
-                            <option value="google">Google (Gemini)</option>
-                            <option value="anthropic">Anthropic (Claude)</option>
-                            <option value="deepseek">DeepSeek</option>
-                            <option value="ollama">Ollama (Local)</option>
-                            <option value="openrouter">OpenRouter</option>
-                            <option value="groq">Groq</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            MODEL ID *
-                          </label>
-                          <input
-                            type="text"
-                            value={newModelConfig.model_id}
-                            onChange={(e) => setNewModelConfig({ ...newModelConfig, model_id: e.target.value })}
-                            placeholder="e.g. gpt-4o-mini"
-                            style={{
-                              width: '100%',
-                              background: '#000',
-                              border: `1px solid #2A2A2A`,
-                              color: colors.text,
-                              padding: '5px 6px',
-                              fontSize: '9px'
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                        <div>
-                          <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            DISPLAY NAME
-                          </label>
-                          <input
-                            type="text"
-                            value={newModelConfig.display_name}
-                            onChange={(e) => setNewModelConfig({ ...newModelConfig, display_name: e.target.value })}
-                            placeholder="e.g. GPT-4o Mini"
-                            style={{
-                              width: '100%',
-                              background: '#000',
-                              border: `1px solid #2A2A2A`,
-                              color: colors.text,
-                              padding: '5px 6px',
-                              fontSize: '9px'
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            API KEY (Optional)
-                          </label>
-                          <input
-                            type="password"
-                            value={newModelConfig.api_key}
-                            onChange={(e) => setNewModelConfig({ ...newModelConfig, api_key: e.target.value })}
-                            placeholder="Uses provider key if empty"
-                            style={{
-                              width: '100%',
-                              background: '#000',
-                              border: `1px solid #2A2A2A`,
-                              color: colors.text,
-                              padding: '5px 6px',
-                              fontSize: '9px',
-                              fontFamily: 'monospace'
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleAddModelConfig}
-                        disabled={loading || !newModelConfig.model_id}
-                        style={{
-                          background: loading || !newModelConfig.model_id ? '#2A2A2A' : colors.primary,
-                          color: loading || !newModelConfig.model_id ? '#666' : '#000',
-                          border: 'none',
-                          padding: '5px 12px',
-                          fontSize: '9px',
-                          fontWeight: 600,
-                          cursor: loading || !newModelConfig.model_id ? 'not-allowed' : 'pointer',
+                      <div>
+                        <div style={{
+                          color: colors.primary,
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        <Plus size={10} />
-                        ADD MODEL
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Models List */}
-                  {modelConfigs.length === 0 ? (
-                    <div style={{
-                      padding: '20px',
-                      textAlign: 'center',
-                      color: '#666',
-                      fontSize: '9px',
-                      border: `1px dashed #2A2A2A`,
-                      background: '#000'
-                    }}>
-                      <Bot size={24} color="#2A2A2A" style={{ marginBottom: '8px' }} />
-                      <div style={{ marginBottom: '4px', fontWeight: 600 }}>No models configured</div>
-                      <div style={{ fontSize: '8px' }}>Click "ADD" to configure models</div>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gap: '6px' }}>
-                      {modelConfigs.map((model) => (
-                        <div
-                          key={model.id}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'auto 1fr auto',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '8px',
-                            background: model.is_enabled ? '#1A1A1A' : '#000',
-                            border: `1px solid ${model.is_enabled ? '#2A2A2A' : '#1a1a1a'}`
-                          }}
-                        >
-                          <button
-                            onClick={() => handleToggleModelEnabled(model.id)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: 0
-                            }}
-                          >
-                            {model.is_enabled ? (
-                              <ToggleRight size={18} color={colors.success} />
-                            ) : (
-                              <ToggleLeft size={18} color="#666" />
-                            )}
-                          </button>
-                          <div>
-                            <div style={{
-                              fontSize: '10px',
-                              fontWeight: 600,
-                              color: model.is_enabled ? colors.text : '#666',
-                              marginBottom: '3px'
-                            }}>
-                              {model.display_name || model.model_id}
-                            </div>
-                            <div style={{ fontSize: '8px', color: '#666', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{
-                                padding: '1px 4px',
-                                background: colors.primary + '20',
-                                border: `1px solid ${colors.primary}`,
-                                color: colors.primary,
-                                fontWeight: 600
-                              }}>
-                                {model.provider.toUpperCase()}
-                              </span>
-                              <span>{model.model_id}</span>
-                              {model.api_key && (
-                                <span style={{
-                                  padding: '1px 4px',
-                                  background: colors.success + '20',
-                                  border: `1px solid ${colors.success}`,
-                                  color: colors.success,
-                                  fontWeight: 600
-                                }}>
-                                  KEY
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            {model.api_key && (
-                              <button
-                                onClick={() => setShowApiKeys(prev => ({ ...prev, [model.id]: !prev[model.id] }))}
-                                style={{
-                                  background: '#0F0F0F',
-                                  border: `1px solid #2A2A2A`,
-                                  color: '#666',
-                                  padding: '4px',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                {showApiKeys[model.id] ? <EyeOff size={10} /> : <Eye size={10} />}
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDeleteModelConfig(model.id)}
-                              style={{
-                                background: '#0F0F0F',
-                                border: `1px solid #2A2A2A`,
-                                color: colors.alert,
-                                padding: '4px 6px',
-                                fontSize: '8px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '3px'
-                              }}
-                            >
-                              <Trash2 size={8} />
-                              DEL
-                            </button>
-                          </div>
+                          gap: '8px'
+                        }}>
+                          <Bot size={16} color={colors.primary} />
+                          MODEL LIBRARY
                         </div>
-                      ))}
-                    </div>
-                  )}
-
-                      {/* Summary */}
-                      {modelConfigs.length > 0 && (
-                        <div style={{
-                          marginTop: '8px',
-                          padding: '5px 6px',
-                          background: '#0a3a0a',
-                          border: `1px solid ${colors.success}`,
+                        <div style={{ color: '#888', fontSize: '11px' }}>
+                          Add custom models for different use cases
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowAddModel(!showAddModel)}
+                        style={{
+                          background: showAddModel ? '#3a0a0a' : colors.primary,
+                          color: showAddModel ? colors.alert : '#000',
+                          border: 'none',
+                          padding: '8px 16px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '6px'
+                        }}
+                      >
+                        {showAddModel ? <><X size={14} /> CANCEL</> : <><Plus size={14} /> ADD MODEL</>}
+                      </button>
+                    </div>
+
+                    {/* Add Model Form */}
+                    {showAddModel && (
+                      <div style={{
+                        background: '#000',
+                        border: `1px solid ${colors.primary}`,
+                        padding: '16px',
+                        marginBottom: '16px'
+                      }}>
+                        <div style={{
+                          color: colors.primary,
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          marginBottom: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
                         }}>
-                          <Check size={10} color={colors.success} />
-                          <div style={{ fontSize: '8px', color: colors.success, fontWeight: 600 }}>
-                            {modelConfigs.filter(m => m.is_enabled).length} ENABLED · {modelConfigs.length} TOTAL
+                          <Plus size={14} />
+                          ADD NEW MODEL CONFIGURATION
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                          <div>
+                            <label style={{ color: '#FFF', fontSize: '10px', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
+                              PROVIDER
+                            </label>
+                            <select
+                              value={newModelConfig.provider}
+                              onChange={(e) => setNewModelConfig({ ...newModelConfig, provider: e.target.value })}
+                              style={{
+                                width: '100%',
+                                background: '#1A1A1A',
+                                border: `1px solid #2A2A2A`,
+                                color: '#FFF',
+                                padding: '10px 12px',
+                                fontSize: '12px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <option value="openai">OpenAI</option>
+                              <option value="google">Google (Gemini)</option>
+                              <option value="anthropic">Anthropic (Claude)</option>
+                              <option value="deepseek">DeepSeek</option>
+                              <option value="ollama">Ollama (Local)</option>
+                              <option value="openrouter">OpenRouter</option>
+                              <option value="groq">Groq</option>
+                            </select>
                           </div>
+                          <div>
+                            <label style={{ color: '#FFF', fontSize: '10px', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
+                              MODEL ID <span style={{ color: colors.alert }}>*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={newModelConfig.model_id}
+                              onChange={(e) => setNewModelConfig({ ...newModelConfig, model_id: e.target.value })}
+                              placeholder="e.g. gpt-4o-mini"
+                              style={{
+                                width: '100%',
+                                background: '#1A1A1A',
+                                border: `1px solid #2A2A2A`,
+                                color: '#FFF',
+                                padding: '10px 12px',
+                                fontSize: '12px'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                          <div>
+                            <label style={{ color: '#FFF', fontSize: '10px', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
+                              DISPLAY NAME
+                            </label>
+                            <input
+                              type="text"
+                              value={newModelConfig.display_name}
+                              onChange={(e) => setNewModelConfig({ ...newModelConfig, display_name: e.target.value })}
+                              placeholder="e.g. GPT-4o Mini"
+                              style={{
+                                width: '100%',
+                                background: '#1A1A1A',
+                                border: `1px solid #2A2A2A`,
+                                color: '#FFF',
+                                padding: '10px 12px',
+                                fontSize: '12px'
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ color: '#FFF', fontSize: '10px', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
+                              API KEY (Optional)
+                            </label>
+                            <input
+                              type="password"
+                              value={newModelConfig.api_key}
+                              onChange={(e) => setNewModelConfig({ ...newModelConfig, api_key: e.target.value })}
+                              placeholder="Uses provider key if empty"
+                              style={{
+                                width: '100%',
+                                background: '#1A1A1A',
+                                border: `1px solid #2A2A2A`,
+                                color: '#FFF',
+                                padding: '10px 12px',
+                                fontSize: '12px',
+                                fontFamily: 'monospace'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handleAddModelConfig}
+                          disabled={loading || !newModelConfig.model_id}
+                          style={{
+                            background: loading || !newModelConfig.model_id ? '#2A2A2A' : colors.success,
+                            color: loading || !newModelConfig.model_id ? '#666' : '#000',
+                            border: 'none',
+                            padding: '10px 20px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: loading || !newModelConfig.model_id ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          <Plus size={14} />
+                          ADD MODEL
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Models List */}
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                      {modelConfigs.length === 0 ? (
+                        <div style={{
+                          padding: '40px 20px',
+                          textAlign: 'center',
+                          color: '#666',
+                          border: `1px dashed #2A2A2A`,
+                          background: '#000'
+                        }}>
+                          <Bot size={40} color="#2A2A2A" style={{ marginBottom: '16px' }} />
+                          <div style={{ fontSize: '13px', marginBottom: '8px', fontWeight: 600, color: '#888' }}>
+                            No Custom Models Configured
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#666' }}>
+                            Click "ADD MODEL" to add custom model configurations
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {modelConfigs.map((model) => (
+                            <div
+                              key={model.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                padding: '12px 14px',
+                                background: model.is_enabled ? '#1A1A1A' : '#0A0A0A',
+                                border: `1px solid ${model.is_enabled ? '#2A2A2A' : '#1A1A1A'}`,
+                                opacity: model.is_enabled ? 1 : 0.6
+                              }}
+                            >
+                              <button
+                                onClick={() => handleToggleModelEnabled(model.id)}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: 0
+                                }}
+                              >
+                                {model.is_enabled ? (
+                                  <ToggleRight size={24} color={colors.success} />
+                                ) : (
+                                  <ToggleLeft size={24} color="#666" />
+                                )}
+                              </button>
+                              <div style={{ flex: 1 }}>
+                                <div style={{
+                                  fontSize: '13px',
+                                  fontWeight: 600,
+                                  color: model.is_enabled ? '#FFF' : '#666',
+                                  marginBottom: '4px'
+                                }}>
+                                  {model.display_name || model.model_id}
+                                </div>
+                                <div style={{
+                                  fontSize: '11px',
+                                  color: '#888',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}>
+                                  <span style={{
+                                    padding: '2px 8px',
+                                    background: colors.primary + '20',
+                                    border: `1px solid ${colors.primary}`,
+                                    color: colors.primary,
+                                    fontWeight: 600,
+                                    fontSize: '10px'
+                                  }}>
+                                    {model.provider.toUpperCase()}
+                                  </span>
+                                  <span style={{ fontFamily: 'monospace' }}>{model.model_id}</span>
+                                  {model.api_key && (
+                                    <span style={{
+                                      padding: '2px 8px',
+                                      background: colors.success + '20',
+                                      border: `1px solid ${colors.success}`,
+                                      color: colors.success,
+                                      fontWeight: 600,
+                                      fontSize: '10px'
+                                    }}>
+                                      HAS KEY
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                {model.api_key && (
+                                  <button
+                                    onClick={() => setShowApiKeys(prev => ({ ...prev, [model.id]: !prev[model.id] }))}
+                                    style={{
+                                      background: '#1A1A1A',
+                                      border: `1px solid #2A2A2A`,
+                                      color: '#888',
+                                      padding: '6px 8px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {showApiKeys[model.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteModelConfig(model.id)}
+                                  style={{
+                                    background: '#1A1A1A',
+                                    border: `1px solid #2A2A2A`,
+                                    color: colors.alert,
+                                    padding: '6px 12px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  <Trash2 size={12} />
+                                  DELETE
+                                </button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
+
+                    {/* Summary */}
+                    {modelConfigs.length > 0 && (
+                      <div style={{
+                        marginTop: '16px',
+                        padding: '12px 14px',
+                        background: '#0a2a0a',
+                        border: `1px solid ${colors.success}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}>
+                        <Check size={16} color={colors.success} />
+                        <div style={{ fontSize: '12px', color: colors.success, fontWeight: 600 }}>
+                          {modelConfigs.filter(m => m.is_enabled).length} ENABLED · {modelConfigs.length} TOTAL MODELS
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2132,6 +2290,39 @@ export default function SettingsTab() {
                 success: colors.success,
                 error: colors.alert
               }} />
+            )}
+
+            {/* Stock Symbols Section */}
+            {activeSection === 'stockSymbols' && (
+              <div style={{ maxWidth: '600px' }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <h2 style={{ fontSize: '16px', fontWeight: 700, color: colors.text, margin: 0 }}>
+                    Stock Symbol Database
+                  </h2>
+                  <p style={{ fontSize: '11px', color: colors.textMuted, marginTop: '8px', lineHeight: 1.5 }}>
+                    Download and manage broker symbol data for fast offline search.
+                    Symbol data includes stocks, F&O, commodities, and currency derivatives.
+                    Update regularly to get latest instruments and expiries.
+                  </p>
+                </div>
+                <MasterContractManager
+                  brokers={['angelone', 'fyers']}
+                  onUpdate={(brokerId, result) => {
+                    if (result.success) {
+                      setMessage({
+                        type: 'success',
+                        text: `${brokerId.toUpperCase()}: Downloaded ${result.symbol_count.toLocaleString()} symbols`
+                      });
+                    } else {
+                      setMessage({
+                        type: 'error',
+                        text: `${brokerId.toUpperCase()}: ${result.message}`
+                      });
+                    }
+                    setTimeout(() => setMessage(null), 5000);
+                  }}
+                />
+              </div>
             )}
 
             {/* Language Section */}

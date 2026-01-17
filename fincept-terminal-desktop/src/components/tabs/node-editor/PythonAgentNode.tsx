@@ -2,7 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Play, Settings, CheckCircle, AlertCircle, Loader, TrendingUp, Brain } from 'lucide-react';
-import { sqliteService, LLMConfig } from '@/services/core/sqliteService';
+import { sqliteService, LLMConfig, LLMModelConfig } from '@/services/core/sqliteService';
+
+// Combined LLM option for display
+interface LLMOption {
+  id: string;
+  provider: string;
+  model: string;
+  displayName: string;
+  type: 'provider' | 'model' | 'fincept';
+  isActive?: boolean;
+}
 
 interface PythonAgentNodeProps {
   id: string;
@@ -26,17 +36,79 @@ interface PythonAgentNodeProps {
 
 const PythonAgentNode: React.FC<PythonAgentNodeProps> = ({ id, data, selected }) => {
   const [showSettings, setShowSettings] = useState(false);
-  const [availableLLMs, setAvailableLLMs] = useState<LLMConfig[]>([]);
+  const [availableLLMs, setAvailableLLMs] = useState<LLMOption[]>([]);
   const [selectedLLM, setSelectedLLM] = useState(data.selectedLLM || 'active');
 
-  // Load available LLM providers from Settings
+  // Load available LLM providers from Settings (both LLMConfig and LLMModelConfig)
   useEffect(() => {
     const loadLLMs = async () => {
       try {
-        const configs = await sqliteService.getLLMConfigs();
-        setAvailableLLMs(configs);
+        const options: LLMOption[] = [];
+
+        // Load provider-level configs (LLMConfig)
+        const providerConfigs = await sqliteService.getLLMConfigs();
+        for (const config of providerConfigs) {
+          // Fincept is special - always show it prominently
+          if (config.provider === 'fincept') {
+            options.unshift({
+              id: 'fincept',
+              provider: 'fincept',
+              model: config.model || 'fincept-llm',
+              displayName: 'FINCEPT (Pre-configured)',
+              type: 'fincept',
+              isActive: config.is_active
+            });
+          } else {
+            options.push({
+              id: config.provider,
+              provider: config.provider,
+              model: config.model,
+              displayName: `${config.provider.toUpperCase()} - ${config.model}`,
+              type: 'provider',
+              isActive: config.is_active
+            });
+          }
+        }
+
+        // Load custom model configs (LLMModelConfig) from Settings
+        const modelConfigs = await sqliteService.getLLMModelConfigs();
+        for (const model of modelConfigs) {
+          if (model.is_enabled) {
+            options.push({
+              id: model.id,
+              provider: model.provider,
+              model: model.model_id,
+              displayName: `${model.display_name} (${model.provider.toUpperCase()})`,
+              type: 'model',
+              isActive: model.is_default
+            });
+          }
+        }
+
+        // If Fincept wasn't in provider configs, add it as default
+        if (!options.find(o => o.provider === 'fincept')) {
+          options.unshift({
+            id: 'fincept',
+            provider: 'fincept',
+            model: 'fincept-llm',
+            displayName: 'FINCEPT (Pre-configured)',
+            type: 'fincept',
+            isActive: true
+          });
+        }
+
+        setAvailableLLMs(options);
       } catch (error) {
         console.error('Failed to load LLM configs:', error);
+        // Default to Fincept if loading fails
+        setAvailableLLMs([{
+          id: 'fincept',
+          provider: 'fincept',
+          model: 'fincept-llm',
+          displayName: 'FINCEPT (Pre-configured)',
+          type: 'fincept',
+          isActive: true
+        }]);
       }
     };
     loadLLMs();
@@ -260,7 +332,10 @@ const PythonAgentNode: React.FC<PythonAgentNodeProps> = ({ id, data, selected })
           color: WHITE,
           fontSize: '8px'
         }}>
-          {selectedLLM === 'active' ? 'Active Provider' : selectedLLM.toUpperCase()}
+          {selectedLLM === 'active'
+            ? 'Active Provider'
+            : (availableLLMs.find(l => l.id === selectedLLM)?.displayName || selectedLLM.toUpperCase())
+          }
         </div>
       </div>
 
@@ -302,15 +377,17 @@ const PythonAgentNode: React.FC<PythonAgentNodeProps> = ({ id, data, selected })
                 backgroundColor: PANEL_BG,
                 border: `1px solid ${BORDER}`,
                 color: WHITE,
-                padding: '4px',
-                fontSize: '8px',
+                padding: '6px',
+                fontSize: '10px',
                 borderRadius: '3px'
               }}
             >
               <option value="active">Use Active Provider (from Settings)</option>
               {availableLLMs.map(llm => (
-                <option key={llm.provider} value={llm.provider}>
-                  {llm.provider.toUpperCase()} - {llm.model}
+                <option key={llm.id} value={llm.id} style={{
+                  backgroundColor: llm.type === 'fincept' ? '#1a3a1a' : undefined
+                }}>
+                  {llm.displayName}{llm.isActive ? ' ✓' : ''}
                 </option>
               ))}
             </select>

@@ -24,6 +24,7 @@ import { AccountStats, FeesDisplay, MarginPanel } from './trading/core/AccountIn
 import { PortfolioAggregator, ArbitrageDetector } from './trading/cross-exchange';
 import { TimezoneSelector } from '../common/TimezoneSelector';
 import { AIAgentsPanel } from './trading/ai-agents/AIAgentsPanel';
+import { GridTradingPanel } from './trading/grid-trading';
 import { ModelChatPanel } from './trading/ai-agents/ModelChatPanel';
 import { LeaderboardPanel } from './trading/ai-agents/LeaderboardPanel';
 import type { OrderRequest } from '../../types/trading';
@@ -125,7 +126,7 @@ export function TradingTab() {
   const [balance, setBalance] = useState(0);
   const [equity, setEquity] = useState(0);
   const [stats, setStats] = useState<any>(null);
-  const [activeBottomTab, setActiveBottomTab] = useState<'positions' | 'orders' | 'history' | 'trades' | 'stats' | 'features' | 'cross-exchange'>('positions');
+  const [activeBottomTab, setActiveBottomTab] = useState<'positions' | 'orders' | 'history' | 'trades' | 'stats' | 'features' | 'cross-exchange' | 'grid-trading'>('positions');
   const [isBottomPanelMinimized, setIsBottomPanelMinimized] = useState(false);
 
   // Trading settings
@@ -1360,7 +1361,7 @@ export function TradingTab() {
               alignItems: 'center'
             }}>
               <div style={{ display: 'flex', gap: '4px' }}>
-                {(['positions', 'orders', 'history', 'trades', 'stats', 'features', 'cross-exchange'] as const).map((tab) => (
+                {(['positions', 'orders', 'history', 'trades', 'stats', 'features', 'cross-exchange', 'grid-trading'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveBottomTab(tab)}
@@ -1576,6 +1577,20 @@ export function TradingTab() {
                       <PortfolioAggregator />
                       <ArbitrageDetector />
                     </div>
+                  </div>
+                )}
+
+                {/* Grid Trading Tab */}
+                {activeBottomTab === 'grid-trading' && (
+                  <div style={{ padding: '16px', overflow: 'auto', height: '100%' }}>
+                    <GridTradingPanel
+                      symbol={selectedSymbol}
+                      currentPrice={tickerState?.last || tickerState?.close || 0}
+                      brokerType="crypto"
+                      brokerId={activeBroker}
+                      cryptoAdapter={realAdapter || undefined}
+                      variant="full"
+                    />
                   </div>
                 )}
               </div>

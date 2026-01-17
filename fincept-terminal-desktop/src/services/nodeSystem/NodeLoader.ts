@@ -35,7 +35,46 @@ import {
 // Import market data nodes
 import {
   YFinanceNode,
+  GetQuoteNode,
+  GetHistoricalDataNode,
+  GetMarketDepthNode,
+  StreamQuotesNode,
+  GetFundamentalsNode,
+  GetTickerStatsNode,
 } from './nodes/marketData';
+
+// Import trading nodes
+import {
+  PlaceOrderNode,
+  ModifyOrderNode,
+  CancelOrderNode,
+  GetPositionsNode,
+  GetHoldingsNode,
+  GetOrdersNode,
+  GetBalanceNode,
+  ClosePositionNode,
+} from './nodes/trading';
+
+// Import trigger nodes
+import {
+  ManualTriggerNode,
+  ScheduleTriggerNode,
+  PriceAlertTriggerNode,
+  NewsEventTriggerNode,
+  MarketEventTriggerNode,
+  WebhookTriggerNode,
+} from './nodes/triggers';
+
+// Import agent nodes
+import { AgentMediatorNode } from './nodes/agents/AgentMediatorNode';
+import { AgentNode } from './nodes/agents/AgentNode';
+import { MultiAgentNode } from './nodes/agents/MultiAgentNode';
+import { GeopoliticsAgentNode } from './nodes/agents/GeopoliticsAgentNode';
+import { HedgeFundAgentNode } from './nodes/agents/HedgeFundAgentNode';
+import { InvestorAgentNode } from './nodes/agents/InvestorAgentNode';
+
+// Import agent node generator for dynamic Python agent nodes
+import { generateAllAgentNodes, getAgentNodeStatistics } from './utils/AgentNodeGenerator';
 
 // Import control flow nodes
 import {
@@ -97,11 +136,8 @@ class NodeLoaderClass {
    */
   async loadAll(): Promise<void> {
     if (this.loaded) {
-      console.log('[NodeLoader] Nodes already loaded, skipping...');
       return;
     }
-
-    console.log('[NodeLoader] Starting node loading...');
 
     // Load core nodes
     await this.loadCoreNodes();
@@ -127,27 +163,22 @@ class NodeLoaderClass {
     // Load transform nodes
     await this.loadTransformNodes();
 
-    // TODO: Load AI agent nodes when ready
-    // await this.loadAIAgentNodes();
+    // Load trading nodes
+    await this.loadTradingNodes();
+
+    // Load trigger nodes
+    await this.loadTriggerNodes();
+
+    // Load AI agent nodes
+    await this.loadAgentNodes();
 
     this.loaded = true;
-
-    // Print statistics
-    const stats = NodeRegistry.getStatistics();
-    console.log('[NodeLoader] Loading complete!');
-    console.log(`  - Total node types: ${stats.totalNodeTypes}`);
-    console.log(`  - Total versions: ${stats.totalVersions}`);
-    console.log('  - Node types:');
-    stats.nodeTypes.forEach((nt) => {
-      console.log(`    • ${nt.name} (${nt.versions} version${nt.versions > 1 ? 's' : ''})`);
-    });
   }
 
   /**
    * Load core nodes (basic workflow nodes)
    */
   private async loadCoreNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading core nodes...');
 
     try {
       // Filter Node - Remove items based on conditions
@@ -174,8 +205,6 @@ class NodeLoaderClass {
       const codeNode = new CoreCodeNode();
       NodeRegistry.registerNodeType(codeNode, 'CoreCodeNode');
       this.loadedNodes.set('coreCode', codeNode);
-
-      console.log('[NodeLoader] Core nodes loaded (5 nodes)');
     } catch (error) {
       console.error('[NodeLoader] Error loading core nodes:', error);
     }
@@ -185,7 +214,6 @@ class NodeLoaderClass {
    * Load finance-specific nodes
    */
   private async loadFinanceNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading finance nodes...');
 
     try {
       // Stock Data Node
@@ -202,8 +230,6 @@ class NodeLoaderClass {
       // - FundamentalAnalysis Node
       // - SentimentAnalysis Node
       // - EconomicData Node
-
-      console.log('[NodeLoader] Finance nodes loaded (1 node)');
     } catch (error) {
       console.error('[NodeLoader] Error loading finance nodes:', error);
     }
@@ -214,16 +240,10 @@ class NodeLoaderClass {
    * TODO: Implement agent node generator
    */
   private async loadAIAgentNodes(): Promise<void> {
-    console.log('[NodeLoader] AI agent nodes not yet implemented, skipping...');
-
     // TODO: Uncomment when agent generator is ready
     /*
     try {
       const stats = await getAgentNodeStatistics();
-      console.log(`[NodeLoader] Found ${stats.totalAgents} Python agents across ${stats.categories} categories:`);
-      for (const [category, count] of Object.entries(stats.byCategory)) {
-        console.log(`  - ${category}: ${count} agents`);
-      }
 
       const agentNodes = await generateAllAgentNodes();
 
@@ -249,7 +269,6 @@ class NodeLoaderClass {
    * Load analytics nodes (Phase 6)
    */
   private async loadAnalyticsNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading analytics nodes...');
 
     try {
       const nodes = [
@@ -262,12 +281,10 @@ class NodeLoaderClass {
         { instance: new CorrelationMatrixNode(), name: 'CorrelationMatrixNode' },
       ];
 
-      for (const { instance, name } of nodes) {
+      for (const { instance, name} of nodes) {
         NodeRegistry.registerNodeType(instance, name);
         this.loadedNodes.set(instance.description.name, instance);
       }
-
-      console.log(`[NodeLoader] Analytics nodes loaded (${nodes.length} nodes)`);
     } catch (error) {
       console.error('[NodeLoader] Error loading analytics nodes:', error);
     }
@@ -277,19 +294,22 @@ class NodeLoaderClass {
    * Load market data nodes
    */
   private async loadMarketDataNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading market data nodes...');
 
     try {
       const nodes = [
         { instance: new YFinanceNode(), name: 'YFinanceNode' },
+        { instance: new GetQuoteNode(), name: 'GetQuoteNode' },
+        { instance: new GetHistoricalDataNode(), name: 'GetHistoricalDataNode' },
+        { instance: new GetMarketDepthNode(), name: 'GetMarketDepthNode' },
+        { instance: new StreamQuotesNode(), name: 'StreamQuotesNode' },
+        { instance: new GetFundamentalsNode(), name: 'GetFundamentalsNode' },
+        { instance: new GetTickerStatsNode(), name: 'GetTickerStatsNode' },
       ];
 
       for (const { instance, name } of nodes) {
         NodeRegistry.registerNodeType(instance, name);
         this.loadedNodes.set(instance.description.name, instance);
       }
-
-      console.log(`[NodeLoader] Market data nodes loaded (${nodes.length} nodes)`);
     } catch (error) {
       console.error('[NodeLoader] Error loading market data nodes:', error);
     }
@@ -299,7 +319,6 @@ class NodeLoaderClass {
    * Load control flow nodes (Phase 7)
    */
   private async loadControlFlowNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading control flow nodes...');
 
     try {
       const nodes = [
@@ -320,8 +339,6 @@ class NodeLoaderClass {
         NodeRegistry.registerNodeType(instance, name);
         this.loadedNodes.set(instance.description.name, instance);
       }
-
-      console.log(`[NodeLoader] Control flow nodes loaded (${nodes.length} nodes)`);
     } catch (error) {
       console.error('[NodeLoader] Error loading control flow nodes:', error);
     }
@@ -331,7 +348,6 @@ class NodeLoaderClass {
    * Load safety nodes (Phase 8)
    */
   private async loadSafetyNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading safety nodes...');
 
     try {
       const nodes = [
@@ -345,8 +361,6 @@ class NodeLoaderClass {
         NodeRegistry.registerNodeType(instance, name);
         this.loadedNodes.set(instance.description.name, instance);
       }
-
-      console.log(`[NodeLoader] Safety nodes loaded (${nodes.length} nodes)`);
     } catch (error) {
       console.error('[NodeLoader] Error loading safety nodes:', error);
     }
@@ -356,7 +370,6 @@ class NodeLoaderClass {
    * Load notification nodes (Phase 9)
    */
   private async loadNotificationNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading notification nodes...');
 
     try {
       const nodes = [
@@ -372,8 +385,6 @@ class NodeLoaderClass {
         NodeRegistry.registerNodeType(instance, name);
         this.loadedNodes.set(instance.description.name, instance);
       }
-
-      console.log(`[NodeLoader] Notification nodes loaded (${nodes.length} nodes)`);
     } catch (error) {
       console.error('[NodeLoader] Error loading notification nodes:', error);
     }
@@ -383,7 +394,6 @@ class NodeLoaderClass {
    * Load transform nodes (Phase 10)
    */
   private async loadTransformNodes(): Promise<void> {
-    console.log('[NodeLoader] Loading transform nodes...');
 
     try {
       const nodes = [
@@ -401,10 +411,115 @@ class NodeLoaderClass {
         NodeRegistry.registerNodeType(instance, name);
         this.loadedNodes.set(instance.description.name, instance);
       }
-
-      console.log(`[NodeLoader] Transform nodes loaded (${nodes.length} nodes)`);
     } catch (error) {
       console.error('[NodeLoader] Error loading transform nodes:', error);
+    }
+  }
+
+  /**
+   * Load trading nodes
+   */
+  private async loadTradingNodes(): Promise<void> {
+
+    try {
+      const nodes = [
+        { instance: new PlaceOrderNode(), name: 'PlaceOrderNode' },
+        { instance: new ModifyOrderNode(), name: 'ModifyOrderNode' },
+        { instance: new CancelOrderNode(), name: 'CancelOrderNode' },
+        { instance: new GetPositionsNode(), name: 'GetPositionsNode' },
+        { instance: new GetHoldingsNode(), name: 'GetHoldingsNode' },
+        { instance: new GetOrdersNode(), name: 'GetOrdersNode' },
+        { instance: new GetBalanceNode(), name: 'GetBalanceNode' },
+        { instance: new ClosePositionNode(), name: 'ClosePositionNode' },
+      ];
+
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading trading nodes:', error);
+    }
+  }
+
+  /**
+   * Load trigger nodes
+   */
+  private async loadTriggerNodes(): Promise<void> {
+
+    try {
+      const nodes = [
+        { instance: new ManualTriggerNode(), name: 'ManualTriggerNode' },
+        { instance: new ScheduleTriggerNode(), name: 'ScheduleTriggerNode' },
+        { instance: new PriceAlertTriggerNode(), name: 'PriceAlertTriggerNode' },
+        { instance: new NewsEventTriggerNode(), name: 'NewsEventTriggerNode' },
+        { instance: new MarketEventTriggerNode(), name: 'MarketEventTriggerNode' },
+        { instance: new WebhookTriggerNode(), name: 'WebhookTriggerNode' },
+      ];
+
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading trigger nodes:', error);
+    }
+  }
+
+  /**
+   * Load AI agent nodes (static + dynamic from Python agents)
+   */
+  private async loadAgentNodes(): Promise<void> {
+
+    let staticCount = 0;
+    let dynamicCount = 0;
+
+    // Load static agent nodes (TypeScript-defined)
+    try {
+      const staticNodes = [
+        { instance: new AgentMediatorNode(), name: 'AgentMediatorNode' },
+        { instance: new AgentNode(), name: 'AgentNode' },
+        { instance: new MultiAgentNode(), name: 'MultiAgentNode' },
+        { instance: new GeopoliticsAgentNode(), name: 'GeopoliticsAgentNode' },
+        { instance: new HedgeFundAgentNode(), name: 'HedgeFundAgentNode' },
+        { instance: new InvestorAgentNode(), name: 'InvestorAgentNode' },
+      ];
+
+      for (const { instance, name } of staticNodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+        staticCount++;
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading static agent nodes:', error);
+    }
+
+    // Load dynamic agent nodes (generated from Python agent metadata)
+    try {
+      // Get statistics first
+      const stats = await getAgentNodeStatistics();
+
+      if (stats.totalAgents > 0) {
+
+        // Generate and register dynamic agent nodes
+        const dynamicAgentNodes = await generateAllAgentNodes();
+
+        for (const [agentId, nodeType] of dynamicAgentNodes.entries()) {
+          try {
+            // Avoid duplicates - check if already registered
+            if (!this.loadedNodes.has(agentId)) {
+              NodeRegistry.registerNodeType(nodeType, `${agentId}AgentNode`);
+              this.loadedNodes.set(agentId, nodeType);
+              dynamicCount++;
+            }
+          } catch (regError) {
+            console.warn(`[NodeLoader] Failed to register dynamic agent node: ${agentId}`, regError);
+          }
+        }
+      }
+    } catch (error) {
+      // Dynamic agent loading is optional - don't fail the entire loading
+      console.warn('[NodeLoader] Dynamic agent node generation skipped:', error);
     }
   }
 
@@ -426,7 +541,6 @@ class NodeLoaderClass {
    * Reload all nodes (for development)
    */
   async reload(): Promise<void> {
-    console.log('[NodeLoader] Reloading all nodes...');
     this.loaded = false;
     this.loadedNodes.clear();
     NodeRegistry.clear();
@@ -449,11 +563,8 @@ export const NodeLoader = new NodeLoaderClass();
  * Call this once during app startup
  */
 export async function initializeNodeSystem(): Promise<void> {
-  console.log('[NodeSystem] Initializing...');
-
   try {
     await NodeLoader.loadAll();
-    console.log('[NodeSystem] Initialization complete!');
   } catch (error) {
     console.error('[NodeSystem] Initialization failed:', error);
     throw error;

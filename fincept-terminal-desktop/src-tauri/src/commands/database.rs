@@ -88,6 +88,36 @@ pub async fn db_save_llm_global_settings(settings: LLMGlobalSettings) -> Result<
     Ok("LLM global settings saved successfully".to_string())
 }
 
+#[tauri::command]
+pub async fn db_set_active_llm_provider(provider: String) -> Result<String, String> {
+    operations::set_active_llm_provider(&provider).map_err(|e| e.to_string())?;
+    Ok("Active LLM provider updated".to_string())
+}
+
+// ============================================================================
+// LLM Model Config Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn db_get_llm_model_configs() -> Result<Vec<LLMModelConfig>, String> {
+    operations::get_llm_model_configs().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_save_llm_model_config(config: LLMModelConfig) -> Result<OperationResult, String> {
+    operations::save_llm_model_config(&config).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_delete_llm_model_config(id: String) -> Result<OperationResult, String> {
+    operations::delete_llm_model_config(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_toggle_llm_model_config_enabled(id: String) -> Result<OperationResult, String> {
+    operations::toggle_llm_model_config_enabled(&id).map_err(|e| e.to_string())
+}
+
 // ============================================================================
 // Chat Commands
 // ============================================================================

@@ -170,6 +170,16 @@ fn current_timestamp() -> i64 {
 /// Save broker credentials (insert or update)
 pub fn save_credentials(conn: &Connection, creds: &BrokerCredentials) -> Result<()> {
     eprintln!("[BrokerCredentials] save_credentials called for broker: {}", creds.broker_id);
+
+    // Debug: Print what we received
+    eprintln!("[BrokerCredentials] Input data:");
+    eprintln!("  - api_key: {:?} (len: {})",
+        creds.api_key.as_ref().map(|s| if s.len() > 0 { "***PRESENT***" } else { "EMPTY" }),
+        creds.api_key.as_ref().map(|s| s.len()).unwrap_or(0));
+    eprintln!("  - api_secret: {:?} (len: {})",
+        creds.api_secret.as_ref().map(|s| if s.len() > 0 { "***PRESENT***" } else { "EMPTY" }),
+        creds.api_secret.as_ref().map(|s| s.len()).unwrap_or(0));
+
     // Ensure encryption key is initialized
     init_encryption_key()?;
 
@@ -246,6 +256,12 @@ pub fn get_credentials(conn: &Connection, broker_id: &str) -> Result<Option<Brok
 
     match result {
         Ok(mut creds) => {
+            // Debug: Print what was retrieved from database BEFORE decryption
+            eprintln!("[BrokerCredentials] Raw data from DB:");
+            eprintln!("  - api_key encrypted: {:?}", creds.api_key.as_ref().map(|s| format!("{}...", &s[..20.min(s.len())])));
+            eprintln!("  - api_secret encrypted: {:?}", creds.api_secret.as_ref().map(|s| format!("{}...", &s[..20.min(s.len())])));
+            eprintln!("  - encrypted flag: {}", creds.encrypted);
+
             // Decrypt sensitive fields if encrypted
             if creds.encrypted {
                 eprintln!("[BrokerCredentials] Decrypting api_key for: {}", broker_id);

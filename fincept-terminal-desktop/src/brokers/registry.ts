@@ -7,8 +7,10 @@
 
 import { KrakenAdapter } from './crypto/kraken/KrakenAdapter';
 import { HyperLiquidAdapter } from './crypto/hyperliquid/HyperLiquidAdapter';
-// import { ZerodhaAdapter } from './stocks/zerodha/ZerodhaAdapter'; // TODO: Implement when ready
+import { ZerodhaAdapter } from './india/zerodha/ZerodhaAdapter';
+import { FyersAdapter } from './stocks/india/fyers/FyersAdapter';
 import type { IExchangeAdapter, ExchangeConfig } from './crypto/types';
+import type { IIndianBrokerAdapter } from './india/types';
 
 // ============================================================================
 // BROKER METADATA
@@ -202,7 +204,147 @@ export const BROKER_REGISTRY: Record<string, BrokerMetadata> = {
     },
   },
 
-  // zerodha: { ... } // TODO: Implement when ZerodhaAdapter is ready
+  // ============================================================================
+  // INDIAN STOCK BROKERS
+  // ============================================================================
+
+  zerodha: {
+    id: 'zerodha',
+    name: 'zerodha',
+    displayName: 'Zerodha (Kite)',
+    type: 'stocks',
+    category: 'centralized',
+    region: 'india',
+    adapterClass: ZerodhaAdapter,
+
+    features: {
+      spot: true,       // Equity delivery
+      margin: true,     // MIS (Intraday)
+      futures: true,    // F&O
+      perpetuals: false,
+      options: true,    // Options
+      staking: false,
+      vaults: false,
+      subaccounts: false,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,      // SL
+      stopLimitOrders: true, // SL-M
+      trailingStopOrders: false,
+      icebergOrders: false,
+      batchOrders: false,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 5,  // MIS leverage up to 5x
+      marginMode: true,
+      transfers: false,
+      withdrawals: false,
+      deposits: false,
+    },
+
+    defaultSymbols: [
+      'RELIANCE',
+      'TCS',
+      'HDFCBANK',
+      'INFY',
+      'ICICIBANK',
+      'SBIN',
+      'BHARTIARTL',
+      'HINDUNILVR',
+      'ITC',
+      'KOTAKBANK',
+      'LT',
+      'AXISBANK',
+      'MARUTI',
+      'TATAMOTORS',
+      'WIPRO',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://ws.kite.trade',
+    },
+
+    fees: {
+      maker: 0,       // Zerodha has zero brokerage for equity delivery
+      taker: 0.0003,  // 0.03% or Rs 20 whichever is lower for intraday
+    },
+  },
+
+  fyers: {
+    id: 'fyers',
+    name: 'fyers',
+    displayName: 'Fyers',
+    type: 'stocks',
+    category: 'centralized',
+    region: 'india',
+    adapterClass: FyersAdapter,
+
+    features: {
+      spot: true,       // Equity delivery
+      margin: true,     // INTRADAY
+      futures: true,    // F&O
+      perpetuals: false,
+      options: true,    // Options
+      staking: false,
+      vaults: false,
+      subaccounts: false,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,      // Stop Loss
+      stopLimitOrders: true, // Stop Loss Limit
+      trailingStopOrders: false,
+      icebergOrders: false,
+      batchOrders: false,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 5,  // Intraday leverage
+      marginMode: true,
+      transfers: false,
+      withdrawals: false,
+      deposits: false,
+    },
+
+    defaultSymbols: [
+      'RELIANCE',
+      'TCS',
+      'HDFCBANK',
+      'INFY',
+      'ICICIBANK',
+      'SBIN',
+      'BHARTIARTL',
+      'HINDUNILVR',
+      'ITC',
+      'KOTAKBANK',
+      'LT',
+      'AXISBANK',
+      'MARUTI',
+      'TATAMOTORS',
+      'WIPRO',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://socket.fyers.in/hsm/v1-5/prod',
+    },
+
+    fees: {
+      maker: 0,       // Fyers has zero brokerage for equity delivery
+      taker: 0.0003,  // 0.03% or Rs 20 whichever is lower for intraday
+    },
+  },
 };
 
 // ============================================================================
@@ -221,6 +363,20 @@ export function getAllBrokers(): BrokerMetadata[] {
  */
 export function getBrokersByType(type: 'crypto' | 'stocks' | 'forex' | 'commodities'): BrokerMetadata[] {
   return getAllBrokers().filter(broker => broker.type === type);
+}
+
+/**
+ * Get brokers by region
+ */
+export function getBrokersByRegion(region: 'global' | 'us' | 'india' | 'asia' | 'europe'): BrokerMetadata[] {
+  return getAllBrokers().filter(broker => broker.region === region);
+}
+
+/**
+ * Get Indian stock brokers
+ */
+export function getIndianBrokers(): BrokerMetadata[] {
+  return getAllBrokers().filter(broker => broker.type === 'stocks' && broker.region === 'india');
 }
 
 /**

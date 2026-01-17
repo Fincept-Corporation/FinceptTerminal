@@ -81,6 +81,14 @@ export {
 // Workflow Cache (caching and memoization)
 export { WorkflowCache, globalWorkflowCache, hashData, memoize } from './WorkflowCache';
 
+// Agent Node Generator (dynamic Python agent node creation)
+export {
+  generateAgentNode,
+  generateAllAgentNodes,
+  generateAgentNodesByCategory,
+  getAgentNodeStatistics,
+} from './utils/AgentNodeGenerator';
+
 // Re-export commonly used types with simpler names
 export type {
   INodeType as NodeType,

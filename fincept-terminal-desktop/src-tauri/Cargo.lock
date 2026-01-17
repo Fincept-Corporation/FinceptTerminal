@@ -1735,6 +1735,7 @@ dependencies = [
  "barter-integration 0.8.0",
  "base64 0.22.1",
  "chrono",
+ "csv",
  "dashmap",
  "flate2",
  "fnv",

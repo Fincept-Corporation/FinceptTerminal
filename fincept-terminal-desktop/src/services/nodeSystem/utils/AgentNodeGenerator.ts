@@ -184,7 +184,6 @@ export function generateAgentNode(agent: AgentMetadata): INodeType {
             llm_config: llmConfig,
           };
 
-          console.log(`[${agent.name}] Executing with parameters:`, parameters);
 
           // Execute Python agent
           const result = await pythonAgentService.executeAgent(
@@ -245,7 +244,6 @@ export async function generateAllAgentNodes(): Promise<Map<string, INodeType>> {
     // Get all available agents
     const agents = await pythonAgentService.getAvailableAgents();
 
-    console.log(`[AgentNodeGenerator] Generating nodes for ${agents.length} agents`);
 
     // Generate a node for each agent
     for (const agent of agents) {
@@ -253,7 +251,6 @@ export async function generateAllAgentNodes(): Promise<Map<string, INodeType>> {
       agentNodes.set(agent.id, nodeType);
     }
 
-    console.log(`[AgentNodeGenerator] Successfully generated ${agentNodes.size} agent nodes`);
   } catch (error) {
     console.error('[AgentNodeGenerator] Failed to generate agent nodes:', error);
   }
@@ -270,7 +267,6 @@ export async function generateAgentNodesByCategory(category: string): Promise<Ma
   try {
     const agents = await pythonAgentService.getAgentsByCategory(category);
 
-    console.log(`[AgentNodeGenerator] Generating ${agents.length} nodes for category: ${category}`);
 
     for (const agent of agents) {
       const nodeType = generateAgentNode(agent);
