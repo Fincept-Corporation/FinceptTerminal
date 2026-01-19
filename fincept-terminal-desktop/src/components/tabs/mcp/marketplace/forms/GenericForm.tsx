@@ -16,10 +16,10 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
     server.env || {}
   );
 
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#000000';
 
   const handleSubmit = () => {
     // Check if all required env vars are filled
@@ -43,7 +43,7 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
   return (
     <div>
       <div style={{
-        color: BLOOMBERG_WHITE,
+        color: FINCEPT_WHITE,
         fontSize: '10px',
         marginBottom: '12px'
       }}>
@@ -56,7 +56,7 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
             <div key={key} style={{ marginBottom: '12px' }}>
               <label style={{
                 display: 'block',
-                color: BLOOMBERG_ORANGE,
+                color: FINCEPT_ORANGE,
                 fontSize: '10px',
                 marginBottom: '4px',
                 fontWeight: 'bold'
@@ -70,9 +70,9 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
                 placeholder={`Enter ${key}`}
                 style={{
                   width: '100%',
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
+                  backgroundColor: FINCEPT_DARK_BG,
+                  border: `1px solid ${FINCEPT_GRAY}`,
+                  color: FINCEPT_WHITE,
                   padding: '6px',
                   fontSize: '10px',
                   fontFamily: 'Consolas, monospace'
@@ -87,7 +87,7 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
         <div style={{ marginBottom: '12px' }}>
           <label style={{
             display: 'block',
-            color: BLOOMBERG_ORANGE,
+            color: FINCEPT_ORANGE,
             fontSize: '10px',
             marginBottom: '4px',
             fontWeight: 'bold'
@@ -101,9 +101,9 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
             placeholder={`Enter ${server.requiresArg}`}
             style={{
               width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
+              backgroundColor: FINCEPT_DARK_BG,
+              border: `1px solid ${FINCEPT_GRAY}`,
+              color: FINCEPT_WHITE,
               padding: '6px',
               fontSize: '10px',
               fontFamily: 'Consolas, monospace'
@@ -119,14 +119,14 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
         justifyContent: 'flex-end',
         marginTop: '16px',
         paddingTop: '12px',
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`
+        borderTop: `1px solid ${FINCEPT_GRAY}`
       }}>
         <button
           onClick={onCancel}
           style={{
-            backgroundColor: BLOOMBERG_DARK_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
-            color: BLOOMBERG_WHITE,
+            backgroundColor: FINCEPT_DARK_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
+            color: FINCEPT_WHITE,
             padding: '6px 12px',
             fontSize: '10px',
             cursor: 'pointer'
@@ -138,7 +138,7 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
           onClick={handleSubmit}
           disabled={!Object.values(envValues).every(v => v.trim())}
           style={{
-            backgroundColor: Object.values(envValues).every(v => v.trim()) ? BLOOMBERG_ORANGE : BLOOMBERG_GRAY,
+            backgroundColor: Object.values(envValues).every(v => v.trim()) ? FINCEPT_ORANGE : FINCEPT_GRAY,
             border: 'none',
             color: 'black',
             padding: '6px 12px',

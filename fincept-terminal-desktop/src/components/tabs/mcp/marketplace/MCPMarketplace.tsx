@@ -19,7 +19,7 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [configureServer, setConfigureServer] = useState<MCPServerDefinition | null>(null);
 
-  // Bloomberg colors
+  // Fincept colors
   const ORANGE = '#FFA500';
   const WHITE = '#FFFFFF';
   const GRAY = '#787878';

@@ -87,7 +87,7 @@ Real-time updates during market hours with 1-second refresh rate.
       content: `Real-time financial news aggregation and analysis.
 
 **News Sources:**
-• Bloomberg
+• Fincept
 • Reuters
 • CNBC
 • Wall Street Journal
@@ -687,7 +687,7 @@ Signal Generator:
 • Streaming - Real-time data feeds
 • Cloud Storage - S3, Google Cloud
 • Time-series - InfluxDB, TimescaleDB
-• Market Data - Bloomberg, Reuters, IEX
+• Market Data - Fincept, Reuters, IEX
 
 **Supported Data Sources:**
 • Yahoo Finance - Free market data
@@ -842,7 +842,7 @@ Warren Buffett Agent:
       content: `Configure terminal preferences and account settings.
 
 **General Settings:**
-• Theme selection (Dark/Light/Bloomberg)
+• Theme selection (Dark/Light/Fincept)
 • Language preferences
 • Time zone settings
 • Date format
@@ -893,7 +893,7 @@ Warren Buffett Agent:
       codeExample: `// Settings configuration:
 {
   general: {
-    theme: "bloomberg-dark",
+    theme: "fincept-dark",
     language: "en",
     timezone: "America/New_York",
     dateFormat: "MM/DD/YYYY"

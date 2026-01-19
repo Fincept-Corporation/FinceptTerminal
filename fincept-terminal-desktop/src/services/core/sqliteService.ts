@@ -3,6 +3,14 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+// Re-export storage service (key-value storage)
+export { storageService } from './storageService';
+export type { StorageEntry } from './storageService';
+
+// Re-export cache service (TTL-based caching)
+export { cacheService, CacheTTL, CACHE_CATEGORIES as CacheCategory } from '../cache/cacheService';
+export type { CacheEntry, CacheStats, CategoryStats } from '../cache/cacheService';
+
 // Re-export watchlist services
 export { watchlistService } from './watchlistService';
 export type { Watchlist, WatchlistStock } from './watchlistService';
@@ -26,6 +34,7 @@ export interface ApiKeys {
   COINGECKO_API_KEY?: string;
   NASDAQ_API_KEY?: string;
   FINANCIAL_MODELING_PREP_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
   [key: string]: string | undefined;
 }
 
@@ -37,6 +46,7 @@ export const PREDEFINED_API_KEYS = [
   { key: 'COINGECKO_API_KEY', label: 'CoinGecko API Key', description: 'Cryptocurrency data' },
   { key: 'NASDAQ_API_KEY', label: 'NASDAQ API Key', description: 'NASDAQ market data' },
   { key: 'FINANCIAL_MODELING_PREP_API_KEY', label: 'Financial Modeling Prep', description: 'Financial statements & ratios' },
+  { key: 'OPENROUTER_API_KEY', label: 'OpenRouter API Key', description: 'Access 400+ AI models from all providers (Model Library)' },
 ] as const;
 
 // LLM Provider configurations
@@ -56,7 +66,7 @@ export const LLM_PROVIDERS = [
     description: 'GPT models',
     endpoint: 'https://api.openai.com/v1',
     requiresApiKey: true,
-    models: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-4o']
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini']
   },
   {
     id: 'anthropic',
@@ -64,7 +74,7 @@ export const LLM_PROVIDERS = [
     description: 'Claude models',
     endpoint: 'https://api.anthropic.com/v1',
     requiresApiKey: true,
-    models: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-3-5-sonnet-20241022']
+    models: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229']
   },
   {
     id: 'google',
@@ -72,7 +82,7 @@ export const LLM_PROVIDERS = [
     description: 'Gemini models',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta',
     requiresApiKey: true,
-    models: ['gemini-pro', 'gemini-1.5-pro-latest', 'gemini-1.5-flash']
+    models: ['gemini-2.5-flash-preview-05-20', 'gemini-2.5-pro-preview-05-06', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash']
   },
   {
     id: 'ollama',
@@ -90,6 +100,22 @@ export const LLM_PROVIDERS = [
     requiresApiKey: true,
     supportsCustomModels: true,
     models: []
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    description: 'Fast inference for open models',
+    endpoint: 'https://api.groq.com/openai/v1',
+    requiresApiKey: true,
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it']
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    description: 'Advanced reasoning models',
+    endpoint: 'https://api.deepseek.com',
+    requiresApiKey: true,
+    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner']
   },
 ] as const;
 
@@ -342,7 +368,7 @@ export const addChatMessage = async (msg: Omit<ChatMessage, 'id' | 'timestamp'>)
     timestamp: new Date().toISOString(),
     ...msg
   };
-  return await invoke<ChatMessage>('db_add_chat_message', { msg: messageWithDefaults });
+  return await invoke<ChatMessage>('db_add_chat_message', { message: messageWithDefaults });
 };
 
 export const getChatMessages = async (sessionUuid: string): Promise<ChatMessage[]> => {
@@ -351,6 +377,35 @@ export const getChatMessages = async (sessionUuid: string): Promise<ChatMessage[
 
 export const deleteChatSession = async (sessionUuid: string): Promise<void> => {
   await invoke('db_delete_chat_session', { sessionUuid });
+};
+
+export interface ChatStatistics {
+  totalSessions: number;
+  totalMessages: number;
+  totalTokens: number;
+}
+
+export const getChatStatistics = async (): Promise<ChatStatistics> => {
+  try {
+    return await invoke<ChatStatistics>('db_get_chat_statistics');
+  } catch (error) {
+    // Fallback if Rust command not implemented yet
+    console.warn('[SqliteService] db_get_chat_statistics not implemented, using fallback');
+    const sessions = await getChatSessions(10000);
+    let totalMessages = 0;
+    let totalTokens = 0;
+
+    for (const session of sessions) {
+      totalMessages += session.message_count || 0;
+      // Note: Can't get token count without loading all messages
+    }
+
+    return {
+      totalSessions: sessions.length,
+      totalMessages,
+      totalTokens
+    };
+  }
 };
 
 // ==================== DATA SOURCES ====================
@@ -695,45 +750,47 @@ export const getActiveAgentConfig = async (): Promise<AgentConfig | null> => {
 };
 
 // ==================== CACHE ====================
+// Forum cache methods - using unified cache system
 
-export const saveMarketDataCache = async (symbol: string, category: string, quoteData: string): Promise<void> => {
-  await invoke('db_save_market_data_cache', { symbol, category, quoteData });
-};
+const forumCacheKey = (type: string, suffix?: string) =>
+  suffix ? `forum:${type}:${suffix}` : `forum:${type}`;
 
-export const getCachedMarketData = async (symbol: string, category: string, maxAgeMinutes: number): Promise<string | null> => {
-  return await invoke<string | null>('db_get_cached_market_data', { symbol, category, maxAgeMinutes });
-};
-
-export const clearMarketDataCache = async (): Promise<void> => {
-  await invoke('db_clear_market_data_cache');
-};
-
-// Forum caching methods - stub implementation
-export const getCachedForumCategories = async (maxAgeMinutes: number): Promise<any[] | null> => {
-  console.warn('[SqliteService] getCachedForumCategories - stub method');
-  return null;
+// Forum categories cache
+export const getCachedForumCategories = async (_maxAgeMinutes: number): Promise<any[] | null> => {
+  const { cacheService } = await import('../cache/cacheService');
+  const result = await cacheService.get<any[]>(forumCacheKey('categories'));
+  return result?.data ?? null;
 };
 
 export const cacheForumCategories = async (categories: any[]): Promise<void> => {
-  console.warn('[SqliteService] cacheForumCategories - stub method');
+  const { cacheService } = await import('../cache/cacheService');
+  await cacheService.set(forumCacheKey('categories'), categories, 'forum', '5m');
 };
 
-export const getCachedForumPosts = async (categoryId: string | number | null, sortBy: string, maxAgeMinutes: number): Promise<any[] | null> => {
-  console.warn('[SqliteService] getCachedForumPosts - stub method');
-  return null;
+// Forum posts cache
+export const getCachedForumPosts = async (categoryId: number | null, sortBy: string, _maxAgeMinutes: number): Promise<any[] | null> => {
+  const { cacheService } = await import('../cache/cacheService');
+  const key = forumCacheKey('posts', `${categoryId || 'all'}-${sortBy}`);
+  const result = await cacheService.get<any[]>(key);
+  return result?.data ?? null;
 };
 
-export const cacheForumPosts = async (categoryId: string | number | null, sortBy: string, posts: any[]): Promise<void> => {
-  console.warn('[SqliteService] cacheForumPosts - stub method');
+export const cacheForumPosts = async (categoryId: number | null, sortBy: string, posts: any[]): Promise<void> => {
+  const { cacheService } = await import('../cache/cacheService');
+  const key = forumCacheKey('posts', `${categoryId || 'all'}-${sortBy}`);
+  await cacheService.set(key, posts, 'forum', '5m');
 };
 
-export const getCachedForumStats = async (maxAgeMinutes: number): Promise<any | null> => {
-  console.warn('[SqliteService] getCachedForumStats - stub method');
-  return null;
+// Forum stats cache
+export const getCachedForumStats = async (_maxAgeMinutes: number): Promise<any | null> => {
+  const { cacheService } = await import('../cache/cacheService');
+  const result = await cacheService.get<any>(forumCacheKey('stats'));
+  return result?.data ?? null;
 };
 
 export const cacheForumStats = async (stats: any): Promise<void> => {
-  console.warn('[SqliteService] cacheForumStats - stub method');
+  const { cacheService } = await import('../cache/cacheService');
+  await cacheService.set(forumCacheKey('stats'), stats, 'forum', '5m');
 };
 
 // ==================== PAPER TRADING ====================
@@ -1172,6 +1229,7 @@ class SqliteService {
   addChatMessage = addChatMessage;
   getChatMessages = getChatMessages;
   deleteChatSession = deleteChatSession;
+  getChatStatistics = getChatStatistics;
 
   async updateChatSessionTitle(sessionUuid: string, title: string) {
     // Not implemented in Rust yet - would need to add this command
@@ -1236,9 +1294,21 @@ class SqliteService {
     );
   }
 
-  async getCachedCategoryData(category: string, maxAgeMinutes: number): Promise<string | null> {
-    return await getCachedMarketData('*', category, maxAgeMinutes);
+  async getCachedCategoryData(category: string, _maxAgeMinutes: number): Promise<string | null> {
+    // Use unified cache service
+    const cacheKey = `market-quotes:${category}:*`;
+    const { cacheService } = await import('../cache/cacheService');
+    const cached = await cacheService.get<string>(cacheKey);
+    return cached?.data || null;
   }
+
+  // Forum cache - using unified cache
+  getCachedForumCategories = getCachedForumCategories;
+  cacheForumCategories = cacheForumCategories;
+  getCachedForumPosts = getCachedForumPosts;
+  cacheForumPosts = cacheForumPosts;
+  getCachedForumStats = getCachedForumStats;
+  cacheForumStats = cacheForumStats;
 
   // MCP
   addMCPServer = addMCPServer;
@@ -1325,16 +1395,7 @@ class SqliteService {
   clearOldContexts = clearOldContexts;
   getContextStorageStats = getContextStorageStats;
 
-  // Cache
-  saveMarketDataCache = saveMarketDataCache;
-  getCachedMarketData = getCachedMarketData;
-  clearMarketDataCache = clearMarketDataCache;
-  getCachedForumCategories = getCachedForumCategories;
-  cacheForumCategories = cacheForumCategories;
-  getCachedForumPosts = getCachedForumPosts;
-  cacheForumPosts = cacheForumPosts;
-  getCachedForumStats = getCachedForumStats;
-  cacheForumStats = cacheForumStats;
+  // Cache - REMOVED: Use unified cache system (src/services/cache/cacheService.ts)
 
   // Paper Trading - Portfolio
   createPortfolio = createPortfolio;

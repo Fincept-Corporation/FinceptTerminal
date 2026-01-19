@@ -118,7 +118,7 @@ const data = await invoke('execute_python_command', {
 
 ## Project Context
 
-Part of **Fincept Terminal** - a Bloomberg-like financial intelligence platform built with:
+Part of **Fincept Terminal** - a Fincept financial intelligence platform built with:
 - **Frontend**: React 19 + TypeScript + Tauri
 - **Backend**: Rust (Tauri 2.x)
 - **Analytics**: Python (embedded runtime)

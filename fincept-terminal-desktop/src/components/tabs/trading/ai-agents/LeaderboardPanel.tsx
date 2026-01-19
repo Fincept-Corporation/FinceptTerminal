@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, TrendingUp, TrendingDown, Award, Target, Percent, DollarSign } from 'lucide-react';
 import type { ModelPerformance } from '../../../../services/trading/agnoTradingService';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -74,15 +74,15 @@ export function LeaderboardPanel({ refreshInterval = 10000 }: LeaderboardPanelPr
 
   const getRankColor = (rank: number) => {
     switch (rank) {
-      case 1: return BLOOMBERG.YELLOW;
-      case 2: return BLOOMBERG.CYAN;
-      case 3: return BLOOMBERG.ORANGE;
-      default: return BLOOMBERG.GRAY;
+      case 1: return FINCEPT.YELLOW;
+      case 2: return FINCEPT.CYAN;
+      case 3: return FINCEPT.ORANGE;
+      default: return FINCEPT.GRAY;
     }
   };
 
   const getModelColor = (model: string) => {
-    const colors = [BLOOMBERG.ORANGE, BLOOMBERG.CYAN, BLOOMBERG.GREEN, BLOOMBERG.PURPLE, BLOOMBERG.YELLOW];
+    const colors = [FINCEPT.ORANGE, FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.PURPLE, FINCEPT.YELLOW];
     const hash = model.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
   };
@@ -90,8 +90,8 @@ export function LeaderboardPanel({ refreshInterval = 10000 }: LeaderboardPanelPr
   return (
     <div style={{
       height: '100%',
-      background: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '2px',
       display: 'flex',
       flexDirection: 'column',
@@ -99,17 +99,17 @@ export function LeaderboardPanel({ refreshInterval = 10000 }: LeaderboardPanelPr
     }}>
       {/* Header */}
       <div style={{
-        background: BLOOMBERG.HEADER_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        background: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px 10px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Trophy size={14} color={BLOOMBERG.YELLOW} />
+          <Trophy size={14} color={FINCEPT.YELLOW} />
           <span style={{
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             fontSize: '11px',
             fontWeight: '600',
             letterSpacing: '0.5px'
@@ -121,7 +121,7 @@ export function LeaderboardPanel({ refreshInterval = 10000 }: LeaderboardPanelPr
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              background: BLOOMBERG.ORANGE,
+              background: FINCEPT.ORANGE,
               animation: 'pulse 2s infinite'
             }} />
           )}
@@ -138,9 +138,9 @@ export function LeaderboardPanel({ refreshInterval = 10000 }: LeaderboardPanelPr
               key={option.value}
               onClick={() => setSortBy(option.value)}
               style={{
-                background: sortBy === option.value ? BLOOMBERG.ORANGE : 'transparent',
-                border: `1px solid ${sortBy === option.value ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                color: sortBy === option.value ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                background: sortBy === option.value ? FINCEPT.ORANGE : 'transparent',
+                border: `1px solid ${sortBy === option.value ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                color: sortBy === option.value ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 padding: '2px 6px',
                 borderRadius: '2px',
                 fontSize: '8px',
@@ -164,7 +164,7 @@ export function LeaderboardPanel({ refreshInterval = 10000 }: LeaderboardPanelPr
         {sortedLeaderboard.length === 0 ? (
           <div style={{
             textAlign: 'center',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '10px',
             marginTop: '40px'
           }}>
@@ -200,8 +200,8 @@ function ModelRankCard({ model, rank, rankColor, modelColor }: ModelRankCardProp
 
   return (
     <div style={{
-      background: BLOOMBERG.DARK_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.DARK_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderLeft: `3px solid ${modelColor}`,
       borderRadius: '2px',
       padding: '8px 10px',
@@ -243,8 +243,8 @@ function ModelRankCard({ model, rank, rankColor, modelColor }: ModelRankCardProp
 
         {/* Total P&L Badge */}
         <div style={{
-          background: isProfitable ? `${BLOOMBERG.GREEN}20` : `${BLOOMBERG.RED}20`,
-          border: `1px solid ${isProfitable ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+          background: isProfitable ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
+          border: `1px solid ${isProfitable ? FINCEPT.GREEN : FINCEPT.RED}`,
           borderRadius: '2px',
           padding: '2px 6px',
           display: 'flex',
@@ -252,12 +252,12 @@ function ModelRankCard({ model, rank, rankColor, modelColor }: ModelRankCardProp
           gap: '3px'
         }}>
           {isProfitable ? (
-            <TrendingUp size={10} color={BLOOMBERG.GREEN} />
+            <TrendingUp size={10} color={FINCEPT.GREEN} />
           ) : (
-            <TrendingDown size={10} color={BLOOMBERG.RED} />
+            <TrendingDown size={10} color={FINCEPT.RED} />
           )}
           <span style={{
-            color: isProfitable ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: isProfitable ? FINCEPT.GREEN : FINCEPT.RED,
             fontSize: '9px',
             fontWeight: '700'
           }}>
@@ -276,9 +276,9 @@ function ModelRankCard({ model, rank, rankColor, modelColor }: ModelRankCardProp
       }}>
         {/* Win Rate */}
         <div>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', marginBottom: '2px' }}>WIN RATE</div>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '7px', marginBottom: '2px' }}>WIN RATE</div>
           <div style={{
-            color: model.win_rate >= 50 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: model.win_rate >= 50 ? FINCEPT.GREEN : FINCEPT.RED,
             fontWeight: '700',
             fontSize: '10px'
           }}>
@@ -288,17 +288,17 @@ function ModelRankCard({ model, rank, rankColor, modelColor }: ModelRankCardProp
 
         {/* Total Trades */}
         <div>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', marginBottom: '2px' }}>TRADES</div>
-          <div style={{ color: BLOOMBERG.CYAN, fontWeight: '700', fontSize: '10px' }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '7px', marginBottom: '2px' }}>TRADES</div>
+          <div style={{ color: FINCEPT.CYAN, fontWeight: '700', fontSize: '10px' }}>
             {model.total_trades}
           </div>
         </div>
 
         {/* Daily P&L */}
         <div>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', marginBottom: '2px' }}>TODAY</div>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '7px', marginBottom: '2px' }}>TODAY</div>
           <div style={{
-            color: model.daily_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: model.daily_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
             fontWeight: '700',
             fontSize: '10px'
           }}>
@@ -311,23 +311,23 @@ function ModelRankCard({ model, rank, rankColor, modelColor }: ModelRankCardProp
       <div style={{
         marginTop: '8px',
         paddingTop: '6px',
-        borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
         justifyContent: 'space-between',
         fontSize: '8px',
         fontFamily: '"IBM Plex Mono", monospace'
       }}>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <span style={{ color: BLOOMBERG.GRAY }}>W: </span>
-          <span style={{ color: BLOOMBERG.GREEN, fontWeight: '600' }}>{model.winning_trades}</span>
+          <span style={{ color: FINCEPT.GRAY }}>W: </span>
+          <span style={{ color: FINCEPT.GREEN, fontWeight: '600' }}>{model.winning_trades}</span>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <span style={{ color: BLOOMBERG.GRAY }}>L: </span>
-          <span style={{ color: BLOOMBERG.RED, fontWeight: '600' }}>{model.losing_trades}</span>
+          <span style={{ color: FINCEPT.GRAY }}>L: </span>
+          <span style={{ color: FINCEPT.RED, fontWeight: '600' }}>{model.losing_trades}</span>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <span style={{ color: BLOOMBERG.GRAY }}>POS: </span>
-          <span style={{ color: BLOOMBERG.YELLOW, fontWeight: '600' }}>{model.positions}</span>
+          <span style={{ color: FINCEPT.GRAY }}>POS: </span>
+          <span style={{ color: FINCEPT.YELLOW, fontWeight: '600' }}>{model.positions}</span>
         </div>
       </div>
     </div>

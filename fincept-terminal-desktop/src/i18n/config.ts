@@ -7,7 +7,7 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import Backend from 'i18next-http-backend';
 import { invoke } from '@tauri-apps/api/core';
 
-// Custom storage backend using SQLite (no localStorage)
+// Custom storage backend using SQLite
 const sqliteStorage = {
   name: 'sqliteStorage',
   async: true,
@@ -59,7 +59,7 @@ i18next
 
     detection: {
       order: ['querystring', 'cookie', 'navigator'],
-      caches: [], // Disable localStorage caching, we'll handle it manually
+      caches: [], // Disabled - using SQLite for persistence
     },
 
     interpolation: {
@@ -74,7 +74,7 @@ i18next
       'profile', 'screener', 'trading', 'watchlist', 'dataMapping',
       'dataSources', 'docs', 'notes', 'support', 'nodeEditor',
       'reportBuilder', 'alphaArena', 'codeEditor', 'agentConfig',
-      'dbnomics', 'excel', 'marketplace', 'backtesting'
+      'dbnomics', 'excel', 'marketplace', 'backtesting', 'akshare'
     ],
 
     react: {

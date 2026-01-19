@@ -2140,7 +2140,7 @@ export default function NodeEditorTab() {
             )}
           </div>
 
-          {/* Right Sidebar - Config Panel (Bloomberg Style) */}
+          {/* Right Sidebar - Config Panel (Fincept Style) */}
           {selectedNodes.length === 1 && (() => {
             const selectedNode = nodes.find(n => n.id === selectedNodes[0]);
             if (!selectedNode) return null;
@@ -2182,7 +2182,7 @@ export default function NodeEditorTab() {
                 overflow: 'hidden',
                 fontFamily: '"IBM Plex Mono", "Consolas", monospace',
               }}>
-                {/* Panel Header - Bloomberg Style */}
+                {/* Panel Header - Fincept Style */}
                 <div style={{
                   backgroundColor: '#1A1A1A',
                   borderBottom: '1px solid #2A2A2A',
@@ -2615,7 +2615,7 @@ export default function NodeEditorTab() {
                   )}
                 </div>
 
-                {/* Panel Footer with Actions - Bloomberg Style */}
+                {/* Panel Footer with Actions - Fincept Style */}
                 <div style={{
                   padding: '10px 12px',
                   backgroundColor: '#0F0F0F',

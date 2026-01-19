@@ -1,7 +1,7 @@
 import React from 'react';
 import { Transaction } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatNumber, formatDateTime } from './utils';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
 
 interface HistoryViewProps {
   transactions: Transaction[];
@@ -14,7 +14,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: BLOOMBERG.DARK_BG,
+      backgroundColor: FINCEPT.DARK_BG,
       padding: SPACING.DEFAULT,
       overflow: 'hidden'
     }}>
@@ -30,7 +30,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
         <div style={{
           padding: SPACING.XLARGE,
           textAlign: 'center',
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontSize: TYPOGRAPHY.DEFAULT,
           fontFamily: TYPOGRAPHY.MONO
         }}>
@@ -44,7 +44,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
             gridTemplateColumns: '1.5fr 1fr 0.8fr 1fr 1fr 1fr 2fr',
             gap: SPACING.MEDIUM,
             padding: SPACING.MEDIUM,
-            backgroundColor: BLOOMBERG.HEADER_BG,
+            backgroundColor: FINCEPT.HEADER_BG,
             fontSize: TYPOGRAPHY.BODY,
             fontWeight: TYPOGRAPHY.BOLD,
             borderBottom: BORDERS.ORANGE,
@@ -52,13 +52,13 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
             top: 0,
             zIndex: 1
           }}>
-            <div style={{ color: BLOOMBERG.ORANGE }}>DATE</div>
-            <div style={{ color: BLOOMBERG.ORANGE }}>SYMBOL</div>
-            <div style={{ color: BLOOMBERG.ORANGE }}>TYPE</div>
-            <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>QTY</div>
-            <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>PRICE</div>
-            <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>TOTAL</div>
-            <div style={{ color: BLOOMBERG.ORANGE }}>NOTES</div>
+            <div style={{ color: FINCEPT.ORANGE }}>DATE</div>
+            <div style={{ color: FINCEPT.ORANGE }}>SYMBOL</div>
+            <div style={{ color: FINCEPT.ORANGE }}>TYPE</div>
+            <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>QTY</div>
+            <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>PRICE</div>
+            <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>TOTAL</div>
+            <div style={{ color: FINCEPT.ORANGE }}>NOTES</div>
           </div>
 
           {/* Transaction Rows */}
@@ -71,7 +71,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
                 gap: SPACING.MEDIUM,
                 padding: SPACING.MEDIUM,
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
-                borderLeft: `3px solid ${txn.transaction_type === 'BUY' ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+                borderLeft: `3px solid ${txn.transaction_type === 'BUY' ? FINCEPT.GREEN : FINCEPT.RED}`,
                 fontSize: TYPOGRAPHY.BODY,
                 marginBottom: '1px',
                 fontFamily: TYPOGRAPHY.MONO,
@@ -79,22 +79,22 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
                 alignItems: 'center'
               }}
             >
-              <div style={{ color: BLOOMBERG.GRAY }}>
+              <div style={{ color: FINCEPT.GRAY }}>
                 {formatDateTime(txn.transaction_date)}
               </div>
-              <div style={{ color: BLOOMBERG.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{txn.symbol}</div>
+              <div style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{txn.symbol}</div>
               <div style={{
-                color: txn.transaction_type === 'BUY' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                color: txn.transaction_type === 'BUY' ? FINCEPT.GREEN : FINCEPT.RED,
                 fontWeight: TYPOGRAPHY.BOLD
               }}>
                 {txn.transaction_type}
               </div>
-              <div style={{ color: BLOOMBERG.WHITE, textAlign: 'right' }}>{formatNumber(txn.quantity, 4)}</div>
-              <div style={{ color: BLOOMBERG.WHITE, textAlign: 'right' }}>{formatCurrency(txn.price, currency)}</div>
-              <div style={{ color: BLOOMBERG.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.SEMIBOLD }}>
+              <div style={{ color: FINCEPT.WHITE, textAlign: 'right' }}>{formatNumber(txn.quantity, 4)}</div>
+              <div style={{ color: FINCEPT.WHITE, textAlign: 'right' }}>{formatCurrency(txn.price, currency)}</div>
+              <div style={{ color: FINCEPT.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.SEMIBOLD }}>
                 {formatCurrency(txn.total_value, currency)}
               </div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.SMALL }}>{txn.notes || '-'}</div>
+              <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL }}>{txn.notes || '-'}</div>
             </div>
           ))}
         </div>

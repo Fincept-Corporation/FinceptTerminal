@@ -171,6 +171,125 @@ export class HyperLiquidAdapter extends BaseExchangeAdapter {
     });
   }
 
+  /**
+   * Create trailing stop order
+   * Note: HyperLiquid doesn't natively support trailing stops, simulated with stop orders
+   */
+  async createTrailingStopOrder(
+    symbol: string,
+    side: OrderSide,
+    amount: number,
+    trailingDelta: number,
+    params?: OrderParams
+  ) {
+    try {
+      await this.ensureAuthenticated();
+      // HyperLiquid doesn't support trailing stops natively
+      // Calculate stop price based on current price and trailing delta
+      const ticker = await this.fetchTicker(symbol);
+      const currentPrice = ticker.last || ticker.close;
+      if (!currentPrice) throw new Error('Cannot determine current price');
+
+      const stopPrice = side === 'sell'
+        ? currentPrice * (1 - trailingDelta / 100)
+        : currentPrice * (1 + trailingDelta / 100);
+
+      return await this.createStopLossOrder(symbol, side, amount, stopPrice);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Create iceberg order (split large order into smaller chunks)
+   * Note: HyperLiquid doesn't support native iceberg, simulated with multiple orders
+   */
+  async createIcebergOrder(
+    symbol: string,
+    side: OrderSide,
+    amount: number,
+    price: number,
+    displayAmount: number,
+    params?: OrderParams
+  ) {
+    try {
+      await this.ensureAuthenticated();
+      // Simulate iceberg by creating multiple smaller orders
+      const chunks = Math.ceil(amount / displayAmount);
+      const orders = [];
+
+      for (let i = 0; i < chunks; i++) {
+        const chunkAmount = Math.min(displayAmount, amount - i * displayAmount);
+        const order = await this.createOrder(symbol, 'limit', side, chunkAmount, price, params);
+        orders.push(order);
+      }
+
+      return orders;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Create OCO (One Cancels Other) order
+   * Note: HyperLiquid doesn't support native OCO, creates linked stop-loss and take-profit
+   */
+  async createOCOOrder(
+    symbol: string,
+    side: OrderSide,
+    amount: number,
+    price: number,
+    stopPrice: number,
+    stopLimitPrice?: number
+  ) {
+    try {
+      await this.ensureAuthenticated();
+      // Create both orders - in a real implementation you'd track and cancel the other when one fills
+      const limitOrder = await this.createOrder(symbol, 'limit', side, amount, price);
+      const stopOrder = await this.createStopLossOrder(
+        symbol,
+        side,
+        amount,
+        stopPrice,
+        stopLimitPrice
+      );
+
+      return {
+        orderListId: `oco_${Date.now()}`,
+        contingencyType: 'OCO',
+        listStatusType: 'EXEC_STARTED',
+        orders: [limitOrder, stopOrder],
+      };
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Create margin order
+   * Note: HyperLiquid uses perpetuals for leverage, not traditional margin
+   */
+  async createMarginOrder(
+    symbol: string,
+    type: OrderType,
+    side: OrderSide,
+    amount: number,
+    price?: number,
+    params?: OrderParams
+  ) {
+    try {
+      await this.ensureAuthenticated();
+      // HyperLiquid perpetuals inherently support leverage
+      // Set leverage first if specified
+      if (params?.leverage) {
+        await this.setLeverage(symbol, params.leverage);
+      }
+      return await this.createOrder(symbol, type, side, amount, price, params);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // ============================================================================
   // LEVERAGE & MARGIN
   // ============================================================================
@@ -202,6 +321,45 @@ export class HyperLiquidAdapter extends BaseExchangeAdapter {
     }
   }
 
+  /**
+   * Fetch margin balance
+   * Note: HyperLiquid uses unified account for perpetuals
+   */
+  async fetchMarginBalance() {
+    try {
+      await this.ensureAuthenticated();
+      // HyperLiquid has unified balance for margin/perpetuals
+      const balance = await this.fetchBalance();
+      return {
+        ...balance,
+        marginLevel: (balance as any).info?.marginLevel || null,
+        marginRatio: (balance as any).info?.marginRatio || null,
+      };
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Fetch futures/perpetual balance
+   * Note: Same as margin balance for HyperLiquid unified account
+   */
+  async fetchFuturesBalance() {
+    try {
+      await this.ensureAuthenticated();
+      const balance = await this.fetchBalance();
+      // Extract futures-specific info
+      return {
+        ...balance,
+        unrealizedPnl: (balance as any).info?.unrealizedPnl || 0,
+        marginBalance: (balance as any).info?.marginBalance || (balance.total as any)?.USDC || 0,
+        availableBalance: (balance.free as any)?.USDC || 0,
+      };
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // ============================================================================
   // TRADING METHODS (Extended)
   // ============================================================================
@@ -214,6 +372,18 @@ export class HyperLiquidAdapter extends BaseExchangeAdapter {
       await this.ensureAuthenticated();
       const fees = await this.exchange.fetchTradingFees();
       return fees[symbol] || null;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Fetch all trading fees
+   */
+  async fetchTradingFees() {
+    try {
+      await this.ensureAuthenticated();
+      return await this.exchange.fetchTradingFees();
     } catch (error) {
       throw this.handleError(error);
     }

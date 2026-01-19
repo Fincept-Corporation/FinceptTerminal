@@ -5,13 +5,16 @@ Provides:
 - Session creation and management
 - Chat history persistence
 - Session resume across restarts
-- Session summaries
+- Session summaries with AI
+- Session history search
+- Agentic session state management
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 import logging
 import json
 from pathlib import Path
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -351,8 +354,197 @@ class SessionModule:
 
     def _get_timestamp(self) -> str:
         """Get current timestamp"""
-        from datetime import datetime
         return datetime.utcnow().isoformat()
+
+    def search_history(
+        self,
+        query: str,
+        session_id: Optional[str] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Search session history for matching messages.
+
+        Args:
+            query: Search query
+            session_id: Specific session to search (None = all)
+            limit: Maximum results
+
+        Returns:
+            List of matching messages with context
+        """
+        results = []
+        query_lower = query.lower()
+
+        sessions_to_search = (
+            [session_id] if session_id
+            else list(self._sessions.keys())
+        )
+
+        for sid in sessions_to_search:
+            session = self._sessions.get(sid)
+            if not session:
+                continue
+
+            for i, msg in enumerate(session.get("messages", [])):
+                content = msg.get("content", "")
+                if query_lower in content.lower():
+                    results.append({
+                        "session_id": sid,
+                        "message_index": i,
+                        "message": msg,
+                        "context": self._get_message_context(session, i)
+                    })
+
+                    if len(results) >= limit:
+                        return results
+
+        return results
+
+    def _get_message_context(
+        self,
+        session: Dict,
+        index: int,
+        window: int = 2
+    ) -> List[Dict]:
+        """Get surrounding messages for context."""
+        messages = session.get("messages", [])
+        start = max(0, index - window)
+        end = min(len(messages), index + window + 1)
+        return messages[start:end]
+
+    def get_session_state(self, session_id: str) -> Dict[str, Any]:
+        """
+        Get session state for agentic state management.
+
+        Returns state that agent can read/write.
+        """
+        session = self._sessions.get(session_id)
+        if not session:
+            return {}
+
+        return session.get("state", {})
+
+    def update_session_state(
+        self,
+        session_id: str,
+        updates: Dict[str, Any],
+        merge: bool = True
+    ) -> None:
+        """
+        Update session state.
+
+        Args:
+            session_id: Session ID
+            updates: State updates
+            merge: Merge with existing state (vs replace)
+        """
+        if session_id not in self._sessions:
+            self.create_session(session_id)
+
+        if "state" not in self._sessions[session_id]:
+            self._sessions[session_id]["state"] = {}
+
+        if merge:
+            self._sessions[session_id]["state"].update(updates)
+        else:
+            self._sessions[session_id]["state"] = updates
+
+        if self.auto_save:
+            self._save_session(session_id)
+
+    def create_ai_summary(
+        self,
+        session_id: str,
+        model: Any = None,
+        api_keys: Dict[str, str] = None
+    ) -> Optional[str]:
+        """
+        Create AI-powered session summary using Agno.
+
+        Args:
+            session_id: Session ID
+            model: LLM model to use
+            api_keys: API keys for model
+
+        Returns:
+            Generated summary
+        """
+        messages = self.get_messages(session_id)
+        if not messages:
+            return None
+
+        try:
+            from agno.session import SessionSummaryManager
+
+            # Create model if not provided
+            if model is None and api_keys:
+                from agno.models.openai import OpenAIChat
+                model = OpenAIChat(
+                    id="gpt-3.5-turbo",
+                    api_key=api_keys.get("OPENAI_API_KEY")
+                )
+
+            if model:
+                manager = SessionSummaryManager(model=model)
+                agno_messages = self.get_chat_history(session_id, format="agno")
+                summary = manager.create_session_summary(agno_messages)
+
+                # Store summary
+                if session_id in self._sessions:
+                    self._sessions[session_id]["summary"] = summary
+                    self._sessions[session_id]["summary_created_at"] = self._get_timestamp()
+                    if self.auto_save:
+                        self._save_session(session_id)
+
+                return summary
+
+        except ImportError:
+            logger.warning("Agno SessionSummaryManager not available")
+        except Exception as e:
+            logger.error(f"Failed to create AI summary: {e}")
+
+        # Fallback: simple summary
+        return self._create_simple_summary(session_id)
+
+    def _create_simple_summary(self, session_id: str) -> str:
+        """Create simple summary without AI."""
+        messages = self.get_messages(session_id)
+        if not messages:
+            return "Empty session"
+
+        # Extract key topics
+        user_messages = [m for m in messages if m.get("role") == "user"]
+        topics = []
+
+        for msg in user_messages[:5]:  # First 5 user messages
+            content = msg.get("content", "")[:100]
+            topics.append(content)
+
+        summary = f"Session with {len(messages)} messages. "
+        summary += f"Topics: {'; '.join(topics)}"
+
+        return summary
+
+    def get_stored_summary(self, session_id: str) -> Optional[str]:
+        """Get previously stored summary."""
+        session = self._sessions.get(session_id)
+        if session:
+            return session.get("summary")
+        return None
+
+    def to_agent_config(self) -> Dict[str, Any]:
+        """
+        Convert to Agno agent config.
+
+        Returns config for Agent initialization.
+        """
+        return {
+            "enable_session_summaries": True,
+            "add_session_summary_to_context": True,
+            "search_session_history": True,
+            "cache_session": True
+        }
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "SessionModule":

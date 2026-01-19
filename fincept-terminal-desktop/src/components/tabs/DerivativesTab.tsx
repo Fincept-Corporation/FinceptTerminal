@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
 import { TabFooter } from '@/components/common/TabFooter';
 
-// Bloomberg-style color palette
+// Fincept-style color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',

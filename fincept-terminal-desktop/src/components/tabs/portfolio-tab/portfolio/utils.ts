@@ -2,7 +2,7 @@
 // Formatting, calculations, and helper functions
 import { terminalThemeService } from '@/services/core/terminalThemeService';
 
-export const getBloombergColors = () => {
+export const getFinceptColors = () => {
   const theme = terminalThemeService.getTheme();
   return {
     ORANGE: theme.colors.primary,
@@ -19,7 +19,7 @@ export const getBloombergColors = () => {
   };
 };
 
-export const BLOOMBERG_COLORS = getBloombergColors();
+export const FINCEPT_COLORS = getFinceptColors();
 
 // Currency symbols and formatting
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -322,7 +322,7 @@ export const formatDateTime = (date: string | Date): string => {
  * Get color for P&L
  */
 export const getPnLColor = (value: number): string => {
-  return value >= 0 ? BLOOMBERG_COLORS.GREEN : BLOOMBERG_COLORS.RED;
+  return value >= 0 ? FINCEPT_COLORS.GREEN : FINCEPT_COLORS.RED;
 };
 
 /**

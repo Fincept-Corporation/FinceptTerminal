@@ -12,18 +12,18 @@ export interface FontSettings {
 
 export interface ColorTheme {
   name: string;
-  primary: string;      // Replaces BLOOMBERG_ORANGE
-  secondary: string;    // Replaces BLOOMBERG_GREEN
+  primary: string;      // Replaces FINCEPT_ORANGE
+  secondary: string;    // Replaces FINCEPT_GREEN
   success: string;      // Success/positive states (same as secondary)
-  alert: string;        // Replaces BLOOMBERG_RED
-  warning: string;      // BLOOMBERG_YELLOW
-  info: string;         // BLOOMBERG_BLUE
-  accent: string;       // BLOOMBERG_CYAN
-  purple: string;       // BLOOMBERG_PURPLE
-  text: string;         // BLOOMBERG_WHITE
-  textMuted: string;    // BLOOMBERG_GRAY
-  background: string;   // BLOOMBERG_DARK_BG
-  panel: string;        // BLOOMBERG_PANEL_BG
+  alert: string;        // Replaces FINCEPT_RED
+  warning: string;      // FINCEPT_YELLOW
+  info: string;         // FINCEPT_BLUE
+  accent: string;       // FINCEPT_CYAN
+  purple: string;       // FINCEPT_PURPLE
+  text: string;         // FINCEPT_WHITE
+  textMuted: string;    // FINCEPT_GRAY
+  background: string;   // FINCEPT_DARK_BG
+  panel: string;        // FINCEPT_PANEL_BG
 }
 
 export interface TerminalTheme {
@@ -41,8 +41,8 @@ export interface FontSizes {
 
 // Predefined color themes
 export const COLOR_THEMES: Record<string, ColorTheme> = {
-  'bloomberg-classic': {
-    name: 'Bloomberg Classic',
+  'fincept-classic': {
+    name: 'Fincept Classic',
     primary: '#FFA500',
     secondary: '#00C800',
     success: '#00C800',
@@ -148,7 +148,7 @@ class TerminalThemeService {
         weight: 'normal',
         italic: false
       },
-      colors: COLOR_THEMES['bloomberg-classic']
+      colors: COLOR_THEMES['fincept-classic']
     };
   }
 
@@ -166,7 +166,7 @@ class TerminalThemeService {
             weight: parsed.font?.weight || 'normal',
             italic: parsed.font?.italic || false
           },
-          colors: parsed.colors || COLOR_THEMES['bloomberg-classic']
+          colors: parsed.colors || COLOR_THEMES['fincept-classic']
         };
       }
     } catch (error) {
@@ -246,7 +246,7 @@ class TerminalThemeService {
         weight: 'normal',
         italic: false
       },
-      colors: COLOR_THEMES['bloomberg-classic']
+      colors: COLOR_THEMES['fincept-classic']
     };
     this.saveTheme(this.theme);
   }
@@ -259,7 +259,7 @@ class TerminalThemeService {
         return key;
       }
     }
-    return 'bloomberg-classic';
+    return 'fincept-classic';
   }
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PortfolioSummary, portfolioService, PortfolioSnapshot } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent } from './utils';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
 
 interface PerformanceViewProps {
   portfolioSummary: PortfolioSummary;
@@ -83,15 +83,15 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
     return (
       <div style={{
         height: '100%',
-        backgroundColor: BLOOMBERG.DARK_BG,
+        backgroundColor: FINCEPT.DARK_BG,
         padding: SPACING.XLARGE,
         textAlign: 'center',
         fontFamily: TYPOGRAPHY.MONO
       }}>
-        <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
+        <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
           Loading performance data...
         </div>
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>
           Fetching portfolio snapshots from database
         </div>
       </div>
@@ -102,15 +102,15 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
     return (
       <div style={{
         height: '100%',
-        backgroundColor: BLOOMBERG.DARK_BG,
+        backgroundColor: FINCEPT.DARK_BG,
         padding: SPACING.XLARGE,
         textAlign: 'center',
         fontFamily: TYPOGRAPHY.MONO
       }}>
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
           No performance data available
         </div>
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>
           Portfolio snapshots will be created automatically as you use the application
         </div>
       </div>
@@ -164,7 +164,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
+      backgroundColor: FINCEPT.DARK_BG,
       padding: SPACING.DEFAULT,
       overflow: 'auto',
       fontFamily: TYPOGRAPHY.MONO
@@ -189,7 +189,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         }}>
           <div style={COMMON_STYLES.dataLabel}>PERIOD RETURN</div>
           <div style={{
-            color: periodReturn >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: periodReturn >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
             fontSize: TYPOGRAPHY.SUBHEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
@@ -203,7 +203,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         }}>
           <div style={COMMON_STYLES.dataLabel}>PERIOD GAIN</div>
           <div style={{
-            color: periodGain >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: periodGain >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
             fontSize: TYPOGRAPHY.SUBHEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
@@ -213,11 +213,11 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
         <div style={{
           ...COMMON_STYLES.metricCard,
-          border: `1px solid ${BLOOMBERG.YELLOW}`
+          border: `1px solid ${FINCEPT.YELLOW}`
         }}>
           <div style={COMMON_STYLES.dataLabel}>CURRENT VALUE</div>
           <div style={{
-            color: BLOOMBERG.YELLOW,
+            color: FINCEPT.YELLOW,
             fontSize: TYPOGRAPHY.SUBHEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
@@ -231,7 +231,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         }}>
           <div style={COMMON_STYLES.dataLabel}>START VALUE</div>
           <div style={{
-            color: BLOOMBERG.CYAN,
+            color: FINCEPT.CYAN,
             fontSize: TYPOGRAPHY.SUBHEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
@@ -245,7 +245,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         }}>
           <div style={COMMON_STYLES.dataLabel}>VOLATILITY</div>
           <div style={{
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             fontSize: TYPOGRAPHY.SUBHEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
@@ -273,7 +273,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                   y1={y}
                   x2={chartWidth - padding.right}
                   y2={y}
-                  stroke={BLOOMBERG.BORDER}
+                  stroke={FINCEPT.BORDER}
                   strokeWidth="0.5"
                   strokeDasharray="4,4"
                   opacity="0.3"
@@ -282,7 +282,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                   x={padding.left - 10}
                   y={y + 4}
                   textAnchor="end"
-                  fill={BLOOMBERG.GRAY}
+                  fill={FINCEPT.GRAY}
                   fontSize="9"
                   fontFamily={TYPOGRAPHY.MONO}
                 >
@@ -302,7 +302,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                 x={x}
                 y={chartHeight - padding.bottom + 20}
                 textAnchor="middle"
-                fill={BLOOMBERG.GRAY}
+                fill={FINCEPT.GRAY}
                 fontSize="8"
                 fontFamily={TYPOGRAPHY.MONO}
               >
@@ -314,7 +314,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           {/* Area fill */}
           <path
             d={areaPath}
-            fill={periodReturn >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+            fill={periodReturn >= 0 ? FINCEPT.GREEN : FINCEPT.RED}
             opacity="0.1"
           />
 
@@ -322,7 +322,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           <path
             d={linePath}
             fill="none"
-            stroke={periodReturn >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+            stroke={periodReturn >= 0 ? FINCEPT.GREEN : FINCEPT.RED}
             strokeWidth="2"
           />
 
@@ -333,8 +333,8 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
               cx={xScale(i)}
               cy={yScale(d.value)}
               r="3"
-              fill={d.changePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
-              stroke={BLOOMBERG.DARK_BG}
+              fill={d.changePercent >= 0 ? FINCEPT.GREEN : FINCEPT.RED}
+              stroke={FINCEPT.DARK_BG}
               strokeWidth="1"
             />
           ))}
@@ -345,7 +345,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             y1={yScale(portfolioSummary.total_cost_basis)}
             x2={chartWidth - padding.right}
             y2={yScale(portfolioSummary.total_cost_basis)}
-            stroke={BLOOMBERG.YELLOW}
+            stroke={FINCEPT.YELLOW}
             strokeWidth="2"
             strokeDasharray="8,4"
           />
@@ -353,7 +353,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             x={chartWidth - padding.right - 10}
             y={yScale(portfolioSummary.total_cost_basis) - 8}
             textAnchor="end"
-            fill={BLOOMBERG.YELLOW}
+            fill={FINCEPT.YELLOW}
             fontSize="10"
             fontWeight="bold"
             fontFamily={TYPOGRAPHY.MONO}
@@ -366,7 +366,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             x={chartWidth / 2}
             y={15}
             textAnchor="middle"
-            fill={BLOOMBERG.ORANGE}
+            fill={FINCEPT.ORANGE}
             fontSize="12"
             fontWeight="bold"
             fontFamily={TYPOGRAPHY.MONO}
@@ -378,7 +378,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
       {/* Performance Table */}
       <div style={{
-        color: BLOOMBERG.ORANGE,
+        color: FINCEPT.ORANGE,
         fontSize: TYPOGRAPHY.DEFAULT,
         fontWeight: TYPOGRAPHY.BOLD,
         marginBottom: SPACING.SMALL,
@@ -395,7 +395,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           gridTemplateColumns: '1fr 1.2fr 1fr 1fr',
           gap: SPACING.SMALL,
           padding: SPACING.SMALL,
-          backgroundColor: BLOOMBERG.HEADER_BG,
+          backgroundColor: FINCEPT.HEADER_BG,
           fontSize: TYPOGRAPHY.BODY,
           fontWeight: TYPOGRAPHY.BOLD,
           position: 'sticky',
@@ -403,10 +403,10 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           zIndex: 1,
           borderBottom: BORDERS.ORANGE
         }}>
-          <div style={{ color: BLOOMBERG.ORANGE }}>DATE</div>
-          <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>VALUE</div>
-          <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>CHANGE</div>
-          <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>CHANGE %</div>
+          <div style={{ color: FINCEPT.ORANGE }}>DATE</div>
+          <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>VALUE</div>
+          <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>CHANGE</div>
+          <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>CHANGE %</div>
         </div>
 
         {/* Table Rows */}
@@ -419,24 +419,24 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
               gap: SPACING.SMALL,
               padding: SPACING.SMALL,
               backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
-              borderLeft: `3px solid ${d.changePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+              borderLeft: `3px solid ${d.changePercent >= 0 ? FINCEPT.GREEN : FINCEPT.RED}`,
               fontSize: TYPOGRAPHY.BODY,
               marginBottom: '2px'
             }}
           >
-            <div style={{ color: BLOOMBERG.GRAY }}>{d.date}</div>
-            <div style={{ color: BLOOMBERG.WHITE, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+            <div style={{ color: FINCEPT.GRAY }}>{d.date}</div>
+            <div style={{ color: FINCEPT.WHITE, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
               {formatCurrency(d.value, currency)}
             </div>
             <div style={{
-              color: d.change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+              color: d.change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
               textAlign: 'right',
               fontWeight: TYPOGRAPHY.BOLD
             }}>
               {formatCurrency(d.change, currency)}
             </div>
             <div style={{
-              color: d.changePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+              color: d.changePercent >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
               textAlign: 'right',
               fontWeight: TYPOGRAPHY.BOLD
             }}>
@@ -454,9 +454,9 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           backgroundColor: 'rgba(255,136,0,0.05)',
           border: BORDERS.ORANGE,
           fontSize: TYPOGRAPHY.SMALL,
-          color: BLOOMBERG.GRAY
+          color: FINCEPT.GRAY
         }}>
-          <strong style={{ color: BLOOMBERG.ORANGE }}>TIP:</strong> Portfolio snapshots are created automatically.
+          <strong style={{ color: FINCEPT.ORANGE }}>TIP:</strong> Portfolio snapshots are created automatically.
           More historical data will be available as you continue to use the application.
           Current data points: {performanceData.length}
         </div>

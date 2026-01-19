@@ -245,7 +245,7 @@ class ToolkitPaneView implements IPrimitivePaneView {
     if (isSelected) {
       this.applyStyle(ctx, {
         ...drawing.style,
-        color: '#FF8800', // Bloomberg orange for selection
+        color: '#FF8800', // Fincept orange for selection
         lineWidth: (drawing.style.lineWidth || 2) + 1, // Thicker when selected
       });
     } else if (isHovered) {

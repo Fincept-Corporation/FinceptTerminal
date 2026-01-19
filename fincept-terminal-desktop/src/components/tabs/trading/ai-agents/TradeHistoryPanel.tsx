@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Activity, BarChart3, RefreshCw, Filter, ArrowUpDown } from 'lucide-react';
 import agnoTradingService, { type AgentTrade, type AgentPerformance } from '../../../../services/trading/agnoTradingService';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -116,8 +116,8 @@ export function TradeHistoryPanel({
   return (
     <div style={{
       height: '100%',
-      background: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '4px',
       display: 'flex',
       flexDirection: 'column',
@@ -125,17 +125,17 @@ export function TradeHistoryPanel({
     }}>
       {/* Header */}
       <div style={{
-        background: BLOOMBERG.HEADER_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        background: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px 10px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <BarChart3 size={14} color={BLOOMBERG.CYAN} />
+          <BarChart3 size={14} color={FINCEPT.CYAN} />
           <span style={{
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             fontSize: '11px',
             fontWeight: '600',
             letterSpacing: '0.5px'
@@ -143,7 +143,7 @@ export function TradeHistoryPanel({
             TRADE HISTORY
           </span>
           {isLoading && (
-            <RefreshCw size={10} color={BLOOMBERG.ORANGE} className="animate-spin" />
+            <RefreshCw size={10} color={FINCEPT.ORANGE} className="animate-spin" />
           )}
         </div>
 
@@ -154,9 +154,9 @@ export function TradeHistoryPanel({
               key={status}
               onClick={() => setFilterStatus(status)}
               style={{
-                background: filterStatus === status ? BLOOMBERG.ORANGE : 'transparent',
-                border: `1px solid ${filterStatus === status ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                color: filterStatus === status ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                background: filterStatus === status ? FINCEPT.ORANGE : 'transparent',
+                border: `1px solid ${filterStatus === status ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                color: filterStatus === status ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 padding: '2px 6px',
                 borderRadius: '2px',
                 fontSize: '8px',
@@ -176,8 +176,8 @@ export function TradeHistoryPanel({
       {/* Performance Summary */}
       {performance && (
         <div style={{
-          background: BLOOMBERG.DARK_BG,
-          borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+          background: FINCEPT.DARK_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
           padding: '8px 10px',
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
@@ -186,42 +186,42 @@ export function TradeHistoryPanel({
           <MetricCard
             label="TOTAL P&L"
             value={`$${performance.total_pnl.toFixed(2)}`}
-            color={performance.total_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+            color={performance.total_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED}
           />
           <MetricCard
             label="WIN RATE"
             value={`${performance.win_rate.toFixed(1)}%`}
-            color={performance.win_rate >= 50 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+            color={performance.win_rate >= 50 ? FINCEPT.GREEN : FINCEPT.RED}
           />
           <MetricCard
             label="SHARPE"
             value={performance.sharpe_ratio.toFixed(2)}
-            color={performance.sharpe_ratio >= 1 ? BLOOMBERG.GREEN : BLOOMBERG.ORANGE}
+            color={performance.sharpe_ratio >= 1 ? FINCEPT.GREEN : FINCEPT.ORANGE}
           />
           <MetricCard
             label="TRADES"
             value={performance.total_trades.toString()}
-            color={BLOOMBERG.CYAN}
+            color={FINCEPT.CYAN}
           />
           <MetricCard
             label="DAILY P&L"
             value={`$${performance.daily_pnl.toFixed(2)}`}
-            color={performance.daily_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+            color={performance.daily_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED}
           />
           <MetricCard
             label="MAX DD"
             value={`${performance.max_drawdown.toFixed(2)}%`}
-            color={BLOOMBERG.RED}
+            color={FINCEPT.RED}
           />
           <MetricCard
             label="PROFIT FACTOR"
             value={performance.profit_factor.toFixed(2)}
-            color={performance.profit_factor >= 1.5 ? BLOOMBERG.GREEN : BLOOMBERG.ORANGE}
+            color={performance.profit_factor >= 1.5 ? FINCEPT.GREEN : FINCEPT.ORANGE}
           />
           <MetricCard
             label="STREAK"
             value={`${performance.consecutive_wins}W / ${performance.consecutive_losses}L`}
-            color={BLOOMBERG.GRAY}
+            color={FINCEPT.GRAY}
           />
         </div>
       )}
@@ -229,12 +229,12 @@ export function TradeHistoryPanel({
       {/* Error Display */}
       {error && (
         <div style={{
-          background: `${BLOOMBERG.RED}15`,
-          border: `1px solid ${BLOOMBERG.RED}`,
+          background: `${FINCEPT.RED}15`,
+          border: `1px solid ${FINCEPT.RED}`,
           borderRadius: '2px',
           padding: '8px',
           margin: '8px',
-          color: BLOOMBERG.RED,
+          color: FINCEPT.RED,
           fontSize: '9px'
         }}>
           {error}
@@ -250,7 +250,7 @@ export function TradeHistoryPanel({
         {trades.length === 0 && !isLoading && (
           <div style={{
             textAlign: 'center',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '10px',
             marginTop: '40px'
           }}>
@@ -267,8 +267,8 @@ export function TradeHistoryPanel({
           }}>
             <thead>
               <tr style={{
-                borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                color: BLOOMBERG.GRAY
+                borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                color: FINCEPT.GRAY
               }}>
                 <SortableHeader
                   label="SYMBOL"
@@ -340,8 +340,8 @@ interface MetricCardProps {
 function MetricCard({ label, value, color }: MetricCardProps) {
   return (
     <div style={{
-      background: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '2px',
       padding: '4px 6px',
       display: 'flex',
@@ -349,7 +349,7 @@ function MetricCard({ label, value, color }: MetricCardProps) {
       gap: '2px'
     }}>
       <span style={{
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         fontSize: '7px',
         fontWeight: '700',
         letterSpacing: '0.5px'
@@ -404,10 +404,10 @@ function SortableHeader({
         transition: 'color 0.2s'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.color = BLOOMBERG.ORANGE;
+        e.currentTarget.style.color = FINCEPT.ORANGE;
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.color = isActive ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY;
+        e.currentTarget.style.color = isActive ? FINCEPT.ORANGE : FINCEPT.GRAY;
       }}
     >
       <div style={{
@@ -415,7 +415,7 @@ function SortableHeader({
         alignItems: 'center',
         gap: '2px',
         justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start',
-        color: isActive ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+        color: isActive ? FINCEPT.ORANGE : FINCEPT.GRAY
       }}>
         {label}
         {isActive && (
@@ -438,19 +438,19 @@ interface TradeRowProps {
 }
 
 function TradeRow({ trade }: TradeRowProps) {
-  const pnlColor = trade.pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED;
-  const statusColor = trade.status === 'open' ? BLOOMBERG.CYAN :
-                     trade.status === 'closed' ? BLOOMBERG.GRAY :
-                     BLOOMBERG.YELLOW;
+  const pnlColor = trade.pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED;
+  const statusColor = trade.status === 'open' ? FINCEPT.CYAN :
+                     trade.status === 'closed' ? FINCEPT.GRAY :
+                     FINCEPT.YELLOW;
 
   return (
     <tr
       style={{
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         transition: 'background 0.2s'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = BLOOMBERG.HOVER;
+        e.currentTarget.style.background = FINCEPT.HOVER;
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = 'transparent';
@@ -459,7 +459,7 @@ function TradeRow({ trade }: TradeRowProps) {
       {/* Symbol */}
       <td style={{
         padding: '6px 4px',
-        color: BLOOMBERG.WHITE,
+        color: FINCEPT.WHITE,
         fontWeight: '600'
       }}>
         {trade.symbol}
@@ -468,7 +468,7 @@ function TradeRow({ trade }: TradeRowProps) {
       {/* Side */}
       <td style={{
         padding: '6px 4px',
-        color: trade.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+        color: trade.side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED,
         fontWeight: '700',
         textTransform: 'uppercase'
       }}>
@@ -479,7 +479,7 @@ function TradeRow({ trade }: TradeRowProps) {
       <td style={{
         padding: '6px 4px',
         textAlign: 'right',
-        color: BLOOMBERG.WHITE
+        color: FINCEPT.WHITE
       }}>
         ${trade.entry_price.toFixed(2)}
       </td>
@@ -488,7 +488,7 @@ function TradeRow({ trade }: TradeRowProps) {
       <td style={{
         padding: '6px 4px',
         textAlign: 'right',
-        color: trade.exit_price ? BLOOMBERG.WHITE : BLOOMBERG.MUTED
+        color: trade.exit_price ? FINCEPT.WHITE : FINCEPT.MUTED
       }}>
         {trade.exit_price ? `$${trade.exit_price.toFixed(2)}` : '-'}
       </td>
@@ -537,7 +537,7 @@ function TradeRow({ trade }: TradeRowProps) {
       <td style={{
         padding: '6px 4px',
         textAlign: 'right',
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         fontSize: '8px'
       }}>
         {new Date(trade.entry_timestamp * 1000).toLocaleDateString()}

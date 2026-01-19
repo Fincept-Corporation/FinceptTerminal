@@ -1,12 +1,12 @@
 /**
- * Bloomberg Terminal Style Constants for Portfolio Tab
+ * Fincept Terminal Style Constants for Portfolio Tab
  *
  * This file contains all styling constants to ensure consistent
- * Bloomberg-style terminal aesthetics across all portfolio components.
+ * Fincept-style terminal aesthetics across all portfolio components.
  */
 
 // ========== COLOR PALETTE ==========
-export const BLOOMBERG = {
+export const FINCEPT = {
   // Primary Colors
   ORANGE: '#FF8800',          // Primary brand color, headers, highlights
   WHITE: '#FFFFFF',            // Primary text
@@ -86,12 +86,12 @@ export const BORDERS = {
   MEDIUM: '2px',
 
   // Border styles
-  STANDARD: `1px solid ${BLOOMBERG.BORDER}`,
-  ORANGE: `1px solid ${BLOOMBERG.ORANGE}`,
-  ORANGE_THICK: `2px solid ${BLOOMBERG.ORANGE}`,
-  RED: `1px solid ${BLOOMBERG.RED}`,
-  GREEN: `1px solid ${BLOOMBERG.GREEN}`,
-  CYAN: `1px solid ${BLOOMBERG.CYAN}`,
+  STANDARD: `1px solid ${FINCEPT.BORDER}`,
+  ORANGE: `1px solid ${FINCEPT.ORANGE}`,
+  ORANGE_THICK: `2px solid ${FINCEPT.ORANGE}`,
+  RED: `1px solid ${FINCEPT.RED}`,
+  GREEN: `1px solid ${FINCEPT.GREEN}`,
+  CYAN: `1px solid ${FINCEPT.CYAN}`,
 
   // Border radius (minimal for terminal aesthetic)
   RADIUS_NONE: '0px',
@@ -123,17 +123,17 @@ export const LAYOUT = {
 // ========== EFFECTS ==========
 export const EFFECTS = {
   // Text shadows (glow effects)
-  ORANGE_GLOW: `0 0 10px ${BLOOMBERG.ORANGE}40`,
-  ORANGE_GLOW_STRONG: `0 0 15px ${BLOOMBERG.ORANGE}60`,
+  ORANGE_GLOW: `0 0 10px ${FINCEPT.ORANGE}40`,
+  ORANGE_GLOW_STRONG: `0 0 15px ${FINCEPT.ORANGE}60`,
 
   // Box shadows
-  PANEL_SHADOW: `0 2px 8px ${BLOOMBERG.ORANGE}20`,
-  PANEL_SHADOW_STRONG: `0 4px 16px ${BLOOMBERG.DARK_BG}80`,
+  PANEL_SHADOW: `0 2px 8px ${FINCEPT.ORANGE}20`,
+  PANEL_SHADOW_STRONG: `0 4px 16px ${FINCEPT.DARK_BG}80`,
 
   // Drop shadows (for icons)
-  ICON_GLOW_ORANGE: `drop-shadow(0 0 4px ${BLOOMBERG.ORANGE})`,
-  ICON_GLOW_GREEN: `drop-shadow(0 0 4px ${BLOOMBERG.GREEN})`,
-  ICON_GLOW_RED: `drop-shadow(0 0 4px ${BLOOMBERG.RED})`,
+  ICON_GLOW_ORANGE: `drop-shadow(0 0 4px ${FINCEPT.ORANGE})`,
+  ICON_GLOW_GREEN: `drop-shadow(0 0 4px ${FINCEPT.GREEN})`,
+  ICON_GLOW_RED: `drop-shadow(0 0 4px ${FINCEPT.RED})`,
 
   // Transitions
   TRANSITION_FAST: 'all 0.15s ease',
@@ -146,8 +146,8 @@ export const COMMON_STYLES = {
   // Container
   container: {
     height: '100%',
-    backgroundColor: BLOOMBERG.DARK_BG,
-    color: BLOOMBERG.WHITE,
+    backgroundColor: FINCEPT.DARK_BG,
+    color: FINCEPT.WHITE,
     fontFamily: TYPOGRAPHY.MONO,
     overflow: 'hidden',
     display: 'flex',
@@ -156,14 +156,14 @@ export const COMMON_STYLES = {
 
   // Panel
   panel: {
-    backgroundColor: BLOOMBERG.PANEL_BG,
+    backgroundColor: FINCEPT.PANEL_BG,
     border: BORDERS.STANDARD,
     padding: SPACING.DEFAULT,
   },
 
   // Header
   header: {
-    backgroundColor: BLOOMBERG.HEADER_BG,
+    backgroundColor: FINCEPT.HEADER_BG,
     borderBottom: BORDERS.ORANGE_THICK,
     padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
     display: 'flex',
@@ -175,7 +175,7 @@ export const COMMON_STYLES = {
 
   // Section Header
   sectionHeader: {
-    color: BLOOMBERG.ORANGE,
+    color: FINCEPT.ORANGE,
     fontSize: TYPOGRAPHY.SUBHEADING,
     fontWeight: TYPOGRAPHY.BOLD,
     letterSpacing: TYPOGRAPHY.WIDE,
@@ -185,7 +185,7 @@ export const COMMON_STYLES = {
 
   // Data Label
   dataLabel: {
-    color: BLOOMBERG.GRAY,
+    color: FINCEPT.GRAY,
     fontSize: TYPOGRAPHY.SMALL,
     fontWeight: TYPOGRAPHY.SEMIBOLD,
     textTransform: 'uppercase' as const,
@@ -193,7 +193,7 @@ export const COMMON_STYLES = {
 
   // Data Value
   dataValue: {
-    color: BLOOMBERG.WHITE,
+    color: FINCEPT.WHITE,
     fontSize: TYPOGRAPHY.DEFAULT,
     fontWeight: TYPOGRAPHY.REGULAR,
     fontFamily: TYPOGRAPHY.MONO,
@@ -201,7 +201,7 @@ export const COMMON_STYLES = {
 
   // Metric Card
   metricCard: {
-    backgroundColor: BLOOMBERG.PANEL_BG,
+    backgroundColor: FINCEPT.PANEL_BG,
     border: BORDERS.STANDARD,
     padding: SPACING.DEFAULT,
     display: 'flex',
@@ -212,9 +212,9 @@ export const COMMON_STYLES = {
   // Button Primary
   buttonPrimary: {
     padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
-    backgroundColor: BLOOMBERG.ORANGE,
+    backgroundColor: FINCEPT.ORANGE,
     border: BORDERS.ORANGE,
-    color: BLOOMBERG.DARK_BG,
+    color: FINCEPT.DARK_BG,
     fontSize: TYPOGRAPHY.BODY,
     fontWeight: TYPOGRAPHY.BOLD,
     cursor: 'pointer',
@@ -227,7 +227,7 @@ export const COMMON_STYLES = {
     padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
     backgroundColor: 'transparent',
     border: BORDERS.STANDARD,
-    color: BLOOMBERG.WHITE,
+    color: FINCEPT.WHITE,
     fontSize: TYPOGRAPHY.BODY,
     fontWeight: TYPOGRAPHY.SEMIBOLD,
     cursor: 'pointer',
@@ -239,9 +239,9 @@ export const COMMON_STYLES = {
   inputField: {
     width: '100%',
     padding: SPACING.MEDIUM,
-    backgroundColor: BLOOMBERG.DARK_BG,
+    backgroundColor: FINCEPT.DARK_BG,
     border: BORDERS.STANDARD,
-    color: BLOOMBERG.WHITE,
+    color: FINCEPT.WHITE,
     fontSize: TYPOGRAPHY.BODY,
     fontFamily: TYPOGRAPHY.MONO,
     outline: 'none',
@@ -249,8 +249,8 @@ export const COMMON_STYLES = {
 
   // Table Header
   tableHeader: {
-    backgroundColor: BLOOMBERG.HEADER_BG,
-    color: BLOOMBERG.ORANGE,
+    backgroundColor: FINCEPT.HEADER_BG,
+    color: FINCEPT.ORANGE,
     fontSize: TYPOGRAPHY.BODY,
     fontWeight: TYPOGRAPHY.BOLD,
     padding: SPACING.SMALL,
@@ -277,14 +277,14 @@ export const COMMON_STYLES = {
   // Divider
   divider: {
     height: '1px',
-    backgroundColor: BLOOMBERG.BORDER,
+    backgroundColor: FINCEPT.BORDER,
     margin: `${SPACING.MEDIUM} 0`,
   },
 
   // Vertical Divider
   verticalDivider: {
     width: '1px',
-    backgroundColor: BLOOMBERG.BORDER,
+    backgroundColor: FINCEPT.BORDER,
     alignSelf: 'stretch',
   },
 
@@ -304,7 +304,7 @@ export const COMMON_STYLES = {
 
   // Modal Panel
   modalPanel: {
-    backgroundColor: BLOOMBERG.PANEL_BG,
+    backgroundColor: FINCEPT.PANEL_BG,
     border: BORDERS.ORANGE_THICK,
     padding: SPACING.XLARGE,
     minWidth: '400px',
@@ -319,14 +319,14 @@ export const COMMON_STYLES = {
       height: 6px;
     }
     *::-webkit-scrollbar-track {
-      background: ${BLOOMBERG.DARK_BG};
+      background: ${FINCEPT.DARK_BG};
     }
     *::-webkit-scrollbar-thumb {
-      background: ${BLOOMBERG.BORDER};
+      background: ${FINCEPT.BORDER};
       border-radius: 3px;
     }
     *::-webkit-scrollbar-thumb:hover {
-      background: ${BLOOMBERG.MUTED};
+      background: ${FINCEPT.MUTED};
     }
   `,
 } as const;
@@ -337,9 +337,9 @@ export const COMMON_STYLES = {
  * Get color based on value (positive/negative)
  */
 export function getValueColor(value: number): string {
-  if (value > 0) return BLOOMBERG.GREEN;
-  if (value < 0) return BLOOMBERG.RED;
-  return BLOOMBERG.WHITE;
+  if (value > 0) return FINCEPT.GREEN;
+  if (value < 0) return FINCEPT.RED;
+  return FINCEPT.WHITE;
 }
 
 /**
@@ -368,7 +368,7 @@ export function createHoverStyle(baseStyle: React.CSSProperties): {
   return {
     style: baseStyle,
     onMouseEnter: (e) => {
-      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+      e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
     },
     onMouseLeave: (e) => {
       e.currentTarget.style.backgroundColor = baseStyle.backgroundColor || 'transparent';
@@ -382,10 +382,10 @@ export function createHoverStyle(baseStyle: React.CSSProperties): {
 export function createFocusHandlers() {
   return {
     onFocus: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+      e.currentTarget.style.borderColor = FINCEPT.ORANGE;
     },
     onBlur: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+      e.currentTarget.style.borderColor = FINCEPT.BORDER;
     },
   };
 }
@@ -426,7 +426,7 @@ export const ANIMATIONS = {
   // Price flash animation
   priceFlash: `
     @keyframes priceFlash {
-      0% { background-color: ${BLOOMBERG.YELLOW}40; }
+      0% { background-color: ${FINCEPT.YELLOW}40; }
       100% { background-color: transparent; }
     }
   `,
@@ -449,7 +449,7 @@ export const ANIMATIONS = {
 } as const;
 
 export default {
-  BLOOMBERG,
+  FINCEPT,
   TYPOGRAPHY,
   SPACING,
   BORDERS,

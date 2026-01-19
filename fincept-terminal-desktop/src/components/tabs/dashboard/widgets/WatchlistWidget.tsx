@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { watchlistService, WatchlistStockWithQuote } from '../../../../services/core/watchlistService';
 
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GREEN = '#00C800';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_CYAN = '#00FFFF';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GREEN = '#00C800';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_CYAN = '#00FFFF';
 
 interface WatchlistWidgetProps {
   id: string;
@@ -72,8 +72,8 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
           gap: '4px',
           fontSize: '9px',
           fontWeight: 'bold',
-          color: BLOOMBERG_WHITE,
-          borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+          color: FINCEPT_WHITE,
+          borderBottom: `1px solid ${FINCEPT_GRAY}`,
           padding: '4px 0',
           marginBottom: '4px'
         }}>
@@ -94,18 +94,18 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
               borderBottom: `1px solid rgba(120,120,120,0.3)`
             }}
           >
-            <div style={{ color: BLOOMBERG_CYAN }}>{stock.symbol}</div>
-            <div style={{ color: BLOOMBERG_WHITE, textAlign: 'right' }}>
+            <div style={{ color: FINCEPT_CYAN }}>{stock.symbol}</div>
+            <div style={{ color: FINCEPT_WHITE, textAlign: 'right' }}>
               {stock.quote?.price?.toFixed(2) || '-'}
             </div>
             <div style={{
-              color: (stock.quote?.change || 0) >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+              color: (stock.quote?.change || 0) >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
               textAlign: 'right'
             }}>
               {stock.quote ? formatChange(stock.quote.change) : '-'}
             </div>
             <div style={{
-              color: (stock.quote?.change_percent || 0) >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+              color: (stock.quote?.change_percent || 0) >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
               textAlign: 'right'
             }}>
               {stock.quote ? formatPercent(stock.quote.change_percent) : '-'}
@@ -113,7 +113,7 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
           </div>
         ))}
         {stocks.length === 0 && !loading && !error && (
-          <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
+          <div style={{ color: FINCEPT_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
             {t('widgets.noStocksInWatchlist')}
           </div>
         )}

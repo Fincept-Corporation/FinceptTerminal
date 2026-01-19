@@ -1,29 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { Edit2, Info } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Edit2, Info, RefreshCw } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { marketDataService, QuoteData } from '../../services/markets/marketDataService';
 import { tickerStorage, UserMarketPreferences } from '../../services/core/tickerStorageService';
 import { sqliteService } from '../../services/core/sqliteService';
 import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
+import { useCache } from '../../hooks/useCache';
 import TickerEditModal from './TickerEditModal';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 import { createMarketsTabTour } from './tours/marketsTabTour';
 
+// Hook to fetch market data for a category
+// Cache key includes ticker count and first/last ticker to detect changes
+const useMarketCategory = (
+  category: string,
+  tickers: string[],
+  enabled: boolean,
+  refetchInterval: number
+) => {
+  // Create a cache key that changes when tickers change
+  const tickerHash = useMemo(() => {
+    if (tickers.length === 0) return 'empty';
+    return `${tickers.length}:${tickers[0]}:${tickers[tickers.length - 1]}`;
+  }, [tickers]);
+
+  return useCache<QuoteData[]>({
+    key: `markets:global:${category}:${tickerHash}`,
+    category: 'market-quotes',
+    fetcher: () => marketDataService.getEnhancedQuotes(tickers),
+    ttl: '10m',
+    enabled: enabled && tickers.length > 0,
+    refetchInterval,
+    staleWhileRevalidate: false // Fetch fresh data, don't use stale
+  });
+};
+
+// Hook to fetch regional market data
+const useRegionalMarket = (
+  region: string,
+  tickers: Array<{ symbol: string; name: string }>,
+  enabled: boolean,
+  refetchInterval: number
+) => {
+  const symbols = useMemo(() => tickers.map(t => t.symbol), [tickers]);
+
+  // Create a cache key that changes when tickers change
+  const tickerHash = useMemo(() => {
+    if (symbols.length === 0) return 'empty';
+    return `${symbols.length}:${symbols[0]}:${symbols[symbols.length - 1]}`;
+  }, [symbols]);
+
+  return useCache<QuoteData[]>({
+    key: `markets:regional:${region}:${tickerHash}`,
+    category: 'market-quotes',
+    fetcher: () => marketDataService.getEnhancedQuotes(symbols),
+    ttl: '10m',
+    enabled: enabled && symbols.length > 0,
+    refetchInterval,
+    staleWhileRevalidate: false // Fetch fresh data, don't use stale
+  });
+};
+
 const MarketsTab: React.FC = () => {
   const { t } = useTranslation('markets');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [lastUpdate, setLastUpdate] = useState(new Date());
-  const [isUpdating, setIsUpdating] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [updateInterval, setUpdateInterval] = useState(600000); // 10 minutes default
   const [dbInitialized, setDbInitialized] = useState(false);
-
-  // Market data state
-  const [marketData, setMarketData] = useState<Record<string, QuoteData[]>>({});
-  const [regionalData, setRegionalData] = useState<Record<string, QuoteData[]>>({});
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -44,9 +91,124 @@ const MarketsTab: React.FC = () => {
     const loadPreferences = async () => {
       const prefs = await tickerStorage.loadPreferences();
       setPreferences(prefs);
+      setPreferencesLoaded(true);
     };
     loadPreferences();
   }, []);
+
+  // Calculate effective refetch interval (0 = disabled)
+  const effectiveRefetchInterval = autoUpdate ? updateInterval : 0;
+
+  // Use cache hooks for each global market category
+  const stockIndicesCache = useMarketCategory(
+    'Stock Indices',
+    preferences.globalMarkets.find(m => m.category === 'Stock Indices')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  const forexCache = useMarketCategory(
+    'Forex',
+    preferences.globalMarkets.find(m => m.category === 'Forex')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  const commoditiesCache = useMarketCategory(
+    'Commodities',
+    preferences.globalMarkets.find(m => m.category === 'Commodities')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  const bondsCache = useMarketCategory(
+    'Bonds',
+    preferences.globalMarkets.find(m => m.category === 'Bonds')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  const etfsCache = useMarketCategory(
+    'ETFs',
+    preferences.globalMarkets.find(m => m.category === 'ETFs')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  const cryptoCache = useMarketCategory(
+    'Cryptocurrencies',
+    preferences.globalMarkets.find(m => m.category === 'Cryptocurrencies')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  // Use cache hooks for regional markets
+  const indiaCache = useRegionalMarket(
+    'India',
+    preferences.regionalMarkets.find(m => m.region === 'India')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  const chinaCache = useRegionalMarket(
+    'China',
+    preferences.regionalMarkets.find(m => m.region === 'China')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  const usCache = useRegionalMarket(
+    'United States',
+    preferences.regionalMarkets.find(m => m.region === 'United States')?.tickers || [],
+    preferencesLoaded && dbInitialized,
+    effectiveRefetchInterval
+  );
+
+  // Aggregate market data from cache hooks
+  const marketData: Record<string, QuoteData[]> = useMemo(() => ({
+    'Stock Indices': stockIndicesCache.data || [],
+    'Forex': forexCache.data || [],
+    'Commodities': commoditiesCache.data || [],
+    'Bonds': bondsCache.data || [],
+    'ETFs': etfsCache.data || [],
+    'Cryptocurrencies': cryptoCache.data || [],
+  }), [stockIndicesCache.data, forexCache.data, commoditiesCache.data, bondsCache.data, etfsCache.data, cryptoCache.data]);
+
+  const regionalData: Record<string, QuoteData[]> = useMemo(() => ({
+    'India': indiaCache.data || [],
+    'China': chinaCache.data || [],
+    'United States': usCache.data || [],
+  }), [indiaCache.data, chinaCache.data, usCache.data]);
+
+  // Track if any market is updating
+  const isUpdating = stockIndicesCache.isFetching || forexCache.isFetching ||
+    commoditiesCache.isFetching || bondsCache.isFetching ||
+    etfsCache.isFetching || cryptoCache.isFetching ||
+    indiaCache.isFetching || chinaCache.isFetching || usCache.isFetching;
+
+  // Get last update time from any successful fetch
+  const lastUpdate = useMemo(() => {
+    // Return current time when data is available
+    if (stockIndicesCache.data || forexCache.data) {
+      return new Date();
+    }
+    return new Date();
+  }, [stockIndicesCache.data, forexCache.data]);
+
+  // Refresh all markets
+  const refreshAllMarkets = useCallback(async () => {
+    await Promise.all([
+      stockIndicesCache.refresh(),
+      forexCache.refresh(),
+      commoditiesCache.refresh(),
+      bondsCache.refresh(),
+      etfsCache.refresh(),
+      cryptoCache.refresh(),
+      indiaCache.refresh(),
+      chinaCache.refresh(),
+      usCache.refresh(),
+    ]);
+  }, [stockIndicesCache, forexCache, commoditiesCache, bondsCache, etfsCache, cryptoCache, indiaCache, chinaCache, usCache]);
 
   // Function to record current market data
   const recordCurrentData = async () => {
@@ -73,100 +235,6 @@ const MarketsTab: React.FC = () => {
     }
   };
 
-  // Fetch market data progressively (display as data arrives)
-  const fetchMarketData = async () => {
-    setIsUpdating(true);
-
-    // Calculate cache age in minutes (10 minutes by default from updateInterval)
-    const cacheAgeMinutes = updateInterval / 60000;
-
-    // Create an array to track completion and capture data
-    const allFetches: Promise<void>[] = [];
-    const capturedGlobalData: Record<string, QuoteData[]> = {};
-    const capturedRegionalData: Record<string, QuoteData[]> = {};
-
-    // Fetch global markets progressively - each updates immediately
-    preferences.globalMarkets.forEach((market) => {
-      const fetchPromise = (async () => {
-        try {
-          // Use cached quotes with enhanced data (7D/30D returns)
-          const quotes = await marketDataService.getEnhancedQuotesWithCache(
-            market.tickers,
-            market.category,
-            cacheAgeMinutes
-          );
-
-          // Capture data for recording
-          capturedGlobalData[market.category] = quotes;
-
-          // Update state immediately as data arrives
-          setMarketData(prev => ({
-            ...prev,
-            [market.category]: quotes
-          }));
-        } catch (error) {
-          console.error(`Failed to fetch ${market.category}:`, error);
-        }
-      })();
-      allFetches.push(fetchPromise);
-    });
-
-    // Fetch regional markets progressively
-    preferences.regionalMarkets.forEach((market) => {
-      const fetchPromise = (async () => {
-        try {
-          const symbols = market.tickers.map(t => t.symbol);
-          // Use cached quotes with enhanced data (7D/30D returns)
-          const quotes = await marketDataService.getEnhancedQuotesWithCache(
-            symbols,
-            market.region,
-            cacheAgeMinutes
-          );
-
-          // Capture data for recording
-          capturedRegionalData[market.region] = quotes;
-
-          // Update state immediately as data arrives
-          setRegionalData(prev => ({
-            ...prev,
-            [market.region]: quotes
-          }));
-        } catch (error) {
-          console.error(`Failed to fetch ${market.region}:`, error);
-        }
-      })();
-      allFetches.push(fetchPromise);
-    });
-
-    // Wait for all basic quotes to load
-    await Promise.all(allFetches);
-    setLastUpdate(new Date());
-    setIsUpdating(false);
-
-    // Record data if recording is active (use captured data, not state)
-    if (isRecording) {
-      try {
-        const allData = {
-          globalMarkets: capturedGlobalData,
-          regionalMarkets: capturedRegionalData,
-          timestamp: new Date().toISOString(),
-          updateInterval: updateInterval
-        };
-        console.log('[MarketsTab] Recording data:', allData);
-        await contextRecorderService.recordApiResponse(
-          'Markets',
-          'market-data',
-          allData,
-          `Market Data - ${new Date().toLocaleString()}`,
-          ['markets', 'quotes', 'live-data']
-        );
-        console.log('[MarketsTab] Data recorded successfully');
-      } catch (error) {
-        console.error('[MarketsTab] Failed to record data:', error);
-      }
-    }
-  };
-
   // Initialize database on mount
   useEffect(() => {
     const initDatabase = async () => {
@@ -178,30 +246,25 @@ const MarketsTab: React.FC = () => {
           console.log('[MarketsTab] Database initialized and ready for caching');
         } else {
           console.warn('[MarketsTab] Database not healthy:', healthCheck.message);
+          // Still set initialized to allow data fetching
+          setDbInitialized(true);
         }
       } catch (error) {
         console.error('[MarketsTab] Database initialization error:', error);
+        // Still set initialized to allow data fetching even without cache
+        setDbInitialized(true);
       }
     };
     initDatabase();
   }, []);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchMarketData();
-  }, []);
-
-  // Auto-update timer
+  // Update current time display
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      if (autoUpdate) {
-        fetchMarketData();
-      }
-    }, updateInterval);
-
+    }, 1000);
     return () => clearInterval(timer);
-  }, [autoUpdate, updateInterval, preferences]);
+  }, []);
 
   // Open edit modal for global markets
   const openEditModal = async (category: string) => {
@@ -236,120 +299,204 @@ const MarketsTab: React.FC = () => {
     }
     const prefs = await tickerStorage.loadPreferences();
     setPreferences(prefs);
-    fetchMarketData(); // Refresh data
+    // Refresh the specific category after save
+    setTimeout(() => refreshAllMarkets(), 100);
   };
 
   // Format helpers
   const formatChange = (value: number) => value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
   const formatPercent = (value: number) => value >= 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`;
 
-  // Create market panel
-  const createMarketPanel = (title: string, quotes: QuoteData[]) => (
+  // Skeleton loading row for global markets (6 columns)
+  const SkeletonRowGlobal = ({ delay = 0 }: { delay?: number }) => (
     <div style={{
-      backgroundColor: colors.panel,
-      border: `1px solid ${colors.textMuted}`,
-      flex: '1 1 calc(33.333% - 16px)',
-      minWidth: '300px',
-      maxWidth: '600px',
-      height: '280px',
-      margin: '8px',
-      display: 'flex',
-      flexDirection: 'column'
+      display: 'grid',
+      gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
+      gap: '4px',
+      padding: '2px 8px',
+      minHeight: '18px',
+      alignItems: 'center',
+      borderBottom: '1px solid rgba(120,120,120,0.3)'
     }}>
-      {/* Panel Header with Edit Icon */}
-      <div style={{
-        backgroundColor: colors.background,
-        color: colors.primary,
-        padding: '8px',
-        fontSize: fontSize.subheading,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        borderBottom: `1px solid ${colors.textMuted}`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px'
-      }}>
-        {title.toUpperCase()}
-        <Edit2
-          size={14}
-          style={{ cursor: 'pointer', color: colors.text }}
-          onClick={() => openEditModal(title)}
-        />
-      </div>
-
-      {/* Table Header */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
-        gap: '4px',
-        padding: '4px 8px',
-        backgroundColor: colors.background,
-        color: colors.text,
-        fontSize: fontSize.body,
-        fontWeight: 'bold',
-        borderBottom: `1px solid ${colors.textMuted}`
-      }}>
-        <div>{t('symbol')}</div>
-        <div style={{ textAlign: 'right' }}>{t('price')}</div>
-        <div style={{ textAlign: 'right' }}>{t('change')}</div>
-        <div style={{ textAlign: 'right' }}>{t('percentChange')}</div>
-        <div style={{ textAlign: 'right' }}>{t('high')}</div>
-        <div style={{ textAlign: 'right' }}>{t('low')}</div>
-      </div>
-
-      {/* Data Rows */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {quotes.length === 0 ? (
-          <div style={{
-            color: colors.textMuted,
-            fontSize: fontSize.body,
-            textAlign: 'center',
-            padding: '16px'
-          }}>
-            {isUpdating ? t('loading') : t('noData')}
-          </div>
-        ) : (
-          quotes.map((quote, index) => (
-            <div key={index} style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
-              gap: '4px',
-              padding: '2px 8px',
-              fontSize: fontSize.small,
-              backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
-              borderBottom: `1px solid rgba(120,120,120,0.3)`,
-              minHeight: '18px',
-              alignItems: 'center'
-            }}>
-              <div style={{ color: colors.text }}>{quote.symbol}</div>
-              <div style={{ color: colors.text, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
-              <div style={{
-                color: quote.change >= 0 ? colors.secondary : colors.alert,
-                textAlign: 'right'
-              }}>{formatChange(quote.change)}</div>
-              <div style={{
-                color: quote.change_percent >= 0 ? colors.secondary : colors.alert,
-                textAlign: 'right'
-              }}>{formatPercent(quote.change_percent)}</div>
-              <div style={{
-                color: colors.text,
-                textAlign: 'right'
-              }}>{quote.high ? quote.high.toFixed(2) : '-'}</div>
-              <div style={{
-                color: colors.text,
-                textAlign: 'right'
-              }}>{quote.low ? quote.low.toFixed(2) : '-'}</div>
-            </div>
-          ))
-        )}
-      </div>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} style={{
+          backgroundColor: 'rgba(120,120,120,0.3)',
+          height: '12px',
+          borderRadius: '2px',
+          animation: 'pulse 1.5s infinite',
+          animationDelay: `${delay + i * 0.1}s`
+        }} />
+      ))}
     </div>
   );
+
+  // Skeleton loading row for regional markets (5 columns)
+  const SkeletonRowRegional = ({ delay = 0 }: { delay?: number }) => (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr',
+      gap: '4px',
+      padding: '2px 8px',
+      minHeight: '18px',
+      alignItems: 'center',
+      borderBottom: '1px solid rgba(120,120,120,0.3)'
+    }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} style={{
+          backgroundColor: 'rgba(120,120,120,0.3)',
+          height: '12px',
+          borderRadius: '2px',
+          animation: 'pulse 1.5s infinite',
+          animationDelay: `${delay + i * 0.1}s`
+        }} />
+      ))}
+    </div>
+  );
+
+  // Get loading state for a specific category
+  const getCategoryLoading = (category: string): boolean => {
+    switch (category) {
+      case 'Stock Indices': return stockIndicesCache.isLoading;
+      case 'Forex': return forexCache.isLoading;
+      case 'Commodities': return commoditiesCache.isLoading;
+      case 'Bonds': return bondsCache.isLoading;
+      case 'ETFs': return etfsCache.isLoading;
+      case 'Cryptocurrencies': return cryptoCache.isLoading;
+      default: return false;
+    }
+  };
+
+  // Get loading state for a specific region
+  const getRegionLoading = (region: string): boolean => {
+    switch (region) {
+      case 'India': return indiaCache.isLoading;
+      case 'China': return chinaCache.isLoading;
+      case 'United States': return usCache.isLoading;
+      default: return false;
+    }
+  };
+
+  // Create market panel
+  const createMarketPanel = (title: string, quotes: QuoteData[]) => {
+    const isLoading = getCategoryLoading(title);
+    const tickerCount = preferences.globalMarkets.find(m => m.category === title)?.tickers.length || 12;
+
+    return (
+      <div style={{
+        backgroundColor: colors.panel,
+        border: `1px solid ${colors.textMuted}`,
+        flex: '1 1 calc(33.333% - 16px)',
+        minWidth: '300px',
+        maxWidth: '600px',
+        height: '280px',
+        margin: '8px',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        {/* Panel Header with Edit Icon */}
+        <div style={{
+          backgroundColor: colors.background,
+          color: colors.primary,
+          padding: '8px',
+          fontSize: fontSize.subheading,
+          fontWeight: 'bold',
+          textAlign: 'center',
+          borderBottom: `1px solid ${colors.textMuted}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        }}>
+          {title.toUpperCase()}
+          <Edit2
+            size={14}
+            style={{ cursor: 'pointer', color: colors.text }}
+            onClick={() => openEditModal(title)}
+          />
+        </div>
+
+        {/* Table Header */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
+          gap: '4px',
+          padding: '4px 8px',
+          backgroundColor: colors.background,
+          color: colors.text,
+          fontSize: fontSize.body,
+          fontWeight: 'bold',
+          borderBottom: `1px solid ${colors.textMuted}`
+        }}>
+          <div>{t('symbol')}</div>
+          <div style={{ textAlign: 'right' }}>{t('price')}</div>
+          <div style={{ textAlign: 'right' }}>{t('change')}</div>
+          <div style={{ textAlign: 'right' }}>{t('percentChange')}</div>
+          <div style={{ textAlign: 'right' }}>{t('high')}</div>
+          <div style={{ textAlign: 'right' }}>{t('low')}</div>
+        </div>
+
+        {/* Data Rows */}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {isLoading && quotes.length === 0 ? (
+            // Show skeleton loading animation
+            <>
+              {Array.from({ length: tickerCount }).map((_, idx) => (
+                <SkeletonRowGlobal key={idx} delay={idx * 0.05} />
+              ))}
+            </>
+          ) : quotes.length === 0 ? (
+            <div style={{
+              color: colors.textMuted,
+              fontSize: fontSize.body,
+              textAlign: 'center',
+              padding: '16px'
+            }}>
+              {t('noData')}
+            </div>
+          ) : (
+            quotes.map((quote, index) => (
+              <div key={index} style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
+                gap: '4px',
+                padding: '2px 8px',
+                fontSize: fontSize.small,
+                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
+                borderBottom: `1px solid rgba(120,120,120,0.3)`,
+                minHeight: '18px',
+                alignItems: 'center'
+              }}>
+                <div style={{ color: colors.text }}>{quote.symbol}</div>
+                <div style={{ color: colors.text, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
+                <div style={{
+                  color: quote.change >= 0 ? colors.secondary : colors.alert,
+                  textAlign: 'right'
+                }}>{formatChange(quote.change)}</div>
+                <div style={{
+                  color: quote.change_percent >= 0 ? colors.secondary : colors.alert,
+                  textAlign: 'right'
+                }}>{formatPercent(quote.change_percent)}</div>
+                <div style={{
+                  color: colors.text,
+                  textAlign: 'right'
+                }}>{quote.high ? quote.high.toFixed(2) : '-'}</div>
+                <div style={{
+                  color: colors.text,
+                  textAlign: 'right'
+                }}>{quote.low ? quote.low.toFixed(2) : '-'}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // Create regional panel
   const createRegionalPanel = (title: string, quotes: QuoteData[]) => {
     const regionConfig = preferences.regionalMarkets.find(r => r.region === title);
+    const isLoading = getRegionLoading(title);
+    const tickerCount = regionConfig?.tickers.length || 12;
 
     return (
       <div style={{
@@ -406,14 +553,21 @@ const MarketsTab: React.FC = () => {
 
         {/* Data Rows */}
         <div style={{ flex: 1, overflow: 'auto' }}>
-          {quotes.length === 0 ? (
+          {isLoading && quotes.length === 0 ? (
+            // Show skeleton loading animation
+            <>
+              {Array.from({ length: tickerCount }).map((_, idx) => (
+                <SkeletonRowRegional key={idx} delay={idx * 0.05} />
+              ))}
+            </>
+          ) : quotes.length === 0 ? (
             <div style={{
               color: colors.textMuted,
               fontSize: fontSize.body,
               textAlign: 'center',
               padding: '16px'
             }}>
-              {isUpdating ? t('loading') : t('noData')}
+              {t('noData')}
             </div>
           ) : (
             quotes.map((quote, index) => {
@@ -478,6 +632,10 @@ const MarketsTab: React.FC = () => {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
           }
+          @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+          }
         `}</style>
         <div style={{ textAlign: 'center', maxWidth: '500px' }}>
           <h3 style={{ color: '#ea580c', fontSize: '18px', marginBottom: '10px' }}>
@@ -520,6 +678,17 @@ const MarketsTab: React.FC = () => {
         }
         *::-webkit-scrollbar-thumb:hover {
           background: #525252;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.8; }
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .animate-spin {
+          animation: spin 1s linear infinite;
         }
       `}</style>
 
@@ -587,7 +756,8 @@ const MarketsTab: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
             id="markets-refresh"
-            onClick={fetchMarketData}
+            onClick={refreshAllMarkets}
+            disabled={isUpdating}
             style={{
               backgroundColor: colors.primary,
               color: 'black',
@@ -595,9 +765,14 @@ const MarketsTab: React.FC = () => {
               padding: '4px 12px',
               fontSize: '11px',
               fontWeight: 'bold',
-              cursor: 'pointer'
+              cursor: isUpdating ? 'wait' : 'pointer',
+              opacity: isUpdating ? 0.7 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
             }}
           >
+            <RefreshCw size={12} className={isUpdating ? 'animate-spin' : ''} />
             {t('refresh')}
           </button>
           <button

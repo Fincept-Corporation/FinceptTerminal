@@ -64,9 +64,9 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
         if (statusResponse.success && statusResponse.data) {
           const transactionData = statusResponse.data;
-          const transactionStatus = transactionData.status || transactionData.payment_status;
+          const transactionStatus = transactionData.data?.order_status || transactionData.order_status;
 
-          if (transactionStatus === 'completed' || transactionStatus === 'success' || transactionStatus === 'paid') {
+          if (transactionStatus === 'PAID' || transactionStatus === 'completed' || transactionStatus === 'SUCCESS') {
             setStatus('completed');
             setPaymentData(transactionData);
             // PURE SQLite - Clear payment order ID
@@ -79,8 +79,8 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
             if (intervalRef.current) clearInterval(intervalRef.current);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             return;
-          } else if (transactionStatus === 'failed' || transactionStatus === 'cancelled') {
-            setStatus(transactionStatus as PaymentStatus);
+          } else if (transactionStatus === 'FAILED' || transactionStatus === 'CANCELLED' || transactionStatus === 'USER_DROPPED' || transactionStatus === 'EXPIRED') {
+            setStatus(transactionStatus === 'USER_DROPPED' ? 'cancelled' : 'failed');
             setPaymentData(transactionData);
             // PURE SQLite - Clear payment order ID
             await saveSetting('pending_payment_order_id', '', 'payment');

@@ -1,14 +1,14 @@
 /**
  * ArbitrageDetector - Real-time arbitrage opportunity detection across exchanges
- * Bloomberg Terminal Style
+ * Fincept Terminal Style
  */
 
 import React from 'react';
 import { Zap, RefreshCw, Loader, TrendingUp, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useArbitrageDetection } from '../hooks/useCrossExchange';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -47,8 +47,8 @@ export function ArbitrageDetector() {
 
   return (
     <div style={{
-      backgroundColor: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '4px',
       padding: '16px',
       height: '100%',
@@ -61,17 +61,17 @@ export function ArbitrageDetector() {
         justifyContent: 'space-between',
         marginBottom: '16px',
         paddingBottom: '12px',
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+        borderBottom: `1px solid ${FINCEPT.BORDER}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Zap style={{ width: 18, height: 18, color: BLOOMBERG.YELLOW }} />
-          <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>
+          <Zap style={{ width: 18, height: 18, color: FINCEPT.YELLOW }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
             ARBITRAGE OPPORTUNITIES
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {lastScanTime && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: BLOOMBERG.MUTED }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: FINCEPT.MUTED }}>
               <Clock style={{ width: 12, height: 12 }} />
               {formatTime(lastScanTime)}
             </div>
@@ -82,9 +82,9 @@ export function ArbitrageDetector() {
             style={{
               padding: '6px 12px',
               fontSize: '10px',
-              color: isScanning ? BLOOMBERG.MUTED : BLOOMBERG.YELLOW,
+              color: isScanning ? FINCEPT.MUTED : FINCEPT.YELLOW,
               backgroundColor: 'transparent',
-              border: `1px solid ${isScanning ? BLOOMBERG.BORDER : BLOOMBERG.BORDER}`,
+              border: `1px solid ${isScanning ? FINCEPT.BORDER : FINCEPT.BORDER}`,
               borderRadius: '2px',
               cursor: isScanning ? 'not-allowed' : 'pointer',
               display: 'flex',
@@ -95,13 +95,13 @@ export function ArbitrageDetector() {
             }}
             onMouseEnter={(e) => {
               if (!isScanning) {
-                e.currentTarget.style.borderColor = BLOOMBERG.YELLOW;
-                e.currentTarget.style.backgroundColor = `${BLOOMBERG.YELLOW}15`;
+                e.currentTarget.style.borderColor = FINCEPT.YELLOW;
+                e.currentTarget.style.backgroundColor = `${FINCEPT.YELLOW}15`;
               }
             }}
             onMouseLeave={(e) => {
               if (!isScanning) {
-                e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                e.currentTarget.style.borderColor = FINCEPT.BORDER;
                 e.currentTarget.style.backgroundColor = 'transparent';
               }
             }}
@@ -116,15 +116,15 @@ export function ArbitrageDetector() {
       <div style={{
         marginBottom: '16px',
         padding: '10px',
-        backgroundColor: `${BLOOMBERG.YELLOW}08`,
-        border: `1px solid ${BLOOMBERG.YELLOW}25`,
+        backgroundColor: `${FINCEPT.YELLOW}08`,
+        border: `1px solid ${FINCEPT.YELLOW}25`,
         borderRadius: '2px',
         display: 'flex',
         alignItems: 'flex-start',
         gap: '8px'
       }}>
-        <AlertTriangle style={{ width: 14, height: 14, color: BLOOMBERG.YELLOW, flexShrink: 0, marginTop: '2px' }} />
-        <div style={{ fontSize: '10px', color: BLOOMBERG.YELLOW, lineHeight: '1.5' }}>
+        <AlertTriangle style={{ width: 14, height: 14, color: FINCEPT.YELLOW, flexShrink: 0, marginTop: '2px' }} />
+        <div style={{ fontSize: '10px', color: FINCEPT.YELLOW, lineHeight: '1.5' }}>
           <strong>RISK WARNING:</strong> Arbitrage opportunities include trading fees, withdrawal
           fees, and execution risk. Always calculate net profit after all costs. Prices can change
           rapidly.
@@ -136,15 +136,15 @@ export function ArbitrageDetector() {
         <div style={{
           marginBottom: '12px',
           padding: '10px',
-          backgroundColor: `${BLOOMBERG.CYAN}08`,
-          border: `1px solid ${BLOOMBERG.CYAN}25`,
+          backgroundColor: `${FINCEPT.CYAN}08`,
+          border: `1px solid ${FINCEPT.CYAN}25`,
           borderRadius: '2px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px'
         }}>
-          <Loader style={{ width: 14, height: 14, color: BLOOMBERG.CYAN, animation: 'spin 1s linear infinite' }} />
-          <span style={{ fontSize: '11px', color: BLOOMBERG.CYAN }}>SCANNING FOR ARBITRAGE OPPORTUNITIES...</span>
+          <Loader style={{ width: 14, height: 14, color: FINCEPT.CYAN, animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: '11px', color: FINCEPT.CYAN }}>SCANNING FOR ARBITRAGE OPPORTUNITIES...</span>
         </div>
       )}
 
@@ -154,9 +154,9 @@ export function ArbitrageDetector() {
           <div style={{
             textAlign: 'center',
             padding: '40px 0',
-            color: BLOOMBERG.MUTED
+            color: FINCEPT.MUTED
           }}>
-            <Zap style={{ width: 48, height: 48, margin: '0 auto 12px', color: BLOOMBERG.MUTED }} />
+            <Zap style={{ width: 48, height: 48, margin: '0 auto 12px', color: FINCEPT.MUTED }} />
             <div style={{ fontSize: '11px', marginBottom: '6px' }}>NO ARBITRAGE OPPORTUNITIES FOUND</div>
             <div style={{ fontSize: '10px' }}>Spread must be &gt; 0.2% to be considered viable</div>
           </div>
@@ -167,18 +167,18 @@ export function ArbitrageDetector() {
                 key={idx}
                 style={{
                   padding: '14px',
-                  background: `linear-gradient(135deg, ${BLOOMBERG.YELLOW}05, ${BLOOMBERG.ORANGE}05)`,
-                  border: `2px solid ${BLOOMBERG.YELLOW}40`,
+                  background: `linear-gradient(135deg, ${FINCEPT.YELLOW}05, ${FINCEPT.ORANGE}05)`,
+                  border: `2px solid ${FINCEPT.YELLOW}40`,
                   borderRadius: '2px',
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = `${BLOOMBERG.YELLOW}80`;
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                  e.currentTarget.style.borderColor = `${FINCEPT.YELLOW}80`;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = `${BLOOMBERG.YELLOW}40`;
-                  e.currentTarget.style.background = `linear-gradient(135deg, ${BLOOMBERG.YELLOW}05, ${BLOOMBERG.ORANGE}05)`;
+                  e.currentTarget.style.borderColor = `${FINCEPT.YELLOW}40`;
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${FINCEPT.YELLOW}05, ${FINCEPT.ORANGE}05)`;
                 }}
               >
                 {/* Opportunity Header */}
@@ -189,19 +189,19 @@ export function ArbitrageDetector() {
                   marginBottom: '12px'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.YELLOW }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: FINCEPT.YELLOW }}>
                       <Zap style={{ width: 18, height: 18 }} fill="currentColor" />
-                      <span style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace' }}>
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
                         {opp.symbol}
                       </span>
                     </div>
                     <div style={{
                       padding: '4px 10px',
-                      backgroundColor: `${BLOOMBERG.YELLOW}20`,
-                      border: `1px solid ${BLOOMBERG.YELLOW}40`,
+                      backgroundColor: `${FINCEPT.YELLOW}20`,
+                      border: `1px solid ${FINCEPT.YELLOW}40`,
                       borderRadius: '2px',
                       fontSize: '10px',
-                      color: BLOOMBERG.YELLOW,
+                      color: FINCEPT.YELLOW,
                       fontWeight: 700,
                       letterSpacing: '0.5px'
                     }}>
@@ -209,8 +209,8 @@ export function ArbitrageDetector() {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '2px' }}>POTENTIAL PROFIT</div>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.GREEN, fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '2px' }}>POTENTIAL PROFIT</div>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.GREEN, fontFamily: 'monospace' }}>
                       ${opp.potentialProfit.toFixed(2)}
                     </div>
                   </div>
@@ -221,19 +221,19 @@ export function ArbitrageDetector() {
                   {/* Buy Side */}
                   <div style={{
                     padding: '12px',
-                    backgroundColor: `${BLOOMBERG.GREEN}10`,
-                    border: `1px solid ${BLOOMBERG.GREEN}30`,
+                    backgroundColor: `${FINCEPT.GREEN}10`,
+                    border: `1px solid ${FINCEPT.GREEN}30`,
                     borderRadius: '2px'
                   }}>
-                    <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
                       BUY ON
                     </div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: BLOOMBERG.WHITE, marginBottom: '8px', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px', textTransform: 'uppercase' }}>
                       {opp.buyExchange}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <TrendingUp style={{ width: 16, height: 16, color: BLOOMBERG.GREEN }} />
-                      <span style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.GREEN, fontFamily: 'monospace' }}>
+                      <TrendingUp style={{ width: 16, height: 16, color: FINCEPT.GREEN }} />
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.GREEN, fontFamily: 'monospace' }}>
                         ${formatPrice(opp.buyPrice)}
                       </span>
                     </div>
@@ -242,19 +242,19 @@ export function ArbitrageDetector() {
                   {/* Sell Side */}
                   <div style={{
                     padding: '12px',
-                    backgroundColor: `${BLOOMBERG.RED}10`,
-                    border: `1px solid ${BLOOMBERG.RED}30`,
+                    backgroundColor: `${FINCEPT.RED}10`,
+                    border: `1px solid ${FINCEPT.RED}30`,
                     borderRadius: '2px'
                   }}>
-                    <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
                       SELL ON
                     </div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: BLOOMBERG.WHITE, marginBottom: '8px', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px', textTransform: 'uppercase' }}>
                       {opp.sellExchange}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <TrendingUp style={{ width: 16, height: 16, color: BLOOMBERG.RED, transform: 'rotate(180deg)' }} />
-                      <span style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.RED, fontFamily: 'monospace' }}>
+                      <TrendingUp style={{ width: 16, height: 16, color: FINCEPT.RED, transform: 'rotate(180deg)' }} />
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.RED, fontFamily: 'monospace' }}>
                         ${formatPrice(opp.sellPrice)}
                       </span>
                     </div>
@@ -264,7 +264,7 @@ export function ArbitrageDetector() {
                 {/* Spread Info */}
                 <div style={{
                   padding: '8px',
-                  backgroundColor: `${BLOOMBERG.DARK_BG}80`,
+                  backgroundColor: `${FINCEPT.DARK_BG}80`,
                   borderRadius: '2px',
                   marginBottom: '10px'
                 }}>
@@ -274,8 +274,8 @@ export function ArbitrageDetector() {
                     justifyContent: 'space-between',
                     fontSize: '10px'
                   }}>
-                    <span style={{ color: BLOOMBERG.GRAY }}>PRICE DIFFERENCE:</span>
-                    <span style={{ color: BLOOMBERG.WHITE, fontWeight: 600, fontFamily: 'monospace' }}>
+                    <span style={{ color: FINCEPT.GRAY }}>PRICE DIFFERENCE:</span>
+                    <span style={{ color: FINCEPT.WHITE, fontWeight: 600, fontFamily: 'monospace' }}>
                       ${opp.spread.toFixed(2)}
                     </span>
                   </div>
@@ -286,8 +286,8 @@ export function ArbitrageDetector() {
                   <button style={{
                     flex: 1,
                     padding: '10px 14px',
-                    backgroundColor: BLOOMBERG.GREEN,
-                    color: BLOOMBERG.WHITE,
+                    backgroundColor: FINCEPT.GREEN,
+                    color: FINCEPT.WHITE,
                     fontSize: '11px',
                     fontWeight: 700,
                     border: 'none',
@@ -304,28 +304,28 @@ export function ArbitrageDetector() {
                     e.currentTarget.style.backgroundColor = '#00FF7F';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.GREEN;
+                    e.currentTarget.style.backgroundColor = FINCEPT.GREEN;
                   }}>
                     <TrendingUp style={{ width: 14, height: 14 }} />
                     EXECUTE ARBITRAGE
                   </button>
                   <button style={{
                     padding: '10px 14px',
-                    backgroundColor: BLOOMBERG.HEADER_BG,
-                    color: BLOOMBERG.WHITE,
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    color: FINCEPT.WHITE,
                     fontSize: '11px',
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     borderRadius: '2px',
                     cursor: 'pointer',
                     transition: 'all 0.2s'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                    e.currentTarget.style.borderColor = FINCEPT.CYAN;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
                   }}>
                     <ExternalLink style={{ width: 14, height: 14 }} />
                   </button>
@@ -335,7 +335,7 @@ export function ArbitrageDetector() {
                 <div style={{
                   marginTop: '8px',
                   fontSize: '9px',
-                  color: BLOOMBERG.MUTED,
+                  color: FINCEPT.MUTED,
                   textAlign: 'center',
                   letterSpacing: '0.5px'
                 }}>
@@ -351,33 +351,33 @@ export function ArbitrageDetector() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{
           padding: '10px',
-          backgroundColor: BLOOMBERG.HEADER_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           borderRadius: '2px'
         }}>
-          <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.WHITE, marginBottom: '8px', letterSpacing: '0.5px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px', letterSpacing: '0.5px' }}>
             HOW IT WORKS
           </div>
-          <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ fontSize: '10px', color: FINCEPT.GRAY, display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div>
-              1. <strong style={{ color: BLOOMBERG.WHITE }}>BUY</strong> the asset on the exchange with the lower price
+              1. <strong style={{ color: FINCEPT.WHITE }}>BUY</strong> the asset on the exchange with the lower price
             </div>
             <div>
-              2. <strong style={{ color: BLOOMBERG.WHITE }}>TRANSFER</strong> the asset to the exchange with the higher price
+              2. <strong style={{ color: FINCEPT.WHITE }}>TRANSFER</strong> the asset to the exchange with the higher price
             </div>
             <div>
-              3. <strong style={{ color: BLOOMBERG.WHITE }}>SELL</strong> the asset for profit
+              3. <strong style={{ color: FINCEPT.WHITE }}>SELL</strong> the asset for profit
             </div>
           </div>
         </div>
 
         <div style={{
           padding: '10px',
-          backgroundColor: `${BLOOMBERG.CYAN}08`,
-          border: `1px solid ${BLOOMBERG.CYAN}25`,
+          backgroundColor: `${FINCEPT.CYAN}08`,
+          border: `1px solid ${FINCEPT.CYAN}25`,
           borderRadius: '2px'
         }}>
-          <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN, lineHeight: '1.5' }}>
+          <div style={{ fontSize: '10px', color: FINCEPT.CYAN, lineHeight: '1.5' }}>
             <strong>COST CONSIDERATIONS:</strong> Factor in trading fees (maker/taker), withdrawal
             fees, network fees, and execution time. The spread must exceed total costs for
             profitable arbitrage.
@@ -386,11 +386,11 @@ export function ArbitrageDetector() {
 
         <div style={{
           padding: '10px',
-          backgroundColor: `${BLOOMBERG.PURPLE}08`,
-          border: `1px solid ${BLOOMBERG.PURPLE}25`,
+          backgroundColor: `${FINCEPT.PURPLE}08`,
+          border: `1px solid ${FINCEPT.PURPLE}25`,
           borderRadius: '2px'
         }}>
-          <div style={{ fontSize: '10px', color: BLOOMBERG.PURPLE, lineHeight: '1.5' }}>
+          <div style={{ fontSize: '10px', color: FINCEPT.PURPLE, lineHeight: '1.5' }}>
             <strong>AUTO-SCAN:</strong> Opportunities are automatically scanned every 10 seconds.
             Click "SCAN" to manually refresh.
           </div>

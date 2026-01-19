@@ -20,12 +20,12 @@ interface EconomicEvent {
   previous?: string;
 }
 
-const BLOOMBERG_GREEN = '#00FF00';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_YELLOW = '#FFD700';
+const FINCEPT_GREEN = '#00FF00';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_YELLOW = '#FFD700';
 
 const COUNTRY_FLAGS: Record<string, string> = {
   US: '🇺🇸',
@@ -149,11 +149,11 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
   const getImpactColor = (impact: string) => {
     switch (impact) {
       case 'high':
-        return BLOOMBERG_RED;
+        return FINCEPT_RED;
       case 'medium':
-        return BLOOMBERG_ORANGE;
+        return FINCEPT_ORANGE;
       default:
-        return BLOOMBERG_GRAY;
+        return FINCEPT_GRAY;
     }
   };
 
@@ -176,7 +176,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
       onRefresh={loadEvents}
       isLoading={loading}
       error={error}
-      headerColor={BLOOMBERG_ORANGE}
+      headerColor={FINCEPT_ORANGE}
     >
       <div style={{ padding: '4px' }}>
         {/* Header */}
@@ -186,7 +186,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
           gap: '4px',
           padding: '4px 8px',
           borderBottom: '1px solid #333',
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '8px'
         }}>
           <span>TIME</span>
@@ -207,18 +207,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
               alignItems: 'center'
             }}
           >
-            <span style={{ fontSize: '10px', color: BLOOMBERG_WHITE, fontFamily: 'monospace' }}>
+            <span style={{ fontSize: '10px', color: FINCEPT_WHITE, fontFamily: 'monospace' }}>
               {event.time}
             </span>
             <span style={{ fontSize: '12px' }}>
               {COUNTRY_FLAGS[event.country] || event.country}
             </span>
             <div>
-              <div style={{ fontSize: '10px', color: BLOOMBERG_WHITE }}>
+              <div style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
                 {event.event}
               </div>
-              <div style={{ fontSize: '8px', color: BLOOMBERG_GRAY }}>
-                {event.actual && <span style={{ color: BLOOMBERG_GREEN }}>A: {event.actual} </span>}
+              <div style={{ fontSize: '8px', color: FINCEPT_GRAY }}>
+                {event.actual && <span style={{ color: FINCEPT_GREEN }}>A: {event.actual} </span>}
                 {event.forecast && <span>F: {event.forecast} </span>}
                 {event.previous && <span>P: {event.previous}</span>}
               </div>
@@ -235,7 +235,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
         ))}
 
         {events.length === 0 && !loading && (
-          <div style={{ padding: '12px', textAlign: 'center', color: BLOOMBERG_GRAY, fontSize: '10px' }}>
+          <div style={{ padding: '12px', textAlign: 'center', color: FINCEPT_GRAY, fontSize: '10px' }}>
             <Calendar size={20} style={{ marginBottom: '8px', opacity: 0.5 }} />
             <div>No events scheduled</div>
           </div>
@@ -250,9 +250,9 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
           borderTop: '1px solid #333',
           fontSize: '8px'
         }}>
-          <span style={{ color: BLOOMBERG_RED }}>●●● High</span>
-          <span style={{ color: BLOOMBERG_ORANGE }}>●●○ Medium</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>●○○ Low</span>
+          <span style={{ color: FINCEPT_RED }}>●●● High</span>
+          <span style={{ color: FINCEPT_ORANGE }}>●●○ Medium</span>
+          <span style={{ color: FINCEPT_GRAY }}>●○○ Low</span>
         </div>
 
         {onNavigate && (
@@ -261,7 +261,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '9px',
               cursor: 'pointer',
               display: 'flex',

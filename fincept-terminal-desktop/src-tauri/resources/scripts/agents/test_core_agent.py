@@ -10,7 +10,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from core_agent_cli import main
+from finagent_core.core_agent import main
 
 
 def test_basic_query():
@@ -40,7 +40,8 @@ def test_basic_query():
     })
 
     try:
-        result = main([query_json, config, api_keys])
+        # New pattern: command + args
+        result = main(["run", query_json, config, api_keys])
         result_data = json.loads(result)
 
         print(f"Success: {result_data.get('success')}")
@@ -79,7 +80,8 @@ def test_with_tools():
     })
 
     try:
-        result = main([query_json, config, api_keys])
+        # New pattern: command + args
+        result = main(["run", query_json, config, api_keys])
         result_data = json.loads(result)
 
         print(f"Success: {result_data.get('success')}")
@@ -127,7 +129,8 @@ def test_different_providers():
         api_keys = json.dumps(api_keys_dict)
 
         try:
-            result = main([query_json, config, api_keys])
+            # New pattern: command + args
+            result = main(["run", query_json, config, api_keys])
             result_data = json.loads(result)
             print(f"[OK] Success: {result_data.get('response', 'N/A')[:50]}...")
         except Exception as e:
@@ -167,7 +170,8 @@ def test_config_changes():
         api_keys = json.dumps({"OPENAI_API_KEY": "sk-test-key-here"})
 
         try:
-            result = main([query_json, config_json, api_keys])
+            # New pattern: command + args
+            result = main(["run", query_json, config_json, api_keys])
             result_data = json.loads(result)
             print(f"Response: {result_data.get('response', 'N/A')[:100]}...")
         except Exception as e:
@@ -184,6 +188,7 @@ def test_error_handling():
     print("\n1. Missing query field:")
     try:
         result = main([
+            "run",
             json.dumps({"session_id": "test"}),
             json.dumps({"model": {"provider": "openai", "model_id": "gpt-3.5-turbo"}}),
             json.dumps({})
@@ -198,6 +203,7 @@ def test_error_handling():
     print("\n2. Invalid JSON:")
     try:
         result = main([
+            "run",
             "not-valid-json",
             json.dumps({"model": {"provider": "openai", "model_id": "gpt-3.5-turbo"}}),
             json.dumps({})
@@ -211,7 +217,7 @@ def test_error_handling():
     # Test 3: Missing arguments
     print("\n3. Missing arguments:")
     try:
-        result = main([json.dumps({})])
+        result = main(["run", json.dumps({})])
         result_data = json.loads(result)
         print(f"   Success: {result_data.get('success')}")
         print(f"   Error: {result_data.get('error')}")

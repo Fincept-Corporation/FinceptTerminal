@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BLOOMBERG_COLORS, WATCHLIST_COLORS } from './utils';
+import { FINCEPT_COLORS, WATCHLIST_COLORS } from './utils';
 
 interface CreateWatchlistModalProps {
   onClose: () => void;
@@ -47,14 +47,14 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
       zIndex: 1000
     }}>
       <div style={{
-        backgroundColor: BLOOMBERG_COLORS.DARK_BG,
-        border: `2px solid ${BLOOMBERG_COLORS.ORANGE}`,
+        backgroundColor: FINCEPT_COLORS.DARK_BG,
+        border: `2px solid ${FINCEPT_COLORS.ORANGE}`,
         padding: '24px',
         minWidth: '400px',
         maxWidth: '500px'
       }}>
         <div style={{
-          color: BLOOMBERG_COLORS.ORANGE,
+          color: FINCEPT_COLORS.ORANGE,
           fontSize: '14px',
           fontWeight: 'bold',
           marginBottom: '16px'
@@ -64,7 +64,7 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
 
         <div style={{ marginBottom: '12px' }}>
           <label style={{
-            color: BLOOMBERG_COLORS.GRAY,
+            color: FINCEPT_COLORS.GRAY,
             fontSize: '10px',
             display: 'block',
             marginBottom: '4px'
@@ -77,9 +77,9 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
             onChange={(e) => setName(e.target.value)}
             style={{
               width: '100%',
-              background: BLOOMBERG_COLORS.PANEL_BG,
-              border: `1px solid ${BLOOMBERG_COLORS.GRAY}`,
-              color: BLOOMBERG_COLORS.WHITE,
+              background: FINCEPT_COLORS.PANEL_BG,
+              border: `1px solid ${FINCEPT_COLORS.GRAY}`,
+              color: FINCEPT_COLORS.WHITE,
               padding: '8px',
               fontSize: '11px',
               fontFamily: 'Consolas, monospace'
@@ -91,7 +91,7 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
 
         <div style={{ marginBottom: '12px' }}>
           <label style={{
-            color: BLOOMBERG_COLORS.GRAY,
+            color: FINCEPT_COLORS.GRAY,
             fontSize: '10px',
             display: 'block',
             marginBottom: '4px'
@@ -103,9 +103,9 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
             onChange={(e) => setDescription(e.target.value)}
             style={{
               width: '100%',
-              background: BLOOMBERG_COLORS.PANEL_BG,
-              border: `1px solid ${BLOOMBERG_COLORS.GRAY}`,
-              color: BLOOMBERG_COLORS.WHITE,
+              background: FINCEPT_COLORS.PANEL_BG,
+              border: `1px solid ${FINCEPT_COLORS.GRAY}`,
+              color: FINCEPT_COLORS.WHITE,
               padding: '8px',
               fontSize: '11px',
               fontFamily: 'Consolas, monospace',
@@ -119,7 +119,7 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
 
         <div style={{ marginBottom: '16px' }}>
           <label style={{
-            color: BLOOMBERG_COLORS.GRAY,
+            color: FINCEPT_COLORS.GRAY,
             fontSize: '10px',
             display: 'block',
             marginBottom: '8px'
@@ -136,8 +136,8 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
                   height: '32px',
                   backgroundColor: color,
                   border: selectedColor === color
-                    ? `3px solid ${BLOOMBERG_COLORS.WHITE}`
-                    : `1px solid ${BLOOMBERG_COLORS.GRAY}`,
+                    ? `3px solid ${FINCEPT_COLORS.WHITE}`
+                    : `1px solid ${FINCEPT_COLORS.GRAY}`,
                   cursor: 'pointer',
                   borderRadius: '2px'
                 }}
@@ -152,7 +152,7 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
             onClick={onClose}
             disabled={loading}
             style={{
-              background: BLOOMBERG_COLORS.GRAY,
+              background: FINCEPT_COLORS.GRAY,
               color: 'black',
               border: 'none',
               padding: '8px 16px',
@@ -168,7 +168,7 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
             onClick={handleCreate}
             disabled={loading || !name.trim()}
             style={{
-              background: (!name.trim() || loading) ? BLOOMBERG_COLORS.GRAY : BLOOMBERG_COLORS.ORANGE,
+              background: (!name.trim() || loading) ? FINCEPT_COLORS.GRAY : FINCEPT_COLORS.ORANGE,
               color: 'black',
               border: 'none',
               padding: '8px 16px',

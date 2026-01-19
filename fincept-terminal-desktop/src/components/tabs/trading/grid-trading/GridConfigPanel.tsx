@@ -14,7 +14,7 @@ import {
 import type { GridConfig, GridType, GridDirection, GridCalculation } from '../../../../services/gridTrading/types';
 import { calculateGridDetails, validateGridConfig } from '../../../../services/gridTrading';
 
-// Bloomberg-style colors
+// Fincept-style colors
 const COLORS = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',

@@ -1,5 +1,5 @@
 /**
- * Positions Panel Component - Bloomberg Style
+ * Positions Panel Component - Fincept Style
  *
  * Displays open positions with P&L and action buttons with proper scrolling
  */
@@ -12,7 +12,7 @@ import {
 import { useStockTradingData, useStockBrokerContext } from '@/contexts/StockBrokerContext';
 import type { Position, ProductType } from '@/brokers/stocks/types';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',

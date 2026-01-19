@@ -29,11 +29,20 @@ try:
     from akshare.stock_feature import stock_hot_xq, stock_inner_trade_xq, stock_comment_em, stock_zh_vote_baidu
     from akshare.stock_feature import stock_ttm_lyr, stock_zh_valuation_baidu, stock_zf_pg, stock_ztb_em
     AKSHARE_FEATURES_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"Warning: AKShare features not fully available: {e}", file=sys.stderr)
     AKSHARE_FEATURES_AVAILABLE = False
 
-from akshare.stock.stock_info import stock_info_a_code_name
-from akshare.stock.stock_overview_em import stock_overview_em
+# Optional imports that may not be available in all akshare versions
+try:
+    from akshare.stock.stock_info import stock_info_a_code_name
+except ImportError:
+    stock_info_a_code_name = None
+
+try:
+    from akshare.stock.stock_overview_em import stock_overview_em
+except ImportError:
+    stock_overview_em = None
 
 
 class StockAnalysisError:
@@ -76,7 +85,7 @@ class StockAnalysisWrapper:
                     if hasattr(result, 'empty') and not result.empty:
                         return {
                             "success": True,
-                            "data": result.to_dict('records') if hasattr(result, 'to_dict') else str(result),
+                            "data": self._convert_dataframe_to_json_safe(result) if hasattr(result, 'to_dict') else str(result),
                             "count": len(result),
                             "timestamp": int(datetime.now().timestamp()),
                             "data_quality": "high",

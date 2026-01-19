@@ -2,7 +2,7 @@ import React from 'react';
 import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency } from './utils';
 import { Bell } from 'lucide-react';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
 
 interface AlertsViewProps {
   portfolioSummary: PortfolioSummary;
@@ -14,7 +14,7 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
+      backgroundColor: FINCEPT.DARK_BG,
       padding: SPACING.DEFAULT,
       overflow: 'auto',
       fontFamily: TYPOGRAPHY.MONO
@@ -30,18 +30,18 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
       <div style={{
         padding: SPACING.XLARGE,
         textAlign: 'center',
-        backgroundColor: BLOOMBERG.PANEL_BG,
+        backgroundColor: FINCEPT.PANEL_BG,
         border: BORDERS.ORANGE,
         marginBottom: SPACING.LARGE
       }}>
-        <Bell size={64} color={BLOOMBERG.ORANGE} style={{ margin: `0 auto ${SPACING.MEDIUM}` }} />
-        <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.SMALL }}>
+        <Bell size={64} color={FINCEPT.ORANGE} style={{ margin: `0 auto ${SPACING.MEDIUM}` }} />
+        <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.SMALL }}>
           PRICE ALERTS FEATURE
         </div>
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.DEFAULT, marginBottom: SPACING.MEDIUM }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.DEFAULT, marginBottom: SPACING.MEDIUM }}>
           This feature is not yet implemented.
         </div>
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>
           Price alerts will allow you to set notifications for:
         </div>
       </div>
@@ -55,13 +55,13 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
       }}>
         <div style={{
           padding: SPACING.MEDIUM,
-          backgroundColor: BLOOMBERG.PANEL_BG,
+          backgroundColor: FINCEPT.PANEL_BG,
           border: BORDERS.STANDARD
         }}>
-          <div style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.SMALL }}>
+          <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.SMALL }}>
             PLANNED FEATURES
           </div>
-          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
+          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: FINCEPT.WHITE }}>
             <li style={{ marginBottom: SPACING.TINY }}>Price target alerts</li>
             <li style={{ marginBottom: SPACING.TINY }}>Stop loss notifications</li>
             <li style={{ marginBottom: SPACING.TINY }}>Take profit alerts</li>
@@ -72,13 +72,13 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
 
         <div style={{
           padding: SPACING.MEDIUM,
-          backgroundColor: BLOOMBERG.PANEL_BG,
+          backgroundColor: FINCEPT.PANEL_BG,
           border: BORDERS.STANDARD
         }}>
-          <div style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.SMALL }}>
+          <div style={{ color: FINCEPT.GREEN, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.SMALL }}>
             NOTIFICATION CHANNELS
           </div>
-          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
+          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: FINCEPT.WHITE }}>
             <li style={{ marginBottom: SPACING.TINY }}>Desktop notifications</li>
             <li style={{ marginBottom: SPACING.TINY }}>Email alerts</li>
             <li style={{ marginBottom: SPACING.TINY }}>SMS notifications (Premium)</li>
@@ -90,7 +90,7 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
 
       {/* Position-Based Alert Suggestions Preview */}
       <div style={{
-        color: BLOOMBERG.ORANGE,
+        color: FINCEPT.ORANGE,
         fontSize: TYPOGRAPHY.DEFAULT,
         fontWeight: TYPOGRAPHY.BOLD,
         marginBottom: SPACING.MEDIUM,
@@ -115,7 +115,7 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
               key={holding.id}
               style={{
                 padding: SPACING.MEDIUM,
-                backgroundColor: BLOOMBERG.PANEL_BG,
+                backgroundColor: FINCEPT.PANEL_BG,
                 border: BORDERS.STANDARD,
                 opacity: 0.6
               }}
@@ -125,10 +125,10 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
                 justifyContent: 'space-between',
                 marginBottom: SPACING.SMALL
               }}>
-                <div style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD }}>
+                <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD }}>
                   {holding.symbol}
                 </div>
-                <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.BODY }}>
+                <div style={{ color: FINCEPT.WHITE, fontSize: TYPOGRAPHY.BODY }}>
                   {formatCurrency(holding.current_price, currency)}
                 </div>
               </div>
@@ -138,18 +138,18 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
                   display: 'flex',
                   justifyContent: 'space-between',
                   marginBottom: SPACING.TINY,
-                  color: BLOOMBERG.GRAY
+                  color: FINCEPT.GRAY
                 }}>
                   <span>Stop Loss (10%):</span>
-                  <span style={{ color: BLOOMBERG.RED }}>{formatCurrency(stopLoss, currency)}</span>
+                  <span style={{ color: FINCEPT.RED }}>{formatCurrency(stopLoss, currency)}</span>
                 </div>
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  color: BLOOMBERG.GRAY
+                  color: FINCEPT.GRAY
                 }}>
                   <span>Take Profit (20%):</span>
-                  <span style={{ color: BLOOMBERG.GREEN }}>{formatCurrency(takeProfit, currency)}</span>
+                  <span style={{ color: FINCEPT.GREEN }}>{formatCurrency(takeProfit, currency)}</span>
                 </div>
               </div>
 
@@ -158,8 +158,8 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
                 style={{
                   width: '100%',
                   padding: SPACING.TINY,
-                  backgroundColor: BLOOMBERG.GRAY,
-                  color: BLOOMBERG.DARK_BG,
+                  backgroundColor: FINCEPT.GRAY,
+                  color: FINCEPT.DARK_BG,
                   border: 'none',
                   fontSize: TYPOGRAPHY.SMALL,
                   fontWeight: TYPOGRAPHY.BOLD,
@@ -182,14 +182,14 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
         border: BORDERS.ORANGE
       }}>
         <div style={{
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           fontSize: TYPOGRAPHY.DEFAULT,
           fontWeight: TYPOGRAPHY.BOLD,
           marginBottom: SPACING.SMALL
         }}>
           IMPLEMENTATION STATUS
         </div>
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>
           The price alerts system requires backend implementation including:
           <ul style={{ marginTop: SPACING.SMALL, paddingLeft: SPACING.DEFAULT }}>
             <li>Database schema for price alert conditions</li>

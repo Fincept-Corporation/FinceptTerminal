@@ -136,7 +136,7 @@ class TeamModule:
             # Register event handlers
             self._register_event_handlers()
 
-            logger.debug(f"Built team '{self.name}' with {len(agents)} agents")
+            logger.debug(f"Built team '{self.name}' with {len(members)} agents")
             return self._team
 
         except ImportError as e:

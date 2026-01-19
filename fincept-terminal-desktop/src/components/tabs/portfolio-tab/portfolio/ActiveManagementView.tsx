@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Target, Activity, Award, AlertTriangle } from 'lucide-react';
 import { activeManagementService, type ComprehensiveAnalysisResult } from '@/services/portfolio/activeManagementService';
 import { formatPercent, formatNumber } from './utils';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
 
 interface ActiveManagementViewProps {
   portfolioId: string;
@@ -69,12 +69,12 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
     return (
       <div style={{
         height: '100%',
-        backgroundColor: BLOOMBERG.DARK_BG,
+        backgroundColor: FINCEPT.DARK_BG,
         padding: SPACING.XLARGE,
         textAlign: 'center',
         fontFamily: TYPOGRAPHY.MONO
       }}>
-        <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.MEDIUM }}>
+        <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.MEDIUM }}>
           Running Active Management Analysis...
         </div>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
@@ -86,7 +86,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
     return (
       <div style={{
         height: '100%',
-        backgroundColor: BLOOMBERG.DARK_BG,
+        backgroundColor: FINCEPT.DARK_BG,
         padding: SPACING.XLARGE,
         fontFamily: TYPOGRAPHY.MONO
       }}>
@@ -94,7 +94,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           padding: SPACING.DEFAULT,
           backgroundColor: 'rgba(255,59,59,0.1)',
           border: BORDERS.RED,
-          color: BLOOMBERG.RED,
+          color: FINCEPT.RED,
           fontSize: TYPOGRAPHY.DEFAULT
         }}>
           <AlertTriangle size={16} style={{ display: 'inline-block', marginRight: SPACING.SMALL }} />
@@ -108,14 +108,14 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
     return (
       <div style={{
         height: '100%',
-        backgroundColor: BLOOMBERG.DARK_BG,
+        backgroundColor: FINCEPT.DARK_BG,
         padding: SPACING.XLARGE,
         textAlign: 'center',
         fontFamily: TYPOGRAPHY.MONO
       }}>
-        <Activity size={48} color={BLOOMBERG.GRAY} style={{ margin: `0 auto ${SPACING.MEDIUM}` }} />
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.DEFAULT }}>No analysis data yet</div>
-        <div style={{ marginTop: SPACING.SMALL, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.GRAY }}>
+        <Activity size={48} color={FINCEPT.GRAY} style={{ margin: `0 auto ${SPACING.MEDIUM}` }} />
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.DEFAULT }}>No analysis data yet</div>
+        <div style={{ marginTop: SPACING.SMALL, fontSize: TYPOGRAPHY.BODY, color: FINCEPT.GRAY }}>
           Portfolio needs return data to perform active management analysis
         </div>
       </div>
@@ -127,13 +127,13 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
+      backgroundColor: FINCEPT.DARK_BG,
       overflow: 'auto',
       fontFamily: TYPOGRAPHY.MONO
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
+        backgroundColor: FINCEPT.PANEL_BG,
         borderBottom: BORDERS.ORANGE,
         padding: SPACING.MEDIUM,
         position: 'sticky',
@@ -141,7 +141,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
         zIndex: 10
       }}>
         <div style={{
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           fontWeight: TYPOGRAPHY.BOLD,
           fontSize: TYPOGRAPHY.SUBHEADING,
           marginBottom: SPACING.SMALL
@@ -150,23 +150,23 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
         </div>
         <div style={{ display: 'flex', gap: SPACING.XLARGE, fontSize: TYPOGRAPHY.BODY }}>
           <div>
-            <span style={{ color: BLOOMBERG.GRAY }}>BENCHMARK: </span>
-            <span style={{ color: BLOOMBERG.CYAN }}>{benchmarkSymbol}</span>
+            <span style={{ color: FINCEPT.GRAY }}>BENCHMARK: </span>
+            <span style={{ color: FINCEPT.CYAN }}>{benchmarkSymbol}</span>
           </div>
           <div>
-            <span style={{ color: BLOOMBERG.GRAY }}>QUALITY RATING: </span>
+            <span style={{ color: FINCEPT.GRAY }}>QUALITY RATING: </span>
             <span style={{
-              color: active_management_assessment.quality_rating === 'Excellent' ? BLOOMBERG.GREEN :
-                active_management_assessment.quality_rating === 'Good' ? BLOOMBERG.CYAN :
-                  active_management_assessment.quality_rating === 'Average' ? BLOOMBERG.YELLOW : BLOOMBERG.RED,
+              color: active_management_assessment.quality_rating === 'Excellent' ? FINCEPT.GREEN :
+                active_management_assessment.quality_rating === 'Good' ? FINCEPT.CYAN :
+                  active_management_assessment.quality_rating === 'Average' ? FINCEPT.YELLOW : FINCEPT.RED,
               fontWeight: TYPOGRAPHY.BOLD
             }}>
               {active_management_assessment.quality_rating}
             </span>
           </div>
           <div>
-            <span style={{ color: BLOOMBERG.GRAY }}>QUALITY SCORE: </span>
-            <span style={{ color: BLOOMBERG.WHITE }}>{active_management_assessment.quality_score}/100</span>
+            <span style={{ color: FINCEPT.GRAY }}>QUALITY SCORE: </span>
+            <span style={{ color: FINCEPT.WHITE }}>{active_management_assessment.quality_score}/100</span>
           </div>
         </div>
       </div>
@@ -178,7 +178,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="ACTIVE RETURN"
           value={formatPercent(value_added_analysis.active_return_annualized)}
           icon={<TrendingUp size={16} />}
-          color={value_added_analysis.active_return_annualized >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+          color={value_added_analysis.active_return_annualized >= 0 ? FINCEPT.GREEN : FINCEPT.RED}
           subtitle="Annualized"
         />
 
@@ -187,7 +187,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="INFORMATION RATIO"
           value={formatNumber(information_ratio_analysis.information_ratio_annualized, 2)}
           icon={<Target size={16} />}
-          color={information_ratio_analysis.information_ratio_annualized > 0.5 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW}
+          color={information_ratio_analysis.information_ratio_annualized > 0.5 ? FINCEPT.GREEN : FINCEPT.YELLOW}
           subtitle="Risk-Adjusted Performance"
         />
 
@@ -196,7 +196,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="TRACKING ERROR"
           value={formatPercent(information_ratio_analysis.tracking_error_annualized)}
           icon={<Activity size={16} />}
-          color={BLOOMBERG.CYAN}
+          color={FINCEPT.CYAN}
           subtitle="Annualized"
         />
 
@@ -205,7 +205,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="HIT RATE"
           value={formatPercent(value_added_analysis.hit_rate)}
           icon={<Award size={16} />}
-          color={value_added_analysis.hit_rate > 0.55 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW}
+          color={value_added_analysis.hit_rate > 0.55 ? FINCEPT.GREEN : FINCEPT.YELLOW}
           subtitle="Positive Periods"
         />
 
@@ -214,7 +214,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="SIGNIFICANCE"
           value={value_added_analysis.statistical_significance.is_significant ? 'YES' : 'NO'}
           icon={<TrendingUp size={16} />}
-          color={value_added_analysis.statistical_significance.is_significant ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+          color={value_added_analysis.statistical_significance.is_significant ? FINCEPT.GREEN : FINCEPT.RED}
           subtitle={`p-value: ${value_added_analysis.statistical_significance.p_value.toFixed(3)}`}
         />
 
@@ -223,7 +223,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="T-STATISTIC"
           value={formatNumber(value_added_analysis.statistical_significance.t_statistic, 2)}
           icon={<Activity size={16} />}
-          color={Math.abs(value_added_analysis.statistical_significance.t_statistic) > 2 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW}
+          color={Math.abs(value_added_analysis.statistical_significance.t_statistic) > 2 ? FINCEPT.GREEN : FINCEPT.YELLOW}
           subtitle="Statistical Measure"
         />
       </div>
@@ -231,12 +231,12 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
       {/* Value Decomposition */}
       <div style={{ padding: `0 ${SPACING.MEDIUM} ${SPACING.MEDIUM}` }}>
         <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
+          backgroundColor: FINCEPT.PANEL_BG,
           border: BORDERS.STANDARD,
           padding: SPACING.MEDIUM
         }}>
           <div style={{
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             fontSize: TYPOGRAPHY.DEFAULT,
             fontWeight: TYPOGRAPHY.BOLD,
             marginBottom: SPACING.MEDIUM
@@ -245,20 +245,20 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: SPACING.MEDIUM, fontSize: TYPOGRAPHY.BODY }}>
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, marginBottom: SPACING.TINY }}>ALLOCATION EFFECT</div>
-              <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD }}>
+              <div style={{ color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>ALLOCATION EFFECT</div>
+              <div style={{ color: FINCEPT.WHITE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {formatPercent(value_added_analysis.value_added_decomposition.estimated_allocation_effect)}
               </div>
             </div>
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, marginBottom: SPACING.TINY }}>SELECTION EFFECT</div>
-              <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD }}>
+              <div style={{ color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>SELECTION EFFECT</div>
+              <div style={{ color: FINCEPT.WHITE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {formatPercent(value_added_analysis.value_added_decomposition.estimated_selection_effect)}
               </div>
             </div>
           </div>
           {value_added_analysis.value_added_decomposition.note && (
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.SMALL, marginTop: SPACING.SMALL, fontStyle: 'italic' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL, marginTop: SPACING.SMALL, fontStyle: 'italic' }}>
               Note: {value_added_analysis.value_added_decomposition.note}
             </div>
           )}
@@ -269,19 +269,19 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
       <div style={{ padding: `0 ${SPACING.MEDIUM} ${SPACING.MEDIUM}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM }}>
         {/* Strengths */}
         <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
+          backgroundColor: FINCEPT.PANEL_BG,
           border: BORDERS.GREEN,
           padding: SPACING.MEDIUM
         }}>
           <div style={{
-            color: BLOOMBERG.GREEN,
+            color: FINCEPT.GREEN,
             fontSize: TYPOGRAPHY.DEFAULT,
             fontWeight: TYPOGRAPHY.BOLD,
             marginBottom: SPACING.SMALL
           }}>
             KEY STRENGTHS
           </div>
-          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
+          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: FINCEPT.WHITE }}>
             {active_management_assessment.key_strengths.map((strength, idx) => (
               <li key={idx} style={{ marginBottom: SPACING.TINY }}>{strength}</li>
             ))}
@@ -290,19 +290,19 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
 
         {/* Areas for Improvement */}
         <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          border: `1px solid ${BLOOMBERG.YELLOW}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.YELLOW}`,
           padding: SPACING.MEDIUM
         }}>
           <div style={{
-            color: BLOOMBERG.YELLOW,
+            color: FINCEPT.YELLOW,
             fontSize: TYPOGRAPHY.DEFAULT,
             fontWeight: TYPOGRAPHY.BOLD,
             marginBottom: SPACING.SMALL
           }}>
             AREAS FOR IMPROVEMENT
           </div>
-          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
+          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: FINCEPT.WHITE }}>
             {active_management_assessment.areas_for_improvement.map((area, idx) => (
               <li key={idx} style={{ marginBottom: SPACING.TINY }}>{area}</li>
             ))}
@@ -314,19 +314,19 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
       {improvement_recommendations && improvement_recommendations.length > 0 && (
         <div style={{ padding: `0 ${SPACING.MEDIUM} ${SPACING.MEDIUM}` }}>
           <div style={{
-            backgroundColor: BLOOMBERG.PANEL_BG,
+            backgroundColor: FINCEPT.PANEL_BG,
             border: BORDERS.CYAN,
             padding: SPACING.MEDIUM
           }}>
             <div style={{
-              color: BLOOMBERG.CYAN,
+              color: FINCEPT.CYAN,
               fontSize: TYPOGRAPHY.DEFAULT,
               fontWeight: TYPOGRAPHY.BOLD,
               marginBottom: SPACING.SMALL
             }}>
               IMPROVEMENT RECOMMENDATIONS
             </div>
-            <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
+            <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: FINCEPT.WHITE }}>
               {improvement_recommendations.map((rec, idx) => (
                 <li key={idx} style={{ marginBottom: SPACING.TINY }}>{rec}</li>
               ))}
@@ -350,7 +350,7 @@ interface MetricCardProps {
 const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, color, subtitle }) => {
   return (
     <div style={{
-      backgroundColor: BLOOMBERG.PANEL_BG,
+      backgroundColor: FINCEPT.PANEL_BG,
       border: BORDERS.STANDARD,
       padding: SPACING.MEDIUM
     }}>
@@ -361,7 +361,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, color, subt
         marginBottom: SPACING.SMALL
       }}>
         <div style={{
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontSize: TYPOGRAPHY.SMALL,
           fontWeight: TYPOGRAPHY.BOLD
         }}>
@@ -378,7 +378,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, color, subt
         {value}
       </div>
       {subtitle && (
-        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.SMALL }}>{subtitle}</div>
+        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SMALL }}>{subtitle}</div>
       )}
     </div>
   );

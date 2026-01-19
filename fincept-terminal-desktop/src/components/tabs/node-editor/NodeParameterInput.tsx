@@ -1,5 +1,5 @@
 /**
- * Node Parameter Input Component - Bloomberg Terminal Style
+ * Node Parameter Input Component - Fincept Terminal Style
  *
  * Universal parameter input component that renders the appropriate UI control
  * based on the parameter type from the node system.
@@ -24,8 +24,8 @@ import type {
 import { isExpression } from '@/services/nodeSystem';
 import { Check, Code2, Calendar, Hash, Type, List, Settings2, Palette, ChevronDown } from 'lucide-react';
 
-// Bloomberg Terminal Style Constants
-const BLOOMBERG = {
+// Fincept Terminal Style Constants
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -43,12 +43,12 @@ const BLOOMBERG = {
 
 const inputBaseStyle: React.CSSProperties = {
   width: '100%',
-  backgroundColor: BLOOMBERG.INPUT_BG,
-  border: `1px solid ${BLOOMBERG.BORDER}`,
+  backgroundColor: FINCEPT.INPUT_BG,
+  border: `1px solid ${FINCEPT.BORDER}`,
   padding: '10px 12px',
-  color: BLOOMBERG.WHITE,
+  color: FINCEPT.WHITE,
   fontSize: '13px',
-  fontFamily: BLOOMBERG.FONT,
+  fontFamily: FINCEPT.FONT,
   outline: 'none',
   transition: 'all 0.15s ease',
 };
@@ -57,7 +57,7 @@ const labelStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
-  color: BLOOMBERG.GRAY,
+  color: FINCEPT.GRAY,
   fontSize: '12px',
   fontWeight: 600,
   marginBottom: '8px',
@@ -103,9 +103,9 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
   }, [isExpressionMode, value, onChange, onExpressionChange]);
 
   const getFocusStyle = (): React.CSSProperties => ({
-    borderColor: isFocused ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER,
-    boxShadow: isFocused ? `0 0 8px ${BLOOMBERG.ORANGE}30` : 'none',
-    backgroundColor: isFocused ? BLOOMBERG.PANEL_BG : BLOOMBERG.INPUT_BG,
+    borderColor: isFocused ? FINCEPT.ORANGE : FINCEPT.BORDER,
+    boxShadow: isFocused ? `0 0 8px ${FINCEPT.ORANGE}30` : 'none',
+    backgroundColor: isFocused ? FINCEPT.PANEL_BG : FINCEPT.INPUT_BG,
   });
 
   const renderInput = () => {
@@ -121,7 +121,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
           style={{
             ...inputBaseStyle,
             ...getFocusStyle(),
-            color: BLOOMBERG.YELLOW,
+            color: FINCEPT.YELLOW,
             minHeight: '60px',
             resize: 'vertical',
           }}
@@ -177,13 +177,13 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
   const renderNumberInput = () => (
     <div style={{ display: 'flex', alignItems: 'stretch' }}>
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        border: `1px solid ${isFocused ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${isFocused ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
         borderRight: 'none',
         padding: '0 10px',
         display: 'flex',
         alignItems: 'center',
-        color: BLOOMBERG.ORANGE,
+        color: FINCEPT.ORANGE,
         fontSize: '13px',
         transition: 'all 0.15s ease',
       }}>
@@ -215,22 +215,22 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
         alignItems: 'center',
         gap: '10px',
         padding: '8px 10px',
-        backgroundColor: BLOOMBERG.INPUT_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.INPUT_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'all 0.15s ease',
       }}
       onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+        if (!disabled) e.currentTarget.style.borderColor = FINCEPT.ORANGE;
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+        e.currentTarget.style.borderColor = FINCEPT.BORDER;
       }}
     >
       <div style={{
         width: '32px',
         height: '16px',
-        backgroundColor: Boolean(value) ? BLOOMBERG.GREEN : BLOOMBERG.MUTED,
+        backgroundColor: Boolean(value) ? FINCEPT.GREEN : FINCEPT.MUTED,
         borderRadius: '8px',
         position: 'relative',
         transition: 'all 0.15s ease',
@@ -241,15 +241,15 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
           left: Boolean(value) ? '16px' : '2px',
           width: '12px',
           height: '12px',
-          backgroundColor: BLOOMBERG.WHITE,
+          backgroundColor: FINCEPT.WHITE,
           borderRadius: '50%',
           transition: 'all 0.15s ease',
         }} />
       </div>
       <span style={{
-        color: Boolean(value) ? BLOOMBERG.GREEN : BLOOMBERG.GRAY,
+        color: Boolean(value) ? FINCEPT.GREEN : FINCEPT.GRAY,
         fontSize: '13px',
-        fontFamily: BLOOMBERG.FONT,
+        fontFamily: FINCEPT.FONT,
         fontWeight: 600,
         textTransform: 'uppercase',
       }}>
@@ -282,8 +282,8 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
               key={String(option.value)}
               value={String(option.value)}
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
               }}
             >
               {option.name}
@@ -297,7 +297,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
             right: '12px',
             top: '50%',
             transform: 'translateY(-50%)',
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             pointerEvents: 'none',
           }}
         />
@@ -311,8 +311,8 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
     return (
       <div style={{
-        backgroundColor: BLOOMBERG.INPUT_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.INPUT_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px',
       }}>
         {options?.map((option) => (
@@ -331,7 +331,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
               gap: '8px',
               padding: '6px 8px',
               cursor: disabled ? 'not-allowed' : 'pointer',
-              backgroundColor: selectedValues.includes(option.value) ? `${BLOOMBERG.ORANGE}15` : 'transparent',
+              backgroundColor: selectedValues.includes(option.value) ? `${FINCEPT.ORANGE}15` : 'transparent',
               marginBottom: '4px',
               transition: 'all 0.15s ease',
             }}
@@ -339,20 +339,20 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
             <div style={{
               width: '18px',
               height: '18px',
-              border: `2px solid ${selectedValues.includes(option.value) ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-              backgroundColor: selectedValues.includes(option.value) ? BLOOMBERG.ORANGE : 'transparent',
+              border: `2px solid ${selectedValues.includes(option.value) ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+              backgroundColor: selectedValues.includes(option.value) ? FINCEPT.ORANGE : 'transparent',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
               {selectedValues.includes(option.value) && (
-                <Check size={14} style={{ color: BLOOMBERG.DARK_BG }} />
+                <Check size={14} style={{ color: FINCEPT.DARK_BG }} />
               )}
             </div>
             <span style={{
-              color: selectedValues.includes(option.value) ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+              color: selectedValues.includes(option.value) ? FINCEPT.WHITE : FINCEPT.GRAY,
               fontSize: '13px',
-              fontFamily: BLOOMBERG.FONT,
+              fontFamily: FINCEPT.FONT,
             }}>
               {option.name}
             </span>
@@ -372,8 +372,8 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
         style={{
           width: '40px',
           height: '32px',
-          border: `1px solid ${BLOOMBERG.BORDER}`,
-          backgroundColor: BLOOMBERG.INPUT_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.INPUT_BG,
           cursor: 'pointer',
           padding: '2px',
         }}
@@ -399,13 +399,13 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
   const renderDateTimeInput = () => (
     <div style={{ display: 'flex', alignItems: 'stretch' }}>
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        border: `1px solid ${isFocused ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${isFocused ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
         borderRight: 'none',
         padding: '0 10px',
         display: 'flex',
         alignItems: 'center',
-        color: BLOOMBERG.ORANGE,
+        color: FINCEPT.ORANGE,
         transition: 'all 0.15s ease',
       }}>
         <Calendar size={14} />
@@ -438,7 +438,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       style={{
         ...inputBaseStyle,
         ...getFocusStyle(),
-        color: BLOOMBERG.GREEN,
+        color: FINCEPT.GREEN,
         minHeight: '100px',
         resize: 'vertical',
         lineHeight: '1.5',
@@ -448,12 +448,12 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
   const renderCollectionInput = () => (
     <div style={{
-      backgroundColor: BLOOMBERG.INPUT_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      backgroundColor: FINCEPT.INPUT_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       padding: '12px',
     }}>
       <div style={{
-        color: BLOOMBERG.CYAN,
+        color: FINCEPT.CYAN,
         fontSize: '12px',
         fontWeight: 700,
         marginBottom: '10px',
@@ -486,20 +486,20 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
   const renderFixedCollectionInput = () => (
     <div style={{
-      backgroundColor: BLOOMBERG.INPUT_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      backgroundColor: FINCEPT.INPUT_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       padding: '14px',
       textAlign: 'center',
     }}>
-      <Settings2 size={20} style={{ color: BLOOMBERG.MUTED, margin: '0 auto 10px' }} />
+      <Settings2 size={20} style={{ color: FINCEPT.MUTED, margin: '0 auto 10px' }} />
       <div style={{
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         fontSize: '12px',
         textTransform: 'uppercase',
       }}>
         ADVANCED CONFIGURATION
       </div>
-      <div style={{ color: BLOOMBERG.MUTED, fontSize: '11px', marginTop: '6px' }}>
+      <div style={{ color: FINCEPT.MUTED, fontSize: '11px', marginTop: '6px' }}>
         Configure in advanced editor
       </div>
     </div>
@@ -522,9 +522,9 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
               cursor: 'pointer',
             }}
           >
-            <option value="id" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>BY ID</option>
-            <option value="url" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>BY URL</option>
-            <option value="list" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>FROM LIST</option>
+            <option value="id" style={{ backgroundColor: FINCEPT.DARK_BG }}>BY ID</option>
+            <option value="url" style={{ backgroundColor: FINCEPT.DARK_BG }}>BY URL</option>
+            <option value="list" style={{ backgroundColor: FINCEPT.DARK_BG }}>FROM LIST</option>
           </select>
           <ChevronDown
             size={16}
@@ -533,7 +533,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
               right: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               pointerEvents: 'none',
             }}
           />
@@ -556,7 +556,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
   };
 
   const getParameterIcon = () => {
-    const iconStyle = { color: BLOOMBERG.ORANGE };
+    const iconStyle = { color: FINCEPT.ORANGE };
     switch (parameter.type) {
       case 'string' as NodePropertyType:
         return <Type size={14} style={iconStyle} />;
@@ -595,7 +595,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
           {getParameterIcon()}
           <span>{parameter.displayName}</span>
           {parameter.required && (
-            <span style={{ color: BLOOMBERG.RED, marginLeft: '2px' }}>*</span>
+            <span style={{ color: FINCEPT.RED, marginLeft: '2px' }}>*</span>
           )}
         </div>
 
@@ -607,11 +607,11 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
             style={{
               padding: '4px 8px',
               fontSize: '10px',
-              fontFamily: BLOOMBERG.FONT,
+              fontFamily: FINCEPT.FONT,
               fontWeight: 600,
-              border: `1px solid ${isExpressionMode ? BLOOMBERG.YELLOW : BLOOMBERG.BORDER}`,
-              backgroundColor: isExpressionMode ? `${BLOOMBERG.YELLOW}20` : 'transparent',
-              color: isExpressionMode ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY,
+              border: `1px solid ${isExpressionMode ? FINCEPT.YELLOW : FINCEPT.BORDER}`,
+              backgroundColor: isExpressionMode ? `${FINCEPT.YELLOW}20` : 'transparent',
+              color: isExpressionMode ? FINCEPT.YELLOW : FINCEPT.GRAY,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -630,7 +630,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       {parameter.description && (
         <div style={{
           fontSize: '11px',
-          color: BLOOMBERG.MUTED,
+          color: FINCEPT.MUTED,
           marginBottom: '8px',
           lineHeight: '1.5',
         }}>
@@ -645,11 +645,11 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       {isExpressionMode && (
         <div style={{
           fontSize: '8px',
-          color: `${BLOOMBERG.YELLOW}90`,
+          color: `${FINCEPT.YELLOW}90`,
           marginTop: '4px',
-          fontFamily: BLOOMBERG.FONT,
+          fontFamily: FINCEPT.FONT,
         }}>
-          SYNTAX: <code style={{ backgroundColor: BLOOMBERG.PANEL_BG, padding: '1px 4px' }}>{'{{$json.field}}'}</code>
+          SYNTAX: <code style={{ backgroundColor: FINCEPT.PANEL_BG, padding: '1px 4px' }}>{'{{$json.field}}'}</code>
         </div>
       )}
     </div>

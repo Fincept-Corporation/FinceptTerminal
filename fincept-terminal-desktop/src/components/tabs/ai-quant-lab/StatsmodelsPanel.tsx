@@ -24,7 +24,7 @@ import {
 import { statsmodelsService, type StatsmodelsResult } from '@/services/aiQuantLab/statsmodelsService';
 import { yfinanceService } from '@/services/markets/yfinanceService';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -328,35 +328,35 @@ export function StatsmodelsPanel() {
     return (
       <div
         className="border rounded p-4 mt-4"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
         <div className="flex items-center gap-2 mb-3">
           {analysisResult.success ? (
-            <CheckCircle2 size={16} color={BLOOMBERG.GREEN} />
+            <CheckCircle2 size={16} color={FINCEPT.GREEN} />
           ) : (
-            <AlertCircle size={16} color={BLOOMBERG.RED} />
+            <AlertCircle size={16} color={FINCEPT.RED} />
           )}
           <span
             className="text-xs font-semibold"
-            style={{ color: analysisResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED }}
+            style={{ color: analysisResult.success ? FINCEPT.GREEN : FINCEPT.RED }}
           >
             {analysisResult.success ? 'ANALYSIS COMPLETE' : 'ANALYSIS FAILED'}
           </span>
           {analysisResult.analysis_type && (
-            <span className="text-xs" style={{ color: BLOOMBERG.GRAY }}>
+            <span className="text-xs" style={{ color: FINCEPT.GRAY }}>
               - {analysisResult.analysis_type.toUpperCase()}
             </span>
           )}
         </div>
 
         {analysisResult.error && (
-          <div className="text-xs p-2 rounded mb-3" style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.RED }}>
+          <div className="text-xs p-2 rounded mb-3" style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.RED }}>
             {analysisResult.error}
             {analysisResult.message && (
-              <div className="mt-1" style={{ color: BLOOMBERG.GRAY }}>{analysisResult.message}</div>
+              <div className="mt-1" style={{ color: FINCEPT.GRAY }}>{analysisResult.message}</div>
             )}
             {analysisResult.suggestions && Array.isArray(analysisResult.suggestions) && (
-              <div className="mt-2" style={{ color: BLOOMBERG.ORANGE }}>
+              <div className="mt-2" style={{ color: FINCEPT.ORANGE }}>
                 <div className="font-semibold mb-1">Suggestions:</div>
                 <ul className="list-disc list-inside">
                   {analysisResult.suggestions.map((s: string, i: number) => (
@@ -376,9 +376,9 @@ export function StatsmodelsPanel() {
               const isExpanded = expandedArrays.has(key);
 
               return (
-                <div key={key} className="py-2 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+                <div key={key} className="py-2 border-b" style={{ borderColor: FINCEPT.BORDER }}>
                   <div className="flex justify-between items-start gap-4">
-                    <span className="text-xs font-mono" style={{ color: BLOOMBERG.ORANGE }}>{key}</span>
+                    <span className="text-xs font-mono" style={{ color: FINCEPT.ORANGE }}>{key}</span>
                     <div className="flex items-center gap-1">
                       {isLargeArray && (
                         <>
@@ -388,9 +388,9 @@ export function StatsmodelsPanel() {
                             title={isExpanded ? "Collapse" : "View All"}
                           >
                             {isExpanded ? (
-                              <ChevronUp size={12} color={BLOOMBERG.GRAY} />
+                              <ChevronUp size={12} color={FINCEPT.GRAY} />
                             ) : (
-                              <Eye size={12} color={BLOOMBERG.GRAY} />
+                              <Eye size={12} color={FINCEPT.GRAY} />
                             )}
                           </button>
                           <button
@@ -398,14 +398,14 @@ export function StatsmodelsPanel() {
                             className="p-1 rounded hover:bg-opacity-20 hover:bg-white"
                             title="Copy to Clipboard"
                           >
-                            <Copy size={12} color={BLOOMBERG.GRAY} />
+                            <Copy size={12} color={FINCEPT.GRAY} />
                           </button>
                           <button
                             onClick={() => exportData(key, value)}
                             className="p-1 rounded hover:bg-opacity-20 hover:bg-white"
                             title="Export as CSV"
                           >
-                            <Download size={12} color={BLOOMBERG.GRAY} />
+                            <Download size={12} color={FINCEPT.GRAY} />
                           </button>
                         </>
                       )}
@@ -414,7 +414,7 @@ export function StatsmodelsPanel() {
                   <div
                     className="text-xs font-mono mt-1"
                     style={{
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       maxHeight: isExpanded ? '300px' : 'none',
                       overflowY: isExpanded ? 'auto' : 'visible',
                       wordBreak: 'break-all'
@@ -433,7 +433,7 @@ export function StatsmodelsPanel() {
             <button
               onClick={exportAllResults}
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded"
-              style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.ORANGE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+              style={{ backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.ORANGE, border: `1px solid ${FINCEPT.BORDER}` }}
             >
               <Download size={12} />
               Export All Results
@@ -442,7 +442,7 @@ export function StatsmodelsPanel() {
         )}
 
         {analysisResult.timestamp && (
-          <div className="mt-3 text-xs" style={{ color: BLOOMBERG.MUTED }}>
+          <div className="mt-3 text-xs" style={{ color: FINCEPT.MUTED }}>
             Timestamp: {analysisResult.timestamp}
           </div>
         )}
@@ -451,15 +451,15 @@ export function StatsmodelsPanel() {
   };
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
       <div
         className="w-80 flex-shrink-0 border-r overflow-y-auto"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
-        <div className="p-4 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+        <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
           <div className="flex items-center gap-2 mb-3">
-            <Activity size={16} color={BLOOMBERG.ORANGE} />
-            <span className="text-xs font-bold" style={{ color: BLOOMBERG.ORANGE }}>DATA SOURCE</span>
+            <Activity size={16} color={FINCEPT.ORANGE} />
+            <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>DATA SOURCE</span>
           </div>
 
           <div className="flex gap-2 mb-3">
@@ -467,9 +467,9 @@ export function StatsmodelsPanel() {
               onClick={() => setDataSourceType('symbol')}
               className="flex-1 py-1.5 text-xs font-semibold rounded"
               style={{
-                backgroundColor: dataSourceType === 'symbol' ? BLOOMBERG.ORANGE : BLOOMBERG.DARK_BG,
-                color: dataSourceType === 'symbol' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: dataSourceType === 'symbol' ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
+                color: dataSourceType === 'symbol' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               SYMBOL
@@ -478,9 +478,9 @@ export function StatsmodelsPanel() {
               onClick={() => setDataSourceType('manual')}
               className="flex-1 py-1.5 text-xs font-semibold rounded"
               style={{
-                backgroundColor: dataSourceType === 'manual' ? BLOOMBERG.ORANGE : BLOOMBERG.DARK_BG,
-                color: dataSourceType === 'manual' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: dataSourceType === 'manual' ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
+                color: dataSourceType === 'manual' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               MANUAL
@@ -497,30 +497,30 @@ export function StatsmodelsPanel() {
                   placeholder="AAPL"
                   className="flex-1 px-2 py-1.5 text-xs font-mono rounded"
                   style={{
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 />
                 <button
                   onClick={fetchSymbolData}
                   disabled={priceDataLoading}
                   className="px-3 py-1.5 rounded"
-                  style={{ backgroundColor: BLOOMBERG.BLUE, color: BLOOMBERG.WHITE }}
+                  style={{ backgroundColor: FINCEPT.BLUE, color: FINCEPT.WHITE }}
                 >
                   {priceDataLoading ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: BLOOMBERG.GRAY }}>Days:</span>
+                <span className="text-xs" style={{ color: FINCEPT.GRAY }}>Days:</span>
                 <select
                   value={historicalDays}
                   onChange={(e) => setHistoricalDays(parseInt(e.target.value))}
                   className="flex-1 px-2 py-1 text-xs rounded"
                   style={{
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 >
                   <option value={30}>30 Days</option>
@@ -532,7 +532,7 @@ export function StatsmodelsPanel() {
                 </select>
               </div>
               {priceData.length > 0 && (
-                <div className="text-xs" style={{ color: BLOOMBERG.GREEN }}>
+                <div className="text-xs" style={{ color: FINCEPT.GREEN }}>
                   Loaded {priceData.length} data points
                 </div>
               )}
@@ -545,18 +545,18 @@ export function StatsmodelsPanel() {
               rows={4}
               className="w-full px-2 py-1.5 text-xs font-mono rounded"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             />
           )}
         </div>
 
-        <div className="p-4 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+        <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
           <div className="flex items-center gap-2 mb-3">
-            <BarChart2 size={16} color={BLOOMBERG.ORANGE} />
-            <span className="text-xs font-bold" style={{ color: BLOOMBERG.ORANGE }}>CATEGORY</span>
+            <BarChart2 size={16} color={FINCEPT.ORANGE} />
+            <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>CATEGORY</span>
           </div>
           <select
             value={selectedCategory}
@@ -571,9 +571,9 @@ export function StatsmodelsPanel() {
             }}
             className="w-full px-2 py-1.5 text-xs rounded"
             style={{
-              backgroundColor: BLOOMBERG.DARK_BG,
-              color: BLOOMBERG.WHITE,
-              border: `1px solid ${BLOOMBERG.BORDER}`
+              backgroundColor: FINCEPT.DARK_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`
             }}
           >
             {Object.entries(categoryLabels).map(([key, { label }]) => (
@@ -582,10 +582,10 @@ export function StatsmodelsPanel() {
           </select>
         </div>
 
-        <div className="p-4 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+        <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
           <div className="flex items-center gap-2 mb-3">
-            <Calculator size={16} color={BLOOMBERG.ORANGE} />
-            <span className="text-xs font-bold" style={{ color: BLOOMBERG.ORANGE }}>ANALYSIS</span>
+            <Calculator size={16} color={FINCEPT.ORANGE} />
+            <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>ANALYSIS</span>
           </div>
           <select
             value={selectedAnalysis}
@@ -595,9 +595,9 @@ export function StatsmodelsPanel() {
             }}
             className="w-full px-2 py-1.5 text-xs rounded"
             style={{
-              backgroundColor: BLOOMBERG.DARK_BG,
-              color: BLOOMBERG.WHITE,
-              border: `1px solid ${BLOOMBERG.BORDER}`
+              backgroundColor: FINCEPT.DARK_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`
             }}
           >
             {analysisTypes
@@ -606,35 +606,35 @@ export function StatsmodelsPanel() {
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
           </select>
-          <div className="mt-2 text-xs" style={{ color: BLOOMBERG.GRAY }}>
+          <div className="mt-2 text-xs" style={{ color: FINCEPT.GRAY }}>
             {analysisTypes.find(a => a.id === selectedAnalysis)?.description}
           </div>
           {selectedAnalysis === 'logit' && (
-            <div className="mt-2 p-2 rounded text-xs" style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.ORANGE }}>
+            <div className="mt-2 p-2 rounded text-xs" style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.ORANGE }}>
               <strong>Note:</strong> Logit models binary outcomes (0/1). Price data will be auto-converted to returns direction (up=1, down=0).
             </div>
           )}
         </div>
 
         {getParamFields(selectedAnalysis).length > 0 && (
-          <div className="p-4 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+          <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
             <div className="flex items-center gap-2 mb-3">
-              <ChevronDown size={16} color={BLOOMBERG.ORANGE} />
-              <span className="text-xs font-bold" style={{ color: BLOOMBERG.ORANGE }}>PARAMETERS</span>
+              <ChevronDown size={16} color={FINCEPT.ORANGE} />
+              <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>PARAMETERS</span>
             </div>
             <div className="space-y-3">
               {getParamFields(selectedAnalysis).map(field => (
                 <div key={field.key}>
-                  <label className="text-xs block mb-1" style={{ color: BLOOMBERG.GRAY }}>{field.label}</label>
+                  <label className="text-xs block mb-1" style={{ color: FINCEPT.GRAY }}>{field.label}</label>
                   {field.type === 'select' ? (
                     <select
                       value={analysisParams[field.key] || ''}
                       onChange={(e) => setAnalysisParams(prev => ({ ...prev, [field.key]: e.target.value }))}
                       className="w-full px-2 py-1.5 text-xs rounded"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        color: BLOOMBERG.WHITE,
-                        border: `1px solid ${BLOOMBERG.BORDER}`
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`
                       }}
                     >
                       {field.options?.map(opt => (
@@ -649,9 +649,9 @@ export function StatsmodelsPanel() {
                       placeholder={field.placeholder}
                       className="w-full px-2 py-1.5 text-xs font-mono rounded"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        color: BLOOMBERG.WHITE,
-                        border: `1px solid ${BLOOMBERG.BORDER}`
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`
                       }}
                     />
                   )}
@@ -667,8 +667,8 @@ export function StatsmodelsPanel() {
             disabled={isLoading}
             className="w-full py-2.5 text-xs font-bold rounded flex items-center justify-center gap-2"
             style={{
-              backgroundColor: isLoading ? BLOOMBERG.MUTED : BLOOMBERG.ORANGE,
-              color: BLOOMBERG.DARK_BG
+              backgroundColor: isLoading ? FINCEPT.MUTED : FINCEPT.ORANGE,
+              color: FINCEPT.DARK_BG
             }}
           >
             {isLoading ? (
@@ -688,10 +688,10 @@ export function StatsmodelsPanel() {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mb-6">
-          <h2 className="text-lg font-bold mb-1" style={{ color: BLOOMBERG.WHITE }}>
+          <h2 className="text-lg font-bold mb-1" style={{ color: FINCEPT.WHITE }}>
             STATSMODELS ANALYTICS
           </h2>
-          <p className="text-xs" style={{ color: BLOOMBERG.GRAY }}>
+          <p className="text-xs" style={{ color: FINCEPT.GRAY }}>
             Statistical modeling and econometric analysis powered by statsmodels library
           </p>
         </div>
@@ -713,20 +713,20 @@ export function StatsmodelsPanel() {
                 }}
                 className="p-3 rounded text-left transition-all"
                 style={{
-                  backgroundColor: isSelected ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${isSelected ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`
+                  backgroundColor: isSelected ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+                  border: `1px solid ${isSelected ? FINCEPT.ORANGE : FINCEPT.BORDER}`
                 }}
               >
-                <Icon size={16} color={isSelected ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY} />
+                <Icon size={16} color={isSelected ? FINCEPT.DARK_BG : FINCEPT.GRAY} />
                 <div
                   className="text-xs font-semibold mt-2"
-                  style={{ color: isSelected ? BLOOMBERG.DARK_BG : BLOOMBERG.WHITE }}
+                  style={{ color: isSelected ? FINCEPT.DARK_BG : FINCEPT.WHITE }}
                 >
                   {label}
                 </div>
                 <div
                   className="text-xs"
-                  style={{ color: isSelected ? BLOOMBERG.DARK_BG : BLOOMBERG.MUTED }}
+                  style={{ color: isSelected ? FINCEPT.DARK_BG : FINCEPT.MUTED }}
                 >
                   {count} analyses
                 </div>
@@ -736,7 +736,7 @@ export function StatsmodelsPanel() {
         </div>
 
         <div className="mb-6">
-          <div className="text-xs font-bold mb-3" style={{ color: BLOOMBERG.ORANGE }}>
+          <div className="text-xs font-bold mb-3" style={{ color: FINCEPT.ORANGE }}>
             AVAILABLE IN {categoryLabels[selectedCategory].label.toUpperCase()}
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -751,12 +751,12 @@ export function StatsmodelsPanel() {
                   }}
                   className="p-2.5 rounded text-left"
                   style={{
-                    backgroundColor: selectedAnalysis === a.id ? BLOOMBERG.BLUE : BLOOMBERG.HEADER_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: selectedAnalysis === a.id ? FINCEPT.BLUE : FINCEPT.HEADER_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 >
-                  <div className="text-xs font-semibold" style={{ color: BLOOMBERG.WHITE }}>{a.name}</div>
-                  <div className="text-xs mt-1" style={{ color: BLOOMBERG.GRAY }}>{a.description}</div>
+                  <div className="text-xs font-semibold" style={{ color: FINCEPT.WHITE }}>{a.name}</div>
+                  <div className="text-xs mt-1" style={{ color: FINCEPT.GRAY }}>{a.description}</div>
                 </button>
               ))}
           </div>
@@ -765,10 +765,10 @@ export function StatsmodelsPanel() {
         {error && (
           <div
             className="p-3 rounded mb-4 flex items-center gap-2"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.RED}` }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.RED}` }}
           >
-            <AlertCircle size={16} color={BLOOMBERG.RED} />
-            <span className="text-xs" style={{ color: BLOOMBERG.RED }}>{error}</span>
+            <AlertCircle size={16} color={FINCEPT.RED} />
+            <span className="text-xs" style={{ color: FINCEPT.RED }}>{error}</span>
           </div>
         )}
 
@@ -777,13 +777,13 @@ export function StatsmodelsPanel() {
         {!analysisResult && !error && (
           <div
             className="p-8 rounded text-center"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
           >
-            <Database size={48} color={BLOOMBERG.MUTED} className="mx-auto mb-4" />
-            <div className="text-sm" style={{ color: BLOOMBERG.GRAY }}>
+            <Database size={48} color={FINCEPT.MUTED} className="mx-auto mb-4" />
+            <div className="text-sm" style={{ color: FINCEPT.GRAY }}>
               Select an analysis and click RUN ANALYSIS to begin
             </div>
-            <div className="text-xs mt-2" style={{ color: BLOOMBERG.MUTED }}>
+            <div className="text-xs mt-2" style={{ color: FINCEPT.MUTED }}>
               {getDataArray().length > 0
                 ? `${getDataArray().length} data points ready`
                 : 'No data loaded - fetch symbol data or enter manual values'}

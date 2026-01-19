@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { RefreshCw, Download } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw, Download, WifiOff } from 'lucide-react';
 import {
   watchlistService,
   Watchlist,
   WatchlistStockWithQuote
 } from '../../services/core/watchlistService';
 import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
+import { useWatchlistStocks, useMarketMovers, useVolumeLeaders } from '../../hooks/useWatchlist';
 import WatchlistSidebar from './watchlist/WatchlistSidebar';
 import StockListView from './watchlist/StockListView';
 import { TabFooter } from '@/components/common/TabFooter';
@@ -13,21 +14,19 @@ import StockDetailPanel from './watchlist/StockDetailPanel';
 import CreateWatchlistModal from './watchlist/CreateWatchlistModal';
 import AddStockModal from './watchlist/AddStockModal';
 import RecordingControlPanel from '../common/RecordingControlPanel';
-import { getBloombergColors, SortCriteria, sortStocks, getNextWatchlistColor } from './watchlist/utils';
+import { getFinceptColors, SortCriteria, sortStocks, getNextWatchlistColor } from './watchlist/utils';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
 const WatchlistTab: React.FC = () => {
   const { colors: themeColors } = useTerminalTheme();
   const { t } = useTranslation('watchlist');
-  const BLOOMBERG_COLORS = getBloombergColors();
+  const FINCEPT_COLORS = getFinceptColors();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [watchlists, setWatchlists] = useState<Array<Watchlist & { stock_count: number }>>([]);
   const [selectedWatchlist, setSelectedWatchlist] = useState<(Watchlist & { stock_count: number }) | null>(null);
-  const [stocks, setStocks] = useState<WatchlistStockWithQuote[]>([]);
   const [selectedStock, setSelectedStock] = useState<WatchlistStockWithQuote | null>(null);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Sort and view states
   const [sortBy, setSortBy] = useState<SortCriteria>('CHANGE');
@@ -39,14 +38,62 @@ const WatchlistTab: React.FC = () => {
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
 
+  // ============================================================================
+  // Cached data fetching using unified cache hooks
+  // ============================================================================
+
+  // Fetch stocks for selected watchlist (cached, auto-refresh every 10 min)
+  const {
+    data: stocks,
+    isLoading: stocksLoading,
+    isFetching: stocksRefreshing,
+    isOffline,
+    isStale,
+    refresh: refreshStocks,
+    invalidate: invalidateStocks
+  } = useWatchlistStocks(selectedWatchlist?.id || null, {
+    enabled: !!selectedWatchlist,
+    refetchInterval: 10 * 60 * 1000 // 10 minutes
+  });
+
+  // Fetch market movers (cached)
+  const {
+    data: marketMovers,
+    refresh: refreshMovers
+  } = useMarketMovers(5, {
+    enabled: !!selectedWatchlist,
+    refetchInterval: 10 * 60 * 1000
+  });
+
+  // Fetch volume leaders (cached)
+  const {
+    data: volumeLeaders,
+    refresh: refreshVolume
+  } = useVolumeLeaders(5, {
+    enabled: !!selectedWatchlist,
+    refetchInterval: 10 * 60 * 1000
+  });
+
+  // Combined refresh function
+  const refreshWatchlistData = useCallback(async () => {
+    await Promise.all([
+      refreshStocks(),
+      refreshMovers(),
+      refreshVolume()
+    ]);
+  }, [refreshStocks, refreshMovers, refreshVolume]);
+
+  // Stocks array with fallback to empty
+  const stocksList = stocks || [];
+
   // Function to record current watchlist data
   const recordCurrentData = async () => {
-    if (selectedWatchlist && stocks.length > 0) {
+    if (selectedWatchlist && stocksList.length > 0) {
       try {
         const recordData = {
           watchlistId: selectedWatchlist.id,
           watchlistName: selectedWatchlist.name,
-          stocks: stocks.map(s => ({
+          stocks: stocksList.map(s => ({
             symbol: s.symbol,
             quote: s.quote,
             notes: s.notes
@@ -68,14 +115,7 @@ const WatchlistTab: React.FC = () => {
     }
   };
 
-  // Market data
-  const [marketMovers, setMarketMovers] = useState<{
-    gainers: WatchlistStockWithQuote[];
-    losers: WatchlistStockWithQuote[];
-  } | null>(null);
-  const [volumeLeaders, setVolumeLeaders] = useState<WatchlistStockWithQuote[]>([]);
-
-  const { ORANGE, WHITE, RED, GREEN, GRAY, DARK_BG, PANEL_BG, CYAN, YELLOW } = BLOOMBERG_COLORS;
+  const { ORANGE, WHITE, RED, GREEN, GRAY, DARK_BG, PANEL_BG, CYAN, YELLOW } = FINCEPT_COLORS;
 
   // Initialize service and load watchlists
   useEffect(() => {
@@ -101,16 +141,6 @@ const WatchlistTab: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-refresh data every 10 minutes (matches cache expiry)
-  useEffect(() => {
-    if (selectedWatchlist) {
-      const refreshTimer = setInterval(() => {
-        refreshWatchlistData();
-      }, 600000); // Refresh every 10 minutes (600000ms)
-      return () => clearInterval(refreshTimer);
-    }
-  }, [selectedWatchlist]);
-
   // Load watchlists
   const loadWatchlists = async () => {
     try {
@@ -126,81 +156,40 @@ const WatchlistTab: React.FC = () => {
     }
   };
 
-  // Load watchlist stocks
-  const loadWatchlistStocks = async (watchlistId: string) => {
-    try {
-      setRefreshing(true);
-      const stocksData = await watchlistService.getWatchlistStocksWithQuotes(watchlistId);
-      setStocks(stocksData);
-
-      // Update selected stock if it exists
-      if (selectedStock) {
-        const updated = stocksData.find(s => s.symbol === selectedStock.symbol);
-        if (updated) {
-          setSelectedStock(updated);
-        }
-      }
-
-      // Record data if recording is active
-      if (isRecording && selectedWatchlist) {
-        try {
-          const recordData = {
-            watchlistId: watchlistId,
-            watchlistName: selectedWatchlist.name,
-            stocks: stocksData.map(s => ({
-              symbol: s.symbol,
-              quote: s.quote,
-              notes: s.notes
-            })),
-            timestamp: new Date().toISOString()
-          };
-          await contextRecorderService.recordApiResponse(
-            'Watchlist',
-            'watchlist-stocks',
-            recordData,
-            `Watchlist: ${selectedWatchlist.name} - ${new Date().toLocaleString()}`,
-            ['watchlist', 'stocks', 'quotes']
-          );
-        } catch (error) {
-          console.error('[WatchlistTab] Failed to record data:', error);
-        }
-      }
-    } catch (error) {
-      console.error('[WatchlistTab] Error loading stocks:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // Load market movers and volume leaders
-  const loadMarketData = async () => {
-    try {
-      const [movers, leaders] = await Promise.all([
-        watchlistService.getMarketMovers(5),
-        watchlistService.getVolumeLeaders(5)
-      ]);
-      setMarketMovers(movers);
-      setVolumeLeaders(leaders);
-    } catch (error) {
-      console.error('[WatchlistTab] Error loading market data:', error);
-    }
-  };
-
-  // Refresh watchlist data
-  const refreshWatchlistData = () => {
-    if (selectedWatchlist) {
-      loadWatchlistStocks(selectedWatchlist.id);
-      loadMarketData();
-    }
-  };
-
-  // Handle watchlist selection
+  // Update selected stock when stocks list changes
   useEffect(() => {
-    if (selectedWatchlist) {
-      loadWatchlistStocks(selectedWatchlist.id);
-      loadMarketData();
+    if (selectedStock && stocksList.length > 0) {
+      const updated = stocksList.find(s => s.symbol === selectedStock.symbol);
+      if (updated) {
+        setSelectedStock(updated);
+      }
     }
-  }, [selectedWatchlist]);
+  }, [stocksList]);
+
+  // Record data when recording is active and stocks change
+  useEffect(() => {
+    if (isRecording && selectedWatchlist && stocksList.length > 0) {
+      const recordData = {
+        watchlistId: selectedWatchlist.id,
+        watchlistName: selectedWatchlist.name,
+        stocks: stocksList.map(s => ({
+          symbol: s.symbol,
+          quote: s.quote,
+          notes: s.notes
+        })),
+        timestamp: new Date().toISOString()
+      };
+      contextRecorderService.recordApiResponse(
+        'Watchlist',
+        'watchlist-stocks',
+        recordData,
+        `Watchlist: ${selectedWatchlist.name} - ${new Date().toLocaleString()}`,
+        ['watchlist', 'stocks', 'quotes']
+      ).catch(error => {
+        console.error('[WatchlistTab] Failed to record data:', error);
+      });
+    }
+  }, [stocksList, isRecording, selectedWatchlist]);
 
   // Create new watchlist
   const handleCreateWatchlist = async (name: string, description: string, color: string) => {
@@ -232,8 +221,8 @@ const WatchlistTab: React.FC = () => {
 
       if (selectedWatchlist?.id === watchlistId) {
         setSelectedWatchlist(watchlists.length > 1 ? watchlists[0] : null);
-        setStocks([]);
         setSelectedStock(null);
+        await invalidateStocks(); // Clear cached stocks for deleted watchlist
       }
     } catch (error) {
       console.error('[WatchlistTab] Error deleting watchlist:', error);
@@ -247,7 +236,8 @@ const WatchlistTab: React.FC = () => {
 
     try {
       await watchlistService.addStock(selectedWatchlist.id, symbol, notes);
-      await loadWatchlistStocks(selectedWatchlist.id);
+      await invalidateStocks(); // Invalidate cache to refetch
+      await refreshStocks();
       await loadWatchlists(); // Update counts
     } catch (error) {
       console.error('[WatchlistTab] Error adding stock:', error);
@@ -261,7 +251,8 @@ const WatchlistTab: React.FC = () => {
 
     try {
       await watchlistService.removeStock(selectedWatchlist.id, symbol);
-      await loadWatchlistStocks(selectedWatchlist.id);
+      await invalidateStocks(); // Invalidate cache to refetch
+      await refreshStocks();
       await loadWatchlists(); // Update counts
 
       if (selectedStock?.symbol === symbol) {
@@ -295,7 +286,10 @@ const WatchlistTab: React.FC = () => {
   };
 
   // Get sorted stocks
-  const sortedStocks = sortStocks(stocks, sortBy);
+  const sortedStocks = sortStocks(stocksList, sortBy);
+
+  // Derive refreshing state from cache
+  const refreshing = stocksRefreshing;
 
   return (
     <div style={{
@@ -394,7 +388,21 @@ const WatchlistTab: React.FC = () => {
             </span>
             <span style={{ color: WHITE }}>|</span>
             <span style={{ color: GRAY }}>{t('list.symbols')}:</span>
-            <span style={{ color: CYAN }}>{stocks.length}</span>
+            <span style={{ color: CYAN }}>{stocksList.length}</span>
+            {isOffline && (
+              <>
+                <span style={{ color: WHITE }}>|</span>
+                <span style={{ color: ORANGE, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <WifiOff size={12} /> OFFLINE
+                </span>
+              </>
+            )}
+            {isStale && !isOffline && (
+              <>
+                <span style={{ color: WHITE }}>|</span>
+                <span style={{ color: YELLOW }}>STALE DATA</span>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -465,7 +473,7 @@ const WatchlistTab: React.FC = () => {
           onCreateWatchlist={() => setShowCreateWatchlist(true)}
           onDeleteWatchlist={handleDeleteWatchlist}
           marketMovers={marketMovers || undefined}
-          volumeLeaders={volumeLeaders}
+          volumeLeaders={volumeLeaders || []}
         />
 
         {/* Center Panel - Stock List */}
@@ -508,11 +516,11 @@ const WatchlistTab: React.FC = () => {
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Fincept Watchlist Monitor v2.0.0 | Real-time tracking with yfinance integration</span>
+          <span>Fincept Watchlist Monitor v2.0.0 | Real-time tracking with yfinance integration | Unified Cache</span>
           {selectedWatchlist && (
             <span>
-              Watchlist: {selectedWatchlist.name} | Stocks: {stocks.length} |
-              Status: <span style={{ color: GREEN }}>CONNECTED</span>
+              Watchlist: {selectedWatchlist.name} | Stocks: {stocksList.length} |
+              Status: <span style={{ color: isOffline ? ORANGE : GREEN }}>{isOffline ? 'OFFLINE' : 'CONNECTED'}</span>
             </span>
           )}
         </div>
@@ -532,7 +540,7 @@ const WatchlistTab: React.FC = () => {
         <AddStockModal
           onClose={() => setShowAddStock(false)}
           onAdd={handleAddStock}
-          existingSymbols={stocks.map(s => s.symbol)}
+          existingSymbols={stocksList.map(s => s.symbol)}
         />
       )}
 
@@ -543,7 +551,7 @@ const WatchlistTab: React.FC = () => {
           { label: `Lists: ${watchlists.length}`, color: '#6b7280' },
           { label: selectedWatchlist ? `"${selectedWatchlist.name}"` : 'No list selected', color: '#06b6d4' },
         ]}
-        statusInfo={`Stocks: ${stocks.length} | ${loading ? 'Loading...' : 'Ready'}`}
+        statusInfo={`Stocks: ${stocksList.length} | ${loading || stocksLoading ? 'Loading...' : isOffline ? 'Offline' : 'Ready'}`}
       />
     </div>
   );

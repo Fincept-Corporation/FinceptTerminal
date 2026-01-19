@@ -1,4 +1,4 @@
-// Data Mapping Tab - Bloomberg Terminal Theme UI
+// Data Mapping Tab - Fincept Terminal Theme UI
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -542,7 +542,7 @@ export default function DataMappingTab() {
 
   return (
     <div className="w-full h-full bg-[#0a0a0a] flex flex-col text-white">
-      {/* Bloomberg-style Header */}
+      {/* Fincept-style Header */}
       <div className="bg-[#1a1a1a] border-b border-[#2a2a2a] px-4 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -592,7 +592,7 @@ export default function DataMappingTab() {
         </div>
       </div>
 
-      {/* Step Progress Bar - Bloomberg Style */}
+      {/* Step Progress Bar - Fincept Style */}
       {view === 'create' && (
         <div className="bg-[#1a1a1a] border-b border-[#2a2a2a] px-4 py-3">
           <div className="flex items-center gap-1">
@@ -733,7 +733,7 @@ export default function DataMappingTab() {
         {view === 'create' && <>{renderStepContent()}</>}
       </div>
 
-      {/* Navigation Footer - Bloomberg Style */}
+      {/* Navigation Footer - Fincept Style */}
       {view === 'create' && (
         <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-3 flex justify-between items-center">
           <button

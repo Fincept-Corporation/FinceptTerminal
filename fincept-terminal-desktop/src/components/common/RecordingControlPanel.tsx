@@ -109,7 +109,7 @@ export const RecordingControlPanel: React.FC<RecordingControlPanelProps> = ({
         </span>
       )}
 
-      {/* Start/Stop Button - Bloomberg Style */}
+      {/* Start/Stop Button - Fincept Style */}
       <button
         onClick={isRecording ? handleStopRecording : handleStartRecording}
         style={{
@@ -144,7 +144,7 @@ export const RecordingControlPanel: React.FC<RecordingControlPanelProps> = ({
         )}
       </button>
 
-      {/* Settings Button - Bloomberg Style with orange background */}
+      {/* Settings Button - Fincept Style with orange background */}
       <button
         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
         style={{
@@ -169,7 +169,7 @@ export const RecordingControlPanel: React.FC<RecordingControlPanelProps> = ({
         <Settings2 size={14} />
       </button>
 
-      {/* Settings Popover - Bloomberg Style */}
+      {/* Settings Popover - Fincept Style */}
       {isSettingsOpen && (
         <>
           {/* Backdrop */}

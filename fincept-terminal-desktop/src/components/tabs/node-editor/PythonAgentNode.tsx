@@ -114,7 +114,7 @@ const PythonAgentNode: React.FC<PythonAgentNodeProps> = ({ id, data, selected })
     loadLLMs();
   }, []);
 
-  // Bloomberg colors
+  // Fincept colors
   const ORANGE = '#FFA500';
   const WHITE = '#FFFFFF';
   const GRAY = '#787878';

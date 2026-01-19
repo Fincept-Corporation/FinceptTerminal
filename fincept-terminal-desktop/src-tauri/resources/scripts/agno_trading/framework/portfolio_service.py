@@ -166,6 +166,12 @@ class InMemoryPortfolioService(BasePortfolioService):
     async def get_portfolio_view(self) -> PortfolioView:
         """
         Get current portfolio snapshot.
+
+        Total portfolio value = Cash + Position Values (at current market prices)
+
+        For long positions: position_value = quantity * current_price
+        For short positions: position_value = margin_held + unrealized_pnl
+            (margin is already deducted from cash when opening short)
         """
         total_unrealized_pnl = sum(pos.unrealized_pnl for pos in self.positions.values())
 
@@ -178,11 +184,38 @@ class InMemoryPortfolioService(BasePortfolioService):
             gross_exposure += notional
 
             if pos.quantity > 0:
+                # Long position: positive exposure
                 net_exposure += notional
             else:
+                # Short position: negative exposure
                 net_exposure -= notional
 
-        total_value = self.cash + total_unrealized_pnl
+        # Total value = Cash + Long Position Values + Unrealized P&L from shorts
+        # For longs: unrealized_pnl is already embedded in (current_price - entry_price) * qty
+        # So we use: Cash + Long Positions Market Value + Short Unrealized P&L
+        # Simplified: Cash + Gross Long Exposure + Total Unrealized P&L (which includes both)
+
+        # More accurate calculation:
+        # - Cash includes proceeds/margin from trades
+        # - Long positions: add current market value
+        # - Short positions: margin is in cash, add/subtract unrealized P&L
+
+        # Calculate long positions value at cost basis + unrealized gain/loss
+        long_positions_value = sum(
+            pos.quantity * pos.current_price
+            for pos in self.positions.values()
+            if pos.quantity > 0
+        )
+
+        # Short positions: only unrealized P&L affects value (margin already in cash)
+        short_unrealized_pnl = sum(
+            pos.unrealized_pnl
+            for pos in self.positions.values()
+            if pos.quantity < 0
+        )
+
+        # Total portfolio value
+        total_value = self.cash + long_positions_value + short_unrealized_pnl
 
         return PortfolioView(
             cash=self.cash,

@@ -91,18 +91,18 @@ const ForumTab: React.FC = () => {
   const [trendingTopics, setTrendingTopics] = useState<Array<{ topic: string; mentions: number; sentiment: string; change: string }>>([]);
   const [recentActivity, setRecentActivity] = useState<Array<{ user: string; action: string; target: string; time: string }>>([]);
 
-  // Bloomberg color scheme - use actual theme colors
-  const BLOOMBERG_ORANGE = colors.primary;
-  const BLOOMBERG_WHITE = colors.text;
-  const BLOOMBERG_RED = colors.alert;
-  const BLOOMBERG_GREEN = colors.secondary;
-  const BLOOMBERG_YELLOW = colors.warning;
-  const BLOOMBERG_GRAY = colors.textMuted;
-  const BLOOMBERG_BLUE = colors.info;
-  const BLOOMBERG_PURPLE = colors.purple;
-  const BLOOMBERG_CYAN = colors.accent;
-  const BLOOMBERG_DARK_BG = colors.background;
-  const BLOOMBERG_PANEL_BG = colors.panel;
+  // Fincept color scheme - use actual theme colors
+  const FINCEPT_ORANGE = colors.primary;
+  const FINCEPT_WHITE = colors.text;
+  const FINCEPT_RED = colors.alert;
+  const FINCEPT_GREEN = colors.secondary;
+  const FINCEPT_YELLOW = colors.warning;
+  const FINCEPT_GRAY = colors.textMuted;
+  const FINCEPT_BLUE = colors.info;
+  const FINCEPT_PURPLE = colors.purple;
+  const FINCEPT_CYAN = colors.accent;
+  const FINCEPT_DARK_BG = colors.background;
+  const FINCEPT_PANEL_BG = colors.panel;
 
   // Top contributors - static for now
   const topContributors: ForumUser[] = [
@@ -182,12 +182,12 @@ const ForumTab: React.FC = () => {
       if (response.success && response.data?.data?.categories) {
         const apiCategories = response.data.data.categories;
         const categoryColors = [
-          BLOOMBERG_BLUE, BLOOMBERG_PURPLE, BLOOMBERG_CYAN, BLOOMBERG_YELLOW,
-          BLOOMBERG_GREEN, BLOOMBERG_ORANGE, BLOOMBERG_RED, BLOOMBERG_PURPLE
+          FINCEPT_BLUE, FINCEPT_PURPLE, FINCEPT_CYAN, FINCEPT_YELLOW,
+          FINCEPT_GREEN, FINCEPT_ORANGE, FINCEPT_RED, FINCEPT_PURPLE
         ];
 
         const formattedCategories = [
-          { name: 'ALL', count: apiCategories.reduce((sum: number, cat: ForumCategory) => sum + cat.post_count, 0), color: BLOOMBERG_WHITE, id: 0 },
+          { name: 'ALL', count: apiCategories.reduce((sum: number, cat: ForumCategory) => sum + cat.post_count, 0), color: FINCEPT_WHITE, id: 0 },
           ...apiCategories.map((cat: ForumCategory, index: number) => ({
             name: cat.name.toUpperCase(),
             count: cat.post_count,
@@ -678,19 +678,19 @@ const ForumTab: React.FC = () => {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'HOT': return BLOOMBERG_RED;
-      case 'TRENDING': return BLOOMBERG_ORANGE;
-      case 'NORMAL': return BLOOMBERG_GRAY;
-      default: return BLOOMBERG_GRAY;
+      case 'HOT': return FINCEPT_RED;
+      case 'TRENDING': return FINCEPT_ORANGE;
+      case 'NORMAL': return FINCEPT_GRAY;
+      default: return FINCEPT_GRAY;
     }
   };
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
-      case 'BULLISH': return BLOOMBERG_GREEN;
-      case 'BEARISH': return BLOOMBERG_RED;
-      case 'NEUTRAL': return BLOOMBERG_YELLOW;
-      default: return BLOOMBERG_GRAY;
+      case 'BULLISH': return FINCEPT_GREEN;
+      case 'BEARISH': return FINCEPT_RED;
+      case 'NEUTRAL': return FINCEPT_YELLOW;
+      default: return FINCEPT_GRAY;
     }
   };
 
@@ -718,21 +718,21 @@ const ForumTab: React.FC = () => {
         zIndex: 1000
       }}>
         <div style={{
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_PANEL_BG,
+          border: `2px solid ${FINCEPT_ORANGE}`,
           padding: '16px',
           width: '600px',
           maxHeight: '80vh',
           overflow: 'auto'
         }}>
-          <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
+          <div style={{ color: FINCEPT_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
             CREATE NEW POST
           </div>
-          <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+          <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '12px' }}></div>
 
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>
-              Title: <span style={{ color: newPostTitle.length < 5 ? BLOOMBERG_RED : BLOOMBERG_GREEN }}>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '4px' }}>
+              Title: <span style={{ color: newPostTitle.length < 5 ? FINCEPT_RED : FINCEPT_GREEN }}>
                 ({newPostTitle.length}/500 chars - min 5)
               </span>
             </div>
@@ -743,9 +743,9 @@ const ForumTab: React.FC = () => {
               maxLength={500}
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${newPostTitle.length > 0 && newPostTitle.length < 5 ? BLOOMBERG_RED : BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${newPostTitle.length > 0 && newPostTitle.length < 5 ? FINCEPT_RED : FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '12px',
                 fontFamily: 'Consolas, monospace'
@@ -755,8 +755,8 @@ const ForumTab: React.FC = () => {
           </div>
 
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>
-              Content: <span style={{ color: newPostContent.length < 10 ? BLOOMBERG_RED : BLOOMBERG_GREEN }}>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '4px' }}>
+              Content: <span style={{ color: newPostContent.length < 10 ? FINCEPT_RED : FINCEPT_GREEN }}>
                 ({newPostContent.length}/10000 chars - min 10)
               </span>
             </div>
@@ -767,9 +767,9 @@ const ForumTab: React.FC = () => {
               rows={10}
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${newPostContent.length > 0 && newPostContent.length < 10 ? BLOOMBERG_RED : BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${newPostContent.length > 0 && newPostContent.length < 10 ? FINCEPT_RED : FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '11px',
                 fontFamily: 'Consolas, monospace',
@@ -783,8 +783,8 @@ const ForumTab: React.FC = () => {
             <button
               onClick={() => setShowCreatePost(false)}
               style={{
-                backgroundColor: BLOOMBERG_GRAY,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: FINCEPT_GRAY,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '6px 16px',
                 fontSize: '11px',
@@ -797,8 +797,8 @@ const ForumTab: React.FC = () => {
             <button
               onClick={handleCreatePost}
               style={{
-                backgroundColor: BLOOMBERG_ORANGE,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: FINCEPT_ORANGE,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '6px 16px',
                 fontSize: '11px',
@@ -812,7 +812,7 @@ const ForumTab: React.FC = () => {
         </div>
       </div>
     );
-  }, [showCreatePost, newPostTitle, newPostContent, handleCreatePost, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_DARK_BG, BLOOMBERG_WHITE, BLOOMBERG_RED, BLOOMBERG_GREEN, BLOOMBERG_PANEL_BG]);
+  }, [showCreatePost, newPostTitle, newPostContent, handleCreatePost, FINCEPT_ORANGE, FINCEPT_GRAY, FINCEPT_DARK_BG, FINCEPT_WHITE, FINCEPT_RED, FINCEPT_GREEN, FINCEPT_PANEL_BG]);
 
   const PostDetailModal = React.useMemo(() => {
     if (!showPostDetail || !selectedPost) return null;
@@ -830,8 +830,8 @@ const ForumTab: React.FC = () => {
         zIndex: 1000
       }}>
         <div style={{
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_PANEL_BG,
+          border: `2px solid ${FINCEPT_ORANGE}`,
           padding: '16px',
           width: '800px',
           maxHeight: '80vh',
@@ -840,15 +840,15 @@ const ForumTab: React.FC = () => {
           {selectedPost && (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
+                <div style={{ color: FINCEPT_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
                   POST DETAILS
                 </div>
                 <button
                   onClick={() => setShowPostDetail(false)}
                   style={{
                     backgroundColor: 'transparent',
-                    border: `1px solid ${BLOOMBERG_GRAY}`,
-                    color: BLOOMBERG_WHITE,
+                    border: `1px solid ${FINCEPT_GRAY}`,
+                    color: FINCEPT_WHITE,
                     padding: '2px 8px',
                     fontSize: '10px',
                     cursor: 'pointer'
@@ -857,22 +857,22 @@ const ForumTab: React.FC = () => {
                   CLOSE [X]
                 </button>
               </div>
-              <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+              <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '12px' }}></div>
 
               {/* Post content */}
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '8px', fontSize: '10px' }}>
-                  <span style={{ color: BLOOMBERG_CYAN }}>@{selectedPost.author}</span>
-                  <span style={{ color: BLOOMBERG_GRAY }}>•</span>
-                  <span style={{ color: BLOOMBERG_BLUE }}>[{selectedPost.category}]</span>
+                  <span style={{ color: FINCEPT_CYAN }}>@{selectedPost.author}</span>
+                  <span style={{ color: FINCEPT_GRAY }}>•</span>
+                  <span style={{ color: FINCEPT_BLUE }}>[{selectedPost.category}]</span>
                   <span style={{ color: getSentimentColor(selectedPost.sentiment) }}>{selectedPost.sentiment}</span>
                 </div>
 
-                <div style={{ color: BLOOMBERG_WHITE, fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>
+                <div style={{ color: FINCEPT_WHITE, fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>
                   {selectedPost.title}
                 </div>
 
-                <div style={{ color: BLOOMBERG_GRAY, fontSize: '11px', lineHeight: '1.5', marginBottom: '8px', whiteSpace: 'pre-wrap' }}>
+                <div style={{ color: FINCEPT_GRAY, fontSize: '11px', lineHeight: '1.5', marginBottom: '8px', whiteSpace: 'pre-wrap' }}>
                   {selectedPost.content}
                 </div>
 
@@ -881,8 +881,8 @@ const ForumTab: React.FC = () => {
                     onClick={() => handleVotePost(selectedPost.id, 'up')}
                     style={{
                       backgroundColor: 'transparent',
-                      border: `1px solid ${BLOOMBERG_GREEN}`,
-                      color: BLOOMBERG_GREEN,
+                      border: `1px solid ${FINCEPT_GREEN}`,
+                      color: FINCEPT_GREEN,
                       padding: '4px 12px',
                       fontSize: '10px',
                       cursor: 'pointer'
@@ -894,8 +894,8 @@ const ForumTab: React.FC = () => {
                     onClick={() => handleVotePost(selectedPost.id, 'down')}
                     style={{
                       backgroundColor: 'transparent',
-                      border: `1px solid ${BLOOMBERG_RED}`,
-                      color: BLOOMBERG_RED,
+                      border: `1px solid ${FINCEPT_RED}`,
+                      color: FINCEPT_RED,
                       padding: '4px 12px',
                       fontSize: '10px',
                       cursor: 'pointer'
@@ -906,8 +906,8 @@ const ForumTab: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, paddingTop: '12px', marginBottom: '12px' }}>
-                <div style={{ color: BLOOMBERG_YELLOW, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
+              <div style={{ borderTop: `1px solid ${FINCEPT_GRAY}`, paddingTop: '12px', marginBottom: '12px' }}>
+                <div style={{ color: FINCEPT_YELLOW, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
                   COMMENTS ({postComments.length})
                 </div>
 
@@ -920,9 +920,9 @@ const ForumTab: React.FC = () => {
                     rows={3}
                     style={{
                       width: '100%',
-                      backgroundColor: BLOOMBERG_DARK_BG,
-                      border: `1px solid ${BLOOMBERG_GRAY}`,
-                      color: BLOOMBERG_WHITE,
+                      backgroundColor: FINCEPT_DARK_BG,
+                      border: `1px solid ${FINCEPT_GRAY}`,
+                      color: FINCEPT_WHITE,
                       padding: '6px',
                       fontSize: '11px',
                       fontFamily: 'Consolas, monospace',
@@ -933,8 +933,8 @@ const ForumTab: React.FC = () => {
                   <button
                     onClick={handleAddComment}
                     style={{
-                      backgroundColor: BLOOMBERG_ORANGE,
-                      color: BLOOMBERG_DARK_BG,
+                      backgroundColor: FINCEPT_ORANGE,
+                      color: FINCEPT_DARK_BG,
                       border: 'none',
                       padding: '4px 12px',
                       fontSize: '10px',
@@ -952,15 +952,15 @@ const ForumTab: React.FC = () => {
                     backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                     padding: '8px',
                     marginBottom: '6px',
-                    borderLeft: `2px solid ${BLOOMBERG_BLUE}`
+                    borderLeft: `2px solid ${FINCEPT_BLUE}`
                   }}>
                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px', fontSize: '9px' }}>
-                      <span style={{ color: BLOOMBERG_CYAN }}>@{comment.author}</span>
-                      <span style={{ color: BLOOMBERG_GRAY }}>•</span>
-                      <span style={{ color: BLOOMBERG_GRAY }}>{comment.time}</span>
+                      <span style={{ color: FINCEPT_CYAN }}>@{comment.author}</span>
+                      <span style={{ color: FINCEPT_GRAY }}>•</span>
+                      <span style={{ color: FINCEPT_GRAY }}>{comment.time}</span>
                     </div>
 
-                    <div style={{ color: BLOOMBERG_WHITE, fontSize: '10px', marginBottom: '4px', whiteSpace: 'pre-wrap' }}>
+                    <div style={{ color: FINCEPT_WHITE, fontSize: '10px', marginBottom: '4px', whiteSpace: 'pre-wrap' }}>
                       {comment.content}
                     </div>
 
@@ -970,7 +970,7 @@ const ForumTab: React.FC = () => {
                         style={{
                           backgroundColor: 'transparent',
                           border: 'none',
-                          color: BLOOMBERG_GREEN,
+                          color: FINCEPT_GREEN,
                           cursor: 'pointer',
                           fontSize: '9px'
                         }}
@@ -982,7 +982,7 @@ const ForumTab: React.FC = () => {
                         style={{
                           backgroundColor: 'transparent',
                           border: 'none',
-                          color: BLOOMBERG_RED,
+                          color: FINCEPT_RED,
                           cursor: 'pointer',
                           fontSize: '9px'
                         }}
@@ -998,7 +998,7 @@ const ForumTab: React.FC = () => {
         </div>
       </div>
     );
-  }, [showPostDetail, selectedPost, postComments, newComment, handleAddComment, handleVotePost, handleVoteComment, getSentimentColor, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_WHITE, BLOOMBERG_DARK_BG, BLOOMBERG_PANEL_BG, BLOOMBERG_CYAN, BLOOMBERG_BLUE, BLOOMBERG_GREEN, BLOOMBERG_RED, BLOOMBERG_YELLOW]);
+  }, [showPostDetail, selectedPost, postComments, newComment, handleAddComment, handleVotePost, handleVoteComment, getSentimentColor, FINCEPT_ORANGE, FINCEPT_GRAY, FINCEPT_WHITE, FINCEPT_DARK_BG, FINCEPT_PANEL_BG, FINCEPT_CYAN, FINCEPT_BLUE, FINCEPT_GREEN, FINCEPT_RED, FINCEPT_YELLOW]);
 
   const SearchModal = React.useMemo(() => {
     if (!showSearch) return null;
@@ -1016,17 +1016,17 @@ const ForumTab: React.FC = () => {
         zIndex: 1000
       }}>
         <div style={{
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_PANEL_BG,
+          border: `2px solid ${FINCEPT_ORANGE}`,
           padding: '16px',
           width: '700px',
           maxHeight: '80vh',
           overflow: 'auto'
         }}>
-          <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
+          <div style={{ color: FINCEPT_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
             SEARCH FORUM
           </div>
-          <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+          <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '12px' }}></div>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
             <input
@@ -1036,9 +1036,9 @@ const ForumTab: React.FC = () => {
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               style={{
                 flex: 1,
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '8px',
                 fontSize: '12px',
                 fontFamily: 'Consolas, monospace'
@@ -1048,8 +1048,8 @@ const ForumTab: React.FC = () => {
             <button
               onClick={handleSearch}
               style={{
-                backgroundColor: BLOOMBERG_ORANGE,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: FINCEPT_ORANGE,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '8px 16px',
                 fontSize: '11px',
@@ -1066,8 +1066,8 @@ const ForumTab: React.FC = () => {
                 setSearchQuery('');
               }}
               style={{
-                backgroundColor: BLOOMBERG_GRAY,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: FINCEPT_GRAY,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '8px 16px',
                 fontSize: '11px',
@@ -1080,14 +1080,14 @@ const ForumTab: React.FC = () => {
           </div>
 
           {isLoading && (
-            <div style={{ color: BLOOMBERG_YELLOW, textAlign: 'center', padding: '20px' }}>
+            <div style={{ color: FINCEPT_YELLOW, textAlign: 'center', padding: '20px' }}>
               SEARCHING...
             </div>
           )}
 
           {searchResults.length > 0 && (
             <div>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '11px', marginBottom: '8px' }}>
+              <div style={{ color: FINCEPT_YELLOW, fontSize: '11px', marginBottom: '8px' }}>
                 FOUND {searchResults.length} RESULTS
               </div>
               {searchResults.map((post, index) => (
@@ -1105,16 +1105,16 @@ const ForumTab: React.FC = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+                  <div style={{ color: FINCEPT_WHITE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
                     {post.title}
                   </div>
-                  <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', marginBottom: '4px' }}>
+                  <div style={{ color: FINCEPT_GRAY, fontSize: '10px', marginBottom: '4px' }}>
                     {post.content.substring(0, 150)}...
                   </div>
                   <div style={{ display: 'flex', gap: '8px', fontSize: '9px' }}>
-                    <span style={{ color: BLOOMBERG_CYAN }}>@{post.author}</span>
-                    <span style={{ color: BLOOMBERG_BLUE }}>[{post.category}]</span>
-                    <span style={{ color: BLOOMBERG_GREEN }}>👍 {post.likes}</span>
+                    <span style={{ color: FINCEPT_CYAN }}>@{post.author}</span>
+                    <span style={{ color: FINCEPT_BLUE }}>[{post.category}]</span>
+                    <span style={{ color: FINCEPT_GREEN }}>👍 {post.likes}</span>
                   </div>
                 </div>
               ))}
@@ -1123,7 +1123,7 @@ const ForumTab: React.FC = () => {
         </div>
       </div>
     );
-  }, [showSearch, searchQuery, searchResults, isLoading, handleSearch, handleViewPost, getPriorityColor, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_DARK_BG, BLOOMBERG_WHITE, BLOOMBERG_PANEL_BG, BLOOMBERG_YELLOW, BLOOMBERG_CYAN, BLOOMBERG_BLUE, BLOOMBERG_GREEN]);
+  }, [showSearch, searchQuery, searchResults, isLoading, handleSearch, handleViewPost, getPriorityColor, FINCEPT_ORANGE, FINCEPT_GRAY, FINCEPT_DARK_BG, FINCEPT_WHITE, FINCEPT_PANEL_BG, FINCEPT_YELLOW, FINCEPT_CYAN, FINCEPT_BLUE, FINCEPT_GREEN]);
 
   const ProfileModal = React.useMemo(() => {
     if (!showProfile || !userProfile) return null;
@@ -1141,8 +1141,8 @@ const ForumTab: React.FC = () => {
         zIndex: 1000
       }}>
         <div style={{
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_PANEL_BG,
+          border: `2px solid ${FINCEPT_ORANGE}`,
           padding: '16px',
           width: '600px',
           maxHeight: '80vh',
@@ -1151,7 +1151,7 @@ const ForumTab: React.FC = () => {
           {userProfile && (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
+                <div style={{ color: FINCEPT_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
                   FORUM PROFILE
                 </div>
                 <button
@@ -1161,8 +1161,8 @@ const ForumTab: React.FC = () => {
                   }}
                   style={{
                     backgroundColor: 'transparent',
-                    border: `1px solid ${BLOOMBERG_GRAY}`,
-                    color: BLOOMBERG_WHITE,
+                    border: `1px solid ${FINCEPT_GRAY}`,
+                    color: FINCEPT_WHITE,
                     padding: '2px 8px',
                     fontSize: '10px',
                     cursor: 'pointer'
@@ -1171,31 +1171,31 @@ const ForumTab: React.FC = () => {
                   CLOSE [X]
                 </button>
               </div>
-              <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+              <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '12px' }}></div>
 
               <div style={{ marginBottom: '12px' }}>
-                <div style={{ color: BLOOMBERG_CYAN, fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
+                <div style={{ color: FINCEPT_CYAN, fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
                   @{userProfile.username}
                 </div>
-                <div style={{ color: BLOOMBERG_WHITE, fontSize: '12px', marginBottom: '4px' }}>
+                <div style={{ color: FINCEPT_WHITE, fontSize: '12px', marginBottom: '4px' }}>
                   {userProfile.display_name || 'No display name set'}
                 </div>
-                <div style={{ color: BLOOMBERG_GRAY, fontSize: '11px', marginBottom: '12px', fontStyle: 'italic' }}>
+                <div style={{ color: FINCEPT_GRAY, fontSize: '11px', marginBottom: '12px', fontStyle: 'italic' }}>
                   {userProfile.bio || 'No bio available'}
                 </div>
 
                 <div style={{ display: 'flex', gap: '16px', fontSize: '11px', marginBottom: '12px' }}>
                   <div>
-                    <span style={{ color: BLOOMBERG_GRAY }}>Posts: </span>
-                    <span style={{ color: BLOOMBERG_WHITE }}>{userProfile.post_count || 0}</span>
+                    <span style={{ color: FINCEPT_GRAY }}>Posts: </span>
+                    <span style={{ color: FINCEPT_WHITE }}>{userProfile.post_count || 0}</span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG_GRAY }}>Comments: </span>
-                    <span style={{ color: BLOOMBERG_WHITE }}>{userProfile.comment_count || 0}</span>
+                    <span style={{ color: FINCEPT_GRAY }}>Comments: </span>
+                    <span style={{ color: FINCEPT_WHITE }}>{userProfile.comment_count || 0}</span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG_GRAY }}>Reputation: </span>
-                    <span style={{ color: BLOOMBERG_GREEN }}>{userProfile.reputation || 0}</span>
+                    <span style={{ color: FINCEPT_GRAY }}>Reputation: </span>
+                    <span style={{ color: FINCEPT_GREEN }}>{userProfile.reputation || 0}</span>
                   </div>
                 </div>
 
@@ -1204,10 +1204,10 @@ const ForumTab: React.FC = () => {
                     backgroundColor: 'rgba(255,255,255,0.02)',
                     padding: '8px',
                     marginBottom: '12px',
-                    borderLeft: `2px solid ${BLOOMBERG_YELLOW}`
+                    borderLeft: `2px solid ${FINCEPT_YELLOW}`
                   }}>
-                    <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', marginBottom: '4px' }}>SIGNATURE:</div>
-                    <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', fontStyle: 'italic' }}>
+                    <div style={{ color: FINCEPT_YELLOW, fontSize: '10px', marginBottom: '4px' }}>SIGNATURE:</div>
+                    <div style={{ color: FINCEPT_GRAY, fontSize: '10px', fontStyle: 'italic' }}>
                       {userProfile.signature}
                     </div>
                   </div>
@@ -1220,8 +1220,8 @@ const ForumTab: React.FC = () => {
                       setShowEditProfile(true);
                     }}
                     style={{
-                      backgroundColor: BLOOMBERG_ORANGE,
-                      color: BLOOMBERG_DARK_BG,
+                      backgroundColor: FINCEPT_ORANGE,
+                      color: FINCEPT_DARK_BG,
                       border: 'none',
                       padding: '6px 16px',
                       fontSize: '11px',
@@ -1238,7 +1238,7 @@ const ForumTab: React.FC = () => {
         </div>
       </div>
     );
-  }, [showProfile, userProfile, selectedUsername, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_WHITE, BLOOMBERG_DARK_BG, BLOOMBERG_PANEL_BG, BLOOMBERG_CYAN, BLOOMBERG_GREEN, BLOOMBERG_YELLOW]);
+  }, [showProfile, userProfile, selectedUsername, FINCEPT_ORANGE, FINCEPT_GRAY, FINCEPT_WHITE, FINCEPT_DARK_BG, FINCEPT_PANEL_BG, FINCEPT_CYAN, FINCEPT_GREEN, FINCEPT_YELLOW]);
 
   const EditProfileModal = React.useMemo(() => {
     if (!showEditProfile) return null;
@@ -1256,29 +1256,29 @@ const ForumTab: React.FC = () => {
         zIndex: 1000
       }}>
         <div style={{
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_PANEL_BG,
+          border: `2px solid ${FINCEPT_ORANGE}`,
           padding: '16px',
           width: '600px',
           maxHeight: '80vh',
           overflow: 'auto'
         }}>
-          <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
+          <div style={{ color: FINCEPT_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
             EDIT PROFILE
           </div>
-          <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+          <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '12px' }}></div>
 
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Display Name:</div>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '4px' }}>Display Name:</div>
             <input
               type="text"
               value={profileEdit.display_name}
               onChange={(e) => setProfileEdit({ ...profileEdit, display_name: e.target.value })}
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '12px',
                 fontFamily: 'Consolas, monospace'
@@ -1287,16 +1287,16 @@ const ForumTab: React.FC = () => {
           </div>
 
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Bio:</div>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '4px' }}>Bio:</div>
             <textarea
               value={profileEdit.bio}
               onChange={(e) => setProfileEdit({ ...profileEdit, bio: e.target.value })}
               rows={4}
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '11px',
                 fontFamily: 'Consolas, monospace'
@@ -1305,16 +1305,16 @@ const ForumTab: React.FC = () => {
           </div>
 
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Signature:</div>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '4px' }}>Signature:</div>
             <input
               type="text"
               value={profileEdit.signature}
               onChange={(e) => setProfileEdit({ ...profileEdit, signature: e.target.value })}
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '12px',
                 fontFamily: 'Consolas, monospace'
@@ -1326,8 +1326,8 @@ const ForumTab: React.FC = () => {
             <button
               onClick={() => setShowEditProfile(false)}
               style={{
-                backgroundColor: BLOOMBERG_GRAY,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: FINCEPT_GRAY,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '6px 16px',
                 fontSize: '11px',
@@ -1340,8 +1340,8 @@ const ForumTab: React.FC = () => {
             <button
               onClick={handleUpdateProfile}
               style={{
-                backgroundColor: BLOOMBERG_ORANGE,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: FINCEPT_ORANGE,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '6px 16px',
                 fontSize: '11px',
@@ -1355,13 +1355,13 @@ const ForumTab: React.FC = () => {
         </div>
       </div>
     );
-  }, [showEditProfile, profileEdit, handleUpdateProfile, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_DARK_BG, BLOOMBERG_WHITE, BLOOMBERG_PANEL_BG]);
+  }, [showEditProfile, profileEdit, handleUpdateProfile, FINCEPT_ORANGE, FINCEPT_GRAY, FINCEPT_DARK_BG, FINCEPT_WHITE, FINCEPT_PANEL_BG]);
 
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG_DARK_BG,
-      color: BLOOMBERG_WHITE,
+      backgroundColor: FINCEPT_DARK_BG,
+      color: FINCEPT_WHITE,
       fontFamily: 'Consolas, monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -1370,29 +1370,29 @@ const ForumTab: React.FC = () => {
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: FINCEPT_PANEL_BG,
+        borderBottom: `1px solid ${FINCEPT_GRAY}`,
         padding: '4px 8px',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>{t('title')}</span>
-            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-            <span style={{ color: BLOOMBERG_GREEN }}>● LIVE</span>
-            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-            <span style={{ color: BLOOMBERG_YELLOW }}>USERS ONLINE: {onlineUsers.toLocaleString()}</span>
-            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-            <span style={{ color: BLOOMBERG_CYAN }}>POSTS TODAY: {postsToday.toLocaleString()}</span>
-            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-            <span style={{ color: BLOOMBERG_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+            <span style={{ color: FINCEPT_ORANGE, fontWeight: 'bold' }}>{t('title')}</span>
+            <span style={{ color: FINCEPT_WHITE }}>|</span>
+            <span style={{ color: FINCEPT_GREEN }}>● LIVE</span>
+            <span style={{ color: FINCEPT_WHITE }}>|</span>
+            <span style={{ color: FINCEPT_YELLOW }}>USERS ONLINE: {onlineUsers.toLocaleString()}</span>
+            <span style={{ color: FINCEPT_WHITE }}>|</span>
+            <span style={{ color: FINCEPT_CYAN }}>POSTS TODAY: {postsToday.toLocaleString()}</span>
+            <span style={{ color: FINCEPT_WHITE }}>|</span>
+            <span style={{ color: FINCEPT_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
           </div>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
             style={{
-              backgroundColor: isRefreshing ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
-              color: BLOOMBERG_DARK_BG,
+              backgroundColor: isRefreshing ? FINCEPT_GRAY : FINCEPT_ORANGE,
+              color: FINCEPT_DARK_BG,
               border: 'none',
               padding: '2px 8px',
               fontSize: '10px',
@@ -1407,24 +1407,24 @@ const ForumTab: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
-          <span style={{ color: BLOOMBERG_GRAY }}>{t('header.trending')}:</span>
+          <span style={{ color: FINCEPT_GRAY }}>{t('header.trending')}:</span>
           {trendingTopics.slice(0, 5).map((topic, i) => (
-            <span key={i} style={{ color: i % 2 === 0 ? BLOOMBERG_RED : i % 3 === 0 ? BLOOMBERG_CYAN : BLOOMBERG_PURPLE }}>
+            <span key={i} style={{ color: i % 2 === 0 ? FINCEPT_RED : i % 3 === 0 ? FINCEPT_CYAN : FINCEPT_PURPLE }}>
               {topic.topic.replace('#', '').toUpperCase()}
             </span>
           ))}
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>SENTIMENT:</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>BULLISH 68%</span>
-          <span style={{ color: BLOOMBERG_RED }}>BEARISH 18%</span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>NEUTRAL 14%</span>
+          <span style={{ color: FINCEPT_WHITE }}>|</span>
+          <span style={{ color: FINCEPT_GRAY }}>SENTIMENT:</span>
+          <span style={{ color: FINCEPT_GREEN }}>BULLISH 68%</span>
+          <span style={{ color: FINCEPT_RED }}>BEARISH 18%</span>
+          <span style={{ color: FINCEPT_YELLOW }}>NEUTRAL 14%</span>
         </div>
       </div>
 
       {/* Function Keys */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: FINCEPT_PANEL_BG,
+        borderBottom: `1px solid ${FINCEPT_GRAY}`,
         padding: '2px 4px',
         flexShrink: 0
       }}>
@@ -1446,9 +1446,9 @@ const ForumTab: React.FC = () => {
             <button key={item.key}
               onClick={item.action}
               style={{
-                backgroundColor: activeCategory === item.label ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: activeCategory === item.label ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
+                backgroundColor: activeCategory === item.label ? FINCEPT_ORANGE : FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: activeCategory === item.label ? FINCEPT_DARK_BG : FINCEPT_WHITE,
                 padding: '2px 4px',
                 fontSize: '9px',
                 height: '16px',
@@ -1458,7 +1458,7 @@ const ForumTab: React.FC = () => {
                 fontWeight: activeCategory === item.label ? 'bold' : 'normal',
                 cursor: 'pointer'
               }}>
-              <span style={{ color: BLOOMBERG_YELLOW }}>{item.key}:</span>
+              <span style={{ color: FINCEPT_YELLOW }}>{item.key}:</span>
               <span style={{ marginLeft: '2px' }}>{item.label}</span>
             </button>
           ))}
@@ -1472,15 +1472,15 @@ const ForumTab: React.FC = () => {
           {/* Left Panel - Categories & Stats */}
           <div style={{
             width: '280px',
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: FINCEPT_PANEL_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: FINCEPT_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
               FORUM CATEGORIES
             </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '4px' }}></div>
+            <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '4px' }}></div>
 
             {categories.map((cat, index) => (
               <button key={index}
@@ -1492,19 +1492,19 @@ const ForumTab: React.FC = () => {
                   padding: '4px',
                   marginBottom: '2px',
                   backgroundColor: activeCategory === cat.name ? 'rgba(255,165,0,0.1)' : 'transparent',
-                  border: `1px solid ${activeCategory === cat.name ? BLOOMBERG_ORANGE : 'transparent'}`,
+                  border: `1px solid ${activeCategory === cat.name ? FINCEPT_ORANGE : 'transparent'}`,
                   color: cat.color,
                   fontSize: '10px',
                   cursor: 'pointer',
                   textAlign: 'left'
                 }}>
                 <span>{cat.name}</span>
-                <span style={{ color: BLOOMBERG_CYAN }}>{cat.count}</span>
+                <span style={{ color: FINCEPT_CYAN }}>{cat.count}</span>
               </button>
             ))}
 
-            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ borderTop: `1px solid ${FINCEPT_GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
+              <div style={{ color: FINCEPT_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
                 TOP CONTRIBUTORS
               </div>
               {topContributors.map((user, index) => (
@@ -1518,12 +1518,12 @@ const ForumTab: React.FC = () => {
                     cursor: 'pointer'
                   }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                    <span style={{ color: BLOOMBERG_WHITE }}>{user.username}</span>
-                    <span style={{ color: user.status === 'ONLINE' ? BLOOMBERG_GREEN : BLOOMBERG_GRAY }}>
+                    <span style={{ color: FINCEPT_WHITE }}>{user.username}</span>
+                    <span style={{ color: user.status === 'ONLINE' ? FINCEPT_GREEN : FINCEPT_GRAY }}>
                       ●
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', color: BLOOMBERG_GRAY }}>
+                  <div style={{ display: 'flex', gap: '6px', color: FINCEPT_GRAY }}>
                     <span>REP: {user.reputation}</span>
                     <span>POSTS: {user.posts}</span>
                   </div>
@@ -1531,16 +1531,16 @@ const ForumTab: React.FC = () => {
               ))}
             </div>
 
-            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ borderTop: `1px solid ${FINCEPT_GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
+              <div style={{ color: FINCEPT_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
                 FORUM STATISTICS
               </div>
-              <div style={{ fontSize: '9px', lineHeight: '1.4', color: BLOOMBERG_GRAY }}>
+              <div style={{ fontSize: '9px', lineHeight: '1.4', color: FINCEPT_GRAY }}>
                 <div>Total Posts: {totalPosts.toLocaleString()}</div>
                 <div>Total Users: {(forumStats?.total_comments || 47832).toLocaleString()}</div>
                 <div>Posts Today: {postsToday.toLocaleString()}</div>
                 <div>Active Now: {onlineUsers}</div>
-                <div style={{ color: BLOOMBERG_GREEN }}>Avg Response: 12 min</div>
+                <div style={{ color: FINCEPT_GREEN }}>Avg Response: 12 min</div>
               </div>
             </div>
           </div>
@@ -1548,44 +1548,44 @@ const ForumTab: React.FC = () => {
           {/* Center Panel - Forum Posts */}
           <div style={{
             flex: 1,
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: FINCEPT_PANEL_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
             padding: '4px',
             overflow: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold' }}>
+              <div style={{ color: FINCEPT_ORANGE, fontSize: '11px', fontWeight: 'bold' }}>
                 FORUM POSTS [{activeCategory}]
-                {isLoading && <span style={{ color: BLOOMBERG_YELLOW, marginLeft: '8px' }}>LOADING...</span>}
+                {isLoading && <span style={{ color: FINCEPT_YELLOW, marginLeft: '8px' }}>LOADING...</span>}
               </div>
               <div style={{ display: 'flex', gap: '4px', fontSize: '9px' }}>
                 <button onClick={() => setSortBy('latest')} style={{
                   padding: '2px 6px',
-                  backgroundColor: sortBy === 'latest' ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
-                  color: sortBy === 'latest' ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
+                  backgroundColor: sortBy === 'latest' ? FINCEPT_ORANGE : FINCEPT_DARK_BG,
+                  color: sortBy === 'latest' ? FINCEPT_DARK_BG : FINCEPT_WHITE,
+                  border: `1px solid ${FINCEPT_GRAY}`,
                   cursor: 'pointer'
                 }}>LATEST</button>
                 <button onClick={() => setSortBy('popular')} style={{
                   padding: '2px 6px',
-                  backgroundColor: sortBy === 'popular' ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
-                  color: sortBy === 'popular' ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
+                  backgroundColor: sortBy === 'popular' ? FINCEPT_ORANGE : FINCEPT_DARK_BG,
+                  color: sortBy === 'popular' ? FINCEPT_DARK_BG : FINCEPT_WHITE,
+                  border: `1px solid ${FINCEPT_GRAY}`,
                   cursor: 'pointer'
                 }}>HOT</button>
                 <button onClick={() => setSortBy('views')} style={{
                   padding: '2px 6px',
-                  backgroundColor: sortBy === 'views' ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
-                  color: sortBy === 'views' ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
+                  backgroundColor: sortBy === 'views' ? FINCEPT_ORANGE : FINCEPT_DARK_BG,
+                  color: sortBy === 'views' ? FINCEPT_DARK_BG : FINCEPT_WHITE,
+                  border: `1px solid ${FINCEPT_GRAY}`,
                   cursor: 'pointer'
                 }}>TOP</button>
               </div>
             </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '8px' }}></div>
+            <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '8px' }}></div>
 
             {filteredPosts.length === 0 && !isLoading && (
-              <div style={{ color: BLOOMBERG_GRAY, textAlign: 'center', padding: '20px' }}>
+              <div style={{ color: FINCEPT_GRAY, textAlign: 'center', padding: '20px' }}>
                 No posts available. Be the first to post!
               </div>
             )}
@@ -1602,27 +1602,27 @@ const ForumTab: React.FC = () => {
                 onClick={() => handleViewPost(post)}
               >
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '2px', fontSize: '8px' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>{post.time}</span>
+                  <span style={{ color: FINCEPT_GRAY }}>{post.time}</span>
                   <span style={{ color: getPriorityColor(post.priority), fontWeight: 'bold' }}>[{post.priority}]</span>
-                  <span style={{ color: BLOOMBERG_BLUE }}>[{post.category}]</span>
+                  <span style={{ color: FINCEPT_BLUE }}>[{post.category}]</span>
                   <span style={{ color: getSentimentColor(post.sentiment) }}>{post.sentiment}</span>
-                  {post.verified && <span style={{ color: BLOOMBERG_CYAN }}>[OK] VERIFIED</span>}
+                  {post.verified && <span style={{ color: FINCEPT_CYAN }}>[OK] VERIFIED</span>}
                 </div>
 
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '2px', fontSize: '9px' }}>
-                  <span style={{ color: BLOOMBERG_CYAN }}>@{post.author}</span>
-                  <span style={{ color: BLOOMBERG_GRAY }}>•</span>
-                  <span style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>{post.title}</span>
+                  <span style={{ color: FINCEPT_CYAN }}>@{post.author}</span>
+                  <span style={{ color: FINCEPT_GRAY }}>•</span>
+                  <span style={{ color: FINCEPT_WHITE, fontWeight: 'bold' }}>{post.title}</span>
                 </div>
 
-                <div style={{ color: BLOOMBERG_GRAY, fontSize: '9px', lineHeight: '1.3', marginBottom: '3px' }}>
+                <div style={{ color: FINCEPT_GRAY, fontSize: '9px', lineHeight: '1.3', marginBottom: '3px' }}>
                   {post.content.substring(0, 200)}{post.content.length > 200 ? '...' : ''}
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px', fontSize: '8px', marginBottom: '2px' }}>
                   {post.tags.map((tag, i) => (
                     <span key={i} style={{
-                      color: BLOOMBERG_YELLOW,
+                      color: FINCEPT_YELLOW,
                       backgroundColor: 'rgba(255,255,0,0.1)',
                       padding: '1px 4px',
                       borderRadius: '2px'
@@ -1631,10 +1631,10 @@ const ForumTab: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', fontSize: '8px' }}>
-                  <span style={{ color: BLOOMBERG_CYAN }}>👁️ {post.views.toLocaleString()}</span>
-                  <span style={{ color: BLOOMBERG_PURPLE }}>💬 {post.replies}</span>
-                  <span style={{ color: BLOOMBERG_GREEN }}>👍 {post.likes}</span>
-                  <span style={{ color: BLOOMBERG_RED }}>👎 {post.dislikes}</span>
+                  <span style={{ color: FINCEPT_CYAN }}>👁️ {post.views.toLocaleString()}</span>
+                  <span style={{ color: FINCEPT_PURPLE }}>💬 {post.replies}</span>
+                  <span style={{ color: FINCEPT_GREEN }}>👍 {post.likes}</span>
+                  <span style={{ color: FINCEPT_RED }}>👎 {post.dislikes}</span>
                 </div>
               </div>
             ))}
@@ -1643,15 +1643,15 @@ const ForumTab: React.FC = () => {
           {/* Right Panel - Activity & Trending */}
           <div style={{
             width: '280px',
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: FINCEPT_PANEL_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: FINCEPT_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
               TRENDING TOPICS (1H)
             </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '8px' }}></div>
+            <div style={{ borderBottom: `1px solid ${FINCEPT_GRAY}`, marginBottom: '8px' }}></div>
 
             {trendingTopics.map((item, index) => (
               <div key={index} style={{
@@ -1661,18 +1661,18 @@ const ForumTab: React.FC = () => {
                 fontSize: '9px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_YELLOW }}>{item.topic}</span>
-                  <span style={{ color: BLOOMBERG_GREEN }}>{item.change}</span>
+                  <span style={{ color: FINCEPT_YELLOW }}>{item.topic}</span>
+                  <span style={{ color: FINCEPT_GREEN }}>{item.change}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: BLOOMBERG_GRAY }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: FINCEPT_GRAY }}>
                   <span>{item.mentions} mentions</span>
                   <span style={{ color: getSentimentColor(item.sentiment) }}>{item.sentiment}</span>
                 </div>
               </div>
             ))}
 
-            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '12px', paddingTop: '8px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ borderTop: `1px solid ${FINCEPT_GRAY}`, marginTop: '12px', paddingTop: '8px' }}>
+              <div style={{ color: FINCEPT_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
                 RECENT ACTIVITY
               </div>
               {recentActivity.map((activity, index) => (
@@ -1680,37 +1680,37 @@ const ForumTab: React.FC = () => {
                   padding: '2px',
                   marginBottom: '2px',
                   fontSize: '8px',
-                  color: BLOOMBERG_GRAY,
+                  color: FINCEPT_GRAY,
                   lineHeight: '1.3'
                 }}>
-                  <span style={{ color: BLOOMBERG_CYAN }}>@{activity.user}</span>
+                  <span style={{ color: FINCEPT_CYAN }}>@{activity.user}</span>
                   {' '}<span>{activity.action}</span>{' '}
-                  <span style={{ color: BLOOMBERG_WHITE }}>{activity.target}</span>
-                  {' '}<span style={{ color: BLOOMBERG_YELLOW }}>• {activity.time}</span>
+                  <span style={{ color: FINCEPT_WHITE }}>{activity.target}</span>
+                  {' '}<span style={{ color: FINCEPT_YELLOW }}>• {activity.time}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '12px', paddingTop: '8px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ borderTop: `1px solid ${FINCEPT_GRAY}`, marginTop: '12px', paddingTop: '8px' }}>
+              <div style={{ color: FINCEPT_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
                 SENTIMENT ANALYSIS
               </div>
               <div style={{ fontSize: '9px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Bullish Posts:</span>
-                  <span style={{ color: BLOOMBERG_GREEN }}>68%</span>
+                  <span style={{ color: FINCEPT_GRAY }}>Bullish Posts:</span>
+                  <span style={{ color: FINCEPT_GREEN }}>68%</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Bearish Posts:</span>
-                  <span style={{ color: BLOOMBERG_RED }}>18%</span>
+                  <span style={{ color: FINCEPT_GRAY }}>Bearish Posts:</span>
+                  <span style={{ color: FINCEPT_RED }}>18%</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Neutral Posts:</span>
-                  <span style={{ color: BLOOMBERG_YELLOW }}>14%</span>
+                  <span style={{ color: FINCEPT_GRAY }}>Neutral Posts:</span>
+                  <span style={{ color: FINCEPT_YELLOW }}>14%</span>
                 </div>
-                <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '4px', paddingTop: '4px' }}>
-                  <span style={{ color: BLOOMBERG_CYAN }}>Overall Sentiment:</span>
-                  <span style={{ color: BLOOMBERG_GREEN, fontWeight: 'bold', marginLeft: '4px' }}>+0.62 BULLISH</span>
+                <div style={{ borderTop: `1px solid ${FINCEPT_GRAY}`, marginTop: '4px', paddingTop: '4px' }}>
+                  <span style={{ color: FINCEPT_CYAN }}>Overall Sentiment:</span>
+                  <span style={{ color: FINCEPT_GREEN, fontWeight: 'bold', marginLeft: '4px' }}>+0.62 BULLISH</span>
                 </div>
               </div>
             </div>
@@ -1720,11 +1720,11 @@ const ForumTab: React.FC = () => {
 
       {/* Status Bar */}
       <div style={{
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
-        backgroundColor: BLOOMBERG_PANEL_BG,
+        borderTop: `1px solid ${FINCEPT_GRAY}`,
+        backgroundColor: FINCEPT_PANEL_BG,
         padding: '2px 8px',
         fontSize: '10px',
-        color: BLOOMBERG_GRAY,
+        color: FINCEPT_GRAY,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1735,7 +1735,7 @@ const ForumTab: React.FC = () => {
           <div style={{ display: 'flex', gap: '16px' }}>
             <span>Category: {activeCategory}</span>
             <span>Sort: {sortBy}</span>
-            <span style={{ color: BLOOMBERG_GREEN }}>STATUS: LIVE</span>
+            <span style={{ color: FINCEPT_GREEN }}>STATUS: LIVE</span>
           </div>
         </div>
       </div>

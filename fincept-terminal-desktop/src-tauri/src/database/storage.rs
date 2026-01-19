@@ -1,5 +1,5 @@
 // Generic Key-Value Storage Database
-// Replacement for localStorage with SQLite persistence
+// SQLite-based key-value storage
 
 use crate::database::pool::get_db;
 use anyhow::{Context, Result};

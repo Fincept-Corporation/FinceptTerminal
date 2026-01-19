@@ -1,5 +1,5 @@
 /**
- * Broker Setup Panel - Bloomberg Style
+ * Broker Setup Panel - Fincept Style
  *
  * Combined panel showing both Configuration and Authentication tabs
  */
@@ -9,7 +9,7 @@ import { Settings, KeyRound } from 'lucide-react';
 import { BrokerConfigPanel } from './BrokerConfigPanel';
 import { BrokerAuthPanel } from './BrokerAuthPanel';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',

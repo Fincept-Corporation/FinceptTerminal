@@ -1,5 +1,5 @@
 import React from 'react';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../finceptStyles';
 
 interface CreatePortfolioModalProps {
   show: boolean;
@@ -33,7 +33,7 @@ const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
         fontFamily: TYPOGRAPHY.MONO
       }}>
         <div style={{
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           fontSize: TYPOGRAPHY.HEADING,
           fontWeight: TYPOGRAPHY.BOLD,
           marginBottom: SPACING.LARGE,
@@ -108,7 +108,7 @@ const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
               ...COMMON_STYLES.buttonSecondary,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+              e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';

@@ -73,10 +73,6 @@ const TrademarksScreen: React.FC<TrademarksScreenProps> = ({ onNavigate }) => {
 
             <div className="space-y-2 text-zinc-400">
               <div className="flex justify-between">
-                <span>Bloomberg Terminal®</span>
-                <span>Bloomberg Finance L.P.</span>
-              </div>
-              <div className="flex justify-between">
                 <span>Reuters®</span>
                 <span>Thomson Reuters Corporation</span>
               </div>

@@ -10,12 +10,18 @@ export * from './types';
 export { BaseExchangeAdapter } from './BaseExchangeAdapter';
 export { KrakenAdapter } from './kraken/KrakenAdapter';
 export { HyperLiquidAdapter } from './hyperliquid/HyperLiquidAdapter';
+export { BinanceAdapter } from './binance/BinanceAdapter';
+export { OKXAdapter } from './okx/OKXAdapter';
+export { CoinbaseAdapter } from './coinbase/CoinbaseAdapter';
 
 // Note: Paper Trading now in standalone src/paper-trading/ module
 
 // Exchange registry
 import { KrakenAdapter } from './kraken/KrakenAdapter';
 import { HyperLiquidAdapter } from './hyperliquid/HyperLiquidAdapter';
+import { BinanceAdapter } from './binance/BinanceAdapter';
+import { OKXAdapter } from './okx/OKXAdapter';
+import { CoinbaseAdapter } from './coinbase/CoinbaseAdapter';
 import type { ExchangeConfig } from './types';
 
 export const SUPPORTED_EXCHANGES = {
@@ -53,7 +59,7 @@ export const SUPPORTED_EXCHANGES = {
   binance: {
     id: 'binance',
     name: 'Binance',
-    adapter: KrakenAdapter, // Using BaseExchangeAdapter (CCXT) until dedicated adapter
+    adapter: BinanceAdapter,
     type: 'centralized',
     assetClass: 'crypto',
     region: 'global',
@@ -67,9 +73,40 @@ export const SUPPORTED_EXCHANGES = {
       lending: true,
     },
   },
-  // Future exchanges
-  // coinbase: { ... },
-  // etc.
+  okx: {
+    id: 'okx',
+    name: 'OKX',
+    adapter: OKXAdapter,
+    type: 'centralized',
+    assetClass: 'crypto',
+    region: 'global',
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      options: true,
+      perpetuals: true,
+      staking: true,
+      earn: true,
+    },
+  },
+  coinbase: {
+    id: 'coinbase',
+    name: 'Coinbase',
+    adapter: CoinbaseAdapter,
+    type: 'centralized',
+    assetClass: 'crypto',
+    region: 'us',
+    features: {
+      spot: true,
+      margin: false,
+      futures: false,
+      options: false,
+      perpetuals: false,
+      staking: true,
+      earn: true,
+    },
+  },
 } as const;
 
 export type SupportedExchangeId = keyof typeof SUPPORTED_EXCHANGES;
@@ -95,7 +132,7 @@ export function createExchangeAdapter(
 /**
  * Get list of all supported exchanges
  */
-export function getupportedExchanges(): Array<{
+export function getSupportedExchanges(): Array<{
   id: string;
   name: string;
   type: string;

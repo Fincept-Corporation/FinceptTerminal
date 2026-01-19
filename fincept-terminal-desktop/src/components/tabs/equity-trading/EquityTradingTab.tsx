@@ -1,5 +1,5 @@
 /**
- * Equity Trading Tab - Bloomberg Terminal Style
+ * Equity Trading Tab - Fincept Terminal Style
  *
  * Professional stock/equity trading interface matching the crypto trading tab design.
  * Supports multiple brokers across different regions with real-time market data.
@@ -32,8 +32,8 @@ import type { SymbolSearchResult, SupportedBroker } from '@/services/trading/mas
 import type { StockExchange, Quote } from '@/brokers/stocks/types';
 import { GridTradingPanel } from '../trading/grid-trading';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -250,8 +250,8 @@ function EquityTradingContent() {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
-      color: BLOOMBERG.WHITE,
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
       fontFamily: '"IBM Plex Mono", "Consolas", monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -261,12 +261,12 @@ function EquityTradingContent() {
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
         *::-webkit-scrollbar { width: 6px; height: 6px; }
-        *::-webkit-scrollbar-track { background: ${BLOOMBERG.DARK_BG}; }
-        *::-webkit-scrollbar-thumb { background: ${BLOOMBERG.BORDER}; border-radius: 3px; }
-        *::-webkit-scrollbar-thumb:hover { background: ${BLOOMBERG.MUTED}; }
+        *::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
+        *::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
 
         .terminal-glow {
-          text-shadow: 0 0 10px ${BLOOMBERG.ORANGE}40;
+          text-shadow: 0 0 10px ${FINCEPT.ORANGE}40;
         }
 
         .price-flash {
@@ -274,53 +274,92 @@ function EquityTradingContent() {
         }
 
         @keyframes flash {
-          0% { background-color: ${BLOOMBERG.YELLOW}40; }
+          0% { background-color: ${FINCEPT.YELLOW}40; }
           100% { background-color: transparent; }
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       `}</style>
 
       {/* ========== TOP NAVIGATION BAR ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
         padding: '6px 12px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
-        boxShadow: `0 2px 8px ${BLOOMBERG.ORANGE}20`
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           {/* Terminal Branding */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Building2 size={18} color={BLOOMBERG.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + BLOOMBERG.ORANGE + ')' }} />
+            <Building2 size={18} color={FINCEPT.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + FINCEPT.ORANGE + ')' }} />
             <span style={{
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               fontWeight: 700,
               fontSize: '14px',
               letterSpacing: '0.5px',
-              textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
+              textShadow: `0 0 10px ${FINCEPT.ORANGE}40`
             }}>
               EQUITY TERMINAL
             </span>
           </div>
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
           {/* Broker Selector */}
           <BrokerSelector />
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
-          {/* Trading Mode Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Trading Mode Toggle - PROMINENT INDICATOR */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '4px 12px',
+            backgroundColor: isLive ? `${FINCEPT.RED}20` : `${FINCEPT.GREEN}20`,
+            border: `2px solid ${isLive ? FINCEPT.RED : FINCEPT.GREEN}`,
+            borderRadius: '4px'
+          }}>
+            {/* Mode Indicator */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: isLive ? FINCEPT.RED : FINCEPT.GREEN,
+                boxShadow: `0 0 8px ${isLive ? FINCEPT.RED : FINCEPT.GREEN}`,
+                animation: isLive ? 'pulse 1s infinite' : 'none'
+              }} />
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: isLive ? FINCEPT.RED : FINCEPT.GREEN,
+                letterSpacing: '1px'
+              }}>
+                {isLive ? '🔴 LIVE' : '⚪ PAPER'}
+              </span>
+            </div>
+
+            <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
+
             <button
               onClick={() => setTradingMode('paper')}
               style={{
                 padding: '4px 10px',
-                backgroundColor: isPaper ? BLOOMBERG.GREEN : BLOOMBERG.PANEL_BG,
-                border: `1px solid ${isPaper ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
-                color: isPaper ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                backgroundColor: isPaper ? FINCEPT.GREEN : FINCEPT.PANEL_BG,
+                border: `1px solid ${isPaper ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+                color: isPaper ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '10px',
                 fontWeight: 700,
@@ -330,12 +369,27 @@ function EquityTradingContent() {
               PAPER
             </button>
             <button
-              onClick={() => setTradingMode('live')}
+              onClick={() => {
+                // Require confirmation before switching to live mode
+                if (!isLive) {
+                  const confirmed = window.confirm(
+                    '⚠️ WARNING: SWITCHING TO LIVE TRADING ⚠️\n\n' +
+                    'You are about to enable LIVE trading mode.\n\n' +
+                    '• All orders will be placed with REAL funds\n' +
+                    '• Trades will be executed on the actual exchange\n' +
+                    '• You may lose money\n\n' +
+                    'Are you sure you want to continue?'
+                  );
+                  if (confirmed) {
+                    setTradingMode('live');
+                  }
+                }
+              }}
               style={{
                 padding: '4px 10px',
-                backgroundColor: isLive ? BLOOMBERG.RED : BLOOMBERG.PANEL_BG,
-                border: `1px solid ${isLive ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
-                color: isLive ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+                backgroundColor: isLive ? FINCEPT.RED : FINCEPT.PANEL_BG,
+                border: `1px solid ${isLive ? FINCEPT.RED : FINCEPT.BORDER}`,
+                color: isLive ? FINCEPT.WHITE : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '10px',
                 fontWeight: 700,
@@ -352,24 +406,24 @@ function EquityTradingContent() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px' }}>
             {isConnected ? (
               <>
-                <Wifi size={12} color={BLOOMBERG.GREEN} />
-                <span style={{ color: BLOOMBERG.GREEN }}>CONNECTED</span>
+                <Wifi size={12} color={FINCEPT.GREEN} />
+                <span style={{ color: FINCEPT.GREEN }}>CONNECTED</span>
               </>
             ) : (
               <>
-                <WifiOff size={12} color={BLOOMBERG.RED} />
-                <span style={{ color: BLOOMBERG.RED }}>DISCONNECTED</span>
+                <WifiOff size={12} color={FINCEPT.RED} />
+                <span style={{ color: FINCEPT.RED }}>DISCONNECTED</span>
               </>
             )}
           </div>
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
           {/* Clock */}
           <div style={{
             fontSize: '11px',
             fontWeight: 600,
-            color: BLOOMBERG.CYAN,
+            color: FINCEPT.CYAN,
             fontFamily: 'monospace'
           }}>
             {currentTime.toLocaleTimeString('en-IN', { hour12: false })}
@@ -381,8 +435,8 @@ function EquityTradingContent() {
             style={{
               padding: '4px 8px',
               backgroundColor: 'transparent',
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.GRAY,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -391,12 +445,12 @@ function EquityTradingContent() {
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
-              e.currentTarget.style.color = BLOOMBERG.ORANGE;
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+              e.currentTarget.style.color = FINCEPT.ORANGE;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-              e.currentTarget.style.color = BLOOMBERG.GRAY;
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
+              e.currentTarget.style.color = FINCEPT.GRAY;
             }}
           >
             <SettingsIcon size={12} />
@@ -406,8 +460,8 @@ function EquityTradingContent() {
 
       {/* ========== TICKER BAR ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '10px 12px',
         display: 'flex',
         alignItems: 'center',
@@ -429,7 +483,7 @@ function EquityTradingContent() {
           <span style={{
             fontSize: '24px',
             fontWeight: 700,
-            color: BLOOMBERG.YELLOW,
+            color: FINCEPT.YELLOW,
             willChange: 'contents',
             transition: 'none'
           }}>
@@ -438,14 +492,14 @@ function EquityTradingContent() {
           {quote && (priceChange !== 0 || priceChangePercent !== 0) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               {priceChange >= 0 ? (
-                <TrendingUp size={16} color={BLOOMBERG.GREEN} />
+                <TrendingUp size={16} color={FINCEPT.GREEN} />
               ) : (
-                <TrendingDown size={16} color={BLOOMBERG.RED} />
+                <TrendingDown size={16} color={FINCEPT.RED} />
               )}
               <span style={{
                 fontSize: '13px',
                 fontWeight: 600,
-                color: priceChange >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                color: priceChange >= 0 ? FINCEPT.GREEN : FINCEPT.RED
               }}>
                 {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%)
               </span>
@@ -453,43 +507,43 @@ function EquityTradingContent() {
           )}
         </div>
 
-        <div style={{ height: '24px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+        <div style={{ height: '24px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
         {/* Market Stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '11px', willChange: 'contents' }}>
           <div style={{ minWidth: '60px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
-            <div style={{ color: BLOOMBERG.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
+            <div style={{ color: FINCEPT.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {quote?.bid ? `₹${quote.bid.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '60px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
-            <div style={{ color: BLOOMBERG.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
+            <div style={{ color: FINCEPT.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {quote?.ask ? `₹${quote.ask.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '100px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>DAY RANGE</div>
-            <div style={{ color: BLOOMBERG.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>DAY RANGE</div>
+            <div style={{ color: FINCEPT.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {dayRange > 0 ? `₹${dayRange.toFixed(2)} (${dayRangePercent.toFixed(2)}%)` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '80px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>HIGH</div>
-            <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>HIGH</div>
+            <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {quote?.high ? `₹${quote.high.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '80px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>LOW</div>
-            <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>LOW</div>
+            <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {quote?.low ? `₹${quote.low.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '100px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>VOLUME</div>
-            <div style={{ color: BLOOMBERG.PURPLE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>VOLUME</div>
+            <div style={{ color: FINCEPT.PURPLE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {quote?.volume ? quote.volume.toLocaleString('en-IN') : '--'}
             </div>
           </div>
@@ -498,17 +552,17 @@ function EquityTradingContent() {
         {/* Account Summary */}
         {isAuthenticated && (
           <>
-            <div style={{ height: '24px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+            <div style={{ height: '24px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px' }}>
               <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>MARGIN</div>
-                <div style={{ color: BLOOMBERG.CYAN, fontWeight: 600 }}>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>MARGIN</div>
+                <div style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>
                   ₹{(funds?.availableMargin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>P&L</div>
-                <div style={{ color: totalPositionPnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED, fontWeight: 600 }}>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>P&L</div>
+                <div style={{ color: totalPositionPnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED, fontWeight: 600 }}>
                   {totalPositionPnl >= 0 ? '+' : ''}₹{totalPositionPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
@@ -523,8 +577,8 @@ function EquityTradingContent() {
         <div style={{
           width: '280px',
           minWidth: '280px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderRight: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -533,8 +587,8 @@ function EquityTradingContent() {
           {/* Toggle Header */}
           <div style={{
             padding: '6px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             gap: '4px'
           }}>
@@ -545,9 +599,9 @@ function EquityTradingContent() {
                 style={{
                   flex: 1,
                   padding: '6px 8px',
-                  backgroundColor: leftSidebarView === view ? BLOOMBERG.ORANGE : 'transparent',
+                  backgroundColor: leftSidebarView === view ? FINCEPT.ORANGE : 'transparent',
                   border: 'none',
-                  color: leftSidebarView === view ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                  color: leftSidebarView === view ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                   cursor: 'pointer',
                   fontSize: '9px',
                   fontWeight: 700,
@@ -583,15 +637,15 @@ function EquityTradingContent() {
                       style={{
                         padding: '8px 10px',
                         cursor: 'pointer',
-                        backgroundColor: isSelected ? `${BLOOMBERG.ORANGE}15` : 'transparent',
-                        borderLeft: isSelected ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
-                        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                        borderRight: idx % 2 === 0 ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
+                        backgroundColor: isSelected ? `${FINCEPT.ORANGE}15` : 'transparent',
+                        borderLeft: isSelected ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                        borderRight: idx % 2 === 0 ? `1px solid ${FINCEPT.BORDER}` : 'none',
                         transition: 'all 0.2s'
                       }}
                       onMouseEnter={(e) => {
                         if (!isSelected) {
-                          e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                          e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                         }
                       }}
                       onMouseLeave={(e) => {
@@ -609,7 +663,7 @@ function EquityTradingContent() {
                         <div style={{
                           fontSize: '11px',
                           fontWeight: 700,
-                          color: isSelected ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                          color: isSelected ? FINCEPT.ORANGE : FINCEPT.WHITE,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -627,7 +681,7 @@ function EquityTradingContent() {
                           }}>
                             <div style={{
                               fontSize: '10px',
-                              color: BLOOMBERG.WHITE,
+                              color: FINCEPT.WHITE,
                               fontFamily: 'monospace',
                               fontWeight: 600
                             }}>
@@ -638,7 +692,7 @@ function EquityTradingContent() {
                             </div>
                             <div style={{
                               fontSize: '9px',
-                              color: q.changePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                              color: q.changePercent >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
                               fontFamily: 'monospace',
                               fontWeight: 700
                             }}>
@@ -648,7 +702,7 @@ function EquityTradingContent() {
                         ) : (
                           <div style={{
                             fontSize: '9px',
-                            color: BLOOMBERG.GRAY,
+                            color: FINCEPT.GRAY,
                             fontFamily: 'monospace'
                           }}>
                             ...
@@ -666,7 +720,7 @@ function EquityTradingContent() {
                 <div style={{
                   fontSize: '10px',
                   fontWeight: 700,
-                  color: BLOOMBERG.GRAY,
+                  color: FINCEPT.GRAY,
                   marginBottom: '12px',
                   letterSpacing: '0.5px'
                 }}>
@@ -677,26 +731,26 @@ function EquityTradingContent() {
                     key={index.symbol}
                     style={{
                       padding: '12px',
-                      backgroundColor: BLOOMBERG.HEADER_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      backgroundColor: FINCEPT.HEADER_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
                       marginBottom: '8px',
                       cursor: 'pointer'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+                      e.currentTarget.style.borderColor = FINCEPT.ORANGE;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontSize: '12px', fontWeight: 700, color: BLOOMBERG.WHITE }}>{index.symbol}</div>
-                        <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY }}>{index.exchange}</div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: FINCEPT.WHITE }}>{index.symbol}</div>
+                        <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>{index.exchange}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: BLOOMBERG.YELLOW }}>--</div>
-                        <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>--</div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: FINCEPT.YELLOW }}>--</div>
+                        <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>--</div>
                       </div>
                     </div>
                   </div>
@@ -709,7 +763,7 @@ function EquityTradingContent() {
                 <div style={{
                   fontSize: '10px',
                   fontWeight: 700,
-                  color: BLOOMBERG.GRAY,
+                  color: FINCEPT.GRAY,
                   marginBottom: '12px',
                   letterSpacing: '0.5px'
                 }}>
@@ -720,8 +774,8 @@ function EquityTradingContent() {
                     key={sector}
                     style={{
                       padding: '10px 12px',
-                      backgroundColor: BLOOMBERG.HEADER_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      backgroundColor: FINCEPT.HEADER_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
                       marginBottom: '6px',
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -729,14 +783,14 @@ function EquityTradingContent() {
                       cursor: 'pointer'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
+                      e.currentTarget.style.borderColor = FINCEPT.CYAN;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
                     }}
                   >
-                    <span style={{ fontSize: '11px', color: BLOOMBERG.WHITE }}>{sector}</span>
-                    <span style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>--</span>
+                    <span style={{ fontSize: '11px', color: FINCEPT.WHITE }}>{sector}</span>
+                    <span style={{ fontSize: '10px', color: FINCEPT.GRAY }}>--</span>
                   </div>
                 ))}
               </div>
@@ -749,8 +803,8 @@ function EquityTradingContent() {
           {/* Chart Area - Takes maximum available space */}
           <div style={{
             flex: isBottomPanelMinimized ? 1 : '1 1 auto',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.PANEL_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -760,8 +814,8 @@ function EquityTradingContent() {
             {/* Chart Header - Compact */}
             <div style={{
               padding: '4px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
@@ -773,9 +827,9 @@ function EquityTradingContent() {
                   onClick={() => setCenterView(view.toLowerCase() as CenterView)}
                   style={{
                     padding: '3px 10px',
-                    backgroundColor: centerView === view.toLowerCase() ? BLOOMBERG.ORANGE : 'transparent',
+                    backgroundColor: centerView === view.toLowerCase() ? FINCEPT.ORANGE : 'transparent',
                     border: 'none',
-                    color: centerView === view.toLowerCase() ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                    color: centerView === view.toLowerCase() ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                     cursor: 'pointer',
                     fontSize: '9px',
                     fontWeight: 700,
@@ -795,8 +849,8 @@ function EquityTradingContent() {
                 style={{
                   padding: '3px 6px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.GRAY,
                   cursor: 'pointer',
                   fontSize: '9px',
                   display: 'flex',
@@ -814,7 +868,7 @@ function EquityTradingContent() {
               display: 'flex',
               alignItems: 'stretch',
               justifyContent: 'stretch',
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '12px',
               overflow: 'hidden',
               minHeight: 0,
@@ -851,9 +905,9 @@ function EquityTradingContent() {
                   flexDirection: 'column',
                   gap: '12px'
                 }}>
-                  <BarChart3 size={48} color={BLOOMBERG.GRAY} />
-                  <span style={{ fontSize: '14px', color: BLOOMBERG.GRAY }}>Market Depth Chart</span>
-                  <span style={{ fontSize: '11px', color: BLOOMBERG.MUTED }}>Connect to broker for real-time depth data</span>
+                  <BarChart3 size={48} color={FINCEPT.GRAY} />
+                  <span style={{ fontSize: '14px', color: FINCEPT.GRAY }}>Market Depth Chart</span>
+                  <span style={{ fontSize: '11px', color: FINCEPT.MUTED }}>Connect to broker for real-time depth data</span>
                 </div>
               )}
               {centerView === 'trades' && (
@@ -862,7 +916,7 @@ function EquityTradingContent() {
                     <div style={{
                       padding: '40px',
                       textAlign: 'center',
-                      color: BLOOMBERG.GRAY,
+                      color: FINCEPT.GRAY,
                       fontSize: '11px'
                     }}>
                       No recent trades
@@ -870,26 +924,26 @@ function EquityTradingContent() {
                   ) : (
                     <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
-                          <th style={{ padding: '6px', textAlign: 'left', color: BLOOMBERG.GRAY }}>TIME</th>
-                          <th style={{ padding: '6px', textAlign: 'right', color: BLOOMBERG.GRAY }}>PRICE</th>
-                          <th style={{ padding: '6px', textAlign: 'right', color: BLOOMBERG.GRAY }}>QTY</th>
+                        <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                          <th style={{ padding: '6px', textAlign: 'left', color: FINCEPT.GRAY }}>TIME</th>
+                          <th style={{ padding: '6px', textAlign: 'right', color: FINCEPT.GRAY }}>PRICE</th>
+                          <th style={{ padding: '6px', textAlign: 'right', color: FINCEPT.GRAY }}>QTY</th>
                         </tr>
                       </thead>
                       <tbody>
                         {recentTrades.slice(0, 20).map((trade, idx) => (
-                          <tr key={idx} style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}40` }}>
-                            <td style={{ padding: '4px 6px', color: BLOOMBERG.GRAY, fontSize: '9px' }}>
+                          <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
+                            <td style={{ padding: '4px 6px', color: FINCEPT.GRAY, fontSize: '9px' }}>
                               {new Date(trade.timestamp).toLocaleTimeString()}
                             </td>
                             <td style={{
                               padding: '4px 6px',
                               textAlign: 'right',
-                              color: trade.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                              color: trade.side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED
                             }}>
                               ₹{trade.price?.toFixed(2)}
                             </td>
-                            <td style={{ padding: '4px 6px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
+                            <td style={{ padding: '4px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>
                               {trade.quantity}
                             </td>
                           </tr>
@@ -915,8 +969,8 @@ function EquityTradingContent() {
             {/* Bottom Panel Header */}
             <div style={{
               padding: '6px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
@@ -935,9 +989,9 @@ function EquityTradingContent() {
                     onClick={() => setActiveBottomTab(tab.id)}
                     style={{
                       padding: '6px 16px',
-                      backgroundColor: activeBottomTab === tab.id ? BLOOMBERG.ORANGE : 'transparent',
+                      backgroundColor: activeBottomTab === tab.id ? FINCEPT.ORANGE : 'transparent',
                       border: 'none',
-                      color: activeBottomTab === tab.id ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                      color: activeBottomTab === tab.id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                       cursor: 'pointer',
                       fontSize: '10px',
                       fontWeight: 700,
@@ -956,8 +1010,8 @@ function EquityTradingContent() {
                 style={{
                   padding: '4px 8px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.GRAY,
                   cursor: 'pointer',
                   fontSize: '10px',
                   fontWeight: 600,
@@ -968,12 +1022,12 @@ function EquityTradingContent() {
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                  e.currentTarget.style.borderColor = BLOOMBERG.GRAY;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  e.currentTarget.style.borderColor = FINCEPT.GRAY;
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
                 }}
               >
                 {isBottomPanelMinimized ? (
@@ -1006,45 +1060,45 @@ function EquityTradingContent() {
                   }}>
                     <div style={{
                       padding: '16px',
-                      backgroundColor: BLOOMBERG.HEADER_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.HEADER_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}>
-                      <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>TOTAL POSITIONS VALUE</div>
-                      <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.CYAN }}>
+                      <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>TOTAL POSITIONS VALUE</div>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.CYAN }}>
                         ₹{totalPositionValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
                     <div style={{
                       padding: '16px',
-                      backgroundColor: BLOOMBERG.HEADER_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.HEADER_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}>
-                      <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>DAY P&L</div>
+                      <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>DAY P&L</div>
                       <div style={{
                         fontSize: '18px',
                         fontWeight: 700,
-                        color: totalPositionPnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                        color: totalPositionPnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED
                       }}>
                         {totalPositionPnl >= 0 ? '+' : ''}₹{totalPositionPnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
                     <div style={{
                       padding: '16px',
-                      backgroundColor: BLOOMBERG.HEADER_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.HEADER_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}>
-                      <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>PORTFOLIO VALUE</div>
-                      <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.YELLOW }}>
+                      <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>PORTFOLIO VALUE</div>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.YELLOW }}>
                         ₹{totalHoldingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
                     <div style={{
                       padding: '16px',
-                      backgroundColor: BLOOMBERG.HEADER_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.HEADER_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}>
-                      <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>AVAILABLE MARGIN</div>
-                      <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.PURPLE }}>
+                      <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>AVAILABLE MARGIN</div>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.PURPLE }}>
                         ₹{(funds?.availableMargin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
@@ -1074,8 +1128,8 @@ function EquityTradingContent() {
         <div style={{
           width: '280px',
           minWidth: '280px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderLeft: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderLeft: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -1084,18 +1138,18 @@ function EquityTradingContent() {
           {/* Order Entry Section */}
           <div style={{
             height: '50%',
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden'
           }}>
             <div style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '10px',
               fontWeight: 700,
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               letterSpacing: '0.5px'
             }}>
               ORDER ENTRY
@@ -1117,11 +1171,11 @@ function EquityTradingContent() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '10px',
               fontWeight: 700,
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               letterSpacing: '0.5px',
               display: 'flex',
               justifyContent: 'space-between',
@@ -1134,9 +1188,9 @@ function EquityTradingContent() {
                     onClick={() => setRightPanelView(view)}
                     style={{
                       padding: '4px 8px',
-                      backgroundColor: rightPanelView === view ? BLOOMBERG.ORANGE : 'transparent',
+                      backgroundColor: rightPanelView === view ? FINCEPT.ORANGE : 'transparent',
                       border: 'none',
-                      color: rightPanelView === view ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                      color: rightPanelView === view ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                       cursor: 'pointer',
                       fontSize: '9px',
                       fontWeight: 700,
@@ -1159,23 +1213,23 @@ function EquityTradingContent() {
                 }}>
                   {/* Buy Orders (Bids) */}
                   <div>
-                    <div style={{ color: BLOOMBERG.GREEN, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
+                    <div style={{ color: FINCEPT.GREEN, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
                       BIDS (BUY ORDERS)
                     </div>
                     <table style={{ width: '100%', fontSize: '10px' }}>
                       <thead>
-                        <tr style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
-                          <th style={{ padding: '4px', textAlign: 'left', color: BLOOMBERG.GRAY }}>QTY</th>
-                          <th style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>PRICE</th>
-                          <th style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>ORDERS</th>
+                        <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                          <th style={{ padding: '4px', textAlign: 'left', color: FINCEPT.GRAY }}>QTY</th>
+                          <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>PRICE</th>
+                          <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>ORDERS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {[1, 2, 3, 4, 5].map((i) => (
-                          <tr key={i} style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}40` }}>
-                            <td style={{ padding: '4px', color: BLOOMBERG.WHITE }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.GREEN }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>--</td>
+                          <tr key={i} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
+                            <td style={{ padding: '4px', color: FINCEPT.WHITE }}>--</td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GREEN }}>--</td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>--</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1186,35 +1240,35 @@ function EquityTradingContent() {
                   <div style={{
                     padding: '8px',
                     textAlign: 'center',
-                    backgroundColor: BLOOMBERG.HEADER_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     fontSize: '10px'
                   }}>
-                    <span style={{ color: BLOOMBERG.GRAY }}>Spread: </span>
-                    <span style={{ color: BLOOMBERG.YELLOW, fontWeight: 600 }}>
+                    <span style={{ color: FINCEPT.GRAY }}>Spread: </span>
+                    <span style={{ color: FINCEPT.YELLOW, fontWeight: 600 }}>
                       {spread > 0 ? `₹${spread.toFixed(2)} (${spreadPercent.toFixed(3)}%)` : '--'}
                     </span>
                   </div>
 
                   {/* Sell Orders (Asks) */}
                   <div>
-                    <div style={{ color: BLOOMBERG.RED, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
+                    <div style={{ color: FINCEPT.RED, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
                       ASKS (SELL ORDERS)
                     </div>
                     <table style={{ width: '100%', fontSize: '10px' }}>
                       <thead>
-                        <tr style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
-                          <th style={{ padding: '4px', textAlign: 'left', color: BLOOMBERG.GRAY }}>PRICE</th>
-                          <th style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>QTY</th>
-                          <th style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>ORDERS</th>
+                        <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                          <th style={{ padding: '4px', textAlign: 'left', color: FINCEPT.GRAY }}>PRICE</th>
+                          <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>QTY</th>
+                          <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>ORDERS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {[1, 2, 3, 4, 5].map((i) => (
-                          <tr key={i} style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}40` }}>
-                            <td style={{ padding: '4px', color: BLOOMBERG.RED }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.WHITE }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>--</td>
+                          <tr key={i} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
+                            <td style={{ padding: '4px', color: FINCEPT.RED }}>--</td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.WHITE }}>--</td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>--</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1232,9 +1286,9 @@ function EquityTradingContent() {
                   flexDirection: 'column',
                   gap: '12px'
                 }}>
-                  <Layers size={48} color={BLOOMBERG.GRAY} />
-                  <span style={{ fontSize: '12px', color: BLOOMBERG.GRAY }}>Market Depth</span>
-                  <span style={{ fontSize: '10px', color: BLOOMBERG.MUTED, textAlign: 'center' }}>
+                  <Layers size={48} color={FINCEPT.GRAY} />
+                  <span style={{ fontSize: '12px', color: FINCEPT.GRAY }}>Market Depth</span>
+                  <span style={{ fontSize: '10px', color: FINCEPT.MUTED, textAlign: 'center' }}>
                     Connect to broker for<br />real-time depth visualization
                   </span>
                 </div>
@@ -1245,7 +1299,7 @@ function EquityTradingContent() {
                   <div style={{
                     fontSize: '10px',
                     fontWeight: 700,
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     marginBottom: '12px',
                     letterSpacing: '0.5px'
                   }}>
@@ -1267,12 +1321,12 @@ function EquityTradingContent() {
                           display: 'flex',
                           justifyContent: 'space-between',
                           padding: '6px 8px',
-                          backgroundColor: BLOOMBERG.HEADER_BG,
-                          border: `1px solid ${BLOOMBERG.BORDER}`
+                          backgroundColor: FINCEPT.HEADER_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`
                         }}
                       >
-                        <span style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>{item.label}</span>
-                        <span style={{ fontSize: '10px', color: BLOOMBERG.WHITE, fontWeight: 600 }}>{item.value}</span>
+                        <span style={{ fontSize: '10px', color: FINCEPT.GRAY }}>{item.label}</span>
+                        <span style={{ fontSize: '10px', color: FINCEPT.WHITE, fontWeight: 600 }}>{item.value}</span>
                       </div>
                     ))}
                   </div>
@@ -1284,8 +1338,8 @@ function EquityTradingContent() {
             {isAuthenticated && (
               <div style={{
                 padding: '6px 8px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.HEADER_BG,
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
                 fontSize: '10px',
                 flexShrink: 0,
                 overflow: 'hidden'
@@ -1299,11 +1353,11 @@ function EquityTradingContent() {
 
       {/* ========== STATUS BAR ========== */}
       <div style={{
-        borderTop: `1px solid ${BLOOMBERG.BORDER}`,
-        backgroundColor: BLOOMBERG.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
         padding: '4px 12px',
         fontSize: '9px',
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -1311,11 +1365,11 @@ function EquityTradingContent() {
       }}>
         <span>Fincept Terminal v3.1.4 | Equity Trading Platform</span>
         <span>
-          Broker: <span style={{ color: BLOOMBERG.ORANGE }}>{activeBrokerMetadata?.displayName?.toUpperCase() || 'NONE'}</span> |
-          Mode: <span style={{ color: isPaper ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+          Broker: <span style={{ color: FINCEPT.ORANGE }}>{activeBrokerMetadata?.displayName?.toUpperCase() || 'NONE'}</span> |
+          Mode: <span style={{ color: isPaper ? FINCEPT.GREEN : FINCEPT.RED }}>
             {tradingMode.toUpperCase()}
           </span> |
-          Status: <span style={{ color: isConnected ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+          Status: <span style={{ color: isConnected ? FINCEPT.GREEN : FINCEPT.RED }}>
             {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
           </span>
         </span>

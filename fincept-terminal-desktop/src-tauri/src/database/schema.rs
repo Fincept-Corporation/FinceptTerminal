@@ -355,14 +355,7 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Market data cache table
-        CREATE TABLE IF NOT EXISTS market_data_cache (
-            symbol TEXT NOT NULL,
-            category TEXT NOT NULL,
-            quote_data TEXT NOT NULL,
-            cached_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (symbol, category)
-        );
+        -- OLD: market_data_cache table REMOVED - Use unified cache (fincept_cache.db)
 
         -- Data source connections table
         CREATE TABLE IF NOT EXISTS data_source_connections (
@@ -378,33 +371,7 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             error_message TEXT
         );
 
-        -- Forum cache tables
-        CREATE TABLE IF NOT EXISTS forum_categories_cache (
-            id INTEGER PRIMARY KEY,
-            data TEXT NOT NULL,
-            cached_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS forum_posts_cache (
-            cache_key TEXT PRIMARY KEY,
-            category_id INTEGER,
-            sort_by TEXT,
-            data TEXT NOT NULL,
-            cached_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS forum_stats_cache (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            data TEXT NOT NULL,
-            cached_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS forum_post_details_cache (
-            post_uuid TEXT PRIMARY KEY,
-            data TEXT NOT NULL,
-            comments_data TEXT NOT NULL,
-            cached_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
+        -- OLD: forum_*_cache tables REMOVED - Use unified cache (fincept_cache.db)
 
         -- Context Recording tables
         CREATE TABLE IF NOT EXISTS recorded_contexts (
@@ -683,7 +650,7 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_symbols_broker_exchange ON symbols(broker_id, exchange);
         CREATE INDEX IF NOT EXISTS idx_symbols_symbol_exchange ON symbols(symbol, exchange);
 
-        -- Generic Key-Value Storage table (localStorage replacement)
+        -- Generic Key-Value Storage table
         CREATE TABLE IF NOT EXISTS key_value_storage (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
@@ -691,6 +658,32 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_key_value_storage_updated ON key_value_storage(updated_at DESC);
+
+        -- User RSS Feeds table (Custom news sources)
+        CREATE TABLE IF NOT EXISTS user_rss_feeds (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL UNIQUE,
+            category TEXT NOT NULL DEFAULT 'GENERAL',
+            region TEXT NOT NULL DEFAULT 'GLOBAL',
+            source_name TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            is_default INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_rss_feeds_enabled ON user_rss_feeds(enabled);
+        CREATE INDEX IF NOT EXISTS idx_user_rss_feeds_category ON user_rss_feeds(category);
+        CREATE INDEX IF NOT EXISTS idx_user_rss_feeds_is_default ON user_rss_feeds(is_default);
+
+        -- Default RSS Feed Preferences (stores user preferences for built-in feeds)
+        CREATE TABLE IF NOT EXISTS default_rss_feed_preferences (
+            feed_id TEXT PRIMARY KEY,
+            enabled INTEGER DEFAULT 1,
+            deleted INTEGER DEFAULT 0,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
         ",
     )?;
 

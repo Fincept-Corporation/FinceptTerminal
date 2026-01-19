@@ -10,7 +10,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Clock, ChevronDown, Globe } from 'lucide-react';
 import { useTimezone, useCurrentTime, TIMEZONE_OPTIONS } from '../../contexts/TimezoneContext';
 
-// Bloomberg-style colors
+// Fincept-style colors
 const COLORS = {
     DARK_BG: '#0a0a0a',
     PANEL_BG: '#141414',

@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Brain, TrendingUp, TrendingDown, Circle, Filter } from 'lucide-react';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -109,7 +109,7 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
     : decisions.filter(d => d.model === selectedModel);
 
   const getModelColor = (model: string) => {
-    const colors = [BLOOMBERG.ORANGE, BLOOMBERG.CYAN, BLOOMBERG.GREEN, BLOOMBERG.PURPLE, BLOOMBERG.YELLOW];
+    const colors = [FINCEPT.ORANGE, FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.PURPLE, FINCEPT.YELLOW];
     const hash = model.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
   };
@@ -117,17 +117,17 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
   const getActionColor = (decision: ModelDecision) => {
     const action = decision.direction || decision.action;
     switch (action) {
-      case 'long': return BLOOMBERG.GREEN;
-      case 'short': return BLOOMBERG.RED;
-      case 'hold': return BLOOMBERG.GRAY;
+      case 'long': return FINCEPT.GREEN;
+      case 'short': return FINCEPT.RED;
+      case 'hold': return FINCEPT.GRAY;
       default:
         // Check sentiment for analyze type
-        if (decision.sentiment === 'bullish') return BLOOMBERG.GREEN;
-        if (decision.sentiment === 'bearish') return BLOOMBERG.RED;
+        if (decision.sentiment === 'bullish') return FINCEPT.GREEN;
+        if (decision.sentiment === 'bearish') return FINCEPT.RED;
         // Check recommendation for evaluate type
-        if (decision.recommendation === 'increase') return BLOOMBERG.GREEN;
-        if (decision.recommendation === 'reduce') return BLOOMBERG.RED;
-        return BLOOMBERG.GRAY;
+        if (decision.recommendation === 'increase') return FINCEPT.GREEN;
+        if (decision.recommendation === 'reduce') return FINCEPT.RED;
+        return FINCEPT.GRAY;
     }
   };
 
@@ -144,8 +144,8 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
   return (
     <div style={{
       height: '100%',
-      background: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '2px',
       display: 'flex',
       flexDirection: 'column',
@@ -153,17 +153,17 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
     }}>
       {/* Header */}
       <div style={{
-        background: BLOOMBERG.HEADER_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        background: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px 10px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Brain size={14} color={BLOOMBERG.ORANGE} />
+          <Brain size={14} color={FINCEPT.ORANGE} />
           <span style={{
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             fontSize: '11px',
             fontWeight: '600',
             letterSpacing: '0.5px'
@@ -171,20 +171,20 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
             MODELCHAT
           </span>
           {isLoading && (
-            <Circle size={8} color={BLOOMBERG.ORANGE} style={{ animation: 'pulse 2s infinite' }} />
+            <Circle size={8} color={FINCEPT.ORANGE} style={{ animation: 'pulse 2s infinite' }} />
           )}
         </div>
 
         {/* Model Filter */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Filter size={12} color={BLOOMBERG.GRAY} />
+          <Filter size={12} color={FINCEPT.GRAY} />
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
             style={{
-              background: BLOOMBERG.DARK_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.WHITE,
+              background: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.WHITE,
               padding: '3px 6px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -212,7 +212,7 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
         {filteredDecisions.length === 0 ? (
           <div style={{
             textAlign: 'center',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '10px',
             marginTop: '40px'
           }}>
@@ -245,8 +245,8 @@ interface DecisionCardProps {
 function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: DecisionCardProps) {
   return (
     <div style={{
-      background: BLOOMBERG.DARK_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.DARK_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderLeft: `3px solid ${modelColor}`,
       borderRadius: '2px',
       padding: '8px 10px'
@@ -321,7 +321,7 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
 
           {decision.symbol && (
             <span style={{
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '8px',
               fontFamily: '"IBM Plex Mono", monospace'
             }}>
@@ -331,7 +331,7 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
         </div>
 
         <span style={{
-          color: BLOOMBERG.MUTED,
+          color: FINCEPT.MUTED,
           fontSize: '8px',
           fontFamily: '"IBM Plex Mono", monospace'
         }}>
@@ -341,7 +341,7 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
 
       {/* Content */}
       <div style={{
-        color: BLOOMBERG.WHITE,
+        color: FINCEPT.WHITE,
         fontSize: '10px',
         lineHeight: '1.5',
         fontFamily: '"IBM Plex Mono", monospace',
@@ -362,7 +362,7 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
           <div style={{
             marginTop: '6px',
             paddingTop: '6px',
-            borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             gap: '12px',
             fontSize: '9px',
@@ -372,49 +372,49 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
             {/* Signal type data */}
             {decision.entry && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>ENTRY: </span>
-                <span style={{ color: BLOOMBERG.CYAN, fontWeight: '600' }}>${decision.entry.toLocaleString()}</span>
+                <span style={{ color: FINCEPT.GRAY }}>ENTRY: </span>
+                <span style={{ color: FINCEPT.CYAN, fontWeight: '600' }}>${decision.entry.toLocaleString()}</span>
               </div>
             )}
             {decision.target && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>TARGET: </span>
-                <span style={{ color: BLOOMBERG.GREEN, fontWeight: '600' }}>${decision.target.toLocaleString()}</span>
+                <span style={{ color: FINCEPT.GRAY }}>TARGET: </span>
+                <span style={{ color: FINCEPT.GREEN, fontWeight: '600' }}>${decision.target.toLocaleString()}</span>
               </div>
             )}
             {decision.stopLoss && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>STOP: </span>
-                <span style={{ color: BLOOMBERG.RED, fontWeight: '600' }}>${decision.stopLoss.toLocaleString()}</span>
+                <span style={{ color: FINCEPT.GRAY }}>STOP: </span>
+                <span style={{ color: FINCEPT.RED, fontWeight: '600' }}>${decision.stopLoss.toLocaleString()}</span>
               </div>
             )}
             {decision.positionSize && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>SIZE: </span>
-                <span style={{ color: BLOOMBERG.PURPLE, fontWeight: '600' }}>{decision.positionSize.toFixed(1)}%</span>
+                <span style={{ color: FINCEPT.GRAY }}>SIZE: </span>
+                <span style={{ color: FINCEPT.PURPLE, fontWeight: '600' }}>{decision.positionSize.toFixed(1)}%</span>
               </div>
             )}
 
             {/* Analyze type data */}
             {decision.support && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>SUP: </span>
-                <span style={{ color: BLOOMBERG.GREEN, fontWeight: '600' }}>${decision.support.toLocaleString()}</span>
+                <span style={{ color: FINCEPT.GRAY }}>SUP: </span>
+                <span style={{ color: FINCEPT.GREEN, fontWeight: '600' }}>${decision.support.toLocaleString()}</span>
               </div>
             )}
             {decision.resistance && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>RES: </span>
-                <span style={{ color: BLOOMBERG.RED, fontWeight: '600' }}>${decision.resistance.toLocaleString()}</span>
+                <span style={{ color: FINCEPT.GRAY }}>RES: </span>
+                <span style={{ color: FINCEPT.RED, fontWeight: '600' }}>${decision.resistance.toLocaleString()}</span>
               </div>
             )}
 
             {/* Evaluate type data */}
             {decision.riskScore !== undefined && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>RISK: </span>
+                <span style={{ color: FINCEPT.GRAY }}>RISK: </span>
                 <span style={{
-                  color: decision.riskScore > 0.7 ? BLOOMBERG.RED : decision.riskScore < 0.3 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW,
+                  color: decision.riskScore > 0.7 ? FINCEPT.RED : decision.riskScore < 0.3 ? FINCEPT.GREEN : FINCEPT.YELLOW,
                   fontWeight: '600'
                 }}>
                   {(decision.riskScore * 10).toFixed(1)}/10
@@ -425,8 +425,8 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
             {/* Confidence (all types) */}
             {decision.confidence && (
               <div>
-                <span style={{ color: BLOOMBERG.GRAY }}>CONF: </span>
-                <span style={{ color: BLOOMBERG.YELLOW, fontWeight: '600' }}>{(decision.confidence * 100).toFixed(0)}%</span>
+                <span style={{ color: FINCEPT.GRAY }}>CONF: </span>
+                <span style={{ color: FINCEPT.YELLOW, fontWeight: '600' }}>{(decision.confidence * 100).toFixed(0)}%</span>
               </div>
             )}
           </div>

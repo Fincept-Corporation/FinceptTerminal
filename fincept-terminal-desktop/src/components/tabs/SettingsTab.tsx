@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff, TrendingUp, Key, X, Clock, Briefcase } from 'lucide-react';
 import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys, saveSetting, getSetting } from '@/services/core/sqliteService';
 import { ollamaService } from '@/services/chat/ollamaService';
+import { LLMModelsService, type ModelInfo } from '@/services/llmModelsService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/core/terminalThemeService';
 import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/trading/websocketBridge';
@@ -91,6 +92,11 @@ export default function SettingsTab() {
   const [useManualEntry, setUseManualEntry] = useState(false);
   const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
 
+  // Provider models (auto-fetched from APIs)
+  const [providerModels, setProviderModels] = useState<ModelInfo[]>([]);
+  const [providerModelsLoading, setProviderModelsLoading] = useState(false);
+  const [providerModelsError, setProviderModelsError] = useState<string | null>(null);
+
   // Multi-model configuration state
   const [modelConfigs, setModelConfigs] = useState<LLMModelConfig[]>([]);
   const [showAddModel, setShowAddModel] = useState(false);
@@ -107,6 +113,9 @@ export default function SettingsTab() {
     api_key: '',
     base_url: ''
   });
+
+  // Models for new model config dropdown
+  const [newModelConfigModels, setNewModelConfigModels] = useState<ModelInfo[]>([]);
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
 
 
@@ -495,13 +504,53 @@ export default function SettingsTab() {
     try {
       setLoading(true);
 
-      // Save all provider configs
-      for (const config of llmConfigs) {
-        await sqliteService.saveLLMConfig(config);
-      }
+      // Check if a custom model from Model Library is selected
+      if (activeProvider.startsWith('model:')) {
+        const modelId = activeProvider.replace('model:', '');
+        const selectedModel = modelConfigs.find(m => m.id === modelId);
 
-      // Set active provider
-      await sqliteService.setActiveLLMProvider(activeProvider);
+        if (selectedModel) {
+          // Get the provider's default base URL based on provider type
+          const getProviderBaseUrl = (provider: string): string => {
+            const providerUrls: Record<string, string> = {
+              'openai': 'https://api.openai.com/v1',
+              'anthropic': 'https://api.anthropic.com/v1',
+              'google': 'https://generativelanguage.googleapis.com/v1beta',
+              'gemini': 'https://generativelanguage.googleapis.com/v1beta',
+              'groq': 'https://api.groq.com/openai/v1',
+              'deepseek': 'https://api.deepseek.com/v1',
+              'openrouter': 'https://openrouter.ai/api/v1'
+            };
+            return providerUrls[provider] || 'https://openrouter.ai/api/v1';
+          };
+
+          // Create/update an LLM config based on the custom model
+          // Use the model's native provider (google, anthropic, etc.) instead of routing through OpenRouter
+          const modelLLMConfig: LLMConfig = {
+            provider: selectedModel.provider, // Use the actual provider
+            api_key: selectedModel.api_key || '',
+            base_url: selectedModel.base_url || getProviderBaseUrl(selectedModel.provider),
+            model: selectedModel.model_id.includes('/')
+              ? selectedModel.model_id.split('/').pop() || selectedModel.model_id // Extract model name from "provider/model" format
+              : selectedModel.model_id,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
+          // Save the provider config with the custom model
+          await sqliteService.saveLLMConfig(modelLLMConfig);
+          await sqliteService.setActiveLLMProvider(selectedModel.provider);
+        }
+      } else {
+        // Save all provider configs
+        for (const config of llmConfigs) {
+          await sqliteService.saveLLMConfig(config);
+        }
+
+        // Set active provider
+        await sqliteService.setActiveLLMProvider(activeProvider);
+      }
 
       // Save global settings
       await sqliteService.saveLLMGlobalSettings(llmGlobalSettings);
@@ -541,12 +590,128 @@ export default function SettingsTab() {
     setOllamaLoading(false);
   };
 
-  // Fetch Ollama models when switching to Ollama provider
-  useEffect(() => {
-    if (activeProvider === 'ollama' && activeSection === 'llm') {
-      fetchOllamaModels();
+  /**
+   * Fetch models from provider API
+   */
+  const fetchProviderModels = async (forceRefresh: boolean = false) => {
+    const currentConfig = getCurrentLLMConfig();
+    if (!currentConfig) return;
+
+    const provider = currentConfig.provider;
+
+    // Skip if provider is Ollama (handled separately) or Fincept (auto-configured)
+    if (provider === 'ollama' || provider === 'fincept') return;
+
+    // Load fallback models immediately for instant display
+    if (!forceRefresh && providerModels.length === 0) {
+      const fallbackModels = LLMModelsService.getFallbackModels(provider);
+      setProviderModels(fallbackModels);
+      console.log(`[SettingsTab] Loaded ${fallbackModels.length} fallback models for ${provider}`);
     }
+
+    // Then fetch from API in background
+    setProviderModelsLoading(true);
+    setProviderModelsError(null);
+
+    try {
+      const result = await LLMModelsService.getModels(
+        provider,
+        currentConfig.api_key || undefined,
+        currentConfig.base_url || undefined
+      );
+
+      if (result.models && result.models.length > 0) {
+        setProviderModels(result.models);
+        setProviderModelsError(null);
+        console.log(`[SettingsTab] Loaded ${result.models.length} models from API for ${provider}`);
+      } else if (result.error) {
+        setProviderModelsError(result.error);
+        // Keep fallback models if API fails
+        if (providerModels.length === 0) {
+          setProviderModels(LLMModelsService.getFallbackModels(provider));
+        }
+      } else {
+        setProviderModels([]);
+        setProviderModelsError('No models available for this provider');
+      }
+    } catch (error) {
+      console.error(`[SettingsTab] Error fetching models for ${provider}:`, error);
+      setProviderModelsError(error instanceof Error ? error.message : 'Failed to fetch models');
+      // Keep fallback models on error
+      if (providerModels.length === 0) {
+        setProviderModels(LLMModelsService.getFallbackModels(provider));
+      }
+    } finally {
+      setProviderModelsLoading(false);
+    }
+  };
+
+  // Fetch models when switching provider
+  useEffect(() => {
+    const loadModels = async () => {
+      if (activeSection !== 'llm') return;
+
+      const currentConfig = getCurrentLLMConfig();
+      if (!currentConfig) return;
+
+      const provider = currentConfig.provider;
+
+      // Reset models when changing provider
+      setProviderModels([]);
+      setProviderModelsError(null);
+
+      if (provider === 'ollama') {
+        fetchOllamaModels();
+      } else if (provider !== 'fincept') {
+        // Load fallback models immediately
+        const fallbackModels = LLMModelsService.getFallbackModels(provider);
+        setProviderModels(fallbackModels);
+        console.log(`[SettingsTab] Loaded ${fallbackModels.length} models for ${provider}`);
+
+        // Then fetch from API
+        setProviderModelsLoading(true);
+        try {
+          const result = await LLMModelsService.getModels(
+            provider,
+            currentConfig.api_key || undefined,
+            currentConfig.base_url || undefined
+          );
+          if (result.models && result.models.length > 0) {
+            setProviderModels(result.models);
+          }
+        } catch (error) {
+          console.error('Error fetching models:', error);
+        } finally {
+          setProviderModelsLoading(false);
+        }
+      }
+    };
+
+    loadModels();
   }, [activeProvider, activeSection]);
+
+  // Fetch models for new model config when provider changes
+  useEffect(() => {
+    const loadNewModelConfigModels = async () => {
+      if (!showAddModel) return;
+
+      try {
+        // Use OpenRouter to get all models for the selected provider
+        const models = await LLMModelsService.getOpenRouterModelsByProvider(newModelConfig.provider);
+        if (models && models.length > 0) {
+          setNewModelConfigModels(models);
+          console.log(`[SettingsTab] Loaded ${models.length} ${newModelConfig.provider} models from OpenRouter`);
+        } else {
+          setNewModelConfigModels(LLMModelsService.getFallbackModels(newModelConfig.provider));
+        }
+      } catch (error) {
+        console.error('[SettingsTab] Failed to fetch models:', error);
+        setNewModelConfigModels(LLMModelsService.getFallbackModels(newModelConfig.provider));
+      }
+    };
+
+    loadNewModelConfigModels();
+  }, [newModelConfig.provider, showAddModel]);
 
   const togglePasswordVisibility = (id: number) => {
     setShowPasswords(prev => ({ ...prev, [id]: !prev[id] }));
@@ -557,7 +722,35 @@ export default function SettingsTab() {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  const getCurrentLLMConfig = () => llmConfigs.find(c => c.provider === activeProvider);
+  const getCurrentLLMConfig = () => {
+    // Check if it's a custom model from Model Library
+    if (activeProvider.startsWith('model:')) {
+      const modelId = activeProvider.replace('model:', '');
+      const modelConfig = modelConfigs.find(m => m.id === modelId);
+      if (modelConfig) {
+        // Convert LLMModelConfig to LLMConfig format
+        return {
+          provider: modelConfig.provider,
+          api_key: modelConfig.api_key || '',
+          base_url: modelConfig.base_url || '',
+          model: modelConfig.model_id,
+          is_active: true,
+          created_at: modelConfig.created_at || new Date().toISOString(),
+          updated_at: modelConfig.updated_at || new Date().toISOString()
+        } as LLMConfig;
+      }
+    }
+    return llmConfigs.find(c => c.provider === activeProvider);
+  };
+
+  // Get selected custom model (for display in UI)
+  const getSelectedModelConfig = () => {
+    if (activeProvider.startsWith('model:')) {
+      const modelId = activeProvider.replace('model:', '');
+      return modelConfigs.find(m => m.id === modelId);
+    }
+    return null;
+  };
 
   // Terminal appearance handlers
   const handleSaveTerminalAppearance = async () => {
@@ -585,7 +778,7 @@ export default function SettingsTab() {
     setBaseSize(defaultTheme.font.baseSize);
     setFontWeight(defaultTheme.font.weight);
     setFontItalic(defaultTheme.font.italic);
-    setSelectedTheme('bloomberg-classic');
+    setSelectedTheme('fincept-classic');
 
     // Reset key mappings to defaults
     setKeyMappings(DEFAULT_KEY_MAPPINGS);
@@ -815,7 +1008,7 @@ export default function SettingsTab() {
               <PolymarketCredentialsPanel />
             )}
 
-            {/* LLM Configuration Section - Bloomberg Style */}
+            {/* LLM Configuration Section - Fincept Style */}
             {activeSection === 'llm' && (
               <div style={{
                 fontFamily: '"IBM Plex Mono", "Consolas", monospace',
@@ -888,7 +1081,9 @@ export default function SettingsTab() {
                     <Zap size={16} color={colors.primary} />
                     SELECT AI PROVIDER
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+
+                  {/* Main Provider Buttons */}
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
                     {llmConfigs.map(config => (
                       <button
                         key={config.provider}
@@ -925,6 +1120,74 @@ export default function SettingsTab() {
                       </button>
                     ))}
                   </div>
+
+                  {/* Custom Models from Model Library */}
+                  {modelConfigs.filter(m => m.is_enabled).length > 0 && (
+                    <div>
+                      <div style={{
+                        color: '#888',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        marginBottom: '10px',
+                        letterSpacing: '0.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <Bot size={14} color="#888" />
+                        CUSTOM MODELS (from Model Library)
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {modelConfigs.filter(m => m.is_enabled).map(model => {
+                          const isSelected = activeProvider === `model:${model.id}`;
+                          return (
+                            <button
+                              key={model.id}
+                              onClick={() => setActiveProvider(`model:${model.id}`)}
+                              style={{
+                                padding: '10px 16px',
+                                backgroundColor: isSelected ? colors.secondary : '#1A1A1A',
+                                border: `2px solid ${isSelected ? colors.secondary : '#2A2A2A'}`,
+                                color: isSelected ? '#000' : '#FFF',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                letterSpacing: '0.5px',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) {
+                                  e.currentTarget.style.borderColor = colors.secondary;
+                                  e.currentTarget.style.backgroundColor = '#252525';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) {
+                                  e.currentTarget.style.borderColor = '#2A2A2A';
+                                  e.currentTarget.style.backgroundColor = '#1A1A1A';
+                                }
+                              }}
+                            >
+                              <span style={{
+                                padding: '2px 6px',
+                                background: colors.primary + '30',
+                                border: `1px solid ${colors.primary}`,
+                                fontSize: '9px',
+                                fontWeight: 700,
+                                color: colors.primary
+                              }}>
+                                {model.provider.toUpperCase()}
+                              </span>
+                              {model.display_name || model.model_id.split('/').pop()}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Main Content Grid */}
@@ -980,8 +1243,76 @@ export default function SettingsTab() {
                       </div>
                     )}
 
+                    {/* Custom Model from Model Library */}
+                    {getSelectedModelConfig() && (
+                      <div style={{
+                        backgroundColor: '#0a1a2a',
+                        border: `2px solid ${colors.secondary}`,
+                        padding: '20px'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          marginBottom: '12px'
+                        }}>
+                          <Bot size={20} color={colors.secondary} />
+                          <span style={{ color: colors.secondary, fontSize: '14px', fontWeight: 700 }}>
+                            CUSTOM MODEL - {getSelectedModelConfig()!.display_name || getSelectedModelConfig()!.model_id}
+                          </span>
+                        </div>
+                        <div style={{ color: '#AAA', fontSize: '12px', lineHeight: 1.6 }}>
+                          <div style={{ marginBottom: '8px' }}>
+                            This model uses the native <strong style={{ color: colors.primary }}>{getSelectedModelConfig()!.provider.toUpperCase()}</strong> API directly.
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '16px',
+                            padding: '12px',
+                            backgroundColor: '#000',
+                            border: `1px solid #2A2A2A`,
+                            flexWrap: 'wrap'
+                          }}>
+                            <div>
+                              <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>PROVIDER</div>
+                              <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 600 }}>
+                                {getSelectedModelConfig()!.provider.toUpperCase()}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>MODEL</div>
+                              <div style={{ color: '#FFF', fontSize: '12px', fontFamily: 'monospace' }}>
+                                {getSelectedModelConfig()!.model_id.includes('/')
+                                  ? getSelectedModelConfig()!.model_id.split('/').pop()
+                                  : getSelectedModelConfig()!.model_id}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>API KEY</div>
+                              <div style={{ color: getSelectedModelConfig()!.api_key ? colors.success : colors.alert, fontSize: '12px' }}>
+                                {getSelectedModelConfig()!.api_key ? 'Custom key set' : 'No API key'}
+                              </div>
+                            </div>
+                          </div>
+                          {!getSelectedModelConfig()!.api_key && (
+                            <div style={{
+                              marginTop: '12px',
+                              padding: '10px',
+                              background: '#3a0a0a',
+                              border: `1px solid ${colors.alert}`,
+                              color: colors.alert,
+                              fontSize: '11px'
+                            }}>
+                              ⚠️ No API key set for this model. Add your {getSelectedModelConfig()!.provider.toUpperCase()} API key in the Model Library or main provider config.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Provider Configuration */}
-                    {getCurrentLLMConfig() && getCurrentLLMConfig()!.provider !== 'fincept' && (
+                    {getCurrentLLMConfig() && getCurrentLLMConfig()!.provider !== 'fincept' && !getSelectedModelConfig() && (
                       <div style={{
                         backgroundColor: '#0F0F0F',
                         border: `1px solid #2A2A2A`,
@@ -1088,8 +1419,8 @@ export default function SettingsTab() {
                               }}>
                                 MODEL
                               </label>
-                              {getCurrentLLMConfig()!.provider === 'ollama' && (
-                                <div style={{ display: 'flex', gap: '8px' }}>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                {getCurrentLLMConfig()!.provider === 'ollama' ? (
                                   <button
                                     onClick={fetchOllamaModels}
                                     disabled={ollamaLoading}
@@ -1109,34 +1440,57 @@ export default function SettingsTab() {
                                     <RefreshCw size={12} className={ollamaLoading ? 'animate-spin' : ''} />
                                     {ollamaLoading ? 'LOADING...' : 'REFRESH MODELS'}
                                   </button>
+                                ) : getCurrentLLMConfig()!.provider !== 'fincept' && (
                                   <button
-                                    onClick={() => setUseManualEntry(!useManualEntry)}
+                                    onClick={() => fetchProviderModels(true)}
+                                    disabled={providerModelsLoading}
                                     style={{
-                                      background: useManualEntry ? colors.primary : '#1A1A1A',
-                                      border: `1px solid ${useManualEntry ? colors.primary : '#2A2A2A'}`,
-                                      color: useManualEntry ? '#000' : '#FFF',
+                                      background: '#1A1A1A',
+                                      border: `1px solid #2A2A2A`,
+                                      color: colors.primary,
                                       padding: '6px 12px',
                                       fontSize: '11px',
-                                      cursor: 'pointer',
+                                      cursor: providerModelsLoading ? 'not-allowed' : 'pointer',
                                       display: 'flex',
                                       alignItems: 'center',
                                       gap: '6px',
                                       fontWeight: 600
                                     }}
                                   >
-                                    <Edit3 size={12} />
-                                    {useManualEntry ? 'USE DROPDOWN' : 'MANUAL ENTRY'}
+                                    <RefreshCw size={12} className={providerModelsLoading ? 'animate-spin' : ''} />
+                                    {providerModelsLoading ? 'LOADING...' : 'REFRESH MODELS'}
                                   </button>
-                                </div>
-                              )}
+                                )}
+                                <button
+                                  onClick={() => setUseManualEntry(!useManualEntry)}
+                                  style={{
+                                    background: useManualEntry ? colors.primary : '#1A1A1A',
+                                    border: `1px solid ${useManualEntry ? colors.primary : '#2A2A2A'}`,
+                                    color: useManualEntry ? '#000' : '#FFF',
+                                    padding: '6px 12px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  <Edit3 size={12} />
+                                  {useManualEntry ? 'USE DROPDOWN' : 'MANUAL ENTRY'}
+                                </button>
+                              </div>
                             </div>
 
-                            {getCurrentLLMConfig()!.provider === 'ollama' && !useManualEntry ? (
+                            {!useManualEntry ? (
                               <div>
                                 <select
                                   value={getCurrentLLMConfig()!.model}
                                   onChange={(e) => updateLLMConfig(activeProvider, 'model', e.target.value)}
-                                  disabled={ollamaLoading || ollamaModels.length === 0}
+                                  disabled={
+                                    (getCurrentLLMConfig()!.provider === 'ollama' && (ollamaLoading || ollamaModels.length === 0)) ||
+                                    (getCurrentLLMConfig()!.provider !== 'ollama' && getCurrentLLMConfig()!.provider !== 'fincept' && (providerModelsLoading || providerModels.length === 0))
+                                  }
                                   style={{
                                     width: '100%',
                                     background: '#000',
@@ -1144,16 +1498,30 @@ export default function SettingsTab() {
                                     color: '#FFF',
                                     padding: '12px 14px',
                                     fontSize: '13px',
-                                    cursor: ollamaLoading || ollamaModels.length === 0 ? 'not-allowed' : 'pointer'
+                                    cursor: 'pointer'
                                   }}
                                 >
-                                  {ollamaModels.length === 0 && !ollamaLoading && <option value="">No models found - Click REFRESH</option>}
-                                  {ollamaLoading && <option value="">Loading models...</option>}
-                                  {ollamaModels.map((model) => (
-                                    <option key={model} value={model}>{model}</option>
-                                  ))}
+                                  {getCurrentLLMConfig()!.provider === 'ollama' ? (
+                                    <>
+                                      {ollamaModels.length === 0 && !ollamaLoading && <option value="">No models found - Click REFRESH</option>}
+                                      {ollamaLoading && <option value="">Loading models...</option>}
+                                      {ollamaModels.map((model) => (
+                                        <option key={model} value={model}>{model}</option>
+                                      ))}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {providerModels.length === 0 && !providerModelsLoading && <option value="">No models found - Click REFRESH</option>}
+                                      {providerModelsLoading && <option value="">Loading models...</option>}
+                                      {providerModels.map((model) => (
+                                        <option key={model.id} value={model.id}>
+                                          {model.name} {model.context_window ? `(${(model.context_window / 1000).toFixed(0)}K)` : ''}
+                                        </option>
+                                      ))}
+                                    </>
+                                  )}
                                 </select>
-                                {ollamaError && (
+                                {getCurrentLLMConfig()!.provider === 'ollama' && ollamaError && (
                                   <div style={{
                                     marginTop: '8px',
                                     padding: '10px 12px',
@@ -1165,7 +1533,19 @@ export default function SettingsTab() {
                                     {ollamaError}
                                   </div>
                                 )}
-                                {ollamaModels.length > 0 && (
+                                {getCurrentLLMConfig()!.provider !== 'ollama' && providerModelsError && (
+                                  <div style={{
+                                    marginTop: '8px',
+                                    padding: '10px 12px',
+                                    background: '#3a0a0a',
+                                    border: `1px solid ${colors.alert}`,
+                                    fontSize: '12px',
+                                    color: colors.alert
+                                  }}>
+                                    {providerModelsError}
+                                  </div>
+                                )}
+                                {getCurrentLLMConfig()!.provider === 'ollama' && ollamaModels.length > 0 && (
                                   <div style={{
                                     marginTop: '8px',
                                     fontSize: '12px',
@@ -1176,6 +1556,30 @@ export default function SettingsTab() {
                                   }}>
                                     <Check size={14} />
                                     {ollamaModels.length} model{ollamaModels.length !== 1 ? 's' : ''} available
+                                  </div>
+                                )}
+                                {getCurrentLLMConfig()!.provider !== 'ollama' && getCurrentLLMConfig()!.provider !== 'fincept' && providerModels.length > 0 && (
+                                  <div style={{
+                                    marginTop: '8px',
+                                    fontSize: '11px',
+                                    color: '#AAA',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '4px'
+                                  }}>
+                                    <div style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                      color: colors.success
+                                    }}>
+                                      <Check size={14} />
+                                      {providerModels.length} model{providerModels.length !== 1 ? 's' : ''} available
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#666' }}>
+                                      Models fetched from {getCurrentLLMConfig()!.provider.toUpperCase()} API
+                                      {providerModelsLoading && ' (updating...)'}
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -1283,7 +1687,7 @@ export default function SettingsTab() {
                             min="1"
                             max="32000"
                             value={llmGlobalSettings.max_tokens}
-                            onChange={(e) => setLlmGlobalSettings({ ...llmGlobalSettings, max_tokens: parseInt(e.target.value) })}
+                            onChange={(e) => setLlmGlobalSettings({ ...llmGlobalSettings, max_tokens: parseInt(e.target.value) || 2048 })}
                             style={{
                               width: '100%',
                               background: '#000',
@@ -1428,32 +1832,83 @@ export default function SettingsTab() {
                               }}
                             >
                               <option value="openai">OpenAI</option>
-                              <option value="google">Google (Gemini)</option>
-                              <option value="anthropic">Anthropic (Claude)</option>
+                              <option value="anthropic">Anthropic</option>
+                              <option value="google">Google</option>
+                              <option value="meta-llama">Meta (Llama)</option>
+                              <option value="mistralai">Mistral AI</option>
+                              <option value="x-ai">xAI (Grok)</option>
+                              <option value="cohere">Cohere</option>
                               <option value="deepseek">DeepSeek</option>
-                              <option value="ollama">Ollama (Local)</option>
-                              <option value="openrouter">OpenRouter</option>
+                              <option value="qwen">Qwen (Alibaba)</option>
+                              <option value="nvidia">NVIDIA</option>
+                              <option value="microsoft">Microsoft</option>
+                              <option value="perplexity">Perplexity</option>
                               <option value="groq">Groq</option>
+                              <option value="ai21">AI21 Labs</option>
+                              <option value="nousresearch">Nous Research</option>
+                              <option value="cognitivecomputations">Cognitive Computations</option>
                             </select>
                           </div>
                           <div>
                             <label style={{ color: '#FFF', fontSize: '10px', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
                               MODEL ID <span style={{ color: colors.alert }}>*</span>
                             </label>
-                            <input
-                              type="text"
-                              value={newModelConfig.model_id}
-                              onChange={(e) => setNewModelConfig({ ...newModelConfig, model_id: e.target.value })}
-                              placeholder="e.g. gpt-4o-mini"
-                              style={{
-                                width: '100%',
-                                background: '#1A1A1A',
-                                border: `1px solid #2A2A2A`,
-                                color: '#FFF',
-                                padding: '10px 12px',
-                                fontSize: '12px'
-                              }}
-                            />
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                              <div style={{ flex: 1 }}>
+                                {useManualEntry ? (
+                                  <input
+                                    type="text"
+                                    value={newModelConfig.model_id}
+                                    onChange={(e) => setNewModelConfig({ ...newModelConfig, model_id: e.target.value })}
+                                    placeholder="e.g. gpt-4o or openai/gpt-4o"
+                                    style={{
+                                      width: '100%',
+                                      background: '#1A1A1A',
+                                      border: `1px solid #2A2A2A`,
+                                      color: '#FFF',
+                                      padding: '10px 12px',
+                                      fontSize: '12px'
+                                    }}
+                                  />
+                                ) : (
+                                  <select
+                                    value={newModelConfig.model_id}
+                                    onChange={(e) => setNewModelConfig({ ...newModelConfig, model_id: e.target.value })}
+                                    style={{
+                                      width: '100%',
+                                      background: '#1A1A1A',
+                                      border: `1px solid #2A2A2A`,
+                                      color: '#FFF',
+                                      padding: '10px 12px',
+                                      fontSize: '12px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <option value="">Select a model...</option>
+                                    {newModelConfigModels.map((model) => (
+                                      <option key={model.id} value={model.id}>
+                                        {model.name} {model.context_window ? `(${(model.context_window / 1000).toFixed(0)}K)` : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => setUseManualEntry(!useManualEntry)}
+                                style={{
+                                  background: useManualEntry ? colors.primary : '#1A1A1A',
+                                  border: `1px solid ${useManualEntry ? colors.primary : '#2A2A2A'}`,
+                                  color: useManualEntry ? '#000' : colors.primary,
+                                  padding: '10px 12px',
+                                  fontSize: '9px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600,
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {useManualEntry ? 'DROPDOWN' : 'MANUAL'}
+                              </button>
+                            </div>
                           </div>
                         </div>
 

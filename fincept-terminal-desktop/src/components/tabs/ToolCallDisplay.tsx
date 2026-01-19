@@ -19,19 +19,19 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
   status,
   executionTime
 }) => {
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_YELLOW = '#FFFF00';
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#000000';
+  const FINCEPT_PANEL_BG = '#0a0a0a';
+  const FINCEPT_GREEN = '#00C800';
+  const FINCEPT_RED = '#FF0000';
+  const FINCEPT_YELLOW = '#FFFF00';
 
   const statusColor = {
-    pending: BLOOMBERG_YELLOW,
-    success: BLOOMBERG_GREEN,
-    error: BLOOMBERG_RED
+    pending: FINCEPT_YELLOW,
+    success: FINCEPT_GREEN,
+    error: FINCEPT_RED
   }[status];
 
   const StatusIcon = {
@@ -47,7 +47,7 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
 
   return (
     <div style={{
-      backgroundColor: BLOOMBERG_PANEL_BG,
+      backgroundColor: FINCEPT_PANEL_BG,
       border: `1px solid ${statusColor}`,
       borderLeft: `3px solid ${statusColor}`,
       padding: '8px',
@@ -62,16 +62,16 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
         gap: '6px',
         marginBottom: '6px'
       }}>
-        <Wrench size={12} color={BLOOMBERG_ORANGE} />
-        <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold', fontSize: '11px' }}>
+        <Wrench size={12} color={FINCEPT_ORANGE} />
+        <span style={{ color: FINCEPT_ORANGE, fontWeight: 'bold', fontSize: '11px' }}>
           TOOL CALL
         </span>
-        <span style={{ color: BLOOMBERG_WHITE }}>→</span>
-        <span style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>{actualToolName}</span>
+        <span style={{ color: FINCEPT_WHITE }}>→</span>
+        <span style={{ color: FINCEPT_WHITE, fontWeight: 'bold' }}>{actualToolName}</span>
         <span style={{
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '9px',
-          backgroundColor: BLOOMBERG_DARK_BG,
+          backgroundColor: FINCEPT_DARK_BG,
           padding: '2px 4px'
         }}>
           {serverId}
@@ -91,7 +91,7 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
       {/* Arguments */}
       <div style={{ marginBottom: '6px' }}>
         <div style={{
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '9px',
           marginBottom: '2px',
           fontWeight: 'bold'
@@ -99,11 +99,11 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
           Arguments:
         </div>
         <div style={{
-          backgroundColor: BLOOMBERG_DARK_BG,
-          border: `1px solid ${BLOOMBERG_GRAY}`,
+          backgroundColor: FINCEPT_DARK_BG,
+          border: `1px solid ${FINCEPT_GRAY}`,
           padding: '4px 6px',
           fontSize: '9px',
-          color: BLOOMBERG_WHITE,
+          color: FINCEPT_WHITE,
           fontFamily: 'Consolas, monospace',
           maxHeight: '100px',
           overflow: 'auto'
@@ -118,7 +118,7 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
       {result && (
         <div>
           <div style={{
-            color: BLOOMBERG_GRAY,
+            color: FINCEPT_GRAY,
             fontSize: '9px',
             marginBottom: '2px',
             fontWeight: 'bold'
@@ -126,11 +126,11 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
             Result:
           </div>
           <div style={{
-            backgroundColor: BLOOMBERG_DARK_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: FINCEPT_DARK_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
             padding: '4px 6px',
             fontSize: '9px',
-            color: BLOOMBERG_WHITE,
+            color: FINCEPT_WHITE,
             fontFamily: 'Consolas, monospace',
             maxHeight: '200px',
             overflow: 'auto'
@@ -147,7 +147,7 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
       {/* Execution time */}
       {executionTime !== undefined && (
         <div style={{
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '8px',
           marginTop: '4px',
           textAlign: 'right'

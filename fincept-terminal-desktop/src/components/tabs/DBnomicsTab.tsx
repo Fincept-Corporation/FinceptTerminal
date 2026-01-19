@@ -80,7 +80,6 @@ export default function DBnomicsTab() {
         activeView,
         timestamp: Date.now()
       };
-      // PURE SQLite - No localStorage fallback
       await saveSetting('dbnomics_state', JSON.stringify(state), 'dbnomics_tab');
       console.log('[DBnomicsTab] State saved to SQLite');
     } catch (error) {
@@ -90,7 +89,6 @@ export default function DBnomicsTab() {
 
   const restoreState = async () => {
     try {
-      // PURE SQLite - No localStorage fallback
       const saved = await getSetting('dbnomics_state');
       if (saved) {
         const state = JSON.parse(saved);

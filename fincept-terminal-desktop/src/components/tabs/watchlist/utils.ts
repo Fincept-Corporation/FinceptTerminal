@@ -1,8 +1,8 @@
 // Watchlist Utilities - Shared constants, formatting, and helper functions
 import { terminalThemeService } from '@/services/core/terminalThemeService';
 
-// Bloomberg Color Scheme
-export const getBloombergColors = () => {
+// Fincept Color Scheme
+export const getFinceptColors = () => {
   const theme = terminalThemeService.getTheme();
   return {
     ORANGE: theme.colors.primary,
@@ -19,7 +19,7 @@ export const getBloombergColors = () => {
   };
 };
 
-export const BLOOMBERG_COLORS = getBloombergColors();
+export const FINCEPT_COLORS = getFinceptColors();
 
 // Format currency values
 export const formatCurrency = (value: number | undefined | null): string => {
@@ -58,8 +58,8 @@ export const formatVolume = (value: number | undefined | null): string => {
 
 // Get color based on value (positive/negative)
 export const getChangeColor = (value: number | undefined | null): string => {
-  if (value === undefined || value === null) return BLOOMBERG_COLORS.GRAY;
-  return value >= 0 ? BLOOMBERG_COLORS.GREEN : BLOOMBERG_COLORS.RED;
+  if (value === undefined || value === null) return FINCEPT_COLORS.GRAY;
+  return value >= 0 ? FINCEPT_COLORS.GREEN : FINCEPT_COLORS.RED;
 };
 
 // Sort stocks by different criteria

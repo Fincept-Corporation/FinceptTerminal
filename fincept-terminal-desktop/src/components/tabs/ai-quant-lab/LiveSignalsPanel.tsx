@@ -1,5 +1,5 @@
 /**
- * Live Signals Panel - Bloomberg Professional Design
+ * Live Signals Panel - Fincept Professional Design
  * Real-time trading signals from deployed models with full backend integration
  * Real-world finance application with working live predictions
  */
@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { qlibService } from '@/services/aiQuantLab/qlibService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -143,22 +143,22 @@ export function LiveSignalsPanel() {
   });
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
       {/* Left Panel - Configuration */}
       <div
         className="w-80 border-r overflow-auto flex-shrink-0"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
         <div className="p-4 space-y-4">
           {/* Header */}
-          <div className="pb-3 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+          <div className="pb-3 border-b" style={{ borderColor: FINCEPT.BORDER }}>
             <div className="flex items-center gap-2 mb-1">
-              <Activity size={18} color={BLOOMBERG.ORANGE} />
-              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+              <Activity size={18} color={FINCEPT.ORANGE} />
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                 LIVE SIGNALS
               </h2>
             </div>
-            <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+            <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
               Real-time predictions from deployed models
             </p>
           </div>
@@ -167,37 +167,37 @@ export function LiveSignalsPanel() {
           <div
             className="p-3 rounded border flex items-center justify-between"
             style={{
-              backgroundColor: isStreaming ? BLOOMBERG.DARK_BG : BLOOMBERG.HEADER_BG,
-              borderColor: isStreaming ? BLOOMBERG.GREEN : BLOOMBERG.BORDER
+              backgroundColor: isStreaming ? FINCEPT.DARK_BG : FINCEPT.HEADER_BG,
+              borderColor: isStreaming ? FINCEPT.GREEN : FINCEPT.BORDER
             }}
           >
             <div className="flex items-center gap-2">
               <div
                 className="w-2 h-2 rounded-full"
                 style={{
-                  backgroundColor: isStreaming ? BLOOMBERG.GREEN : BLOOMBERG.GRAY,
+                  backgroundColor: isStreaming ? FINCEPT.GREEN : FINCEPT.GRAY,
                   animation: isStreaming ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none'
                 }}
               />
-              <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+              <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                 {isStreaming ? 'STREAMING' : 'OFFLINE'}
               </span>
             </div>
-            <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+            <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
               {filteredSignals.length} signals
             </span>
           </div>
 
           {/* Configuration */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wide mb-3 flex items-center gap-1" style={{ color: BLOOMBERG.GRAY }}>
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-3 flex items-center gap-1" style={{ color: FINCEPT.GRAY }}>
               <Settings size={12} />
               CONFIGURATION
             </h3>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
                   <Brain size={12} className="inline mr-1" />
                   Model
                 </label>
@@ -207,9 +207,9 @@ export function LiveSignalsPanel() {
                   disabled={isStreaming}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none uppercase disabled:opacity-50"
                   style={{
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 >
                   <option value="lightgbm">LightGBM</option>
@@ -220,7 +220,7 @@ export function LiveSignalsPanel() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
                   <Target size={12} className="inline mr-1" />
                   Instruments
                 </label>
@@ -231,15 +231,15 @@ export function LiveSignalsPanel() {
                   rows={3}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none resize-none disabled:opacity-50"
                   style={{
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
                   <Clock size={12} className="inline mr-1" />
                   Refresh Interval (sec)
                 </label>
@@ -252,9 +252,9 @@ export function LiveSignalsPanel() {
                   max={300}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none disabled:opacity-50"
                   style={{
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 />
               </div>
@@ -268,7 +268,7 @@ export function LiveSignalsPanel() {
                 onClick={handleStartStreaming}
                 disabled={!instruments || !selectedModel}
                 className="w-full py-3 rounded font-bold uppercase text-sm tracking-wide hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: BLOOMBERG.GREEN, color: BLOOMBERG.DARK_BG }}
+                style={{ backgroundColor: FINCEPT.GREEN, color: FINCEPT.DARK_BG }}
               >
                 <Play size={16} />
                 START STREAMING
@@ -277,7 +277,7 @@ export function LiveSignalsPanel() {
               <button
                 onClick={handleStopStreaming}
                 className="w-full py-3 rounded font-bold uppercase text-sm tracking-wide hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
-                style={{ backgroundColor: BLOOMBERG.RED, color: BLOOMBERG.WHITE }}
+                style={{ backgroundColor: FINCEPT.RED, color: FINCEPT.WHITE }}
               >
                 <Pause size={16} />
                 STOP STREAMING
@@ -286,8 +286,8 @@ export function LiveSignalsPanel() {
           </div>
 
           {/* Filters */}
-          <div className="pt-3 border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+          <div className="pt-3 border-t" style={{ borderColor: FINCEPT.BORDER }}>
+            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
               <Filter size={12} className="inline mr-1" />
               Signal Filter
             </label>
@@ -298,9 +298,9 @@ export function LiveSignalsPanel() {
                   onClick={() => setSignalFilter(filter)}
                   className="flex-1 px-3 py-2 rounded text-xs font-bold uppercase tracking-wide transition-all"
                   style={{
-                    backgroundColor: signalFilter === filter ? BLOOMBERG.ORANGE : BLOOMBERG.DARK_BG,
-                    color: signalFilter === filter ? BLOOMBERG.DARK_BG : BLOOMBERG.WHITE,
-                    border: `1px solid ${signalFilter === filter ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`
+                    backgroundColor: signalFilter === filter ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
+                    color: signalFilter === filter ? FINCEPT.DARK_BG : FINCEPT.WHITE,
+                    border: `1px solid ${signalFilter === filter ? FINCEPT.ORANGE : FINCEPT.BORDER}`
                   }}
                 >
                   {filter}
@@ -312,15 +312,15 @@ export function LiveSignalsPanel() {
       </div>
 
       {/* Right Panel - Signals Feed */}
-      <div className="flex-1 overflow-auto" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+      <div className="flex-1 overflow-auto" style={{ backgroundColor: FINCEPT.DARK_BG }}>
         {filteredSignals.length > 0 ? (
           <div className="p-4">
             {/* Header */}
-            <div className="flex items-center justify-between mb-4 pb-3 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
-              <h3 className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+            <div className="flex items-center justify-between mb-4 pb-3 border-b" style={{ borderColor: FINCEPT.BORDER }}>
+              <h3 className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
                 SIGNAL FEED ({filteredSignals.length})
               </h3>
-              <div className="flex items-center gap-2 text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              <div className="flex items-center gap-2 text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                 <Clock size={12} />
                 <span>LAST UPDATE: {new Date().toLocaleTimeString()}</span>
               </div>
@@ -338,22 +338,22 @@ export function LiveSignalsPanel() {
             <div className="text-center max-w-md">
               {isStreaming ? (
                 <>
-                  <RefreshCw size={64} color={BLOOMBERG.ORANGE} className="animate-spin mx-auto mb-4" />
-                  <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: BLOOMBERG.WHITE }}>
+                  <RefreshCw size={64} color={FINCEPT.ORANGE} className="animate-spin mx-auto mb-4" />
+                  <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: FINCEPT.WHITE }}>
                     WAITING FOR SIGNALS
                   </h3>
-                  <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                  <p className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
                     Streaming live predictions from {selectedModel}...<br/>
                     Next update in {refreshInterval} seconds
                   </p>
                 </>
               ) : (
                 <>
-                  <Activity size={64} color={BLOOMBERG.GRAY} className="mx-auto mb-4" />
-                  <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: BLOOMBERG.WHITE }}>
+                  <Activity size={64} color={FINCEPT.GRAY} className="mx-auto mb-4" />
+                  <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: FINCEPT.WHITE }}>
                     NO SIGNALS YET
                   </h3>
-                  <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                  <p className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
                     Configure your model and instruments, then start streaming<br/>
                     to receive real-time trading signals
                   </p>
@@ -368,31 +368,31 @@ export function LiveSignalsPanel() {
 }
 
 function SignalCard({ signal }: { signal: Signal }) {
-  const signalColor = signal.signal === 'BUY' ? BLOOMBERG.GREEN : signal.signal === 'SELL' ? BLOOMBERG.RED : BLOOMBERG.GRAY;
+  const signalColor = signal.signal === 'BUY' ? FINCEPT.GREEN : signal.signal === 'SELL' ? FINCEPT.RED : FINCEPT.GRAY;
 
   return (
     <div
       className="p-4 rounded border hover:bg-opacity-80 transition-all"
       style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        borderColor: BLOOMBERG.BORDER,
+        backgroundColor: FINCEPT.PANEL_BG,
+        borderColor: FINCEPT.BORDER,
         borderLeftWidth: '3px',
         borderLeftColor: signalColor
       }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <span className="text-base font-bold font-mono" style={{ color: BLOOMBERG.WHITE }}>
+          <span className="text-base font-bold font-mono" style={{ color: FINCEPT.WHITE }}>
             {signal.instrument}
           </span>
           <span
             className="px-2 py-1 rounded text-xs font-bold uppercase"
-            style={{ backgroundColor: signalColor, color: BLOOMBERG.DARK_BG }}
+            style={{ backgroundColor: signalColor, color: FINCEPT.DARK_BG }}
           >
             {signal.signal}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+        <div className="flex items-center gap-2 text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
           <Clock size={12} />
           <span>{new Date(signal.timestamp).toLocaleTimeString()}</span>
         </div>
@@ -400,7 +400,7 @@ function SignalCard({ signal }: { signal: Signal }) {
 
       <div className="grid grid-cols-4 gap-4 text-xs">
         <div>
-          <span className="block font-mono uppercase mb-1" style={{ color: BLOOMBERG.GRAY }}>
+          <span className="block font-mono uppercase mb-1" style={{ color: FINCEPT.GRAY }}>
             SCORE
           </span>
           <span className="font-bold font-mono" style={{ color: signalColor }}>
@@ -408,26 +408,26 @@ function SignalCard({ signal }: { signal: Signal }) {
           </span>
         </div>
         <div>
-          <span className="block font-mono uppercase mb-1" style={{ color: BLOOMBERG.GRAY }}>
+          <span className="block font-mono uppercase mb-1" style={{ color: FINCEPT.GRAY }}>
             PRICE
           </span>
-          <span className="font-bold font-mono" style={{ color: BLOOMBERG.WHITE }}>
+          <span className="font-bold font-mono" style={{ color: FINCEPT.WHITE }}>
             ${signal.price.toFixed(2)}
           </span>
         </div>
         <div>
-          <span className="block font-mono uppercase mb-1" style={{ color: BLOOMBERG.GRAY }}>
+          <span className="block font-mono uppercase mb-1" style={{ color: FINCEPT.GRAY }}>
             CONFIDENCE
           </span>
-          <span className="font-bold font-mono" style={{ color: BLOOMBERG.CYAN }}>
+          <span className="font-bold font-mono" style={{ color: FINCEPT.CYAN }}>
             {(signal.confidence * 100).toFixed(1)}%
           </span>
         </div>
         <div>
-          <span className="block font-mono uppercase mb-1" style={{ color: BLOOMBERG.GRAY }}>
+          <span className="block font-mono uppercase mb-1" style={{ color: FINCEPT.GRAY }}>
             MODEL
           </span>
-          <span className="font-bold font-mono uppercase" style={{ color: BLOOMBERG.ORANGE }}>
+          <span className="font-bold font-mono uppercase" style={{ color: FINCEPT.ORANGE }}>
             {signal.model}
           </span>
         </div>
@@ -435,7 +435,7 @@ function SignalCard({ signal }: { signal: Signal }) {
 
       {/* Confidence Bar */}
       <div className="mt-3">
-        <div className="w-full h-1.5 rounded overflow-hidden" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+        <div className="w-full h-1.5 rounded overflow-hidden" style={{ backgroundColor: FINCEPT.DARK_BG }}>
           <div
             className="h-full transition-all duration-300"
             style={{

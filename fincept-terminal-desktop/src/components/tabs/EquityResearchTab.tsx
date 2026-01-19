@@ -11,25 +11,25 @@ import { useTranslation } from 'react-i18next';
 import { Search, TrendingUp, BarChart3, FileText, Users, Newspaper, RefreshCw, AlertCircle, Info } from 'lucide-react';
 import { createEquityResearchTabTour } from './tours/equityResearchTabTour';
 
-// Import Bloomberg styles
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, LAYOUT, EFFECTS, COMMON_STYLES } from './portfolio-tab/bloombergStyles';
+// Import Fincept styles
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, LAYOUT, EFFECTS, COMMON_STYLES } from './portfolio-tab/finceptStyles';
 
 const COLORS = {
-  ORANGE: BLOOMBERG.ORANGE,
-  WHITE: BLOOMBERG.WHITE,
-  RED: BLOOMBERG.RED,
-  GREEN: BLOOMBERG.GREEN,
-  YELLOW: BLOOMBERG.YELLOW,
-  GRAY: BLOOMBERG.GRAY,
-  BLUE: BLOOMBERG.BLUE,
-  CYAN: BLOOMBERG.CYAN,
-  DARK_BG: BLOOMBERG.DARK_BG,
-  PANEL_BG: BLOOMBERG.PANEL_BG,
-  BORDER: BLOOMBERG.BORDER,
+  ORANGE: FINCEPT.ORANGE,
+  WHITE: FINCEPT.WHITE,
+  RED: FINCEPT.RED,
+  GREEN: FINCEPT.GREEN,
+  YELLOW: FINCEPT.YELLOW,
+  GRAY: FINCEPT.GRAY,
+  BLUE: FINCEPT.BLUE,
+  CYAN: FINCEPT.CYAN,
+  DARK_BG: FINCEPT.DARK_BG,
+  PANEL_BG: FINCEPT.PANEL_BG,
+  BORDER: FINCEPT.BORDER,
   MAGENTA: '#FF00FF',
-  PURPLE: BLOOMBERG.PURPLE,
-  HEADER_BG: BLOOMBERG.HEADER_BG,
-  HOVER: BLOOMBERG.HOVER,
+  PURPLE: FINCEPT.PURPLE,
+  HEADER_BG: FINCEPT.HEADER_BG,
+  HOVER: FINCEPT.HOVER,
 };
 
 interface StockInfo {
@@ -770,6 +770,13 @@ const EquityResearchTab: React.FC = () => {
   const [newsData, setNewsData] = useState<any>(null);
   const [newsLoading, setNewsLoading] = useState(false);
 
+  // Symbol Search State
+  const [searchResults, setSearchResults] = useState<Array<{ symbol: string; name: string; type: string }>>([]);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const candlestickSeriesRef = useRef<any>(null);
@@ -794,6 +801,76 @@ const EquityResearchTab: React.FC = () => {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // HTTP Symbol Search function
+  const searchSymbolsHttp = async (query: string) => {
+    try {
+      const response = await fetch(`https://finceptbackend.share.zrok.io/search/symbols?query=${encodeURIComponent(query)}&limit=50`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Search] HTTP results:', data);
+        setSearchResults(data.results || []);
+        setSearchLoading(false);
+        if (data.results?.length > 0) {
+          setShowSearchDropdown(true);
+        }
+      } else {
+        console.error('[Search] HTTP error:', response.status);
+        setSearchLoading(false);
+      }
+    } catch (e) {
+      console.error('[Search] HTTP fetch error:', e);
+      setSearchLoading(false);
+    }
+  };
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
+
+  // Debounced search function (non-blocking)
+  const handleSearchInput = (query: string) => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowSearchDropdown(false);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+
+    searchDebounceRef.current = setTimeout(() => {
+      searchSymbolsHttp(query);
+    }, 300);
+  };
+
+  // Handle symbol selection from dropdown
+  const handleSelectSymbol = (symbol: string) => {
+    setSearchSymbol(symbol);
+    setCurrentSymbol(symbol);
+    setShowSearchDropdown(false);
+    setSearchResults([]);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSearchDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const fetchStockData = async (symbol: string, forceRefresh = false) => {
@@ -1346,7 +1423,7 @@ const EquityResearchTab: React.FC = () => {
       ...COMMON_STYLES.container,
       fontFamily: TYPOGRAPHY.MONO,
     }}>
-      {/* Bloomberg-Style Header */}
+      {/* Fincept-Style Header */}
       <div style={{
         ...COMMON_STYLES.header,
         display: 'flex',
@@ -1401,30 +1478,110 @@ const EquityResearchTab: React.FC = () => {
 
           {/* Symbol Search */}
           <div id="research-search" style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div ref={searchContainerRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Search size={14} style={{
                 position: 'absolute',
-                left: '6px',
+                left: '8px',
                 pointerEvents: 'none',
-                color: COLORS.GRAY
+                color: COLORS.GRAY,
+                zIndex: 1
               }} />
+              {searchLoading && (
+                <div style={{
+                  position: 'absolute',
+                  right: '8px',
+                  width: '12px',
+                  height: '12px',
+                  border: `2px solid ${COLORS.BORDER}`,
+                  borderTop: `2px solid ${COLORS.ORANGE}`,
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                  zIndex: 1
+                }} />
+              )}
               <input
                 type="text"
-                value={searchSymbol}
-                onChange={(e) => setSearchSymbol(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="SYMBOL..."
                 style={{
                   ...COMMON_STYLES.inputField,
-                  paddingLeft: '26px',
-                  width: '140px',
+                  paddingLeft: '28px',
+                  paddingRight: searchLoading ? '28px' : '8px',
+                  width: '160px',
+                  height: '28px',
+                  padding: `${SPACING.SMALL} ${SPACING.SMALL} ${SPACING.SMALL} 28px`,
                   fontSize: TYPOGRAPHY.BODY,
-                  padding: `${SPACING.SMALL} ${SPACING.SMALL} ${SPACING.SMALL} 26px`,
                   textTransform: 'uppercase',
                 }}
-                onFocus={(e) => e.currentTarget.style.borderColor = COLORS.ORANGE}
+                onInput={(e) => {
+                  const val = (e.target as HTMLInputElement).value;
+                  setSearchSymbol(val);
+                  handleSearchInput(val);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch();
+                    setShowSearchDropdown(false);
+                  }
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = COLORS.ORANGE;
+                  if (searchResults.length > 0) setShowSearchDropdown(true);
+                }}
                 onBlur={(e) => e.currentTarget.style.borderColor = COLORS.BORDER}
               />
+              {/* Search Results Dropdown */}
+              {showSearchDropdown && searchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  width: '320px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: BORDERS.STANDARD,
+                  borderColor: COLORS.ORANGE,
+                  zIndex: 1000,
+                  marginTop: '2px',
+                }}>
+                  {searchResults.map((result, idx) => (
+                    <div
+                      key={`${result.symbol}-${idx}`}
+                      onMouseDown={() => handleSelectSymbol(result.symbol)}
+                      style={{
+                        padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+                        cursor: 'pointer',
+                        borderBottom: idx < searchResults.length - 1 ? BORDERS.STANDARD : 'none',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        transition: EFFECTS.TRANSITION_FAST,
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.HOVER}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ color: COLORS.ORANGE, fontWeight: TYPOGRAPHY.BOLD, fontSize: TYPOGRAPHY.BODY }}>
+                          {result.symbol}
+                        </span>
+                        <span style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.SMALL, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {result.name}
+                        </span>
+                      </div>
+                      <span style={{
+                        color: COLORS.CYAN,
+                        fontSize: '9px',
+                        textTransform: 'uppercase',
+                        padding: '2px 6px',
+                        backgroundColor: `${COLORS.CYAN}20`,
+                        borderRadius: '2px',
+                      }}>
+                        {result.type}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               onClick={handleSearch}
@@ -1440,7 +1597,7 @@ const EquityResearchTab: React.FC = () => {
               onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
             >
               <Search size={12} />
-              SEARCH
+              GO
             </button>
             <button
               onClick={() => fetchStockData(currentSymbol)}

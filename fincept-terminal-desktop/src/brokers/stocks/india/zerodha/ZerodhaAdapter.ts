@@ -1290,6 +1290,33 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
       accessToken: this.accessToken,
     });
   }
+
+  /**
+   * Get last updated timestamp of master contract
+   */
+  async getMasterContractLastUpdated(): Promise<Date | null> {
+    try {
+      const response = await invoke<{
+        success: boolean;
+        data?: {
+          last_updated: number;
+          symbol_count: number;
+          age_seconds: number;
+        };
+        error?: string;
+      }>('zerodha_get_master_contract_metadata');
+
+      if (!response.success || !response.data) {
+        return null;
+      }
+
+      // last_updated is Unix timestamp in seconds
+      return new Date(response.data.last_updated * 1000);
+    } catch (error) {
+      console.error('[Zerodha] getMasterContractLastUpdated error:', error);
+      return null;
+    }
+  }
 }
 
 // Export singleton instance

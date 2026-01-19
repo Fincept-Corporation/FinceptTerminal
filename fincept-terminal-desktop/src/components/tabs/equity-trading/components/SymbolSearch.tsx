@@ -15,8 +15,8 @@ import {
 } from '@/services/trading/masterContractService';
 import type { StockExchange } from '@/brokers/stocks/types';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -208,8 +208,8 @@ export function SymbolSearch({
         onClick={() => setIsOpen(!isOpen)}
         style={{
           padding: '6px 12px',
-          backgroundColor: BLOOMBERG.HEADER_BG,
-          border: `1px solid ${isOpen ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+          border: `1px solid ${isOpen ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
           cursor: 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
@@ -221,17 +221,17 @@ export function SymbolSearch({
           <span style={{
             fontSize: '13px',
             fontWeight: 700,
-            color: selectedSymbol ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+            color: selectedSymbol ? FINCEPT.ORANGE : FINCEPT.GRAY
           }}>
             {selectedSymbol || 'Select Symbol'}
           </span>
           {selectedSymbol && (
-            <span style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>{selectedExchange}</span>
+            <span style={{ fontSize: '10px', color: FINCEPT.GRAY }}>{selectedExchange}</span>
           )}
         </div>
         <ChevronDown
           size={12}
-          color={BLOOMBERG.GRAY}
+          color={FINCEPT.GRAY}
           style={{
             transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 0.2s'
@@ -247,21 +247,21 @@ export function SymbolSearch({
           left: 0,
           right: 0,
           marginTop: '4px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           maxHeight: '450px',
           overflow: 'hidden',
           zIndex: 1000,
-          boxShadow: `0 4px 16px ${BLOOMBERG.DARK_BG}80`,
+          boxShadow: `0 4px 16px ${FINCEPT.DARK_BG}80`,
           display: 'flex',
           flexDirection: 'column'
         }}>
           {/* Search Input */}
-          <div style={{ padding: '8px', borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
+          <div style={{ padding: '8px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
             <div style={{ position: 'relative' }}>
               <Search
                 size={14}
-                color={BLOOMBERG.GRAY}
+                color={FINCEPT.GRAY}
                 style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)' }}
               />
               <input
@@ -273,9 +273,9 @@ export function SymbolSearch({
                 style={{
                   width: '100%',
                   padding: '8px 32px 8px 32px',
-                  backgroundColor: BLOOMBERG.HEADER_BG,
-                  color: BLOOMBERG.WHITE,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   fontSize: '11px',
                   outline: 'none'
                 }}
@@ -283,7 +283,7 @@ export function SymbolSearch({
               {query && (
                 <X
                   size={14}
-                  color={BLOOMBERG.GRAY}
+                  color={FINCEPT.GRAY}
                   style={{
                     position: 'absolute',
                     right: '8px',
@@ -312,9 +312,9 @@ export function SymbolSearch({
                   onClick={() => setSelectedFilterExchange(undefined)}
                   style={{
                     padding: '3px 8px',
-                    backgroundColor: !selectedFilterExchange ? BLOOMBERG.ORANGE : 'transparent',
-                    border: `1px solid ${!selectedFilterExchange ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                    color: !selectedFilterExchange ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                    backgroundColor: !selectedFilterExchange ? FINCEPT.ORANGE : 'transparent',
+                    border: `1px solid ${!selectedFilterExchange ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                    color: !selectedFilterExchange ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                     cursor: 'pointer',
                     fontSize: '9px',
                     fontWeight: 600
@@ -328,9 +328,9 @@ export function SymbolSearch({
                     onClick={() => setSelectedFilterExchange(exch === selectedFilterExchange ? undefined : exch)}
                     style={{
                       padding: '3px 8px',
-                      backgroundColor: selectedFilterExchange === exch ? BLOOMBERG.ORANGE : 'transparent',
-                      border: `1px solid ${selectedFilterExchange === exch ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                      color: selectedFilterExchange === exch ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                      backgroundColor: selectedFilterExchange === exch ? FINCEPT.ORANGE : 'transparent',
+                      border: `1px solid ${selectedFilterExchange === exch ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                      color: selectedFilterExchange === exch ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                       cursor: 'pointer',
                       fontSize: '9px',
                       fontWeight: 600
@@ -347,8 +347,8 @@ export function SymbolSearch({
           {showDownloadStatus && (
             <div style={{
               padding: '6px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
@@ -356,18 +356,18 @@ export function SymbolSearch({
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {downloadStatus === 'downloading' && (
-                  <Loader2 size={12} color={BLOOMBERG.CYAN} className="animate-spin" />
+                  <Loader2 size={12} color={FINCEPT.CYAN} className="animate-spin" />
                 )}
                 {downloadStatus === 'success' && (
-                  <Check size={12} color={BLOOMBERG.GREEN} />
+                  <Check size={12} color={FINCEPT.GREEN} />
                 )}
                 {downloadStatus === 'error' && (
-                  <AlertCircle size={12} color={BLOOMBERG.RED} />
+                  <AlertCircle size={12} color={FINCEPT.RED} />
                 )}
 
                 <span style={{
-                  color: downloadStatus === 'error' ? BLOOMBERG.RED :
-                    downloadStatus === 'success' ? BLOOMBERG.GREEN : BLOOMBERG.GRAY
+                  color: downloadStatus === 'error' ? FINCEPT.RED :
+                    downloadStatus === 'success' ? FINCEPT.GREEN : FINCEPT.GRAY
                 }}>
                   {downloadMessage || (symbolCount > 0
                     ? `${symbolCount.toLocaleString()} symbols loaded`
@@ -382,8 +382,8 @@ export function SymbolSearch({
                 style={{
                   padding: '4px 8px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: isDownloading ? BLOOMBERG.MUTED : BLOOMBERG.CYAN,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: isDownloading ? FINCEPT.MUTED : FINCEPT.CYAN,
                   cursor: isDownloading ? 'not-allowed' : 'pointer',
                   fontSize: '9px',
                   display: 'flex',
@@ -408,7 +408,7 @@ export function SymbolSearch({
               <div style={{
                 padding: '20px',
                 textAlign: 'center',
-                color: BLOOMBERG.GRAY,
+                color: FINCEPT.GRAY,
                 fontSize: '11px'
               }}>
                 <Loader2 size={16} className="animate-spin" style={{ margin: '0 auto 8px' }} />
@@ -425,11 +425,11 @@ export function SymbolSearch({
                     fontSize: '11px',
                     backgroundColor: 'transparent',
                     borderLeft: '3px solid transparent',
-                    borderBottom: `1px solid ${BLOOMBERG.BORDER}20`
+                    borderBottom: `1px solid ${FINCEPT.BORDER}20`
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                    e.currentTarget.style.borderLeftColor = BLOOMBERG.ORANGE;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                    e.currentTarget.style.borderLeftColor = FINCEPT.ORANGE;
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent';
@@ -438,13 +438,13 @@ export function SymbolSearch({
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ color: BLOOMBERG.WHITE, fontWeight: 700, fontSize: '12px' }}>
+                      <span style={{ color: FINCEPT.WHITE, fontWeight: 700, fontSize: '12px' }}>
                         {result.symbol}
                       </span>
                       <span style={{
                         padding: '2px 4px',
-                        backgroundColor: BLOOMBERG.HEADER_BG,
-                        color: BLOOMBERG.CYAN,
+                        backgroundColor: FINCEPT.HEADER_BG,
+                        color: FINCEPT.CYAN,
                         fontSize: '8px',
                         fontWeight: 600
                       }}>
@@ -453,8 +453,8 @@ export function SymbolSearch({
                       {result.instrument_type && result.instrument_type !== 'EQ' && (
                         <span style={{
                           padding: '2px 4px',
-                          backgroundColor: BLOOMBERG.PURPLE + '30',
-                          color: BLOOMBERG.PURPLE,
+                          backgroundColor: FINCEPT.PURPLE + '30',
+                          color: FINCEPT.PURPLE,
                           fontSize: '8px',
                           fontWeight: 600
                         }}>
@@ -463,14 +463,14 @@ export function SymbolSearch({
                       )}
                     </div>
                     {result.token && (
-                      <span style={{ color: BLOOMBERG.MUTED, fontSize: '9px', fontFamily: 'monospace' }}>
+                      <span style={{ color: FINCEPT.MUTED, fontSize: '9px', fontFamily: 'monospace' }}>
                         {result.token}
                       </span>
                     )}
                   </div>
                   {result.name && (
                     <div style={{
-                      color: BLOOMBERG.GRAY,
+                      color: FINCEPT.GRAY,
                       fontSize: '10px',
                       marginTop: '4px',
                       whiteSpace: 'nowrap',
@@ -486,7 +486,7 @@ export function SymbolSearch({
                       gap: '12px',
                       marginTop: '4px',
                       fontSize: '9px',
-                      color: BLOOMBERG.MUTED
+                      color: FINCEPT.MUTED
                     }}>
                       <span>Expiry: {result.expiry}</span>
                       {result.strike && <span>Strike: {result.strike}</span>}
@@ -499,7 +499,7 @@ export function SymbolSearch({
               <div style={{
                 padding: '20px',
                 textAlign: 'center',
-                color: BLOOMBERG.GRAY,
+                color: FINCEPT.GRAY,
                 fontSize: '11px'
               }}>
                 No symbols found for "{query}"
@@ -508,13 +508,13 @@ export function SymbolSearch({
               <div style={{
                 padding: '30px 20px',
                 textAlign: 'center',
-                color: BLOOMBERG.GRAY
+                color: FINCEPT.GRAY
               }}>
-                <Download size={32} color={BLOOMBERG.MUTED} style={{ margin: '0 auto 12px' }} />
+                <Download size={32} color={FINCEPT.MUTED} style={{ margin: '0 auto 12px' }} />
                 <div style={{ fontSize: '12px', marginBottom: '8px' }}>
                   No symbol data available
                 </div>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED, marginBottom: '16px' }}>
+                <div style={{ fontSize: '10px', color: FINCEPT.MUTED, marginBottom: '16px' }}>
                   Download master contract to enable symbol search
                 </div>
                 <button
@@ -522,9 +522,9 @@ export function SymbolSearch({
                   disabled={isDownloading}
                   style={{
                     padding: '8px 16px',
-                    backgroundColor: BLOOMBERG.ORANGE,
+                    backgroundColor: FINCEPT.ORANGE,
                     border: 'none',
-                    color: BLOOMBERG.DARK_BG,
+                    color: FINCEPT.DARK_BG,
                     cursor: isDownloading ? 'not-allowed' : 'pointer',
                     fontSize: '10px',
                     fontWeight: 700,
@@ -545,7 +545,7 @@ export function SymbolSearch({
               <div style={{
                 padding: '16px',
                 textAlign: 'center',
-                color: BLOOMBERG.MUTED,
+                color: FINCEPT.MUTED,
                 fontSize: '10px'
               }}>
                 Type to search {symbolCount.toLocaleString()} symbols

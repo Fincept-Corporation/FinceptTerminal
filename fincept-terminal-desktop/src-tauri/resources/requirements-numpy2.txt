@@ -13,6 +13,7 @@ requests==2.32.5
 aiohttp==3.13.2
 websockets==15.0.1
 beautifulsoup4==4.14.2
+googletrans==4.0.0-rc1
 protobuf>=3.20.2,<6.0.0
 yfinance==0.2.66
 databento==0.66.0

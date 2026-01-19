@@ -27,7 +27,7 @@ const GeopoliticsRelationshipMap: React.FC<GeopoliticsRelationshipMapProps> = ({
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
-  // Define relationship nodes (inspired by Bloomberg's network graph)
+  // Define relationship nodes (inspired by Fincept's network graph)
   const nodes: RelationshipNode[] = [
     // Center node
     { id: 'center', label: centerNode, type: 'crisis', x: 400, y: 300, connections: ['ukraine', 'gaza', 'sudan', 'yemen', 'syria', 'myanmar'], datasetCount: 245 },

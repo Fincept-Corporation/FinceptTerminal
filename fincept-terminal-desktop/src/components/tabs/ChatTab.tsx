@@ -5,10 +5,8 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { llmApiService, ChatMessage as APIMessage } from '../../services/chat/llmApi';
-import { sqliteService, ChatSession, ChatMessage, RecordedContext } from '../../services/core/sqliteService';
-import { llmConfigService } from '../../services/chat/llmConfig';
+import { sqliteService, ChatSession, ChatMessage, RecordedContext, LLMConfig, LLMGlobalSettings, ChatStatistics } from '../../services/core/sqliteService';
 import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
-import LLMSettingsModal from './LLMSettingsModal';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ContextSelector from '../common/ContextSelector';
 import { TabFooter } from '@/components/common/TabFooter';
@@ -18,6 +16,14 @@ interface ChatTabProps {
   onNavigateToTab?: (tabName: string) => void;
 }
 
+// Constants
+const SESSION_CREATION_DELAY_MS = 100;
+const MAX_MESSAGES_IN_MEMORY = 200;
+const MCP_RETRY_INTERVAL_MS = 10000;
+const MCP_MAX_RETRIES = 5;
+const CLOCK_UPDATE_INTERVAL_MS = 1000;
+const MCP_SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'deepseek', 'openrouter', 'fincept'];
+
 const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab }) => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const auth = useAuth();
@@ -26,16 +32,21 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messageInput, setMessageInput] = useState('');
-  const [sessionSearch, setSessionSearch] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [systemStatus, setSystemStatus] = useState('STATUS: INITIALIZING...');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [currentProvider, setCurrentProvider] = useState('ollama');
   const [streamingContent, setStreamingContent] = useState('');
   const [statistics, setStatistics] = useState({ totalSessions: 0, totalMessages: 0, totalTokens: 0 });
   const [mcpToolsCount, setMcpToolsCount] = useState(0);
   const [linkedContexts, setLinkedContexts] = useState<RecordedContext[]>([]);
+
+  // LLM Configuration state
+  const [activeLLMConfig, setActiveLLMConfig] = useState<LLMConfig | null>(null);
+  const [llmGlobalSettings, setLLMGlobalSettings] = useState<LLMGlobalSettings>({
+    temperature: 0.7,
+    max_tokens: 4096,
+    system_prompt: ''
+  });
 
   const handleContextsChange = (contexts: RecordedContext[]) => {
     setLinkedContexts(contexts);
@@ -53,8 +64,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
   // Check if current provider supports MCP tools
   const providerSupportsMCP = () => {
-    const supportedProviders = ['openai', 'openrouter', 'gemini', 'deepseek', 'ollama'];
-    return supportedProviders.includes(currentProvider.toLowerCase());
+    if (!activeLLMConfig) return false;
+    return MCP_SUPPORTED_PROVIDERS.includes(activeLLMConfig.provider.toLowerCase());
   };
 
   // Initialize database on mount
@@ -62,10 +73,6 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     const initDatabase = async () => {
       try {
         setSystemStatus('STATUS: INITIALIZING DATABASE...');
-
-        // Clear any old localStorage data from previous versions
-        const oldKeys = ['chat-sessions', 'chat-messages', 'fincept-chat-data', 'fincept-llm-settings'];
-        oldKeys.forEach(key => localStorage.removeItem(key));
 
         // Initialize database
         await sqliteService.initialize();
@@ -82,7 +89,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         // Load initial data
         await loadSessions();
         await loadStatistics();
-        await loadLLMProvider();
+        await loadLLMConfiguration();
         await loadMCPToolsCount();
 
         setSystemStatus('STATUS: READY');
@@ -103,7 +110,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000);
+    }, CLOCK_UPDATE_INTERVAL_MS);
     return () => clearInterval(timer);
   }, []);
 
@@ -111,7 +118,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   useEffect(() => {
     const mcpCheckInterval = setInterval(() => {
       loadMCPToolsCount();
-    }, 10000); // Check every 10 seconds
+    }, MCP_RETRY_INTERVAL_MS);
 
     return () => {
       clearInterval(mcpCheckInterval);
@@ -141,43 +148,48 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
   const loadStatistics = async () => {
     try {
-      const sessions = await sqliteService.getChatSessions(10000);
-      const allMessages: ChatMessage[] = [];
-      for (const session of sessions) {
-        const msgs = await sqliteService.getChatMessages(session.session_uuid);
-        allMessages.push(...msgs);
-      }
-      const totalTokens = allMessages.reduce((sum, msg) => sum + (msg.tokens_used || 0), 0);
+      // Optimized: Use SQL aggregation instead of loading all messages
+      const stats = await sqliteService.getChatStatistics();
+      setStatistics(stats);
+    } catch (error) {
+      console.error('[ChatTab] Failed to load statistics:', error);
+      // Fallback to basic count
+      const sessions = await sqliteService.getChatSessions(1000);
       setStatistics({
         totalSessions: sessions.length,
-        totalMessages: allMessages.length,
-        totalTokens
+        totalMessages: 0,
+        totalTokens: 0
       });
-    } catch (error) {
-      console.error('Failed to load statistics:', error);
     }
   };
 
-  const loadLLMProvider = async () => {
+  const loadLLMConfiguration = async () => {
     try {
-      const activeConfig = await sqliteService.getActiveLLMConfig();
-      if (activeConfig) {
-        setCurrentProvider(activeConfig.provider);
+      const [activeConfig, globalSettings] = await Promise.all([
+        sqliteService.getActiveLLMConfig(),
+        sqliteService.getLLMGlobalSettings()
+      ]);
+
+      setActiveLLMConfig(activeConfig);
+      setLLMGlobalSettings(globalSettings);
+
+      if (!activeConfig) {
+        setSystemStatus('WARNING: No active LLM provider configured');
       }
     } catch (error) {
-      console.error('Failed to load LLM provider:', error);
+      console.error('[ChatTab] Failed to load LLM configuration:', error);
+      setSystemStatus('ERROR: Failed to load LLM configuration');
     }
   };
 
-  const loadMCPToolsCount = async (retryCount = 0, maxRetries = 5) => {
+  const loadMCPToolsCount = async (retryCount = 0, maxRetries = MCP_MAX_RETRIES) => {
     try {
       const { mcpToolService } = await import('../../services/mcp/mcpToolService');
       const tools = await mcpToolService.getAllTools();
       setMcpToolsCount(tools.length);
 
-      // If we got 0 tools and haven't exceeded max retries, try again after a delay
       if (tools.length === 0 && retryCount < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
+        const delay = Math.min(1000 * Math.pow(2, retryCount), MCP_RETRY_INTERVAL_MS);
         const timeoutId = setTimeout(() => {
           retryTimeoutsRef.current.delete(timeoutId);
           loadMCPToolsCount(retryCount + 1, maxRetries);
@@ -193,11 +205,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     try {
       setSystemStatus('STATUS: LOADING MESSAGES...');
       const loadedMessages = await sqliteService.getChatMessages(sessionUuid);
-      // Limit messages in memory to last 200 to prevent memory issues
-      setMessages(loadedMessages.slice(-200));
+      setMessages(loadedMessages.slice(-MAX_MESSAGES_IN_MEMORY));
       setSystemStatus('STATUS: READY');
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      console.error('[ChatTab] Failed to load messages:', error);
       setSystemStatus('ERROR: Failed to load messages');
     }
   };
@@ -215,7 +226,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     }
   };
 
-  const createNewSession = async () => {
+  const createNewSession = async (): Promise<string | null> => {
     try {
       const title = messageInput.trim() ?
         generateSmartTitle(messageInput) :
@@ -227,9 +238,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       setMessages([]);
       await loadStatistics();
       setSystemStatus('STATUS: NEW SESSION CREATED');
+      return newSession.session_uuid;
     } catch (error) {
       console.error('Failed to create session:', error);
       setSystemStatus('ERROR: Failed to create session');
+      return null;
     }
   };
 
@@ -318,34 +331,141 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     }
   };
 
+  // Helper functions for handleSendMessage
+  const validateLLMConfiguration = (): { valid: boolean; error?: string } => {
+    if (!activeLLMConfig) {
+      return {
+        valid: false,
+        error: 'No LLM provider is configured.\n\nPlease go to Settings → LLM Configuration to set up a provider.'
+      };
+    }
+
+    // Providers that don't require API key
+    const noApiKeyProviders = ['ollama', 'fincept'];
+    const requiresApiKey = !noApiKeyProviders.includes(activeLLMConfig.provider.toLowerCase());
+
+    if (requiresApiKey && !activeLLMConfig.api_key) {
+      const providerName = activeLLMConfig.provider.charAt(0).toUpperCase() + activeLLMConfig.provider.slice(1);
+      return {
+        valid: false,
+        error: `${providerName} requires an API key.\n\nPlease go to Settings → LLM Configuration to add your ${providerName} API key.`
+      };
+    }
+
+    return { valid: true };
+  };
+
+  const ensureSessionExists = async (): Promise<string | null> => {
+    if (currentSessionUuid) {
+      return currentSessionUuid;
+    }
+
+    // createNewSession now returns the UUID directly, no need to wait for state update
+    const newSessionUuid = await createNewSession();
+    return newSessionUuid;
+  };
+
+  const buildConversationHistory = (): APIMessage[] => {
+    return messages.map(msg => ({
+      role: msg.role as 'system' | 'user' | 'assistant',
+      content: msg.content
+    }));
+  };
+
+  const addContextToConversation = async (conversationHistory: APIMessage[]): Promise<void> => {
+    if (linkedContexts.length === 0) {
+      console.log('[ChatTab] No active contexts linked');
+      return;
+    }
+
+    console.log('[ChatTab] Active contexts linked:', linkedContexts.length);
+    const contextIds = linkedContexts.map(ctx => ctx.id);
+    const contextData = await contextRecorderService.formatMultipleContexts(contextIds, 'markdown');
+
+    const systemMessage: APIMessage = {
+      role: 'system' as const,
+      content: `The following recorded data contexts are provided for your reference:\n\n${contextData}\n\n---\n\nPlease use this information to help answer the user's questions.`
+    };
+
+    conversationHistory.unshift(systemMessage);
+    console.log('[ChatTab] System message with context added to conversation');
+  };
+
+  const getMCPTools = async (): Promise<any[]> => {
+    try {
+      const { mcpToolService } = await import('../../services/mcp/mcpToolService');
+      return await mcpToolService.getAllTools();
+    } catch (error) {
+      return [];
+    }
+  };
+
+  const handleStreamingCallback = (chunk: string, done: boolean) => {
+    if (!done) {
+      streamedContentRef.current += chunk;
+      flushSync(() => {
+        setStreamingContent(prev => prev + chunk);
+      });
+    } else {
+      flushSync(() => {
+        setIsTyping(false);
+        setStreamingContent('');
+        setSystemStatus('STATUS: READY');
+      });
+    }
+  };
+
+  const handleToolCallback = (toolName: string, args: any, result?: any) => {
+    if (!result) {
+      console.log(`[Tool Call] ${toolName}`, args);
+      setSystemStatus('STATUS: Fetching data...');
+    } else {
+      console.log(`[Tool Result] ${toolName}`, result);
+      setSystemStatus('STATUS: Processing response...');
+    }
+  };
+
+  const saveAssistantMessage = async (sessionUuid: string, content: string, usage?: any): Promise<void> => {
+    if (!activeLLMConfig) return;
+
+    const aiMessage = await sqliteService.addChatMessage({
+      session_uuid: sessionUuid,
+      role: 'assistant',
+      content,
+      provider: activeLLMConfig.provider,
+      model: activeLLMConfig.model,
+      tokens_used: usage?.totalTokens
+    });
+
+    setMessages(prev => [...prev, aiMessage]);
+  };
+
+  const saveErrorMessage = async (sessionUuid: string, error: string): Promise<void> => {
+    const errorMessage = await sqliteService.addChatMessage({
+      session_uuid: sessionUuid,
+      role: 'assistant',
+      content: `[ERROR] ${error}\n\nPlease check your LLM configuration and try again.`
+    });
+
+    setMessages(prev => [...prev, errorMessage]);
+  };
+
   const handleSendMessage = async () => {
     if (!messageInput.trim()) return;
 
-    // Create session if none exists
-    if (!currentSessionUuid) {
-      await createNewSession();
-      // Wait a bit for session to be created
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    if (!currentSessionUuid) {
-      setSystemStatus('ERROR: No active session');
+    // Validate LLM configuration
+    const validation = validateLLMConfiguration();
+    if (!validation.valid) {
+      setSystemStatus('ERROR: Invalid LLM configuration');
+      alert(validation.error);
+      onNavigateToSettings?.();
       return;
     }
 
-    // Validate configuration
-    const activeConfig = await sqliteService.getActiveLLMConfig();
-    if (!activeConfig) {
-      setSystemStatus('ERROR: No active LLM provider configured');
-      alert('LLM Configuration Error: No active provider configured\n\nPlease configure your LLM settings first.');
-      setIsSettingsOpen(true);
-      return;
-    }
-
-    if (activeConfig.provider !== 'ollama' && !activeConfig.api_key) {
-      setSystemStatus(`ERROR: ${activeConfig.provider} requires API key`);
-      alert(`LLM Configuration Error: ${activeConfig.provider} requires an API key\n\nPlease configure your LLM settings first.`);
-      setIsSettingsOpen(true);
+    // Ensure session exists
+    const sessionUuid = await ensureSessionExists();
+    if (!sessionUuid) {
+      setSystemStatus('ERROR: Failed to create session');
       return;
     }
 
@@ -353,156 +473,74 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     setMessageInput('');
     setIsTyping(true);
     setStreamingContent('');
-    setSystemStatus(`STATUS: CALLING ${currentProvider.toUpperCase()} API...`);
+    setSystemStatus(`STATUS: CALLING ${activeLLMConfig!.provider.toUpperCase()} API...`);
 
     try {
-      // Save user message to database
+      // Save user message
       const userMessage = await sqliteService.addChatMessage({
-        session_uuid: currentSessionUuid,
+        session_uuid: sessionUuid,
         role: 'user',
         content: userContent
       });
-
       setMessages(prev => [...prev, userMessage]);
 
-      // Convert conversation history
-      const conversationHistory: APIMessage[] = messages.map(msg => ({
-        role: (msg.role as 'system' | 'user' | 'assistant'),
-        content: msg.content
-      }));
+      // Build conversation history
+      const conversationHistory = buildConversationHistory();
 
-      // Prepend linked contexts to the conversation
-      if (linkedContexts.length > 0) {
-        console.log('[ChatTab] 🔗 Active contexts linked:', linkedContexts.length);
-        const contextIds = linkedContexts.map(ctx => ctx.id);
-        console.log('[ChatTab] 📋 Context IDs:', contextIds);
+      // Add linked contexts if any
+      await addContextToConversation(conversationHistory);
 
-        const contextData = await contextRecorderService.formatMultipleContexts(contextIds, 'markdown');
-        console.log('[ChatTab] 📊 Formatted context data length:', contextData.length, 'characters');
-        console.log('[ChatTab] 📝 Context data preview (first 500 chars):\n', contextData.substring(0, 500));
+      // Get MCP tools
+      const mcpTools = await getMCPTools();
 
-        const systemMessage: APIMessage = {
-          role: 'system' as const,
-          content: `The following recorded data contexts are provided for your reference:\n\n${contextData}\n\n---\n\nPlease use this information to help answer the user's questions.`
-        };
-
-        conversationHistory.unshift(systemMessage);
-        console.log('[ChatTab] [OK] System message with context added to conversation');
-        console.log('[ChatTab] 📤 Total conversation history length:', conversationHistory.length);
-      } else {
-        console.log('[ChatTab] ℹ️ No active contexts linked');
-      }
-
-      // Get MCP tools if available using the unified service
-      let mcpTools: any[] = [];
-      try {
-        const { mcpToolService } = await import('../../services/mcp/mcpToolService');
-        mcpTools = await mcpToolService.getAllTools();
-      } catch (error) {
-        // MCP tools not available
-      }
-
-      // Reset the ref before starting new stream
+      // Reset streaming reference
       streamedContentRef.current = '';
 
-      // Call LLM API with tools if available
+      // Call LLM API
       const response = mcpTools.length > 0
         ? await llmApiService.chatWithTools(
           userContent,
           conversationHistory,
           mcpTools,
-          (chunk: string, done: boolean) => {
-            if (!done) {
-              streamedContentRef.current += chunk;
-              flushSync(() => {
-                setStreamingContent(prev => prev + chunk);
-              });
-            } else {
-              flushSync(() => {
-                setIsTyping(false);
-                setStreamingContent('');
-                setSystemStatus('STATUS: READY');
-              });
-            }
-          },
-          (toolName: string, args: any, result?: any) => {
-            // Tool call callback - don't show in UI, only in console
-            if (!result) {
-              console.log(`[Tool Call] ${toolName}`, args);
-              setSystemStatus(`STATUS: Fetching data...`);
-            } else {
-              console.log(`[Tool Result] ${toolName}`, result);
-              setSystemStatus(`STATUS: Processing response...`);
-            }
-          }
+          handleStreamingCallback,
+          handleToolCallback
         )
         : await llmApiService.chat(
           userContent,
           conversationHistory,
-          (chunk: string, done: boolean) => {
-            if (!done) {
-              streamedContentRef.current += chunk;
-              flushSync(() => {
-                setStreamingContent(prev => prev + chunk);
-              });
-            } else {
-              flushSync(() => {
-                setIsTyping(false);
-                setStreamingContent('');
-                setSystemStatus('STATUS: READY');
-              });
-            }
-          }
+          handleStreamingCallback
         );
 
+      // Handle response
       if (response.error) {
-        const errorMessage = await sqliteService.addChatMessage({
-          session_uuid: currentSessionUuid,
-          role: 'assistant',
-          content: `[ERROR] Error: ${response.error}\n\nPlease check your LLM configuration and try again.`
-        });
-        setMessages(prev => [...prev, errorMessage]);
-        setIsTyping(false);
-        setStreamingContent('');
+        await saveErrorMessage(sessionUuid, response.error);
         setSystemStatus(`ERROR: ${response.error}`);
       } else {
-        // Use the ref which contains all streamed content, fallback to response.content
         const contentToSave = response.content || streamedContentRef.current || '(No response generated)';
-
-        const aiMessage = await sqliteService.addChatMessage({
-          session_uuid: currentSessionUuid,
-          role: 'assistant',
-          content: contentToSave,
-          provider: activeConfig.provider,
-          model: activeConfig.model,
-          tokens_used: response.usage?.totalTokens
-        });
-
-        setMessages(prev => [...prev, aiMessage]);
-        setIsTyping(false);
-        setStreamingContent('');
-        // Clear the ref for next message
+        await saveAssistantMessage(sessionUuid, contentToSave, response.usage);
         streamedContentRef.current = '';
       }
 
-      // Reload sessions and statistics
-      await loadSessions();
-      await loadStatistics();
-
-      // Refresh user profile to update credits in realtime
-      await auth.refreshUserData();
-
-    } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage = await sqliteService.addChatMessage({
-        session_uuid: currentSessionUuid,
-        role: 'assistant',
-        content: `[ERROR] Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      });
-      setMessages(prev => [...prev, errorMessage]);
+      // Update UI state
       setIsTyping(false);
       setStreamingContent('');
-      setSystemStatus('STATUS: ERROR');
+
+      // Reload data
+      await Promise.all([
+        loadSessions(),
+        loadStatistics(),
+        auth.refreshUserData()
+      ]);
+
+    } catch (error) {
+      console.error('[ChatTab] Send message error:', error);
+      await saveErrorMessage(
+        sessionUuid,
+        `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      setIsTyping(false);
+      setStreamingContent('');
+      setSystemStatus('ERROR: Request failed');
     }
   };
 
@@ -569,7 +607,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {t('subtitle')}
         </div>
         <div style={{ color: colors.warning, fontSize: '12px', marginBottom: '16px' }}>
-          Provider: {currentProvider.toUpperCase()} | Model: {llmConfigService.getActiveConfig().model}
+          Provider: {activeLLMConfig?.provider.toUpperCase() || 'NONE'} | Model: {activeLLMConfig?.model || 'N/A'}
         </div>
         <button
           onClick={createNewSession}
@@ -731,7 +769,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '12px' }}>{t('title')}</span>
           <span style={{ color: colors.textMuted }}>|</span>
           <span style={{ color: colors.warning, fontSize: '10px' }}>
-            {currentProvider.toUpperCase()}
+            {activeLLMConfig?.provider.toUpperCase() || 'NO PROVIDER'}
           </span>
           <span style={{ color: colors.textMuted }}>|</span>
           <span style={{ color: colors.text, fontSize: '10px' }}>
@@ -740,7 +778,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={() => onNavigateToSettings?.()}
             style={{
               backgroundColor: colors.background,
               border: `1px solid ${colors.textMuted}`,
@@ -752,6 +790,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               alignItems: 'center',
               gap: '4px'
             }}
+            title="Go to Settings tab to configure LLM providers"
           >
             <Settings size={12} />
             {t('header.settings')}
@@ -1136,18 +1175,26 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
               {t('panel.systemInfo')}
             </div>
-            <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-              Provider: {currentProvider.toUpperCase()}
-            </div>
-            <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-              Model: {llmConfigService.getActiveConfig().model}
-            </div>
-            <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-              Temp: {llmConfigService.getActiveConfig().temperature}
-            </div>
-            <div style={{ color: colors.secondary, fontSize: '9px', marginBottom: '2px' }}>
-              Streaming: Enabled
-            </div>
+            {activeLLMConfig ? (
+              <>
+                <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
+                  Provider: {activeLLMConfig.provider.toUpperCase()}
+                </div>
+                <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
+                  Model: {activeLLMConfig.model}
+                </div>
+                <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
+                  Temp: {llmGlobalSettings.temperature}
+                </div>
+                <div style={{ color: colors.secondary, fontSize: '9px', marginBottom: '2px' }}>
+                  Streaming: Enabled
+                </div>
+              </>
+            ) : (
+              <div style={{ color: colors.alert, fontSize: '9px', marginBottom: '6px' }}>
+                No LLM provider configured
+              </div>
+            )}
             <div style={{
               marginTop: '6px',
               paddingTop: '6px',
@@ -1178,7 +1225,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               >
                 🔧 MCP INTEGRATION
               </button>
-              {mcpToolsCount > 0 && !providerSupportsMCP() && (
+              {mcpToolsCount > 0 && !providerSupportsMCP() && activeLLMConfig && (
                 <div style={{
                   color: colors.alert,
                   fontSize: '8px',
@@ -1188,7 +1235,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   border: `1px solid ${colors.alert}`,
                   borderRadius: '2px'
                 }}>
-                  [WARN]️ {currentProvider.toUpperCase()} doesn't support MCP tools
+                  [WARN] {activeLLMConfig.provider.toUpperCase()} doesn't support MCP tools
                 </div>
               )}
             </div>
@@ -1196,22 +1243,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         </div>
       </div>
 
-      {/* Settings Modal */}
-      <LLMSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        onSave={() => {
-          setCurrentProvider(llmConfigService.getActiveProvider());
-          setSystemStatus('STATUS: SETTINGS UPDATED');
-        }}
-        onNavigateToSettings={onNavigateToSettings}
-      />
-
       {/* Footer */}
       <TabFooter
         tabName="AI CHAT"
         leftInfo={[
-          { label: `Provider: ${currentProvider?.toUpperCase() || 'NONE'}`, color: colors.textMuted },
+          { label: `Provider: ${activeLLMConfig?.provider.toUpperCase() || 'NONE'}`, color: colors.textMuted },
           { label: `Session: ${currentSessionUuid ? 'Active' : 'None'}`, color: colors.textMuted },
         ]}
         statusInfo={`Messages: ${messages.length} | ${streamingContent ? 'Streaming...' : 'Ready'}`}

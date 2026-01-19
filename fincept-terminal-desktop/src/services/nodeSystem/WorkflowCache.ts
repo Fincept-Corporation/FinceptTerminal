@@ -1,40 +1,30 @@
 /**
  * Workflow Cache
  *
- * Provides caching and memoization for workflow execution to improve performance.
+ * Hybrid caching system:
+ * - SQLite (via Rust): Persistent cache for serializable data (executions, parameters, expressions)
+ * - In-Memory: Session-only cache for non-serializable objects (DirectedGraph, node outputs)
  *
  * Features:
- * - Cache workflow execution results
- * - Memoize node execution outputs
- * - Cache DirectedGraph instances
- * - Cache parameter evaluations
- * - LRU eviction policy
- * - TTL (time-to-live) support
+ * - Cache workflow execution results (SQLite)
+ * - Memoize node execution outputs (In-Memory)
+ * - Cache DirectedGraph instances (In-Memory - not serializable)
+ * - Cache parameter evaluations (SQLite)
+ * - LRU eviction policy for in-memory caches
+ * - TTL (time-to-live) support via Rust cache
  * - Cache invalidation
- * - Memory management
- *
- * Based on caching patterns from n8n and general workflow systems.
  */
 
 import type {
-  IWorkflow,
-  INode,
   IRunExecutionData,
-  IRunData,
   NodeParameterValue,
   INodeExecutionData,
 } from './types';
 import { DirectedGraph } from './DirectedGraph';
+import { cacheService, CacheTTL } from '../cache/cacheService';
 
-/**
- * Cache entry with metadata
- */
-interface ICacheEntry<T> {
-  value: T;
-  timestamp: number;
-  hits: number;
-  size: number; // Approximate size in bytes
-}
+// Cache category for workflow data
+const WORKFLOW_CACHE_CATEGORY = 'workflow';
 
 /**
  * Cache statistics
@@ -48,233 +38,141 @@ interface ICacheStats {
 }
 
 /**
- * LRU Cache with TTL support
+ * Simple in-memory LRU cache for non-serializable objects
+ * Used only for DirectedGraph and node outputs that can't be stored in SQLite
  */
-class LRUCache<T> {
-  private cache: Map<string, ICacheEntry<T>>;
+class InMemoryLRUCache<T> {
+  private cache: Map<string, { value: T; timestamp: number }>;
   private maxSize: number;
-  private maxAge: number; // milliseconds
-  private currentSize: number;
-  private hits: number;
-  private misses: number;
+  private maxAge: number;
+  private hits: number = 0;
+  private misses: number = 0;
 
   constructor(maxSize: number = 100, maxAge: number = 5 * 60 * 1000) {
     this.cache = new Map();
     this.maxSize = maxSize;
     this.maxAge = maxAge;
-    this.currentSize = 0;
-    this.hits = 0;
-    this.misses = 0;
   }
 
-  /**
-   * Get value from cache
-   */
   get(key: string): T | undefined {
     const entry = this.cache.get(key);
-
     if (!entry) {
       this.misses++;
       return undefined;
     }
 
-    // Check if expired
-    const age = Date.now() - entry.timestamp;
-    if (age > this.maxAge) {
+    if (Date.now() - entry.timestamp > this.maxAge) {
       this.cache.delete(key);
-      this.currentSize -= entry.size;
       this.misses++;
       return undefined;
     }
 
-    // Update access metadata
-    entry.hits++;
-    entry.timestamp = Date.now();
-
-    // Move to end (most recently used)
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-
     this.hits++;
+    // Move to end (LRU)
+    this.cache.delete(key);
+    this.cache.set(key, { ...entry, timestamp: Date.now() });
     return entry.value;
   }
 
-  /**
-   * Set value in cache
-   */
-  set(key: string, value: T, size: number = 1): void {
-    // Remove existing entry if present
-    const existing = this.cache.get(key);
-    if (existing) {
-      this.currentSize -= existing.size;
+  set(key: string, value: T): void {
+    if (this.cache.has(key)) {
       this.cache.delete(key);
     }
-
-    // Evict entries if necessary
     while (this.cache.size >= this.maxSize) {
-      this.evictOldest();
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
     }
-
-    // Add new entry
-    const entry: ICacheEntry<T> = {
-      value,
-      timestamp: Date.now(),
-      hits: 0,
-      size,
-    };
-
-    this.cache.set(key, entry);
-    this.currentSize += size;
+    this.cache.set(key, { value, timestamp: Date.now() });
   }
 
-  /**
-   * Check if key exists (without updating access)
-   */
-  has(key: string): boolean {
-    const entry = this.cache.get(key);
-    if (!entry) return false;
-
-    // Check expiration
-    const age = Date.now() - entry.timestamp;
-    if (age > this.maxAge) {
-      this.cache.delete(key);
-      this.currentSize -= entry.size;
-      return false;
-    }
-
-    return true;
-  }
-
-  /**
-   * Delete entry
-   */
   delete(key: string): boolean {
-    const entry = this.cache.get(key);
-    if (entry) {
-      this.currentSize -= entry.size;
-    }
     return this.cache.delete(key);
   }
 
-  /**
-   * Clear all entries
-   */
   clear(): void {
     this.cache.clear();
-    this.currentSize = 0;
     this.hits = 0;
     this.misses = 0;
   }
 
-  /**
-   * Evict oldest (least recently used) entry
-   */
-  private evictOldest(): void {
-    const firstKey = this.cache.keys().next().value;
-    if (firstKey) {
-      const entry = this.cache.get(firstKey);
-      if (entry) {
-        this.currentSize -= entry.size;
-      }
-      this.cache.delete(firstKey);
-    }
+  keys(): string[] {
+    return Array.from(this.cache.keys());
   }
 
-  /**
-   * Get cache statistics
-   */
   getStats(): ICacheStats {
     const total = this.hits + this.misses;
     return {
       hits: this.hits,
       misses: this.misses,
-      size: this.currentSize,
+      size: this.cache.size,
       entries: this.cache.size,
       hitRate: total > 0 ? this.hits / total : 0,
     };
   }
 
-  /**
-   * Get all keys
-   */
-  keys(): string[] {
-    return Array.from(this.cache.keys());
-  }
-
-  /**
-   * Cleanup expired entries
-   */
   cleanup(): void {
     const now = Date.now();
-    const keysToDelete: string[] = [];
-
     for (const [key, entry] of this.cache.entries()) {
-      const age = now - entry.timestamp;
-      if (age > this.maxAge) {
-        keysToDelete.push(key);
+      if (now - entry.timestamp > this.maxAge) {
+        this.cache.delete(key);
       }
-    }
-
-    for (const key of keysToDelete) {
-      const entry = this.cache.get(key);
-      if (entry) {
-        this.currentSize -= entry.size;
-      }
-      this.cache.delete(key);
     }
   }
 }
 
 /**
  * Workflow Cache Manager
+ * Hybrid: SQLite for persistent data, in-memory for session-only objects
  */
 export class WorkflowCache {
-  // Caches for different types of data
-  private executionCache: LRUCache<IRunExecutionData>;
-  private nodeOutputCache: LRUCache<INodeExecutionData[][]>;
-  private graphCache: LRUCache<DirectedGraph>;
-  private parameterCache: LRUCache<NodeParameterValue>;
-  private expressionCache: LRUCache<any>;
+  // In-memory caches for non-serializable objects
+  private graphCache: InMemoryLRUCache<DirectedGraph>;
+  private nodeOutputCache: InMemoryLRUCache<INodeExecutionData[][]>;
 
-  // Cache configuration
+  // Track stats for SQLite-backed caches
+  private sqliteHits: number = 0;
+  private sqliteMisses: number = 0;
+
   private enabled: boolean = true;
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    // Initialize caches with different sizes based on typical usage
-    this.executionCache = new LRUCache<IRunExecutionData>(50, 10 * 60 * 1000); // 10 min TTL
-    this.nodeOutputCache = new LRUCache<INodeExecutionData[][]>(200, 5 * 60 * 1000); // 5 min TTL
-    this.graphCache = new LRUCache<DirectedGraph>(100, 30 * 60 * 1000); // 30 min TTL
-    this.parameterCache = new LRUCache<NodeParameterValue>(500, 5 * 60 * 1000); // 5 min TTL
-    this.expressionCache = new LRUCache<any>(1000, 5 * 60 * 1000); // 5 min TTL
+    // In-memory only for non-serializable data
+    this.graphCache = new InMemoryLRUCache<DirectedGraph>(100, 30 * 60 * 1000);
+    this.nodeOutputCache = new InMemoryLRUCache<INodeExecutionData[][]>(200, 5 * 60 * 1000);
 
-    // Start periodic cleanup
     this.startCleanup();
   }
 
   /**
-   * Cache workflow execution result
+   * Cache workflow execution result (SQLite - persistent)
    */
-  cacheExecution(workflowId: string, executionId: string, result: IRunExecutionData): void {
+  async cacheExecution(workflowId: string, executionId: string, result: IRunExecutionData): Promise<void> {
     if (!this.enabled) return;
 
-    const key = `${workflowId}:${executionId}`;
-    const size = this.estimateSize(result);
-    this.executionCache.set(key, result, size);
+    const key = `workflow:exec:${workflowId}:${executionId}`;
+    await cacheService.setJSON(key, result, WORKFLOW_CACHE_CATEGORY, CacheTTL.LONG);
   }
 
   /**
-   * Get cached workflow execution result
+   * Get cached workflow execution result (SQLite)
    */
-  getCachedExecution(workflowId: string, executionId: string): IRunExecutionData | undefined {
+  async getCachedExecution(workflowId: string, executionId: string): Promise<IRunExecutionData | undefined> {
     if (!this.enabled) return undefined;
 
-    const key = `${workflowId}:${executionId}`;
-    return this.executionCache.get(key);
+    const key = `workflow:exec:${workflowId}:${executionId}`;
+    const result = await cacheService.getJSON<IRunExecutionData>(key);
+
+    if (result) {
+      this.sqliteHits++;
+      return result;
+    }
+    this.sqliteMisses++;
+    return undefined;
   }
 
   /**
-   * Cache node execution output
+   * Cache node execution output (In-Memory - contains complex objects)
    */
   cacheNodeOutput(
     workflowId: string,
@@ -283,14 +181,12 @@ export class WorkflowCache {
     output: INodeExecutionData[][]
   ): void {
     if (!this.enabled) return;
-
     const key = `${workflowId}:${nodeId}:${inputHash}`;
-    const size = this.estimateSize(output);
-    this.nodeOutputCache.set(key, output, size);
+    this.nodeOutputCache.set(key, output);
   }
 
   /**
-   * Get cached node output
+   * Get cached node output (In-Memory)
    */
   getCachedNodeOutput(
     workflowId: string,
@@ -298,106 +194,102 @@ export class WorkflowCache {
     inputHash: string
   ): INodeExecutionData[][] | undefined {
     if (!this.enabled) return undefined;
-
     const key = `${workflowId}:${nodeId}:${inputHash}`;
     return this.nodeOutputCache.get(key);
   }
 
   /**
-   * Cache DirectedGraph for workflow
+   * Cache DirectedGraph for workflow (In-Memory - not serializable)
    */
   cacheGraph(workflowId: string, graph: DirectedGraph): void {
     if (!this.enabled) return;
-
-    const size = graph.getNodes().size + graph.getDirectChildren.length * 2;
-    this.graphCache.set(workflowId, graph, size);
+    this.graphCache.set(workflowId, graph);
   }
 
   /**
-   * Get cached DirectedGraph
+   * Get cached DirectedGraph (In-Memory)
    */
   getCachedGraph(workflowId: string): DirectedGraph | undefined {
     if (!this.enabled) return undefined;
-
     return this.graphCache.get(workflowId);
   }
 
   /**
-   * Cache parameter value
+   * Cache parameter value (SQLite - persistent)
    */
-  cacheParameter(
+  async cacheParameter(
     workflowId: string,
     nodeId: string,
     paramName: string,
     value: NodeParameterValue
-  ): void {
+  ): Promise<void> {
     if (!this.enabled) return;
 
-    const key = `${workflowId}:${nodeId}:${paramName}`;
-    const size = this.estimateSize(value);
-    this.parameterCache.set(key, value, size);
+    const key = `workflow:param:${workflowId}:${nodeId}:${paramName}`;
+    await cacheService.setJSON(key, value, WORKFLOW_CACHE_CATEGORY, CacheTTL.MEDIUM);
   }
 
   /**
-   * Get cached parameter value
+   * Get cached parameter value (SQLite)
    */
-  getCachedParameter(
+  async getCachedParameter(
     workflowId: string,
     nodeId: string,
     paramName: string
-  ): NodeParameterValue | undefined {
+  ): Promise<NodeParameterValue | undefined> {
     if (!this.enabled) return undefined;
 
-    const key = `${workflowId}:${nodeId}:${paramName}`;
-    return this.parameterCache.get(key);
+    const key = `workflow:param:${workflowId}:${nodeId}:${paramName}`;
+    const result = await cacheService.getJSON<NodeParameterValue>(key);
+
+    if (result !== null) {
+      this.sqliteHits++;
+      return result;
+    }
+    this.sqliteMisses++;
+    return undefined;
   }
 
   /**
-   * Cache expression evaluation result
+   * Cache expression evaluation result (SQLite - persistent)
    */
-  cacheExpression(expression: string, contextHash: string, result: any): void {
+  async cacheExpression(expression: string, contextHash: string, result: any): Promise<void> {
     if (!this.enabled) return;
 
-    const key = `${expression}:${contextHash}`;
-    const size = this.estimateSize(result);
-    this.expressionCache.set(key, result, size);
+    const key = `workflow:expr:${contextHash}:${hashData(expression)}`;
+    await cacheService.setJSON(key, result, WORKFLOW_CACHE_CATEGORY, CacheTTL.MEDIUM);
   }
 
   /**
-   * Get cached expression result
+   * Get cached expression result (SQLite)
    */
-  getCachedExpression(expression: string, contextHash: string): any | undefined {
+  async getCachedExpression(expression: string, contextHash: string): Promise<any | undefined> {
     if (!this.enabled) return undefined;
 
-    const key = `${expression}:${contextHash}`;
-    return this.expressionCache.get(key);
+    const key = `workflow:expr:${contextHash}:${hashData(expression)}`;
+    const result = await cacheService.getJSON(key);
+
+    if (result !== null) {
+      this.sqliteHits++;
+      return result;
+    }
+    this.sqliteMisses++;
+    return undefined;
   }
 
   /**
    * Invalidate all caches for a workflow
    */
-  invalidateWorkflow(workflowId: string): void {
-    // Invalidate execution cache
-    for (const key of this.executionCache.keys()) {
-      if (key.startsWith(`${workflowId}:`)) {
-        this.executionCache.delete(key);
-      }
-    }
+  async invalidateWorkflow(workflowId: string): Promise<void> {
+    // Invalidate SQLite caches
+    await cacheService.invalidatePattern(`workflow:%:${workflowId}:%`);
 
-    // Invalidate node output cache
+    // Invalidate in-memory caches
+    this.graphCache.delete(workflowId);
+
     for (const key of this.nodeOutputCache.keys()) {
       if (key.startsWith(`${workflowId}:`)) {
         this.nodeOutputCache.delete(key);
-      }
-    }
-
-    // Invalidate graph cache
-    this.graphCache.delete(workflowId);
-
-    // Invalidate parameter cache
-    for (const key of this.parameterCache.keys()) {
-      if (key.startsWith(`${workflowId}:`)) {
-        this.parameterCache.delete(key);
       }
     }
   }
@@ -405,18 +297,14 @@ export class WorkflowCache {
   /**
    * Invalidate cache for a specific node
    */
-  invalidateNode(workflowId: string, nodeId: string): void {
-    // Invalidate node output cache
+  async invalidateNode(workflowId: string, nodeId: string): Promise<void> {
+    // Invalidate SQLite parameter cache
+    await cacheService.invalidatePattern(`workflow:param:${workflowId}:${nodeId}:%`);
+
+    // Invalidate in-memory node output cache
     for (const key of this.nodeOutputCache.keys()) {
       if (key.startsWith(`${workflowId}:${nodeId}:`)) {
         this.nodeOutputCache.delete(key);
-      }
-    }
-
-    // Invalidate parameter cache
-    for (const key of this.parameterCache.keys()) {
-      if (key.startsWith(`${workflowId}:${nodeId}:`)) {
-        this.parameterCache.delete(key);
       }
     }
   }
@@ -424,21 +312,24 @@ export class WorkflowCache {
   /**
    * Clear all caches
    */
-  clearAll(): void {
-    this.executionCache.clear();
-    this.nodeOutputCache.clear();
+  async clearAll(): Promise<void> {
+    // Clear SQLite cache
+    await cacheService.invalidateCategory(WORKFLOW_CACHE_CATEGORY);
+
+    // Clear in-memory caches
     this.graphCache.clear();
-    this.parameterCache.clear();
-    this.expressionCache.clear();
+    this.nodeOutputCache.clear();
+    this.sqliteHits = 0;
+    this.sqliteMisses = 0;
   }
 
   /**
    * Enable/disable caching
    */
-  setEnabled(enabled: boolean): void {
+  async setEnabled(enabled: boolean): Promise<void> {
     this.enabled = enabled;
     if (!enabled) {
-      this.clearAll();
+      await this.clearAll();
     }
   }
 
@@ -450,83 +341,65 @@ export class WorkflowCache {
   }
 
   /**
-   * Get comprehensive cache statistics
+   * Get cache statistics
    */
-  getStats(): {
-    execution: ICacheStats;
-    nodeOutput: ICacheStats;
+  async getStats(): Promise<{
     graph: ICacheStats;
-    parameter: ICacheStats;
-    expression: ICacheStats;
+    nodeOutput: ICacheStats;
+    sqlite: ICacheStats;
     total: {
       hits: number;
       misses: number;
       hitRate: number;
-      totalSize: number;
       totalEntries: number;
     };
-  } {
-    const executionStats = this.executionCache.getStats();
-    const nodeOutputStats = this.nodeOutputCache.getStats();
+  }> {
     const graphStats = this.graphCache.getStats();
-    const parameterStats = this.parameterCache.getStats();
-    const expressionStats = this.expressionCache.getStats();
+    const nodeOutputStats = this.nodeOutputCache.getStats();
 
-    const totalHits =
-      executionStats.hits +
-      nodeOutputStats.hits +
-      graphStats.hits +
-      parameterStats.hits +
-      expressionStats.hits;
+    // Get SQLite stats
+    const rustStats = await cacheService.stats();
+    const workflowEntries = rustStats?.categories.find(c => c.category === WORKFLOW_CACHE_CATEGORY);
 
-    const totalMisses =
-      executionStats.misses +
-      nodeOutputStats.misses +
-      graphStats.misses +
-      parameterStats.misses +
-      expressionStats.misses;
+    const sqliteStats: ICacheStats = {
+      hits: this.sqliteHits,
+      misses: this.sqliteMisses,
+      size: workflowEntries?.total_size ?? 0,
+      entries: workflowEntries?.entry_count ?? 0,
+      hitRate: (this.sqliteHits + this.sqliteMisses) > 0
+        ? this.sqliteHits / (this.sqliteHits + this.sqliteMisses)
+        : 0,
+    };
 
+    const totalHits = graphStats.hits + nodeOutputStats.hits + this.sqliteHits;
+    const totalMisses = graphStats.misses + nodeOutputStats.misses + this.sqliteMisses;
     const total = totalHits + totalMisses;
 
     return {
-      execution: executionStats,
-      nodeOutput: nodeOutputStats,
       graph: graphStats,
-      parameter: parameterStats,
-      expression: expressionStats,
+      nodeOutput: nodeOutputStats,
+      sqlite: sqliteStats,
       total: {
         hits: totalHits,
         misses: totalMisses,
         hitRate: total > 0 ? totalHits / total : 0,
-        totalSize:
-          executionStats.size +
-          nodeOutputStats.size +
-          graphStats.size +
-          parameterStats.size +
-          expressionStats.size,
-        totalEntries:
-          executionStats.entries +
-          nodeOutputStats.entries +
-          graphStats.entries +
-          parameterStats.entries +
-          expressionStats.entries,
+        totalEntries: graphStats.entries + nodeOutputStats.entries + sqliteStats.entries,
       },
     };
   }
 
   /**
-   * Start periodic cleanup of expired entries
+   * Start periodic cleanup
    */
   private startCleanup(): void {
     if (this.cleanupInterval) return;
 
     this.cleanupInterval = setInterval(() => {
-      this.executionCache.cleanup();
-      this.nodeOutputCache.cleanup();
       this.graphCache.cleanup();
-      this.parameterCache.cleanup();
-      this.expressionCache.cleanup();
-    }, 60 * 1000); // Cleanup every minute
+      this.nodeOutputCache.cleanup();
+      // SQLite cleanup is handled by Rust cache_cleanup
+      cacheService.cleanup();
+    }, 60 * 1000);
   }
 
   /**
@@ -537,27 +410,6 @@ export class WorkflowCache {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
-  }
-
-  /**
-   * Estimate size of data for cache management
-   */
-  private estimateSize(data: any): number {
-    if (data === null || data === undefined) return 1;
-
-    if (typeof data === 'string') return data.length;
-    if (typeof data === 'number') return 8;
-    if (typeof data === 'boolean') return 4;
-
-    if (Array.isArray(data)) {
-      return data.reduce((sum: number, item) => sum + this.estimateSize(item), 10);
-    }
-
-    if (typeof data === 'object') {
-      return Object.values(data).reduce((sum: number, value) => sum + this.estimateSize(value), 10);
-    }
-
-    return 1;
   }
 }
 
@@ -570,20 +422,20 @@ export const globalWorkflowCache = new WorkflowCache();
  * Hash function for creating cache keys
  */
 export function hashData(data: any): string {
-  const str = JSON.stringify(data);
+  const str = typeof data === 'string' ? data : JSON.stringify(data);
   let hash = 0;
 
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
 
   return hash.toString(36);
 }
 
 /**
- * Memoize function results
+ * Memoize function results (in-memory only)
  */
 export function memoize<T extends (...args: any[]) => any>(
   fn: T,

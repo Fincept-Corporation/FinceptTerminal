@@ -1,5 +1,5 @@
 // File: src/components/tabs/MonitoringTab.tsx
-// Professional Bloomberg Terminal-Grade Market Monitoring Interface
+// Professional Fincept Terminal-Grade Market Monitoring Interface
 
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -31,8 +31,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useBrokerContext } from '@/contexts/BrokerContext';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -227,20 +227,20 @@ export default function MonitoringTab() {
   });
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-      {/* Bloomberg-Style Header */}
+    <div className="h-full flex flex-col" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+      {/* Fincept-Style Header */}
       <div
         className="px-6 py-4 border-b flex items-center justify-between"
-        style={{ backgroundColor: BLOOMBERG.HEADER_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.HEADER_BG, borderColor: FINCEPT.BORDER }}
       >
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <Bell className="w-6 h-6" style={{ color: BLOOMBERG.ORANGE }} />
+            <Bell className="w-6 h-6" style={{ color: FINCEPT.ORANGE }} />
             <div>
-              <h1 className="text-xl font-bold" style={{ color: BLOOMBERG.WHITE }}>
+              <h1 className="text-xl font-bold" style={{ color: FINCEPT.WHITE }}>
                 MARKET MONITORING
               </h1>
-              <p className="text-xs" style={{ color: BLOOMBERG.MUTED }}>
+              <p className="text-xs" style={{ color: FINCEPT.MUTED }}>
                 Real-time Alert System
               </p>
             </div>
@@ -252,9 +252,9 @@ export default function MonitoringTab() {
               onClick={() => setSelectedView('conditions')}
               className="px-4 py-2 text-sm font-mono transition-colors"
               style={{
-                backgroundColor: selectedView === 'conditions' ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                color: selectedView === 'conditions' ? BLOOMBERG.DARK_BG : BLOOMBERG.MUTED,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: selectedView === 'conditions' ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+                color: selectedView === 'conditions' ? FINCEPT.DARK_BG : FINCEPT.MUTED,
+                border: `1px solid ${FINCEPT.BORDER}`,
               }}
             >
               CONDITIONS ({conditions.length})
@@ -263,9 +263,9 @@ export default function MonitoringTab() {
               onClick={() => setSelectedView('alerts')}
               className="px-4 py-2 text-sm font-mono transition-colors"
               style={{
-                backgroundColor: selectedView === 'alerts' ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                color: selectedView === 'alerts' ? BLOOMBERG.DARK_BG : BLOOMBERG.MUTED,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: selectedView === 'alerts' ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+                color: selectedView === 'alerts' ? FINCEPT.DARK_BG : FINCEPT.MUTED,
+                border: `1px solid ${FINCEPT.BORDER}`,
               }}
             >
               ALERTS ({alerts.length})
@@ -275,7 +275,7 @@ export default function MonitoringTab() {
 
         <div className="flex items-center gap-4">
           {/* Time Display */}
-          <div className="flex items-center gap-2" style={{ color: BLOOMBERG.CYAN }}>
+          <div className="flex items-center gap-2" style={{ color: FINCEPT.CYAN }}>
             <Clock className="w-4 h-4" />
             <span className="text-sm font-mono">
               {currentTime.toLocaleTimeString('en-US', { hour12: false })}
@@ -283,9 +283,9 @@ export default function MonitoringTab() {
           </div>
 
           {/* Stats */}
-          <div className="flex items-center gap-2 px-3 py-1.5 border rounded" style={{ borderColor: BLOOMBERG.BORDER }}>
-            <CheckCircle className="w-4 h-4" style={{ color: BLOOMBERG.GREEN }} />
-            <span className="text-sm font-mono" style={{ color: BLOOMBERG.WHITE }}>
+          <div className="flex items-center gap-2 px-3 py-1.5 border rounded" style={{ borderColor: FINCEPT.BORDER }}>
+            <CheckCircle className="w-4 h-4" style={{ color: FINCEPT.GREEN }} />
+            <span className="text-sm font-mono" style={{ color: FINCEPT.WHITE }}>
               {conditions.filter(c => c.enabled).length} ACTIVE
             </span>
           </div>
@@ -295,8 +295,8 @@ export default function MonitoringTab() {
             onClick={() => setShowAddForm(!showAddForm)}
             className="px-4 py-2 font-mono text-sm transition-all hover:brightness-110"
             style={{
-              backgroundColor: BLOOMBERG.ORANGE,
-              color: BLOOMBERG.DARK_BG,
+              backgroundColor: FINCEPT.ORANGE,
+              color: FINCEPT.DARK_BG,
             }}
           >
             <Plus className="w-4 h-4 inline mr-2" />
@@ -309,12 +309,12 @@ export default function MonitoringTab() {
       {showAddForm && (
         <div
           className="px-6 py-4 border-b"
-          style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+          style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
         >
           <div className="grid grid-cols-6 gap-4">
             {/* Provider */}
             <div>
-              <label className="block text-xs mb-2 font-mono" style={{ color: BLOOMBERG.ORANGE }}>
+              <label className="block text-xs mb-2 font-mono" style={{ color: FINCEPT.ORANGE }}>
                 PROVIDER
               </label>
               <select
@@ -322,9 +322,9 @@ export default function MonitoringTab() {
                 onChange={(e) => setNewCondition({ ...newCondition, provider: e.target.value })}
                 className="w-full px-3 py-2 text-sm font-mono border outline-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  borderColor: BLOOMBERG.BORDER,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  borderColor: FINCEPT.BORDER,
                 }}
               >
                 {allProviders.map((broker) => (
@@ -337,7 +337,7 @@ export default function MonitoringTab() {
 
             {/* Symbol */}
             <div>
-              <label className="block text-xs mb-2 font-mono" style={{ color: BLOOMBERG.ORANGE }}>
+              <label className="block text-xs mb-2 font-mono" style={{ color: FINCEPT.ORANGE }}>
                 SYMBOL
               </label>
               <input
@@ -347,16 +347,16 @@ export default function MonitoringTab() {
                 placeholder="BTC/USD"
                 className="w-full px-3 py-2 text-sm font-mono border outline-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  borderColor: BLOOMBERG.BORDER,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  borderColor: FINCEPT.BORDER,
                 }}
               />
             </div>
 
             {/* Field */}
             <div>
-              <label className="block text-xs mb-2 font-mono" style={{ color: BLOOMBERG.ORANGE }}>
+              <label className="block text-xs mb-2 font-mono" style={{ color: FINCEPT.ORANGE }}>
                 FIELD
               </label>
               <select
@@ -364,9 +364,9 @@ export default function MonitoringTab() {
                 onChange={(e) => setNewCondition({ ...newCondition, field: e.target.value as any })}
                 className="w-full px-3 py-2 text-sm font-mono border outline-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  borderColor: BLOOMBERG.BORDER,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  borderColor: FINCEPT.BORDER,
                 }}
               >
                 <option value="price">PRICE</option>
@@ -378,7 +378,7 @@ export default function MonitoringTab() {
 
             {/* Operator */}
             <div>
-              <label className="block text-xs mb-2 font-mono" style={{ color: BLOOMBERG.ORANGE }}>
+              <label className="block text-xs mb-2 font-mono" style={{ color: FINCEPT.ORANGE }}>
                 OPERATOR
               </label>
               <select
@@ -386,9 +386,9 @@ export default function MonitoringTab() {
                 onChange={(e) => setNewCondition({ ...newCondition, operator: e.target.value as any })}
                 className="w-full px-3 py-2 text-sm font-mono border outline-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  borderColor: BLOOMBERG.BORDER,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  borderColor: FINCEPT.BORDER,
                 }}
               >
                 <option value=">">&gt;</option>
@@ -402,7 +402,7 @@ export default function MonitoringTab() {
 
             {/* Value */}
             <div>
-              <label className="block text-xs mb-2 font-mono" style={{ color: BLOOMBERG.ORANGE }}>
+              <label className="block text-xs mb-2 font-mono" style={{ color: FINCEPT.ORANGE }}>
                 VALUE
               </label>
               <input
@@ -411,9 +411,9 @@ export default function MonitoringTab() {
                 onChange={(e) => setNewCondition({ ...newCondition, value: parseFloat(e.target.value) })}
                 className="w-full px-3 py-2 text-sm font-mono border outline-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  borderColor: BLOOMBERG.BORDER,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  borderColor: FINCEPT.BORDER,
                 }}
               />
             </div>
@@ -425,8 +425,8 @@ export default function MonitoringTab() {
                 disabled={loading}
                 className="flex-1 px-4 py-2 font-mono text-sm transition-all hover:brightness-110"
                 style={{
-                  backgroundColor: BLOOMBERG.GREEN,
-                  color: BLOOMBERG.DARK_BG,
+                  backgroundColor: FINCEPT.GREEN,
+                  color: FINCEPT.DARK_BG,
                 }}
               >
                 ADD
@@ -435,9 +435,9 @@ export default function MonitoringTab() {
                 onClick={() => setShowAddForm(false)}
                 className="px-4 py-2 font-mono text-sm transition-all"
                 style={{
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  color: BLOOMBERG.MUTED,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.MUTED,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                 }}
               >
                 <X className="w-4 h-4" />
@@ -447,7 +447,7 @@ export default function MonitoringTab() {
 
           {newCondition.operator === 'between' && (
             <div className="mt-4">
-              <label className="block text-xs mb-2 font-mono" style={{ color: BLOOMBERG.ORANGE }}>
+              <label className="block text-xs mb-2 font-mono" style={{ color: FINCEPT.ORANGE }}>
                 VALUE 2
               </label>
               <input
@@ -456,9 +456,9 @@ export default function MonitoringTab() {
                 onChange={(e) => setNewCondition({ ...newCondition, value2: parseFloat(e.target.value) })}
                 className="w-64 px-3 py-2 text-sm font-mono border outline-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  borderColor: BLOOMBERG.BORDER,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  borderColor: FINCEPT.BORDER,
                 }}
               />
             </div>
@@ -469,17 +469,17 @@ export default function MonitoringTab() {
       {/* Filters & Search */}
       <div
         className="px-6 py-3 border-b flex items-center gap-4"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
         <div className="flex items-center gap-2 flex-1">
-          <Search className="w-4 h-4" style={{ color: BLOOMBERG.MUTED }} />
+          <Search className="w-4 h-4" style={{ color: FINCEPT.MUTED }} />
           <input
             type="text"
             placeholder="Search symbols..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent outline-none text-sm font-mono"
-            style={{ color: BLOOMBERG.WHITE }}
+            style={{ color: FINCEPT.WHITE }}
           />
         </div>
 
@@ -490,9 +490,9 @@ export default function MonitoringTab() {
               onChange={(e) => setFilterProvider(e.target.value)}
               className="px-3 py-1.5 text-sm font-mono border outline-none"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                borderColor: BLOOMBERG.BORDER,
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                borderColor: FINCEPT.BORDER,
               }}
             >
               <option value="all">ALL PROVIDERS</option>
@@ -508,9 +508,9 @@ export default function MonitoringTab() {
               onChange={(e) => setFilterField(e.target.value)}
               className="px-3 py-1.5 text-sm font-mono border outline-none"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                borderColor: BLOOMBERG.BORDER,
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                borderColor: FINCEPT.BORDER,
               }}
             >
               <option value="all">ALL FIELDS</option>
@@ -526,9 +526,9 @@ export default function MonitoringTab() {
           onClick={selectedView === 'conditions' ? loadExistingConditions : loadAlerts}
           className="px-3 py-1.5 transition-all hover:brightness-110"
           style={{
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            color: BLOOMBERG.CYAN,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.PANEL_BG,
+            color: FINCEPT.CYAN,
+            border: `1px solid ${FINCEPT.BORDER}`,
           }}
         >
           <RefreshCw className="w-4 h-4" />
@@ -542,11 +542,11 @@ export default function MonitoringTab() {
           <div className="space-y-2">
             {filteredConditions.length === 0 ? (
               <div className="text-center py-16">
-                <Bell className="w-16 h-16 mx-auto mb-4" style={{ color: BLOOMBERG.MUTED }} />
-                <p className="text-lg font-mono" style={{ color: BLOOMBERG.MUTED }}>
+                <Bell className="w-16 h-16 mx-auto mb-4" style={{ color: FINCEPT.MUTED }} />
+                <p className="text-lg font-mono" style={{ color: FINCEPT.MUTED }}>
                   NO MONITORING CONDITIONS
                 </p>
-                <p className="text-sm mt-2" style={{ color: BLOOMBERG.GRAY }}>
+                <p className="text-sm mt-2" style={{ color: FINCEPT.GRAY }}>
                   Add conditions to start monitoring market events
                 </p>
               </div>
@@ -556,8 +556,8 @@ export default function MonitoringTab() {
                   key={condition.id}
                   className="p-4 border transition-all hover:brightness-110"
                   style={{
-                    backgroundColor: BLOOMBERG.PANEL_BG,
-                    borderColor: condition.enabled ? BLOOMBERG.BORDER : BLOOMBERG.MUTED,
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    borderColor: condition.enabled ? FINCEPT.BORDER : FINCEPT.MUTED,
                   }}
                 >
                   <div className="flex items-center justify-between">
@@ -566,8 +566,8 @@ export default function MonitoringTab() {
                       <div
                         className="w-10 h-10 flex items-center justify-center"
                         style={{
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          color: BLOOMBERG.ORANGE,
+                          backgroundColor: FINCEPT.DARK_BG,
+                          color: FINCEPT.ORANGE,
                         }}
                       >
                         {getFieldIcon(condition.field)}
@@ -576,19 +576,19 @@ export default function MonitoringTab() {
                       {/* Info */}
                       <div>
                         <div className="flex items-center gap-3">
-                          <span className="text-lg font-mono font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                          <span className="text-lg font-mono font-bold" style={{ color: FINCEPT.WHITE }}>
                             {condition.symbol}
                           </span>
-                          <span className="text-xs px-2 py-0.5 font-mono" style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.CYAN }}>
+                          <span className="text-xs px-2 py-0.5 font-mono" style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.CYAN }}>
                             {condition.provider.toUpperCase()}
                           </span>
                           {!condition.enabled && (
-                            <span className="text-xs px-2 py-0.5 font-mono" style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.GRAY }}>
+                            <span className="text-xs px-2 py-0.5 font-mono" style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.GRAY }}>
                               DISABLED
                             </span>
                           )}
                         </div>
-                        <div className="text-sm font-mono mt-1" style={{ color: BLOOMBERG.MUTED }}>
+                        <div className="text-sm font-mono mt-1" style={{ color: FINCEPT.MUTED }}>
                           {condition.field.toUpperCase()} {condition.operator} {condition.value.toLocaleString()}
                           {condition.value2 && ` AND ${condition.value2.toLocaleString()}`}
                         </div>
@@ -600,8 +600,8 @@ export default function MonitoringTab() {
                       onClick={() => condition.id && deleteCondition(condition.id)}
                       className="px-3 py-2 transition-all hover:brightness-110"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        color: BLOOMBERG.RED,
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.RED,
                       }}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -616,11 +616,11 @@ export default function MonitoringTab() {
           <div className="space-y-2">
             {filteredAlerts.length === 0 ? (
               <div className="text-center py-16">
-                <AlertCircle className="w-16 h-16 mx-auto mb-4" style={{ color: BLOOMBERG.MUTED }} />
-                <p className="text-lg font-mono" style={{ color: BLOOMBERG.MUTED }}>
+                <AlertCircle className="w-16 h-16 mx-auto mb-4" style={{ color: FINCEPT.MUTED }} />
+                <p className="text-lg font-mono" style={{ color: FINCEPT.MUTED }}>
                   NO ALERTS YET
                 </p>
-                <p className="text-sm mt-2" style={{ color: BLOOMBERG.GRAY }}>
+                <p className="text-sm mt-2" style={{ color: FINCEPT.GRAY }}>
                   Alerts will appear here when conditions are triggered
                 </p>
               </div>
@@ -630,10 +630,10 @@ export default function MonitoringTab() {
                   key={alert.id || index}
                   className="p-4 border transition-all hover:brightness-110"
                   style={{
-                    backgroundColor: BLOOMBERG.PANEL_BG,
-                    borderColor: BLOOMBERG.BORDER,
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    borderColor: FINCEPT.BORDER,
                     borderLeftWidth: '4px',
-                    borderLeftColor: BLOOMBERG.YELLOW,
+                    borderLeftColor: FINCEPT.YELLOW,
                   }}
                 >
                   <div className="flex items-center justify-between">
@@ -642,8 +642,8 @@ export default function MonitoringTab() {
                       <div
                         className="w-10 h-10 flex items-center justify-center"
                         style={{
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          color: BLOOMBERG.YELLOW,
+                          backgroundColor: FINCEPT.DARK_BG,
+                          color: FINCEPT.YELLOW,
                         }}
                       >
                         <Bell className="w-5 h-5" />
@@ -652,21 +652,21 @@ export default function MonitoringTab() {
                       {/* Info */}
                       <div>
                         <div className="flex items-center gap-3">
-                          <span className="text-lg font-mono font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                          <span className="text-lg font-mono font-bold" style={{ color: FINCEPT.WHITE }}>
                             {alert.symbol}
                           </span>
-                          <span className="text-xs px-2 py-0.5 font-mono" style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.CYAN }}>
+                          <span className="text-xs px-2 py-0.5 font-mono" style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.CYAN }}>
                             {alert.provider.toUpperCase()}
                           </span>
                         </div>
-                        <div className="text-sm font-mono mt-1" style={{ color: BLOOMBERG.MUTED }}>
+                        <div className="text-sm font-mono mt-1" style={{ color: FINCEPT.MUTED }}>
                           {alert.field.toUpperCase()}: {alert.triggered_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                     </div>
 
                     {/* Timestamp */}
-                    <div className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                    <div className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
                       {new Date(alert.triggered_at).toLocaleString()}
                     </div>
                   </div>

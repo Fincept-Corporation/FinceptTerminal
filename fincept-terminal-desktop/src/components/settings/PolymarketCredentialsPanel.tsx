@@ -1,5 +1,5 @@
 // File: src/components/settings/PolymarketCredentialsPanel.tsx
-// Polymarket API credentials management panel - Bloomberg Terminal Style
+// Polymarket API credentials management panel - Fincept Terminal Style
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -24,8 +24,8 @@ import {
 import polymarketServiceEnhanced from '@/services/polymarket/polymarketServiceEnhanced';
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -302,13 +302,13 @@ export const PolymarketCredentialsPanel: React.FC = () => {
   // Button style helper
   const btnStyle = (color: string, isDisabled?: boolean) => ({
     padding: '6px 12px',
-    backgroundColor: isDisabled ? BLOOMBERG.MUTED : color,
+    backgroundColor: isDisabled ? FINCEPT.MUTED : color,
     border: 'none',
-    color: color === BLOOMBERG.ORANGE ? '#000' : BLOOMBERG.WHITE,
+    color: color === FINCEPT.ORANGE ? '#000' : FINCEPT.WHITE,
     cursor: isDisabled ? 'not-allowed' : 'pointer',
     fontSize: '10px',
     fontWeight: 600,
-    fontFamily: BLOOMBERG.FONT,
+    fontFamily: FINCEPT.FONT,
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
@@ -318,25 +318,25 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
   return (
     <div style={{
-      fontFamily: BLOOMBERG.FONT,
-      color: BLOOMBERG.WHITE,
-      backgroundColor: BLOOMBERG.DARK_BG,
+      fontFamily: FINCEPT.FONT,
+      color: FINCEPT.WHITE,
+      backgroundColor: FINCEPT.DARK_BG,
     }}>
       {/* Header */}
       <div style={{
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
         padding: '12px 0',
         marginBottom: '16px',
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
       }}>
-        <Shield size={20} color={BLOOMBERG.ORANGE} />
+        <Shield size={20} color={FINCEPT.ORANGE} />
         <div>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: '14px', fontWeight: 700, letterSpacing: '0.5px' }}>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: '14px', fontWeight: 700, letterSpacing: '0.5px' }}>
             POLYMARKET API CREDENTIALS
           </div>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px', marginTop: '2px' }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginTop: '2px' }}>
             Manage API credentials for trading and portfolio access
           </div>
         </div>
@@ -350,15 +350,15 @@ export const PolymarketCredentialsPanel: React.FC = () => {
           gap: '8px',
           padding: '10px 12px',
           marginBottom: '16px',
-          backgroundColor: testResult.success ? `${BLOOMBERG.GREEN}15` : `${BLOOMBERG.RED}15`,
-          border: `1px solid ${testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+          backgroundColor: testResult.success ? `${FINCEPT.GREEN}15` : `${FINCEPT.RED}15`,
+          border: `1px solid ${testResult.success ? FINCEPT.GREEN : FINCEPT.RED}`,
         }}>
           {testResult.success ? (
-            <CheckCircle size={16} color={BLOOMBERG.GREEN} />
+            <CheckCircle size={16} color={FINCEPT.GREEN} />
           ) : (
-            <XCircle size={16} color={BLOOMBERG.RED} />
+            <XCircle size={16} color={FINCEPT.RED} />
           )}
-          <span style={{ color: testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED, fontSize: '11px' }}>
+          <span style={{ color: testResult.success ? FINCEPT.GREEN : FINCEPT.RED, fontSize: '11px' }}>
             {testResult.message}
           </span>
         </div>
@@ -371,19 +371,19 @@ export const PolymarketCredentialsPanel: React.FC = () => {
         gap: '10px',
         padding: '12px',
         marginBottom: '16px',
-        backgroundColor: `${BLOOMBERG.BLUE}10`,
-        border: `1px solid ${BLOOMBERG.BLUE}40`,
+        backgroundColor: `${FINCEPT.BLUE}10`,
+        border: `1px solid ${FINCEPT.BLUE}40`,
       }}>
-        <AlertCircle size={16} color={BLOOMBERG.BLUE} style={{ flexShrink: 0, marginTop: '2px' }} />
-        <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN, lineHeight: 1.5 }}>
+        <AlertCircle size={16} color={FINCEPT.BLUE} style={{ flexShrink: 0, marginTop: '2px' }} />
+        <div style={{ fontSize: '10px', color: FINCEPT.CYAN, lineHeight: 1.5 }}>
           <div style={{ fontWeight: 600, marginBottom: '6px' }}>TWO WAYS TO GET CREDENTIALS:</div>
-          <div style={{ marginBottom: '4px' }}>1. <span style={{ color: BLOOMBERG.ORANGE }}>WALLET CONNECTION</span> - Auto-generate from MetaMask</div>
-          <div style={{ marginBottom: '8px' }}>2. <span style={{ color: BLOOMBERG.BLUE }}>MANUAL ENTRY</span> - Enter existing credentials</div>
+          <div style={{ marginBottom: '4px' }}>1. <span style={{ color: FINCEPT.ORANGE }}>WALLET CONNECTION</span> - Auto-generate from MetaMask</div>
+          <div style={{ marginBottom: '8px' }}>2. <span style={{ color: FINCEPT.BLUE }}>MANUAL ENTRY</span> - Enter existing credentials</div>
           <a
             href="https://docs.polymarket.com/developers/CLOB/authentication"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: BLOOMBERG.CYAN, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            style={{ color: FINCEPT.CYAN, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
           >
             Documentation <ExternalLink size={10} />
           </a>
@@ -393,8 +393,8 @@ export const PolymarketCredentialsPanel: React.FC = () => {
       {/* Current Credentials Display */}
       {credentials && !isEditing && (
         <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           padding: '16px',
           marginBottom: '16px',
         }}>
@@ -405,17 +405,17 @@ export const PolymarketCredentialsPanel: React.FC = () => {
             justifyContent: 'space-between',
             marginBottom: '16px',
             paddingBottom: '12px',
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CheckCircle size={16} color={BLOOMBERG.GREEN} />
-              <span style={{ color: BLOOMBERG.GREEN, fontSize: '12px', fontWeight: 600 }}>CREDENTIALS ACTIVE</span>
+              <CheckCircle size={16} color={FINCEPT.GREEN} />
+              <span style={{ color: FINCEPT.GREEN, fontSize: '12px', fontWeight: 600 }}>CREDENTIALS ACTIVE</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: BLOOMBERG.MUTED, fontSize: '9px' }}>
+              <span style={{ color: FINCEPT.MUTED, fontSize: '9px' }}>
                 METHOD: {credentials.method === 'wallet' ? 'WALLET' : 'MANUAL'}
               </span>
-              {credentials.method === 'wallet' && <Wallet size={12} color={BLOOMBERG.BLUE} />}
+              {credentials.method === 'wallet' && <Wallet size={12} color={FINCEPT.BLUE} />}
             </div>
           </div>
 
@@ -424,18 +424,18 @@ export const PolymarketCredentialsPanel: React.FC = () => {
             {/* Wallet Address */}
             {credentials.walletAddress && (
               <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>WALLET ADDRESS</div>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>WALLET ADDRESS</div>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  backgroundColor: BLOOMBERG.INPUT_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.INPUT_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   padding: '8px 10px',
                 }}>
-                  <code style={{ flex: 1, color: BLOOMBERG.CYAN, fontSize: '11px' }}>{credentials.walletAddress}</code>
+                  <code style={{ flex: 1, color: FINCEPT.CYAN, fontSize: '11px' }}>{credentials.walletAddress}</code>
                   <button onClick={() => handleCopy(credentials.walletAddress!, 'Address')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                    <Copy size={12} color={BLOOMBERG.GRAY} />
+                    <Copy size={12} color={FINCEPT.GRAY} />
                   </button>
                 </div>
               </div>
@@ -443,67 +443,67 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
             {/* API Key */}
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API KEY</div>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API KEY</div>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                backgroundColor: BLOOMBERG.INPUT_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.INPUT_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 padding: '8px 10px',
               }}>
-                <code style={{ flex: 1, color: BLOOMBERG.WHITE, fontSize: '11px' }}>
+                <code style={{ flex: 1, color: FINCEPT.WHITE, fontSize: '11px' }}>
                   {showSecrets ? credentials.apiKey : '••••••••••••••••••••'}
                 </code>
                 <button onClick={() => handleCopy(credentials.apiKey, 'API Key')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                  <Copy size={12} color={BLOOMBERG.GRAY} />
+                  <Copy size={12} color={FINCEPT.GRAY} />
                 </button>
               </div>
             </div>
 
             {/* API Secret */}
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API SECRET</div>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API SECRET</div>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                backgroundColor: BLOOMBERG.INPUT_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.INPUT_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 padding: '8px 10px',
               }}>
-                <code style={{ flex: 1, color: BLOOMBERG.WHITE, fontSize: '11px' }}>
+                <code style={{ flex: 1, color: FINCEPT.WHITE, fontSize: '11px' }}>
                   {showSecrets ? credentials.apiSecret : '••••••••••••••••••••'}
                 </code>
                 <button onClick={() => handleCopy(credentials.apiSecret, 'API Secret')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                  <Copy size={12} color={BLOOMBERG.GRAY} />
+                  <Copy size={12} color={FINCEPT.GRAY} />
                 </button>
               </div>
             </div>
 
             {/* API Passphrase */}
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API PASSPHRASE</div>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>API PASSPHRASE</div>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                backgroundColor: BLOOMBERG.INPUT_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.INPUT_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 padding: '8px 10px',
               }}>
-                <code style={{ flex: 1, color: BLOOMBERG.WHITE, fontSize: '11px' }}>
+                <code style={{ flex: 1, color: FINCEPT.WHITE, fontSize: '11px' }}>
                   {showSecrets ? credentials.apiPassphrase : '••••••••••••••••••••'}
                 </code>
                 <button onClick={() => handleCopy(credentials.apiPassphrase, 'Passphrase')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                  <Copy size={12} color={BLOOMBERG.GRAY} />
+                  <Copy size={12} color={FINCEPT.GRAY} />
                 </button>
               </div>
             </div>
 
             {/* Created Date */}
             {credentials.createdAt && (
-              <div style={{ color: BLOOMBERG.MUTED, fontSize: '9px' }}>
+              <div style={{ color: FINCEPT.MUTED, fontSize: '9px' }}>
                 CREATED: {new Date(credentials.createdAt).toLocaleString()}
               </div>
             )}
@@ -516,26 +516,26 @@ export const PolymarketCredentialsPanel: React.FC = () => {
             gap: '8px',
             marginTop: '16px',
             paddingTop: '12px',
-            borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
             flexWrap: 'wrap',
           }}>
-            <button onClick={() => setShowSecrets(!showSecrets)} style={btnStyle(BLOOMBERG.HEADER_BG)}>
+            <button onClick={() => setShowSecrets(!showSecrets)} style={btnStyle(FINCEPT.HEADER_BG)}>
               {showSecrets ? <EyeOff size={12} /> : <Eye size={12} />}
               {showSecrets ? 'HIDE' : 'SHOW'}
             </button>
-            <button onClick={handleTest} disabled={isTesting} style={btnStyle(BLOOMBERG.BLUE, isTesting)}>
+            <button onClick={handleTest} disabled={isTesting} style={btnStyle(FINCEPT.BLUE, isTesting)}>
               {isTesting ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
               TEST
             </button>
-            <button onClick={handleExport} style={btnStyle(BLOOMBERG.HEADER_BG)}>
+            <button onClick={handleExport} style={btnStyle(FINCEPT.HEADER_BG)}>
               <Download size={12} />
               EXPORT
             </button>
-            <button onClick={() => setIsEditing(true)} style={btnStyle(BLOOMBERG.ORANGE)}>
+            <button onClick={() => setIsEditing(true)} style={btnStyle(FINCEPT.ORANGE)}>
               <Key size={12} />
               UPDATE
             </button>
-            <button onClick={handleDelete} style={{ ...btnStyle(BLOOMBERG.RED), marginLeft: 'auto' }}>
+            <button onClick={handleDelete} style={{ ...btnStyle(FINCEPT.RED), marginLeft: 'auto' }}>
               <Trash2 size={12} />
               DELETE
             </button>
@@ -553,30 +553,30 @@ export const PolymarketCredentialsPanel: React.FC = () => {
               onClick={handleWalletConnect}
               disabled={isConnecting}
               style={{
-                backgroundColor: BLOOMBERG.PANEL_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 padding: '20px',
                 textAlign: 'left',
                 cursor: isConnecting ? 'not-allowed' : 'pointer',
                 opacity: isConnecting ? 0.6 : 1,
                 transition: 'border-color 0.2s',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                <Wallet size={20} color={BLOOMBERG.ORANGE} />
-                <span style={{ color: BLOOMBERG.WHITE, fontSize: '12px', fontWeight: 600 }}>WALLET CONNECTION</span>
+                <Wallet size={20} color={FINCEPT.ORANGE} />
+                <span style={{ color: FINCEPT.WHITE, fontSize: '12px', fontWeight: 600 }}>WALLET CONNECTION</span>
               </div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px', marginBottom: '10px', lineHeight: 1.4 }}>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '10px', lineHeight: 1.4 }}>
                 Connect MetaMask to auto-generate API credentials
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.GREEN, fontSize: '9px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: FINCEPT.GREEN, fontSize: '9px' }}>
                 <CheckCircle size={12} />
                 RECOMMENDED
               </div>
               {isConnecting && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.ORANGE, fontSize: '10px', marginTop: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: FINCEPT.ORANGE, fontSize: '10px', marginTop: '10px' }}>
                   <RefreshCw size={12} className="animate-spin" />
                   CONNECTING...
                 </div>
@@ -587,24 +587,24 @@ export const PolymarketCredentialsPanel: React.FC = () => {
             <button
               onClick={() => { setIsEditing(true); setTestResult(null); }}
               style={{
-                backgroundColor: BLOOMBERG.PANEL_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 padding: '20px',
                 textAlign: 'left',
                 cursor: 'pointer',
                 transition: 'border-color 0.2s',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BLUE; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = FINCEPT.BLUE; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                <Key size={20} color={BLOOMBERG.BLUE} />
-                <span style={{ color: BLOOMBERG.WHITE, fontSize: '12px', fontWeight: 600 }}>MANUAL ENTRY</span>
+                <Key size={20} color={FINCEPT.BLUE} />
+                <span style={{ color: FINCEPT.WHITE, fontSize: '12px', fontWeight: 600 }}>MANUAL ENTRY</span>
               </div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px', marginBottom: '10px', lineHeight: 1.4 }}>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '10px', lineHeight: 1.4 }}>
                 Enter existing API credentials from Polymarket
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.MUTED, fontSize: '9px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: FINCEPT.MUTED, fontSize: '9px' }}>
                 <LinkIcon size={12} />
                 FOR EXISTING CREDENTIALS
               </div>
@@ -614,20 +614,20 @@ export const PolymarketCredentialsPanel: React.FC = () => {
           {/* Manual Entry Form */}
           {isEditing && (
             <div style={{
-              backgroundColor: BLOOMBERG.PANEL_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
               padding: '16px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Key size={16} color={BLOOMBERG.ORANGE} />
-                <span style={{ color: BLOOMBERG.WHITE, fontSize: '12px', fontWeight: 600 }}>ENTER API CREDENTIALS</span>
+                <Key size={16} color={FINCEPT.ORANGE} />
+                <span style={{ color: FINCEPT.WHITE, fontSize: '12px', fontWeight: 600 }}>ENTER API CREDENTIALS</span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {/* API Key */}
                 <div>
-                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
-                    API KEY <span style={{ color: BLOOMBERG.RED }}>*</span>
+                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                    API KEY <span style={{ color: FINCEPT.RED }}>*</span>
                   </div>
                   <input
                     type="text"
@@ -636,23 +636,23 @@ export const PolymarketCredentialsPanel: React.FC = () => {
                     placeholder="Enter your API key"
                     style={{
                       width: '100%',
-                      backgroundColor: BLOOMBERG.INPUT_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      backgroundColor: FINCEPT.INPUT_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
                       padding: '10px 12px',
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       fontSize: '11px',
-                      fontFamily: BLOOMBERG.FONT,
+                      fontFamily: FINCEPT.FONT,
                       outline: 'none',
                     }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
                   />
                 </div>
 
                 {/* API Secret */}
                 <div>
-                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
-                    API SECRET <span style={{ color: BLOOMBERG.RED }}>*</span>
+                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                    API SECRET <span style={{ color: FINCEPT.RED }}>*</span>
                   </div>
                   <input
                     type="password"
@@ -661,23 +661,23 @@ export const PolymarketCredentialsPanel: React.FC = () => {
                     placeholder="Enter your API secret"
                     style={{
                       width: '100%',
-                      backgroundColor: BLOOMBERG.INPUT_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      backgroundColor: FINCEPT.INPUT_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
                       padding: '10px 12px',
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       fontSize: '11px',
-                      fontFamily: BLOOMBERG.FONT,
+                      fontFamily: FINCEPT.FONT,
                       outline: 'none',
                     }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
                   />
                 </div>
 
                 {/* API Passphrase */}
                 <div>
-                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
-                    API PASSPHRASE <span style={{ color: BLOOMBERG.RED }}>*</span>
+                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                    API PASSPHRASE <span style={{ color: FINCEPT.RED }}>*</span>
                   </div>
                   <input
                     type="password"
@@ -686,26 +686,26 @@ export const PolymarketCredentialsPanel: React.FC = () => {
                     placeholder="Enter your API passphrase"
                     style={{
                       width: '100%',
-                      backgroundColor: BLOOMBERG.INPUT_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      backgroundColor: FINCEPT.INPUT_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
                       padding: '10px 12px',
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       fontSize: '11px',
-                      fontFamily: BLOOMBERG.FONT,
+                      fontFamily: FINCEPT.FONT,
                       outline: 'none',
                     }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.ORANGE; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
                   />
                 </div>
 
                 {/* Import Option */}
-                <div style={{ paddingTop: '8px', borderTop: `1px solid ${BLOOMBERG.BORDER}` }}>
+                <div style={{ paddingTop: '8px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
                   <label style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     fontSize: '10px',
                     cursor: 'pointer',
                   }}>
@@ -717,14 +717,14 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
                 {/* Actions */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                  <button onClick={handleManualSave} style={btnStyle(BLOOMBERG.ORANGE)}>
+                  <button onClick={handleManualSave} style={btnStyle(FINCEPT.ORANGE)}>
                     <Save size={12} />
                     SAVE CREDENTIALS
                   </button>
                   {credentials && (
                     <button
                       onClick={() => { setIsEditing(false); setFormData({ apiKey: '', apiSecret: '', apiPassphrase: '' }); }}
-                      style={btnStyle(BLOOMBERG.HEADER_BG)}
+                      style={btnStyle(FINCEPT.HEADER_BG)}
                     >
                       CANCEL
                     </button>
@@ -738,33 +738,33 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
       {/* Help Section */}
       <div style={{
-        backgroundColor: `${BLOOMBERG.PANEL_BG}80`,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: `${FINCEPT.PANEL_BG}80`,
+        border: `1px solid ${FINCEPT.BORDER}`,
         padding: '16px',
         marginTop: '16px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-          <AlertCircle size={14} color={BLOOMBERG.ORANGE} />
-          <span style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 600 }}>NEED HELP?</span>
+          <AlertCircle size={14} color={FINCEPT.ORANGE} />
+          <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 600 }}>NEED HELP?</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '10px', color: BLOOMBERG.GRAY, lineHeight: 1.5 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '10px', color: FINCEPT.GRAY, lineHeight: 1.5 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
-            <span><span style={{ color: BLOOMBERG.WHITE }}>No credentials?</span> Use wallet connection to auto-generate</span>
+            <span style={{ color: FINCEPT.ORANGE }}>&#8226;</span>
+            <span><span style={{ color: FINCEPT.WHITE }}>No credentials?</span> Use wallet connection to auto-generate</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
-            <span><span style={{ color: BLOOMBERG.WHITE }}>Already have credentials?</span> Enter manually or import from file</span>
+            <span style={{ color: FINCEPT.ORANGE }}>&#8226;</span>
+            <span><span style={{ color: FINCEPT.WHITE }}>Already have credentials?</span> Enter manually or import from file</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
-            <span><span style={{ color: BLOOMBERG.WHITE }}>Security:</span> Credentials stored locally, never sent to our servers</span>
+            <span style={{ color: FINCEPT.ORANGE }}>&#8226;</span>
+            <span><span style={{ color: FINCEPT.WHITE }}>Security:</span> Credentials stored locally, never sent to our servers</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span style={{ color: BLOOMBERG.ORANGE }}>&#8226;</span>
+            <span style={{ color: FINCEPT.ORANGE }}>&#8226;</span>
             <span>
               Visit{' '}
-              <a href="https://docs.polymarket.com" target="_blank" rel="noopener noreferrer" style={{ color: BLOOMBERG.CYAN, textDecoration: 'underline' }}>
+              <a href="https://docs.polymarket.com" target="_blank" rel="noopener noreferrer" style={{ color: FINCEPT.CYAN, textDecoration: 'underline' }}>
                 Polymarket Docs
               </a>
               {' '}for more info

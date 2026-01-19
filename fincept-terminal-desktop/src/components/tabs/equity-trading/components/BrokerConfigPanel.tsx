@@ -1,5 +1,5 @@
 /**
- * Broker Configuration Panel - Bloomberg Style
+ * Broker Configuration Panel - Fincept Style
  *
  * Handles broker API key configuration before authentication
  * Required for OAuth brokers like Zerodha and Fyers
@@ -11,7 +11,7 @@ import { useStockBrokerSelection, useStockBrokerContext } from '@/contexts/Stock
 import { createStockBrokerAdapter } from '@/brokers/stocks';
 import type { BrokerCredentials } from '@/brokers/stocks/types';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',
@@ -140,6 +140,10 @@ export function BrokerConfigPanel({ onConfigSaved }: BrokerConfigPanelProps) {
       angel: 'https://smartapi.angelbroking.com/',
       dhan: 'https://dhanhq.co/api',
       upstox: 'https://upstox.com/developer/api/',
+      kotak: 'https://napi.kotaksecurities.com/devportal/',
+      saxobank: 'https://www.developer.saxo/openapi/appmanagement',
+      alpaca: 'https://app.alpaca.markets/brokerage/new-account',
+      ibkr: 'https://www.interactivebrokers.com/en/trading/ib-api.php',
     };
     return urls[brokerId] || metadata?.website || '#';
   };
@@ -323,7 +327,13 @@ export function BrokerConfigPanel({ onConfigSaved }: BrokerConfigPanelProps) {
             {metadata.id === 'zerodha' && 'Your Kite Connect API key'}
             {metadata.id === 'fyers' && 'Your Fyers App ID'}
             {metadata.id === 'angelone' && 'Your Angel One Smart API key'}
-            {metadata.id !== 'zerodha' && metadata.id !== 'fyers' && metadata.id !== 'angelone' && 'Your broker API key'}
+            {metadata.id === 'dhan' && 'Your Dhan API App ID'}
+            {metadata.id === 'upstox' && 'Your Upstox API key'}
+            {metadata.id === 'kotak' && 'Your Kotak Neo Consumer Key (neo-fin-key)'}
+            {metadata.id === 'saxobank' && 'Your Saxo Bank OpenAPI App Key'}
+            {metadata.id === 'alpaca' && 'Your Alpaca API Key ID'}
+            {metadata.id === 'ibkr' && 'Your Interactive Brokers Client ID'}
+            {!['zerodha', 'fyers', 'angelone', 'dhan', 'upstox', 'kotak', 'saxobank', 'alpaca', 'ibkr'].includes(metadata.id) && 'Your broker API key'}
           </p>
         </div>
 
@@ -382,7 +392,11 @@ export function BrokerConfigPanel({ onConfigSaved }: BrokerConfigPanelProps) {
             <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px' }}>
               {metadata.id === 'zerodha' && 'Your Kite Connect API secret'}
               {metadata.id === 'fyers' && 'Your Fyers App Secret'}
-              {metadata.id !== 'zerodha' && metadata.id !== 'fyers' && 'Your broker API secret'}
+              {metadata.id === 'dhan' && 'Your Dhan API App Secret'}
+              {metadata.id === 'upstox' && 'Your Upstox API secret'}
+              {metadata.id === 'saxobank' && 'Your Saxo Bank OpenAPI App Secret'}
+              {metadata.id === 'alpaca' && 'Your Alpaca API Secret Key'}
+              {!['zerodha', 'fyers', 'dhan', 'upstox', 'saxobank', 'alpaca'].includes(metadata.id) && 'Your broker API secret'}
             </p>
           </div>
         )}

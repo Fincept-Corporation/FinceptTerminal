@@ -1,6 +1,6 @@
 /**
  * Functime Analytics Panel - Time Series Forecasting
- * Bloomberg Professional Design
+ * Fincept Professional Design
  * Integrated with functime library via PyO3
  * Enhanced with portfolio integration and yfinance data fetching
  */
@@ -55,8 +55,8 @@ import {
 } from '@/services/aiQuantLab/portfolioFunctimeService';
 import { portfolioService, type Portfolio } from '@/services/portfolio/portfolioService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -422,8 +422,8 @@ export function FunctimePanel() {
   // Loading state
   if (isFunctimeAvailable === null) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-        <RefreshCw size={32} color={BLOOMBERG.ORANGE} className="animate-spin" />
+      <div className="flex items-center justify-center h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+        <RefreshCw size={32} color={FINCEPT.ORANGE} className="animate-spin" />
       </div>
     );
   }
@@ -431,25 +431,25 @@ export function FunctimePanel() {
   // Not available state
   if (!isFunctimeAvailable) {
     return (
-      <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+      <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: FINCEPT.DARK_BG }}>
         <div className="text-center max-w-md">
-          <AlertCircle size={48} color={BLOOMBERG.RED} className="mx-auto mb-4" />
-          <h3 className="text-lg font-bold uppercase mb-2" style={{ color: BLOOMBERG.WHITE }}>
+          <AlertCircle size={48} color={FINCEPT.RED} className="mx-auto mb-4" />
+          <h3 className="text-lg font-bold uppercase mb-2" style={{ color: FINCEPT.WHITE }}>
             Functime Library Not Installed
           </h3>
-          <p className="text-sm mb-4" style={{ color: BLOOMBERG.GRAY }}>
+          <p className="text-sm mb-4" style={{ color: FINCEPT.GRAY }}>
             Install functime and polars for ML time series forecasting
           </p>
           <code
             className="block p-4 rounded text-sm font-mono mt-4"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, color: BLOOMBERG.ORANGE }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.ORANGE }}
           >
             pip install functime polars
           </code>
           <button
             onClick={checkFunctimeStatus}
             className="mt-6 px-6 py-2 rounded font-bold text-sm uppercase flex items-center gap-2 mx-auto"
-            style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+            style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
           >
             <RefreshCw size={14} />
             Check Again
@@ -460,19 +460,19 @@ export function FunctimePanel() {
   }
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
       {/* Left Panel - Configuration */}
       <div
         className="w-96 flex flex-col border-r"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
         {/* Input Header */}
         <div
           className="px-4 py-3 border-b flex items-center gap-2"
-          style={{ backgroundColor: BLOOMBERG.HEADER_BG, borderColor: BLOOMBERG.BORDER }}
+          style={{ backgroundColor: FINCEPT.HEADER_BG, borderColor: FINCEPT.BORDER }}
         >
-          <Zap size={16} color={BLOOMBERG.ORANGE} />
-          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+          <Zap size={16} color={FINCEPT.ORANGE} />
+          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
             Time Series Forecasting
           </span>
         </div>
@@ -482,23 +482,23 @@ export function FunctimePanel() {
           {/* Data Source Selection */}
           <div
             className="rounded overflow-hidden"
-            style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+            style={{ border: `1px solid ${FINCEPT.BORDER}` }}
           >
             <button
               onClick={() => toggleSection('dataSource')}
               className="w-full px-3 py-2 flex items-center justify-between"
-              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+              style={{ backgroundColor: FINCEPT.HEADER_BG }}
             >
               <div className="flex items-center gap-2">
-                <Database size={14} color={BLOOMBERG.CYAN} />
-                <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                <Database size={14} color={FINCEPT.CYAN} />
+                <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                   Data Source
                 </span>
               </div>
               {expandedSections.dataSource ? (
-                <ChevronUp size={14} color={BLOOMBERG.GRAY} />
+                <ChevronUp size={14} color={FINCEPT.GRAY} />
               ) : (
-                <ChevronDown size={14} color={BLOOMBERG.GRAY} />
+                <ChevronDown size={14} color={FINCEPT.GRAY} />
               )}
             </button>
 
@@ -510,9 +510,9 @@ export function FunctimePanel() {
                     onClick={() => setDataSourceType('manual')}
                     className={`flex-1 px-2 py-1.5 rounded text-xs font-mono ${dataSourceType === 'manual' ? 'border-2' : ''}`}
                     style={{
-                      backgroundColor: dataSourceType === 'manual' ? BLOOMBERG.HEADER_BG : BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.ORANGE,
-                      color: dataSourceType === 'manual' ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+                      backgroundColor: dataSourceType === 'manual' ? FINCEPT.HEADER_BG : FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.ORANGE,
+                      color: dataSourceType === 'manual' ? FINCEPT.ORANGE : FINCEPT.GRAY
                     }}
                   >
                     Manual
@@ -521,9 +521,9 @@ export function FunctimePanel() {
                     onClick={() => setDataSourceType('portfolio')}
                     className={`flex-1 px-2 py-1.5 rounded text-xs font-mono ${dataSourceType === 'portfolio' ? 'border-2' : ''}`}
                     style={{
-                      backgroundColor: dataSourceType === 'portfolio' ? BLOOMBERG.HEADER_BG : BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.ORANGE,
-                      color: dataSourceType === 'portfolio' ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+                      backgroundColor: dataSourceType === 'portfolio' ? FINCEPT.HEADER_BG : FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.ORANGE,
+                      color: dataSourceType === 'portfolio' ? FINCEPT.ORANGE : FINCEPT.GRAY
                     }}
                   >
                     <Briefcase size={12} className="inline mr-1" />
@@ -533,9 +533,9 @@ export function FunctimePanel() {
                     onClick={() => setDataSourceType('symbol')}
                     className={`flex-1 px-2 py-1.5 rounded text-xs font-mono ${dataSourceType === 'symbol' ? 'border-2' : ''}`}
                     style={{
-                      backgroundColor: dataSourceType === 'symbol' ? BLOOMBERG.HEADER_BG : BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.ORANGE,
-                      color: dataSourceType === 'symbol' ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+                      backgroundColor: dataSourceType === 'symbol' ? FINCEPT.HEADER_BG : FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.ORANGE,
+                      color: dataSourceType === 'symbol' ? FINCEPT.ORANGE : FINCEPT.GRAY
                     }}
                   >
                     <Search size={12} className="inline mr-1" />
@@ -546,7 +546,7 @@ export function FunctimePanel() {
                 {/* Portfolio Selection */}
                 {dataSourceType === 'portfolio' && (
                   <div>
-                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                    <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                       SELECT PORTFOLIO
                     </label>
                     <select
@@ -554,9 +554,9 @@ export function FunctimePanel() {
                       onChange={(e) => setSelectedPortfolioId(e.target.value)}
                       className="w-full p-2 rounded text-xs font-mono"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        color: BLOOMBERG.WHITE,
-                        border: `1px solid ${BLOOMBERG.BORDER}`
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`
                       }}
                     >
                       {portfolios.length === 0 ? (
@@ -575,7 +575,7 @@ export function FunctimePanel() {
                 {/* Symbol Input */}
                 {dataSourceType === 'symbol' && (
                   <div>
-                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                    <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                       TICKER SYMBOL
                     </label>
                     <input
@@ -585,9 +585,9 @@ export function FunctimePanel() {
                       placeholder="AAPL"
                       className="w-full p-2 rounded text-xs font-mono"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        color: BLOOMBERG.WHITE,
-                        border: `1px solid ${BLOOMBERG.BORDER}`
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`
                       }}
                     />
                   </div>
@@ -596,7 +596,7 @@ export function FunctimePanel() {
                 {/* Historical Days */}
                 {dataSourceType !== 'manual' && (
                   <div>
-                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                    <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                       HISTORICAL DAYS
                     </label>
                     <input
@@ -607,9 +607,9 @@ export function FunctimePanel() {
                       onChange={(e) => setHistoricalDays(parseInt(e.target.value) || 365)}
                       className="w-full p-2 rounded text-xs font-mono"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        color: BLOOMBERG.WHITE,
-                        border: `1px solid ${BLOOMBERG.BORDER}`
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`
                       }}
                     />
                   </div>
@@ -621,7 +621,7 @@ export function FunctimePanel() {
                     onClick={loadDataFromSource}
                     disabled={priceDataLoading}
                     className="w-full py-2 rounded font-bold text-xs uppercase flex items-center justify-center gap-2"
-                    style={{ backgroundColor: BLOOMBERG.CYAN, color: BLOOMBERG.DARK_BG }}
+                    style={{ backgroundColor: FINCEPT.CYAN, color: FINCEPT.DARK_BG }}
                   >
                     {priceDataLoading ? (
                       <>
@@ -639,18 +639,18 @@ export function FunctimePanel() {
 
                 {/* Data Info */}
                 {priceData && dataSourceType !== 'manual' && (
-                  <div className="p-2 rounded text-xs font-mono" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                    <div className="flex justify-between" style={{ color: BLOOMBERG.GRAY }}>
+                  <div className="p-2 rounded text-xs font-mono" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                    <div className="flex justify-between" style={{ color: FINCEPT.GRAY }}>
                       <span>Assets:</span>
-                      <span style={{ color: BLOOMBERG.CYAN }}>{priceData.assets.length}</span>
+                      <span style={{ color: FINCEPT.CYAN }}>{priceData.assets.length}</span>
                     </div>
-                    <div className="flex justify-between" style={{ color: BLOOMBERG.GRAY }}>
+                    <div className="flex justify-between" style={{ color: FINCEPT.GRAY }}>
                       <span>Data Points:</span>
-                      <span style={{ color: BLOOMBERG.WHITE }}>{priceData.nDataPoints}</span>
+                      <span style={{ color: FINCEPT.WHITE }}>{priceData.nDataPoints}</span>
                     </div>
-                    <div className="flex justify-between" style={{ color: BLOOMBERG.GRAY }}>
+                    <div className="flex justify-between" style={{ color: FINCEPT.GRAY }}>
                       <span>Range:</span>
-                      <span style={{ color: BLOOMBERG.WHITE }}>{priceData.startDate} to {priceData.endDate}</span>
+                      <span style={{ color: FINCEPT.WHITE }}>{priceData.startDate} to {priceData.endDate}</span>
                     </div>
                   </div>
                 )}
@@ -659,13 +659,13 @@ export function FunctimePanel() {
           </div>
 
           {/* Analysis Mode Tabs */}
-          <div className="flex gap-1 p-1 rounded" style={{ backgroundColor: BLOOMBERG.HEADER_BG }}>
+          <div className="flex gap-1 p-1 rounded" style={{ backgroundColor: FINCEPT.HEADER_BG }}>
             <button
               onClick={() => setAnalysisMode('forecast')}
               className={`flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1`}
               style={{
-                backgroundColor: analysisMode === 'forecast' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'forecast' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                backgroundColor: analysisMode === 'forecast' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'forecast' ? FINCEPT.DARK_BG : FINCEPT.GRAY
               }}
             >
               <TrendingUp size={12} />
@@ -675,8 +675,8 @@ export function FunctimePanel() {
               onClick={() => setAnalysisMode('anomaly')}
               className={`flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1`}
               style={{
-                backgroundColor: analysisMode === 'anomaly' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'anomaly' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                backgroundColor: analysisMode === 'anomaly' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'anomaly' ? FINCEPT.DARK_BG : FINCEPT.GRAY
               }}
             >
               <AlertTriangle size={12} />
@@ -686,8 +686,8 @@ export function FunctimePanel() {
               onClick={() => setAnalysisMode('seasonality')}
               className={`flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1`}
               style={{
-                backgroundColor: analysisMode === 'seasonality' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'seasonality' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                backgroundColor: analysisMode === 'seasonality' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'seasonality' ? FINCEPT.DARK_BG : FINCEPT.GRAY
               }}
             >
               <Waves size={12} />
@@ -698,7 +698,7 @@ export function FunctimePanel() {
           {/* Data Input - Only for Manual */}
           {dataSourceType === 'manual' && (
             <div>
-              <label className="block text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+              <label className="block text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                 PANEL DATA (JSON)
               </label>
               <textarea
@@ -706,9 +706,9 @@ export function FunctimePanel() {
                 onChange={(e) => setDataInput(e.target.value)}
                 className="w-full h-32 p-3 rounded text-xs font-mono resize-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`
                 }}
                 placeholder='[{"entity_id": "A", "time": "2024-01-01", "value": 100}, ...]'
               />
@@ -719,23 +719,23 @@ export function FunctimePanel() {
           {analysisMode === 'forecast' && (
           <div
             className="rounded overflow-hidden"
-            style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+            style={{ border: `1px solid ${FINCEPT.BORDER}` }}
           >
             <button
               onClick={() => toggleSection('config')}
               className="w-full px-3 py-2 flex items-center justify-between"
-              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+              style={{ backgroundColor: FINCEPT.HEADER_BG }}
             >
               <div className="flex items-center gap-2">
-                <Settings size={14} color={BLOOMBERG.CYAN} />
-                <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                <Settings size={14} color={FINCEPT.CYAN} />
+                <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                   Model Configuration
                 </span>
               </div>
               {expandedSections.config ? (
-                <ChevronUp size={14} color={BLOOMBERG.GRAY} />
+                <ChevronUp size={14} color={FINCEPT.GRAY} />
               ) : (
-                <ChevronDown size={14} color={BLOOMBERG.GRAY} />
+                <ChevronDown size={14} color={FINCEPT.GRAY} />
               )}
             </button>
 
@@ -743,7 +743,7 @@ export function FunctimePanel() {
               <div className="p-3 space-y-3">
                 {/* Model Selection */}
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     FORECAST MODEL
                   </label>
                   <select
@@ -751,9 +751,9 @@ export function FunctimePanel() {
                     onChange={(e) => setSelectedModel(e.target.value)}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   >
                     {models.map((m) => (
@@ -766,7 +766,7 @@ export function FunctimePanel() {
 
                 {/* Horizon */}
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     FORECAST HORIZON
                   </label>
                   <input
@@ -777,16 +777,16 @@ export function FunctimePanel() {
                     onChange={(e) => setHorizon(parseInt(e.target.value) || 7)}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   />
                 </div>
 
                 {/* Frequency */}
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     DATA FREQUENCY
                   </label>
                   <select
@@ -794,9 +794,9 @@ export function FunctimePanel() {
                     onChange={(e) => setFrequency(e.target.value)}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   >
                     {frequencies.map((f) => (
@@ -810,7 +810,7 @@ export function FunctimePanel() {
                 {/* Alpha (for regularized models) */}
                 {['lasso', 'ridge', 'elasticnet', 'auto_lasso', 'auto_ridge', 'auto_elasticnet'].includes(selectedModel) && (
                   <div>
-                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                    <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                       ALPHA (REGULARIZATION)
                     </label>
                     <input
@@ -821,9 +821,9 @@ export function FunctimePanel() {
                       onChange={(e) => setAlpha(parseFloat(e.target.value) || 1.0)}
                       className="w-full p-2 rounded text-xs font-mono"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        color: BLOOMBERG.WHITE,
-                        border: `1px solid ${BLOOMBERG.BORDER}`
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`
                       }}
                     />
                   </div>
@@ -831,7 +831,7 @@ export function FunctimePanel() {
 
                 {/* Test Size */}
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     TEST SIZE (FOR EVALUATION)
                   </label>
                   <input
@@ -841,16 +841,16 @@ export function FunctimePanel() {
                     onChange={(e) => setTestSize(parseInt(e.target.value) || 5)}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   />
                 </div>
 
                 {/* Preprocessing */}
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     PREPROCESSING
                   </label>
                   <select
@@ -858,9 +858,9 @@ export function FunctimePanel() {
                     onChange={(e) => setPreprocess(e.target.value as 'none' | 'scale' | 'difference')}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   >
                     <option value="none">None</option>
@@ -877,20 +877,20 @@ export function FunctimePanel() {
           {analysisMode === 'anomaly' && (
           <div
             className="rounded overflow-hidden"
-            style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+            style={{ border: `1px solid ${FINCEPT.BORDER}` }}
           >
             <div
               className="px-3 py-2 flex items-center gap-2"
-              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+              style={{ backgroundColor: FINCEPT.HEADER_BG }}
             >
-              <AlertTriangle size={14} color={BLOOMBERG.YELLOW} />
-              <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+              <AlertTriangle size={14} color={FINCEPT.YELLOW} />
+              <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                 Anomaly Detection Settings
               </span>
             </div>
             <div className="p-3 space-y-3">
               <div>
-                <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                   DETECTION METHOD
                 </label>
                 <select
@@ -898,9 +898,9 @@ export function FunctimePanel() {
                   onChange={(e) => setAnomalyMethod(e.target.value as 'zscore' | 'iqr' | 'isolation_forest')}
                   className="w-full p-2 rounded text-xs font-mono"
                   style={{
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 >
                   <option value="zscore">Z-Score</option>
@@ -909,7 +909,7 @@ export function FunctimePanel() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                   THRESHOLD
                 </label>
                 <input
@@ -921,9 +921,9 @@ export function FunctimePanel() {
                   onChange={(e) => setAnomalyThreshold(parseFloat(e.target.value) || 3.0)}
                   className="w-full p-2 rounded text-xs font-mono"
                   style={{
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 />
               </div>
@@ -935,19 +935,19 @@ export function FunctimePanel() {
           {analysisMode === 'seasonality' && (
           <div
             className="rounded overflow-hidden"
-            style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+            style={{ border: `1px solid ${FINCEPT.BORDER}` }}
           >
             <div
               className="px-3 py-2 flex items-center gap-2"
-              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+              style={{ backgroundColor: FINCEPT.HEADER_BG }}
             >
-              <Waves size={14} color={BLOOMBERG.CYAN} />
-              <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+              <Waves size={14} color={FINCEPT.CYAN} />
+              <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                 Seasonality Analysis
               </span>
             </div>
             <div className="p-3">
-              <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                 Analyzes time series for seasonal patterns, trend strength, and periodicity.
                 Uses FFT and ACF for automatic period detection.
               </p>
@@ -957,12 +957,12 @@ export function FunctimePanel() {
         </div>
 
         {/* Run Button */}
-        <div className="p-4 border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
+        <div className="p-4 border-t" style={{ borderColor: FINCEPT.BORDER }}>
           <button
             onClick={runAnalysis}
             disabled={isLoading}
             className="w-full py-3 rounded font-bold text-sm uppercase flex items-center justify-center gap-2 disabled:opacity-50"
-            style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+            style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
           >
             {isLoading ? (
               <>
@@ -986,18 +986,18 @@ export function FunctimePanel() {
         {error && (
           <div
             className="mb-4 p-4 rounded flex items-center gap-3"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderLeft: `3px solid ${BLOOMBERG.RED}` }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, borderLeft: `3px solid ${FINCEPT.RED}` }}
           >
-            <AlertCircle size={20} color={BLOOMBERG.RED} />
-            <span className="text-sm font-mono" style={{ color: BLOOMBERG.RED }}>{error}</span>
+            <AlertCircle size={20} color={FINCEPT.RED} />
+            <span className="text-sm font-mono" style={{ color: FINCEPT.RED }}>{error}</span>
           </div>
         )}
 
         {!analysisResult && !anomalyResult && !seasonalityResult && !error && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <LineChart size={64} color={BLOOMBERG.MUTED} className="mx-auto mb-4" />
-              <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              <LineChart size={64} color={FINCEPT.MUTED} className="mx-auto mb-4" />
+              <p className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
                 {analysisMode === 'forecast'
                   ? 'Configure model and click "Run Forecast" to see predictions'
                   : analysisMode === 'anomaly'
@@ -1013,14 +1013,14 @@ export function FunctimePanel() {
           <div className="space-y-4">
             <div
               className="rounded overflow-hidden"
-              style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+              style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
             >
               <div
                 className="px-4 py-3 flex items-center gap-2"
-                style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                style={{ backgroundColor: FINCEPT.HEADER_BG }}
               >
-                <AlertTriangle size={16} color={BLOOMBERG.YELLOW} />
-                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                <AlertTriangle size={16} color={FINCEPT.YELLOW} />
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                   Anomaly Detection Results
                 </span>
               </div>
@@ -1030,23 +1030,23 @@ export function FunctimePanel() {
                     <div
                       key={symbol}
                       className="p-3 rounded"
-                      style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+                      style={{ backgroundColor: FINCEPT.DARK_BG }}
                     >
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-bold" style={{ color: BLOOMBERG.CYAN }}>
+                        <span className="text-sm font-bold" style={{ color: FINCEPT.CYAN }}>
                           {symbol}
                         </span>
                         <span
                           className="text-xs px-2 py-0.5 rounded"
                           style={{
-                            backgroundColor: data.count > 0 ? BLOOMBERG.RED : BLOOMBERG.GREEN,
-                            color: BLOOMBERG.WHITE
+                            backgroundColor: data.count > 0 ? FINCEPT.RED : FINCEPT.GREEN,
+                            color: FINCEPT.WHITE
                           }}
                         >
                           {data.count} anomalies
                         </span>
                       </div>
-                      <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                      <div className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                         <div>Rate: {(data.rate * 100).toFixed(2)}%</div>
                         {data.dates?.length > 0 && (
                           <div className="mt-1">
@@ -1067,14 +1067,14 @@ export function FunctimePanel() {
           <div className="space-y-4">
             <div
               className="rounded overflow-hidden"
-              style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+              style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
             >
               <div
                 className="px-4 py-3 flex items-center gap-2"
-                style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                style={{ backgroundColor: FINCEPT.HEADER_BG }}
               >
-                <Waves size={16} color={BLOOMBERG.CYAN} />
-                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                <Waves size={16} color={FINCEPT.CYAN} />
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                   Seasonality Analysis Results
                 </span>
               </div>
@@ -1084,35 +1084,35 @@ export function FunctimePanel() {
                     <div
                       key={symbol}
                       className="p-3 rounded"
-                      style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+                      style={{ backgroundColor: FINCEPT.DARK_BG }}
                     >
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-bold" style={{ color: BLOOMBERG.CYAN }}>
+                        <span className="text-sm font-bold" style={{ color: FINCEPT.CYAN }}>
                           {symbol}
                         </span>
                         <span
                           className="text-xs px-2 py-0.5 rounded"
                           style={{
-                            backgroundColor: data.is_seasonal ? BLOOMBERG.GREEN : BLOOMBERG.MUTED,
-                            color: BLOOMBERG.WHITE
+                            backgroundColor: data.is_seasonal ? FINCEPT.GREEN : FINCEPT.MUTED,
+                            color: FINCEPT.WHITE
                           }}
                         >
                           {data.is_seasonal ? 'Seasonal' : 'Non-Seasonal'}
                         </span>
                       </div>
-                      <div className="text-xs font-mono space-y-1" style={{ color: BLOOMBERG.GRAY }}>
+                      <div className="text-xs font-mono space-y-1" style={{ color: FINCEPT.GRAY }}>
                         <div className="flex justify-between">
                           <span>Period:</span>
-                          <span style={{ color: BLOOMBERG.WHITE }}>{data.period} days</span>
+                          <span style={{ color: FINCEPT.WHITE }}>{data.period} days</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Seasonal Strength:</span>
-                          <span style={{ color: BLOOMBERG.ORANGE }}>{(data.strength * 100).toFixed(1)}%</span>
+                          <span style={{ color: FINCEPT.ORANGE }}>{(data.strength * 100).toFixed(1)}%</span>
                         </div>
                         {data.trend_strength !== undefined && (
                           <div className="flex justify-between">
                             <span>Trend Strength:</span>
-                            <span style={{ color: BLOOMBERG.GREEN }}>{(data.trend_strength * 100).toFixed(1)}%</span>
+                            <span style={{ color: FINCEPT.GREEN }}>{(data.trend_strength * 100).toFixed(1)}%</span>
                           </div>
                         )}
                       </div>
@@ -1130,23 +1130,23 @@ export function FunctimePanel() {
             {analysisResult.data_summary && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('summary')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <Database size={16} color={BLOOMBERG.CYAN} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <Database size={16} color={FINCEPT.CYAN} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Data Summary
                     </span>
                   </div>
                   {expandedSections.summary ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1155,25 +1155,25 @@ export function FunctimePanel() {
                     <MetricCard
                       label="Total Rows"
                       value={String(analysisResult.data_summary.total_rows)}
-                      color={BLOOMBERG.WHITE}
+                      color={FINCEPT.WHITE}
                       icon={<Database size={14} />}
                     />
                     <MetricCard
                       label="Entities"
                       value={String(analysisResult.data_summary.entities)}
-                      color={BLOOMBERG.CYAN}
+                      color={FINCEPT.CYAN}
                       icon={<Layers size={14} />}
                     />
                     <MetricCard
                       label="Train Size"
                       value={String(analysisResult.data_summary.train_size)}
-                      color={BLOOMBERG.GREEN}
+                      color={FINCEPT.GREEN}
                       icon={<GitBranch size={14} />}
                     />
                     <MetricCard
                       label="Test Size"
                       value={String(analysisResult.data_summary.test_size)}
-                      color={BLOOMBERG.YELLOW}
+                      color={FINCEPT.YELLOW}
                       icon={<Target size={14} />}
                     />
                   </div>
@@ -1185,23 +1185,23 @@ export function FunctimePanel() {
             {analysisResult.evaluation_metrics && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('metrics')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <Target size={16} color={BLOOMBERG.GREEN} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <Target size={16} color={FINCEPT.GREEN} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Evaluation Metrics
                     </span>
                   </div>
                   {expandedSections.metrics ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1210,19 +1210,19 @@ export function FunctimePanel() {
                     <MetricCard
                       label="MAE"
                       value={formatMetric(analysisResult.evaluation_metrics.mae)}
-                      color={BLOOMBERG.CYAN}
+                      color={FINCEPT.CYAN}
                       icon={<BarChart2 size={14} />}
                     />
                     <MetricCard
                       label="RMSE"
                       value={formatMetric(analysisResult.evaluation_metrics.rmse)}
-                      color={BLOOMBERG.YELLOW}
+                      color={FINCEPT.YELLOW}
                       icon={<Activity size={14} />}
                     />
                     <MetricCard
                       label="SMAPE"
                       value={formatMetric(analysisResult.evaluation_metrics.smape)}
-                      color={BLOOMBERG.PURPLE}
+                      color={FINCEPT.PURPLE}
                       icon={<TrendingUp size={14} />}
                     />
                   </div>
@@ -1234,23 +1234,23 @@ export function FunctimePanel() {
             {analysisResult.forecast && analysisResult.forecast.length > 0 && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('chart')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <LineChart size={16} color={BLOOMBERG.CYAN} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <LineChart size={16} color={FINCEPT.CYAN} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Forecast Chart
                     </span>
                   </div>
                   {expandedSections.chart ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1269,56 +1269,56 @@ export function FunctimePanel() {
             {/* Forecast Results Section */}
             <div
               className="rounded overflow-hidden"
-              style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+              style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
             >
               <button
                 onClick={() => toggleSection('forecast')}
                 className="w-full px-4 py-3 flex items-center justify-between"
-                style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                style={{ backgroundColor: FINCEPT.HEADER_BG }}
               >
                 <div className="flex items-center gap-2">
-                  <TrendingUp size={16} color={BLOOMBERG.ORANGE} />
-                  <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                  <TrendingUp size={16} color={FINCEPT.ORANGE} />
+                  <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                     Forecast Results
                   </span>
                   {analysisResult.model && (
                     <span
                       className="ml-2 px-2 py-0.5 rounded text-xs font-mono"
-                      style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+                      style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
                     >
                       {analysisResult.model.toUpperCase()}
                     </span>
                   )}
                 </div>
                 {expandedSections.forecast ? (
-                  <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                  <ChevronUp size={16} color={FINCEPT.GRAY} />
                 ) : (
-                  <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                  <ChevronDown size={16} color={FINCEPT.GRAY} />
                 )}
               </button>
 
               {expandedSections.forecast && analysisResult.forecast && (
                 <div className="p-4">
                   {/* Forecast info */}
-                  <div className="mb-4 flex gap-4 text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
-                    <span>Horizon: <span style={{ color: BLOOMBERG.WHITE }}>{analysisResult.horizon}</span></span>
-                    <span>Frequency: <span style={{ color: BLOOMBERG.WHITE }}>{analysisResult.frequency}</span></span>
+                  <div className="mb-4 flex gap-4 text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+                    <span>Horizon: <span style={{ color: FINCEPT.WHITE }}>{analysisResult.horizon}</span></span>
+                    <span>Frequency: <span style={{ color: FINCEPT.WHITE }}>{analysisResult.frequency}</span></span>
                     {analysisResult.best_params && (
-                      <span>Auto-tuned: <CheckCircle2 size={12} color={BLOOMBERG.GREEN} className="inline ml-1" /></span>
+                      <span>Auto-tuned: <CheckCircle2 size={12} color={FINCEPT.GREEN} className="inline ml-1" /></span>
                     )}
                   </div>
 
                   {/* Forecast table */}
                   <div
                     className="rounded overflow-hidden"
-                    style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+                    style={{ border: `1px solid ${FINCEPT.BORDER}` }}
                   >
                     <table className="w-full text-xs font-mono">
                       <thead>
-                        <tr style={{ backgroundColor: BLOOMBERG.HEADER_BG }}>
-                          <th className="px-3 py-2 text-left" style={{ color: BLOOMBERG.GRAY }}>ENTITY</th>
-                          <th className="px-3 py-2 text-left" style={{ color: BLOOMBERG.GRAY }}>TIME</th>
-                          <th className="px-3 py-2 text-right" style={{ color: BLOOMBERG.GRAY }}>FORECAST</th>
+                        <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
+                          <th className="px-3 py-2 text-left" style={{ color: FINCEPT.GRAY }}>ENTITY</th>
+                          <th className="px-3 py-2 text-left" style={{ color: FINCEPT.GRAY }}>TIME</th>
+                          <th className="px-3 py-2 text-right" style={{ color: FINCEPT.GRAY }}>FORECAST</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1326,16 +1326,16 @@ export function FunctimePanel() {
                           <tr
                             key={idx}
                             style={{
-                              backgroundColor: idx % 2 === 0 ? BLOOMBERG.DARK_BG : BLOOMBERG.PANEL_BG
+                              backgroundColor: idx % 2 === 0 ? FINCEPT.DARK_BG : FINCEPT.PANEL_BG
                             }}
                           >
-                            <td className="px-3 py-2" style={{ color: BLOOMBERG.CYAN }}>
+                            <td className="px-3 py-2" style={{ color: FINCEPT.CYAN }}>
                               {row.entity_id}
                             </td>
-                            <td className="px-3 py-2" style={{ color: BLOOMBERG.WHITE }}>
+                            <td className="px-3 py-2" style={{ color: FINCEPT.WHITE }}>
                               {row.time}
                             </td>
-                            <td className="px-3 py-2 text-right" style={{ color: BLOOMBERG.GREEN }}>
+                            <td className="px-3 py-2 text-right" style={{ color: FINCEPT.GREEN }}>
                               {typeof row.value === 'number' ? row.value.toFixed(2) : row.value}
                             </td>
                           </tr>
@@ -1346,7 +1346,7 @@ export function FunctimePanel() {
                       <button
                         onClick={() => setForecastTableExpanded(!forecastTableExpanded)}
                         className="w-full px-3 py-2 text-xs font-mono text-center flex items-center justify-center gap-2 hover:opacity-80 transition-opacity"
-                        style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.ORANGE }}
+                        style={{ backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.ORANGE }}
                       >
                         {forecastTableExpanded ? (
                           <>
@@ -1370,19 +1370,19 @@ export function FunctimePanel() {
             {analysisResult.best_params && Object.keys(analysisResult.best_params).length > 0 && (
               <div
                 className="rounded p-4"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <div className="flex items-center gap-2 mb-3">
-                  <Zap size={16} color={BLOOMBERG.YELLOW} />
-                  <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                  <Zap size={16} color={FINCEPT.YELLOW} />
+                  <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                     Best Parameters (Auto-tuned)
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {Object.entries(analysisResult.best_params).map(([key, value]) => (
-                    <div key={key} className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                      <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>{key}</span>
-                      <span className="text-xs font-mono" style={{ color: BLOOMBERG.CYAN }}>
+                    <div key={key} className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>{key}</span>
+                      <span className="text-xs font-mono" style={{ color: FINCEPT.CYAN }}>
                         {typeof value === 'number' ? value.toFixed(4) : String(value)}
                       </span>
                     </div>
@@ -1414,11 +1414,11 @@ function MetricCard({
   return (
     <div
       className={`p-3 rounded ${large ? 'col-span-3' : ''}`}
-      style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+      style={{ backgroundColor: FINCEPT.DARK_BG }}
     >
       <div className="flex items-center gap-2 mb-1">
-        <span style={{ color: BLOOMBERG.GRAY }}>{icon}</span>
-        <span className="text-xs font-mono uppercase" style={{ color: BLOOMBERG.GRAY }}>
+        <span style={{ color: FINCEPT.GRAY }}>{icon}</span>
+        <span className="text-xs font-mono uppercase" style={{ color: FINCEPT.GRAY }}>
           {label}
         </span>
       </div>
@@ -1482,9 +1482,9 @@ function ForecastChart({
     return (
       <div
         className="flex items-center justify-center"
-        style={{ height, backgroundColor: BLOOMBERG.DARK_BG }}
+        style={{ height, backgroundColor: FINCEPT.DARK_BG }}
       >
-        <span className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
+        <span className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
           No data to display
         </span>
       </div>
@@ -1570,18 +1570,18 @@ function ForecastChart({
         <button
           onClick={handleZoomOut}
           className="px-2 py-1 rounded text-xs font-mono"
-          style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+          style={{ backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}` }}
           disabled={zoomLevel <= 1}
         >
           −
         </button>
-        <span className="px-2 py-1 text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+        <span className="px-2 py-1 text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
           {Math.round(zoomLevel * 100)}%
         </span>
         <button
           onClick={handleZoomIn}
           className="px-2 py-1 rounded text-xs font-mono"
-          style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+          style={{ backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}` }}
           disabled={zoomLevel >= 3}
         >
           +
@@ -1590,7 +1590,7 @@ function ForecastChart({
           <button
             onClick={handleResetZoom}
             className="px-2 py-1 rounded text-xs font-mono"
-            style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.ORANGE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+            style={{ backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.ORANGE, border: `1px solid ${FINCEPT.BORDER}` }}
           >
             Reset
           </button>
@@ -1604,7 +1604,7 @@ function ForecastChart({
           width={width}
           height={height}
           viewBox={`0 0 ${width} ${height}`}
-          style={{ backgroundColor: BLOOMBERG.DARK_BG, minWidth: baseWidth }}
+          style={{ backgroundColor: FINCEPT.DARK_BG, minWidth: baseWidth }}
         >
           {/* Grid lines */}
           {yTicks.map((tick, i) => (
@@ -1614,7 +1614,7 @@ function ForecastChart({
               y1={tick.y}
               x2={width - padding.right}
               y2={tick.y}
-              stroke={BLOOMBERG.BORDER}
+              stroke={FINCEPT.BORDER}
               strokeWidth={1}
               strokeDasharray="4,4"
             />
@@ -1627,7 +1627,7 @@ function ForecastChart({
               y={padding.top}
               width={chartWidth - xScale(historicalEndIndex) + padding.left}
               height={chartHeight}
-              fill={BLOOMBERG.ORANGE}
+              fill={FINCEPT.ORANGE}
               opacity={0.05}
             />
           )}
@@ -1639,7 +1639,7 @@ function ForecastChart({
               y1={padding.top}
               x2={xScale(historicalEndIndex)}
               y2={height - padding.bottom}
-              stroke={BLOOMBERG.ORANGE}
+              stroke={FINCEPT.ORANGE}
               strokeWidth={1}
               strokeDasharray="6,4"
               opacity={0.6}
@@ -1651,7 +1651,7 @@ function ForecastChart({
             <path
               d={historicalPath}
               fill="none"
-              stroke={BLOOMBERG.CYAN}
+              stroke={FINCEPT.CYAN}
               strokeWidth={2}
             />
           )}
@@ -1661,7 +1661,7 @@ function ForecastChart({
             <path
               d={forecastPath}
               fill="none"
-              stroke={BLOOMBERG.ORANGE}
+              stroke={FINCEPT.ORANGE}
               strokeWidth={2}
               strokeDasharray="6,3"
             />
@@ -1689,7 +1689,7 @@ function ForecastChart({
                   cx={cx}
                   cy={cy}
                   r={tooltip.data?.time === d.time && tooltip.data?.type === 'historical' ? 6 : 3}
-                  fill={BLOOMBERG.CYAN}
+                  fill={FINCEPT.CYAN}
                   style={{ transition: 'r 0.15s ease', pointerEvents: 'none' }}
                 />
               </g>
@@ -1718,8 +1718,8 @@ function ForecastChart({
                   cx={cx}
                   cy={cy}
                   r={tooltip.data?.time === d.time && tooltip.data?.type === 'forecast' ? 7 : 4}
-                  fill={BLOOMBERG.ORANGE}
-                  stroke={BLOOMBERG.DARK_BG}
+                  fill={FINCEPT.ORANGE}
+                  stroke={FINCEPT.DARK_BG}
                   strokeWidth={1}
                   style={{ transition: 'r 0.15s ease', pointerEvents: 'none' }}
                 />
@@ -1736,7 +1736,7 @@ function ForecastChart({
               textAnchor="end"
               fontSize={10}
               fontFamily="monospace"
-              fill={BLOOMBERG.GRAY}
+              fill={FINCEPT.GRAY}
             >
               {tick.value.toFixed(2)}
             </text>
@@ -1751,7 +1751,7 @@ function ForecastChart({
               textAnchor="middle"
               fontSize={10}
               fontFamily="monospace"
-              fill={BLOOMBERG.GRAY}
+              fill={FINCEPT.GRAY}
             >
               {item.label}
             </text>
@@ -1759,11 +1759,11 @@ function ForecastChart({
 
           {/* Legend */}
           <g transform={`translate(${width - padding.right - 120}, ${padding.top})`}>
-            <rect x={0} y={0} width={120} height={50} fill={BLOOMBERG.PANEL_BG} rx={4} />
-            <line x1={10} y1={15} x2={35} y2={15} stroke={BLOOMBERG.CYAN} strokeWidth={2} />
-            <text x={42} y={18} fontSize={10} fontFamily="monospace" fill={BLOOMBERG.WHITE}>Historical</text>
-            <line x1={10} y1={35} x2={35} y2={35} stroke={BLOOMBERG.ORANGE} strokeWidth={2} strokeDasharray="6,3" />
-            <text x={42} y={38} fontSize={10} fontFamily="monospace" fill={BLOOMBERG.WHITE}>Forecast</text>
+            <rect x={0} y={0} width={120} height={50} fill={FINCEPT.PANEL_BG} rx={4} />
+            <line x1={10} y1={15} x2={35} y2={15} stroke={FINCEPT.CYAN} strokeWidth={2} />
+            <text x={42} y={18} fontSize={10} fontFamily="monospace" fill={FINCEPT.WHITE}>Historical</text>
+            <line x1={10} y1={35} x2={35} y2={35} stroke={FINCEPT.ORANGE} strokeWidth={2} strokeDasharray="6,3" />
+            <text x={42} y={38} fontSize={10} fontFamily="monospace" fill={FINCEPT.WHITE}>Forecast</text>
           </g>
 
           {/* Forecast label */}
@@ -1773,7 +1773,7 @@ function ForecastChart({
               y={padding.top + 15}
               fontSize={10}
               fontFamily="monospace"
-              fill={BLOOMBERG.ORANGE}
+              fill={FINCEPT.ORANGE}
             >
               ▼ Forecast
             </text>
@@ -1787,23 +1787,23 @@ function ForecastChart({
             style={{
               left: Math.min(tooltip.x + 10, width - 180),
               top: Math.max(tooltip.y - 60, 10),
-              backgroundColor: BLOOMBERG.PANEL_BG,
-              border: `1px solid ${tooltip.data.type === 'forecast' ? BLOOMBERG.ORANGE : BLOOMBERG.CYAN}`,
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${tooltip.data.type === 'forecast' ? FINCEPT.ORANGE : FINCEPT.CYAN}`,
               minWidth: 160
             }}
           >
-            <div className="text-xs font-mono font-bold mb-1" style={{ color: tooltip.data.type === 'forecast' ? BLOOMBERG.ORANGE : BLOOMBERG.CYAN }}>
+            <div className="text-xs font-mono font-bold mb-1" style={{ color: tooltip.data.type === 'forecast' ? FINCEPT.ORANGE : FINCEPT.CYAN }}>
               {tooltip.data.type === 'forecast' ? '📈 FORECAST' : '📊 HISTORICAL'}
             </div>
-            <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
-              Date: <span style={{ color: BLOOMBERG.WHITE }}>{tooltip.data.time.split('T')[0]}</span>
+            <div className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+              Date: <span style={{ color: FINCEPT.WHITE }}>{tooltip.data.time.split('T')[0]}</span>
             </div>
-            <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
-              Value: <span style={{ color: BLOOMBERG.GREEN, fontWeight: 'bold' }}>{tooltip.data.value.toFixed(4)}</span>
+            <div className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+              Value: <span style={{ color: FINCEPT.GREEN, fontWeight: 'bold' }}>{tooltip.data.value.toFixed(4)}</span>
             </div>
             {tooltip.data.entity_id && (
-              <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
-                Entity: <span style={{ color: BLOOMBERG.CYAN }}>{tooltip.data.entity_id}</span>
+              <div className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+                Entity: <span style={{ color: FINCEPT.CYAN }}>{tooltip.data.entity_id}</span>
               </div>
             )}
           </div>

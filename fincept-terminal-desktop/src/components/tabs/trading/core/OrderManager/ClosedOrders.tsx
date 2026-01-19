@@ -7,7 +7,7 @@ import React from 'react';
 import { useClosedOrders } from '../../hooks/useOrders';
 import { formatCurrency, formatDateTime, formatOrderStatus } from '../../utils/formatters';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -28,7 +28,7 @@ export function ClosedOrders() {
         style={{
           padding: '20px',
           textAlign: 'center',
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontSize: '11px',
         }}
       >
@@ -39,7 +39,7 @@ export function ClosedOrders() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center', color: BLOOMBERG.GRAY, fontSize: '11px' }}>
+      <div style={{ padding: '20px', textAlign: 'center', color: FINCEPT.GRAY, fontSize: '11px' }}>
         Loading order history...
       </div>
     );
@@ -47,7 +47,7 @@ export function ClosedOrders() {
 
   if (closedOrders.length === 0) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center', color: BLOOMBERG.GRAY, fontSize: '11px' }}>
+      <div style={{ padding: '20px', textAlign: 'center', color: FINCEPT.GRAY, fontSize: '11px' }}>
         No closed orders
       </div>
     );
@@ -57,32 +57,32 @@ export function ClosedOrders() {
     <div style={{ width: '100%', height: '100%', overflowX: 'auto', overflowY: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-          <tr style={{ backgroundColor: BLOOMBERG.HEADER_BG, borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+          <tr style={{ backgroundColor: FINCEPT.HEADER_BG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <th style={{ padding: '8px 10px', textAlign: 'left', color: FINCEPT.GRAY, fontWeight: 700 }}>
               SYMBOL
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'left', color: FINCEPT.GRAY, fontWeight: 700 }}>
               TYPE
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'left', color: FINCEPT.GRAY, fontWeight: 700 }}>
               SIDE
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 700 }}>
               SIZE
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 700 }}>
               PRICE
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 700 }}>
               AVG FILL
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 700 }}>
               COST
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'left', color: FINCEPT.GRAY, fontWeight: 700 }}>
               STATUS
             </th>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 700 }}>
+            <th style={{ padding: '8px 10px', textAlign: 'left', color: FINCEPT.GRAY, fontWeight: 700 }}>
               TIME
             </th>
           </tr>
@@ -95,17 +95,17 @@ export function ClosedOrders() {
               <tr
                 key={order.id}
                 style={{
-                  borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                  backgroundColor: index % 2 === 0 ? BLOOMBERG.DARK_BG : BLOOMBERG.PANEL_BG,
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: index % 2 === 0 ? FINCEPT.DARK_BG : FINCEPT.PANEL_BG,
                 }}
               >
                 {/* Symbol */}
-                <td style={{ padding: '10px', color: BLOOMBERG.WHITE, fontWeight: 600 }}>
+                <td style={{ padding: '10px', color: FINCEPT.WHITE, fontWeight: 600 }}>
                   {order.symbol}
                 </td>
 
                 {/* Type */}
-                <td style={{ padding: '10px', color: BLOOMBERG.GRAY, textTransform: 'uppercase', fontSize: '9px' }}>
+                <td style={{ padding: '10px', color: FINCEPT.GRAY, textTransform: 'uppercase', fontSize: '9px' }}>
                   {order.type}
                 </td>
 
@@ -114,8 +114,8 @@ export function ClosedOrders() {
                   <span
                     style={{
                       padding: '2px 6px',
-                      backgroundColor: order.side === 'buy' ? `${BLOOMBERG.GREEN}20` : `${BLOOMBERG.RED}20`,
-                      color: order.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                      backgroundColor: order.side === 'buy' ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
+                      color: order.side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED,
                       fontSize: '9px',
                       fontWeight: 700,
                       borderRadius: '2px',
@@ -126,22 +126,22 @@ export function ClosedOrders() {
                 </td>
 
                 {/* Size */}
-                <td style={{ padding: '10px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
+                <td style={{ padding: '10px', textAlign: 'right', color: FINCEPT.WHITE }}>
                   {order.quantity.toFixed(4)}
                 </td>
 
                 {/* Price */}
-                <td style={{ padding: '10px', textAlign: 'right', color: BLOOMBERG.GRAY }}>
+                <td style={{ padding: '10px', textAlign: 'right', color: FINCEPT.GRAY }}>
                   {order.price ? formatCurrency(order.price) : 'MARKET'}
                 </td>
 
                 {/* Average Fill */}
-                <td style={{ padding: '10px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
+                <td style={{ padding: '10px', textAlign: 'right', color: FINCEPT.WHITE }}>
                   {order.average ? formatCurrency(order.average) : '--'}
                 </td>
 
                 {/* Cost */}
-                <td style={{ padding: '10px', textAlign: 'right', color: BLOOMBERG.ORANGE }}>
+                <td style={{ padding: '10px', textAlign: 'right', color: FINCEPT.ORANGE }}>
                   {order.cost ? formatCurrency(order.cost) : '--'}
                 </td>
 
@@ -162,7 +162,7 @@ export function ClosedOrders() {
                 </td>
 
                 {/* Time */}
-                <td style={{ padding: '10px', color: BLOOMBERG.GRAY, fontSize: '9px' }}>
+                <td style={{ padding: '10px', color: FINCEPT.GRAY, fontSize: '9px' }}>
                   {formatDateTime(order.timestamp)}
                 </td>
               </tr>

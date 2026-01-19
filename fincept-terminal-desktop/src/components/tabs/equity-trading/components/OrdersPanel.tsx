@@ -1,5 +1,5 @@
 /**
- * Orders Panel Component - Bloomberg Style
+ * Orders Panel Component - Fincept Style
  *
  * Displays open orders and order history with actions
  */
@@ -12,7 +12,7 @@ import {
 import { useStockTradingData, useStockBrokerContext } from '@/contexts/StockBrokerContext';
 import type { Order, OrderStatus } from '@/brokers/stocks/types';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',

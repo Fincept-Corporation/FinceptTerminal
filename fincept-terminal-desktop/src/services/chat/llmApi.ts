@@ -1,9 +1,17 @@
 // LLM API Integration Service
-// Unified interface for different LLM providers with streaming support
+// Unified interface for different LLM providers using native SDKs
 
 import { fetch } from '@tauri-apps/plugin-http';
 import { invoke } from '@tauri-apps/api/core';
 import { llmLogger } from '../core/loggerService';
+
+// Native SDK imports
+import { ChatOpenAI } from '@langchain/openai';
+import { ChatAnthropic } from '@langchain/anthropic';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOllama } from '@langchain/ollama';
+import Groq from 'groq-sdk';
+import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 
 export interface LLMConfig {
   provider: string;
@@ -33,20 +41,355 @@ export interface LLMResponse {
 export type StreamCallback = (chunk: string, done: boolean) => void;
 
 class LLMApiService {
-  // OpenAI API
+  // Normalize model ID for native provider APIs
+  // OpenRouter uses "provider/model" format, but native APIs need just the model name
+  private normalizeModelId(provider: string, modelId: string): string {
+    if (!modelId) return modelId;
+
+    // If model ID contains "/", extract the model name part for native APIs
+    if (modelId.includes('/')) {
+      const parts = modelId.split('/');
+      const providerPrefix = parts[0].toLowerCase();
+      const modelName = parts.slice(1).join('/');
+
+      // Map of provider prefixes to their native provider names
+      const providerMap: Record<string, string[]> = {
+        'openai': ['openai', 'gpt'],
+        'anthropic': ['anthropic', 'claude'],
+        'google': ['google', 'gemini'],
+        'groq': ['groq', 'llama', 'mixtral'],
+        'deepseek': ['deepseek'],
+        'meta': ['meta-llama', 'llama'],
+        'mistral': ['mistralai', 'mistral'],
+      };
+
+      // Check if this is a native provider call (not openrouter)
+      if (provider !== 'openrouter') {
+        // For native APIs, return just the model name without provider prefix
+        const providerPrefixes = providerMap[provider] || [];
+        if (providerPrefixes.some(p => providerPrefix.includes(p))) {
+          return modelName;
+        }
+        // If prefix doesn't match provider, return as-is (might be custom)
+        return modelName;
+      }
+    }
+
+    return modelId;
+  }
+
+  // Convert ChatMessage array to LangChain message format
+  private toLangChainMessages(messages: ChatMessage[]) {
+    return messages.map(msg => {
+      switch (msg.role) {
+        case 'system':
+          return new SystemMessage(msg.content);
+        case 'user':
+          return new HumanMessage(msg.content);
+        case 'assistant':
+          return new AIMessage(msg.content);
+        default:
+          return new HumanMessage(msg.content);
+      }
+    });
+  }
+
+  // OpenAI API using @langchain/openai
   private async callOpenAI(
     messages: ChatMessage[],
     config: LLMConfig,
     onStream?: StreamCallback
   ): Promise<LLMResponse> {
-    const url = `${config.baseUrl || 'https://api.openai.com/v1'}/chat/completions`;
+    try {
+      const normalizedModel = this.normalizeModelId('openai', config.model);
+      const model = new ChatOpenAI({
+        openAIApiKey: config.apiKey,
+        modelName: normalizedModel,
+        temperature: config.temperature,
+        maxTokens: config.maxTokens,
+        streaming: !!onStream,
+        configuration: config.baseUrl ? {
+          baseURL: config.baseUrl
+        } : undefined
+      });
+
+      const langChainMessages = this.toLangChainMessages(messages);
+
+      if (onStream) {
+        let fullContent = '';
+        const stream = await model.stream(langChainMessages);
+
+        for await (const chunk of stream) {
+          const content = typeof chunk.content === 'string' ? chunk.content : '';
+          fullContent += content;
+          onStream(content, false);
+        }
+
+        onStream('', true);
+        return { content: fullContent };
+      } else {
+        const response = await model.invoke(langChainMessages);
+        const content = typeof response.content === 'string' ? response.content : '';
+        return {
+          content,
+          usage: {
+            promptTokens: response.usage_metadata?.input_tokens || 0,
+            completionTokens: response.usage_metadata?.output_tokens || 0,
+            totalTokens: response.usage_metadata?.total_tokens || 0
+          }
+        };
+      }
+    } catch (error) {
+      llmLogger.error('OpenAI API Error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'OpenAI API error'
+      };
+    }
+  }
+
+  // Anthropic API using @langchain/anthropic
+  private async callAnthropic(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    onStream?: StreamCallback
+  ): Promise<LLMResponse> {
+    try {
+      const normalizedModel = this.normalizeModelId('anthropic', config.model);
+      const model = new ChatAnthropic({
+        anthropicApiKey: config.apiKey,
+        modelName: normalizedModel,
+        temperature: config.temperature,
+        maxTokens: config.maxTokens,
+        streaming: !!onStream
+      });
+
+      const langChainMessages = this.toLangChainMessages(messages);
+
+      if (onStream) {
+        let fullContent = '';
+        const stream = await model.stream(langChainMessages);
+
+        for await (const chunk of stream) {
+          const content = typeof chunk.content === 'string' ? chunk.content : '';
+          fullContent += content;
+          onStream(content, false);
+        }
+
+        onStream('', true);
+        return { content: fullContent };
+      } else {
+        const response = await model.invoke(langChainMessages);
+        const content = typeof response.content === 'string' ? response.content : '';
+        return {
+          content,
+          usage: {
+            promptTokens: response.usage_metadata?.input_tokens || 0,
+            completionTokens: response.usage_metadata?.output_tokens || 0,
+            totalTokens: response.usage_metadata?.total_tokens || 0
+          }
+        };
+      }
+    } catch (error) {
+      llmLogger.error('Anthropic API Error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Anthropic API error'
+      };
+    }
+  }
+
+  // Google Gemini API using @langchain/google-genai
+  private async callGemini(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    onStream?: StreamCallback
+  ): Promise<LLMResponse> {
+    try {
+      const normalizedModel = this.normalizeModelId('google', config.model);
+      const model = new ChatGoogleGenerativeAI({
+        apiKey: config.apiKey,
+        model: normalizedModel,
+        temperature: config.temperature,
+        maxOutputTokens: config.maxTokens,
+        streaming: !!onStream
+      });
+
+      const langChainMessages = this.toLangChainMessages(messages);
+
+      if (onStream) {
+        let fullContent = '';
+        const stream = await model.stream(langChainMessages);
+
+        for await (const chunk of stream) {
+          const content = typeof chunk.content === 'string' ? chunk.content : '';
+          fullContent += content;
+          onStream(content, false);
+        }
+
+        onStream('', true);
+        return { content: fullContent };
+      } else {
+        const response = await model.invoke(langChainMessages);
+        const content = typeof response.content === 'string' ? response.content : '';
+        return {
+          content,
+          usage: {
+            promptTokens: response.usage_metadata?.input_tokens || 0,
+            completionTokens: response.usage_metadata?.output_tokens || 0,
+            totalTokens: response.usage_metadata?.total_tokens || 0
+          }
+        };
+      }
+    } catch (error) {
+      llmLogger.error('Gemini API Error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Gemini API error'
+      };
+    }
+  }
+
+  // Groq API using groq-sdk
+  private async callGroq(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    onStream?: StreamCallback
+  ): Promise<LLMResponse> {
+    try {
+      const normalizedModel = this.normalizeModelId('groq', config.model);
+      const groq = new Groq({
+        apiKey: config.apiKey,
+        dangerouslyAllowBrowser: true
+      });
+
+      const groqMessages = messages.map(msg => ({
+        role: msg.role as 'system' | 'user' | 'assistant',
+        content: msg.content
+      }));
+
+      if (onStream) {
+        let fullContent = '';
+        const stream = await groq.chat.completions.create({
+          model: normalizedModel,
+          messages: groqMessages,
+          temperature: config.temperature,
+          max_tokens: config.maxTokens,
+          stream: true
+        });
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          fullContent += content;
+          onStream(content, false);
+        }
+
+        onStream('', true);
+        return { content: fullContent };
+      } else {
+        const response = await groq.chat.completions.create({
+          model: normalizedModel,
+          messages: groqMessages,
+          temperature: config.temperature,
+          max_tokens: config.maxTokens
+        });
+
+        return {
+          content: response.choices[0]?.message?.content || '',
+          usage: {
+            promptTokens: response.usage?.prompt_tokens || 0,
+            completionTokens: response.usage?.completion_tokens || 0,
+            totalTokens: response.usage?.total_tokens || 0
+          }
+        };
+      }
+    } catch (error) {
+      llmLogger.error('Groq API Error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Groq API error'
+      };
+    }
+  }
+
+  // DeepSeek API (OpenAI-compatible, uses ChatOpenAI with custom baseUrl)
+  private async callDeepSeek(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    onStream?: StreamCallback
+  ): Promise<LLMResponse> {
+    const deepseekConfig = {
+      ...config,
+      baseUrl: config.baseUrl || 'https://api.deepseek.com/v1'
+    };
+    return this.callOpenAI(messages, deepseekConfig, onStream);
+  }
+
+  // Ollama API using @langchain/ollama
+  private async callOllama(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    onStream?: StreamCallback
+  ): Promise<LLMResponse> {
+    try {
+      const model = new ChatOllama({
+        baseUrl: config.baseUrl || 'http://localhost:11434',
+        model: config.model,
+        temperature: config.temperature,
+        numPredict: config.maxTokens
+      });
+
+      const langChainMessages = this.toLangChainMessages(messages);
+
+      if (onStream) {
+        let fullContent = '';
+        const stream = await model.stream(langChainMessages);
+
+        for await (const chunk of stream) {
+          const content = typeof chunk.content === 'string' ? chunk.content : '';
+          fullContent += content;
+          onStream(content, false);
+        }
+
+        onStream('', true);
+        return { content: fullContent };
+      } else {
+        const response = await model.invoke(langChainMessages);
+        const content = typeof response.content === 'string' ? response.content : '';
+        return { content };
+      }
+    } catch (error) {
+      llmLogger.error('Ollama API Error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Ollama API error';
+      if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('fetch')) {
+        return {
+          content: '',
+          error: 'Ollama server not found. Please ensure Ollama is running at http://localhost:11434'
+        };
+      }
+      return {
+        content: '',
+        error: errorMsg
+      };
+    }
+  }
+
+  // OpenRouter API (for custom models from Model Library)
+  private async callOpenRouter(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    onStream?: StreamCallback
+  ): Promise<LLMResponse> {
+    const url = `${config.baseUrl || 'https://openrouter.ai/api/v1'}/chat/completions`;
 
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`
+          'Authorization': `Bearer ${config.apiKey}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://fincept.ai',
+          'X-Title': 'Fincept Terminal'
         },
         body: JSON.stringify({
           model: config.model,
@@ -58,12 +401,14 @@ class LLMApiService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
+        const errorData = await response.json();
+        llmLogger.debug('OpenRouter full error response:', JSON.stringify(errorData, null, 2));
+        const errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData);
+        throw new Error(`OpenRouter error (${response.status}): ${errorMessage}`);
       }
 
       if (onStream) {
-        return await this.handleOpenAIStream(response, onStream);
+        return await this.handleOpenRouterStream(response, onStream);
       } else {
         const data = await response.json();
         return {
@@ -76,15 +421,15 @@ class LLMApiService {
         };
       }
     } catch (error) {
-      llmLogger.error('OpenAI API Error:', error);
+      llmLogger.error('OpenRouter API Error:', error);
       return {
         content: '',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'OpenRouter API error'
       };
     }
   }
 
-  private async handleOpenAIStream(response: Response, onStream: StreamCallback): Promise<LLMResponse> {
+  private async handleOpenRouterStream(response: Response, onStream: StreamCallback): Promise<LLMResponse> {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let fullContent = '';
@@ -125,757 +470,65 @@ class LLMApiService {
     }
   }
 
-  // Gemini API
-  private async callGemini(
+  // Fincept LLM API (custom)
+  private async callFincept(
     messages: ChatMessage[],
     config: LLMConfig,
     onStream?: StreamCallback
   ): Promise<LLMResponse> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:${onStream ? 'streamGenerateContent' : 'generateContent'}?key=${config.apiKey}`;
-
-    // Convert messages to Gemini format
-    const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
-    // Filter out system messages AND any placeholder/empty responses
-    const conversationMessages = messages.filter(m =>
-      m.role !== 'system' &&
-      m.content.trim() !== '' &&
-      m.content !== '(No response generated)'
-    );
-
-    // Gemini requires alternating roles - merge consecutive messages from same role
-    const contents: any[] = [];
-    let lastRole: string | null = null;
-
-    for (const msg of conversationMessages) {
-      const geminiRole = msg.role === 'assistant' ? 'model' : 'user';
-
-      if (geminiRole === lastRole && contents.length > 0) {
-        // Merge with previous message
-        contents[contents.length - 1].parts.push({ text: '\n\n' + msg.content });
-      } else {
-        // New message
-        contents.push({
-          role: geminiRole,
-          parts: [{ text: msg.content }]
-        });
-        lastRole = geminiRole;
-      }
-    }
-
-    // Ensure we have at least one message
-    if (contents.length === 0) {
-      return {
-        content: '',
-        error: 'No messages to send to Gemini'
-      };
-    }
-
-    const requestBody = {
-      contents,
-      systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
-      generationConfig: {
-        temperature: config.temperature,
-        maxOutputTokens: config.maxTokens
-      }
-    };
-
-    llmLogger.debug('[Gemini] Request details:');
-    llmLogger.debug('[Gemini] - Contents count:', contents.length);
-    llmLogger.debug('[Gemini] - System instruction length: ' + (systemPrompt?.length || 0) + ' characters');
-    llmLogger.debug('[Gemini] - First content role:', contents[0]?.role);
-    llmLogger.debug('[Gemini] - First content preview:', JSON.stringify(contents[0]).substring(0, 200));
+    const url = config.baseUrl || 'https://finceptbackend.share.zrok.io/research/llm';
 
     try {
+      const userMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
+      const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+
+      const requestBody = {
+        prompt: userMessage,
+        system_prompt: systemPrompt,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens
+      };
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-API-Key': config.apiKey || ''
         },
         body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = `Gemini API error: ${response.status}`;
-        try {
-          const error = JSON.parse(errorText);
-          errorMessage = error.error?.message || errorMessage;
-          llmLogger.error('[Gemini] API Error Response:', error);
-        } catch {
-          llmLogger.error('[Gemini] API Error Text:', errorText);
-        }
-        throw new Error(errorMessage);
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || error.message || `Fincept API error: ${response.status}`);
       }
 
-      if (onStream) {
-        return await this.handleGeminiStream(response, onStream);
-      } else {
-        const data = await response.json();
+      const data = await response.json();
 
-        // Extract text content safely
-        const candidate = data.candidates?.[0];
-        if (!candidate) {
-          throw new Error('No candidates in Gemini response');
-        }
+      // Response can be nested in data.data.response or directly in data.response
+      const responseData = data.data || data;
+      const content = responseData.response || responseData.content || responseData.answer || responseData.text || responseData.result || '';
 
-        const parts = candidate.content?.parts;
-        if (!parts || parts.length === 0) {
-          throw new Error('No content parts in Gemini response');
-        }
-
-        const text = parts[0].text;
-        if (!text) {
-          throw new Error('No text in Gemini response parts');
-        }
-
-        return {
-          content: text,
-          usage: {
-            promptTokens: data.usageMetadata?.promptTokenCount || 0,
-            completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
-            totalTokens: data.usageMetadata?.totalTokenCount || 0
-          }
-        };
-      }
-    } catch (error) {
-      llmLogger.error('Gemini API Error:', error);
-      return {
-        content: '',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  private async handleGeminiStream(response: Response, onStream: StreamCallback): Promise<LLMResponse> {
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullContent = '';
-    let accumulatedJson = '';
-
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    try {
-      // Accumulate all chunks into complete JSON string
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        accumulatedJson += chunk;
-      }
-
-      // Parse the complete JSON response (Gemini returns an array)
-      try {
-        const parsed = JSON.parse(accumulatedJson);
-
-        // Gemini returns an array of response objects
-        if (Array.isArray(parsed)) {
-          for (const item of parsed) {
-            const content = item.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            if (content) {
-              fullContent += content;
-              onStream(content, false);
-            }
-          }
-        } else {
-          // Single object response
-          const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (content) {
-            fullContent = content;
-            onStream(content, false);
-          }
-        }
-      } catch (e) {
-        llmLogger.error('[Gemini Stream] Failed to parse JSON:', e);
-        llmLogger.debug('[Gemini Stream] Accumulated JSON:', accumulatedJson);
-        throw new Error('Failed to parse Gemini response');
-      }
-
-      onStream('', true);
-      return { content: fullContent };
-    } finally {
-      reader.releaseLock();
-    }
-  }
-
-  // Gemini with function calling
-  private async callGeminiWithTools(
-    userMessage: string,
-    conversationHistory: ChatMessage[],
-    tools: Array<any>,
-    config: LLMConfig,
-    onStream?: StreamCallback,
-    onToolCall?: (toolName: string, args: any, result?: any) => void
-  ): Promise<LLMResponse> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
-
-    // Convert MCP tools to Gemini function format
-    const functionDeclarations = tools.map(tool => {
-      // Clean schema for Gemini - remove $schema and additionalProperties
-      const cleanSchema = tool.inputSchema ? { ...tool.inputSchema } : { type: 'object', properties: {} };
-      delete cleanSchema.$schema;
-      delete cleanSchema.additionalProperties;
-
-      return {
-        name: `${tool.serverId}__${tool.name}`,
-        description: tool.description || '',
-        parameters: cleanSchema
-      };
-    });
-
-    llmLogger.debug('[MCP] Sending tools to Gemini: ' + functionDeclarations.length + ' tools');
-
-    // Convert messages to Gemini format
-    const systemPrompt = conversationHistory.find(m => m.role === 'system')?.content || config.systemPrompt || '';
-    const conversationMessages = conversationHistory.filter(m => m.role !== 'system');
-
-    const contents = [
-      ...conversationMessages.map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
-      })),
-      {
-        role: 'user',
-        parts: [{ text: userMessage }]
-      }
-    ];
-
-    try {
-      // First call - with tools
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents,
-          systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
-          tools: [{ functionDeclarations }],
-          generationConfig: {
-            temperature: config.temperature,
-            maxOutputTokens: config.maxTokens
-          }
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
-      }
-
-      let data = await response.json();
-      const candidate = data.candidates?.[0];
-
-      // Track tool result content for fallback
-      let resultContent = '';
-
-      // Check if Gemini wants to call functions
-      const functionCall = candidate?.content?.parts?.find((part: any) => part.functionCall);
-
-      if (functionCall) {
-        llmLogger.info('[MCP] Gemini requested function call:', functionCall.functionCall.name);
-
-        const toolName = functionCall.functionCall.name;
-        const toolArgs = functionCall.functionCall.args || {};
-
-        // Notify UI
-        if (onToolCall) {
-          onToolCall(toolName, toolArgs);
-        }
-
-        // Execute tool
-        const { mcpManager } = await import('../mcp/mcpManager');
-        const [serverId, actualToolName] = toolName.includes('__')
-          ? toolName.split('__')
-          : [toolName, toolName];
-
-        let toolResult: any;
-        try {
-          toolResult = await mcpManager.callTool(serverId, actualToolName, toolArgs);
-
-          // Format result
-          if (toolResult.content && Array.isArray(toolResult.content)) {
-            resultContent = toolResult.content
-              .map((c: any) => {
-                if (c.text) return c.text;
-                if (c.data) return typeof c.data === 'string' ? c.data : JSON.stringify(c.data, null, 2);
-                return JSON.stringify(c, null, 2);
-              })
-              .join('\n\n');
-          } else if (toolResult.content) {
-            resultContent = typeof toolResult.content === 'string'
-              ? toolResult.content
-              : JSON.stringify(toolResult.content, null, 2);
-          } else {
-            resultContent = JSON.stringify(toolResult, null, 2);
-          }
-
-          // Notify UI of result
-          if (onToolCall) {
-            onToolCall(toolName, toolArgs, toolResult);
-          }
-
-          llmLogger.debug('[MCP] Tool result:', resultContent);
-
-          // Second call with function response
-          contents.push({
-            role: 'model',
-            parts: [{ functionCall: functionCall.functionCall } as any]
-          });
-
-          contents.push({
-            role: 'user',
-            parts: [{
-              functionResponse: {
-                name: toolName,
-                response: { result: resultContent }
-              }
-            } as any]
-          });
-
-        } catch (error) {
-          llmLogger.error('[MCP] Tool execution error:', error);
-          contents.push({
-            role: 'user',
-            parts: [{
-              functionResponse: {
-                name: toolName,
-                response: { error: error instanceof Error ? error.message : 'Unknown error' }
-              }
-            } as any]
-          });
-        }
-
-        // Get final response
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents,
-            systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
-            generationConfig: {
-              temperature: config.temperature,
-              maxOutputTokens: config.maxTokens
-            }
-          })
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
-        }
-
-        data = await response.json();
-      }
-
-      // Extract final content
-      let finalContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-      // If Gemini didn't generate text after tool call, return the tool result
-      if (!finalContent && resultContent) {
-        finalContent = resultContent;
-      }
-
-      llmLogger.debug('[MCP] Gemini final response length:', finalContent.length);
-
-      // Signal completion to UI
-      if (onStream && finalContent) {
-        onStream(finalContent, false);
+      if (onStream && content) {
+        onStream(content, false);
         onStream('', true);
       }
 
+      // Usage can also be nested in data.data
+      const usage = responseData.usage || data.usage || {};
+
       return {
-        content: finalContent,
+        content,
         usage: {
-          promptTokens: data.usageMetadata?.promptTokenCount || 0,
-          completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: data.usageMetadata?.totalTokenCount || 0
+          promptTokens: usage.input_tokens || usage.prompt_tokens || 0,
+          completionTokens: usage.output_tokens || usage.completion_tokens || 0,
+          totalTokens: usage.total_tokens || 0
         }
       };
-
     } catch (error) {
-      llmLogger.error('Gemini function calling error:', error);
       return {
         content: '',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  // DeepSeek API (OpenAI-compatible)
-  private async callDeepSeek(
-    messages: ChatMessage[],
-    config: LLMConfig,
-    onStream?: StreamCallback
-  ): Promise<LLMResponse> {
-    const deepseekConfig = {
-      ...config,
-      baseUrl: config.baseUrl || 'https://api.deepseek.com'
-    };
-    return this.callOpenAI(messages, deepseekConfig, onStream);
-  }
-
-  // Ollama API
-  private async callOllama(
-    messages: ChatMessage[],
-    config: LLMConfig,
-    onStream?: StreamCallback
-  ): Promise<LLMResponse> {
-    const url = `${config.baseUrl || 'http://localhost:11434'}/api/chat`;
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: messages,
-          stream: !!onStream,
-          options: {
-            temperature: config.temperature,
-            num_predict: config.maxTokens
-          }
-        })
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          let errorMsg = '';
-          try {
-            const errorData = await response.json();
-            if (errorData.error && errorData.error.includes('model')) {
-              errorMsg = `Ollama model '${config.model}' not found. Please pull the model first using: ollama pull ${config.model}`;
-            } else {
-              errorMsg = errorData.error || 'Ollama server not found. Please ensure Ollama is running at http://localhost:11434';
-            }
-          } catch {
-            errorMsg = 'Ollama server not found. Please ensure Ollama is running at http://localhost:11434';
-          }
-          throw new Error(errorMsg);
-        }
-        throw new Error(`Ollama API error: ${response.status}`);
-      }
-
-      if (onStream) {
-        return await this.handleOllamaStream(response, onStream);
-      } else {
-        const data = await response.json();
-        return {
-          content: data.message.content,
-          usage: {
-            promptTokens: data.prompt_eval_count || 0,
-            completionTokens: data.eval_count || 0,
-            totalTokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
-          }
-        };
-      }
-    } catch (error) {
-      llmLogger.error('Ollama API Error:', error);
-      return {
-        content: '',
-        error: error instanceof Error ? error.message : 'Unknown error. Is Ollama running?'
-      };
-    }
-  }
-
-  private async handleOllamaStream(response: Response, onStream: StreamCallback): Promise<LLMResponse> {
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullContent = '';
-
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim());
-
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            const content = parsed.message?.content || '';
-            if (content) {
-              fullContent += content;
-              onStream(content, false);
-            }
-            if (parsed.done) {
-              break;
-            }
-          } catch (e) {
-            // Skip invalid JSON
-          }
-        }
-      }
-
-      onStream('', true);
-      return { content: fullContent };
-    } finally {
-      reader.releaseLock();
-    }
-  }
-
-  // Ollama with function calling
-  private async callOllamaWithTools(
-    userMessage: string,
-    conversationHistory: ChatMessage[],
-    tools: Array<any>,
-    config: LLMConfig,
-    onStream?: StreamCallback,
-    onToolCall?: (toolName: string, args: any, result?: any) => void
-  ): Promise<LLMResponse> {
-    const url = `${config.baseUrl || 'http://localhost:11434'}/api/chat`;
-
-    // Convert MCP tools to Ollama function format
-    const ollamaTools = tools.map(tool => {
-      // Clean schema for Ollama - remove $schema and additionalProperties
-      const cleanSchema = tool.inputSchema ? { ...tool.inputSchema } : { type: 'object', properties: {} };
-      delete cleanSchema.$schema;
-      delete cleanSchema.additionalProperties;
-
-      return {
-        type: 'function',
-        function: {
-          name: `${tool.serverId}__${tool.name}`,
-          description: tool.description || '',
-          parameters: cleanSchema
-        }
-      };
-    });
-
-    llmLogger.debug('[MCP] Sending tools to Ollama: ' + ollamaTools.length + ' tools');
-
-    // Build messages
-    const systemPrompt = conversationHistory.find(m => m.role === 'system')?.content || config.systemPrompt || '';
-    const conversationMessages = conversationHistory.filter(m => m.role !== 'system');
-
-    let messages: any[] = [
-      { role: 'system', content: systemPrompt + '\n\nYou have access to tools. Use them when the user asks for specific data or actions.' },
-      ...conversationMessages.map(msg => ({ role: msg.role, content: msg.content })),
-      { role: 'user', content: userMessage }
-    ];
-
-    try {
-      // First call - with tools
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: messages,
-          tools: ollamaTools,
-          stream: false,
-          options: {
-            temperature: config.temperature,
-            num_predict: config.maxTokens
-          }
-        })
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`Ollama model '${config.model}' not found. Please pull the model first using: ollama pull ${config.model}`);
-        }
-        throw new Error(`Ollama API error: ${response.status}`);
-      }
-
-      let data = await response.json();
-      let assistantMessage = data.message;
-
-      // Track tool result content for fallback
-      let resultContent = '';
-
-      // Check if Ollama wants to call tools
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        llmLogger.info('[MCP] Ollama requested tool calls:', assistantMessage.tool_calls.length);
-
-        // Add assistant's tool call message to conversation
-        messages.push(assistantMessage);
-
-        // Execute each tool call
-        for (const toolCall of assistantMessage.tool_calls) {
-          const toolName = toolCall.function.name;
-          const toolArgs = toolCall.function.arguments;
-
-          llmLogger.debug(`[MCP] Calling tool: ${toolName}`, toolArgs);
-
-          // Notify UI that tool is being called
-          if (onToolCall) {
-            onToolCall(toolName, toolArgs);
-          }
-
-          // Import mcpManager dynamically to avoid circular dependency
-          const { mcpManager } = await import('../mcp/mcpManager');
-
-          // Execute the tool
-          try {
-            // Parse server ID from tool name (format: serverId__toolName)
-            const [serverId, actualToolName] = toolName.includes('__')
-              ? toolName.split('__')
-              : [toolName, toolName];
-
-            const toolResult = await mcpManager.callTool(serverId, actualToolName, toolArgs);
-
-            // Format result for Ollama
-            if (toolResult.content && Array.isArray(toolResult.content)) {
-              resultContent = toolResult.content
-                .map((c: any) => {
-                  if (c.text) return c.text;
-                  if (c.data) return typeof c.data === 'string' ? c.data : JSON.stringify(c.data, null, 2);
-                  return JSON.stringify(c, null, 2);
-                })
-                .join('\n\n');
-            } else if (toolResult.content) {
-              resultContent = typeof toolResult.content === 'string'
-                ? toolResult.content
-                : JSON.stringify(toolResult.content, null, 2);
-            } else {
-              resultContent = JSON.stringify(toolResult, null, 2);
-            }
-
-            // Add tool result to conversation
-            messages.push({
-              role: 'tool',
-              content: resultContent
-            });
-
-            // Notify UI of result
-            if (onToolCall) {
-              onToolCall(toolName, toolArgs, toolResult);
-            }
-
-            llmLogger.debug(`[MCP] Tool result:`, resultContent);
-          } catch (error) {
-            llmLogger.error(`[MCP] Tool execution error:`, error);
-            messages.push({
-              role: 'tool',
-              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-            });
-          }
-        }
-
-        // Second call - get final response with tool results
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: config.model,
-            messages: messages,
-            stream: false,
-            options: {
-              temperature: config.temperature,
-              num_predict: config.maxTokens
-            }
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Ollama API error: ${response.status}`);
-        }
-
-        data = await response.json();
-        assistantMessage = data.message;
-      }
-
-      // Extract final content
-      let finalContent = assistantMessage.content || '';
-
-      // If Ollama didn't generate text after tool call, return the tool result
-      if (!finalContent && resultContent) {
-        finalContent = resultContent;
-      }
-
-      llmLogger.debug('[MCP] Ollama final response length:', finalContent.length);
-
-      // Signal completion to UI
-      if (onStream && finalContent) {
-        onStream(finalContent, false);
-        onStream('', true);
-      }
-
-      return {
-        content: finalContent,
-        usage: {
-          promptTokens: data.prompt_eval_count || 0,
-          completionTokens: data.eval_count || 0,
-          totalTokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
-        }
-      };
-
-    } catch (error) {
-      llmLogger.error('Ollama function calling error:', error);
-      return {
-        content: '',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  // OpenRouter API (OpenAI-compatible)
-  private async callOpenRouter(
-    messages: ChatMessage[],
-    config: LLMConfig,
-    onStream?: StreamCallback
-  ): Promise<LLMResponse> {
-    const url = `${config.baseUrl || 'https://openrouter.ai/api/v1'}/chat/completions`;
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Fincept Terminal'
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: messages,
-          temperature: config.temperature,
-          max_tokens: config.maxTokens,
-          stream: !!onStream
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        llmLogger.debug('OpenRouter full error response:', JSON.stringify(errorData, null, 2));
-        const errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData);
-        throw new Error(`OpenRouter error (${response.status}): ${errorMessage}`);
-      }
-
-      if (onStream) {
-        return await this.handleOpenAIStream(response, onStream);
-      } else {
-        const data = await response.json();
-        return {
-          content: data.choices[0].message.content,
-          usage: {
-            promptTokens: data.usage?.prompt_tokens || 0,
-            completionTokens: data.usage?.completion_tokens || 0,
-            totalTokens: data.usage?.total_tokens || 0
-          }
-        };
-      }
-    } catch (error) {
-      llmLogger.error('OpenRouter API Error:', error);
-      return {
-        content: '',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Fincept API error'
       };
     }
   }
@@ -912,7 +565,7 @@ class LLMApiService {
       };
 
       // Validate configuration
-      if (config.provider !== 'ollama' && !config.apiKey) {
+      if (config.provider !== 'ollama' && config.provider !== 'fincept' && !config.apiKey) {
         return {
           content: '',
           error: `${config.provider} requires an API key. Please configure it in settings.`
@@ -930,18 +583,29 @@ class LLMApiService {
       switch (config.provider) {
         case 'openai':
           return this.callOpenAI(messages, config, onStream);
+        case 'anthropic':
+          return this.callAnthropic(messages, config, onStream);
         case 'gemini':
+        case 'google':
           return this.callGemini(messages, config, onStream);
+        case 'groq':
+          return this.callGroq(messages, config, onStream);
         case 'deepseek':
           return this.callDeepSeek(messages, config, onStream);
         case 'ollama':
           return this.callOllama(messages, config, onStream);
         case 'openrouter':
           return this.callOpenRouter(messages, config, onStream);
+        case 'fincept':
+          return this.callFincept(messages, config, onStream);
         default:
+          // For custom models from Model Library, check if it's an OpenRouter model
+          if (config.model && config.model.includes('/')) {
+            return this.callOpenRouter(messages, config, onStream);
+          }
           return {
             content: '',
-            error: `Unknown provider: ${config.provider}`
+            error: `Unknown provider: ${config.provider}. Please configure it in settings.`
           };
       }
     } catch (error) {
@@ -953,7 +617,7 @@ class LLMApiService {
     }
   }
 
-  // Chat with MCP tools support (Full Implementation)
+  // Chat with MCP tools support
   async chatWithTools(
     userMessage: string,
     conversationHistory: ChatMessage[] = [],
@@ -972,20 +636,18 @@ class LLMApiService {
         };
       }
 
-      // OpenAI, OpenRouter, Gemini, DeepSeek, and Ollama support function calling
-      const supportsTools = ['openai', 'openrouter', 'gemini', 'deepseek', 'ollama'].includes(activeConfig.provider);
+      // Providers that support function calling (MCP tools)
+      const supportsTools = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'openrouter', 'fincept'].includes(activeConfig.provider);
 
       if (!supportsTools && tools.length > 0) {
-        // Provider doesn't support tools - show warning message
         llmLogger.warn(`Provider '${activeConfig.provider}' does not support function calling. Available tools: ${tools.length}`);
 
-        const warningMessage = `[WARN]️ MCP Tools Not Supported\n\n` +
+        const warningMessage = `[WARN] MCP Tools Not Supported\n\n` +
           `Your current LLM provider (${activeConfig.provider.toUpperCase()}) does not support function calling with MCP tools.\n\n` +
           `**Available MCP Tools:** ${tools.length} tools detected\n` +
-          `**Supported Providers:** OpenAI, Gemini, DeepSeek, OpenRouter, Ollama\n\n` +
-          `To use MCP tools, please switch to a supported provider in Settings (CONFIG button).`;
+          `**Supported Providers:** OpenAI, Anthropic, Gemini, Groq, OpenRouter\n\n` +
+          `To use MCP tools, please switch to a supported provider in Settings.`;
 
-        // Return warning as response
         return {
           content: warningMessage,
           error: undefined
@@ -997,8 +659,10 @@ class LLMApiService {
         return this.chat(userMessage, conversationHistory, onStream);
       }
 
+      // Get global settings
       const globalSettings = await invoke<any>('db_get_llm_global_settings');
 
+      // Build config
       const config: LLMConfig = {
         provider: activeConfig.provider,
         apiKey: activeConfig.api_key,
@@ -1009,198 +673,447 @@ class LLMApiService {
         systemPrompt: globalSettings.system_prompt
       };
 
-      // Handle Gemini separately since it has different API format
-      if (activeConfig.provider === 'gemini') {
-        return this.callGeminiWithTools(userMessage, conversationHistory, tools, config, onStream, onToolCall);
-      }
-
-      // Handle Ollama separately since it has different API format
-      if (activeConfig.provider === 'ollama') {
-        return this.callOllamaWithTools(userMessage, conversationHistory, tools, config, onStream, onToolCall);
-      }
-
-      // Build messages for OpenAI/OpenRouter/DeepSeek (all use OpenAI format)
-      let messages: any[] = [
-        { role: 'system', content: config.systemPrompt || 'You are a helpful assistant with access to tools. Use them when needed.' },
-        ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
-        { role: 'user', content: userMessage }
-      ];
-
-      // Convert MCP tools to OpenAI function format
-      // Prefix tool name with serverId for proper routing
-      const functions = tools.map(tool => ({
-        type: 'function',
+      // Format tools for OpenAI-style function calling
+      const formattedTools = tools.map((tool: any) => ({
+        type: 'function' as const,
         function: {
-          name: `${tool.serverId}__${tool.name}`, // Format: serverId__toolName
-          description: tool.description || '',
-          parameters: tool.inputSchema || { type: 'object', properties: {} }
+          name: `${tool.serverId}__${tool.name}`,
+          description: tool.description || `Tool: ${tool.name} from ${tool.serverId}`,
+          parameters: tool.inputSchema || {
+            type: 'object',
+            properties: {},
+            required: []
+          }
         }
       }));
 
-      llmLogger.debug('[MCP] Sending tools to API:', functions.length + ' tools');
-      llmLogger.debug('[MCP] Tool names:', functions.map(f => f.function.name));
+      // Build messages array
+      const messages: ChatMessage[] = [
+        { role: 'system', content: config.systemPrompt || 'You are a helpful assistant with access to tools. Use them when appropriate to help the user.' },
+        ...conversationHistory,
+        { role: 'user', content: userMessage }
+      ];
 
-      // Determine base URL based on provider
-      let baseUrl = config.baseUrl;
-      if (!baseUrl) {
-        if (activeConfig.provider === 'deepseek') {
-          baseUrl = 'https://api.deepseek.com';
-        } else if (activeConfig.provider === 'openrouter') {
-          baseUrl = 'https://openrouter.ai/api/v1';
-        } else {
-          baseUrl = 'https://api.openai.com/v1';
-        }
-      }
-
-      const url = `${baseUrl}/chat/completions`;
-
-      // First call - with tools
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
-          ...(activeConfig.provider === 'openrouter' ? {
-            'HTTP-Referer': window.location.origin,
-            'X-Title': 'Fincept Terminal'
-          } : {})
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: messages,
-          tools: functions,
-          tool_choice: 'auto',
-          temperature: config.temperature,
-          max_tokens: config.maxTokens
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || `API error: ${response.status}`);
-      }
-
-      let data = await response.json();
-      let assistantMessage = data.choices[0].message;
-
-      // Check if AI wants to call tools
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        llmLogger.info('[MCP] AI requested tool calls:', assistantMessage.tool_calls.length);
-
-        // Add assistant's tool call message to conversation
-        messages.push(assistantMessage);
-
-        // Execute each tool call
-        for (const toolCall of assistantMessage.tool_calls) {
-          const toolName = toolCall.function.name;
-          const toolArgs = JSON.parse(toolCall.function.arguments);
-
-          llmLogger.debug(`[MCP] Calling tool: ${toolName}`, toolArgs);
-
-          // Notify UI that tool is being called
-          if (onToolCall) {
-            onToolCall(toolName, toolArgs);
-          }
-
-          // Import mcpManager dynamically to avoid circular dependency
-          const { mcpManager } = await import('../mcp/mcpManager');
-
-          // Execute the tool
-          try {
-            // Parse server ID from tool name (format: serverId__toolName)
-            const [serverId, actualToolName] = toolName.includes('__')
-              ? toolName.split('__')
-              : [toolName, toolName];
-
-            const toolResult = await mcpManager.callTool(serverId, actualToolName, toolArgs);
-
-            // Format result for OpenAI - Better formatting
-            let resultContent = '';
-            if (toolResult.content && Array.isArray(toolResult.content)) {
-              resultContent = toolResult.content
-                .map((c: any) => {
-                  if (c.text) return c.text;
-                  if (c.data) return typeof c.data === 'string' ? c.data : JSON.stringify(c.data, null, 2);
-                  return JSON.stringify(c, null, 2);
-                })
-                .join('\n\n');
-            } else if (toolResult.content) {
-              resultContent = typeof toolResult.content === 'string'
-                ? toolResult.content
-                : JSON.stringify(toolResult.content, null, 2);
-            } else {
-              resultContent = JSON.stringify(toolResult, null, 2);
-            }
-
-            // Add tool result to conversation
-            messages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: resultContent
-            });
-
-            // Notify UI of result
-            if (onToolCall) {
-              onToolCall(toolName, toolArgs, toolResult);
-            }
-
-            llmLogger.debug(`[MCP] Tool result:`, resultContent);
-          } catch (error) {
-            llmLogger.error(`[MCP] Tool execution error:`, error);
-            messages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-            });
-          }
-        }
-
-        // Second call - get final response with tool results
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.apiKey}`,
-            ...(activeConfig.provider === 'openrouter' ? {
-              'HTTP-Referer': window.location.origin,
-              'X-Title': 'Fincept Terminal'
-            } : {})
-          },
-          body: JSON.stringify({
-            model: config.model,
-            messages: messages,
-            temperature: config.temperature,
-            max_tokens: config.maxTokens
-          })
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error?.message || `API error: ${response.status}`);
-        }
-
-        data = await response.json();
-        assistantMessage = data.choices[0].message;
-      }
-
-      // Ensure content exists
-      const finalContent = assistantMessage.content || '';
-      llmLogger.debug('[MCP] Final response length:', finalContent.length);
-
-      return {
-        content: finalContent,
-        usage: {
-          promptTokens: data.usage?.prompt_tokens || 0,
-          completionTokens: data.usage?.completion_tokens || 0,
-          totalTokens: data.usage?.total_tokens || 0
-        }
-      };
+      // Use OpenAI-compatible tool calling for supported providers
+      return await this.callWithTools(messages, config, formattedTools, onStream, onToolCall);
 
     } catch (error) {
       llmLogger.error('Error in chatWithTools:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Call LLM with tool support (OpenAI-compatible format)
+  private async callWithTools(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    tools: any[],
+    onStream?: StreamCallback,
+    onToolCall?: (toolName: string, args: any, result?: any) => void
+  ): Promise<LLMResponse> {
+    try {
+      // For OpenAI, Groq, DeepSeek - use ChatOpenAI with tools
+      if (['openai', 'groq', 'deepseek'].includes(config.provider)) {
+        const baseUrl = config.provider === 'groq'
+          ? 'https://api.groq.com/openai/v1'
+          : config.provider === 'deepseek'
+            ? 'https://api.deepseek.com/v1'
+            : config.baseUrl;
+
+        const normalizedModel = this.normalizeModelId(config.provider, config.model);
+        const model = new ChatOpenAI({
+          openAIApiKey: config.apiKey,
+          modelName: normalizedModel,
+          temperature: config.temperature,
+          maxTokens: config.maxTokens,
+          configuration: baseUrl ? { baseURL: baseUrl } : undefined
+        });
+
+        const modelWithTools = model.bindTools(tools);
+        const langChainMessages = this.toLangChainMessages(messages);
+        const response = await modelWithTools.invoke(langChainMessages);
+
+        // Check if tool calls were made
+        if (response.tool_calls && response.tool_calls.length > 0) {
+          let toolResults = '';
+
+          for (const toolCall of response.tool_calls) {
+            const functionName = toolCall.name;
+            const args = toolCall.args;
+
+            // Parse function name to get serverId and toolName
+            const parts = functionName.split('__');
+            if (parts.length === 2) {
+              const [serverId, toolName] = parts;
+
+              // Notify about tool call
+              onToolCall?.(toolName, args);
+
+              try {
+                // Execute the tool via MCP
+                const { mcpManager } = await import('../mcp/mcpManager');
+                const result = await mcpManager.callTool(serverId, toolName, args);
+
+                // Notify about tool result
+                onToolCall?.(toolName, args, result);
+
+                toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
+              } catch (toolError) {
+                toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
+              }
+            }
+          }
+
+          // If we have tool results, make a follow-up call to get the final response
+          if (toolResults) {
+            const followUpMessages: ChatMessage[] = [
+              ...messages,
+              { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
+              { role: 'user', content: 'Please provide a summary based on the tool results above.' }
+            ];
+
+            return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
+          }
+        }
+
+        const content = typeof response.content === 'string' ? response.content : '';
+
+        if (onStream && content) {
+          onStream(content, false);
+          onStream('', true);
+        }
+
+        return { content };
+      }
+
+      // For Anthropic - use ChatAnthropic with tools
+      if (config.provider === 'anthropic') {
+        const normalizedModel = this.normalizeModelId('anthropic', config.model);
+        const model = new ChatAnthropic({
+          anthropicApiKey: config.apiKey,
+          modelName: normalizedModel,
+          temperature: config.temperature,
+          maxTokens: config.maxTokens
+        });
+
+        const modelWithTools = model.bindTools(tools);
+        const langChainMessages = this.toLangChainMessages(messages);
+        const response = await modelWithTools.invoke(langChainMessages);
+
+        // Handle tool calls similar to OpenAI
+        if (response.tool_calls && response.tool_calls.length > 0) {
+          let toolResults = '';
+
+          for (const toolCall of response.tool_calls) {
+            const functionName = toolCall.name;
+            const args = toolCall.args;
+
+            const parts = functionName.split('__');
+            if (parts.length === 2) {
+              const [serverId, toolName] = parts;
+              onToolCall?.(toolName, args);
+
+              try {
+                const { mcpManager } = await import('../mcp/mcpManager');
+                const result = await mcpManager.callTool(serverId, toolName, args);
+                onToolCall?.(toolName, args, result);
+                toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
+              } catch (toolError) {
+                toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
+              }
+            }
+          }
+
+          if (toolResults) {
+            const followUpMessages: ChatMessage[] = [
+              ...messages,
+              { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
+              { role: 'user', content: 'Please provide a summary based on the tool results above.' }
+            ];
+
+            return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
+          }
+        }
+
+        const content = typeof response.content === 'string' ? response.content : '';
+
+        if (onStream && content) {
+          onStream(content, false);
+          onStream('', true);
+        }
+
+        return { content };
+      }
+
+      // For Google/Gemini - use ChatGoogleGenerativeAI with tools
+      if (['gemini', 'google'].includes(config.provider)) {
+        const normalizedModel = this.normalizeModelId('google', config.model);
+        const model = new ChatGoogleGenerativeAI({
+          apiKey: config.apiKey,
+          model: normalizedModel,
+          temperature: config.temperature,
+          maxOutputTokens: config.maxTokens
+        });
+
+        const modelWithTools = model.bindTools(tools);
+        const langChainMessages = this.toLangChainMessages(messages);
+        const response = await modelWithTools.invoke(langChainMessages);
+
+        // Handle tool calls
+        if (response.tool_calls && response.tool_calls.length > 0) {
+          let toolResults = '';
+
+          for (const toolCall of response.tool_calls) {
+            const functionName = toolCall.name;
+            const args = toolCall.args;
+
+            const parts = functionName.split('__');
+            if (parts.length === 2) {
+              const [serverId, toolName] = parts;
+              onToolCall?.(toolName, args);
+
+              try {
+                const { mcpManager } = await import('../mcp/mcpManager');
+                const result = await mcpManager.callTool(serverId, toolName, args);
+                onToolCall?.(toolName, args, result);
+                toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
+              } catch (toolError) {
+                toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
+              }
+            }
+          }
+
+          if (toolResults) {
+            const followUpMessages: ChatMessage[] = [
+              ...messages,
+              { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
+              { role: 'user', content: 'Please provide a summary based on the tool results above.' }
+            ];
+
+            return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
+          }
+        }
+
+        const content = typeof response.content === 'string' ? response.content : '';
+
+        if (onStream && content) {
+          onStream(content, false);
+          onStream('', true);
+        }
+
+        return { content };
+      }
+
+      // For OpenRouter - use HTTP API with tools
+      if (config.provider === 'openrouter') {
+        return await this.callOpenRouterWithTools(messages, config, tools, onStream, onToolCall);
+      }
+
+      // For Fincept - use HTTP API with tools (OpenAI-compatible)
+      if (config.provider === 'fincept') {
+        return await this.callFinceptWithTools(messages, config, tools, onStream, onToolCall);
+      }
+
+      // Fallback to regular chat if tools not supported
+      llmLogger.warn(`Tool calling not implemented for provider: ${config.provider}, falling back to regular chat`);
+      return this.chat(messages[messages.length - 1].content, messages.slice(0, -1), onStream);
+
+    } catch (error) {
+      llmLogger.error('Error in callWithTools:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Fincept with tools support (OpenAI-compatible)
+  private async callFinceptWithTools(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    tools: any[],
+    onStream?: StreamCallback,
+    onToolCall?: (toolName: string, args: any, result?: any) => void
+  ): Promise<LLMResponse> {
+    const url = config.baseUrl || 'https://finceptbackend.share.zrok.io/research/llm';
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': config.apiKey || ''
+        },
+        body: JSON.stringify({
+          messages: messages,
+          tools: tools,
+          temperature: config.temperature,
+          max_tokens: config.maxTokens
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || `Fincept error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Check for tool calls
+      if (data.tool_calls && data.tool_calls.length > 0) {
+        let toolResults = '';
+
+        for (const toolCall of data.tool_calls) {
+          const functionName = toolCall.function?.name || toolCall.name;
+          const args = typeof toolCall.function?.arguments === 'string'
+            ? JSON.parse(toolCall.function.arguments)
+            : toolCall.args || {};
+
+          const parts = functionName.split('__');
+          if (parts.length === 2) {
+            const [serverId, toolName] = parts;
+            onToolCall?.(toolName, args);
+
+            try {
+              const { mcpManager } = await import('../mcp/mcpManager');
+              const result = await mcpManager.callTool(serverId, toolName, args);
+              onToolCall?.(toolName, args, result);
+              toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
+            } catch (toolError) {
+              toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
+            }
+          }
+        }
+
+        if (toolResults) {
+          const followUpMessages: ChatMessage[] = [
+            ...messages,
+            { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
+            { role: 'user', content: 'Please provide a summary based on the tool results above.' }
+          ];
+
+          return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
+        }
+      }
+
+      const content = data.response || data.content || data.choices?.[0]?.message?.content || '';
+
+      if (onStream && content) {
+        onStream(content, false);
+        onStream('', true);
+      }
+
+      return {
+        content,
+        usage: {
+          promptTokens: data.usage?.prompt_tokens || 0,
+          completionTokens: data.usage?.completion_tokens || 0,
+          totalTokens: data.usage?.total_tokens || 0
+        }
+      };
+    } catch (error) {
+      llmLogger.error('Fincept with tools error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Fincept API error'
+      };
+    }
+  }
+
+  // OpenRouter with tools support
+  private async callOpenRouterWithTools(
+    messages: ChatMessage[],
+    config: LLMConfig,
+    tools: any[],
+    onStream?: StreamCallback,
+    onToolCall?: (toolName: string, args: any, result?: any) => void
+  ): Promise<LLMResponse> {
+    const url = `${config.baseUrl || 'https://openrouter.ai/api/v1'}/chat/completions`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://fincept.ai',
+          'X-Title': 'Fincept Terminal'
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: messages,
+          tools: tools,
+          temperature: config.temperature,
+          max_tokens: config.maxTokens
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `OpenRouter error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const choice = data.choices[0];
+
+      // Check for tool calls
+      if (choice.message?.tool_calls && choice.message.tool_calls.length > 0) {
+        let toolResults = '';
+
+        for (const toolCall of choice.message.tool_calls) {
+          const functionName = toolCall.function.name;
+          const args = JSON.parse(toolCall.function.arguments || '{}');
+
+          const parts = functionName.split('__');
+          if (parts.length === 2) {
+            const [serverId, toolName] = parts;
+            onToolCall?.(toolName, args);
+
+            try {
+              const { mcpManager } = await import('../mcp/mcpManager');
+              const result = await mcpManager.callTool(serverId, toolName, args);
+              onToolCall?.(toolName, args, result);
+              toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
+            } catch (toolError) {
+              toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
+            }
+          }
+        }
+
+        if (toolResults) {
+          const followUpMessages: ChatMessage[] = [
+            ...messages,
+            { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
+            { role: 'user', content: 'Please provide a summary based on the tool results above.' }
+          ];
+
+          return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
+        }
+      }
+
+      const content = choice.message?.content || '';
+
+      if (onStream && content) {
+        onStream(content, false);
+        onStream('', true);
+      }
+
+      return {
+        content,
+        usage: {
+          promptTokens: data.usage?.prompt_tokens || 0,
+          completionTokens: data.usage?.completion_tokens || 0,
+          totalTokens: data.usage?.total_tokens || 0
+        }
+      };
+    } catch (error) {
+      llmLogger.error('OpenRouter with tools error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'OpenRouter API error'
       };
     }
   }

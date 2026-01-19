@@ -11,11 +11,11 @@ interface DataSourceWidgetProps {
   onRemove?: () => void;
 }
 
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GREEN = '#00ff00';
-const BLOOMBERG_RED = '#ff0000';
-const BLOOMBERG_GRAY = '#787878';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GREEN = '#00ff00';
+const FINCEPT_RED = '#ff0000';
+const FINCEPT_GRAY = '#787878';
 
 export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
   id,
@@ -55,15 +55,15 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
   }, [data, loading]);
 
   const renderDataValue = (value: any): React.ReactNode => {
-    if (value === null || value === undefined) return <span style={{ color: BLOOMBERG_GRAY }}>N/A</span>;
+    if (value === null || value === undefined) return <span style={{ color: FINCEPT_GRAY }}>N/A</span>;
 
     if (typeof value === 'object') {
       return (
         <div style={{ fontSize: '9px', fontFamily: 'monospace' }}>
           {Object.entries(value).slice(0, 10).map(([key, val]) => (
             <div key={key} style={{ padding: '2px 0', borderBottom: `1px solid #1a1a1a` }}>
-              <span style={{ color: BLOOMBERG_ORANGE }}>{key}:</span>{' '}
-              <span style={{ color: BLOOMBERG_WHITE }}>
+              <span style={{ color: FINCEPT_ORANGE }}>{key}:</span>{' '}
+              <span style={{ color: FINCEPT_WHITE }}>
                 {typeof val === 'object' ? JSON.stringify(val).substring(0, 50) : String(val)}
               </span>
             </div>
@@ -72,7 +72,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
       );
     }
 
-    return <span style={{ color: BLOOMBERG_WHITE }}>{String(value)}</span>;
+    return <span style={{ color: FINCEPT_WHITE }}>{String(value)}</span>;
   };
 
   const renderContent = () => {
@@ -87,8 +87,8 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           padding: '20px',
           textAlign: 'center'
         }}>
-          <AlertCircle size={32} color={BLOOMBERG_RED} />
-          <div style={{ color: BLOOMBERG_RED, fontSize: '11px', marginTop: '8px' }}>
+          <AlertCircle size={32} color={FINCEPT_RED} />
+          <div style={{ color: FINCEPT_RED, fontSize: '11px', marginTop: '8px' }}>
             {error}
           </div>
         </div>
@@ -105,7 +105,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           height: '100%',
           gap: '8px'
         }}>
-          <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px' }}>
+          <div style={{ color: FINCEPT_ORANGE, fontSize: '10px' }}>
             {t('widgets.loading')}
           </div>
         </div>
@@ -121,7 +121,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           justifyContent: 'center',
           height: '100%',
           gap: '8px',
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '10px'
         }}>
           <Database size={24} />
@@ -130,7 +130,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
             <button
               onClick={refreshDataSources}
               style={{
-                background: BLOOMBERG_ORANGE,
+                background: FINCEPT_ORANGE,
                 color: '#000',
                 border: 'none',
                 padding: '6px 12px',
@@ -157,30 +157,30 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           marginBottom: '8px',
           padding: '4px 8px',
           backgroundColor: isBlinking ? '#1a1a1a' : '#0a0a0a',
-          border: `1px solid ${connected ? BLOOMBERG_GREEN : BLOOMBERG_GRAY}`,
+          border: `1px solid ${connected ? FINCEPT_GREEN : FINCEPT_GRAY}`,
           fontSize: '9px',
           transition: 'background-color 0.3s ease'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {source?.type === 'websocket' ? (
-              <Wifi size={12} color={connected ? BLOOMBERG_GREEN : BLOOMBERG_GRAY} />
+              <Wifi size={12} color={connected ? FINCEPT_GREEN : FINCEPT_GRAY} />
             ) : (
-              <Database size={12} color={BLOOMBERG_ORANGE} />
+              <Database size={12} color={FINCEPT_ORANGE} />
             )}
-            <span style={{ color: BLOOMBERG_WHITE }}>
+            <span style={{ color: FINCEPT_WHITE }}>
               {source?.type === 'websocket' ? 'WebSocket' : 'REST API'}
             </span>
-            <span style={{ color: connected ? BLOOMBERG_GREEN : BLOOMBERG_GRAY }}>
+            <span style={{ color: connected ? FINCEPT_GREEN : FINCEPT_GRAY }}>
               {connected ? '● LIVE' : '○ IDLE'}
             </span>
             {updateCount > 0 && (
-              <span style={{ color: BLOOMBERG_ORANGE, fontSize: '8px' }}>
+              <span style={{ color: FINCEPT_ORANGE, fontSize: '8px' }}>
                 #{updateCount}
               </span>
             )}
           </div>
 
-          <div style={{ color: BLOOMBERG_GRAY, fontSize: '8px' }}>
+          <div style={{ color: FINCEPT_GRAY, fontSize: '8px' }}>
             {lastUpdate && (
               <span>{lastUpdate.toLocaleTimeString()}</span>
             )}
@@ -205,7 +205,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
               onClick={refreshDataSources}
               disabled={loading}
               style={{
-                background: loading ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
+                background: loading ? FINCEPT_GRAY : FINCEPT_ORANGE,
                 color: '#000',
                 border: 'none',
                 padding: '4px 12px',
@@ -231,7 +231,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
       onRefresh={source?.type === 'rest_api' ? refreshDataSources : undefined}
       isLoading={loading && !data}
       error={null}
-      headerColor={source?.type === 'websocket' ? BLOOMBERG_GREEN : BLOOMBERG_ORANGE}
+      headerColor={source?.type === 'websocket' ? FINCEPT_GREEN : FINCEPT_ORANGE}
     >
       {renderContent()}
     </BaseWidget>

@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { MessageSquare, TrendingUp, TrendingDown, Brain, Loader2, AlertCircle, CheckCircle, Zap, Play } from 'lucide-react';
 import agnoTradingService, { type DebateResult } from '../../../../services/trading/agnoTradingService';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -86,15 +86,15 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
 
   const getModelColor = (provider: string) => {
     const colors: Record<string, string> = {
-      openai: BLOOMBERG.GREEN,
-      anthropic: BLOOMBERG.ORANGE,
-      google: BLOOMBERG.BLUE,
-      gemini: BLOOMBERG.BLUE,
-      groq: BLOOMBERG.PURPLE,
-      deepseek: BLOOMBERG.CYAN,
-      xai: BLOOMBERG.YELLOW
+      openai: FINCEPT.GREEN,
+      anthropic: FINCEPT.ORANGE,
+      google: FINCEPT.BLUE,
+      gemini: FINCEPT.BLUE,
+      groq: FINCEPT.PURPLE,
+      deepseek: FINCEPT.CYAN,
+      xai: FINCEPT.YELLOW
     };
-    return colors[provider.toLowerCase()] || BLOOMBERG.GRAY;
+    return colors[provider.toLowerCase()] || FINCEPT.GRAY;
   };
 
   const handleStartDebate = async () => {
@@ -145,8 +145,8 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
   return (
     <div style={{
       height: '100%',
-      background: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '4px',
       display: 'flex',
       flexDirection: 'column',
@@ -154,17 +154,17 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
     }}>
       {/* Header */}
       <div style={{
-        background: BLOOMBERG.HEADER_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        background: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px 10px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <MessageSquare size={14} color={BLOOMBERG.ORANGE} />
+          <MessageSquare size={14} color={FINCEPT.ORANGE} />
           <span style={{
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             fontSize: '11px',
             fontWeight: '600',
             letterSpacing: '0.5px'
@@ -172,10 +172,10 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
             DEBATE ARENA
           </span>
           {isDebating && (
-            <Loader2 size={12} color={BLOOMBERG.ORANGE} className="animate-spin" />
+            <Loader2 size={12} color={FINCEPT.ORANGE} className="animate-spin" />
           )}
         </div>
-        <span style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}>
+        <span style={{ color: FINCEPT.GRAY, fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}>
           {selectedSymbol}
         </span>
       </div>
@@ -194,9 +194,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 gap: '6px',
                 marginBottom: '4px'
               }}>
-                <TrendingUp size={10} color={BLOOMBERG.GREEN} />
+                <TrendingUp size={10} color={FINCEPT.GREEN} />
                 <label style={{
-                  color: BLOOMBERG.GREEN,
+                  color: FINCEPT.GREEN,
                   fontSize: '9px',
                   fontWeight: '600',
                   letterSpacing: '0.5px'
@@ -210,9 +210,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 disabled={isDebating || availableModels.length === 0}
                 style={{
                   width: '100%',
-                  background: BLOOMBERG.DARK_BG,
-                  border: `1px solid ${BLOOMBERG.GREEN}`,
-                  color: BLOOMBERG.WHITE,
+                  background: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.GREEN}`,
+                  color: FINCEPT.WHITE,
                   padding: '5px 8px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -234,9 +234,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 gap: '6px',
                 marginBottom: '4px'
               }}>
-                <TrendingDown size={10} color={BLOOMBERG.RED} />
+                <TrendingDown size={10} color={FINCEPT.RED} />
                 <label style={{
-                  color: BLOOMBERG.RED,
+                  color: FINCEPT.RED,
                   fontSize: '9px',
                   fontWeight: '600',
                   letterSpacing: '0.5px'
@@ -250,9 +250,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 disabled={isDebating || availableModels.length === 0}
                 style={{
                   width: '100%',
-                  background: BLOOMBERG.DARK_BG,
-                  border: `1px solid ${BLOOMBERG.RED}`,
-                  color: BLOOMBERG.WHITE,
+                  background: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.RED}`,
+                  color: FINCEPT.WHITE,
                   padding: '5px 8px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -274,9 +274,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 gap: '6px',
                 marginBottom: '4px'
               }}>
-                <Brain size={10} color={BLOOMBERG.ORANGE} />
+                <Brain size={10} color={FINCEPT.ORANGE} />
                 <label style={{
-                  color: BLOOMBERG.ORANGE,
+                  color: FINCEPT.ORANGE,
                   fontSize: '9px',
                   fontWeight: '600',
                   letterSpacing: '0.5px'
@@ -290,9 +290,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 disabled={isDebating || availableModels.length === 0}
                 style={{
                   width: '100%',
-                  background: BLOOMBERG.DARK_BG,
-                  border: `1px solid ${BLOOMBERG.ORANGE}`,
-                  color: BLOOMBERG.WHITE,
+                  background: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.ORANGE}`,
+                  color: FINCEPT.WHITE,
                   padding: '5px 8px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -312,9 +312,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
               disabled={!canStartDebate}
               style={{
                 width: '100%',
-                background: canStartDebate ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY,
+                background: canStartDebate ? FINCEPT.ORANGE : FINCEPT.GRAY,
                 border: 'none',
-                color: canStartDebate ? BLOOMBERG.DARK_BG : BLOOMBERG.MUTED,
+                color: canStartDebate ? FINCEPT.DARK_BG : FINCEPT.MUTED,
                 padding: '10px',
                 borderRadius: '2px',
                 fontSize: '10px',
@@ -344,12 +344,12 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
 
             {availableModels.length < 3 && (
               <div style={{
-                background: `${BLOOMBERG.YELLOW}15`,
-                border: `1px solid ${BLOOMBERG.YELLOW}`,
+                background: `${FINCEPT.YELLOW}15`,
+                border: `1px solid ${FINCEPT.YELLOW}`,
                 borderRadius: '2px',
                 padding: '6px 8px',
                 fontSize: '8px',
-                color: BLOOMBERG.YELLOW
+                color: FINCEPT.YELLOW
               }}>
                 Configure at least 3 models in Settings → LLM Config
               </div>
@@ -360,18 +360,18 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
         {/* Error Display */}
         {error && (
           <div style={{
-            background: `${BLOOMBERG.RED}15`,
-            border: `1px solid ${BLOOMBERG.RED}`,
+            background: `${FINCEPT.RED}15`,
+            border: `1px solid ${FINCEPT.RED}`,
             borderRadius: '2px',
             padding: '8px',
             display: 'flex',
             alignItems: 'flex-start',
             gap: '6px'
           }}>
-            <AlertCircle size={12} color={BLOOMBERG.RED} style={{ flexShrink: 0, marginTop: '1px' }} />
+            <AlertCircle size={12} color={FINCEPT.RED} style={{ flexShrink: 0, marginTop: '1px' }} />
             <div>
-              <div style={{ color: BLOOMBERG.RED, fontSize: '9px', fontWeight: '600' }}>ERROR</div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '8px', marginTop: '2px' }}>{error}</div>
+              <div style={{ color: FINCEPT.RED, fontSize: '9px', fontWeight: '600' }}>ERROR</div>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '8px', marginTop: '2px' }}>{error}</div>
             </div>
           </div>
         )}
@@ -381,8 +381,8 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {/* Final Decision Card */}
             <div style={{
-              background: BLOOMBERG.DARK_BG,
-              border: `2px solid ${BLOOMBERG.ORANGE}`,
+              background: FINCEPT.DARK_BG,
+              border: `2px solid ${FINCEPT.ORANGE}`,
               borderRadius: '4px',
               padding: '10px'
             }}>
@@ -392,24 +392,24 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 gap: '6px',
                 marginBottom: '8px'
               }}>
-                <CheckCircle size={14} color={BLOOMBERG.ORANGE} />
-                <span style={{ color: BLOOMBERG.ORANGE, fontSize: '10px', fontWeight: '700', letterSpacing: '0.5px' }}>
+                <CheckCircle size={14} color={FINCEPT.ORANGE} />
+                <span style={{ color: FINCEPT.ORANGE, fontSize: '10px', fontWeight: '700', letterSpacing: '0.5px' }}>
                   FINAL DECISION
                 </span>
               </div>
 
               <div style={{
-                background: BLOOMBERG.PANEL_BG,
+                background: FINCEPT.PANEL_BG,
                 borderRadius: '2px',
                 padding: '8px',
                 marginBottom: '8px'
               }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                   <div>
-                    <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', marginBottom: '3px' }}>ACTION</div>
+                    <div style={{ color: FINCEPT.GRAY, fontSize: '7px', marginBottom: '3px' }}>ACTION</div>
                     <div style={{
-                      color: debateResult.final_action === 'BUY' ? BLOOMBERG.GREEN :
-                             debateResult.final_action === 'SELL' ? BLOOMBERG.RED : BLOOMBERG.YELLOW,
+                      color: debateResult.final_action === 'BUY' ? FINCEPT.GREEN :
+                             debateResult.final_action === 'SELL' ? FINCEPT.RED : FINCEPT.YELLOW,
                       fontSize: '14px',
                       fontWeight: '700',
                       fontFamily: '"IBM Plex Mono", monospace'
@@ -418,9 +418,9 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                     </div>
                   </div>
                   <div>
-                    <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', marginBottom: '3px' }}>CONFIDENCE</div>
+                    <div style={{ color: FINCEPT.GRAY, fontSize: '7px', marginBottom: '3px' }}>CONFIDENCE</div>
                     <div style={{
-                      color: BLOOMBERG.CYAN,
+                      color: FINCEPT.CYAN,
                       fontSize: '14px',
                       fontWeight: '700',
                       fontFamily: '"IBM Plex Mono", monospace'
@@ -433,23 +433,23 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 {debateResult.entry_price && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', fontSize: '8px' }}>
                     <div>
-                      <div style={{ color: BLOOMBERG.GRAY, marginBottom: '2px' }}>ENTRY</div>
-                      <div style={{ color: BLOOMBERG.WHITE, fontWeight: '600', fontFamily: '"IBM Plex Mono", monospace' }}>
+                      <div style={{ color: FINCEPT.GRAY, marginBottom: '2px' }}>ENTRY</div>
+                      <div style={{ color: FINCEPT.WHITE, fontWeight: '600', fontFamily: '"IBM Plex Mono", monospace' }}>
                         ${debateResult.entry_price.toFixed(2)}
                       </div>
                     </div>
                     {debateResult.stop_loss && (
                       <div>
-                        <div style={{ color: BLOOMBERG.GRAY, marginBottom: '2px' }}>STOP</div>
-                        <div style={{ color: BLOOMBERG.RED, fontWeight: '600', fontFamily: '"IBM Plex Mono", monospace' }}>
+                        <div style={{ color: FINCEPT.GRAY, marginBottom: '2px' }}>STOP</div>
+                        <div style={{ color: FINCEPT.RED, fontWeight: '600', fontFamily: '"IBM Plex Mono", monospace' }}>
                           ${debateResult.stop_loss.toFixed(2)}
                         </div>
                       </div>
                     )}
                     {debateResult.take_profit && (
                       <div>
-                        <div style={{ color: BLOOMBERG.GRAY, marginBottom: '2px' }}>TARGET</div>
-                        <div style={{ color: BLOOMBERG.GREEN, fontWeight: '600', fontFamily: '"IBM Plex Mono", monospace' }}>
+                        <div style={{ color: FINCEPT.GRAY, marginBottom: '2px' }}>TARGET</div>
+                        <div style={{ color: FINCEPT.GREEN, fontWeight: '600', fontFamily: '"IBM Plex Mono", monospace' }}>
                           ${debateResult.take_profit.toFixed(2)}
                         </div>
                       </div>
@@ -463,8 +463,8 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 style={{
                   width: '100%',
                   background: 'transparent',
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.GRAY,
                   padding: '6px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -484,7 +484,7 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 role="BULL"
                 model={bullModel}
                 argument={debateResult.bull_argument}
-                color={BLOOMBERG.GREEN}
+                color={FINCEPT.GREEN}
               />
 
               {/* Bear Argument */}
@@ -492,7 +492,7 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 role="BEAR"
                 model={bearModel}
                 argument={debateResult.bear_argument}
-                color={BLOOMBERG.RED}
+                color={FINCEPT.RED}
               />
 
               {/* Analyst Decision */}
@@ -500,14 +500,14 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 role="ANALYST"
                 model={analystModel}
                 argument={debateResult.analyst_decision}
-                color={BLOOMBERG.ORANGE}
+                color={FINCEPT.ORANGE}
               />
             </div>
 
             {/* Execution Time */}
             <div style={{
               textAlign: 'center',
-              color: BLOOMBERG.MUTED,
+              color: FINCEPT.MUTED,
               fontSize: '8px',
               fontFamily: '"IBM Plex Mono", monospace'
             }}>
@@ -520,7 +520,7 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
         {!debateResult && recentDebates.length > 0 && (
           <div style={{ marginTop: '10px' }}>
             <div style={{
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '9px',
               fontWeight: '600',
               marginBottom: '6px',
@@ -533,8 +533,8 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                 <div
                   key={idx}
                   style={{
-                    background: BLOOMBERG.DARK_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    background: FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     borderRadius: '2px',
                     padding: '6px 8px',
                     fontSize: '8px',
@@ -543,17 +543,17 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
                     alignItems: 'center'
                   }}
                 >
-                  <span style={{ color: BLOOMBERG.WHITE, fontFamily: '"IBM Plex Mono", monospace' }}>
+                  <span style={{ color: FINCEPT.WHITE, fontFamily: '"IBM Plex Mono", monospace' }}>
                     {debate.symbol}
                   </span>
                   <span style={{
-                    color: debate.final_action === 'BUY' ? BLOOMBERG.GREEN :
-                           debate.final_action === 'SELL' ? BLOOMBERG.RED : BLOOMBERG.YELLOW,
+                    color: debate.final_action === 'BUY' ? FINCEPT.GREEN :
+                           debate.final_action === 'SELL' ? FINCEPT.RED : FINCEPT.YELLOW,
                     fontWeight: '700'
                   }}>
                     {debate.final_action}
                   </span>
-                  <span style={{ color: BLOOMBERG.GRAY }}>
+                  <span style={{ color: FINCEPT.GRAY }}>
                     {new Date(debate.timestamp * 1000).toLocaleTimeString()}
                   </span>
                 </div>
@@ -582,7 +582,7 @@ function DebateArgumentCard({ role, model, argument, color }: DebateArgumentCard
 
   return (
     <div style={{
-      background: BLOOMBERG.DARK_BG,
+      background: FINCEPT.DARK_BG,
       border: `1px solid ${color}`,
       borderRadius: '2px',
       overflow: 'hidden'
@@ -592,7 +592,7 @@ function DebateArgumentCard({ role, model, argument, color }: DebateArgumentCard
         style={{
           padding: '6px 8px',
           background: `${color}10`,
-          borderBottom: isExpanded ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
+          borderBottom: isExpanded ? `1px solid ${FINCEPT.BORDER}` : 'none',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -607,14 +607,14 @@ function DebateArgumentCard({ role, model, argument, color }: DebateArgumentCard
             {role}
           </span>
         </div>
-        <span style={{ color: BLOOMBERG.GRAY, fontSize: '8px', fontFamily: '"IBM Plex Mono", monospace' }}>
+        <span style={{ color: FINCEPT.GRAY, fontSize: '8px', fontFamily: '"IBM Plex Mono", monospace' }}>
           {model.split(':')[1] || model}
         </span>
       </div>
       {isExpanded && (
         <div style={{
           padding: '8px',
-          color: BLOOMBERG.WHITE,
+          color: FINCEPT.WHITE,
           fontSize: '9px',
           lineHeight: '1.5',
           maxHeight: '200px',

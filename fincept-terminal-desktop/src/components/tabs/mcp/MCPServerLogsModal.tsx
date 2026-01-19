@@ -26,14 +26,14 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = React.useRef<HTMLDivElement>(null);
 
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_YELLOW = '#FFFF00';
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#000000';
+  const FINCEPT_PANEL_BG = '#0a0a0a';
+  const FINCEPT_GREEN = '#00C800';
+  const FINCEPT_RED = '#FF0000';
+  const FINCEPT_YELLOW = '#FFFF00';
 
   useEffect(() => {
     loadLogs();
@@ -99,13 +99,13 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
   const getLogColor = (type: LogEntry['type']) => {
     switch (type) {
       case 'stdout':
-        return BLOOMBERG_WHITE;
+        return FINCEPT_WHITE;
       case 'stderr':
-        return BLOOMBERG_RED;
+        return FINCEPT_RED;
       case 'system':
-        return BLOOMBERG_YELLOW;
+        return FINCEPT_YELLOW;
       default:
-        return BLOOMBERG_GRAY;
+        return FINCEPT_GRAY;
     }
   };
 
@@ -124,8 +124,8 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
       fontFamily: 'Consolas, monospace'
     }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
+        backgroundColor: FINCEPT_PANEL_BG,
+        border: `2px solid ${FINCEPT_ORANGE}`,
         width: '80%',
         height: '80%',
         display: 'flex',
@@ -133,8 +133,8 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
       }}>
         {/* Header */}
         <div style={{
-          backgroundColor: BLOOMBERG_DARK_BG,
-          borderBottom: `1px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_DARK_BG,
+          borderBottom: `1px solid ${FINCEPT_ORANGE}`,
           padding: '10px 12px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -142,7 +142,7 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
           flexShrink: 0
         }}>
           <span style={{
-            color: BLOOMBERG_ORANGE,
+            color: FINCEPT_ORANGE,
             fontSize: '12px',
             fontWeight: 'bold'
           }}>
@@ -154,7 +154,7 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              color: BLOOMBERG_WHITE,
+              color: FINCEPT_WHITE,
               fontSize: '10px'
             }}>
               <input
@@ -168,9 +168,9 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
             <button
               onClick={clearLogs}
               style={{
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '4px 8px',
                 fontSize: '10px',
                 cursor: 'pointer',
@@ -186,9 +186,9 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
             <button
               onClick={downloadLogs}
               style={{
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '4px 8px',
                 fontSize: '10px',
                 cursor: 'pointer',
@@ -206,7 +206,7 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
               style={{
                 backgroundColor: 'transparent',
                 border: 'none',
-                color: BLOOMBERG_WHITE,
+                color: FINCEPT_WHITE,
                 cursor: 'pointer',
                 padding: '4px'
               }}
@@ -219,7 +219,7 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
         {/* Logs Content */}
         <div style={{
           flex: 1,
-          backgroundColor: BLOOMBERG_DARK_BG,
+          backgroundColor: FINCEPT_DARK_BG,
           padding: '10px',
           overflow: 'auto',
           fontFamily: 'Consolas, monospace',
@@ -227,7 +227,7 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
         }}>
           {logs.length === 0 ? (
             <div style={{
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               textAlign: 'center',
               padding: '40px'
             }}>
@@ -244,11 +244,11 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
                   color: getLogColor(log.type)
                 }}
               >
-                <span style={{ color: BLOOMBERG_GRAY, minWidth: '180px' }}>
+                <span style={{ color: FINCEPT_GRAY, minWidth: '180px' }}>
                   [{new Date(log.timestamp).toLocaleTimeString()}]
                 </span>
                 <span style={{
-                  color: BLOOMBERG_YELLOW,
+                  color: FINCEPT_YELLOW,
                   minWidth: '60px',
                   fontWeight: 'bold'
                 }}>
@@ -265,11 +265,11 @@ const MCPServerLogsModal: React.FC<MCPServerLogsModalProps> = ({
 
         {/* Footer */}
         <div style={{
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          borderTop: `1px solid ${BLOOMBERG_GRAY}`,
+          backgroundColor: FINCEPT_PANEL_BG,
+          borderTop: `1px solid ${FINCEPT_GRAY}`,
           padding: '6px 12px',
           fontSize: '9px',
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           flexShrink: 0
         }}>
           {logs.length} log entries | Server ID: {serverId}

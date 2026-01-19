@@ -1,9 +1,10 @@
 // Market Data Service - TypeScript wrapper for Tauri market data commands
 // Modular design: gracefully handles failures and can be extended with other data sources
+// CACHING: Use unified cache system (useCache hook) in components
 
 import { invoke } from '@tauri-apps/api/core';
-import { sqliteService } from '../core/sqliteService';
 import { marketDataLogger } from '../core/loggerService';
+import { cacheService } from '../cache/cacheService';
 
 export interface QuoteData {
   symbol: string;
@@ -164,69 +165,36 @@ class MarketDataService {
   }
 
   /**
-   * Fetch enhanced quotes with SQL caching
-   * Checks cache first, only fetches from API if cache is stale or missing
+   * Fetch enhanced quotes with unified caching
+   * Uses the new unified cache system (fincept_cache.db)
+   * @deprecated Use useCache hook in components instead for better control
    */
   async getEnhancedQuotesWithCache(
     symbols: string[],
     category: string,
     maxCacheAgeMinutes: number = 10
   ): Promise<(QuoteData & { seven_day?: number; thirty_day?: number })[]> {
+    const cacheKey = `market-quotes:${category}:${symbols.sort().join(',')}`;
+    const ttlSeconds = maxCacheAgeMinutes * 60;
+
     try {
-      // Check if database is initialized
-      if (!sqliteService.isReady()) {
-        marketDataLogger.warn('Database not ready, fetching without cache');
-        return await this.getEnhancedQuotes(symbols);
+      // Check unified cache first
+      const cached = await cacheService.get<(QuoteData & { seven_day?: number; thirty_day?: number })[]>(cacheKey);
+      if (cached && !cached.isStale) {
+        marketDataLogger.debug(`[Cache HIT] ${category} - ${symbols.length} symbols`);
+        return cached.data;
       }
 
-      // Try to get cached data for each symbol
-      const cachedDataPromises = symbols.map(symbol =>
-        sqliteService.getCachedMarketData(symbol, category, maxCacheAgeMinutes)
-      );
-      const cachedDataResults = await Promise.all(cachedDataPromises);
+      // Fetch fresh data
+      marketDataLogger.debug(`[Cache MISS] Fetching ${symbols.length} symbols for ${category}`);
+      const freshData = await this.getEnhancedQuotes(symbols);
 
-      const cachedData = new Map<string, QuoteData & { seven_day?: number; thirty_day?: number }>();
-      symbols.forEach((symbol, index) => {
-        const cached = cachedDataResults[index];
-        if (cached) {
-          try {
-            cachedData.set(symbol, JSON.parse(cached));
-          } catch (e) {
-            // Invalid cached data, will fetch fresh
-          }
-        }
-      });
-
-      // Identify which symbols need fresh data
-      const symbolsNeedingFetch = symbols.filter(symbol => !cachedData.has(symbol));
-
-      // If all data is cached, return it
-      if (symbolsNeedingFetch.length === 0) {
-        marketDataLogger.debug(`Using cached data for ${symbols.length} symbols in ${category}`);
-        return symbols.map(symbol => cachedData.get(symbol)!);
+      // Store in unified cache
+      if (freshData.length > 0) {
+        await cacheService.set(cacheKey, freshData, 'market-quotes', ttlSeconds);
       }
 
-      // Fetch missing data from API
-      marketDataLogger.debug(`Fetching ${symbolsNeedingFetch.length}/${symbols.length} symbols from API for ${category}`);
-      const freshQuotes = await this.getEnhancedQuotes(symbolsNeedingFetch);
-
-      // Cache the fresh data
-      await Promise.all(
-        freshQuotes.map(quote =>
-          sqliteService.saveMarketDataCache(quote.symbol, category, JSON.stringify(quote))
-        )
-      );
-
-      // Combine cached and fresh data in original order
-      const result = symbols.map(symbol => {
-        if (cachedData.has(symbol)) {
-          return cachedData.get(symbol)!;
-        }
-        const freshQuote = freshQuotes.find(q => q.symbol === symbol);
-        return freshQuote || null;
-      }).filter(q => q !== null) as (QuoteData & { seven_day?: number; thirty_day?: number })[];
-
-      return result;
+      return freshData;
     } catch (error) {
       marketDataLogger.error('Cache error, falling back to direct fetch:', error);
       return await this.getEnhancedQuotes(symbols);

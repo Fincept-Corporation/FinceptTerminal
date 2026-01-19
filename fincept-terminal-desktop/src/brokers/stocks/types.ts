@@ -523,7 +523,7 @@ export interface StockBrokerMetadata {
   productTypes: ProductType[];
 
   // Auth type
-  authType: 'oauth' | 'totp' | 'password' | 'api_key';
+  authType: 'oauth' | 'totp' | 'password' | 'api_key' | 'enckey';
 
   // Rate limits
   rateLimit: {

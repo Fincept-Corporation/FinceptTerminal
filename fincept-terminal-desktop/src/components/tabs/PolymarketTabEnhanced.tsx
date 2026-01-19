@@ -1,5 +1,5 @@
 // File: src/components/tabs/PolymarketTab.tsx
-// Polymarket prediction markets integration - Bloomberg Terminal Style
+// Polymarket prediction markets integration - Fincept Terminal Style
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -353,7 +353,7 @@ const PolymarketTabEnhanced: React.FC = () => {
           )}
         </div>
 
-        {/* Outcome prices - Bloomberg style */}
+        {/* Outcome prices - Fincept style */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
           <div style={{
             backgroundColor: '#1A1A1A',

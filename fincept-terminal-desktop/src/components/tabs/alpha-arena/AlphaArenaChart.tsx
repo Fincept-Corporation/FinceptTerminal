@@ -1,6 +1,6 @@
 /**
  * Alpha Arena Performance Chart
- * Bloomberg-style portfolio value chart showing all models' performance over time
+ * Fincept-style portfolio value chart showing all models' performance over time
  */
 
 import React, { useMemo } from 'react';
@@ -12,7 +12,7 @@ interface AlphaArenaChartProps {
   initialCapital?: number;
 }
 
-// Bloomberg color palette for models
+// Fincept color palette for models
 const MODEL_COLORS = [
   '#FF8800', // Orange (primary)
   '#00D66F', // Green
@@ -26,7 +26,7 @@ const MODEL_COLORS = [
   '#EC4899', // Pink
 ];
 
-const BLOOMBERG = {
+const FINCEPT = {
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
   BORDER: '#2A2A2A',
@@ -79,13 +79,13 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
 
     return (
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
         padding: '12px',
         fontSize: '10px',
         fontFamily: '"IBM Plex Mono", monospace',
       }}>
-        <div style={{ color: BLOOMBERG.GRAY, marginBottom: '8px', fontSize: '9px' }}>
+        <div style={{ color: FINCEPT.GRAY, marginBottom: '8px', fontSize: '9px' }}>
           CYCLE #{label}
         </div>
         {payload.map((entry: any, index: number) => (
@@ -103,12 +103,12 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
                 backgroundColor: entry.color,
                 borderRadius: '50%',
               }} />
-              <span style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>
+              <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
                 {entry.name}:
               </span>
             </div>
             <span style={{
-              color: entry.value >= initialCapital ? BLOOMBERG.GREEN : BLOOMBERG.ORANGE,
+              color: entry.value >= initialCapital ? FINCEPT.GREEN : FINCEPT.ORANGE,
               fontWeight: 700,
               fontFamily: '"IBM Plex Mono", monospace',
             }}>
@@ -143,7 +143,7 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
               height: '3px',
               backgroundColor: entry.color,
             }} />
-            <span style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>
+            <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
               {entry.value}
             </span>
           </div>
@@ -159,7 +159,7 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         fontSize: '11px',
         fontFamily: '"IBM Plex Mono", monospace',
       }}>
@@ -176,32 +176,32 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
       >
         <CartesianGrid
           strokeDasharray="3 3"
-          stroke={BLOOMBERG.BORDER}
+          stroke={FINCEPT.BORDER}
           vertical={false}
         />
         <XAxis
           dataKey="cycle"
-          stroke={BLOOMBERG.GRAY}
-          tick={{ fill: BLOOMBERG.GRAY, fontSize: 10, fontFamily: '"IBM Plex Mono", monospace' }}
+          stroke={FINCEPT.GRAY}
+          tick={{ fill: FINCEPT.GRAY, fontSize: 10, fontFamily: '"IBM Plex Mono", monospace' }}
           label={{
             value: 'CYCLE',
             position: 'insideBottom',
             offset: -5,
-            fill: BLOOMBERG.GRAY,
+            fill: FINCEPT.GRAY,
             fontSize: 10,
             fontFamily: '"IBM Plex Mono", monospace',
           }}
         />
         <YAxis
-          stroke={BLOOMBERG.GRAY}
-          tick={{ fill: BLOOMBERG.GRAY, fontSize: 10, fontFamily: '"IBM Plex Mono", monospace' }}
+          stroke={FINCEPT.GRAY}
+          tick={{ fill: FINCEPT.GRAY, fontSize: 10, fontFamily: '"IBM Plex Mono", monospace' }}
           tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
           domain={['dataMin - 500', 'dataMax + 500']}
           label={{
             value: 'PORTFOLIO VALUE',
             angle: -90,
             position: 'insideLeft',
-            fill: BLOOMBERG.GRAY,
+            fill: FINCEPT.GRAY,
             fontSize: 10,
             fontFamily: '"IBM Plex Mono", monospace',
           }}
@@ -213,7 +213,7 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
         <Line
           type="monotone"
           dataKey={() => initialCapital}
-          stroke={BLOOMBERG.BORDER}
+          stroke={FINCEPT.BORDER}
           strokeWidth={1}
           strokeDasharray="5 5"
           dot={false}
@@ -237,7 +237,7 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
             activeDot={{
               r: 5,
               fill: MODEL_COLORS[index % MODEL_COLORS.length],
-              stroke: BLOOMBERG.WHITE,
+              stroke: FINCEPT.WHITE,
               strokeWidth: 2,
             }}
             name={modelName}

@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Brain, Target, Shield, TrendingUp, Filter, RefreshCw } from 'lucide-react';
 import agnoTradingService, { type Decision } from '../../../../services/trading/agnoTradingService';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -79,12 +79,12 @@ export function DecisionFeedPanel({
 
   const getDecisionTypeColor = (type: string) => {
     const colors: Record<string, string> = {
-      analysis: BLOOMBERG.BLUE,
-      signal: BLOOMBERG.GREEN,
-      trade: BLOOMBERG.ORANGE,
-      risk: BLOOMBERG.RED
+      analysis: FINCEPT.BLUE,
+      signal: FINCEPT.GREEN,
+      trade: FINCEPT.ORANGE,
+      risk: FINCEPT.RED
     };
-    return colors[type] || BLOOMBERG.GRAY;
+    return colors[type] || FINCEPT.GRAY;
   };
 
   const getDecisionTypeIcon = (type: string) => {
@@ -101,8 +101,8 @@ export function DecisionFeedPanel({
   return (
     <div style={{
       height: '100%',
-      background: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '4px',
       display: 'flex',
       flexDirection: 'column',
@@ -110,17 +110,17 @@ export function DecisionFeedPanel({
     }}>
       {/* Header */}
       <div style={{
-        background: BLOOMBERG.HEADER_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        background: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px 10px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Activity size={14} color={BLOOMBERG.CYAN} />
+          <Activity size={14} color={FINCEPT.CYAN} />
           <span style={{
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             fontSize: '11px',
             fontWeight: '600',
             letterSpacing: '0.5px'
@@ -128,7 +128,7 @@ export function DecisionFeedPanel({
             DECISION FEED
           </span>
           {isLoading && (
-            <RefreshCw size={10} color={BLOOMBERG.ORANGE} className="animate-spin" />
+            <RefreshCw size={10} color={FINCEPT.ORANGE} className="animate-spin" />
           )}
         </div>
 
@@ -139,9 +139,9 @@ export function DecisionFeedPanel({
               key={type}
               onClick={() => setFilterType(type)}
               style={{
-                background: filterType === type ? BLOOMBERG.ORANGE : 'transparent',
-                border: `1px solid ${filterType === type ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                color: filterType === type ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                background: filterType === type ? FINCEPT.ORANGE : 'transparent',
+                border: `1px solid ${filterType === type ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                color: filterType === type ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 padding: '2px 6px',
                 borderRadius: '2px',
                 fontSize: '8px',
@@ -166,12 +166,12 @@ export function DecisionFeedPanel({
       }}>
         {error && (
           <div style={{
-            background: `${BLOOMBERG.RED}15`,
-            border: `1px solid ${BLOOMBERG.RED}`,
+            background: `${FINCEPT.RED}15`,
+            border: `1px solid ${FINCEPT.RED}`,
             borderRadius: '2px',
             padding: '8px',
             marginBottom: '8px',
-            color: BLOOMBERG.RED,
+            color: FINCEPT.RED,
             fontSize: '9px'
           }}>
             {error}
@@ -181,7 +181,7 @@ export function DecisionFeedPanel({
         {decisions.length === 0 && !isLoading && (
           <div style={{
             textAlign: 'center',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '10px',
             marginTop: '40px'
           }}>
@@ -212,12 +212,12 @@ function DecisionCard({ decision }: DecisionCardProps) {
 
   const getDecisionTypeColor = (type: string) => {
     const colors: Record<string, string> = {
-      analysis: BLOOMBERG.BLUE,
-      signal: BLOOMBERG.GREEN,
-      trade: BLOOMBERG.ORANGE,
-      risk: BLOOMBERG.RED
+      analysis: FINCEPT.BLUE,
+      signal: FINCEPT.GREEN,
+      trade: FINCEPT.ORANGE,
+      risk: FINCEPT.RED
     };
-    return colors[type] || BLOOMBERG.GRAY;
+    return colors[type] || FINCEPT.GRAY;
   };
 
   const getDecisionTypeIcon = (type: string) => {
@@ -238,7 +238,7 @@ function DecisionCard({ decision }: DecisionCardProps) {
     <div
       onClick={() => setIsExpanded(!isExpanded)}
       style={{
-        background: BLOOMBERG.DARK_BG,
+        background: FINCEPT.DARK_BG,
         border: `1px solid ${typeColor}30`,
         borderLeft: `3px solid ${typeColor}`,
         borderRadius: '2px',
@@ -247,10 +247,10 @@ function DecisionCard({ decision }: DecisionCardProps) {
         transition: 'all 0.2s'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = BLOOMBERG.HOVER;
+        e.currentTarget.style.background = FINCEPT.HOVER;
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = BLOOMBERG.DARK_BG;
+        e.currentTarget.style.background = FINCEPT.DARK_BG;
       }}
     >
       {/* Header */}
@@ -275,7 +275,7 @@ function DecisionCard({ decision }: DecisionCardProps) {
           </span>
           {decision.symbol && (
             <span style={{
-              color: BLOOMBERG.WHITE,
+              color: FINCEPT.WHITE,
               fontSize: '9px',
               fontFamily: '"IBM Plex Mono", monospace',
               fontWeight: '600'
@@ -288,7 +288,7 @@ function DecisionCard({ decision }: DecisionCardProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {decision.confidence !== undefined && (
             <span style={{
-              color: BLOOMBERG.CYAN,
+              color: FINCEPT.CYAN,
               fontSize: '8px',
               fontWeight: '700',
               fontFamily: '"IBM Plex Mono", monospace'
@@ -297,7 +297,7 @@ function DecisionCard({ decision }: DecisionCardProps) {
             </span>
           )}
           <span style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '8px',
             fontFamily: '"IBM Plex Mono", monospace'
           }}>
@@ -308,7 +308,7 @@ function DecisionCard({ decision }: DecisionCardProps) {
 
       {/* Decision Text */}
       <div style={{
-        color: BLOOMBERG.WHITE,
+        color: FINCEPT.WHITE,
         fontSize: '9px',
         lineHeight: '1.4',
         fontFamily: '"IBM Plex Mono", monospace',
@@ -320,13 +320,13 @@ function DecisionCard({ decision }: DecisionCardProps) {
       {/* Reasoning (when expanded) */}
       {isExpanded && decision.reasoning && (
         <div style={{
-          background: BLOOMBERG.PANEL_BG,
+          background: FINCEPT.PANEL_BG,
           borderRadius: '2px',
           padding: '6px',
           marginTop: '6px'
         }}>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '7px',
             fontWeight: '700',
             marginBottom: '4px',
@@ -335,7 +335,7 @@ function DecisionCard({ decision }: DecisionCardProps) {
             REASONING
           </div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '8px',
             lineHeight: '1.4',
             fontFamily: '"IBM Plex Mono", monospace'
@@ -352,10 +352,10 @@ function DecisionCard({ decision }: DecisionCardProps) {
         alignItems: 'center',
         marginTop: '6px',
         paddingTop: '6px',
-        borderTop: `1px solid ${BLOOMBERG.BORDER}`
+        borderTop: `1px solid ${FINCEPT.BORDER}`
       }}>
         <span style={{
-          color: BLOOMBERG.MUTED,
+          color: FINCEPT.MUTED,
           fontSize: '8px',
           fontFamily: '"IBM Plex Mono", monospace'
         }}>
@@ -363,7 +363,7 @@ function DecisionCard({ decision }: DecisionCardProps) {
         </span>
         {decision.execution_time_ms !== undefined && (
           <span style={{
-            color: BLOOMBERG.MUTED,
+            color: FINCEPT.MUTED,
             fontSize: '7px',
             fontFamily: '"IBM Plex Mono", monospace'
           }}>

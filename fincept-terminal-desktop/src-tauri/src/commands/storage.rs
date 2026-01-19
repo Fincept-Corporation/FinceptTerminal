@@ -1,5 +1,5 @@
 // Generic Key-Value Storage Commands
-// Tauri commands for localStorage replacement with SQLite
+// Tauri commands for SQLite key-value storage
 
 use crate::database::storage;
 use serde::{Deserialize, Serialize};

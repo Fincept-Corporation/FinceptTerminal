@@ -120,16 +120,22 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
     return iconMap[planId] || <Star className="w-4 h-4" />;
   };
 
-  // Handle plan selection - Block selection if user has active subscription and trying to select different plan
+  // Handle plan selection - Allow upgrades only, block downgrades
   const handlePlanClick = (planId: string) => {
     const currentPlanId = session?.user_info?.account_type;
 
-    // If user has active subscription and trying to select a different plan, show message
-    if (currentPlanId && currentPlanId !== 'free' && planId !== currentPlanId) {
-      setError('You already have an active subscription. To change plans, cancel your current subscription first. You will keep access until the end of your billing period, then you can select a new plan.');
+    // Plan order for comparison (higher index = higher tier)
+    const planOrder = ['free', 'basic', 'standard', 'pro', 'enterprise'];
+    const currentIndex = planOrder.indexOf(currentPlanId || 'free');
+    const selectedIndex = planOrder.indexOf(planId);
+
+    // Block downgrades (but allow same plan or upgrades)
+    if (currentPlanId && currentPlanId !== 'free' && selectedIndex < currentIndex) {
+      setError(`Cannot downgrade from ${currentPlanId} to ${planId}. Upgrades only.`);
       return;
     }
 
+    setError('');
     setSelectedPlan(planId);
   };
 
@@ -155,8 +161,8 @@ const handleSelectPlan = async () => {
 
       if (checkoutUrl && checkoutUrl !== 'undefined' && checkoutUrl !== 'null') {
         // PURE SQLite - Store payment UUID for payment processing screen
-        if (result.data.payment_uuid) {
-          await saveSetting('pending_payment_order_id', result.data.payment_uuid, 'payment');
+        if (result.data.order_id) {
+          await saveSetting('pending_payment_order_id', result.data.order_id, 'payment');
         }
 
         try {

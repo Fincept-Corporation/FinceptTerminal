@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { marketDataService, QuoteData } from '../../../../services/markets/marketDataService';
+import { useCache } from '../../../../hooks/useCache';
 
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GREEN = '#00C800';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_CYAN = '#00FFFF';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GREEN = '#00C800';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_CYAN = '#00FFFF';
 
 interface GlobalIndicesWidgetProps {
   id: string;
@@ -47,28 +48,21 @@ const INDEX_NAMES: { [key: string]: string } = {
 
 export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, onRemove }) => {
   const { t } = useTranslation('dashboard');
-  const [quotes, setQuotes] = useState<QuoteData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadQuotes = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await marketDataService.getEnhancedQuotesWithCache(TOP_12_INDICES, 'Indices', 10);
-      setQuotes(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load indices data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadQuotes();
-    const interval = setInterval(loadQuotes, 10 * 60 * 1000); // Refresh every 10 minutes
-    return () => clearInterval(interval);
-  }, []);
+  // Use unified cache hook for indices data
+  const {
+    data: quotes,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<QuoteData[]>({
+    key: 'market-widget:global-indices',
+    category: 'market-quotes',
+    fetcher: () => marketDataService.getEnhancedQuotes(TOP_12_INDICES),
+    ttl: '10m',
+    refetchInterval: 10 * 60 * 1000, // Auto-refresh every 10 minutes
+    staleWhileRevalidate: true
+  });
 
   const formatChange = (value: number) => value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
   const formatPercent = (value: number) => value >= 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`;
@@ -94,9 +88,9 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
       id={id}
       title={t('widgets.globalIndices')}
       onRemove={onRemove}
-      onRefresh={loadQuotes}
+      onRefresh={refresh}
       isLoading={false}
-      error={error}
+      error={error?.message}
     >
       <style>{`
         @keyframes pulse {
@@ -111,8 +105,8 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
           gap: '4px',
           fontSize: '9px',
           fontWeight: 'bold',
-          color: BLOOMBERG_WHITE,
-          borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+          color: FINCEPT_WHITE,
+          borderBottom: `1px solid ${FINCEPT_GRAY}`,
           padding: '4px 0',
           marginBottom: '4px'
         }}>
@@ -121,11 +115,11 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
           <div style={{ textAlign: 'right' }}>{t('widgets.change')}</div>
           <div style={{ textAlign: 'right' }}>{t('widgets.percentChange')}</div>
         </div>
-        {loading && quotes.length === 0 ? (
+        {loading && (!quotes || quotes.length === 0) ? (
           <>
             {TOP_12_INDICES.map((_, idx) => <SkeletonRow key={idx} />)}
           </>
-        ) : quotes.map((quote, index) => (
+        ) : (quotes || []).map((quote, index) => (
           <div
             key={index}
             style={{
@@ -137,26 +131,26 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
               borderBottom: `1px solid rgba(120,120,120,0.3)`
             }}
           >
-            <div style={{ color: BLOOMBERG_CYAN }}>{INDEX_NAMES[quote.symbol] || quote.symbol}</div>
-            <div style={{ color: BLOOMBERG_WHITE, textAlign: 'right' }}>
+            <div style={{ color: FINCEPT_CYAN }}>{INDEX_NAMES[quote.symbol] || quote.symbol}</div>
+            <div style={{ color: FINCEPT_WHITE, textAlign: 'right' }}>
               {quote.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div style={{
-              color: quote.change >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+              color: quote.change >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
               textAlign: 'right'
             }}>
               {formatChange(quote.change)}
             </div>
             <div style={{
-              color: quote.change_percent >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+              color: quote.change_percent >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
               textAlign: 'right'
             }}>
               {formatPercent(quote.change_percent)}
             </div>
           </div>
         ))}
-        {quotes.length === 0 && !loading && !error && (
-          <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
+        {(!quotes || quotes.length === 0) && !loading && !error && (
+          <div style={{ color: FINCEPT_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
             {t('widgets.noIndexData')}
           </div>
         )}

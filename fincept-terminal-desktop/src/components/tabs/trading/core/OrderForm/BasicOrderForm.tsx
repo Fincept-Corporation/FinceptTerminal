@@ -8,7 +8,7 @@ import type { OrderType, OrderSide } from '../../../../../brokers/crypto/types';
 import type { UnifiedOrderRequest } from '../../types';
 import { formatPrice, formatCurrency } from '../../utils/formatters';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -115,7 +115,7 @@ export function BasicOrderForm({
               display: 'block',
               fontSize: '9px',
               fontWeight: 700,
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               marginBottom: '4px',
               letterSpacing: '0.5px',
             }}
@@ -130,17 +130,17 @@ export function BasicOrderForm({
             style={{
               width: '100%',
               padding: '8px 10px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.WHITE,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.WHITE,
               fontSize: '12px',
               fontFamily: 'inherit',
               outline: 'none',
             }}
-            onFocus={(e) => (e.target.style.borderColor = BLOOMBERG.ORANGE)}
-            onBlur={(e) => (e.target.style.borderColor = BLOOMBERG.BORDER)}
+            onFocus={(e) => (e.target.style.borderColor = FINCEPT.ORANGE)}
+            onBlur={(e) => (e.target.style.borderColor = FINCEPT.BORDER)}
           />
-          <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginTop: '4px' }}>
+          <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginTop: '4px' }}>
             Market: {formatCurrency(currentPrice)}
           </div>
         </div>
@@ -150,13 +150,13 @@ export function BasicOrderForm({
         <div
           style={{
             padding: '8px',
-            backgroundColor: `${BLOOMBERG.ORANGE}10`,
-            border: `1px solid ${BLOOMBERG.ORANGE}40`,
+            backgroundColor: `${FINCEPT.ORANGE}10`,
+            border: `1px solid ${FINCEPT.ORANGE}40`,
             fontSize: '10px',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
           }}
         >
-          Market Price: <span style={{ color: BLOOMBERG.ORANGE, fontWeight: 700 }}>{formatCurrency(currentPrice)}</span>
+          Market Price: <span style={{ color: FINCEPT.ORANGE, fontWeight: 700 }}>{formatCurrency(currentPrice)}</span>
         </div>
       )}
 
@@ -167,7 +167,7 @@ export function BasicOrderForm({
             display: 'block',
             fontSize: '9px',
             fontWeight: 700,
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             marginBottom: '4px',
             letterSpacing: '0.5px',
           }}
@@ -182,17 +182,17 @@ export function BasicOrderForm({
           style={{
             width: '100%',
             padding: '8px 10px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
-            color: BLOOMBERG.WHITE,
+            backgroundColor: FINCEPT.HEADER_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            color: FINCEPT.WHITE,
             fontSize: '12px',
             fontFamily: 'inherit',
             outline: 'none',
           }}
-          onFocus={(e) => (e.target.style.borderColor = BLOOMBERG.ORANGE)}
-          onBlur={(e) => (e.target.style.borderColor = BLOOMBERG.BORDER)}
+          onFocus={(e) => (e.target.style.borderColor = FINCEPT.ORANGE)}
+          onBlur={(e) => (e.target.style.borderColor = FINCEPT.BORDER)}
         />
-        <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginTop: '4px' }}>
+        <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginTop: '4px' }}>
           {side === 'buy' ? 'Max (buy)' : 'Available'}: {maxQuantity.toFixed(4)} {symbol.split('/')[0]}
         </div>
       </div>
@@ -206,23 +206,23 @@ export function BasicOrderForm({
             style={{
               flex: 1,
               padding: '6px',
-              backgroundColor: BLOOMBERG.PANEL_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.GRAY,
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
               fontSize: '9px',
               fontWeight: 700,
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-              e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
-              e.currentTarget.style.color = BLOOMBERG.ORANGE;
+              e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+              e.currentTarget.style.color = FINCEPT.ORANGE;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = BLOOMBERG.PANEL_BG;
-              e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-              e.currentTarget.style.color = BLOOMBERG.GRAY;
+              e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
+              e.currentTarget.style.color = FINCEPT.GRAY;
             }}
           >
             {percent * 100}%
@@ -234,15 +234,15 @@ export function BasicOrderForm({
       <div
         style={{
           padding: '10px',
-          backgroundColor: BLOOMBERG.HEADER_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}
       >
-        <span style={{ fontSize: '9px', color: BLOOMBERG.GRAY, fontWeight: 700 }}>TOTAL</span>
-        <span style={{ fontSize: '13px', color: BLOOMBERG.YELLOW, fontWeight: 700 }}>
+        <span style={{ fontSize: '9px', color: FINCEPT.GRAY, fontWeight: 700 }}>TOTAL</span>
+        <span style={{ fontSize: '13px', color: FINCEPT.YELLOW, fontWeight: 700 }}>
           {formatCurrency(total)}
         </span>
       </div>
@@ -252,10 +252,10 @@ export function BasicOrderForm({
         <div
           style={{
             padding: '8px',
-            backgroundColor: `${BLOOMBERG.RED}10`,
-            border: `1px solid ${BLOOMBERG.RED}40`,
+            backgroundColor: `${FINCEPT.RED}10`,
+            border: `1px solid ${FINCEPT.RED}40`,
             fontSize: '10px',
-            color: BLOOMBERG.RED,
+            color: FINCEPT.RED,
           }}
         >
           [WARN] Insufficient balance (Available: {formatCurrency(balance)})

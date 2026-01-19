@@ -1,8 +1,8 @@
-// Bloomberg API Adapter
+// Fincept Data API Adapter
 import { BaseAdapter } from './BaseAdapter';
 import { TestConnectionResult } from '../types';
 
-export class BloombergAdapter extends BaseAdapter {
+export class FinceptDataAdapter extends BaseAdapter {
   async testConnection(): Promise<TestConnectionResult> {
     try {
       const validation = this.validateConfig();
@@ -17,14 +17,14 @@ export class BloombergAdapter extends BaseAdapter {
         return this.createErrorResult('Host is required');
       }
 
-      console.log('Validating Bloomberg API configuration (client-side only)');
+      console.log('Validating Fincept Data API configuration (client-side only)');
 
-      // Bloomberg API requires specialized Bloomberg SDK (blpapi)
-      return this.createSuccessResult(`Configuration validated for Bloomberg API at ${host}:${port}`, {
+      // Fincept Data API connection validation
+      return this.createSuccessResult(`Configuration validated for Fincept Data API at ${host}:${port}`, {
         validatedAt: new Date().toISOString(),
         host,
         port,
-        note: 'Client-side validation only. Bloomberg API requires backend integration with Bloomberg Terminal and blpapi SDK.',
+        note: 'Client-side validation only. Fincept Data API requires backend integration.',
       });
     } catch (error) {
       return this.createErrorResult(error);
@@ -33,25 +33,25 @@ export class BloombergAdapter extends BaseAdapter {
 
   async query(operation: string, params?: Record<string, any>): Promise<any> {
     try {
-      // Bloomberg operations need to go through backend
-      const response = await fetch('/api/data-sources/bloomberg', {
+      // Fincept Data operations need to go through backend
+      const response = await fetch('/api/data-sources/fincept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           connectionId: this.connection.id,
-          type: 'bloomberg',
+          type: 'fincept',
           operation,
           params,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Bloomberg operation failed: ${response.statusText}`);
+        throw new Error(`Fincept Data operation failed: ${response.statusText}`);
       }
 
       return await response.json();
     } catch (error) {
-      throw new Error(`Bloomberg query error: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Fincept Data query error: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -61,7 +61,7 @@ export class BloombergAdapter extends BaseAdapter {
       ...base,
       host: this.getConfig('host'),
       port: this.getConfig('port', 8194),
-      provider: 'Bloomberg',
+      provider: 'Fincept',
     };
   }
 

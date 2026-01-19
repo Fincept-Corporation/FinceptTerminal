@@ -1,5 +1,5 @@
 /**
- * AI Quant Lab Tab - Bloomberg Professional Design
+ * AI Quant Lab Tab - Fincept Professional Design
  * Complete Microsoft Qlib + RD-Agent integration
  * Full-featured quantitative research platform
  *
@@ -39,8 +39,8 @@ import { StatsmodelsPanel } from './StatsmodelsPanel';
 import { CFAQuantPanel } from './CFAQuantPanel';
 import { StatusBar } from './StatusBar';
 
-// Bloomberg Professional Color Palette - Consistent across all tabs
-const BLOOMBERG = {
+// Fincept Professional Color Palette - Consistent across all tabs
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -168,21 +168,21 @@ export default function AIQuantLabTab() {
   ];
 
   return (
-    <div className="flex flex-col h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-      {/* Bloomberg-style Header */}
+    <div className="flex flex-col h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+      {/* Fincept-style Header */}
       <div
         className="flex items-center justify-between px-4 py-2.5 border-b"
-        style={{ backgroundColor: BLOOMBERG.HEADER_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.HEADER_BG, borderColor: FINCEPT.BORDER }}
       >
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5" style={{ backgroundColor: BLOOMBERG.ORANGE }}>
-            <Brain size={18} color={BLOOMBERG.DARK_BG} />
-            <span className="font-bold text-xs tracking-wider" style={{ color: BLOOMBERG.DARK_BG }}>
+          <div className="flex items-center gap-2 px-3 py-1.5" style={{ backgroundColor: FINCEPT.ORANGE }}>
+            <Brain size={18} color={FINCEPT.DARK_BG} />
+            <span className="font-bold text-xs tracking-wider" style={{ color: FINCEPT.DARK_BG }}>
               AI QUANT LAB
             </span>
           </div>
-          <div className="h-6 w-px" style={{ backgroundColor: BLOOMBERG.BORDER }} />
-          <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+          <div className="h-6 w-px" style={{ backgroundColor: FINCEPT.BORDER }} />
+          <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
             Microsoft Qlib + RD-Agent • Autonomous Factor Mining & Model Library
           </span>
         </div>
@@ -192,18 +192,18 @@ export default function AIQuantLabTab() {
           <div
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono"
             style={{
-              backgroundColor: qlibStatus.initialized ? BLOOMBERG.PANEL_BG : BLOOMBERG.DARK_BG,
-              borderLeft: `2px solid ${qlibStatus.initialized ? BLOOMBERG.GREEN : isInitializing ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY}`
+              backgroundColor: qlibStatus.initialized ? FINCEPT.PANEL_BG : FINCEPT.DARK_BG,
+              borderLeft: `2px solid ${qlibStatus.initialized ? FINCEPT.GREEN : isInitializing ? FINCEPT.YELLOW : FINCEPT.GRAY}`
             }}
           >
             {qlibStatus.initialized ? (
-              <CheckCircle2 size={12} color={BLOOMBERG.GREEN} />
+              <CheckCircle2 size={12} color={FINCEPT.GREEN} />
             ) : isInitializing ? (
-              <RefreshCw size={12} color={BLOOMBERG.YELLOW} className="animate-spin" />
+              <RefreshCw size={12} color={FINCEPT.YELLOW} className="animate-spin" />
             ) : (
-              <Clock size={12} color={BLOOMBERG.GRAY} />
+              <Clock size={12} color={FINCEPT.GRAY} />
             )}
-            <span style={{ color: qlibStatus.initialized ? BLOOMBERG.GREEN : BLOOMBERG.GRAY }}>
+            <span style={{ color: qlibStatus.initialized ? FINCEPT.GREEN : FINCEPT.GRAY }}>
               QLIB
             </span>
           </div>
@@ -212,23 +212,23 @@ export default function AIQuantLabTab() {
           <div
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono"
             style={{
-              backgroundColor: rdAgentStatus.initialized ? BLOOMBERG.PANEL_BG : BLOOMBERG.DARK_BG,
-              borderLeft: `2px solid ${rdAgentStatus.initialized ? BLOOMBERG.GREEN : isInitializing ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY}`
+              backgroundColor: rdAgentStatus.initialized ? FINCEPT.PANEL_BG : FINCEPT.DARK_BG,
+              borderLeft: `2px solid ${rdAgentStatus.initialized ? FINCEPT.GREEN : isInitializing ? FINCEPT.YELLOW : FINCEPT.GRAY}`
             }}
           >
             {rdAgentStatus.initialized ? (
-              <CheckCircle2 size={12} color={BLOOMBERG.GREEN} />
+              <CheckCircle2 size={12} color={FINCEPT.GREEN} />
             ) : isInitializing ? (
-              <RefreshCw size={12} color={BLOOMBERG.YELLOW} className="animate-spin" />
+              <RefreshCw size={12} color={FINCEPT.YELLOW} className="animate-spin" />
             ) : (
-              <Clock size={12} color={BLOOMBERG.GRAY} />
+              <Clock size={12} color={FINCEPT.GRAY} />
             )}
-            <span style={{ color: rdAgentStatus.initialized ? BLOOMBERG.GREEN : BLOOMBERG.GRAY }}>
+            <span style={{ color: rdAgentStatus.initialized ? FINCEPT.GREEN : FINCEPT.GRAY }}>
               RD-AGENT
             </span>
           </div>
 
-          <div className="h-6 w-px" style={{ backgroundColor: BLOOMBERG.BORDER }} />
+          <div className="h-6 w-px" style={{ backgroundColor: FINCEPT.BORDER }} />
 
           {/* Refresh Button */}
           <button
@@ -238,7 +238,7 @@ export default function AIQuantLabTab() {
             disabled={isInitializing}
             title="Refresh status"
           >
-            <RefreshCw size={14} color={BLOOMBERG.GRAY} className={isInitializing ? 'animate-spin' : ''} />
+            <RefreshCw size={14} color={FINCEPT.GRAY} className={isInitializing ? 'animate-spin' : ''} />
           </button>
 
           {/* Settings Button */}
@@ -248,15 +248,15 @@ export default function AIQuantLabTab() {
             style={{ backgroundColor: 'transparent' }}
             title="Settings"
           >
-            <Settings size={14} color={BLOOMBERG.GRAY} />
+            <Settings size={14} color={FINCEPT.GRAY} />
           </button>
         </div>
       </div>
 
-      {/* Bloomberg-style Navigation Tabs */}
+      {/* Fincept-style Navigation Tabs */}
       <div
         className="flex items-center border-b"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -268,9 +268,9 @@ export default function AIQuantLabTab() {
               onClick={() => setActiveView(item.id as ViewMode)}
               className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold tracking-wide transition-all relative"
               style={{
-                backgroundColor: isActive ? BLOOMBERG.DARK_BG : 'transparent',
-                color: isActive ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY,
-                borderBottom: isActive ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
+                backgroundColor: isActive ? FINCEPT.DARK_BG : 'transparent',
+                color: isActive ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                borderBottom: isActive ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
               }}
               title={item.description}
             >

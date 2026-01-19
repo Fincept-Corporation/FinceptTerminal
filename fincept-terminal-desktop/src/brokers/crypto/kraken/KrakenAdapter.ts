@@ -134,6 +134,58 @@ export class KrakenAdapter extends BaseExchangeAdapter {
     });
   }
 
+  /**
+   * Create reduce-only order (close position only)
+   */
+  async createReduceOnlyOrder(
+    symbol: string,
+    type: OrderType,
+    side: OrderSide,
+    amount: number,
+    price?: number
+  ) {
+    return await this.createOrder(symbol, type, side, amount, price, {
+      reduceOnly: true,
+    });
+  }
+
+  /**
+   * Create post-only order (maker-only, rejected if would take)
+   */
+  async createPostOnlyOrder(
+    symbol: string,
+    side: OrderSide,
+    amount: number,
+    price: number
+  ) {
+    return await this.createOrder(symbol, 'limit', side, amount, price, {
+      postOnly: true,
+    });
+  }
+
+  /**
+   * Create OCO (One-Cancels-Other) order
+   */
+  async createOCOOrder(
+    symbol: string,
+    side: OrderSide,
+    amount: number,
+    price: number,
+    stopPrice: number,
+    stopLimitPrice?: number
+  ) {
+    try {
+      await this.ensureAuthenticated();
+      return await (this.exchange as any).createOrder(symbol, 'limit', side, amount, price, {
+        stopPrice,
+        stopLimitPrice: stopLimitPrice || stopPrice,
+        orderType: 'oco',
+      });
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // ============================================================================
   // MARGIN TRADING
   // ============================================================================
@@ -148,6 +200,23 @@ export class KrakenAdapter extends BaseExchangeAdapter {
         throw new Error('Leverage not supported');
       }
       return await this.exchange.setLeverage(leverage, symbol);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Set margin mode (cross or isolated)
+   */
+  async setMarginMode(symbol: string, marginMode: 'cross' | 'isolated') {
+    try {
+      await this.ensureAuthenticated();
+      if (!this.exchange.has['setMarginMode']) {
+        // Kraken primarily uses cross margin, isolated not fully supported
+        console.warn('[Kraken] setMarginMode: Kraken primarily supports cross margin');
+        return { symbol, marginMode: 'cross' };
+      }
+      return await this.exchange.setMarginMode(marginMode, symbol);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -178,6 +247,18 @@ export class KrakenAdapter extends BaseExchangeAdapter {
     try {
       await this.ensureAuthenticated();
       return await this.exchange.fetchBalance({ type: 'margin' });
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Fetch futures balance
+   */
+  async fetchFuturesBalance() {
+    try {
+      await this.ensureAuthenticated();
+      return await this.exchange.fetchBalance({ type: 'future' });
     } catch (error) {
       throw this.handleError(error);
     }
@@ -217,6 +298,36 @@ export class KrakenAdapter extends BaseExchangeAdapter {
         throw new Error('Funding history not available');
       }
       return await this.exchange.fetchFundingHistory(symbol, since, limit);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Fetch funding rate for symbol
+   */
+  async fetchFundingRate(symbol: string) {
+    try {
+      await this.ensureConnected();
+      if (!this.exchange.has['fetchFundingRate']) {
+        throw new Error('Funding rate not available for spot. Use Kraken Futures.');
+      }
+      return await this.exchange.fetchFundingRate(symbol);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Fetch funding rate history
+   */
+  async fetchFundingRateHistory(symbol: string, since?: number, limit?: number) {
+    try {
+      await this.ensureConnected();
+      if (!this.exchange.has['fetchFundingRateHistory']) {
+        throw new Error('Funding rate history not available for spot. Use Kraken Futures.');
+      }
+      return await this.exchange.fetchFundingRateHistory(symbol, since, limit);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -286,6 +397,21 @@ export class KrakenAdapter extends BaseExchangeAdapter {
         enableRateLimit: true,
       });
       return await futuresExchange.loadMarkets();
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Fetch open interest for symbol
+   */
+  async fetchOpenInterest(symbol: string) {
+    try {
+      await this.ensureConnected();
+      if (!this.exchange.has['fetchOpenInterest']) {
+        throw new Error('Open interest not available for spot. Use Kraken Futures.');
+      }
+      return await this.exchange.fetchOpenInterest(symbol);
     } catch (error) {
       throw this.handleError(error);
     }

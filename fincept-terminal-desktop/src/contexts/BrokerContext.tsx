@@ -26,7 +26,7 @@ const CONNECTION_TIMEOUT = 10000; // 10 seconds
 const CONNECTION_RETRY_ATTEMPTS = 3;
 const CONNECTION_RETRY_DELAY = 2000; // 2 seconds
 
-// Helper to validate localStorage values
+// Helper to validate storage values
 function validateTradingMode(value: string | null): 'live' | 'paper' | null {
   if (value === 'live' || value === 'paper') return value;
   return null;

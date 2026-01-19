@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GREEN = '#00C800';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_CYAN = '#00FFFF';
-const BLOOMBERG_YELLOW = '#FFFF00';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GREEN = '#00C800';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_CYAN = '#00FFFF';
+const FINCEPT_YELLOW = '#FFFF00';
 
 interface TradeRoute {
   name: string;
@@ -51,10 +51,10 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'critical': return BLOOMBERG_RED;
-      case 'delayed': return BLOOMBERG_YELLOW;
-      case 'active': return BLOOMBERG_GREEN;
-      default: return BLOOMBERG_GRAY;
+      case 'critical': return FINCEPT_RED;
+      case 'delayed': return FINCEPT_YELLOW;
+      case 'active': return FINCEPT_GREEN;
+      default: return FINCEPT_GRAY;
     }
   };
 
@@ -212,7 +212,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
       id={id}
       title={t('widgets.maritimeIntelligence')}
       onRemove={onRemove}
-      headerColor={BLOOMBERG_CYAN}
+      headerColor={FINCEPT_CYAN}
     >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* 3D Globe Section - Top 60% */}
@@ -222,7 +222,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
             position: 'relative',
             overflow: 'hidden',
             cursor: 'pointer',
-            borderBottom: `2px solid ${BLOOMBERG_CYAN}`
+            borderBottom: `2px solid ${FINCEPT_CYAN}`
           }}
           title="Click to open full Maritime Intelligence view"
         >
@@ -260,30 +260,30 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
             gap: '4px',
             marginBottom: '6px',
             paddingBottom: '4px',
-            borderBottom: `1px solid ${BLOOMBERG_GRAY}`
+            borderBottom: `1px solid ${FINCEPT_GRAY}`
           }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>{t('widgets.vessels')}</div>
-              <div style={{ color: BLOOMBERG_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '6px' }}>{t('widgets.vessels')}</div>
+              <div style={{ color: FINCEPT_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
                 {intelligence.active_vessels}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>{t('widgets.routes')}</div>
-              <div style={{ color: BLOOMBERG_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '6px' }}>{t('widgets.routes')}</div>
+              <div style={{ color: FINCEPT_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
                 {intelligence.monitored_routes}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>{t('widgets.vol24h')}</div>
-              <div style={{ color: BLOOMBERG_GREEN, fontWeight: 'bold', fontSize: '10px' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '6px' }}>{t('widgets.vol24h')}</div>
+              <div style={{ color: FINCEPT_GREEN, fontWeight: 'bold', fontSize: '10px' }}>
                 {intelligence.trade_volume}
               </div>
             </div>
           </div>
 
           {/* Top Trade Routes */}
-          <div style={{ color: BLOOMBERG_CYAN, fontSize: '7px', fontWeight: 'bold', marginBottom: '3px' }}>
+          <div style={{ color: FINCEPT_CYAN, fontSize: '7px', fontWeight: 'bold', marginBottom: '3px' }}>
             {t('widgets.topTradeCorridors')}
           </div>
           {TRADE_ROUTES.map((route, idx) => (
@@ -303,7 +303,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
                 alignItems: 'center',
                 marginBottom: '1px'
               }}>
-                <span style={{ color: BLOOMBERG_WHITE, fontSize: '7px', fontWeight: 'bold' }}>
+                <span style={{ color: FINCEPT_WHITE, fontSize: '7px', fontWeight: 'bold' }}>
                   {route.name}
                 </span>
                 <span style={{
@@ -316,8 +316,8 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '6px' }}>
-                <span style={{ color: BLOOMBERG_GRAY }}>{route.value}</span>
-                <span style={{ color: BLOOMBERG_CYAN }}>{route.vessels} {t('widgets.ships')}</span>
+                <span style={{ color: FINCEPT_GRAY }}>{route.value}</span>
+                <span style={{ color: FINCEPT_CYAN }}>{route.vessels} {t('widgets.ships')}</span>
               </div>
             </div>
           ))}

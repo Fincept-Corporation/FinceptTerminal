@@ -26,8 +26,8 @@ import { DebateArenaPanel } from './DebateArenaPanel';
 import { DecisionFeedPanel } from './DecisionFeedPanel';
 import { TradeHistoryPanel } from './TradeHistoryPanel';
 
-// Bloomberg color palette
-const BLOOMBERG = {
+// Fincept color palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -293,8 +293,8 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
   return (
     <div
       style={{
-        background: BLOOMBERG.PANEL_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        background: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
         borderRadius: '4px',
         height: '100%',
         display: 'flex',
@@ -304,8 +304,8 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
       {/* Header */}
       <div
         style={{
-          background: BLOOMBERG.HEADER_BG,
-          borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+          background: FINCEPT.HEADER_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
           padding: '6px 8px',
           display: 'flex',
           alignItems: 'center',
@@ -313,9 +313,9 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Sparkles size={14} color={BLOOMBERG.ORANGE} />
+          <Sparkles size={14} color={FINCEPT.ORANGE} />
           <h3 style={{
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             fontSize: '11px',
             fontWeight: '600',
             margin: 0,
@@ -329,9 +329,9 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
           <button
             onClick={() => setActiveView('quick-actions')}
             style={{
-              background: activeView === 'quick-actions' ? BLOOMBERG.ORANGE : 'transparent',
-              color: activeView === 'quick-actions' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-              border: `1px solid ${activeView === 'quick-actions' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              background: activeView === 'quick-actions' ? FINCEPT.ORANGE : 'transparent',
+              color: activeView === 'quick-actions' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: `1px solid ${activeView === 'quick-actions' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
               padding: '4px 8px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -347,9 +347,9 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
           <button
             onClick={() => setActiveView('create-agent')}
             style={{
-              background: activeView === 'create-agent' ? BLOOMBERG.ORANGE : 'transparent',
-              color: activeView === 'create-agent' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-              border: `1px solid ${activeView === 'create-agent' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              background: activeView === 'create-agent' ? FINCEPT.ORANGE : 'transparent',
+              color: activeView === 'create-agent' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: `1px solid ${activeView === 'create-agent' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
               padding: '4px 8px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -365,9 +365,9 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
           <button
             onClick={() => setActiveView('manage-agents')}
             style={{
-              background: activeView === 'manage-agents' ? BLOOMBERG.ORANGE : 'transparent',
-              color: activeView === 'manage-agents' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-              border: `1px solid ${activeView === 'manage-agents' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              background: activeView === 'manage-agents' ? FINCEPT.ORANGE : 'transparent',
+              color: activeView === 'manage-agents' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: `1px solid ${activeView === 'manage-agents' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
               padding: '4px 8px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -383,9 +383,9 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
           <button
             onClick={() => setActiveView('competition')}
             style={{
-              background: activeView === 'competition' ? BLOOMBERG.ORANGE : 'transparent',
-              color: activeView === 'competition' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-              border: `1px solid ${activeView === 'competition' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              background: activeView === 'competition' ? FINCEPT.ORANGE : 'transparent',
+              color: activeView === 'competition' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: `1px solid ${activeView === 'competition' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
               padding: '4px 8px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -508,7 +508,7 @@ function QuickActionsView({
       {/* Model Selection */}
       <div>
         <label style={{
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontSize: '9px',
           fontWeight: '600',
           display: 'block',
@@ -523,9 +523,9 @@ function QuickActionsView({
           disabled={!hasConfiguredKeys}
           style={{
             width: '100%',
-            background: BLOOMBERG.DARK_BG,
-            border: `1px solid ${hasConfiguredKeys ? BLOOMBERG.BORDER : BLOOMBERG.RED}`,
-            color: hasConfiguredKeys ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+            background: FINCEPT.DARK_BG,
+            border: `1px solid ${hasConfiguredKeys ? FINCEPT.BORDER : FINCEPT.RED}`,
+            color: hasConfiguredKeys ? FINCEPT.WHITE : FINCEPT.GRAY,
             padding: '5px 8px',
             borderRadius: '2px',
             fontSize: '10px',
@@ -539,7 +539,7 @@ function QuickActionsView({
           ))}
         </select>
         {!hasConfiguredKeys && (
-          <div style={{ fontSize: '8px', color: BLOOMBERG.RED, marginTop: '3px' }}>
+          <div style={{ fontSize: '8px', color: FINCEPT.RED, marginTop: '3px' }}>
             Configure API keys in Settings → LLM Config
           </div>
         )}
@@ -554,9 +554,9 @@ function QuickActionsView({
             disabled={isLoading || !hasConfiguredKeys}
             style={{
               width: '100%',
-              background: hasConfiguredKeys ? BLOOMBERG.BLUE : BLOOMBERG.GRAY,
-              border: `1px solid ${hasConfiguredKeys ? BLOOMBERG.BLUE : BLOOMBERG.GRAY}`,
-              color: BLOOMBERG.WHITE,
+              background: hasConfiguredKeys ? FINCEPT.BLUE : FINCEPT.GRAY,
+              border: `1px solid ${hasConfiguredKeys ? FINCEPT.BLUE : FINCEPT.GRAY}`,
+              color: FINCEPT.WHITE,
               padding: '6px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -578,9 +578,9 @@ function QuickActionsView({
             onChange={(e) => setAnalysisType(e.target.value as any)}
             style={{
               width: '100%',
-              background: BLOOMBERG.DARK_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.GRAY,
+              background: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
               padding: '4px 6px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -601,9 +601,9 @@ function QuickActionsView({
             disabled={isLoading || !hasConfiguredKeys}
             style={{
               width: '100%',
-              background: hasConfiguredKeys ? BLOOMBERG.GREEN : BLOOMBERG.GRAY,
-              border: `1px solid ${hasConfiguredKeys ? BLOOMBERG.GREEN : BLOOMBERG.GRAY}`,
-              color: BLOOMBERG.DARK_BG,
+              background: hasConfiguredKeys ? FINCEPT.GREEN : FINCEPT.GRAY,
+              border: `1px solid ${hasConfiguredKeys ? FINCEPT.GREEN : FINCEPT.GRAY}`,
+              color: FINCEPT.DARK_BG,
               padding: '6px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -625,9 +625,9 @@ function QuickActionsView({
             onChange={(e) => setStrategy(e.target.value as any)}
             style={{
               width: '100%',
-              background: BLOOMBERG.DARK_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.GRAY,
+              background: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
               padding: '4px 6px',
               borderRadius: '2px',
               fontSize: '9px',
@@ -648,9 +648,9 @@ function QuickActionsView({
           disabled={isLoading || !hasConfiguredKeys}
           style={{
             width: '100%',
-            background: hasConfiguredKeys ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY,
-            border: `1px solid ${hasConfiguredKeys ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY}`,
-            color: BLOOMBERG.DARK_BG,
+            background: hasConfiguredKeys ? FINCEPT.ORANGE : FINCEPT.GRAY,
+            border: `1px solid ${hasConfiguredKeys ? FINCEPT.ORANGE : FINCEPT.GRAY}`,
+            color: FINCEPT.DARK_BG,
             padding: '6px',
             borderRadius: '2px',
             fontSize: '9px',
@@ -674,9 +674,9 @@ function QuickActionsView({
           disabled={isLoading || availableModels.length < 2}
           style={{
             width: '100%',
-            background: (availableModels.length >= 2) ? BLOOMBERG.PURPLE : BLOOMBERG.GRAY,
-            border: `1px solid ${(availableModels.length >= 2) ? BLOOMBERG.PURPLE : BLOOMBERG.GRAY}`,
-            color: BLOOMBERG.WHITE,
+            background: (availableModels.length >= 2) ? FINCEPT.PURPLE : FINCEPT.GRAY,
+            border: `1px solid ${(availableModels.length >= 2) ? FINCEPT.PURPLE : FINCEPT.GRAY}`,
+            color: FINCEPT.WHITE,
             padding: '6px',
             borderRadius: '2px',
             fontSize: '9px',
@@ -696,13 +696,13 @@ function QuickActionsView({
       </div>
 
       {!hasConfiguredKeys && (
-        <div style={{ fontSize: '8px', color: BLOOMBERG.RED, marginTop: '4px', textAlign: 'center' }}>
+        <div style={{ fontSize: '8px', color: FINCEPT.RED, marginTop: '4px', textAlign: 'center' }}>
           Configure API keys in Settings → LLM Config
         </div>
       )}
 
       {hasConfiguredKeys && availableModels.length < 2 && (
-        <div style={{ fontSize: '8px', color: BLOOMBERG.YELLOW, marginTop: '4px', textAlign: 'center' }}>
+        <div style={{ fontSize: '8px', color: FINCEPT.YELLOW, marginTop: '4px', textAlign: 'center' }}>
           Add 2+ models for multi-model competition
         </div>
       )}
@@ -710,18 +710,18 @@ function QuickActionsView({
       {/* Error Display */}
       {error && (
         <div style={{
-          background: `${BLOOMBERG.RED}10`,
-          border: `1px solid ${BLOOMBERG.RED}`,
+          background: `${FINCEPT.RED}10`,
+          border: `1px solid ${FINCEPT.RED}`,
           borderRadius: '2px',
           padding: '6px 8px',
           display: 'flex',
           alignItems: 'flex-start',
           gap: '6px'
         }}>
-          <AlertCircle size={12} color={BLOOMBERG.RED} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <AlertCircle size={12} color={FINCEPT.RED} style={{ flexShrink: 0, marginTop: '1px' }} />
           <div>
-            <div style={{ color: BLOOMBERG.RED, fontSize: '9px', fontWeight: '600', letterSpacing: '0.3px' }}>ERROR</div>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginTop: '2px', lineHeight: '1.4' }}>{error}</div>
+            <div style={{ color: FINCEPT.RED, fontSize: '9px', fontWeight: '600', letterSpacing: '0.3px' }}>ERROR</div>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px', lineHeight: '1.4' }}>{error}</div>
           </div>
         </div>
       )}
@@ -729,8 +729,8 @@ function QuickActionsView({
       {/* Result Display */}
       {result && (
         <div style={{
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           borderRadius: '2px',
           padding: '8px',
           maxHeight: '300px',
@@ -742,10 +742,10 @@ function QuickActionsView({
             gap: '6px',
             marginBottom: '6px',
             paddingBottom: '6px',
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+            borderBottom: `1px solid ${FINCEPT.BORDER}`
           }}>
-            <CheckCircle size={12} color={BLOOMBERG.GREEN} />
-            <span style={{ color: BLOOMBERG.GREEN, fontSize: '9px', fontWeight: '600', letterSpacing: '0.5px' }}>
+            <CheckCircle size={12} color={FINCEPT.GREEN} />
+            <span style={{ color: FINCEPT.GREEN, fontSize: '9px', fontWeight: '600', letterSpacing: '0.5px' }}>
               {result.type === 'market_analysis' && 'MARKET ANALYSIS'}
               {result.type === 'trade_signal' && 'TRADE SIGNAL'}
               {result.type === 'risk_analysis' && 'RISK ASSESSMENT'}
@@ -760,9 +760,9 @@ function QuickActionsView({
                 disabled={isLoading}
                 style={{
                   marginLeft: 'auto',
-                  background: BLOOMBERG.ORANGE,
-                  border: `1px solid ${BLOOMBERG.ORANGE}`,
-                  color: BLOOMBERG.DARK_BG,
+                  background: FINCEPT.ORANGE,
+                  border: `1px solid ${FINCEPT.ORANGE}`,
+                  color: FINCEPT.DARK_BG,
                   padding: '3px 8px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -786,26 +786,26 @@ function QuickActionsView({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {/* Consensus */}
               <div>
-                <div style={{ color: BLOOMBERG.ORANGE, fontSize: '8px', fontWeight: '700', marginBottom: '4px' }}>
+                <div style={{ color: FINCEPT.ORANGE, fontSize: '8px', fontWeight: '700', marginBottom: '4px' }}>
                   CONSENSUS ({result.data.consensus.total_models} MODELS)
                 </div>
                 <div style={{
-                  background: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  background: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   borderRadius: '2px',
                   padding: '6px',
                   fontSize: '9px',
-                  color: BLOOMBERG.WHITE
+                  color: FINCEPT.WHITE
                 }}>
-                  Action: <span style={{ color: BLOOMBERG.CYAN, fontWeight: '700' }}>
+                  Action: <span style={{ color: FINCEPT.CYAN, fontWeight: '700' }}>
                     {result.data.consensus.action.toUpperCase()}
                   </span>
                   {' • '}
-                  Confidence: <span style={{ color: BLOOMBERG.YELLOW, fontWeight: '700' }}>
+                  Confidence: <span style={{ color: FINCEPT.YELLOW, fontWeight: '700' }}>
                     {(result.data.consensus.confidence * 100).toFixed(0)}%
                   </span>
                   {' • '}
-                  Agreement: <span style={{ color: BLOOMBERG.GREEN, fontWeight: '700' }}>
+                  Agreement: <span style={{ color: FINCEPT.GREEN, fontWeight: '700' }}>
                     {result.data.consensus.agreement}/{result.data.consensus.total_models}
                   </span>
                 </div>
@@ -813,7 +813,7 @@ function QuickActionsView({
 
               {/* Model Results */}
               <div>
-                <div style={{ color: BLOOMBERG.ORANGE, fontSize: '8px', fontWeight: '700', marginBottom: '4px' }}>
+                <div style={{ color: FINCEPT.ORANGE, fontSize: '8px', fontWeight: '700', marginBottom: '4px' }}>
                   MODEL DECISIONS
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -821,18 +821,18 @@ function QuickActionsView({
                     <div
                       key={idx}
                       style={{
-                        background: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
+                        background: FINCEPT.PANEL_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
                         borderRadius: '2px',
                         padding: '4px 6px',
                         fontSize: '9px'
                       }}
                     >
-                      <span style={{ color: BLOOMBERG.CYAN, fontWeight: '700' }}>
+                      <span style={{ color: FINCEPT.CYAN, fontWeight: '700' }}>
                         {r.model.split(':')[1] || r.model}:
                       </span>
                       {' '}
-                      <span style={{ color: BLOOMBERG.WHITE }}>
+                      <span style={{ color: FINCEPT.WHITE }}>
                         {r.decision?.action?.toUpperCase() || 'ANALYZING...'}
                       </span>
                     </div>
@@ -845,12 +845,12 @@ function QuickActionsView({
               {/* Trade Success Message */}
               {result.data.success && (
                 <div style={{
-                  background: `${BLOOMBERG.GREEN}15`,
-                  border: `1px solid ${BLOOMBERG.GREEN}`,
+                  background: `${FINCEPT.GREEN}15`,
+                  border: `1px solid ${FINCEPT.GREEN}`,
                   borderRadius: '2px',
                   padding: '6px',
                   fontSize: '9px',
-                  color: BLOOMBERG.GREEN
+                  color: FINCEPT.GREEN
                 }}>
                   [OK] Trade executed successfully (Paper Trading)
                   {result.data.trade_id && <span style={{ marginLeft: '6px' }}>ID: {result.data.trade_id}</span>}
@@ -860,13 +860,13 @@ function QuickActionsView({
               {/* Warnings */}
               {result.data.warnings && result.data.warnings.length > 0 && (
                 <div style={{
-                  background: `${BLOOMBERG.YELLOW}15`,
-                  border: `1px solid ${BLOOMBERG.YELLOW}`,
+                  background: `${FINCEPT.YELLOW}15`,
+                  border: `1px solid ${FINCEPT.YELLOW}`,
                   borderRadius: '2px',
                   padding: '6px'
                 }}>
                   {result.data.warnings.map((warn: string, idx: number) => (
-                    <div key={idx} style={{ fontSize: '8px', color: BLOOMBERG.YELLOW, marginBottom: '2px' }}>
+                    <div key={idx} style={{ fontSize: '8px', color: FINCEPT.YELLOW, marginBottom: '2px' }}>
                       [WARN] {warn}
                     </div>
                   ))}
@@ -876,8 +876,8 @@ function QuickActionsView({
               {/* Trade Details */}
               {result.data.trade_data && (
                 <div style={{
-                  background: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  background: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   borderRadius: '2px',
                   padding: '6px',
                   display: 'grid',
@@ -886,15 +886,15 @@ function QuickActionsView({
                   fontSize: '9px'
                 }}>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>Symbol:</span>
-                    <span style={{ color: BLOOMBERG.WHITE, fontWeight: '700', marginLeft: '4px' }}>
+                    <span style={{ color: FINCEPT.GRAY }}>Symbol:</span>
+                    <span style={{ color: FINCEPT.WHITE, fontWeight: '700', marginLeft: '4px' }}>
                       {result.data.trade_data.symbol}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>Side:</span>
+                    <span style={{ color: FINCEPT.GRAY }}>Side:</span>
                     <span style={{
-                      color: result.data.trade_data.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                      color: result.data.trade_data.side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED,
                       fontWeight: '700',
                       marginLeft: '4px',
                       textTransform: 'uppercase'
@@ -903,29 +903,29 @@ function QuickActionsView({
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>Entry:</span>
-                    <span style={{ color: BLOOMBERG.CYAN, fontWeight: '700', marginLeft: '4px' }}>
+                    <span style={{ color: FINCEPT.GRAY }}>Entry:</span>
+                    <span style={{ color: FINCEPT.CYAN, fontWeight: '700', marginLeft: '4px' }}>
                       ${result.data.trade_data.entry_price?.toFixed(2)}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>Quantity:</span>
-                    <span style={{ color: BLOOMBERG.WHITE, fontWeight: '700', marginLeft: '4px' }}>
+                    <span style={{ color: FINCEPT.GRAY }}>Quantity:</span>
+                    <span style={{ color: FINCEPT.WHITE, fontWeight: '700', marginLeft: '4px' }}>
                       {result.data.trade_data.quantity}
                     </span>
                   </div>
                   {result.data.trade_data.stop_loss && (
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>Stop Loss:</span>
-                      <span style={{ color: BLOOMBERG.RED, fontWeight: '700', marginLeft: '4px' }}>
+                      <span style={{ color: FINCEPT.GRAY }}>Stop Loss:</span>
+                      <span style={{ color: FINCEPT.RED, fontWeight: '700', marginLeft: '4px' }}>
                         ${result.data.trade_data.stop_loss.toFixed(2)}
                       </span>
                     </div>
                   )}
                   {result.data.trade_data.take_profit && (
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>Take Profit:</span>
-                      <span style={{ color: BLOOMBERG.GREEN, fontWeight: '700', marginLeft: '4px' }}>
+                      <span style={{ color: FINCEPT.GRAY }}>Take Profit:</span>
+                      <span style={{ color: FINCEPT.GREEN, fontWeight: '700', marginLeft: '4px' }}>
                         ${result.data.trade_data.take_profit.toFixed(2)}
                       </span>
                     </div>
@@ -935,14 +935,14 @@ function QuickActionsView({
 
               {/* Execution Time */}
               {result.data.execution_time_ms && (
-                <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, textAlign: 'right' }}>
+                <div style={{ fontSize: '8px', color: FINCEPT.GRAY, textAlign: 'right' }}>
                   Executed in {result.data.execution_time_ms}ms
                 </div>
               )}
             </div>
           ) : (
             <div style={{
-              color: BLOOMBERG.WHITE,
+              color: FINCEPT.WHITE,
               fontSize: '10px',
               lineHeight: '1.5',
               whiteSpace: 'pre-wrap',
@@ -1042,8 +1042,8 @@ function ManageAgentsView({ agents }: { agents: AgentInfo[] }) {
 
   if (agents.length === 0) {
     return (
-      <div style={{ color: BLOOMBERG.GRAY, textAlign: 'center', padding: '30px 12px' }}>
-        <Bot size={32} color={BLOOMBERG.GRAY} style={{ margin: '0 auto 10px' }} />
+      <div style={{ color: FINCEPT.GRAY, textAlign: 'center', padding: '30px 12px' }}>
+        <Bot size={32} color={FINCEPT.GRAY} style={{ margin: '0 auto 10px' }} />
         <div style={{ fontSize: '11px', fontWeight: '600', marginBottom: '4px', letterSpacing: '0.5px' }}>
           NO AGENTS
         </div>
@@ -1063,30 +1063,30 @@ function ManageAgentsView({ agents }: { agents: AgentInfo[] }) {
       {/* Overview Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
         <div style={{
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           borderRadius: '2px',
           padding: '6px 8px'
         }}>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: '8px', marginBottom: '3px', letterSpacing: '0.5px' }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '8px', marginBottom: '3px', letterSpacing: '0.5px' }}>
             ACTIVE
           </div>
-          <div style={{ color: BLOOMBERG.WHITE, fontSize: '14px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
+          <div style={{ color: FINCEPT.WHITE, fontSize: '14px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
             {runningAgents}/{agents.length}
           </div>
         </div>
 
         <div style={{
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           borderRadius: '2px',
           padding: '6px 8px'
         }}>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: '8px', marginBottom: '3px', letterSpacing: '0.5px' }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '8px', marginBottom: '3px', letterSpacing: '0.5px' }}>
             P&L
           </div>
           <div style={{
-            color: totalPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: totalPnL >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
             fontSize: '14px',
             fontWeight: '700',
             fontFamily: '"IBM Plex Mono", monospace'
@@ -1096,22 +1096,22 @@ function ManageAgentsView({ agents }: { agents: AgentInfo[] }) {
         </div>
 
         <div style={{
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           borderRadius: '2px',
           padding: '6px 8px'
         }}>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: '8px', marginBottom: '3px', letterSpacing: '0.5px' }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: '8px', marginBottom: '3px', letterSpacing: '0.5px' }}>
             TRADES
           </div>
-          <div style={{ color: BLOOMBERG.WHITE, fontSize: '14px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
+          <div style={{ color: FINCEPT.WHITE, fontSize: '14px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
             {totalTrades}
           </div>
         </div>
 
         <div style={{
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           borderRadius: '2px',
           padding: '6px 8px'
         }}>
@@ -1121,9 +1121,9 @@ function ManageAgentsView({ agents }: { agents: AgentInfo[] }) {
             style={{
               width: '100%',
               height: '100%',
-              background: runningAgents > 0 ? BLOOMBERG.RED : 'transparent',
-              border: `1px solid ${runningAgents > 0 ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
-              color: runningAgents > 0 ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+              background: runningAgents > 0 ? FINCEPT.RED : 'transparent',
+              border: `1px solid ${runningAgents > 0 ? FINCEPT.RED : FINCEPT.BORDER}`,
+              color: runningAgents > 0 ? FINCEPT.WHITE : FINCEPT.GRAY,
               borderRadius: '2px',
               fontSize: '8px',
               fontWeight: '600',
@@ -1178,15 +1178,15 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
     : 0;
 
   const statusColor = {
-    running: BLOOMBERG.GREEN,
-    paused: BLOOMBERG.YELLOW,
-    stopped: BLOOMBERG.GRAY
+    running: FINCEPT.GREEN,
+    paused: FINCEPT.YELLOW,
+    stopped: FINCEPT.GRAY
   }[agent.status];
 
   return (
     <div style={{
-      background: BLOOMBERG.DARK_BG,
-      border: `1px solid ${agent.status === 'running' ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
+      background: FINCEPT.DARK_BG,
+      border: `1px solid ${agent.status === 'running' ? FINCEPT.GREEN : FINCEPT.BORDER}`,
       borderRadius: '2px',
       overflow: 'hidden'
     }}>
@@ -1199,7 +1199,7 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: agent.status === 'running' ? `${BLOOMBERG.GREEN}08` : 'transparent'
+          background: agent.status === 'running' ? `${FINCEPT.GREEN}08` : 'transparent'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
@@ -1213,24 +1213,24 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
 
           <div style={{ flex: 1 }}>
             <div style={{
-              color: BLOOMBERG.WHITE,
+              color: FINCEPT.WHITE,
               fontSize: '10px',
               fontWeight: '600',
               marginBottom: '1px'
             }}>
               {agent.name}
             </div>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '8px' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '8px' }}>
               {agent.type.replace(/_/g, ' ').toUpperCase()}
-              {agent.autoTrading && <span style={{ color: BLOOMBERG.ORANGE, marginLeft: '6px' }}>● AUTO</span>}
+              {agent.autoTrading && <span style={{ color: FINCEPT.ORANGE, marginLeft: '6px' }}>● AUTO</span>}
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', letterSpacing: '0.5px' }}>P&L</div>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '7px', letterSpacing: '0.5px' }}>P&L</div>
               <div style={{
-                color: agent.metrics.totalPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                color: agent.metrics.totalPnL >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
                 fontSize: '10px',
                 fontWeight: '700',
                 fontFamily: '"IBM Plex Mono", monospace'
@@ -1240,30 +1240,30 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
             </div>
 
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', letterSpacing: '0.5px' }}>WIN</div>
-              <div style={{ color: BLOOMBERG.WHITE, fontSize: '10px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '7px', letterSpacing: '0.5px' }}>WIN</div>
+              <div style={{ color: FINCEPT.WHITE, fontSize: '10px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
                 {winRate.toFixed(0)}%
               </div>
             </div>
 
             <div>
-              <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', letterSpacing: '0.5px' }}>TRD</div>
-              <div style={{ color: BLOOMBERG.WHITE, fontSize: '10px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '7px', letterSpacing: '0.5px' }}>TRD</div>
+              <div style={{ color: FINCEPT.WHITE, fontSize: '10px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>
                 {agent.metrics.totalTrades}
               </div>
             </div>
           </div>
         </div>
 
-        {isExpanded ? <ChevronUp size={12} color={BLOOMBERG.GRAY} /> : <ChevronDown size={12} color={BLOOMBERG.GRAY} />}
+        {isExpanded ? <ChevronUp size={12} color={FINCEPT.GRAY} /> : <ChevronDown size={12} color={FINCEPT.GRAY} />}
       </div>
 
       {/* Expanded Details */}
       {isExpanded && (
         <div style={{
-          borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
           padding: '8px',
-          background: BLOOMBERG.PANEL_BG
+          background: FINCEPT.PANEL_BG
         }}>
           {/* Metrics Grid */}
           <div style={{
@@ -1273,15 +1273,15 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
             marginBottom: '8px'
           }}>
             <MetricBox label="DAILY" value={`$${agent.metrics.dailyPnL.toFixed(0)}`}
-              color={agent.metrics.dailyPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED} />
+              color={agent.metrics.dailyPnL >= 0 ? FINCEPT.GREEN : FINCEPT.RED} />
             <MetricBox label="DD" value={`${(agent.metrics.currentDrawdown * 100).toFixed(1)}%`}
-              color={BLOOMBERG.ORANGE} />
+              color={FINCEPT.ORANGE} />
             <MetricBox label="CONF" value={`${(agent.metrics.confidence * 100).toFixed(0)}%`}
-              color={BLOOMBERG.CYAN} />
+              color={FINCEPT.CYAN} />
             <MetricBox label="WIN" value={agent.metrics.winningTrades.toString()}
-              color={BLOOMBERG.GREEN} />
+              color={FINCEPT.GREEN} />
             <MetricBox label="LOSS" value={agent.metrics.losingTrades.toString()}
-              color={BLOOMBERG.RED} />
+              color={FINCEPT.RED} />
             <MetricBox label="STATE" value={agent.status.toUpperCase()}
               color={statusColor} />
           </div>
@@ -1293,9 +1293,9 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
                 onClick={onStart}
                 style={{
                   flex: 1,
-                  background: BLOOMBERG.GREEN,
+                  background: FINCEPT.GREEN,
                   border: 'none',
-                  color: BLOOMBERG.DARK_BG,
+                  color: FINCEPT.DARK_BG,
                   padding: '6px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -1318,9 +1318,9 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
                 onClick={onPause}
                 style={{
                   flex: 1,
-                  background: BLOOMBERG.YELLOW,
+                  background: FINCEPT.YELLOW,
                   border: 'none',
-                  color: BLOOMBERG.DARK_BG,
+                  color: FINCEPT.DARK_BG,
                   padding: '6px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -1343,9 +1343,9 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
                 onClick={onStop}
                 style={{
                   flex: 1,
-                  background: BLOOMBERG.RED,
+                  background: FINCEPT.RED,
                   border: 'none',
-                  color: BLOOMBERG.WHITE,
+                  color: FINCEPT.WHITE,
                   padding: '6px',
                   borderRadius: '2px',
                   fontSize: '9px',
@@ -1376,12 +1376,12 @@ function AgentCard({ agent, isExpanded, onToggleExpand, onStart, onPause, onStop
 function MetricBox({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{
-      background: BLOOMBERG.DARK_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.DARK_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '2px',
       padding: '5px 6px'
     }}>
-      <div style={{ color: BLOOMBERG.GRAY, fontSize: '7px', marginBottom: '2px', letterSpacing: '0.5px' }}>
+      <div style={{ color: FINCEPT.GRAY, fontSize: '7px', marginBottom: '2px', letterSpacing: '0.5px' }}>
         {label}
       </div>
       <div style={{ color, fontSize: '11px', fontWeight: '700', fontFamily: '"IBM Plex Mono", monospace' }}>

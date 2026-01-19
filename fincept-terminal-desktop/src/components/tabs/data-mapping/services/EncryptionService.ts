@@ -1,5 +1,5 @@
 // Encryption Service - Secure credential storage
-// PURE SQLite - No localStorage fallback
+// Uses SQLite for key persistence
 
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
 

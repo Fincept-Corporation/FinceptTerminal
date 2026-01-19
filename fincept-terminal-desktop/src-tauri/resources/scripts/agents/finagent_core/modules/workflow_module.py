@@ -517,3 +517,383 @@ class WorkflowBuilder:
     def get_module(self) -> WorkflowModule:
         """Get the underlying WorkflowModule"""
         return self._module
+
+
+class FinancialWorkflowTemplates:
+    """
+    Pre-built workflow templates for common financial tasks.
+
+    Templates:
+    - Stock analysis pipeline
+    - Portfolio rebalancing
+    - Risk assessment
+    - Market screening
+    - Report generation
+    """
+
+    @staticmethod
+    def stock_analysis_pipeline(
+        fetch_agent: Any = None,
+        analysis_agent: Any = None,
+        report_agent: Any = None
+    ) -> WorkflowModule:
+        """
+        Create stock analysis workflow.
+
+        Steps:
+        1. Fetch market data
+        2. Perform technical analysis
+        3. Perform fundamental analysis (parallel)
+        4. Generate recommendation
+        5. Create report
+
+        Args:
+            fetch_agent: Agent for fetching data
+            analysis_agent: Agent for analysis
+            report_agent: Agent for report generation
+
+        Returns:
+            Configured WorkflowModule
+        """
+        workflow = WorkflowModule(
+            name="Stock Analysis Pipeline",
+            description="Comprehensive stock analysis workflow"
+        )
+
+        # Step 1: Fetch data
+        workflow.add_step(
+            name="fetch_market_data",
+            agent=fetch_agent,
+            prompt="Fetch current market data for {symbol} including price, volume, and recent news"
+        )
+
+        # Step 2: Parallel analysis
+        workflow.add_parallel(
+            name="analysis",
+            steps=[
+                {
+                    "type": "step",
+                    "name": "technical_analysis",
+                    "agent": analysis_agent,
+                    "prompt": "Perform technical analysis on {symbol} using the market data: {last_result}"
+                },
+                {
+                    "type": "step",
+                    "name": "fundamental_analysis",
+                    "agent": analysis_agent,
+                    "prompt": "Perform fundamental analysis on {symbol} including valuation metrics"
+                }
+            ]
+        )
+
+        # Step 3: Generate recommendation
+        workflow.add_step(
+            name="generate_recommendation",
+            agent=analysis_agent,
+            prompt="Based on the technical and fundamental analysis, provide a buy/sell/hold recommendation for {symbol}"
+        )
+
+        # Step 4: Create report
+        workflow.add_step(
+            name="create_report",
+            agent=report_agent,
+            prompt="Generate a comprehensive investment report for {symbol} summarizing all analysis and recommendations"
+        )
+
+        return workflow
+
+    @staticmethod
+    def portfolio_rebalancing(
+        analysis_agent: Any = None,
+        optimization_agent: Any = None,
+        execution_agent: Any = None,
+        risk_threshold: float = 0.05
+    ) -> WorkflowModule:
+        """
+        Create portfolio rebalancing workflow.
+
+        Steps:
+        1. Analyze current portfolio
+        2. Check if rebalancing needed (condition)
+        3. Calculate optimal allocation
+        4. Generate trade orders
+        5. Review and confirm
+
+        Args:
+            analysis_agent: Agent for portfolio analysis
+            optimization_agent: Agent for optimization
+            execution_agent: Agent for trade execution
+            risk_threshold: Drift threshold for rebalancing
+
+        Returns:
+            Configured WorkflowModule
+        """
+        workflow = WorkflowModule(
+            name="Portfolio Rebalancing",
+            description="Automated portfolio rebalancing workflow"
+        )
+
+        # Step 1: Analyze current portfolio
+        workflow.add_step(
+            name="analyze_portfolio",
+            agent=analysis_agent,
+            prompt="Analyze current portfolio holdings and calculate drift from target allocation"
+        )
+
+        # Step 2: Check if rebalancing needed
+        def needs_rebalancing(context: Dict) -> bool:
+            drift = context.get("max_drift", 0)
+            return drift > risk_threshold
+
+        workflow.add_condition(
+            name="check_rebalancing_needed",
+            condition=needs_rebalancing,
+            if_true={
+                "type": "step",
+                "name": "calculate_optimal_allocation",
+                "agent": optimization_agent,
+                "prompt": "Calculate optimal trade orders to rebalance portfolio to target allocation"
+            },
+            if_false={
+                "type": "step",
+                "name": "no_action_needed",
+                "function": lambda ctx: {"message": "Portfolio within tolerance, no rebalancing needed"}
+            }
+        )
+
+        # Step 3: Generate trade orders
+        workflow.add_step(
+            name="generate_orders",
+            agent=execution_agent,
+            prompt="Generate specific trade orders based on the optimal allocation: {last_result}"
+        )
+
+        return workflow
+
+    @staticmethod
+    def market_screening(
+        screening_agent: Any = None,
+        analysis_agent: Any = None,
+        max_iterations: int = 5
+    ) -> WorkflowModule:
+        """
+        Create market screening workflow with iterative refinement.
+
+        Steps:
+        1. Initial broad screen
+        2. Apply filters (loop)
+        3. Deep analysis on top candidates
+        4. Rank and prioritize
+
+        Args:
+            screening_agent: Agent for screening
+            analysis_agent: Agent for deep analysis
+            max_iterations: Maximum screening iterations
+
+        Returns:
+            Configured WorkflowModule
+        """
+        workflow = WorkflowModule(
+            name="Market Screening",
+            description="Iterative market screening and analysis"
+        )
+
+        # Step 1: Initial screen
+        workflow.add_step(
+            name="initial_screen",
+            agent=screening_agent,
+            prompt="Screen the market for stocks matching criteria: {criteria}"
+        )
+
+        # Step 2: Iterative filtering (loop)
+        def has_more_filters(context: Dict) -> bool:
+            filters = context.get("remaining_filters", [])
+            return len(filters) > 0
+
+        workflow.add_loop(
+            name="apply_filters",
+            steps=[
+                {
+                    "type": "step",
+                    "name": "apply_filter",
+                    "agent": screening_agent,
+                    "prompt": "Apply filter {current_filter} to the stock list: {candidates}"
+                }
+            ],
+            condition=has_more_filters,
+            max_iterations=max_iterations
+        )
+
+        # Step 3: Deep analysis on top candidates
+        workflow.add_step(
+            name="deep_analysis",
+            agent=analysis_agent,
+            prompt="Perform detailed analysis on top candidates: {last_result}"
+        )
+
+        # Step 4: Rank and prioritize
+        workflow.add_step(
+            name="rank_candidates",
+            agent=analysis_agent,
+            prompt="Rank and prioritize the analyzed candidates based on investment potential"
+        )
+
+        return workflow
+
+    @staticmethod
+    def risk_assessment(
+        risk_agent: Any = None,
+        market_agent: Any = None
+    ) -> WorkflowModule:
+        """
+        Create risk assessment workflow with routing.
+
+        Steps:
+        1. Identify risk type
+        2. Route to appropriate analysis
+        3. Calculate risk metrics
+        4. Generate risk report
+
+        Args:
+            risk_agent: Agent for risk analysis
+            market_agent: Agent for market analysis
+
+        Returns:
+            Configured WorkflowModule
+        """
+        workflow = WorkflowModule(
+            name="Risk Assessment",
+            description="Comprehensive risk assessment with dynamic routing"
+        )
+
+        # Step 1: Identify risk type
+        workflow.add_step(
+            name="identify_risk_type",
+            agent=risk_agent,
+            prompt="Identify the primary risk type for the portfolio: market, credit, liquidity, or operational"
+        )
+
+        # Step 2: Route to appropriate analysis
+        def route_risk_analysis(context: Dict) -> str:
+            risk_type = context.get("risk_type", "market").lower()
+            if "market" in risk_type:
+                return "market_risk"
+            elif "credit" in risk_type:
+                return "credit_risk"
+            elif "liquidity" in risk_type:
+                return "liquidity_risk"
+            return "general_risk"
+
+        workflow.add_router(
+            name="risk_router",
+            routes={
+                "market_risk": {
+                    "type": "step",
+                    "name": "market_risk_analysis",
+                    "agent": market_agent,
+                    "prompt": "Perform market risk analysis including VaR, beta, and volatility"
+                },
+                "credit_risk": {
+                    "type": "step",
+                    "name": "credit_risk_analysis",
+                    "agent": risk_agent,
+                    "prompt": "Perform credit risk analysis on holdings"
+                },
+                "liquidity_risk": {
+                    "type": "step",
+                    "name": "liquidity_risk_analysis",
+                    "agent": risk_agent,
+                    "prompt": "Analyze liquidity risk including bid-ask spreads and volume"
+                },
+                "general_risk": {
+                    "type": "step",
+                    "name": "general_risk_analysis",
+                    "agent": risk_agent,
+                    "prompt": "Perform general risk assessment"
+                }
+            },
+            router_function=route_risk_analysis
+        )
+
+        # Step 3: Generate risk report
+        workflow.add_step(
+            name="generate_risk_report",
+            agent=risk_agent,
+            prompt="Generate comprehensive risk report based on the analysis: {last_result}"
+        )
+
+        return workflow
+
+    @staticmethod
+    def research_report_generation(
+        research_agent: Any = None,
+        writing_agent: Any = None
+    ) -> WorkflowModule:
+        """
+        Create research report generation workflow.
+
+        Steps:
+        1. Gather research data (parallel)
+        2. Analyze and synthesize
+        3. Write report sections
+        4. Review and finalize
+
+        Args:
+            research_agent: Agent for research
+            writing_agent: Agent for writing
+
+        Returns:
+            Configured WorkflowModule
+        """
+        workflow = WorkflowModule(
+            name="Research Report Generation",
+            description="Generate comprehensive research reports"
+        )
+
+        # Step 1: Gather research data in parallel
+        workflow.add_parallel(
+            name="gather_research",
+            steps=[
+                {
+                    "type": "step",
+                    "name": "company_research",
+                    "agent": research_agent,
+                    "prompt": "Research company fundamentals, management, and competitive position for {symbol}"
+                },
+                {
+                    "type": "step",
+                    "name": "industry_research",
+                    "agent": research_agent,
+                    "prompt": "Research industry trends and competitive landscape for {symbol}'s sector"
+                },
+                {
+                    "type": "step",
+                    "name": "financial_research",
+                    "agent": research_agent,
+                    "prompt": "Analyze financial statements and metrics for {symbol}"
+                }
+            ]
+        )
+
+        # Step 2: Synthesize findings
+        workflow.add_step(
+            name="synthesize_findings",
+            agent=research_agent,
+            prompt="Synthesize all research findings into key insights and investment thesis"
+        )
+
+        # Step 3: Write report
+        workflow.add_step(
+            name="write_report",
+            agent=writing_agent,
+            prompt="Write a professional investment research report based on the synthesized findings"
+        )
+
+        # Step 4: Review and finalize
+        workflow.add_step(
+            name="review_report",
+            agent=writing_agent,
+            prompt="Review the report for accuracy, completeness, and clarity. Make necessary improvements."
+        )
+
+        return workflow

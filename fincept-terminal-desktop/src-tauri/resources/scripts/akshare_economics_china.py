@@ -44,6 +44,19 @@ class ChinaEconomicsWrapper:
         self.default_start_date = (datetime.now() - timedelta(days=3650)).strftime('%Y%m%d')  # 10 years
         self.default_end_date = datetime.now().strftime('%Y%m%d')
 
+    def _convert_dataframe_to_json_safe(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Convert DataFrame to JSON-safe format, handling dates and other non-serializable types"""
+        df_copy = df.copy()
+        for col in df_copy.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
+                df_copy[col] = df_copy[col].astype(str)
+            elif df_copy[col].dtype == 'object':
+                try:
+                    df_copy[col] = df_copy[col].apply(lambda x: str(x) if hasattr(x, 'strftime') else x)
+                except:
+                    pass
+        return df_copy.to_dict('records')
+
     def _safe_call_with_retry(self, func, *args, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """Safely call AKShare function with enhanced error handling and retry logic"""
         last_error = None
@@ -57,7 +70,7 @@ class ChinaEconomicsWrapper:
                     if hasattr(result, 'empty') and not result.empty:
                         return {
                             "success": True,
-                            "data": result.to_dict('records'),
+                            "data": self._convert_dataframe_to_json_safe(result),
                             "count": len(result),
                             "timestamp": int(datetime.now().timestamp()),
                             "data_quality": "high",

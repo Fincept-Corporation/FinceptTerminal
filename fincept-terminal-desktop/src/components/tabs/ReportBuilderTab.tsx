@@ -48,8 +48,8 @@ import MarkdownRenderer from '../common/MarkdownRenderer';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 
-// Bloomberg color palette
-const BLOOMBERG_COLORS = {
+// Fincept color palette
+const FINCEPT_COLORS = {
   ORANGE: '#FFA500',
   WHITE: '#FFFFFF',
   BLACK: '#000000',
@@ -366,7 +366,7 @@ const ReportBuilderTab: React.FC = () => {
         multiple: false
       });
 
-      // For now, we'll just load from saved templates in localStorage
+      // Load from saved templates in SQLite
       // In the future, could add file system loading
       const templates = await reportService.getTemplates();
       if (templates.length > 0) {
@@ -589,15 +589,15 @@ const ReportBuilderTab: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: BLOOMBERG_COLORS.DARK_BG, color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>
+    <div className="h-full flex flex-col" style={{ backgroundColor: FINCEPT_COLORS.DARK_BG, color: FINCEPT_COLORS.TEXT_PRIMARY }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: BLOOMBERG_COLORS.BORDER, backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
+      <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: FINCEPT_COLORS.BORDER, backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5" style={{ color: BLOOMBERG_COLORS.ORANGE }} />
-            <span className="font-bold text-sm" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('title')}</span>
+            <FileText className="w-5 h-5" style={{ color: FINCEPT_COLORS.ORANGE }} />
+            <span className="font-bold text-sm" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('title')}</span>
           </div>
-          <span className="text-xs" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+          <span className="text-xs" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
             {currentTime.toLocaleTimeString()}
           </span>
         </div>
@@ -605,7 +605,7 @@ const ReportBuilderTab: React.FC = () => {
           <button
             onClick={loadTemplate}
             className="px-3 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-1"
-            style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+            style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
           >
             <FolderOpen size={14} />
             {t('header.load')}
@@ -614,7 +614,7 @@ const ReportBuilderTab: React.FC = () => {
             onClick={saveTemplate}
             disabled={isSaving}
             className="px-3 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-1 disabled:opacity-50"
-            style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+            style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
           >
             <Save size={14} />
             {isSaving ? t('header.saving') : t('header.save')}
@@ -624,8 +624,8 @@ const ReportBuilderTab: React.FC = () => {
             disabled={isGenerating || template.components.length === 0}
             className="px-3 py-1 text-xs rounded transition-colors flex items-center gap-1 disabled:opacity-50"
             style={{
-              backgroundColor: BLOOMBERG_COLORS.ORANGE,
-              color: BLOOMBERG_COLORS.BLACK,
+              backgroundColor: FINCEPT_COLORS.ORANGE,
+              color: FINCEPT_COLORS.BLACK,
               fontWeight: 'bold'
             }}
           >
@@ -638,16 +638,16 @@ const ReportBuilderTab: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Components */}
-        <div className="w-1/5 border-r overflow-y-auto" style={{ borderColor: BLOOMBERG_COLORS.BORDER, backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
+        <div className="w-1/5 border-r overflow-y-auto" style={{ borderColor: FINCEPT_COLORS.BORDER, backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
           <div className="p-3">
             {/* Add Components */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('components.title')}</h3>
+              <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('components.title')}</h3>
               <div className="space-y-1">
                 <button
                   onClick={() => addComponent('heading')}
                   className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <Type size={14} />
                   Heading
@@ -655,7 +655,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('text')}
                   className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <AlignLeft size={14} />
                   Text
@@ -663,7 +663,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('chart')}
                   className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <BarChart3 size={14} />
                   Chart
@@ -671,7 +671,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('table')}
                   className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <Table size={14} />
                   Table
@@ -679,7 +679,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('image')}
                   className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <ImageIcon size={14} />
                   Image
@@ -687,7 +687,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('code')}
                   className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <Code size={14} />
                   Code Block
@@ -695,7 +695,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('divider')}
                   className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <Minus size={14} />
                   Divider
@@ -705,12 +705,12 @@ const ReportBuilderTab: React.FC = () => {
 
             {/* Layout Components */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('layout.title')}</h3>
+              <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('layout.title')}</h3>
               <div className="grid grid-cols-2 gap-1">
                 <button
                   onClick={() => addComponent('section')}
                   className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <Layout size={14} />
                   <span className="text-[9px]">Section</span>
@@ -718,7 +718,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('columns')}
                   className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <ColumnsIcon size={14} />
                   <span className="text-[9px]">Columns</span>
@@ -726,7 +726,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('coverpage')}
                   className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <BookOpen size={14} />
                   <span className="text-[9px]">Cover</span>
@@ -734,7 +734,7 @@ const ReportBuilderTab: React.FC = () => {
                 <button
                   onClick={() => addComponent('pagebreak')}
                   className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-                  style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                 >
                   <FileX size={14} />
                   <span className="text-[9px]">Break</span>
@@ -744,17 +744,17 @@ const ReportBuilderTab: React.FC = () => {
 
             {/* Settings */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('settings.title')}</h3>
+              <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('settings.title')}</h3>
               <div className="space-y-2">
                 <div>
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     Page Theme
                   </label>
                   <select
                     value={pageTheme}
                     onChange={(e) => setPageTheme(e.target.value as any)}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                   >
                     <option value="classic">Classic White</option>
                     <option value="minimal">Minimal Grid</option>
@@ -769,13 +769,13 @@ const ReportBuilderTab: React.FC = () => {
                 {pageTheme === 'classic' && (
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-[9px]" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                      <label className="text-[9px]" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                         Background Color
                       </label>
                       <button
                         onClick={() => setShowColorPicker(!showColorPicker)}
                         className="text-[9px] px-2 py-1 rounded hover:bg-[#2a2a2a]"
-                        style={{ color: BLOOMBERG_COLORS.ORANGE }}
+                        style={{ color: FINCEPT_COLORS.ORANGE }}
                       >
                         {showColorPicker ? 'Hide Picker' : 'Show Picker'}
                       </button>
@@ -792,7 +792,7 @@ const ReportBuilderTab: React.FC = () => {
                         value={customBgColor}
                         onChange={(e) => setCustomBgColor(e.target.value)}
                         className="flex-1 px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                        style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                        style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                         placeholder="#ffffff"
                       />
                     </div>
@@ -802,7 +802,7 @@ const ReportBuilderTab: React.FC = () => {
                       <div className="p-3 rounded bg-[#0a0a0a] border border-[#333333] space-y-3">
                         {/* Main Gradient Palette */}
                         <div>
-                          <label className="text-[9px] mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                             Color Palette
                           </label>
                           <div
@@ -853,7 +853,7 @@ const ReportBuilderTab: React.FC = () => {
 
                         {/* Hue Slider */}
                         <div>
-                          <label className="text-[9px] mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                             Hue
                           </label>
                           <div
@@ -885,7 +885,7 @@ const ReportBuilderTab: React.FC = () => {
 
                         {/* Lightness Slider */}
                         <div>
-                          <label className="text-[9px] mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                             Lightness
                           </label>
                           <div
@@ -917,7 +917,7 @@ const ReportBuilderTab: React.FC = () => {
 
                         {/* Preset Colors */}
                         <div>
-                          <label className="text-[9px] mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                             Preset Colors
                           </label>
                           <div className="grid grid-cols-8 gap-1">
@@ -945,7 +945,7 @@ const ReportBuilderTab: React.FC = () => {
                   </div>
                 )}
                 <div>
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     Report Title
                   </label>
                   <input
@@ -956,12 +956,12 @@ const ReportBuilderTab: React.FC = () => {
                       metadata: { ...prev.metadata, title: e.target.value }
                     }))}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                     placeholder="Enter report title..."
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     Author
                   </label>
                   <input
@@ -972,12 +972,12 @@ const ReportBuilderTab: React.FC = () => {
                       metadata: { ...prev.metadata, author: e.target.value }
                     }))}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                     placeholder="Enter author name..."
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     Company
                   </label>
                   <input
@@ -988,19 +988,19 @@ const ReportBuilderTab: React.FC = () => {
                       metadata: { ...prev.metadata, company: e.target.value }
                     }))}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                     placeholder="Enter company name..."
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     Font Family
                   </label>
                   <select
                     value={fontFamily}
                     onChange={(e) => setFontFamily(e.target.value)}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                   >
                     <option value="Arial, sans-serif">Arial</option>
                     <option value="'Times New Roman', serif">Times New Roman</option>
@@ -1015,7 +1015,7 @@ const ReportBuilderTab: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     Base Font Size
                   </label>
                   <div className="flex items-center gap-2">
@@ -1026,15 +1026,15 @@ const ReportBuilderTab: React.FC = () => {
                       value={defaultFontSize}
                       onChange={(e) => setDefaultFontSize(Number(e.target.value))}
                       className="flex-1"
-                      style={{ accentColor: BLOOMBERG_COLORS.ORANGE }}
+                      style={{ accentColor: FINCEPT_COLORS.ORANGE }}
                     />
-                    <span className="text-xs" style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY, minWidth: '30px' }}>
+                    <span className="text-xs" style={{ color: FINCEPT_COLORS.TEXT_PRIMARY, minWidth: '30px' }}>
                       {defaultFontSize}pt
                     </span>
                   </div>
                 </div>
                 <div>
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     Text Style
                   </label>
                   <div className="flex gap-2">
@@ -1065,10 +1065,10 @@ const ReportBuilderTab: React.FC = () => {
 
             {/* Document Structure */}
             <div>
-              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>DOCUMENT STRUCTURE</h3>
+              <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>DOCUMENT STRUCTURE</h3>
               <div className="space-y-0">
                 {template.components.length === 0 ? (
-                  <p className="text-xs text-center py-4" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <p className="text-xs text-center py-4" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     No components yet
                   </p>
                 ) : (
@@ -1255,14 +1255,14 @@ const ReportBuilderTab: React.FC = () => {
         </div>
 
         {/* Right Panel - Properties and AI Chat */}
-        <div className="w-1/5 border-l flex flex-col min-h-0" style={{ borderColor: BLOOMBERG_COLORS.BORDER, backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
+        <div className="w-1/5 border-l flex flex-col min-h-0" style={{ borderColor: FINCEPT_COLORS.BORDER, backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
           {/* Toggle Buttons */}
-          <div className="flex border-b" style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
+          <div className="flex border-b" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
             <button
               onClick={() => setRightPanelView('properties')}
               className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'properties' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
                 }`}
-              style={{ color: rightPanelView === 'properties' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
+              style={{ color: rightPanelView === 'properties' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
             >
               <SettingsIcon size={14} />
               Properties
@@ -1271,7 +1271,7 @@ const ReportBuilderTab: React.FC = () => {
               onClick={() => setRightPanelView('chat')}
               className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'chat' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
                 }`}
-              style={{ color: rightPanelView === 'chat' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
+              style={{ color: rightPanelView === 'chat' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
             >
               <MessageSquare size={14} />
               AI Chat
@@ -1280,7 +1280,7 @@ const ReportBuilderTab: React.FC = () => {
               onClick={() => setRightPanelView('split')}
               className={`px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center ${rightPanelView === 'split' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
                 }`}
-              style={{ color: rightPanelView === 'split' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
+              style={{ color: rightPanelView === 'split' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
               title="Split View"
             >
               <Maximize2 size={14} />
@@ -1289,15 +1289,15 @@ const ReportBuilderTab: React.FC = () => {
 
           {/* Properties Section */}
           {(rightPanelView === 'properties' || rightPanelView === 'split') && (
-            <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
+            <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: FINCEPT_COLORS.BORDER }}>
               {selectedComp ? (
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold" style={{ color: BLOOMBERG_COLORS.ORANGE }}>PROPERTIES</h3>
+                    <h3 className="text-sm font-bold" style={{ color: FINCEPT_COLORS.ORANGE }}>PROPERTIES</h3>
                     <button
                       onClick={() => setSelectedComponent(null)}
                       className="p-1 hover:bg-[#2a2a2a] rounded"
-                      style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}
+                      style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}
                     >
                       <X size={16} />
                     </button>
@@ -1306,7 +1306,7 @@ const ReportBuilderTab: React.FC = () => {
                   <div className="space-y-4">
                     {/* Component Type */}
                     <div>
-                      <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                      <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                         Type
                       </label>
                       <div className="px-3 py-2 text-xs rounded bg-[#0a0a0a] capitalize">
@@ -1317,14 +1317,14 @@ const ReportBuilderTab: React.FC = () => {
                     {/* Content Editor */}
                     {(selectedComp.type === 'heading' || selectedComp.type === 'text' || selectedComp.type === 'code') && (
                       <div>
-                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                           Content
                         </label>
                         <textarea
                           value={selectedComp.content || ''}
                           onChange={(e) => updateComponent(selectedComp.id, { content: e.target.value })}
                           className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                          style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                           rows={selectedComp.type === 'code' ? 10 : 4}
                           placeholder="Enter content..."
                         />
@@ -1334,7 +1334,7 @@ const ReportBuilderTab: React.FC = () => {
                     {/* Alignment */}
                     {(selectedComp.type === 'heading' || selectedComp.type === 'text') && (
                       <div>
-                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                           Alignment
                         </label>
                         <div className="flex gap-2">
@@ -1359,7 +1359,7 @@ const ReportBuilderTab: React.FC = () => {
                     {/* Font Size */}
                     {(selectedComp.type === 'heading' || selectedComp.type === 'text') && (
                       <div>
-                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                           Font Size
                         </label>
                         <select
@@ -1368,7 +1368,7 @@ const ReportBuilderTab: React.FC = () => {
                             config: { ...selectedComp.config, fontSize: e.target.value }
                           })}
                           className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                          style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                         >
                           <option value="xs">Extra Small</option>
                           <option value="sm">Small</option>
@@ -1384,7 +1384,7 @@ const ReportBuilderTab: React.FC = () => {
                     {/* Image Upload */}
                     {selectedComp.type === 'image' && (
                       <div>
-                        <label className="text-xs font-semibold mb-2 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        <label className="text-xs font-semibold mb-2 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                           Image
                         </label>
                         {selectedComp.config.imageUrl ? (
@@ -1413,7 +1413,7 @@ const ReportBuilderTab: React.FC = () => {
                           <button
                             onClick={handleImageUpload}
                             className="w-full px-3 py-2 text-xs rounded transition-colors flex items-center justify-center gap-2"
-                            style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE, color: BLOOMBERG_COLORS.BLACK }}
+                            style={{ backgroundColor: FINCEPT_COLORS.ORANGE, color: FINCEPT_COLORS.BLACK }}
                           >
                             <Plus size={14} />
                             Upload Image
@@ -1425,7 +1425,7 @@ const ReportBuilderTab: React.FC = () => {
                     {/* Table Columns */}
                     {selectedComp.type === 'table' && (
                       <div>
-                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                           Columns (comma-separated)
                         </label>
                         <input
@@ -1435,7 +1435,7 @@ const ReportBuilderTab: React.FC = () => {
                             config: { ...selectedComp.config, columns: e.target.value.split(',').map(s => s.trim()) }
                           })}
                           className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                          style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                           placeholder="Column 1, Column 2, Column 3"
                         />
                       </div>
@@ -1444,7 +1444,7 @@ const ReportBuilderTab: React.FC = () => {
                     {/* Chart Type */}
                     {selectedComp.type === 'chart' && (
                       <div>
-                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                           Chart Type
                         </label>
                         <select
@@ -1453,7 +1453,7 @@ const ReportBuilderTab: React.FC = () => {
                             config: { ...selectedComp.config, chartType: e.target.value }
                           })}
                           className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                          style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                         >
                           <option value="bar">Bar Chart</option>
                           <option value="line">Line Chart</option>
@@ -1464,7 +1464,7 @@ const ReportBuilderTab: React.FC = () => {
                     )}
 
                     {/* Actions */}
-                    <div className="pt-4 border-t" style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
+                    <div className="pt-4 border-t" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
                       <div className="flex gap-2">
                         <button
                           onClick={() => duplicateComponent(selectedComp.id)}
@@ -1485,7 +1485,7 @@ const ReportBuilderTab: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="p-4 text-center" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                <div className="p-4 text-center" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                   <SettingsIcon size={32} className="mx-auto mb-2 opacity-30" />
                   <p className="text-xs">Select a component to edit properties</p>
                 </div>
@@ -1495,29 +1495,29 @@ const ReportBuilderTab: React.FC = () => {
 
           {/* AI Writing Assistant Section */}
           {(rightPanelView === 'chat' || rightPanelView === 'split') && (
-            <div className={`${rightPanelView === 'split' ? 'flex-1' : 'flex-1'} flex flex-col min-h-0`} style={{ backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
+            <div className={`${rightPanelView === 'split' ? 'flex-1' : 'flex-1'} flex flex-col min-h-0`} style={{ backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
               {/* AI Assistant Header */}
               <div className="p-4 border-b border-[#333333] flex-shrink-0">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Bot size={18} style={{ color: BLOOMBERG_COLORS.ORANGE }} />
-                    <h3 className="text-sm font-bold" style={{ color: BLOOMBERG_COLORS.ORANGE }}>
+                    <Bot size={18} style={{ color: FINCEPT_COLORS.ORANGE }} />
+                    <h3 className="text-sm font-bold" style={{ color: FINCEPT_COLORS.ORANGE }}>
                       AI WRITING ASSISTANT
                     </h3>
                   </div>
-                  <Sparkles size={16} style={{ color: BLOOMBERG_COLORS.ORANGE }} />
+                  <Sparkles size={16} style={{ color: FINCEPT_COLORS.ORANGE }} />
                 </div>
 
                 {/* Model Selector */}
                 <div className="mb-3">
-                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                     AI Model
                   </label>
                   <select
                     value={currentProvider}
                     onChange={(e) => setCurrentProvider(e.target.value)}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                   >
                     {availableModels.map(model => (
                       <option key={model.id} value={model.provider}>
@@ -1535,28 +1535,28 @@ const ReportBuilderTab: React.FC = () => {
                   <button
                     onClick={() => handleAiQuickAction('improve')}
                     className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                   >
                     ✨ Improve
                   </button>
                   <button
                     onClick={() => handleAiQuickAction('expand')}
                     className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                   >
                     📝 Expand
                   </button>
                   <button
                     onClick={() => handleAiQuickAction('summarize')}
                     className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                   >
                     📋 Summary
                   </button>
                   <button
                     onClick={() => handleAiQuickAction('grammar')}
                     className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                   >
                     [OK] Grammar
                   </button>
@@ -1567,11 +1567,11 @@ const ReportBuilderTab: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
                 {aiMessages.length === 0 && (
                   <div className="text-center py-8">
-                    <Bot size={32} className="mx-auto mb-3" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }} />
-                    <p className="text-xs" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                    <Bot size={32} className="mx-auto mb-3" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }} />
+                    <p className="text-xs" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                       Ask me to help you write better reports!
                     </p>
-                    <p className="text-[9px] mt-2" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                    <p className="text-[9px] mt-2" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                       Try: "Help me write an introduction"
                     </p>
                   </div>
@@ -1580,7 +1580,7 @@ const ReportBuilderTab: React.FC = () => {
                 {aiMessages.map((msg, idx) => (
                   <div key={idx} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {msg.role === 'assistant' && (
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: FINCEPT_COLORS.ORANGE }}>
                         <Bot size={14} style={{ color: '#000' }} />
                       </div>
                     )}
@@ -1590,7 +1590,7 @@ const ReportBuilderTab: React.FC = () => {
                         : 'bg-[#1a1a1a] border border-[#333333]'
                         }`}
                     >
-                      <div className="text-xs break-words" style={{ color: msg.role === 'user' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}>
+                      <div className="text-xs break-words" style={{ color: msg.role === 'user' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}>
                         {msg.role === 'assistant' ? (
                           <MarkdownRenderer content={msg.content} />
                         ) : (
@@ -1600,7 +1600,7 @@ const ReportBuilderTab: React.FC = () => {
                     </div>
                     {msg.role === 'user' && (
                       <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-[#333333]">
-                        <User size={14} style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }} />
+                        <User size={14} style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }} />
                       </div>
                     )}
                   </div>
@@ -1608,11 +1608,11 @@ const ReportBuilderTab: React.FC = () => {
 
                 {isAiTyping && streamingContent && (
                   <div className="flex gap-2 justify-start">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: FINCEPT_COLORS.ORANGE }}>
                       <Bot size={14} style={{ color: '#000' }} />
                     </div>
                     <div className="max-w-[85%] rounded-lg p-3 bg-[#1a1a1a] border border-[#333333]">
-                      <div className="text-xs break-words" style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>
+                      <div className="text-xs break-words" style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}>
                         <MarkdownRenderer content={streamingContent} />
                       </div>
                     </div>
@@ -1621,11 +1621,11 @@ const ReportBuilderTab: React.FC = () => {
 
                 {isAiTyping && !streamingContent && (
                   <div className="flex gap-2 justify-start">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: FINCEPT_COLORS.ORANGE }}>
                       <Bot size={14} style={{ color: '#000' }} />
                     </div>
                     <div className="max-w-[85%] rounded-lg p-3 bg-[#1a1a1a] border border-[#333333]">
-                      <div className="text-xs flex gap-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                      <div className="text-xs flex gap-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
                         <span className="animate-bounce">●</span>
                         <span className="animate-bounce delay-100">●</span>
                         <span className="animate-bounce delay-200">●</span>
@@ -1647,7 +1647,7 @@ const ReportBuilderTab: React.FC = () => {
                     onKeyPress={(e) => e.key === 'Enter' && handleAiSendMessage()}
                     placeholder="Ask AI to help with your report..."
                     className="flex-1 px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
                     disabled={isAiTyping}
                   />
                   <button
@@ -1655,7 +1655,7 @@ const ReportBuilderTab: React.FC = () => {
                     disabled={isAiTyping || !aiInput.trim()}
                     className="px-3 py-2 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{
-                      backgroundColor: BLOOMBERG_COLORS.ORANGE,
+                      backgroundColor: FINCEPT_COLORS.ORANGE,
                       color: '#000'
                     }}
                   >
@@ -1705,12 +1705,12 @@ const ReportBuilderTab: React.FC = () => {
       <TabFooter
         tabName="REPORT BUILDER"
         leftInfo={[
-          { label: `Components: ${template.components.length}`, color: BLOOMBERG_COLORS.TEXT_PRIMARY },
-          { label: `Theme: ${pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}`, color: BLOOMBERG_COLORS.TEXT_PRIMARY },
+          { label: `Components: ${template.components.length}`, color: FINCEPT_COLORS.TEXT_PRIMARY },
+          { label: `Theme: ${pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}`, color: FINCEPT_COLORS.TEXT_PRIMARY },
         ]}
         statusInfo={`${currentTime.toLocaleTimeString()} | PDF Generator: Rust printpdf`}
-        backgroundColor={BLOOMBERG_COLORS.PANEL_BG}
-        borderColor={BLOOMBERG_COLORS.ORANGE}
+        backgroundColor={FINCEPT_COLORS.PANEL_BG}
+        borderColor={FINCEPT_COLORS.ORANGE}
       />
     </div>
   );

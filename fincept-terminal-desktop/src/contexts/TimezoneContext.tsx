@@ -3,7 +3,7 @@
  *
  * Global timezone state management for Fincept Terminal.
  * Provides dual-timezone support:
- * - Default Timezone: Persisted in localStorage, used by navigation bar
+ * - Default Timezone: Persisted in SQLite, used by navigation bar
  * - Session Timezone: Per-session, used by dashboard widgets
  */
 

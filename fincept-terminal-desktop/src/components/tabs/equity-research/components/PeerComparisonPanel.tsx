@@ -1,4 +1,4 @@
-// Peer Comparison Panel Component - Bloomberg Style
+// Peer Comparison Panel Component - Fincept Style
 // Main UI for peer analysis and comparison
 
 import React, { useState } from 'react';
@@ -7,7 +7,7 @@ import type { PeerCompany, CompanyMetrics, ViewMode } from '../../../../types/pe
 import { formatMetricValue, getMetricValue, getAllMetricNames } from '../../../../types/peer';
 import { usePeerComparison } from '../../../../hooks/usePeerComparison';
 import { PercentileRankMini } from './PercentileRankChart';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../../portfolio-tab/bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 
 interface PeerComparisonPanelProps {
   initialSymbol?: string;
@@ -181,13 +181,13 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                   ...COMMON_STYLES.inputField,
                   fontSize: TYPOGRAPHY.BODY,
                 }}
-                onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
-                onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+                onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.ORANGE}
+                onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
               />
             </div>
           </div>
           <p style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: TYPOGRAPHY.SMALL,
             marginTop: SPACING.SMALL,
           }}>
@@ -206,12 +206,12 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 gap: SPACING.SMALL,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+                e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                e.currentTarget.style.borderColor = FINCEPT.ORANGE;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                e.currentTarget.style.borderColor = FINCEPT.BORDER;
               }}
             >
               <svg style={{ width: '14px', height: '14px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -247,11 +247,11 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
       {/* Error Display */}
       {error && (
         <div style={{
-          backgroundColor: `${BLOOMBERG.RED}15`,
-          border: `1px solid ${BLOOMBERG.RED}`,
+          backgroundColor: `${FINCEPT.RED}15`,
+          border: `1px solid ${FINCEPT.RED}`,
           padding: SPACING.DEFAULT,
         }}>
-          <p style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.BODY }}>{error}</p>
+          <p style={{ color: FINCEPT.RED, fontSize: TYPOGRAPHY.BODY }}>{error}</p>
         </div>
       )}
 
@@ -261,7 +261,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
         padding: SPACING.LARGE,
       }}>
         <h3 style={{
-          color: BLOOMBERG.WHITE,
+          color: FINCEPT.WHITE,
           fontSize: TYPOGRAPHY.SUBHEADING,
           fontWeight: TYPOGRAPHY.BOLD,
           marginBottom: SPACING.MEDIUM,
@@ -273,7 +273,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
 
         {selectedPeers.length === 0 ? (
           <p style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: TYPOGRAPHY.BODY,
           }}>
             No peers selected. Add peers manually using the input below.
@@ -292,7 +292,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: SPACING.MEDIUM,
-                  backgroundColor: BLOOMBERG.DARK_BG,
+                  backgroundColor: FINCEPT.DARK_BG,
                   border: BORDERS.STANDARD,
                 }}
               >
@@ -300,7 +300,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                   <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
                     <span style={{
                       fontWeight: TYPOGRAPHY.BOLD,
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       fontSize: TYPOGRAPHY.DEFAULT,
                     }}>
                       {peer.symbol}
@@ -308,16 +308,16 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                     <span style={{
                       fontSize: TYPOGRAPHY.TINY,
                       padding: `${SPACING.TINY} ${SPACING.SMALL}`,
-                      backgroundColor: `${BLOOMBERG.CYAN}20`,
-                      color: BLOOMBERG.CYAN,
-                      border: `1px solid ${BLOOMBERG.CYAN}`,
+                      backgroundColor: `${FINCEPT.CYAN}20`,
+                      color: FINCEPT.CYAN,
+                      border: `1px solid ${FINCEPT.CYAN}`,
                     }}>
                       {(peer.similarityScore * 100).toFixed(0)}% MATCH
                     </span>
                   </div>
                   <p style={{
                     fontSize: TYPOGRAPHY.SMALL,
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     marginTop: SPACING.TINY,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -334,11 +334,11 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                     backgroundColor: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     transition: 'color 0.2s',
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = BLOOMBERG.RED}
-                  onMouseLeave={(e) => e.currentTarget.style.color = BLOOMBERG.GRAY}
+                  onMouseEnter={(e) => e.currentTarget.style.color = FINCEPT.RED}
+                  onMouseLeave={(e) => e.currentTarget.style.color = FINCEPT.GRAY}
                 >
                   <svg style={{ width: '16px', height: '16px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -369,8 +369,8 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 flex: 1,
                 fontSize: TYPOGRAPHY.BODY,
               }}
-              onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
-              onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+              onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.ORANGE}
+              onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
             />
             <button
               onClick={handleAddManualPeer}
@@ -396,7 +396,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
           </div>
           <p style={{
             fontSize: TYPOGRAPHY.SMALL,
-            color: BLOOMBERG.MUTED,
+            color: FINCEPT.MUTED,
             marginTop: SPACING.TINY,
           }}>
             Tip: Add companies from the same industry/sector for better comparison
@@ -422,20 +422,20 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                     style={{
                       padding: `${SPACING.TINY} ${SPACING.MEDIUM}`,
                       fontSize: TYPOGRAPHY.BODY,
-                      backgroundColor: BLOOMBERG.DARK_BG,
+                      backgroundColor: FINCEPT.DARK_BG,
                       border: BORDERS.STANDARD,
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                       fontWeight: TYPOGRAPHY.SEMIBOLD,
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                      e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+                      e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                      e.currentTarget.style.borderColor = FINCEPT.ORANGE;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.DARK_BG;
-                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
                     }}
                   >
                     + {peer.symbol}
@@ -466,18 +466,18 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 transition: 'all 0.2s',
                 backgroundColor: 'transparent',
                 border: 'none',
-                borderBottom: viewMode === mode ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
-                color: viewMode === mode ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY,
+                borderBottom: viewMode === mode ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                color: viewMode === mode ? FINCEPT.ORANGE : FINCEPT.GRAY,
                 cursor: 'pointer',
               }}
               onMouseEnter={(e) => {
                 if (viewMode !== mode) {
-                  e.currentTarget.style.color = BLOOMBERG.WHITE;
+                  e.currentTarget.style.color = FINCEPT.WHITE;
                 }
               }}
               onMouseLeave={(e) => {
                 if (viewMode !== mode) {
-                  e.currentTarget.style.color = BLOOMBERG.GRAY;
+                  e.currentTarget.style.color = FINCEPT.GRAY;
                 }
               }}
             >
@@ -522,11 +522,11 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
             else if (psPercentile > 66) score--;
 
             const getStatus = () => {
-              if (score >= 2) return { label: 'UNDERVALUED', bgColor: `${BLOOMBERG.GREEN}15`, textColor: BLOOMBERG.GREEN, borderColor: BLOOMBERG.GREEN };
-              if (score >= 1) return { label: 'POTENTIALLY UNDERVALUED', bgColor: `${BLOOMBERG.GREEN}10`, textColor: BLOOMBERG.GREEN, borderColor: BLOOMBERG.GREEN };
-              if (score <= -2) return { label: 'OVERVALUED', bgColor: `${BLOOMBERG.RED}15`, textColor: BLOOMBERG.RED, borderColor: BLOOMBERG.RED };
-              if (score <= -1) return { label: 'POTENTIALLY OVERVALUED', bgColor: `${BLOOMBERG.YELLOW}15`, textColor: BLOOMBERG.YELLOW, borderColor: BLOOMBERG.YELLOW };
-              return { label: 'FAIRLY VALUED', bgColor: `${BLOOMBERG.CYAN}15`, textColor: BLOOMBERG.CYAN, borderColor: BLOOMBERG.CYAN };
+              if (score >= 2) return { label: 'UNDERVALUED', bgColor: `${FINCEPT.GREEN}15`, textColor: FINCEPT.GREEN, borderColor: FINCEPT.GREEN };
+              if (score >= 1) return { label: 'POTENTIALLY UNDERVALUED', bgColor: `${FINCEPT.GREEN}10`, textColor: FINCEPT.GREEN, borderColor: FINCEPT.GREEN };
+              if (score <= -2) return { label: 'OVERVALUED', bgColor: `${FINCEPT.RED}15`, textColor: FINCEPT.RED, borderColor: FINCEPT.RED };
+              if (score <= -1) return { label: 'POTENTIALLY OVERVALUED', bgColor: `${FINCEPT.YELLOW}15`, textColor: FINCEPT.YELLOW, borderColor: FINCEPT.YELLOW };
+              return { label: 'FAIRLY VALUED', bgColor: `${FINCEPT.CYAN}15`, textColor: FINCEPT.CYAN, borderColor: FINCEPT.CYAN };
             };
 
             const status = getStatus();
@@ -542,7 +542,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                     <h3 style={{
                       fontSize: TYPOGRAPHY.SUBHEADING,
                       fontWeight: TYPOGRAPHY.BOLD,
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       marginBottom: SPACING.TINY,
                       letterSpacing: TYPOGRAPHY.WIDE,
                       textTransform: 'uppercase',
@@ -551,7 +551,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                     </h3>
                     <p style={{
                       fontSize: TYPOGRAPHY.BODY,
-                      color: BLOOMBERG.GRAY,
+                      color: FINCEPT.GRAY,
                     }}>
                       Based on P/E, P/B, and P/S percentile rankings vs peers
                     </p>
@@ -570,7 +570,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                     </span>
                     <p style={{
                       fontSize: TYPOGRAPHY.SMALL,
-                      color: BLOOMBERG.GRAY,
+                      color: FINCEPT.GRAY,
                       marginTop: SPACING.TINY,
                     }}>
                       P/E: {pePercentile.toFixed(0)}th • P/B: {pbPercentile.toFixed(0)}th • P/S: {psPercentile.toFixed(0)}th percentile
@@ -595,7 +595,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
               <h3 style={{
                 fontSize: TYPOGRAPHY.SUBHEADING,
                 fontWeight: TYPOGRAPHY.BOLD,
-                color: BLOOMBERG.WHITE,
+                color: FINCEPT.WHITE,
                 letterSpacing: TYPOGRAPHY.WIDE,
                 textTransform: 'uppercase',
               }}>
@@ -604,9 +604,9 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
               <span style={{
                 fontSize: TYPOGRAPHY.SMALL,
                 padding: `${SPACING.TINY} ${SPACING.SMALL}`,
-                backgroundColor: `${BLOOMBERG.CYAN}20`,
-                color: BLOOMBERG.CYAN,
-                border: `1px solid ${BLOOMBERG.CYAN}`,
+                backgroundColor: `${FINCEPT.CYAN}20`,
+                color: FINCEPT.CYAN,
+                border: `1px solid ${FINCEPT.CYAN}`,
                 fontWeight: TYPOGRAPHY.BOLD,
               }}>
                 {comparisonData.benchmarks.sector}
@@ -618,7 +618,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
               gap: SPACING.LARGE,
             }}>
               <div style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
+                backgroundColor: FINCEPT.DARK_BG,
                 border: BORDERS.STANDARD,
                 padding: SPACING.MEDIUM,
               }}>
@@ -631,14 +631,14 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 <p style={{
                   fontSize: TYPOGRAPHY.LARGE,
                   fontWeight: TYPOGRAPHY.BOLD,
-                  color: BLOOMBERG.WHITE,
+                  color: FINCEPT.WHITE,
                   fontFamily: TYPOGRAPHY.MONO,
                 }}>
                   {comparisonData.benchmarks.medianPe?.toFixed(1) || 'N/A'}
                 </p>
               </div>
               <div style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
+                backgroundColor: FINCEPT.DARK_BG,
                 border: BORDERS.STANDARD,
                 padding: SPACING.MEDIUM,
               }}>
@@ -651,14 +651,14 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 <p style={{
                   fontSize: TYPOGRAPHY.LARGE,
                   fontWeight: TYPOGRAPHY.BOLD,
-                  color: BLOOMBERG.WHITE,
+                  color: FINCEPT.WHITE,
                   fontFamily: TYPOGRAPHY.MONO,
                 }}>
                   {comparisonData.benchmarks.medianPb?.toFixed(1) || 'N/A'}
                 </p>
               </div>
               <div style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
+                backgroundColor: FINCEPT.DARK_BG,
                 border: BORDERS.STANDARD,
                 padding: SPACING.MEDIUM,
               }}>
@@ -671,14 +671,14 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 <p style={{
                   fontSize: TYPOGRAPHY.LARGE,
                   fontWeight: TYPOGRAPHY.BOLD,
-                  color: BLOOMBERG.WHITE,
+                  color: FINCEPT.WHITE,
                   fontFamily: TYPOGRAPHY.MONO,
                 }}>
                   {comparisonData.benchmarks.medianRoe?.toFixed(1) || 'N/A'}%
                 </p>
               </div>
               <div style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
+                backgroundColor: FINCEPT.DARK_BG,
                 border: BORDERS.STANDARD,
                 padding: SPACING.MEDIUM,
               }}>
@@ -691,14 +691,14 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 <p style={{
                   fontSize: TYPOGRAPHY.LARGE,
                   fontWeight: TYPOGRAPHY.BOLD,
-                  color: BLOOMBERG.WHITE,
+                  color: FINCEPT.WHITE,
                   fontFamily: TYPOGRAPHY.MONO,
                 }}>
                   {comparisonData.benchmarks.medianRevenueGrowth?.toFixed(1) || 'N/A'}%
                 </p>
               </div>
               <div style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
+                backgroundColor: FINCEPT.DARK_BG,
                 border: BORDERS.STANDARD,
                 padding: SPACING.MEDIUM,
               }}>
@@ -711,7 +711,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 <p style={{
                   fontSize: TYPOGRAPHY.LARGE,
                   fontWeight: TYPOGRAPHY.BOLD,
-                  color: BLOOMBERG.WHITE,
+                  color: FINCEPT.WHITE,
                   fontFamily: TYPOGRAPHY.MONO,
                 }}>
                   {comparisonData.benchmarks.medianDebtToEquity?.toFixed(2) || 'N/A'}

@@ -1,14 +1,14 @@
 /**
  * FuturesPanel - Kraken futures trading interface
- * Bloomberg Terminal Style
+ * Fincept Terminal Style
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { TrendingUp, Activity, AlertTriangle, ExternalLink, Loader } from 'lucide-react';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -92,33 +92,33 @@ export function FuturesPanel() {
 
   if (isLoading) {
     return (
-      <div style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '4px', padding: '24px' }}>
+      <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
-          <Loader style={{ width: 24, height: 24, color: BLOOMBERG.BLUE, animation: 'spin 1s linear infinite' }} />
+          <Loader style={{ width: 24, height: 24, color: FINCEPT.BLUE, animation: 'spin 1s linear infinite' }} />
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '4px', padding: '16px', height: '100%', overflow: 'auto' }}>
+    <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '16px', height: '100%', overflow: 'auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Activity style={{ width: 18, height: 18, color: BLOOMBERG.PURPLE }} />
-          <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>KRAKEN FUTURES</span>
+          <Activity style={{ width: 18, height: 18, color: FINCEPT.PURPLE }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>KRAKEN FUTURES</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button onClick={fetchFuturesMarkets}
-            style={{ padding: '6px 12px', fontSize: '10px', color: BLOOMBERG.CYAN, backgroundColor: 'transparent', border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', cursor: 'pointer', transition: 'all 0.2s' }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.CYAN; e.currentTarget.style.backgroundColor = `${BLOOMBERG.CYAN}15`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; e.currentTarget.style.backgroundColor = 'transparent'; }}>
+            style={{ padding: '6px 12px', fontSize: '10px', color: FINCEPT.CYAN, backgroundColor: 'transparent', border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', cursor: 'pointer', transition: 'all 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = FINCEPT.CYAN; e.currentTarget.style.backgroundColor = `${FINCEPT.CYAN}15`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; e.currentTarget.style.backgroundColor = 'transparent'; }}>
             REFRESH
           </button>
           <a href="https://futures.kraken.com" target="_blank" rel="noopener noreferrer"
-            style={{ padding: '6px 12px', fontSize: '10px', color: BLOOMBERG.GRAY, backgroundColor: 'transparent', border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.MUTED; e.currentTarget.style.color = BLOOMBERG.WHITE; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; e.currentTarget.style.color = BLOOMBERG.GRAY; }}>
+            style={{ padding: '6px 12px', fontSize: '10px', color: FINCEPT.GRAY, backgroundColor: 'transparent', border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = FINCEPT.MUTED; e.currentTarget.style.color = FINCEPT.WHITE; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; e.currentTarget.style.color = FINCEPT.GRAY; }}>
             <ExternalLink style={{ width: 12, height: 12 }} />
             KRAKEN FUTURES
           </a>
@@ -126,17 +126,17 @@ export function FuturesPanel() {
       </div>
 
       {/* Warning Banner */}
-      <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: `${BLOOMBERG.YELLOW}08`, border: `1px solid ${BLOOMBERG.YELLOW}25`, borderRadius: '2px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-        <AlertTriangle style={{ width: 14, height: 14, color: BLOOMBERG.YELLOW, flexShrink: 0, marginTop: '2px' }} />
-        <div style={{ fontSize: '10px', color: BLOOMBERG.YELLOW, lineHeight: '1.5' }}>
+      <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: `${FINCEPT.YELLOW}08`, border: `1px solid ${FINCEPT.YELLOW}25`, borderRadius: '2px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+        <AlertTriangle style={{ width: 14, height: 14, color: FINCEPT.YELLOW, flexShrink: 0, marginTop: '2px' }} />
+        <div style={{ fontSize: '10px', color: FINCEPT.YELLOW, lineHeight: '1.5' }}>
           <strong>FUTURES TRADING RISK WARNING:</strong> Futures trading involves high risk and leverage. Only trade with funds you can afford to lose. Requires separate Kraken Futures account.
         </div>
       </div>
 
       {/* Markets Grid */}
       {futuresMarkets.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 0', color: BLOOMBERG.MUTED }}>
-          <Activity style={{ width: 48, height: 48, margin: '0 auto 12px', color: BLOOMBERG.MUTED }} />
+        <div style={{ textAlign: 'center', padding: '40px 0', color: FINCEPT.MUTED }}>
+          <Activity style={{ width: 48, height: 48, margin: '0 auto 12px', color: FINCEPT.MUTED }} />
           <div style={{ fontSize: '11px' }}>NO FUTURES MARKETS AVAILABLE</div>
         </div>
       ) : (
@@ -145,12 +145,12 @@ export function FuturesPanel() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
             {futuresMarkets.map((market) => (
               <div key={market.symbol} onClick={() => setSelectedMarket(market)}
-                style={{ padding: '10px', borderRadius: '2px', border: `2px solid ${selectedMarket?.symbol === market.symbol ? BLOOMBERG.PURPLE : BLOOMBERG.BORDER}`, backgroundColor: selectedMarket?.symbol === market.symbol ? `${BLOOMBERG.PURPLE}10` : BLOOMBERG.HEADER_BG, cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={(e) => { if (selectedMarket?.symbol !== market.symbol) e.currentTarget.style.borderColor = BLOOMBERG.MUTED; }}
-                onMouseLeave={(e) => { if (selectedMarket?.symbol !== market.symbol) e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}>
-                <div style={{ marginBottom: '4px', color: BLOOMBERG.WHITE, fontWeight: 700, fontSize: '11px', fontFamily: 'monospace' }}>{market.baseAsset}/USD</div>
-                <div style={{ fontSize: '11px', color: BLOOMBERG.GRAY, marginBottom: '2px', fontFamily: 'monospace' }}>${formatNumber(market.price)}</div>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: market.change24h >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+                style={{ padding: '10px', borderRadius: '2px', border: `2px solid ${selectedMarket?.symbol === market.symbol ? FINCEPT.PURPLE : FINCEPT.BORDER}`, backgroundColor: selectedMarket?.symbol === market.symbol ? `${FINCEPT.PURPLE}10` : FINCEPT.HEADER_BG, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={(e) => { if (selectedMarket?.symbol !== market.symbol) e.currentTarget.style.borderColor = FINCEPT.MUTED; }}
+                onMouseLeave={(e) => { if (selectedMarket?.symbol !== market.symbol) e.currentTarget.style.borderColor = FINCEPT.BORDER; }}>
+                <div style={{ marginBottom: '4px', color: FINCEPT.WHITE, fontWeight: 700, fontSize: '11px', fontFamily: 'monospace' }}>{market.baseAsset}/USD</div>
+                <div style={{ fontSize: '11px', color: FINCEPT.GRAY, marginBottom: '2px', fontFamily: 'monospace' }}>${formatNumber(market.price)}</div>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: market.change24h >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>
                   {market.change24h >= 0 ? '+' : ''}{market.change24h.toFixed(2)}%
                 </div>
               </div>
@@ -159,109 +159,109 @@ export function FuturesPanel() {
 
           {/* Selected Market Details */}
           {selectedMarket && (
-            <div style={{ borderTop: `1px solid ${BLOOMBERG.BORDER}`, paddingTop: '16px' }}>
+            <div style={{ borderTop: `1px solid ${FINCEPT.BORDER}`, paddingTop: '16px' }}>
               {/* Market Stats */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
                 {/* Price */}
-                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>MARK PRICE</div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '4px' }}>
+                <div style={{ padding: '12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>MARK PRICE</div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: 'monospace', marginBottom: '4px' }}>
                     ${formatNumber(selectedMarket.price)}
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: selectedMarket.change24h >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: selectedMarket.change24h >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>
                     {selectedMarket.change24h >= 0 ? '+' : ''}{selectedMarket.change24h.toFixed(2)}% 24h
                   </div>
                 </div>
 
                 {/* Volume */}
-                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>24H VOLUME</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
+                <div style={{ padding: '12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>24H VOLUME</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {formatLargeNumber(selectedMarket.volume24h)}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>TRADING VOLUME</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>TRADING VOLUME</div>
                 </div>
 
                 {/* Open Interest */}
-                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>OPEN INTEREST</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
+                <div style={{ padding: '12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>OPEN INTEREST</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {formatLargeNumber(selectedMarket.openInterest)}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>TOTAL POSITIONS</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>TOTAL POSITIONS</div>
                 </div>
 
                 {/* Funding Rate */}
-                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>FUNDING RATE</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: selectedMarket.fundingRate >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED, fontFamily: 'monospace', marginBottom: '2px' }}>
+                <div style={{ padding: '12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>FUNDING RATE</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: selectedMarket.fundingRate >= 0 ? FINCEPT.GREEN : FINCEPT.RED, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {(selectedMarket.fundingRate * 100).toFixed(4)}%
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>EVERY 8 HOURS</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>EVERY 8 HOURS</div>
                 </div>
 
                 {/* Next Funding */}
-                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>NEXT FUNDING</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
+                <div style={{ padding: '12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>NEXT FUNDING</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {selectedMarket.nextFunding}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>COUNTDOWN</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>COUNTDOWN</div>
                 </div>
 
                 {/* Max Leverage */}
-                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>MAX LEVERAGE</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.ORANGE, fontFamily: 'monospace', marginBottom: '2px' }}>
+                <div style={{ padding: '12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>MAX LEVERAGE</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.ORANGE, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {selectedMarket.maxLeverage}x
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>AVAILABLE</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>AVAILABLE</div>
                 </div>
               </div>
 
               {/* Contract Details */}
-              <div style={{ padding: '12px', backgroundColor: `${BLOOMBERG.CYAN}08`, border: `1px solid ${BLOOMBERG.CYAN}25`, borderRadius: '2px', marginBottom: '12px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: BLOOMBERG.CYAN, marginBottom: '8px', letterSpacing: '0.5px' }}>CONTRACT DETAILS</div>
+              <div style={{ padding: '12px', backgroundColor: `${FINCEPT.CYAN}08`, border: `1px solid ${FINCEPT.CYAN}25`, borderRadius: '2px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.CYAN, marginBottom: '8px', letterSpacing: '0.5px' }}>CONTRACT DETAILS</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '10px' }}>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>CONTRACT TYPE:</span>
-                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>Perpetual</span>
+                    <span style={{ color: FINCEPT.GRAY }}>CONTRACT TYPE:</span>
+                    <span style={{ color: FINCEPT.WHITE, marginLeft: '8px', fontWeight: 600 }}>Perpetual</span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>SETTLEMENT:</span>
-                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>USD</span>
+                    <span style={{ color: FINCEPT.GRAY }}>SETTLEMENT:</span>
+                    <span style={{ color: FINCEPT.WHITE, marginLeft: '8px', fontWeight: 600 }}>USD</span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>CONTRACT SIZE:</span>
-                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>1 {selectedMarket.baseAsset}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>CONTRACT SIZE:</span>
+                    <span style={{ color: FINCEPT.WHITE, marginLeft: '8px', fontWeight: 600 }}>1 {selectedMarket.baseAsset}</span>
                   </div>
                   <div>
-                    <span style={{ color: BLOOMBERG.GRAY }}>MIN ORDER:</span>
-                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>0.0001 {selectedMarket.baseAsset}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>MIN ORDER:</span>
+                    <span style={{ color: FINCEPT.WHITE, marginLeft: '8px', fontWeight: 600 }}>0.0001 {selectedMarket.baseAsset}</span>
                   </div>
                 </div>
               </div>
 
               {/* Trading Info */}
-              <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', marginBottom: '12px' }}>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, lineHeight: '1.6' }}>
+              <div style={{ padding: '12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, lineHeight: '1.6' }}>
                   <div style={{ marginBottom: '8px' }}>
-                    <strong style={{ color: BLOOMBERG.WHITE }}>HOW TO TRADE:</strong> Futures trading on Kraken requires a separate Kraken Futures account. Visit{' '}
+                    <strong style={{ color: FINCEPT.WHITE }}>HOW TO TRADE:</strong> Futures trading on Kraken requires a separate Kraken Futures account. Visit{' '}
                     <a href="https://futures.kraken.com" target="_blank" rel="noopener noreferrer"
-                      style={{ color: BLOOMBERG.CYAN, textDecoration: 'underline' }}>futures.kraken.com</a>{' '}
+                      style={{ color: FINCEPT.CYAN, textDecoration: 'underline' }}>futures.kraken.com</a>{' '}
                     to create an account and start trading.
                   </div>
                   <div>
-                    <strong style={{ color: BLOOMBERG.WHITE }}>API INTEGRATION:</strong> To trade futures directly from this terminal, configure Kraken Futures API credentials in Settings.
+                    <strong style={{ color: FINCEPT.WHITE }}>API INTEGRATION:</strong> To trade futures directly from this terminal, configure Kraken Futures API credentials in Settings.
                   </div>
                 </div>
               </div>
 
               {/* Action Button */}
               <a href={`https://futures.kraken.com/trade/${selectedMarket.symbol}`} target="_blank" rel="noopener noreferrer"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 16px', backgroundColor: BLOOMBERG.PURPLE, color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 700, border: 'none', borderRadius: '2px', textDecoration: 'none', transition: 'all 0.2s', letterSpacing: '0.5px' }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 16px', backgroundColor: FINCEPT.PURPLE, color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 700, border: 'none', borderRadius: '2px', textDecoration: 'none', transition: 'all 0.2s', letterSpacing: '0.5px' }}
                 onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#B565FF'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = BLOOMBERG.PURPLE; }}>
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = FINCEPT.PURPLE; }}>
                 <ExternalLink style={{ width: 14, height: 14 }} />
                 TRADE ON KRAKEN FUTURES
               </a>

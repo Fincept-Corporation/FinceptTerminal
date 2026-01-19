@@ -5,8 +5,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import type { ChordData } from '@/services/trading/tradeService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -140,8 +140,8 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
       .attr('d', arcGenerator as any)
       .attr('transform', `translate(${centerX},${centerY})`)
       .attr('fill', (d: any) => {
-        if (d.partner.isSource) return BLOOMBERG.ORANGE;
-        return BLOOMBERG.CYAN;
+        if (d.partner.isSource) return FINCEPT.ORANGE;
+        return FINCEPT.CYAN;
       })
       .attr('fill-opacity', (d: any) => {
         const isHovered = d.partner.index === hoveredPartner;
@@ -150,7 +150,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
         if (isHovered) return 0.9;
         return 0.7;
       })
-      .attr('stroke', BLOOMBERG.BORDER)
+      .attr('stroke', FINCEPT.BORDER)
       .attr('stroke-width', 1.5)
       .style('cursor', 'pointer')
       .on('mouseenter', function(event, d: any) {
@@ -190,7 +190,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
 
         chordGroup.append('path')
           .attr('d', path)
-          .attr('stroke', BLOOMBERG.GREEN)
+          .attr('stroke', FINCEPT.GREEN)
           .attr('stroke-width', isHighlighted ? thickness * 1.5 : thickness)
           .attr('stroke-opacity', isHighlighted ? 0.9 : 0.4)
           .attr('fill', 'none')
@@ -210,7 +210,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
 
         chordGroup.append('path')
           .attr('d', path)
-          .attr('stroke', BLOOMBERG.RED)
+          .attr('stroke', FINCEPT.RED)
           .attr('stroke-width', isHighlighted ? thickness * 1.5 : thickness)
           .attr('stroke-opacity', isHighlighted ? 0.9 : 0.4)
           .attr('fill', 'none')
@@ -270,7 +270,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
         .attr('y1', arcMidY)
         .attr('x2', pos.x)
         .attr('y2', pos.y)
-        .attr('stroke', BLOOMBERG.MUTED)
+        .attr('stroke', FINCEPT.MUTED)
         .attr('stroke-width', 0.5)
         .attr('stroke-dasharray', '2,2')
         .attr('opacity', 0.5);
@@ -287,8 +287,8 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
         .attr('font-size', '11px')
         .attr('font-weight', pos.arc.partner.isSource ? '700' : '400')
         .attr('font-family', '"Segoe UI", sans-serif')
-        .attr('fill', pos.arc.partner.isSource ? BLOOMBERG.YELLOW : BLOOMBERG.WHITE)
-        .attr('stroke', BLOOMBERG.DARK_BG)
+        .attr('fill', pos.arc.partner.isSource ? FINCEPT.YELLOW : FINCEPT.WHITE)
+        .attr('stroke', FINCEPT.DARK_BG)
         .attr('stroke-width', 3)
         .attr('paint-order', 'stroke')
         .text(text.length > 15 ? text.substring(0, 15) + '...' : text)
@@ -308,8 +308,8 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
       .attr('width', 32)
       .attr('height', 32)
       .attr('rx', 4)
-      .attr('fill', BLOOMBERG.PANEL_BG)
-      .attr('stroke', BLOOMBERG.BORDER)
+      .attr('fill', FINCEPT.PANEL_BG)
+      .attr('stroke', FINCEPT.BORDER)
       .style('cursor', 'pointer')
       .on('click', function() {
         svg.transition().duration(300).call(zoom.scaleBy as any, 1.3);
@@ -319,7 +319,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
       .attr('x', 36)
       .attr('y', 40)
       .attr('text-anchor', 'middle')
-      .attr('fill', BLOOMBERG.WHITE)
+      .attr('fill', FINCEPT.WHITE)
       .attr('font-size', '20px')
       .attr('font-weight', 'bold')
       .text('+')
@@ -332,8 +332,8 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
       .attr('width', 32)
       .attr('height', 32)
       .attr('rx', 4)
-      .attr('fill', BLOOMBERG.PANEL_BG)
-      .attr('stroke', BLOOMBERG.BORDER)
+      .attr('fill', FINCEPT.PANEL_BG)
+      .attr('stroke', FINCEPT.BORDER)
       .style('cursor', 'pointer')
       .on('click', function() {
         svg.transition().duration(300).call(zoom.scaleBy as any, 0.7);
@@ -343,7 +343,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
       .attr('x', 36)
       .attr('y', 80)
       .attr('text-anchor', 'middle')
-      .attr('fill', BLOOMBERG.WHITE)
+      .attr('fill', FINCEPT.WHITE)
       .attr('font-size', '20px')
       .attr('font-weight', 'bold')
       .text('−')
@@ -356,8 +356,8 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
       .attr('width', 32)
       .attr('height', 32)
       .attr('rx', 4)
-      .attr('fill', BLOOMBERG.PANEL_BG)
-      .attr('stroke', BLOOMBERG.BORDER)
+      .attr('fill', FINCEPT.PANEL_BG)
+      .attr('stroke', FINCEPT.BORDER)
       .style('cursor', 'pointer')
       .on('click', function() {
         svg.transition().duration(500).call(
@@ -371,7 +371,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
       .attr('x', 36)
       .attr('y', 120)
       .attr('text-anchor', 'middle')
-      .attr('fill', BLOOMBERG.WHITE)
+      .attr('fill', FINCEPT.WHITE)
       .attr('font-size', '16px')
       .text('⟲')
       .style('pointer-events', 'none');
@@ -413,7 +413,7 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
         style={{
           width: '100%',
           height: '100%',
-          backgroundColor: BLOOMBERG.DARK_BG,
+          backgroundColor: FINCEPT.DARK_BG,
           cursor: 'grab'
         }}
       />
@@ -425,17 +425,17 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
             position: 'fixed',
             left: tooltip.x + 10,
             top: tooltip.y + 10,
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            border: `2px solid ${BLOOMBERG.ORANGE}`,
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `2px solid ${FINCEPT.ORANGE}`,
             padding: '10px 14px',
             borderRadius: '6px',
             fontSize: '12px',
             fontWeight: '500',
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             pointerEvents: 'none',
             zIndex: 10000,
             whiteSpace: 'pre-line',
-            boxShadow: `0 8px 24px ${BLOOMBERG.DARK_BG}CC`,
+            boxShadow: `0 8px 24px ${FINCEPT.DARK_BG}CC`,
             fontFamily: '"Segoe UI", sans-serif',
             backdropFilter: 'blur(10px)'
           }}
@@ -451,8 +451,8 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
           position: 'absolute',
           right: '20px',
           top: '20px',
-          backgroundColor: `${BLOOMBERG.PANEL_BG}F2`,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: `${FINCEPT.PANEL_BG}F2`,
+          border: `1px solid ${FINCEPT.BORDER}`,
           borderRadius: '8px',
           padding: '12px',
           maxWidth: '320px',
@@ -464,10 +464,10 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
         <div style={{
           fontSize: '11px',
           fontWeight: 600,
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           marginBottom: '12px',
           paddingBottom: '8px',
-          borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+          borderBottom: `1px solid ${FINCEPT.BORDER}`
         }}>
           TRADING PARTNERS
         </div>
@@ -479,15 +479,15 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
               padding: '10px',
               marginBottom: '6px',
               backgroundColor: selectedPartner === idx + 1
-                ? `${BLOOMBERG.ORANGE}30`
+                ? `${FINCEPT.ORANGE}30`
                 : hoveredPartner === idx + 1
-                  ? `${BLOOMBERG.CYAN}20`
+                  ? `${FINCEPT.CYAN}20`
                   : 'transparent',
               border: `1px solid ${
                 selectedPartner === idx + 1
-                  ? BLOOMBERG.ORANGE
+                  ? FINCEPT.ORANGE
                   : hoveredPartner === idx + 1
-                    ? BLOOMBERG.CYAN
+                    ? FINCEPT.CYAN
                     : 'transparent'
               }`,
               borderRadius: '4px',
@@ -501,22 +501,22 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
             <div style={{
               fontSize: '11px',
               fontWeight: 600,
-              color: BLOOMBERG.WHITE,
+              color: FINCEPT.WHITE,
               marginBottom: '4px',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
               <span>{idx + 1}. {partner.partner_name}</span>
-              <span style={{ fontSize: '10px', color: BLOOMBERG.YELLOW }}>
+              <span style={{ fontSize: '10px', color: FINCEPT.YELLOW }}>
                 {formatCurrency(partner.total_trade)}
               </span>
             </div>
-            <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, display: 'flex', gap: '12px' }}>
-              <span style={{ color: BLOOMBERG.GREEN }}>
+            <div style={{ fontSize: '9px', color: FINCEPT.GRAY, display: 'flex', gap: '12px' }}>
+              <span style={{ color: FINCEPT.GREEN }}>
                 ↑ {formatCurrency(partner.export_value)}
               </span>
-              <span style={{ color: BLOOMBERG.RED }}>
+              <span style={{ color: FINCEPT.RED }}>
                 ↓ {formatCurrency(partner.import_value)}
               </span>
             </div>

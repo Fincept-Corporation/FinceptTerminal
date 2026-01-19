@@ -10,7 +10,7 @@ interface TradeHistoryPanelProps {
   decisions: AlphaDecisionLog[];
 }
 
-const BLOOMBERG = {
+const FINCEPT = {
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
   HEADER_BG: '#1A1A1A',
@@ -49,7 +49,7 @@ export const TradeHistoryPanel: React.FC<TradeHistoryPanelProps> = ({ decisions 
       <div style={{
         padding: '24px',
         textAlign: 'center',
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         fontSize: '10px',
         fontFamily: '"IBM Plex Mono", monospace'
       }}>
@@ -69,11 +69,11 @@ export const TradeHistoryPanel: React.FC<TradeHistoryPanelProps> = ({ decisions 
         display: 'grid',
         gridTemplateColumns: '100px 80px 120px 100px 100px 100px 1fr 80px',
         padding: '8px 12px',
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         fontSize: '8px',
         fontWeight: 700,
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         letterSpacing: '0.5px',
         position: 'sticky',
         top: 0
@@ -102,26 +102,26 @@ export const TradeHistoryPanel: React.FC<TradeHistoryPanelProps> = ({ decisions 
               display: 'grid',
               gridTemplateColumns: '100px 80px 120px 100px 100px 100px 1fr 80px',
               padding: '10px 12px',
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '9px',
-              color: BLOOMBERG.WHITE,
+              color: FINCEPT.WHITE,
               alignItems: 'center',
-              backgroundColor: idx % 2 === 0 ? BLOOMBERG.DARK_BG : BLOOMBERG.PANEL_BG
+              backgroundColor: idx % 2 === 0 ? FINCEPT.DARK_BG : FINCEPT.PANEL_BG
             }}
           >
             {/* Time */}
-            <div style={{ color: BLOOMBERG.GRAY }}>
+            <div style={{ color: FINCEPT.GRAY }}>
               {formatTime(decision.timestamp)}
             </div>
 
             {/* Cycle */}
-            <div style={{ color: BLOOMBERG.CYAN, fontWeight: 600 }}>
+            <div style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>
               #{decision.cycle_number}
             </div>
 
             {/* Model */}
             <div style={{
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               fontSize: '8px',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -139,31 +139,31 @@ export const TradeHistoryPanel: React.FC<TradeHistoryPanelProps> = ({ decisions 
             }}>
               {decision.action === 'buy' && (
                 <>
-                  <TrendingUp size={12} color={BLOOMBERG.GREEN} />
-                  <span style={{ color: BLOOMBERG.GREEN }}>BUY</span>
+                  <TrendingUp size={12} color={FINCEPT.GREEN} />
+                  <span style={{ color: FINCEPT.GREEN }}>BUY</span>
                 </>
               )}
               {decision.action === 'sell' && (
                 <>
-                  <TrendingDown size={12} color={BLOOMBERG.RED} />
-                  <span style={{ color: BLOOMBERG.RED }}>SELL</span>
+                  <TrendingDown size={12} color={FINCEPT.RED} />
+                  <span style={{ color: FINCEPT.RED }}>SELL</span>
                 </>
               )}
               {decision.action === 'hold' && (
                 <>
-                  <Circle size={12} color={BLOOMBERG.GRAY} />
-                  <span style={{ color: BLOOMBERG.GRAY }}>HOLD</span>
+                  <Circle size={12} color={FINCEPT.GRAY} />
+                  <span style={{ color: FINCEPT.GRAY }}>HOLD</span>
                 </>
               )}
             </div>
 
             {/* Quantity */}
-            <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>
+            <div style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
               {decision.quantity ? `×${decision.quantity.toFixed(3)}` : '-'}
             </div>
 
             {/* Price */}
-            <div style={{ color: BLOOMBERG.CYAN }}>
+            <div style={{ color: FINCEPT.CYAN }}>
               {decision.price_at_decision
                 ? `$${decision.price_at_decision.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                 : '-'}
@@ -171,7 +171,7 @@ export const TradeHistoryPanel: React.FC<TradeHistoryPanelProps> = ({ decisions 
 
             {/* Reasoning */}
             <div style={{
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '8px',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -190,24 +190,24 @@ export const TradeHistoryPanel: React.FC<TradeHistoryPanelProps> = ({ decisions 
             }}>
               {isExecuted && (
                 <>
-                  <CheckCircle size={10} color={BLOOMBERG.GREEN} />
-                  <span style={{ color: BLOOMBERG.GREEN }}>EXEC</span>
+                  <CheckCircle size={10} color={FINCEPT.GREEN} />
+                  <span style={{ color: FINCEPT.GREEN }}>EXEC</span>
                 </>
               )}
               {isRejected && (
                 <>
-                  <XCircle size={10} color={BLOOMBERG.RED} />
-                  <span style={{ color: BLOOMBERG.RED }}>REJ</span>
+                  <XCircle size={10} color={FINCEPT.RED} />
+                  <span style={{ color: FINCEPT.RED }}>REJ</span>
                 </>
               )}
               {isHold && (
                 <>
-                  <Circle size={10} color={BLOOMBERG.GRAY} />
-                  <span style={{ color: BLOOMBERG.GRAY }}>HOLD</span>
+                  <Circle size={10} color={FINCEPT.GRAY} />
+                  <span style={{ color: FINCEPT.GRAY }}>HOLD</span>
                 </>
               )}
               {!isExecuted && !isRejected && !isHold && (
-                <span style={{ color: BLOOMBERG.YELLOW }}>PEND</span>
+                <span style={{ color: FINCEPT.YELLOW }}>PEND</span>
               )}
             </div>
           </div>

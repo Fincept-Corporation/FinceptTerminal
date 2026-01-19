@@ -38,6 +38,7 @@ import { useTranslation } from 'react-i18next';
 
 // Lazy loaded tabs (heavy/Python-dependent)
 const EquityResearchTab = React.lazy(() => import('@/components/tabs/EquityResearchTab'));
+const AsiaMarketsTab = React.lazy(() => import('@/components/tabs/AsiaMarketsTab'));
 const ScreenerTab = React.lazy(() => import('@/components/tabs/ScreenerTab'));
 const BacktestingTab = React.lazy(() => import('@/components/tabs/BacktestingTabNew'));
 const GeopoliticsTab = React.lazy(() => import('@/components/tabs/GeopoliticsTab'));
@@ -49,6 +50,7 @@ const DerivativesTab = React.lazy(() => import('@/components/tabs/DerivativesTab
 const TradingTab = React.lazy(() => import('@/components/tabs/TradingTab').then(m => ({ default: m.TradingTab })));
 const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading/EquityTradingTab'));
 const DBnomicsTab = React.lazy(() => import('@/components/tabs/DBnomicsTab'));
+const AkShareDataTab = React.lazy(() => import('@/components/tabs/AkShareDataTab'));
 const EconomicsTab = React.lazy(() => import('@/components/tabs/EconomicsTab'));
 const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTabDeck'));
 const ReportBuilderTab = React.lazy(() => import('@/components/tabs/ReportBuilderTab'));
@@ -555,6 +557,7 @@ function FinxeptTerminalContent() {
 
   const researchMenuItems = [
     { label: 'Equity Research', shortcut: 'F7', action: () => setActiveTab('research') },
+    { label: 'Asia Markets', action: () => setActiveTab('asia-markets') },
     { label: '3D Visualization', action: () => setActiveTab('3d-viz') },
     { label: 'AI Quant Lab', action: () => setActiveTab('ai-quant-lab') },
     { label: 'Geopolitics', action: () => setActiveTab('geopolitics') },
@@ -1069,6 +1072,11 @@ function FinxeptTerminalContent() {
                 <EquityResearchTab />
               </React.Suspense>
             </TabsContent>
+            <TabsContent value="asia-markets" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <AsiaMarketsTab />
+              </React.Suspense>
+            </TabsContent>
             <TabsContent value="polygon" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <PolygonEqTab />
@@ -1082,6 +1090,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="dbnomics" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <DBnomicsTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="akshare" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <AkShareDataTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="economics" className="h-full m-0 p-0">

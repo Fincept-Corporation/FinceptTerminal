@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useBrokerContext } from '@/contexts/BrokerContext';
 import { alphaArenaBrokerBridge } from '@/services/trading/alphaArenaBrokerBridge';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',

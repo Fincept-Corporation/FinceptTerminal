@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { PortfolioSummary, PortfolioHolding } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent } from './utils';
 import { sectorService } from '../../../../services/data-sources/sectorService';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
 
 interface SectorsViewProps {
   portfolioSummary: PortfolioSummary;
@@ -19,15 +19,15 @@ interface SectorAllocation {
 const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
   const currency = portfolioSummary.portfolio.currency;
 
-  // Bloomberg color palette for sectors
+  // Fincept color palette for sectors
   const sectorColors = [
-    BLOOMBERG.CYAN,
-    BLOOMBERG.GREEN,
-    BLOOMBERG.ORANGE,
-    BLOOMBERG.PURPLE,
-    BLOOMBERG.BLUE,
-    BLOOMBERG.YELLOW,
-    BLOOMBERG.RED
+    FINCEPT.CYAN,
+    FINCEPT.GREEN,
+    FINCEPT.ORANGE,
+    FINCEPT.PURPLE,
+    FINCEPT.BLUE,
+    FINCEPT.YELLOW,
+    FINCEPT.RED
   ];
 
   // Group holdings by sector using real sector classification
@@ -94,7 +94,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
+      backgroundColor: FINCEPT.DARK_BG,
       padding: SPACING.DEFAULT,
       overflow: 'auto',
       fontFamily: TYPOGRAPHY.MONO
@@ -111,7 +111,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
         <div style={{
           padding: SPACING.XLARGE,
           textAlign: 'center',
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontSize: TYPOGRAPHY.DEFAULT
         }}>
           No sector data available. Add holdings with sector information.
@@ -131,7 +131,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                   <path
                     d={createArc(sector.startAngle, sector.endAngle)}
                     fill={sector.color}
-                    stroke={BLOOMBERG.DARK_BG}
+                    stroke={FINCEPT.DARK_BG}
                     strokeWidth="2"
                     opacity="0.9"
                   />
@@ -141,7 +141,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                       x={centerX + (radius * 0.7) * Math.cos((((sector.startAngle + sector.endAngle) / 2) - 90) * Math.PI / 180)}
                       y={centerY + (radius * 0.7) * Math.sin((((sector.startAngle + sector.endAngle) / 2) - 90) * Math.PI / 180)}
                       textAnchor="middle"
-                      fill={BLOOMBERG.WHITE}
+                      fill={FINCEPT.WHITE}
                       fontSize={TYPOGRAPHY.DEFAULT}
                       fontWeight={TYPOGRAPHY.BOLD}
                       fontFamily={TYPOGRAPHY.MONO}
@@ -156,15 +156,15 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                 cx={centerX}
                 cy={centerY}
                 r={radius * 0.4}
-                fill={BLOOMBERG.PANEL_BG}
-                stroke={BLOOMBERG.ORANGE}
+                fill={FINCEPT.PANEL_BG}
+                stroke={FINCEPT.ORANGE}
                 strokeWidth="2"
               />
               <text
                 x={centerX}
                 y={centerY - 10}
                 textAnchor="middle"
-                fill={BLOOMBERG.ORANGE}
+                fill={FINCEPT.ORANGE}
                 fontSize={TYPOGRAPHY.SUBHEADING}
                 fontWeight={TYPOGRAPHY.BOLD}
                 fontFamily={TYPOGRAPHY.MONO}
@@ -175,7 +175,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                 x={centerX}
                 y={centerY + 10}
                 textAnchor="middle"
-                fill={BLOOMBERG.WHITE}
+                fill={FINCEPT.WHITE}
                 fontSize={TYPOGRAPHY.HEADING}
                 fontWeight={TYPOGRAPHY.BOLD}
                 fontFamily={TYPOGRAPHY.MONO}
@@ -194,7 +194,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                     alignItems: 'center',
                     marginBottom: SPACING.SMALL,
                     padding: SPACING.SMALL,
-                    backgroundColor: BLOOMBERG.PANEL_BG,
+                    backgroundColor: FINCEPT.PANEL_BG,
                     borderLeft: `4px solid ${sector.color}`
                   }}
                 >
@@ -207,7 +207,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                   }} />
                   <div style={{ flex: 1 }}>
                     <span style={{
-                      color: BLOOMBERG.WHITE,
+                      color: FINCEPT.WHITE,
                       fontSize: TYPOGRAPHY.BODY,
                       fontWeight: TYPOGRAPHY.BOLD
                     }}>
@@ -216,7 +216,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <span style={{
-                      color: BLOOMBERG.YELLOW,
+                      color: FINCEPT.YELLOW,
                       fontSize: TYPOGRAPHY.BODY,
                       fontWeight: TYPOGRAPHY.BOLD
                     }}>
@@ -231,7 +231,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
           {/* Sector Details Table */}
           <div>
             <div style={{
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               fontSize: TYPOGRAPHY.DEFAULT,
               fontWeight: TYPOGRAPHY.BOLD,
               marginBottom: SPACING.MEDIUM,
@@ -247,16 +247,16 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
               gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
               gap: SPACING.MEDIUM,
               padding: SPACING.MEDIUM,
-              backgroundColor: BLOOMBERG.HEADER_BG,
+              backgroundColor: FINCEPT.HEADER_BG,
               fontSize: TYPOGRAPHY.BODY,
               fontWeight: TYPOGRAPHY.BOLD,
               borderBottom: BORDERS.ORANGE,
               marginBottom: SPACING.SMALL
             }}>
-              <div style={{ color: BLOOMBERG.ORANGE }}>SECTOR</div>
-              <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>VALUE</div>
-              <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>WEIGHT</div>
-              <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>HOLDINGS</div>
+              <div style={{ color: FINCEPT.ORANGE }}>SECTOR</div>
+              <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>VALUE</div>
+              <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>WEIGHT</div>
+              <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>HOLDINGS</div>
             </div>
 
             {/* Sector Rows */}
@@ -279,13 +279,13 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                     <div style={{ color: sector.color, fontWeight: TYPOGRAPHY.BOLD }}>
                       {sector.sector}
                     </div>
-                    <div style={{ color: BLOOMBERG.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+                    <div style={{ color: FINCEPT.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
                       {formatCurrency(sector.value, currency)}
                     </div>
-                    <div style={{ color: BLOOMBERG.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+                    <div style={{ color: FINCEPT.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
                       {sector.weight.toFixed(2)}%
                     </div>
-                    <div style={{ color: BLOOMBERG.CYAN, textAlign: 'right' }}>
+                    <div style={{ color: FINCEPT.CYAN, textAlign: 'right' }}>
                       {sector.holdings.length}
                     </div>
                   </div>
@@ -307,15 +307,15 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                         alignItems: 'center'
                       }}
                     >
-                      <div style={{ color: BLOOMBERG.CYAN }}>└─ {holding.symbol}</div>
-                      <div style={{ color: BLOOMBERG.WHITE, textAlign: 'right' }}>
+                      <div style={{ color: FINCEPT.CYAN }}>└─ {holding.symbol}</div>
+                      <div style={{ color: FINCEPT.WHITE, textAlign: 'right' }}>
                         {formatCurrency(holding.market_value, currency)}
                       </div>
-                      <div style={{ color: BLOOMBERG.GRAY, textAlign: 'right' }}>
+                      <div style={{ color: FINCEPT.GRAY, textAlign: 'right' }}>
                         {holding.weight.toFixed(2)}%
                       </div>
                       <div style={{
-                        color: holding.unrealized_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                        color: holding.unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
                         textAlign: 'right',
                         fontWeight: TYPOGRAPHY.SEMIBOLD
                       }}>
@@ -331,11 +331,11 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
             <div style={{
               marginTop: SPACING.LARGE,
               padding: SPACING.DEFAULT,
-              backgroundColor: BLOOMBERG.PANEL_BG,
+              backgroundColor: FINCEPT.PANEL_BG,
               border: BORDERS.ORANGE,
             }}>
               <div style={{
-                color: BLOOMBERG.ORANGE,
+                color: FINCEPT.ORANGE,
                 fontSize: TYPOGRAPHY.BODY,
                 fontWeight: TYPOGRAPHY.BOLD,
                 marginBottom: SPACING.MEDIUM
@@ -345,14 +345,14 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
                 <div>
                   <div style={{
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     fontSize: TYPOGRAPHY.SMALL,
                     marginBottom: SPACING.TINY
                   }}>
                     Total Sectors
                   </div>
                   <div style={{
-                    color: BLOOMBERG.CYAN,
+                    color: FINCEPT.CYAN,
                     fontSize: TYPOGRAPHY.HEADING,
                     fontWeight: TYPOGRAPHY.BOLD
                   }}>
@@ -361,14 +361,14 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                 </div>
                 <div>
                   <div style={{
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     fontSize: TYPOGRAPHY.SMALL,
                     marginBottom: SPACING.TINY
                   }}>
                     Largest Sector
                   </div>
                   <div style={{
-                    color: BLOOMBERG.YELLOW,
+                    color: FINCEPT.YELLOW,
                     fontSize: TYPOGRAPHY.HEADING,
                     fontWeight: TYPOGRAPHY.BOLD
                   }}>
@@ -377,14 +377,14 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                 </div>
                 <div>
                   <div style={{
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     fontSize: TYPOGRAPHY.SMALL,
                     marginBottom: SPACING.TINY
                   }}>
                     Concentration Risk
                   </div>
                   <div style={{
-                    color: sectorAllocations[0]?.weight > 40 ? BLOOMBERG.RED : sectorAllocations[0]?.weight > 25 ? BLOOMBERG.YELLOW : BLOOMBERG.GREEN,
+                    color: sectorAllocations[0]?.weight > 40 ? FINCEPT.RED : sectorAllocations[0]?.weight > 25 ? FINCEPT.YELLOW : FINCEPT.GREEN,
                     fontSize: TYPOGRAPHY.HEADING,
                     fontWeight: TYPOGRAPHY.BOLD
                   }}>
@@ -393,14 +393,14 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                 </div>
                 <div>
                   <div style={{
-                    color: BLOOMBERG.GRAY,
+                    color: FINCEPT.GRAY,
                     fontSize: TYPOGRAPHY.SMALL,
                     marginBottom: SPACING.TINY
                   }}>
                     Diversification
                   </div>
                   <div style={{
-                    color: sectorAllocations.length >= 5 ? BLOOMBERG.GREEN : sectorAllocations.length >= 3 ? BLOOMBERG.YELLOW : BLOOMBERG.RED,
+                    color: sectorAllocations.length >= 5 ? FINCEPT.GREEN : sectorAllocations.length >= 3 ? FINCEPT.YELLOW : FINCEPT.RED,
                     fontSize: TYPOGRAPHY.HEADING,
                     fontWeight: TYPOGRAPHY.BOLD
                   }}>

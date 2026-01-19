@@ -36,7 +36,7 @@ const AgentMediatorNode: React.FC<AgentMediatorNodeProps> = ({ id, data, selecte
   const [localProvider, setLocalProvider] = useState(data.selectedProvider || 'active');
   const [localPrompt, setLocalPrompt] = useState(data.customPrompt || '');
 
-  // Bloomberg colors
+  // Fincept colors
   const ORANGE = '#FFA500';
   const WHITE = '#FFFFFF';
   const GRAY = '#787878';

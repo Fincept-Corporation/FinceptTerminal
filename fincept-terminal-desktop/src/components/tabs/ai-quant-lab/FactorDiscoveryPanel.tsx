@@ -1,5 +1,5 @@
 /**
- * Factor Discovery Panel - Bloomberg Professional Design
+ * Factor Discovery Panel - Fincept Professional Design
  * RD-Agent powered autonomous factor mining with full backend integration
  * Real-world finance application with working features
  */
@@ -25,8 +25,8 @@ import {
 } from 'lucide-react';
 import { rdAgentService, type DiscoveredFactor } from '@/services/aiQuantLab/rdAgentService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -179,29 +179,29 @@ export function FactorDiscoveryPanel() {
   };
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
       {/* Left Panel - Configuration */}
       <div
         className="w-96 border-r overflow-auto flex-shrink-0"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
         <div className="p-4 space-y-4">
           {/* Header */}
-          <div className="pb-3 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+          <div className="pb-3 border-b" style={{ borderColor: FINCEPT.BORDER }}>
             <div className="flex items-center gap-2 mb-1">
-              <Sparkles size={18} color={BLOOMBERG.ORANGE} />
-              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+              <Sparkles size={18} color={FINCEPT.ORANGE} />
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                 AUTONOMOUS FACTOR MINING
               </h2>
             </div>
-            <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+            <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
               AI-powered discovery of profitable trading factors
             </p>
           </div>
 
           {/* Task Description */}
           <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
               Research Objective
             </label>
             <textarea
@@ -211,13 +211,13 @@ export function FactorDiscoveryPanel() {
               rows={4}
               className="w-full px-3 py-2 rounded text-xs font-mono outline-none resize-none"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             />
             <div className="mt-2 space-y-1">
-              <p className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.GRAY }}>
+              <p className="text-xs font-bold uppercase" style={{ color: FINCEPT.GRAY }}>
                 Examples:
               </p>
               {examplePrompts.map((prompt, idx) => (
@@ -225,7 +225,7 @@ export function FactorDiscoveryPanel() {
                   key={idx}
                   onClick={() => setTaskDescription(prompt)}
                   className="block text-xs hover:underline text-left font-mono"
-                  style={{ color: BLOOMBERG.ORANGE }}
+                  style={{ color: FINCEPT.ORANGE }}
                 >
                   • {prompt}
                 </button>
@@ -235,7 +235,7 @@ export function FactorDiscoveryPanel() {
 
           {/* API Key */}
           <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
               OpenAI API Key
             </label>
             <input
@@ -245,12 +245,12 @@ export function FactorDiscoveryPanel() {
               placeholder="sk-proj-..."
               className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             />
-            <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
+            <p className="text-xs font-mono mt-1" style={{ color: FINCEPT.GRAY }}>
               Required for AI-powered factor generation
             </p>
           </div>
@@ -258,7 +258,7 @@ export function FactorDiscoveryPanel() {
           {/* Settings */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+              <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
                 Target Market
               </label>
               <select
@@ -266,9 +266,9 @@ export function FactorDiscoveryPanel() {
                 onChange={(e) => setTargetMarket(e.target.value)}
                 className="w-full px-3 py-2 rounded text-xs font-mono outline-none uppercase"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`
                 }}
               >
                 <option value="US">US Markets</option>
@@ -277,7 +277,7 @@ export function FactorDiscoveryPanel() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+              <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
                 Budget (USD)
               </label>
               <input
@@ -288,9 +288,9 @@ export function FactorDiscoveryPanel() {
                 max={100}
                 className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                 style={{
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`
                 }}
               />
             </div>
@@ -302,7 +302,7 @@ export function FactorDiscoveryPanel() {
               onClick={handleStartMining}
               disabled={isRunning || !taskDescription || !apiKey}
               className="flex-1 py-2.5 rounded font-bold uppercase text-xs tracking-wide flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+              style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
             >
               {isRunning ? (
                 <>
@@ -320,7 +320,7 @@ export function FactorDiscoveryPanel() {
               <button
                 onClick={handleStop}
                 className="px-4 py-2.5 rounded font-bold uppercase text-xs tracking-wide hover:bg-opacity-90 transition-colors"
-                style={{ backgroundColor: BLOOMBERG.RED, color: BLOOMBERG.WHITE }}
+                style={{ backgroundColor: FINCEPT.RED, color: FINCEPT.WHITE }}
               >
                 <Square size={14} />
               </button>
@@ -331,18 +331,18 @@ export function FactorDiscoveryPanel() {
           {taskStatus && (
             <div
               className="p-4 rounded border space-y-3"
-              style={{ backgroundColor: BLOOMBERG.DARK_BG, borderColor: BLOOMBERG.BORDER }}
+              style={{ backgroundColor: FINCEPT.DARK_BG, borderColor: FINCEPT.BORDER }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                   TASK STATUS
                 </span>
                 <span
                   className="text-xs px-2 py-0.5 rounded uppercase font-bold"
                   style={{
-                    backgroundColor: taskStatus.status === 'completed' ? BLOOMBERG.GREEN :
-                                   taskStatus.status === 'running' ? BLOOMBERG.ORANGE : BLOOMBERG.RED,
-                    color: BLOOMBERG.DARK_BG
+                    backgroundColor: taskStatus.status === 'completed' ? FINCEPT.GREEN :
+                                   taskStatus.status === 'running' ? FINCEPT.ORANGE : FINCEPT.RED,
+                    color: FINCEPT.DARK_BG
                   }}
                 >
                   {taskStatus.status}
@@ -352,15 +352,15 @@ export function FactorDiscoveryPanel() {
                 {taskStatus.progress !== undefined && (
                   <div>
                     <div className="flex justify-between mb-1">
-                      <span style={{ color: BLOOMBERG.GRAY }}>PROGRESS</span>
-                      <span style={{ color: BLOOMBERG.WHITE }}>{taskStatus.progress}%</span>
+                      <span style={{ color: FINCEPT.GRAY }}>PROGRESS</span>
+                      <span style={{ color: FINCEPT.WHITE }}>{taskStatus.progress}%</span>
                     </div>
-                    <div className="w-full h-1.5 rounded overflow-hidden" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
+                    <div className="w-full h-1.5 rounded overflow-hidden" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
                       <div
                         className="h-full transition-all duration-300"
                         style={{
                           width: `${taskStatus.progress}%`,
-                          backgroundColor: BLOOMBERG.ORANGE
+                          backgroundColor: FINCEPT.ORANGE
                         }}
                       />
                     </div>
@@ -368,26 +368,26 @@ export function FactorDiscoveryPanel() {
                 )}
                 {taskStatus.factors_generated !== undefined && (
                   <div className="flex justify-between">
-                    <span style={{ color: BLOOMBERG.GRAY }}>FACTORS GENERATED</span>
-                    <span style={{ color: BLOOMBERG.GREEN }}>{taskStatus.factors_generated}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>FACTORS GENERATED</span>
+                    <span style={{ color: FINCEPT.GREEN }}>{taskStatus.factors_generated}</span>
                   </div>
                 )}
                 {taskStatus.factors_tested !== undefined && (
                   <div className="flex justify-between">
-                    <span style={{ color: BLOOMBERG.GRAY }}>FACTORS TESTED</span>
-                    <span style={{ color: BLOOMBERG.WHITE }}>{taskStatus.factors_tested}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>FACTORS TESTED</span>
+                    <span style={{ color: FINCEPT.WHITE }}>{taskStatus.factors_tested}</span>
                   </div>
                 )}
                 {taskStatus.best_ic !== undefined && taskStatus.best_ic !== null && (
                   <div className="flex justify-between">
-                    <span style={{ color: BLOOMBERG.GRAY }}>BEST IC</span>
-                    <span style={{ color: BLOOMBERG.GREEN }}>{taskStatus.best_ic.toFixed(4)}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>BEST IC</span>
+                    <span style={{ color: FINCEPT.GREEN }}>{taskStatus.best_ic.toFixed(4)}</span>
                   </div>
                 )}
                 {taskStatus.elapsed_time && (
                   <div className="flex justify-between">
-                    <span style={{ color: BLOOMBERG.GRAY }}>ELAPSED TIME</span>
-                    <span style={{ color: BLOOMBERG.WHITE }}>{taskStatus.elapsed_time}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>ELAPSED TIME</span>
+                    <span style={{ color: FINCEPT.WHITE }}>{taskStatus.elapsed_time}</span>
                   </div>
                 )}
               </div>
@@ -403,14 +403,14 @@ export function FactorDiscoveryPanel() {
             {/* Factor List */}
             <div
               className="w-80 border-r overflow-auto flex-shrink-0"
-              style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+              style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
             >
               <div className="p-3">
-                <div className="flex items-center justify-between mb-3 pb-2 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
-                  <h3 className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+                <div className="flex items-center justify-between mb-3 pb-2 border-b" style={{ borderColor: FINCEPT.BORDER }}>
+                  <h3 className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
                     DISCOVERED FACTORS
                   </h3>
-                  <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}>
+                  <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}>
                     {discoveredFactors.length}
                   </span>
                 </div>
@@ -421,30 +421,30 @@ export function FactorDiscoveryPanel() {
                       onClick={() => setSelectedFactor(factor)}
                       className="w-full p-3 rounded text-left transition-all hover:bg-opacity-80"
                       style={{
-                        backgroundColor: selectedFactor?.factor_id === factor.factor_id ? BLOOMBERG.DARK_BG : BLOOMBERG.HEADER_BG,
-                        border: selectedFactor?.factor_id === factor.factor_id ? `1px solid ${BLOOMBERG.ORANGE}` : `1px solid ${BLOOMBERG.BORDER}`
+                        backgroundColor: selectedFactor?.factor_id === factor.factor_id ? FINCEPT.DARK_BG : FINCEPT.HEADER_BG,
+                        border: selectedFactor?.factor_id === factor.factor_id ? `1px solid ${FINCEPT.ORANGE}` : `1px solid ${FINCEPT.BORDER}`
                       }}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <span className="font-bold text-xs uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                        <span className="font-bold text-xs uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                           {factor.name}
                         </span>
                         <span
                           className="text-xs px-1.5 py-0.5 rounded font-bold"
-                          style={{ backgroundColor: BLOOMBERG.GREEN, color: BLOOMBERG.DARK_BG }}
+                          style={{ backgroundColor: FINCEPT.GREEN, color: FINCEPT.DARK_BG }}
                         >
                           IC: {factor.ic.toFixed(4)}
                         </span>
                       </div>
-                      <p className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                      <p className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                         {factor.description}
                       </p>
                       <div className="flex items-center gap-3 text-xs font-mono">
-                        <span style={{ color: BLOOMBERG.GRAY }}>
-                          SHARPE: <span style={{ color: BLOOMBERG.WHITE }}>{factor.sharpe.toFixed(2)}</span>
+                        <span style={{ color: FINCEPT.GRAY }}>
+                          SHARPE: <span style={{ color: FINCEPT.WHITE }}>{factor.sharpe.toFixed(2)}</span>
                         </span>
-                        <span style={{ color: BLOOMBERG.GRAY }}>
-                          RET: <span style={{ color: BLOOMBERG.GREEN }}>{factor.performance_metrics.annual_return.toFixed(1)}%</span>
+                        <span style={{ color: FINCEPT.GRAY }}>
+                          RET: <span style={{ color: FINCEPT.GREEN }}>{factor.performance_metrics.annual_return.toFixed(1)}%</span>
                         </span>
                       </div>
                     </button>
@@ -455,24 +455,24 @@ export function FactorDiscoveryPanel() {
 
             {/* Factor Details */}
             {selectedFactor && (
-              <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+              <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: FINCEPT.DARK_BG }}>
                 <div className="space-y-6 max-w-5xl">
                   {/* Header */}
                   <div>
-                    <h2 className="text-xl font-bold mb-2 uppercase tracking-wide flex items-center gap-3" style={{ color: BLOOMBERG.WHITE }}>
+                    <h2 className="text-xl font-bold mb-2 uppercase tracking-wide flex items-center gap-3" style={{ color: FINCEPT.WHITE }}>
                       {selectedFactor.name}
-                      <span className="text-sm px-3 py-1 rounded font-bold" style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}>
+                      <span className="text-sm px-3 py-1 rounded font-bold" style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}>
                         FACTOR ID: {selectedFactor.factor_id}
                       </span>
                     </h2>
-                    <p className="font-mono text-sm" style={{ color: BLOOMBERG.GRAY }}>
+                    <p className="font-mono text-sm" style={{ color: FINCEPT.GRAY }}>
                       {selectedFactor.description}
                     </p>
                   </div>
 
                   {/* Performance Metrics */}
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: BLOOMBERG.GRAY }}>
+                    <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: FINCEPT.GRAY }}>
                       PERFORMANCE METRICS
                     </h3>
                     <div className="grid grid-cols-4 gap-3">
@@ -481,31 +481,31 @@ export function FactorDiscoveryPanel() {
                         value={selectedFactor.ic.toFixed(4)}
                         subtext={`± ${selectedFactor.ic_std.toFixed(4)}`}
                         icon={<TrendingUp size={16} />}
-                        color={BLOOMBERG.GREEN}
+                        color={FINCEPT.GREEN}
                       />
                       <MetricCard
                         label="Sharpe Ratio"
                         value={selectedFactor.sharpe.toFixed(2)}
                         icon={<BarChart2 size={16} />}
-                        color={BLOOMBERG.ORANGE}
+                        color={FINCEPT.ORANGE}
                       />
                       <MetricCard
                         label="Annual Return"
                         value={`${selectedFactor.performance_metrics.annual_return.toFixed(1)}%`}
                         icon={<DollarSign size={16} />}
-                        color={BLOOMBERG.GREEN}
+                        color={FINCEPT.GREEN}
                       />
                       <MetricCard
                         label="Max Drawdown"
                         value={`${selectedFactor.performance_metrics.max_drawdown.toFixed(1)}%`}
                         icon={<AlertCircle size={16} />}
-                        color={BLOOMBERG.RED}
+                        color={FINCEPT.RED}
                       />
                       <MetricCard
                         label="Win Rate"
                         value={`${selectedFactor.performance_metrics.win_rate.toFixed(1)}%`}
                         icon={<Target size={16} />}
-                        color={BLOOMBERG.CYAN}
+                        color={FINCEPT.CYAN}
                       />
                     </div>
                   </div>
@@ -514,15 +514,15 @@ export function FactorDiscoveryPanel() {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <Code size={16} color={BLOOMBERG.ORANGE} />
-                        <h3 className="font-bold uppercase text-xs tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                        <Code size={16} color={FINCEPT.ORANGE} />
+                        <h3 className="font-bold uppercase text-xs tracking-wide" style={{ color: FINCEPT.WHITE }}>
                           FACTOR IMPLEMENTATION
                         </h3>
                       </div>
                       <button
                         onClick={() => copyToClipboard(selectedFactor.code)}
                         className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold uppercase hover:bg-opacity-80 transition-colors"
-                        style={{ backgroundColor: BLOOMBERG.PANEL_BG, color: BLOOMBERG.WHITE }}
+                        style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE }}
                       >
                         <Copy size={12} />
                         COPY
@@ -531,9 +531,9 @@ export function FactorDiscoveryPanel() {
                     <pre
                       className="p-4 rounded text-xs overflow-x-auto font-mono border"
                       style={{
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        color: BLOOMBERG.WHITE,
-                        borderColor: BLOOMBERG.BORDER
+                        backgroundColor: FINCEPT.PANEL_BG,
+                        color: FINCEPT.WHITE,
+                        borderColor: FINCEPT.BORDER
                       }}
                     >
                       <code>{selectedFactor.code}</code>
@@ -541,17 +541,17 @@ export function FactorDiscoveryPanel() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
+                  <div className="flex gap-3 pt-4 border-t" style={{ borderColor: FINCEPT.BORDER }}>
                     <button
                       className="flex-1 py-3 rounded font-bold uppercase text-sm tracking-wide hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
-                      style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+                      style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
                     >
                       <Zap size={16} />
                       DEPLOY TO LIVE TRADING
                     </button>
                     <button
                       className="px-6 py-3 rounded font-bold uppercase text-sm tracking-wide hover:bg-opacity-80 transition-colors flex items-center justify-center gap-2"
-                      style={{ backgroundColor: BLOOMBERG.PANEL_BG, color: BLOOMBERG.WHITE }}
+                      style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE }}
                     >
                       <Download size={16} />
                       EXPORT
@@ -564,11 +564,11 @@ export function FactorDiscoveryPanel() {
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-md">
-              <Sparkles size={64} color={BLOOMBERG.GRAY} className="mx-auto mb-4" />
-              <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: BLOOMBERG.WHITE }}>
+              <Sparkles size={64} color={FINCEPT.GRAY} className="mx-auto mb-4" />
+              <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: FINCEPT.WHITE }}>
                 NO FACTORS DISCOVERED YET
               </h3>
-              <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              <p className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
                 Configure your research objective and start factor mining<br/>
                 to discover profitable trading signals automatically
               </p>
@@ -596,10 +596,10 @@ function MetricCard({
   return (
     <div
       className="p-3 rounded border"
-      style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+      style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs uppercase font-mono" style={{ color: BLOOMBERG.GRAY }}>
+        <span className="text-xs uppercase font-mono" style={{ color: FINCEPT.GRAY }}>
           {label}
         </span>
         <div style={{ color }}>{icon}</div>
@@ -608,7 +608,7 @@ function MetricCard({
         {value}
       </div>
       {subtext && (
-        <div className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
+        <div className="text-xs font-mono mt-1" style={{ color: FINCEPT.GRAY }}>
           {subtext}
         </div>
       )}

@@ -1,5 +1,5 @@
 // File: src/components/command-bar/commandRegistry.ts
-// Command registry for Fincept Terminal - Bloomberg-style command system
+// Command registry for Fincept Terminal - Fincept-style command system
 
 export interface Command {
   id: string;

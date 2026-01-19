@@ -57,6 +57,14 @@ class TradeExecutor:
         daily_pnl = portfolio_data.get('daily_pnl', 0)
         open_positions = len(portfolio_data.get('positions', []))
 
+        # Safety check: Ensure portfolio_value is positive to prevent division by zero
+        if portfolio_value <= 0:
+            validation['approved'] = False
+            validation['reasons'].append(
+                f"Portfolio value is zero or negative (${portfolio_value:.2f}). Cannot process trades."
+            )
+            return validation
+
         # Check 1: Daily loss limit
         if daily_pnl < 0:
             daily_loss_pct = abs(daily_pnl / portfolio_value)
@@ -76,14 +84,25 @@ class TradeExecutor:
             return validation
 
         # Check 3: Position size limit
-        intended_value = signal.get('quantity', 0) * signal.get('entry_price', 0)
+        entry_price = signal.get('entry_price', 0)
+        quantity = signal.get('quantity', 0)
+
+        # Validate entry price to prevent division by zero
+        if entry_price <= 0:
+            validation['approved'] = False
+            validation['reasons'].append(
+                f"Invalid entry price: {entry_price}. Entry price must be positive."
+            )
+            return validation
+
+        intended_value = quantity * entry_price
         position_size_pct = intended_value / portfolio_value
 
         max_allowed_pct = self.risk_config['max_position_size_pct']
 
         if position_size_pct > max_allowed_pct:
             # Adjust quantity to fit within limits
-            adjusted_quantity = (portfolio_value * max_allowed_pct) / signal.get('entry_price', 1)
+            adjusted_quantity = (portfolio_value * max_allowed_pct) / entry_price
             validation['adjusted_signal']['quantity'] = adjusted_quantity
             validation['warnings'].append(
                 f"Position size reduced from {position_size_pct*100:.1f}% to {max_allowed_pct*100}%"

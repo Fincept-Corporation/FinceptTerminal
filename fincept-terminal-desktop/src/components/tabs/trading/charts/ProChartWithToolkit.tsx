@@ -437,7 +437,7 @@ export function ProChartWithToolkit({
         position: 'relative',
       }}
     >
-      {/* Header with symbol and OHLC data - Bloomberg style */}
+      {/* Header with symbol and OHLC data - Fincept style */}
       {showHeader && (
         <div
           style={{

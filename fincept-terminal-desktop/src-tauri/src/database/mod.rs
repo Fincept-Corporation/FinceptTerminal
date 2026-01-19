@@ -12,8 +12,10 @@ pub mod broker_credentials;
 pub mod master_contract;
 pub mod storage;
 pub mod fyers_symbols;
+pub mod shoonya_symbols;
 
 pub use pool::init_database;
+pub use pool::init_cache_database;
 pub use types::*;
 
 use anyhow::Result;
@@ -21,6 +23,14 @@ use anyhow::Result;
 /// Initialize all databases and connection pools
 pub async fn initialize() -> Result<()> {
     init_database().await?;
+
+    // Initialize cache database (separate file: fincept_cache.db)
+    eprintln!("[Database] Initializing cache database...");
+    if let Err(e) = init_cache_database().await {
+        eprintln!("[Database] Warning: Failed to initialize cache database: {}", e);
+    } else {
+        eprintln!("[Database] ✓ Cache database initialized");
+    }
 
     // Initialize paper trading tables
     eprintln!("[Database] Initializing paper trading tables...");
@@ -36,6 +46,14 @@ pub async fn initialize() -> Result<()> {
         eprintln!("[Database] Warning: Failed to initialize Fyers symbols table: {}", e);
     } else {
         eprintln!("[Database] ✓ Fyers symbols table initialized");
+    }
+
+    // Initialize Shoonya symbols table
+    eprintln!("[Database] Initializing Shoonya symbols table...");
+    if let Err(e) = shoonya_symbols::init_shoonya_symbols_table() {
+        eprintln!("[Database] Warning: Failed to initialize Shoonya symbols table: {}", e);
+    } else {
+        eprintln!("[Database] ✓ Shoonya symbols table initialized");
     }
 
     Ok(())

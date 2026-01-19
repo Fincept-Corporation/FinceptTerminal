@@ -145,8 +145,11 @@ pub mod broker_credentials;
 // Master Contract Cache - Broker symbol data caching
 pub mod master_contract;
 
-// Generic Storage - localStorage replacement with SQLite
+// Generic Storage - SQLite key-value storage
 pub mod storage;
 
 // Unified Trading - Live/Paper mode switching for all brokers
 pub mod unified_trading;
+
+// AKShare - Free Chinese & Global market data
+pub mod akshare;

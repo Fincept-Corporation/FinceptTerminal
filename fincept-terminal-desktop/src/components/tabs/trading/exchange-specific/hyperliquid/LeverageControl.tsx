@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -84,7 +84,7 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
             style={{
               fontSize: '9px',
               fontWeight: 700,
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               letterSpacing: '0.5px',
             }}
           >
@@ -94,7 +94,7 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
             style={{
               fontSize: '12px',
               fontWeight: 700,
-              color: leverage > 10 ? BLOOMBERG.RED : BLOOMBERG.ORANGE,
+              color: leverage > 10 ? FINCEPT.RED : FINCEPT.ORANGE,
             }}
           >
             {leverage}x
@@ -111,7 +111,7 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
           style={{
             width: '100%',
             height: '4px',
-            backgroundColor: BLOOMBERG.BORDER,
+            backgroundColor: FINCEPT.BORDER,
             outline: 'none',
             opacity: isUpdating ? 0.5 : 1,
           }}
@@ -127,9 +127,9 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
               style={{
                 flex: 1,
                 padding: '4px',
-                backgroundColor: leverage === lev ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                border: `1px solid ${leverage === lev ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                color: leverage === lev ? BLOOMBERG.PANEL_BG : BLOOMBERG.GRAY,
+                backgroundColor: leverage === lev ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+                border: `1px solid ${leverage === lev ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                color: leverage === lev ? FINCEPT.PANEL_BG : FINCEPT.GRAY,
                 fontSize: '8px',
                 fontWeight: 700,
                 cursor: isUpdating ? 'not-allowed' : 'pointer',
@@ -149,7 +149,7 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
             display: 'block',
             fontSize: '9px',
             fontWeight: 700,
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             marginBottom: '6px',
             letterSpacing: '0.5px',
           }}
@@ -163,9 +163,9 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
             style={{
               flex: 1,
               padding: '6px',
-              backgroundColor: marginMode === 'cross' ? BLOOMBERG.GREEN : BLOOMBERG.PANEL_BG,
-              border: `1px solid ${marginMode === 'cross' ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
-              color: marginMode === 'cross' ? BLOOMBERG.PANEL_BG : BLOOMBERG.GRAY,
+              backgroundColor: marginMode === 'cross' ? FINCEPT.GREEN : FINCEPT.PANEL_BG,
+              border: `1px solid ${marginMode === 'cross' ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+              color: marginMode === 'cross' ? FINCEPT.PANEL_BG : FINCEPT.GRAY,
               fontSize: '9px',
               fontWeight: 700,
               cursor: isUpdating ? 'not-allowed' : 'pointer',
@@ -180,9 +180,9 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
             style={{
               flex: 1,
               padding: '6px',
-              backgroundColor: marginMode === 'isolated' ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-              border: `1px solid ${marginMode === 'isolated' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-              color: marginMode === 'isolated' ? BLOOMBERG.PANEL_BG : BLOOMBERG.GRAY,
+              backgroundColor: marginMode === 'isolated' ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+              border: `1px solid ${marginMode === 'isolated' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+              color: marginMode === 'isolated' ? FINCEPT.PANEL_BG : FINCEPT.GRAY,
               fontSize: '9px',
               fontWeight: 700,
               cursor: isUpdating ? 'not-allowed' : 'pointer',
@@ -200,10 +200,10 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
           style={{
             marginTop: '8px',
             padding: '6px 8px',
-            backgroundColor: `${BLOOMBERG.RED}15`,
-            border: `1px solid ${BLOOMBERG.RED}40`,
+            backgroundColor: `${FINCEPT.RED}15`,
+            border: `1px solid ${FINCEPT.RED}40`,
             fontSize: '8px',
-            color: BLOOMBERG.RED,
+            color: FINCEPT.RED,
           }}
         >
           [WARN]️ High leverage ({leverage}x) increases liquidation risk

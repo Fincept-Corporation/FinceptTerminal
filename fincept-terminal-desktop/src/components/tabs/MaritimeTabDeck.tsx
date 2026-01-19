@@ -17,7 +17,7 @@ const INITIAL_VIEW_STATE = {
   bearing: 0
 };
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF6600',
   BLACK: '#000000',
   DARK_BG: '#0F0F0F',
@@ -450,8 +450,8 @@ export default function MaritimeTabDeck() {
         top: 0,
         left: 0,
         right: 0,
-        background: BLOOMBERG.BLACK,
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        background: FINCEPT.BLACK,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
         zIndex: 1000,
         fontFamily: 'Consolas, monospace',
         fontSize: '12px'
@@ -462,16 +462,16 @@ export default function MaritimeTabDeck() {
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+          borderBottom: `1px solid ${FINCEPT.BORDER}`
         }}>
-          <div style={{ color: BLOOMBERG.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
+          <div style={{ color: FINCEPT.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
             MAR&gt;
           </div>
-          <div style={{ color: BLOOMBERG.WHITE, fontWeight: 'bold' }}>
+          <div style={{ color: FINCEPT.WHITE, fontWeight: 'bold' }}>
             MARITIME TRACKING
           </div>
-          <div style={{ color: BLOOMBERG.GRAY }}>|</div>
-          <div style={{ color: vesselPoints.length > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED, fontWeight: 'bold' }}>
+          <div style={{ color: FINCEPT.GRAY }}>|</div>
+          <div style={{ color: vesselPoints.length > 0 ? FINCEPT.GREEN : FINCEPT.RED, fontWeight: 'bold' }}>
             {vesselPoints.length}/{vessels.length} VESSELS
           </div>
         </div>
@@ -658,7 +658,7 @@ export default function MaritimeTabDeck() {
             disabled={searchingVessel || (searchMode === 'single' ? !searchImo.trim() : !multiImoInput.trim())}
             style={{
               padding: '4px 12px',
-              background: BLOOMBERG.ORANGE,
+              background: FINCEPT.ORANGE,
               border: 'none',
               color: '#000',
               fontFamily: 'Consolas, monospace',

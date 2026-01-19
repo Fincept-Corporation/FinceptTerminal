@@ -1,5 +1,5 @@
 /**
- * Holdings Panel Component - Bloomberg Style
+ * Holdings Panel Component - Fincept Style
  *
  * Displays portfolio holdings (long-term investments) with proper scrolling
  */
@@ -9,7 +9,7 @@ import { RefreshCw, TrendingUp, TrendingDown, Search, SortAsc, SortDesc, PieChar
 import { useStockTradingData } from '@/contexts/StockBrokerContext';
 import type { Holding } from '@/brokers/stocks/types';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',

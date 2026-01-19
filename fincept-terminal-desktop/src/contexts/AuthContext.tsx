@@ -84,6 +84,7 @@ export interface PaymentSession {
   checkout_url: string;
   session_id: string;
   payment_uuid: string;
+  order_id?: string;
   plan: {
     name: string;
     price: number;
@@ -466,7 +467,8 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         const paymentSession: PaymentSession = {
           checkout_url: checkoutUrl,
           session_id: apiData.payment_session_id || apiData.session_id || apiData.id || '',
-          payment_uuid: apiData.order_id || apiData.payment_uuid || apiData.transaction_id || '',
+          payment_uuid: apiData.payment_uuid || apiData.transaction_id || '',
+          order_id: apiData.order_id || '',
           plan: {
             name: apiData.plan?.name || planId,
             price: apiData.pricing?.amount || apiData.price || 0

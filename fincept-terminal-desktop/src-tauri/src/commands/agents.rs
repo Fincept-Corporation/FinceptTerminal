@@ -41,16 +41,17 @@ pub struct AgentExecutionResult {
 }
 
 /// Execute CoreAgent - unified single agent system
+/// Follows same pattern as yfinance_data.py - command + args
 #[tauri::command]
 pub async fn execute_core_agent(
     app: tauri::AppHandle,
-    query_json: String,
-    config_json: String,
-    api_keys_json: String,
+    command: String,
+    args: Vec<String>,
 ) -> Result<String, String> {
-    let script_path = get_script_path(&app, "agents/core_agent_cli.py")?;
-    let args = vec![query_json, config_json, api_keys_json];
-    python_runtime::execute_python_script(&script_path, args)
+    let script_path = get_script_path(&app, "agents/finagent_core/core_agent.py")?;
+    let mut cmd_args = vec![command];
+    cmd_args.extend(args);
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 /// DEPRECATED - Old agent manager commands removed

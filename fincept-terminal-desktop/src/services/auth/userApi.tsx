@@ -1,14 +1,17 @@
 // File: src/services/userApi.tsx
 // User and Profile API Service
 
-import { fetch } from '@tauri-apps/plugin-http';
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
-// API Configuration
+// API Configuration - always use full URL for Tauri fetch
 const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',
+  BASE_URL: 'https://finceptbackend.share.zrok.io',
 };
 
 const getApiEndpoint = (path: string) => `${API_CONFIG.BASE_URL}${path}`;
+
+// Use native fetch in dev mode (for Vite proxy), Tauri fetch in production
+const safeFetch = import.meta.env.DEV ? window.fetch.bind(window) : tauriFetch;
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -37,12 +40,8 @@ async function makeApiRequest<T = any>(
       options.body = JSON.stringify(body);
     }
 
-    console.log(`[UserAPI] ${method} ${endpoint}`, body || '');
-
-    const response = await fetch(getApiEndpoint(endpoint), options);
+    const response = await safeFetch(getApiEndpoint(endpoint), options);
     const data = await response.json();
-
-    console.log(`[UserAPI] Response:`, data);
 
     return {
       success: response.ok,
@@ -51,7 +50,6 @@ async function makeApiRequest<T = any>(
       status_code: response.status,
     };
   } catch (error) {
-    console.error(`[UserAPI] Error in ${method} ${endpoint}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Network error',

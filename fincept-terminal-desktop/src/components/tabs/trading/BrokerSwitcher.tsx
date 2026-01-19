@@ -5,7 +5,7 @@ import React from 'react';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
 import { Activity, Zap, Shield, TrendingUp } from 'lucide-react';
 
-const BLOOMBERG_COLORS = {
+const FINCEPT_COLORS = {
   ORANGE: '#ea580c',
   WHITE: '#ffffff',
   GREEN: '#10b981',
@@ -26,7 +26,7 @@ export function BrokerSwitcher() {
     isConnecting,
   } = useBrokerContext();
 
-  const { ORANGE, WHITE, GREEN, GRAY, DARK_BG, PANEL_BG } = BLOOMBERG_COLORS;
+  const { ORANGE, WHITE, GREEN, GRAY, DARK_BG, PANEL_BG } = FINCEPT_COLORS;
 
   if (isLoading) {
     return (

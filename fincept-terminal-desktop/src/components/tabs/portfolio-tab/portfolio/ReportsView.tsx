@@ -1,7 +1,7 @@
 import React from 'react';
 import { PortfolioSummary, Transaction } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent, calculateTaxLiability } from './utils';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
 
 interface ReportsViewProps {
   portfolioSummary: PortfolioSummary;
@@ -24,7 +24,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
+      backgroundColor: FINCEPT.DARK_BG,
       padding: SPACING.DEFAULT,
       overflow: 'auto',
       fontFamily: TYPOGRAPHY.MONO
@@ -49,7 +49,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         }}>
           <div style={COMMON_STYLES.dataLabel}>TOTAL TAX LIABILITY</div>
           <div style={{
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             fontSize: TYPOGRAPHY.HEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
@@ -63,14 +63,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         }}>
           <div style={COMMON_STYLES.dataLabel}>LONG-TERM GAINS</div>
           <div style={{
-            color: BLOOMBERG.GREEN,
+            color: FINCEPT.GREEN,
             fontSize: TYPOGRAPHY.HEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
             {formatCurrency(taxCalculation.longTermGains, currency)}
           </div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: TYPOGRAPHY.TINY,
             marginTop: SPACING.TINY
           }}>
@@ -80,18 +80,18 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
         <div style={{
           ...COMMON_STYLES.metricCard,
-          border: `1px solid ${BLOOMBERG.YELLOW}`
+          border: `1px solid ${FINCEPT.YELLOW}`
         }}>
           <div style={COMMON_STYLES.dataLabel}>SHORT-TERM GAINS</div>
           <div style={{
-            color: BLOOMBERG.YELLOW,
+            color: FINCEPT.YELLOW,
             fontSize: TYPOGRAPHY.HEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
             {formatCurrency(taxCalculation.shortTermGains, currency)}
           </div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: TYPOGRAPHY.TINY,
             marginTop: SPACING.TINY
           }}>
@@ -105,14 +105,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         }}>
           <div style={COMMON_STYLES.dataLabel}>UNREALIZED GAINS</div>
           <div style={{
-            color: portfolioSummary.total_unrealized_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
             fontSize: TYPOGRAPHY.HEADING,
             fontWeight: TYPOGRAPHY.BOLD
           }}>
             {formatCurrency(portfolioSummary.total_unrealized_pnl, currency)}
           </div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: TYPOGRAPHY.TINY,
             marginTop: SPACING.TINY
           }}>
@@ -123,7 +123,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
       {/* Tax Breakdown */}
       <div style={{
-        color: BLOOMBERG.ORANGE,
+        color: FINCEPT.ORANGE,
         fontSize: TYPOGRAPHY.DEFAULT,
         fontWeight: TYPOGRAPHY.BOLD,
         marginBottom: SPACING.MEDIUM,
@@ -135,7 +135,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
       <div style={{
         padding: SPACING.DEFAULT,
-        backgroundColor: BLOOMBERG.PANEL_BG,
+        backgroundColor: FINCEPT.PANEL_BG,
         border: BORDERS.STANDARD,
         marginBottom: SPACING.XLARGE
       }}>
@@ -145,13 +145,13 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
           gap: SPACING.MEDIUM,
           marginBottom: SPACING.MEDIUM,
           padding: SPACING.MEDIUM,
-          backgroundColor: BLOOMBERG.HEADER_BG,
+          backgroundColor: FINCEPT.HEADER_BG,
           borderBottom: BORDERS.ORANGE
         }}>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>CATEGORY</div>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, textAlign: 'right' }}>GAINS</div>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, textAlign: 'right' }}>TAX RATE</div>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, textAlign: 'right' }}>TAX DUE</div>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>CATEGORY</div>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, textAlign: 'right' }}>GAINS</div>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, textAlign: 'right' }}>TAX RATE</div>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, textAlign: 'right' }}>TAX DUE</div>
         </div>
 
         <div style={{
@@ -160,17 +160,17 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
           gap: SPACING.MEDIUM,
           padding: SPACING.MEDIUM,
           backgroundColor: 'rgba(255,215,0,0.05)',
-          borderLeft: `3px solid ${BLOOMBERG.YELLOW}`,
+          borderLeft: `3px solid ${FINCEPT.YELLOW}`,
           marginBottom: SPACING.SMALL
         }}>
-          <div style={{ color: BLOOMBERG.YELLOW, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+          <div style={{ color: FINCEPT.YELLOW, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
             Short-Term Capital Gains (&lt; 1 year)
           </div>
-          <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>
+          <div style={{ color: FINCEPT.WHITE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>
             {formatCurrency(taxCalculation.shortTermGains, currency)}
           </div>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>15%</div>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>15%</div>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
             {formatCurrency(taxCalculation.shortTermTax, currency)}
           </div>
         </div>
@@ -181,17 +181,17 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
           gap: SPACING.MEDIUM,
           padding: SPACING.MEDIUM,
           backgroundColor: 'rgba(0,214,111,0.05)',
-          borderLeft: `3px solid ${BLOOMBERG.GREEN}`,
+          borderLeft: `3px solid ${FINCEPT.GREEN}`,
           marginBottom: SPACING.SMALL
         }}>
-          <div style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+          <div style={{ color: FINCEPT.GREEN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
             Long-Term Capital Gains (&gt; 1 year)
           </div>
-          <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>
+          <div style={{ color: FINCEPT.WHITE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>
             {formatCurrency(taxCalculation.longTermGains, currency)}
           </div>
-          <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>20%</div>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY, textAlign: 'right' }}>20%</div>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.BODY, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
             {formatCurrency(taxCalculation.longTermTax, currency)}
           </div>
         </div>
@@ -202,13 +202,13 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
           gap: SPACING.MEDIUM,
           padding: SPACING.MEDIUM,
           backgroundColor: 'rgba(255,136,0,0.1)',
-          borderTop: `2px solid ${BLOOMBERG.ORANGE}`,
+          borderTop: `2px solid ${FINCEPT.ORANGE}`,
           marginTop: SPACING.SMALL
         }}>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD }}>TOTAL TAX DUE</div>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD }}>TOTAL TAX DUE</div>
           <div></div>
           <div></div>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
             {formatCurrency(taxCalculation.totalTax, currency)}
           </div>
         </div>
@@ -219,7 +219,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         {/* Transaction Summary */}
         <div>
           <div style={{
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             fontSize: TYPOGRAPHY.DEFAULT,
             fontWeight: TYPOGRAPHY.BOLD,
             marginBottom: SPACING.MEDIUM,
@@ -231,7 +231,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
           <div style={{
             padding: SPACING.DEFAULT,
-            backgroundColor: BLOOMBERG.PANEL_BG,
+            backgroundColor: FINCEPT.PANEL_BG,
             border: BORDERS.STANDARD
           }}>
             <div style={{
@@ -239,10 +239,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
               justifyContent: 'space-between',
               marginBottom: SPACING.SMALL,
               paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+              borderBottom: `1px solid ${FINCEPT.BORDER}`
             }}>
-              <span style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>Total Transactions:</span>
-              <span style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>Total Transactions:</span>
+              <span style={{ color: FINCEPT.WHITE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                 {transactions.length}
               </span>
             </div>
@@ -252,10 +252,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
               justifyContent: 'space-between',
               marginBottom: SPACING.SMALL,
               paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+              borderBottom: `1px solid ${FINCEPT.BORDER}`
             }}>
-              <span style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>Buy Transactions:</span>
-              <span style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>Buy Transactions:</span>
+              <span style={{ color: FINCEPT.GREEN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                 {transactions.filter(t => t.transaction_type === 'BUY').length}
               </span>
             </div>
@@ -265,10 +265,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
               justifyContent: 'space-between',
               marginBottom: SPACING.SMALL,
               paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+              borderBottom: `1px solid ${FINCEPT.BORDER}`
             }}>
-              <span style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>Sell Transactions:</span>
-              <span style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>Sell Transactions:</span>
+              <span style={{ color: FINCEPT.RED, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                 {transactions.filter(t => t.transaction_type === 'SELL').length}
               </span>
             </div>
@@ -277,8 +277,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
               display: 'flex',
               justifyContent: 'space-between'
             }}>
-              <span style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>Current Positions:</span>
-              <span style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>Current Positions:</span>
+              <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                 {portfolioSummary.holdings.length}
               </span>
             </div>
@@ -288,7 +288,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         {/* Dividend Information */}
         <div>
           <div style={{
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             fontSize: TYPOGRAPHY.DEFAULT,
             fontWeight: TYPOGRAPHY.BOLD,
             marginBottom: SPACING.MEDIUM,
@@ -300,7 +300,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
           <div style={{
             padding: SPACING.DEFAULT,
-            backgroundColor: BLOOMBERG.PANEL_BG,
+            backgroundColor: FINCEPT.PANEL_BG,
             border: BORDERS.STANDARD
           }}>
             <div style={{
@@ -308,10 +308,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
               justifyContent: 'space-between',
               marginBottom: SPACING.SMALL,
               paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+              borderBottom: `1px solid ${FINCEPT.BORDER}`
             }}>
-              <span style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>Total Dividends (YTD):</span>
-              <span style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>Total Dividends (YTD):</span>
+              <span style={{ color: FINCEPT.GREEN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                 {formatCurrency(totalDividends, currency)}
               </span>
             </div>
@@ -320,8 +320,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
               display: 'flex',
               justifyContent: 'space-between'
             }}>
-              <span style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>Portfolio Yield:</span>
-              <span style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>Portfolio Yield:</span>
+              <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                 {dividendYield.toFixed(2)}%
               </span>
             </div>
@@ -337,7 +337,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         border: BORDERS.ORANGE
       }}>
         <div style={{
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           fontSize: TYPOGRAPHY.DEFAULT,
           fontWeight: TYPOGRAPHY.BOLD,
           marginBottom: SPACING.MEDIUM
@@ -348,8 +348,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         <div style={{ display: 'flex', gap: SPACING.MEDIUM }}>
           <button style={{
             ...COMMON_STYLES.buttonPrimary,
-            backgroundColor: BLOOMBERG.ORANGE,
-            borderColor: BLOOMBERG.ORANGE
+            backgroundColor: FINCEPT.ORANGE,
+            borderColor: FINCEPT.ORANGE
           }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';
@@ -362,8 +362,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
           <button style={{
             ...COMMON_STYLES.buttonPrimary,
-            backgroundColor: BLOOMBERG.GREEN,
-            borderColor: BLOOMBERG.GREEN
+            backgroundColor: FINCEPT.GREEN,
+            borderColor: FINCEPT.GREEN
           }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';
@@ -376,9 +376,9 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
           <button style={{
             ...COMMON_STYLES.buttonPrimary,
-            backgroundColor: BLOOMBERG.CYAN,
-            borderColor: BLOOMBERG.CYAN,
-            color: BLOOMBERG.DARK_BG
+            backgroundColor: FINCEPT.CYAN,
+            borderColor: FINCEPT.CYAN,
+            color: FINCEPT.DARK_BG
           }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';
@@ -393,7 +393,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         <div style={{
           marginTop: SPACING.MEDIUM,
           fontSize: TYPOGRAPHY.TINY,
-          color: BLOOMBERG.GRAY
+          color: FINCEPT.GRAY
         }}>
           Reports are generated for the current tax year. Consult with a tax professional for accurate filing.
         </div>

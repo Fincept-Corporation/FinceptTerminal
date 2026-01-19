@@ -7,6 +7,9 @@
 
 import { KrakenAdapter } from './crypto/kraken/KrakenAdapter';
 import { HyperLiquidAdapter } from './crypto/hyperliquid/HyperLiquidAdapter';
+import { BinanceAdapter } from './crypto/binance/BinanceAdapter';
+import { OKXAdapter } from './crypto/okx/OKXAdapter';
+import { CoinbaseAdapter } from './crypto/coinbase/CoinbaseAdapter';
 import { ZerodhaAdapter } from './india/zerodha/ZerodhaAdapter';
 import { FyersAdapter } from './stocks/india/fyers/FyersAdapter';
 import type { IExchangeAdapter, ExchangeConfig } from './crypto/types';
@@ -201,6 +204,213 @@ export const BROKER_REGISTRY: Record<string, BrokerMetadata> = {
     fees: {
       maker: 0.00015,
       taker: 0.00035,
+    },
+  },
+
+  binance: {
+    id: 'binance',
+    name: 'binance',
+    displayName: 'Binance',
+    type: 'crypto',
+    category: 'centralized',
+    region: 'global',
+    adapterClass: BinanceAdapter,
+
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      perpetuals: true,
+      options: true,
+      staking: true,
+      vaults: false,
+      subaccounts: true,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: true,
+      icebergOrders: false,
+      batchOrders: true,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 125,
+      marginMode: true,
+      transfers: true,
+      withdrawals: true,
+      deposits: true,
+    },
+
+    defaultSymbols: [
+      'BTC/USDT',
+      'ETH/USDT',
+      'BNB/USDT',
+      'SOL/USDT',
+      'XRP/USDT',
+      'ADA/USDT',
+      'DOGE/USDT',
+      'MATIC/USDT',
+      'DOT/USDT',
+      'AVAX/USDT',
+      'LINK/USDT',
+      'UNI/USDT',
+      'ATOM/USDT',
+      'LTC/USDT',
+      'ETC/USDT',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://stream.binance.com:9443/ws',
+    },
+
+    fees: {
+      maker: 0.001,
+      taker: 0.001,
+    },
+  },
+
+  okx: {
+    id: 'okx',
+    name: 'okx',
+    displayName: 'OKX',
+    type: 'crypto',
+    category: 'centralized',
+    region: 'global',
+    adapterClass: OKXAdapter,
+
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      perpetuals: true,
+      options: true,
+      staking: true,
+      vaults: false,
+      subaccounts: true,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: true,
+      icebergOrders: true,
+      batchOrders: true,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 125,
+      marginMode: true,
+      transfers: true,
+      withdrawals: true,
+      deposits: true,
+    },
+
+    defaultSymbols: [
+      'BTC/USDT',
+      'ETH/USDT',
+      'SOL/USDT',
+      'XRP/USDT',
+      'DOGE/USDT',
+      'ADA/USDT',
+      'AVAX/USDT',
+      'DOT/USDT',
+      'MATIC/USDT',
+      'LINK/USDT',
+      'UNI/USDT',
+      'ATOM/USDT',
+      'LTC/USDT',
+      'APT/USDT',
+      'ARB/USDT',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://ws.okx.com:8443/ws/v5/public',
+    },
+
+    fees: {
+      maker: 0.0008,
+      taker: 0.001,
+    },
+  },
+
+  coinbase: {
+    id: 'coinbase',
+    name: 'coinbase',
+    displayName: 'Coinbase',
+    type: 'crypto',
+    category: 'centralized',
+    region: 'us',
+    adapterClass: CoinbaseAdapter,
+
+    features: {
+      spot: true,
+      margin: false,
+      futures: false,
+      perpetuals: false,
+      options: false,
+      staking: true,
+      vaults: false,
+      subaccounts: false,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: false,
+      icebergOrders: false,
+      batchOrders: false,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: false,
+      maxLeverage: 1,
+      marginMode: false,
+      transfers: true,
+      withdrawals: true,
+      deposits: true,
+    },
+
+    defaultSymbols: [
+      'BTC/USD',
+      'ETH/USD',
+      'SOL/USD',
+      'XRP/USD',
+      'DOGE/USD',
+      'ADA/USD',
+      'AVAX/USD',
+      'DOT/USD',
+      'MATIC/USD',
+      'LINK/USD',
+      'UNI/USD',
+      'ATOM/USD',
+      'LTC/USD',
+      'BCH/USD',
+      'SHIB/USD',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://ws-feed.exchange.coinbase.com',
+    },
+
+    fees: {
+      maker: 0.004,
+      taker: 0.006,
     },
   },
 

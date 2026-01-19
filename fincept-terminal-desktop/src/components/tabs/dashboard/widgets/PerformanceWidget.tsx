@@ -17,12 +17,12 @@ interface PerformanceData {
   winRate: number;
 }
 
-const BLOOMBERG_GREEN = '#00FF00';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_CYAN = '#00E5FF';
+const FINCEPT_GREEN = '#00FF00';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_CYAN = '#00E5FF';
 
 export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   id,
@@ -108,7 +108,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       onRefresh={loadPerformance}
       isLoading={loading}
       error={error}
-      headerColor={totalPnL >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED}
+      headerColor={totalPnL >= 0 ? FINCEPT_GREEN : FINCEPT_RED}
     >
       <div style={{ padding: '4px' }}>
         {/* Total P&L Header */}
@@ -122,11 +122,11 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           alignItems: 'center'
         }}>
           <div>
-            <div style={{ fontSize: '9px', color: BLOOMBERG_GRAY }}>TOTAL P&L</div>
+            <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>TOTAL P&L</div>
             <div style={{
               fontSize: '18px',
               fontWeight: 'bold',
-              color: totalPnL >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+              color: totalPnL >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
               display: 'flex',
               alignItems: 'center',
               gap: '4px'
@@ -138,11 +138,11 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           <div style={{
             textAlign: 'right'
           }}>
-            <div style={{ fontSize: '9px', color: BLOOMBERG_GRAY }}>WIN RATE</div>
+            <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>WIN RATE</div>
             <div style={{
               fontSize: '14px',
               fontWeight: 'bold',
-              color: BLOOMBERG_ORANGE
+              color: FINCEPT_ORANGE
             }}>
               {performance[performance.length - 1]?.winRate || 0}%
             </div>
@@ -156,7 +156,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           gap: '4px',
           padding: '4px 8px',
           borderBottom: '1px solid #333',
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '8px'
         }}>
           <span>PERIOD</span>
@@ -178,20 +178,20 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
               alignItems: 'center'
             }}
           >
-            <span style={{ fontSize: '10px', color: BLOOMBERG_WHITE }}>
+            <span style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
               {perf.period}
             </span>
             <div style={{ textAlign: 'right' }}>
               <div style={{
                 fontSize: '10px',
                 fontWeight: 'bold',
-                color: perf.pnl >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED
+                color: perf.pnl >= 0 ? FINCEPT_GREEN : FINCEPT_RED
               }}>
                 {perf.pnl >= 0 ? '+' : ''}{formatCurrency(perf.pnl)}
               </div>
               <div style={{
                 fontSize: '8px',
-                color: perf.pnl >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED
+                color: perf.pnl >= 0 ? FINCEPT_GREEN : FINCEPT_RED
               }}>
                 {perf.pnl >= 0 ? '+' : ''}{perf.pnlPercent.toFixed(2)}%
               </div>
@@ -199,14 +199,14 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             <span style={{
               textAlign: 'right',
               fontSize: '10px',
-              color: BLOOMBERG_WHITE
+              color: FINCEPT_WHITE
             }}>
               {perf.trades}
             </span>
             <span style={{
               textAlign: 'right',
               fontSize: '10px',
-              color: perf.winRate >= 55 ? BLOOMBERG_GREEN : perf.winRate >= 45 ? BLOOMBERG_ORANGE : BLOOMBERG_RED
+              color: perf.winRate >= 55 ? FINCEPT_GREEN : perf.winRate >= 45 ? FINCEPT_ORANGE : FINCEPT_RED
             }}>
               {perf.winRate.toFixed(1)}%
             </span>
@@ -219,7 +219,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: BLOOMBERG_GREEN,
+              color: FINCEPT_GREEN,
               fontSize: '9px',
               cursor: 'pointer',
               display: 'flex',

@@ -10,11 +10,11 @@ interface PolymarketWidgetProps {
   onNavigate?: () => void;
 }
 
-const BLOOMBERG_GREEN = '#00FF00';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GRAY = '#787878';
+const FINCEPT_GREEN = '#00FF00';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GRAY = '#787878';
 
 export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
   id,
@@ -76,7 +76,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
           >
             <div style={{
               fontSize: '10px',
-              color: BLOOMBERG_WHITE,
+              color: FINCEPT_WHITE,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap'
@@ -85,14 +85,14 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <span style={{ fontSize: '10px', color: BLOOMBERG_GREEN }}>
+                <span style={{ fontSize: '10px', color: FINCEPT_GREEN }}>
                   YES: {((parseFloat(market.outcomePrices?.[0] || '0')) * 100).toFixed(0)}%
                 </span>
-                <span style={{ fontSize: '10px', color: BLOOMBERG_RED }}>
+                <span style={{ fontSize: '10px', color: FINCEPT_RED }}>
                   NO: {((parseFloat(market.outcomePrices?.[1] || '0')) * 100).toFixed(0)}%
                 </span>
               </div>
-              <span style={{ fontSize: '9px', color: BLOOMBERG_GRAY }}>
+              <span style={{ fontSize: '9px', color: FINCEPT_GRAY }}>
                 Vol: {formatVolume(parseFloat(market.volume || '0'))}
               </span>
             </div>
@@ -100,7 +100,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
         ))}
 
         {markets.length === 0 && !loading && (
-          <div style={{ padding: '12px', textAlign: 'center', color: BLOOMBERG_GRAY, fontSize: '10px' }}>
+          <div style={{ padding: '12px', textAlign: 'center', color: FINCEPT_GRAY, fontSize: '10px' }}>
             No active markets found
           </div>
         )}

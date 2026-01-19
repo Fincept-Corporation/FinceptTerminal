@@ -443,7 +443,7 @@ export default function MaritimeTabDeck() {
         overflow: 'hidden'
       }}
     >
-      {/* Header - Bloomberg Style - Split into Two Rows */}
+      {/* Header - Fincept Style - Split into Two Rows */}
       <div
         style={{
           position: 'absolute',

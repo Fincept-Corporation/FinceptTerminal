@@ -25,8 +25,8 @@ import { sqliteService, type BacktestingProvider } from '@/services/core/sqliteS
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { PathService } from '@/services/backtesting/PathService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -94,9 +94,9 @@ function PathInfoPanel() {
     <div style={{
       marginBottom: '20px',
       padding: '12px',
-      backgroundColor: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
-      borderLeft: `3px solid ${BLOOMBERG.YELLOW}`,
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      borderLeft: `3px solid ${FINCEPT.YELLOW}`,
       borderRadius: '3px'
     }}>
       <div
@@ -109,9 +109,9 @@ function PathInfoPanel() {
         onClick={() => setShowPaths(!showPaths)}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Settings size={14} color={BLOOMBERG.YELLOW} />
+          <Settings size={14} color={FINCEPT.YELLOW} />
           <span style={{
-            color: BLOOMBERG.WHITE,
+            color: FINCEPT.WHITE,
             fontSize: '11px',
             fontWeight: 600,
             letterSpacing: '0.5px'
@@ -119,15 +119,15 @@ function PathInfoPanel() {
             DATA STORAGE LOCATION
           </span>
         </div>
-        <span style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
+        <span style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
           {showPaths ? '▼' : '▶'} {showPaths ? 'Hide' : 'Show'} Paths
         </span>
       </div>
 
       {showPaths && (
-        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${BLOOMBERG.BORDER}` }}>
-          <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>
-            Platform: <span style={{ color: BLOOMBERG.CYAN }}>{pathsInfo.platform}</span>
+        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
+          <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>
+            Platform: <span style={{ color: FINCEPT.CYAN }}>{pathsInfo.platform}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <PathItem label="Base Directory" path={pathsInfo.baseDir} />
@@ -138,10 +138,10 @@ function PathInfoPanel() {
           <div style={{
             marginTop: '10px',
             padding: '8px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
+            backgroundColor: FINCEPT.HEADER_BG,
             borderRadius: '2px',
             fontSize: '9px',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             lineHeight: '1.5'
           }}>
             ℹ️ Backtesting data is stored in your application data folder, separate from the project directory.
@@ -161,10 +161,10 @@ function PathItem({ label, path }: { label: string; path: string }) {
       gap: '2px',
       fontSize: '9px'
     }}>
-      <span style={{ color: BLOOMBERG.GRAY }}>{label}:</span>
+      <span style={{ color: FINCEPT.GRAY }}>{label}:</span>
       <code style={{
-        color: BLOOMBERG.CYAN,
-        backgroundColor: BLOOMBERG.HEADER_BG,
+        color: FINCEPT.CYAN,
+        backgroundColor: FINCEPT.HEADER_BG,
         padding: '4px 6px',
         borderRadius: '2px',
         fontFamily: 'monospace',
@@ -444,7 +444,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '60px',
-        color: BLOOMBERG.GRAY
+        color: FINCEPT.GRAY
       }}>
         <Loader size={24} className="animate-spin" style={{ marginRight: '12px' }} />
         <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.5px' }}>LOADING PROVIDERS...</span>
@@ -461,16 +461,16 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
         gap: '12px',
         marginBottom: '24px',
         paddingBottom: '12px',
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`
       }}>
-        <Activity size={20} color={BLOOMBERG.ORANGE} style={{ filter: `drop-shadow(0 0 4px ${BLOOMBERG.ORANGE})` }} />
+        <Activity size={20} color={FINCEPT.ORANGE} style={{ filter: `drop-shadow(0 0 4px ${FINCEPT.ORANGE})` }} />
         <h2 style={{
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           fontSize: '16px',
           fontWeight: 700,
           letterSpacing: '1px',
           margin: 0,
-          textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
+          textShadow: `0 0 10px ${FINCEPT.ORANGE}40`
         }}>
           BACKTESTING PROVIDERS
         </h2>
@@ -480,12 +480,12 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
       <div style={{
         marginBottom: '20px',
         padding: '12px',
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
-        borderLeft: `3px solid ${BLOOMBERG.CYAN}`
+        backgroundColor: FINCEPT.HEADER_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderLeft: `3px solid ${FINCEPT.CYAN}`
       }}>
         <p style={{
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontSize: '10px',
           margin: 0,
           lineHeight: '1.6'
@@ -502,17 +502,17 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
         <div style={{
           padding: '12px 16px',
           marginBottom: '20px',
-          backgroundColor: message.type === 'success' ? `${BLOOMBERG.GREEN}15` : `${BLOOMBERG.RED}15`,
-          border: `1px solid ${message.type === 'success' ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
-          borderLeft: `3px solid ${message.type === 'success' ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+          backgroundColor: message.type === 'success' ? `${FINCEPT.GREEN}15` : `${FINCEPT.RED}15`,
+          border: `1px solid ${message.type === 'success' ? FINCEPT.GREEN : FINCEPT.RED}`,
+          borderLeft: `3px solid ${message.type === 'success' ? FINCEPT.GREEN : FINCEPT.RED}`,
           borderRadius: '3px',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
         }}>
-          {message.type === 'success' ? <CheckCircle size={16} color={BLOOMBERG.GREEN} /> : <AlertCircle size={16} color={BLOOMBERG.RED} />}
+          {message.type === 'success' ? <CheckCircle size={16} color={FINCEPT.GREEN} /> : <AlertCircle size={16} color={FINCEPT.RED} />}
           <span style={{
-            color: message.type === 'success' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            color: message.type === 'success' ? FINCEPT.GREEN : FINCEPT.RED,
             fontSize: '10px',
             fontWeight: 600
           }}>{message.text}</span>
@@ -525,7 +525,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
         style={{
           padding: '10px 20px',
           marginBottom: '20px',
-          backgroundColor: BLOOMBERG.GREEN,
+          backgroundColor: FINCEPT.GREEN,
           color: '#000000',
           border: 'none',
           borderRadius: '4px',
@@ -536,15 +536,15 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
           fontWeight: 700,
           fontSize: '11px',
           letterSpacing: '0.5px',
-          boxShadow: `0 0 12px ${BLOOMBERG.GREEN}40`,
+          boxShadow: `0 0 12px ${FINCEPT.GREEN}40`,
           transition: 'all 0.2s'
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.boxShadow = `0 0 20px ${BLOOMBERG.GREEN}60`;
+          e.currentTarget.style.boxShadow = `0 0 20px ${FINCEPT.GREEN}60`;
           e.currentTarget.style.transform = 'translateY(-1px)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.boxShadow = `0 0 12px ${BLOOMBERG.GREEN}40`;
+          e.currentTarget.style.boxShadow = `0 0 12px ${FINCEPT.GREEN}40`;
           e.currentTarget.style.transform = 'translateY(0)';
         }}
       >
@@ -557,13 +557,13 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
         <div style={{
           marginBottom: '20px',
           padding: '20px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
-          borderLeft: `3px solid ${BLOOMBERG.ORANGE}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderLeft: `3px solid ${FINCEPT.ORANGE}`,
           borderRadius: '4px',
         }}>
           <h3 style={{
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             marginBottom: '16px',
             fontSize: '13px',
             fontWeight: 700,
@@ -573,7 +573,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <label style={{
-                color: BLOOMBERG.WHITE,
+                color: FINCEPT.WHITE,
                 display: 'block',
                 marginBottom: '6px',
                 fontSize: '10px',
@@ -613,9 +613,9 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 style={{
                   width: '100%',
                   padding: '10px',
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   borderRadius: '3px',
                   fontSize: '11px',
                   fontWeight: 500,
@@ -637,7 +637,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
             <div>
               <label style={{
-                color: BLOOMBERG.WHITE,
+                color: FINCEPT.WHITE,
                 display: 'block',
                 marginBottom: '6px',
                 fontSize: '10px',
@@ -653,9 +653,9 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 style={{
                   width: '100%',
                   padding: '10px',
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  color: BLOOMBERG.WHITE,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   borderRadius: '3px',
                   fontFamily: 'monospace',
                   fontSize: '10px',
@@ -670,7 +670,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 onClick={saveNewProvider}
                 style={{
                   padding: '10px 20px',
-                  backgroundColor: BLOOMBERG.GREEN,
+                  backgroundColor: FINCEPT.GREEN,
                   color: '#000000',
                   border: 'none',
                   borderRadius: '4px',
@@ -690,8 +690,8 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 style={{
                   padding: '10px 20px',
                   backgroundColor: 'transparent',
-                  color: BLOOMBERG.GRAY,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  color: FINCEPT.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   borderRadius: '4px',
                   cursor: 'pointer',
                   fontWeight: 700,
@@ -700,12 +700,12 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = BLOOMBERG.RED;
-                  e.currentTarget.style.color = BLOOMBERG.RED;
+                  e.currentTarget.style.borderColor = FINCEPT.RED;
+                  e.currentTarget.style.color = FINCEPT.RED;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                  e.currentTarget.style.color = BLOOMBERG.GRAY;
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                  e.currentTarget.style.color = FINCEPT.GRAY;
                 }}
               >
                 CANCEL
@@ -722,15 +722,15 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
             gridColumn: '1 / -1',
             padding: '60px 40px',
             textAlign: 'center',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            border: `1px dashed ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px dashed ${FINCEPT.BORDER}`,
             borderRadius: '4px',
           }}>
-            <Activity size={48} style={{ margin: '0 auto 16px', opacity: 0.3, color: BLOOMBERG.ORANGE }} />
-            <p style={{ color: BLOOMBERG.WHITE, fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+            <Activity size={48} style={{ margin: '0 auto 16px', opacity: 0.3, color: FINCEPT.ORANGE }} />
+            <p style={{ color: FINCEPT.WHITE, fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
               NO PROVIDERS CONFIGURED
             </p>
-            <p style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
+            <p style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
               Click "ADD PROVIDER" to configure your first backtesting engine
             </p>
           </div>
@@ -745,9 +745,9 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 key={provider.id}
                 style={{
                   padding: '16px',
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${isActive ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                  borderLeft: `3px solid ${isActive ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${isActive ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                  borderLeft: `3px solid ${isActive ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
                   borderRadius: '4px',
                   transition: 'all 0.2s',
                   position: 'relative',
@@ -755,14 +755,14 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                    e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                    e.currentTarget.style.borderColor = FINCEPT.MUTED;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.PANEL_BG;
-                    e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                    e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
                   }
                 }}
               >
@@ -774,7 +774,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                     left: 0,
                     right: 0,
                     height: '1px',
-                    background: `linear-gradient(90deg, transparent, ${BLOOMBERG.ORANGE}, transparent)`,
+                    background: `linear-gradient(90deg, transparent, ${FINCEPT.ORANGE}, transparent)`,
                     opacity: 0.5
                   }} />
                 )}
@@ -782,17 +782,17 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                    <Activity size={20} style={{ color: isActive ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY }} />
+                    <Activity size={20} style={{ color: isActive ? FINCEPT.ORANGE : FINCEPT.GRAY }} />
                     <div>
                       <h3 style={{
-                        color: isActive ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                        color: isActive ? FINCEPT.ORANGE : FINCEPT.WHITE,
                         margin: 0,
                         fontSize: '12px',
                         fontWeight: 700,
                         letterSpacing: '0.5px'
                       }}>{provider.name}</h3>
                       <p style={{
-                        color: BLOOMBERG.GRAY,
+                        color: FINCEPT.GRAY,
                         fontSize: '9px',
                         margin: 0,
                         fontWeight: 500
@@ -810,18 +810,18 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                         alignItems: 'center',
                         gap: '4px',
                         padding: '3px 8px',
-                        backgroundColor: `${BLOOMBERG.GREEN}20`,
+                        backgroundColor: `${FINCEPT.GREEN}20`,
                         borderRadius: '3px'
                       }}>
                         <div style={{
                           width: '6px',
                           height: '6px',
                           borderRadius: '50%',
-                          backgroundColor: BLOOMBERG.GREEN,
-                          boxShadow: `0 0 6px ${BLOOMBERG.GREEN}`
+                          backgroundColor: FINCEPT.GREEN,
+                          boxShadow: `0 0 6px ${FINCEPT.GREEN}`
                         }} />
                         <span style={{
-                          color: BLOOMBERG.GREEN,
+                          color: FINCEPT.GREEN,
                           fontSize: '9px',
                           fontWeight: 700
                         }}>ACTIVE</span>
@@ -834,12 +834,12 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                         alignItems: 'center',
                         gap: '4px',
                         padding: '3px 8px',
-                        backgroundColor: `${BLOOMBERG.CYAN}20`,
+                        backgroundColor: `${FINCEPT.CYAN}20`,
                         borderRadius: '3px'
                       }}>
-                        <CheckCircle size={10} color={BLOOMBERG.CYAN} />
+                        <CheckCircle size={10} color={FINCEPT.CYAN} />
                         <span style={{
-                          color: BLOOMBERG.CYAN,
+                          color: FINCEPT.CYAN,
                           fontSize: '9px',
                           fontWeight: 700
                         }}>CONNECTED</span>
@@ -855,10 +855,10 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                       {capabilities.backtesting && (
                         <span style={{
                           padding: '3px 8px',
-                          backgroundColor: `${BLOOMBERG.ORANGE}15`,
-                          border: `1px solid ${BLOOMBERG.ORANGE}40`,
+                          backgroundColor: `${FINCEPT.ORANGE}15`,
+                          border: `1px solid ${FINCEPT.ORANGE}40`,
                           borderRadius: '3px',
-                          color: BLOOMBERG.ORANGE,
+                          color: FINCEPT.ORANGE,
                           fontSize: '8px',
                           fontWeight: 700,
                           letterSpacing: '0.5px'
@@ -867,10 +867,10 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                       {capabilities.optimization && (
                         <span style={{
                           padding: '3px 8px',
-                          backgroundColor: `${BLOOMBERG.CYAN}15`,
-                          border: `1px solid ${BLOOMBERG.CYAN}40`,
+                          backgroundColor: `${FINCEPT.CYAN}15`,
+                          border: `1px solid ${FINCEPT.CYAN}40`,
                           borderRadius: '3px',
-                          color: BLOOMBERG.CYAN,
+                          color: FINCEPT.CYAN,
                           fontSize: '8px',
                           fontWeight: 700,
                           letterSpacing: '0.5px'
@@ -879,10 +879,10 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                       {capabilities.liveTrading && (
                         <span style={{
                           padding: '3px 8px',
-                          backgroundColor: `${BLOOMBERG.GREEN}15`,
-                          border: `1px solid ${BLOOMBERG.GREEN}40`,
+                          backgroundColor: `${FINCEPT.GREEN}15`,
+                          border: `1px solid ${FINCEPT.GREEN}40`,
                           borderRadius: '3px',
-                          color: BLOOMBERG.GREEN,
+                          color: FINCEPT.GREEN,
                           fontSize: '8px',
                           fontWeight: 700,
                           letterSpacing: '0.5px'
@@ -891,10 +891,10 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                       {capabilities.research && (
                         <span style={{
                           padding: '3px 8px',
-                          backgroundColor: `${BLOOMBERG.YELLOW}15`,
-                          border: `1px solid ${BLOOMBERG.YELLOW}40`,
+                          backgroundColor: `${FINCEPT.YELLOW}15`,
+                          border: `1px solid ${FINCEPT.YELLOW}40`,
                           borderRadius: '3px',
-                          color: BLOOMBERG.YELLOW,
+                          color: FINCEPT.YELLOW,
                           fontSize: '8px',
                           fontWeight: 700,
                           letterSpacing: '0.5px'
@@ -909,11 +909,11 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                   <div style={{
                     padding: '8px 10px',
                     marginBottom: '12px',
-                    backgroundColor: status.connected ? `${BLOOMBERG.GREEN}10` : `${BLOOMBERG.RED}10`,
-                    border: `1px solid ${status.connected ? BLOOMBERG.GREEN : BLOOMBERG.RED}40`,
+                    backgroundColor: status.connected ? `${FINCEPT.GREEN}10` : `${FINCEPT.RED}10`,
+                    border: `1px solid ${status.connected ? FINCEPT.GREEN : FINCEPT.RED}40`,
                     borderRadius: '3px',
                     fontSize: '9px',
-                    color: status.connected ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                    color: status.connected ? FINCEPT.GREEN : FINCEPT.RED,
                   }}>
                     {status.message}
                   </div>
@@ -923,11 +923,11 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                   <div style={{
                     padding: '8px 10px',
                     marginBottom: '12px',
-                    backgroundColor: `${BLOOMBERG.RED}10`,
-                    border: `1px solid ${BLOOMBERG.RED}40`,
+                    backgroundColor: `${FINCEPT.RED}10`,
+                    border: `1px solid ${FINCEPT.RED}40`,
                     borderRadius: '3px',
                     fontSize: '9px',
-                    color: BLOOMBERG.RED,
+                    color: FINCEPT.RED,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
@@ -945,7 +945,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                     style={{
                       flex: 1,
                       padding: '8px 12px',
-                      backgroundColor: status.testing ? BLOOMBERG.MUTED : BLOOMBERG.ORANGE,
+                      backgroundColor: status.testing ? FINCEPT.MUTED : FINCEPT.ORANGE,
                       color: '#000000',
                       border: 'none',
                       borderRadius: '3px',
@@ -985,7 +985,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                       onClick={() => activateProvider(provider.name)}
                       style={{
                         padding: '8px 12px',
-                        backgroundColor: BLOOMBERG.GREEN,
+                        backgroundColor: FINCEPT.GREEN,
                         color: '#000000',
                         border: 'none',
                         borderRadius: '3px',
@@ -1011,8 +1011,8 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                     style={{
                       padding: '8px 12px',
                       backgroundColor: 'transparent',
-                      color: BLOOMBERG.GRAY,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      color: FINCEPT.GRAY,
+                      border: `1px solid ${FINCEPT.BORDER}`,
                       borderRadius: '3px',
                       cursor: 'pointer',
                       display: 'flex',
@@ -1024,12 +1024,12 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                       transition: 'all 0.2s'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = BLOOMBERG.RED;
-                      e.currentTarget.style.color = BLOOMBERG.RED;
+                      e.currentTarget.style.borderColor = FINCEPT.RED;
+                      e.currentTarget.style.color = FINCEPT.RED;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                      e.currentTarget.style.color = BLOOMBERG.GRAY;
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.color = FINCEPT.GRAY;
                     }}
                   >
                     <Trash2 size={12} />
@@ -1045,9 +1045,9 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
       {/* Registry Status */}
       <div style={{
         padding: '16px',
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
-        borderTop: `2px solid ${BLOOMBERG.CYAN}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderTop: `2px solid ${FINCEPT.CYAN}`,
         borderRadius: '4px',
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
@@ -1055,28 +1055,28 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
       }}>
         <div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             fontWeight: 600,
             letterSpacing: '0.5px',
             marginBottom: '6px'
           }}>REGISTERED PROVIDERS</div>
           <div style={{
-            color: BLOOMBERG.CYAN,
+            color: FINCEPT.CYAN,
             fontSize: '20px',
             fontWeight: 700
           }}>{backtestingRegistry.listProviders().length}</div>
         </div>
         <div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             fontWeight: 600,
             letterSpacing: '0.5px',
             marginBottom: '6px'
           }}>ACTIVE PROVIDER</div>
           <div style={{
-            color: BLOOMBERG.GREEN,
+            color: FINCEPT.GREEN,
             fontSize: '12px',
             fontWeight: 700,
             letterSpacing: '0.5px'

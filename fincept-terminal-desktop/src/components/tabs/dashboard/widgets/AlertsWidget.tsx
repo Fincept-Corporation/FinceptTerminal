@@ -21,12 +21,12 @@ interface Alert {
   status: 'active' | 'triggered' | 'expired';
 }
 
-const BLOOMBERG_GREEN = '#00FF00';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_YELLOW = '#FFD700';
+const FINCEPT_GREEN = '#00FF00';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_YELLOW = '#FFD700';
 
 export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
   id,
@@ -109,22 +109,22 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'triggered':
-        return <Bell size={12} style={{ color: BLOOMBERG_YELLOW }} />;
+        return <Bell size={12} style={{ color: FINCEPT_YELLOW }} />;
       case 'active':
-        return <Clock size={12} style={{ color: BLOOMBERG_GREEN }} />;
+        return <Clock size={12} style={{ color: FINCEPT_GREEN }} />;
       default:
-        return <AlertTriangle size={12} style={{ color: BLOOMBERG_GRAY }} />;
+        return <AlertTriangle size={12} style={{ color: FINCEPT_GRAY }} />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'triggered':
-        return BLOOMBERG_YELLOW;
+        return FINCEPT_YELLOW;
       case 'active':
-        return BLOOMBERG_GREEN;
+        return FINCEPT_GREEN;
       default:
-        return BLOOMBERG_GRAY;
+        return FINCEPT_GRAY;
     }
   };
 
@@ -139,7 +139,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
       onRefresh={loadAlerts}
       isLoading={loading}
       error={error}
-      headerColor={BLOOMBERG_YELLOW}
+      headerColor={FINCEPT_YELLOW}
     >
       <div style={{ padding: '4px' }}>
         {/* Summary bar */}
@@ -151,11 +151,11 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
           marginBottom: '4px',
           fontSize: '9px'
         }}>
-          <span style={{ color: BLOOMBERG_GREEN }}>
+          <span style={{ color: FINCEPT_GREEN }}>
             <Clock size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
             {activeCount} Active
           </span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>
+          <span style={{ color: FINCEPT_YELLOW }}>
             <Bell size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
             {triggeredCount} Triggered
           </span>
@@ -176,17 +176,17 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
             {getStatusIcon(alert.status)}
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '10px', color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>
+                <span style={{ fontSize: '10px', color: FINCEPT_WHITE, fontWeight: 'bold' }}>
                   {alert.symbol}
                 </span>
                 <span style={{ fontSize: '9px', color: getStatusColor(alert.status) }}>
                   {alert.status.toUpperCase()}
                 </span>
               </div>
-              <div style={{ fontSize: '9px', color: BLOOMBERG_GRAY }}>
+              <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>
                 {alert.field} {alert.condition}
                 {alert.triggeredAt && (
-                  <span style={{ marginLeft: '8px', color: BLOOMBERG_YELLOW }}>
+                  <span style={{ marginLeft: '8px', color: FINCEPT_YELLOW }}>
                     @ {alert.triggeredAt}
                   </span>
                 )}
@@ -196,7 +196,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
         ))}
 
         {alerts.length === 0 && !loading && (
-          <div style={{ padding: '12px', textAlign: 'center', color: BLOOMBERG_GRAY, fontSize: '10px' }}>
+          <div style={{ padding: '12px', textAlign: 'center', color: FINCEPT_GRAY, fontSize: '10px' }}>
             <Bell size={20} style={{ marginBottom: '8px', opacity: 0.5 }} />
             <div>No alerts configured</div>
             <div style={{ fontSize: '9px', marginTop: '4px' }}>Set up alerts in Monitoring tab</div>
@@ -209,7 +209,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: BLOOMBERG_YELLOW,
+              color: FINCEPT_YELLOW,
               fontSize: '9px',
               cursor: 'pointer',
               display: 'flex',

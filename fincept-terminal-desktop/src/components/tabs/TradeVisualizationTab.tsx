@@ -1,5 +1,5 @@
 // File: src/components/tabs/TradeVisualizationTab.tsx
-// Professional Bloomberg Terminal-Grade Global Trade Visualization Interface
+// Professional Fincept Terminal-Grade Global Trade Visualization Interface
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -24,8 +24,8 @@ import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 import { TradeChordDiagram } from '@/components/visualization/TradeChordDiagram';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -169,8 +169,8 @@ export default function TradeVisualizationTab() {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
-      color: BLOOMBERG.WHITE,
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
       fontFamily: '"Segoe UI", "Helvetica Neue", Arial, sans-serif',
       display: 'flex',
       flexDirection: 'column',
@@ -178,8 +178,8 @@ export default function TradeVisualizationTab() {
     }}>
       {/* ========== HEADER ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
         padding: '10px 16px',
         display: 'flex',
         justifyContent: 'space-between',
@@ -187,22 +187,22 @@ export default function TradeVisualizationTab() {
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Globe size={20} color={BLOOMBERG.ORANGE} />
+          <Globe size={20} color={FINCEPT.ORANGE} />
           <span style={{
             fontSize: '16px',
             fontWeight: 700,
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             letterSpacing: '0.5px'
           }}>
             GLOBAL TRADE ANALYSIS
           </span>
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
-          <span style={{ fontSize: '11px', color: BLOOMBERG.GRAY }}>
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
+          <span style={{ fontSize: '11px', color: FINCEPT.GRAY }}>
             Real-time Trade Flow Visualization
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '11px', color: BLOOMBERG.CYAN }}>
+          <span style={{ fontSize: '11px', color: FINCEPT.CYAN }}>
             {currentTime.toUTCString()}
           </span>
         </div>
@@ -210,8 +210,8 @@ export default function TradeVisualizationTab() {
 
       {/* ========== CONTROL BAR ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '12px 16px',
         display: 'flex',
         alignItems: 'center',
@@ -220,23 +220,23 @@ export default function TradeVisualizationTab() {
       }}>
         {/* Country Selector */}
         <div style={{ position: 'relative', minWidth: '200px' }}>
-          <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>COUNTRY</div>
+          <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px' }}>COUNTRY</div>
           <div
             onClick={() => setShowCountryDropdown(!showCountryDropdown)}
             style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
               cursor: 'pointer',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}
           >
-            <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.ORANGE }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: FINCEPT.ORANGE }}>
               {selectedCountryName}
             </span>
-            <ChevronDown size={14} color={BLOOMBERG.GRAY} />
+            <ChevronDown size={14} color={FINCEPT.GRAY} />
           </div>
 
           {showCountryDropdown && (
@@ -246,14 +246,14 @@ export default function TradeVisualizationTab() {
               left: 0,
               right: 0,
               marginTop: '4px',
-              backgroundColor: BLOOMBERG.PANEL_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
               maxHeight: '400px',
               overflow: 'hidden',
               zIndex: 1000,
-              boxShadow: `0 4px 16px ${BLOOMBERG.DARK_BG}80`
+              boxShadow: `0 4px 16px ${FINCEPT.DARK_BG}80`
             }}>
-              <div style={{ padding: '8px', borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
+              <div style={{ padding: '8px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                 <input
                   type="text"
                   placeholder="Search countries..."
@@ -263,9 +263,9 @@ export default function TradeVisualizationTab() {
                   style={{
                     width: '100%',
                     padding: '6px 8px',
-                    backgroundColor: BLOOMBERG.HEADER_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     fontSize: '11px',
                     outline: 'none'
                   }}
@@ -280,13 +280,13 @@ export default function TradeVisualizationTab() {
                       padding: '8px 12px',
                       cursor: 'pointer',
                       fontSize: '11px',
-                      backgroundColor: country.country_id === selectedCountry ? `${BLOOMBERG.ORANGE}20` : 'transparent',
-                      color: country.country_id === selectedCountry ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
-                      borderLeft: country.country_id === selectedCountry ? `3px solid ${BLOOMBERG.ORANGE}` : 'none'
+                      backgroundColor: country.country_id === selectedCountry ? `${FINCEPT.ORANGE}20` : 'transparent',
+                      color: country.country_id === selectedCountry ? FINCEPT.ORANGE : FINCEPT.WHITE,
+                      borderLeft: country.country_id === selectedCountry ? `3px solid ${FINCEPT.ORANGE}` : 'none'
                     }}
                     onMouseEnter={(e) => {
                       if (country.country_id !== selectedCountry) {
-                        e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -296,7 +296,7 @@ export default function TradeVisualizationTab() {
                     }}
                   >
                     <div style={{ fontWeight: 600 }}>{country.country_name}</div>
-                    <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY }}>
+                    <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
                       {country.continent_name}
                     </div>
                   </div>
@@ -308,13 +308,13 @@ export default function TradeVisualizationTab() {
 
         {/* Year Selector */}
         <div style={{ minWidth: '100px' }}>
-          <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>YEAR</div>
+          <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px' }}>YEAR</div>
           <div
             onClick={() => setShowYearDropdown(!showYearDropdown)}
             style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
               cursor: 'pointer',
               display: 'flex',
               justifyContent: 'space-between',
@@ -322,10 +322,10 @@ export default function TradeVisualizationTab() {
               position: 'relative'
             }}
           >
-            <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.YELLOW }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: FINCEPT.YELLOW }}>
               {selectedYear}
             </span>
-            <ChevronDown size={14} color={BLOOMBERG.GRAY} />
+            <ChevronDown size={14} color={FINCEPT.GRAY} />
 
             {showYearDropdown && (
               <div style={{
@@ -334,8 +334,8 @@ export default function TradeVisualizationTab() {
                 left: 0,
                 right: 0,
                 marginTop: '4px',
-                backgroundColor: BLOOMBERG.PANEL_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 maxHeight: '300px',
                 overflowY: 'auto',
                 zIndex: 1000
@@ -352,12 +352,12 @@ export default function TradeVisualizationTab() {
                       padding: '8px 12px',
                       cursor: 'pointer',
                       fontSize: '11px',
-                      backgroundColor: year === selectedYear ? `${BLOOMBERG.YELLOW}20` : 'transparent',
-                      color: year === selectedYear ? BLOOMBERG.YELLOW : BLOOMBERG.WHITE
+                      backgroundColor: year === selectedYear ? `${FINCEPT.YELLOW}20` : 'transparent',
+                      color: year === selectedYear ? FINCEPT.YELLOW : FINCEPT.WHITE
                     }}
                     onMouseEnter={(e) => {
                       if (year !== selectedYear) {
-                        e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -376,15 +376,15 @@ export default function TradeVisualizationTab() {
 
         {/* Top N Selector */}
         <div style={{ minWidth: '120px' }}>
-          <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>TOP PARTNERS</div>
+          <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px' }}>TOP PARTNERS</div>
           <select
             value={topN}
             onChange={(e) => setTopN(parseInt(e.target.value))}
             style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              color: BLOOMBERG.CYAN,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              color: FINCEPT.CYAN,
+              border: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '13px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -408,9 +408,9 @@ export default function TradeVisualizationTab() {
             onClick={() => setView('chord')}
             style={{
               padding: '8px 16px',
-              backgroundColor: view === 'chord' ? BLOOMBERG.ORANGE : BLOOMBERG.HEADER_BG,
-              color: view === 'chord' ? BLOOMBERG.DARK_BG : BLOOMBERG.WHITE,
-              border: `1px solid ${view === 'chord' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              backgroundColor: view === 'chord' ? FINCEPT.ORANGE : FINCEPT.HEADER_BG,
+              color: view === 'chord' ? FINCEPT.DARK_BG : FINCEPT.WHITE,
+              border: `1px solid ${view === 'chord' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
               fontSize: '11px',
               fontWeight: 600,
               cursor: 'pointer'
@@ -423,9 +423,9 @@ export default function TradeVisualizationTab() {
             onClick={() => setView('table')}
             style={{
               padding: '8px 16px',
-              backgroundColor: view === 'table' ? BLOOMBERG.ORANGE : BLOOMBERG.HEADER_BG,
-              color: view === 'table' ? BLOOMBERG.DARK_BG : BLOOMBERG.WHITE,
-              border: `1px solid ${view === 'table' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              backgroundColor: view === 'table' ? FINCEPT.ORANGE : FINCEPT.HEADER_BG,
+              color: view === 'table' ? FINCEPT.DARK_BG : FINCEPT.WHITE,
+              border: `1px solid ${view === 'table' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
               fontSize: '11px',
               fontWeight: 600,
               cursor: 'pointer'
@@ -438,9 +438,9 @@ export default function TradeVisualizationTab() {
             onClick={() => setView('stats')}
             style={{
               padding: '8px 16px',
-              backgroundColor: view === 'stats' ? BLOOMBERG.ORANGE : BLOOMBERG.HEADER_BG,
-              color: view === 'stats' ? BLOOMBERG.DARK_BG : BLOOMBERG.WHITE,
-              border: `1px solid ${view === 'stats' ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+              backgroundColor: view === 'stats' ? FINCEPT.ORANGE : FINCEPT.HEADER_BG,
+              color: view === 'stats' ? FINCEPT.DARK_BG : FINCEPT.WHITE,
+              border: `1px solid ${view === 'stats' ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
               fontSize: '11px',
               fontWeight: 600,
               cursor: 'pointer'
@@ -457,9 +457,9 @@ export default function TradeVisualizationTab() {
           disabled={loading}
           style={{
             padding: '8px 16px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            color: loading ? BLOOMBERG.GRAY : BLOOMBERG.CYAN,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            color: loading ? FINCEPT.GRAY : FINCEPT.CYAN,
+            border: `1px solid ${FINCEPT.BORDER}`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: loading ? 'not-allowed' : 'pointer',
@@ -477,9 +477,9 @@ export default function TradeVisualizationTab() {
           disabled={!chordData}
           style={{
             padding: '8px 16px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            color: chordData ? BLOOMBERG.GREEN : BLOOMBERG.GRAY,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            color: chordData ? FINCEPT.GREEN : FINCEPT.GRAY,
+            border: `1px solid ${FINCEPT.BORDER}`,
             fontSize: '11px',
             fontWeight: 600,
             cursor: chordData ? 'pointer' : 'not-allowed',
@@ -500,15 +500,15 @@ export default function TradeVisualizationTab() {
           {error && (
             <div style={{
               padding: '12px 16px',
-              backgroundColor: `${BLOOMBERG.RED}20`,
-              border: `1px solid ${BLOOMBERG.RED}`,
+              backgroundColor: `${FINCEPT.RED}20`,
+              border: `1px solid ${FINCEPT.RED}`,
               margin: '16px',
               display: 'flex',
               alignItems: 'center',
               gap: '12px'
             }}>
-              <AlertCircle size={16} color={BLOOMBERG.RED} />
-              <span style={{ fontSize: '11px', color: BLOOMBERG.RED }}>{error}</span>
+              <AlertCircle size={16} color={FINCEPT.RED} />
+              <span style={{ fontSize: '11px', color: FINCEPT.RED }}>{error}</span>
             </div>
           )}
 
@@ -521,8 +521,8 @@ export default function TradeVisualizationTab() {
               flexDirection: 'column',
               gap: '16px'
             }}>
-              <RefreshCw size={32} color={BLOOMBERG.ORANGE} className="animate-spin" />
-              <span style={{ fontSize: '13px', color: BLOOMBERG.GRAY }}>
+              <RefreshCw size={32} color={FINCEPT.ORANGE} className="animate-spin" />
+              <span style={{ fontSize: '13px', color: FINCEPT.GRAY }}>
                 Loading trade data...
               </span>
             </div>
@@ -547,26 +547,26 @@ export default function TradeVisualizationTab() {
               overflow: 'auto'
             }}>
               <div style={{
-                backgroundColor: BLOOMBERG.PANEL_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 borderRadius: '4px'
               }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ backgroundColor: BLOOMBERG.HEADER_BG, borderBottom: `2px solid ${BLOOMBERG.ORANGE}` }}>
-                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: BLOOMBERG.ORANGE }}>
+                    <tr style={{ backgroundColor: FINCEPT.HEADER_BG, borderBottom: `2px solid ${FINCEPT.ORANGE}` }}>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: FINCEPT.ORANGE }}>
                         RANK
                       </th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: BLOOMBERG.ORANGE }}>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: FINCEPT.ORANGE }}>
                         TRADING PARTNER
                       </th>
-                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: BLOOMBERG.ORANGE }}>
+                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: FINCEPT.ORANGE }}>
                         EXPORTS ($M)
                       </th>
-                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: BLOOMBERG.ORANGE }}>
+                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: FINCEPT.ORANGE }}>
                         IMPORTS ($M)
                       </th>
-                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: BLOOMBERG.ORANGE }}>
+                      <th style={{ padding: '12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: FINCEPT.ORANGE }}>
                         TOTAL TRADE ($M)
                       </th>
                     </tr>
@@ -576,23 +576,23 @@ export default function TradeVisualizationTab() {
                       <tr
                         key={partner.partner_id}
                         style={{
-                          borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                          backgroundColor: idx % 2 === 0 ? 'transparent' : `${BLOOMBERG.BORDER}40`
+                          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                          backgroundColor: idx % 2 === 0 ? 'transparent' : `${FINCEPT.BORDER}40`
                         }}
                       >
-                        <td style={{ padding: '10px 12px', fontSize: '11px', color: BLOOMBERG.GRAY }}>
+                        <td style={{ padding: '10px 12px', fontSize: '11px', color: FINCEPT.GRAY }}>
                           {idx + 1}
                         </td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: BLOOMBERG.WHITE }}>
+                        <td style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: FINCEPT.WHITE }}>
                           {partner.partner_name}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '12px', color: BLOOMBERG.GREEN }}>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '12px', color: FINCEPT.GREEN }}>
                           {formatCurrency(partner.export_value)}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '12px', color: BLOOMBERG.RED }}>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '12px', color: FINCEPT.RED }}>
                           {formatCurrency(partner.import_value)}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '13px', fontWeight: 600, color: BLOOMBERG.YELLOW }}>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '13px', fontWeight: 600, color: FINCEPT.YELLOW }}>
                           {formatCurrency(partner.total_trade)}
                         </td>
                       </tr>
@@ -612,70 +612,70 @@ export default function TradeVisualizationTab() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                 {/* Total Trade */}
                 <div style={{
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   padding: '16px',
                   borderRadius: '4px'
                 }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>TOTAL TRADE</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.YELLOW }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>TOTAL TRADE</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.YELLOW }}>
                     {formatCurrency(chordData.total_trade)}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginTop: '4px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '4px' }}>
                     {selectedYear} • {chordData.partners.length} partners
                   </div>
                 </div>
 
                 {/* Total Exports */}
                 <div style={{
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   padding: '16px',
                   borderRadius: '4px'
                 }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>TOTAL EXPORTS</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.GREEN }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>TOTAL EXPORTS</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.GREEN }}>
                     {formatCurrency(chordData.total_export)}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <ArrowUpRight size={12} color={BLOOMBERG.GREEN} />
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <ArrowUpRight size={12} color={FINCEPT.GREEN} />
                     Outbound trade flows
                   </div>
                 </div>
 
                 {/* Total Imports */}
                 <div style={{
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   padding: '16px',
                   borderRadius: '4px'
                 }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>TOTAL IMPORTS</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.RED }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>TOTAL IMPORTS</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.RED }}>
                     {formatCurrency(chordData.total_import)}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <ArrowDownRight size={12} color={BLOOMBERG.RED} />
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <ArrowDownRight size={12} color={FINCEPT.RED} />
                     Inbound trade flows
                   </div>
                 </div>
 
                 {/* Trade Balance */}
                 <div style={{
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   padding: '16px',
                   borderRadius: '4px'
                 }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>TRADE BALANCE</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>TRADE BALANCE</div>
                   <div style={{
                     fontSize: '24px',
                     fontWeight: 700,
-                    color: (chordData.total_export - chordData.total_import) >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                    color: (chordData.total_export - chordData.total_import) >= 0 ? FINCEPT.GREEN : FINCEPT.RED
                   }}>
                     {formatCurrency(Math.abs(chordData.total_export - chordData.total_import))}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginTop: '4px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '4px' }}>
                     {(chordData.total_export - chordData.total_import) >= 0 ? 'Surplus' : 'Deficit'}
                   </div>
                 </div>
@@ -683,16 +683,16 @@ export default function TradeVisualizationTab() {
                 {/* Top Partner */}
                 {chordData.partners.length > 0 && (
                   <div style={{
-                    backgroundColor: BLOOMBERG.PANEL_BG,
-                    border: `1px solid ${BLOOMBERG.ORANGE}`,
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    border: `1px solid ${FINCEPT.ORANGE}`,
                     padding: '16px',
                     borderRadius: '4px'
                   }}>
-                    <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>TOP TRADING PARTNER</div>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.ORANGE }}>
+                    <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>TOP TRADING PARTNER</div>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.ORANGE }}>
                       {chordData.partners[0].partner_name}
                     </div>
-                    <div style={{ fontSize: '14px', color: BLOOMBERG.YELLOW, marginTop: '4px' }}>
+                    <div style={{ fontSize: '14px', color: FINCEPT.YELLOW, marginTop: '4px' }}>
                       {formatCurrency(chordData.partners[0].total_trade)}
                     </div>
                   </div>
@@ -700,16 +700,16 @@ export default function TradeVisualizationTab() {
 
                 {/* Average Trade per Partner */}
                 <div style={{
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   padding: '16px',
                   borderRadius: '4px'
                 }}>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>AVG PER PARTNER</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.CYAN }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>AVG PER PARTNER</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.CYAN }}>
                     {formatCurrency(chordData.total_trade / chordData.partners.length)}
                   </div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginTop: '4px' }}>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '4px' }}>
                     Mean trade value
                   </div>
                 </div>
@@ -726,8 +726,8 @@ export default function TradeVisualizationTab() {
               flexDirection: 'column',
               gap: '16px'
             }}>
-              <Globe size={48} color={BLOOMBERG.MUTED} />
-              <span style={{ fontSize: '13px', color: BLOOMBERG.GRAY }}>
+              <Globe size={48} color={FINCEPT.MUTED} />
+              <span style={{ fontSize: '13px', color: FINCEPT.GRAY }}>
                 Select a country to view trade relationships
               </span>
             </div>
@@ -738,18 +738,18 @@ export default function TradeVisualizationTab() {
         {chordData && (
           <div style={{
             width: '320px',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            borderLeft: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.PANEL_BG,
+            borderLeft: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden'
           }}>
             <div style={{
               padding: '12px 16px',
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-              backgroundColor: BLOOMBERG.HEADER_BG
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG
             }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: BLOOMBERG.ORANGE }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: FINCEPT.ORANGE }}>
                 INFORMATION
               </span>
             </div>
@@ -758,16 +758,16 @@ export default function TradeVisualizationTab() {
               {/* Country Info */}
               <div style={{
                 padding: '12px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.HEADER_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 marginBottom: '12px',
                 borderRadius: '4px'
               }}>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>SELECTED COUNTRY</div>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.ORANGE }}>
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>SELECTED COUNTRY</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.ORANGE }}>
                   {chordData.country_name}
                 </div>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginTop: '4px' }}>
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginTop: '4px' }}>
                   Country ID: {chordData.country_id}
                 </div>
               </div>
@@ -775,41 +775,41 @@ export default function TradeVisualizationTab() {
               {/* Data Info */}
               <div style={{
                 padding: '12px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.HEADER_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 marginBottom: '12px',
                 borderRadius: '4px'
               }}>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>DATA DETAILS</div>
-                <div style={{ fontSize: '11px', color: BLOOMBERG.WHITE, marginBottom: '6px' }}>
-                  Year: <span style={{ color: BLOOMBERG.YELLOW }}>{chordData.year}</span>
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>DATA DETAILS</div>
+                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, marginBottom: '6px' }}>
+                  Year: <span style={{ color: FINCEPT.YELLOW }}>{chordData.year}</span>
                 </div>
-                <div style={{ fontSize: '11px', color: BLOOMBERG.WHITE, marginBottom: '6px' }}>
-                  HS Code: <span style={{ color: BLOOMBERG.CYAN }}>{chordData.hs_code}</span>
+                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, marginBottom: '6px' }}>
+                  HS Code: <span style={{ color: FINCEPT.CYAN }}>{chordData.hs_code}</span>
                 </div>
-                <div style={{ fontSize: '11px', color: BLOOMBERG.WHITE }}>
-                  Partners: <span style={{ color: BLOOMBERG.GREEN }}>{chordData.partners.length}</span>
+                <div style={{ fontSize: '11px', color: FINCEPT.WHITE }}>
+                  Partners: <span style={{ color: FINCEPT.GREEN }}>{chordData.partners.length}</span>
                 </div>
               </div>
 
               {/* Legend */}
               <div style={{
                 padding: '12px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.HEADER_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 borderRadius: '4px'
               }}>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>LEGEND</div>
-                <div style={{ fontSize: '11px', color: BLOOMBERG.WHITE, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '16px', height: '3px', backgroundColor: BLOOMBERG.GREEN }} />
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '8px' }}>LEGEND</div>
+                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '16px', height: '3px', backgroundColor: FINCEPT.GREEN }} />
                   <span>Exports (Outbound)</span>
                 </div>
-                <div style={{ fontSize: '11px', color: BLOOMBERG.WHITE, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '16px', height: '3px', backgroundColor: BLOOMBERG.RED }} />
+                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '16px', height: '3px', backgroundColor: FINCEPT.RED }} />
                   <span>Imports (Inbound)</span>
                 </div>
-                <div style={{ fontSize: '11px', color: BLOOMBERG.WHITE, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Info size={12} color={BLOOMBERG.CYAN} />
+                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Info size={12} color={FINCEPT.CYAN} />
                   <span>Hover for details</span>
                 </div>
               </div>
@@ -822,17 +822,17 @@ export default function TradeVisualizationTab() {
       <TabFooter
         tabName="TRADE VISUALIZATION"
         leftInfo={[
-          { label: 'Fincept Trade API', color: BLOOMBERG.CYAN },
-          { label: chordData ? `${chordData.partners.length} Partners` : 'No Data', color: BLOOMBERG.GRAY },
-          { label: `Year: ${selectedYear}`, color: BLOOMBERG.GRAY },
+          { label: 'Fincept Trade API', color: FINCEPT.CYAN },
+          { label: chordData ? `${chordData.partners.length} Partners` : 'No Data', color: FINCEPT.GRAY },
+          { label: `Year: ${selectedYear}`, color: FINCEPT.GRAY },
         ]}
         statusInfo={
-          <span style={{ color: BLOOMBERG.GRAY }}>
-            Bloomberg Terminal Design • Real-time Trade Intelligence
+          <span style={{ color: FINCEPT.GRAY }}>
+            Fincept Terminal Design • Real-time Trade Intelligence
           </span>
         }
-        backgroundColor={BLOOMBERG.PANEL_BG}
-        borderColor={BLOOMBERG.ORANGE}
+        backgroundColor={FINCEPT.PANEL_BG}
+        borderColor={FINCEPT.ORANGE}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 /**
- * Stock Broker Selector Component - Bloomberg Style
+ * Stock Broker Selector Component - Fincept Style
  *
  * Dropdown for selecting stock brokers with region grouping
  */
@@ -9,7 +9,7 @@ import { ChevronDown, Check, Globe, Building2 } from 'lucide-react';
 import { useStockBrokerSelection } from '@/contexts/StockBrokerContext';
 import type { Region, StockBrokerMetadata } from '@/brokers/stocks/types';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',
@@ -219,7 +219,7 @@ export function BrokerSelector({ className = '' }: BrokerSelectorProps) {
                         transition: 'all 0.1s ease'
                       }}
                     >
-                      {/* Logo placeholder */}
+                      {/* Broker Logo */}
                       <div style={{
                         width: '28px',
                         height: '28px',
@@ -231,9 +231,23 @@ export function BrokerSelector({ className = '' }: BrokerSelectorProps) {
                         fontSize: '10px',
                         fontWeight: 700,
                         color: isSelected ? COLORS.ORANGE : COLORS.GRAY,
-                        flexShrink: 0
+                        flexShrink: 0,
+                        overflow: 'hidden'
                       }}>
-                        {b.name.substring(0, 2).toUpperCase()}
+                        <img
+                          src={b.logo || `https://fincept.in/brokers/${b.id}.png`}
+                          alt={b.displayName}
+                          style={{
+                            width: '20px',
+                            height: '20px',
+                            objectFit: 'contain'
+                          }}
+                          onError={(e) => {
+                            // Fallback to text if image fails to load
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.parentElement!.textContent = b.name.substring(0, 2).toUpperCase();
+                          }}
+                        />
                       </div>
 
                       {/* Broker info */}

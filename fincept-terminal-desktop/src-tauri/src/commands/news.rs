@@ -1,10 +1,12 @@
 // RSS News Feed Fetcher - High-performance Rust implementation
 // Fetches real-time news from 20+ financial RSS feeds without CORS restrictions
+// Now supports user-configurable RSS feeds stored in SQLite
 
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::timeout;
+use crate::database::pool::get_db;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewsArticle {
@@ -25,94 +27,166 @@ pub struct NewsArticle {
     pub pub_date: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-struct RSSFeed {
-    name: String,
-    url: String,
-    category: String,
-    region: String,
-    source: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RSSFeed {
+    pub id: Option<String>,
+    pub name: String,
+    pub url: String,
+    pub category: String,
+    pub region: String,
+    pub source: String,
+    pub enabled: bool,
+    pub is_default: bool,
 }
 
-// Verified working RSS feeds (2025)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserRSSFeed {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub category: String,
+    pub region: String,
+    pub source_name: String,
+    pub enabled: bool,
+    pub is_default: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// Default feed preference info
+#[derive(Debug, Clone)]
+struct DefaultFeedPref {
+    enabled: bool,
+    deleted: bool,
+}
+
+// Get default feed preferences from database
+fn get_default_feed_preferences() -> std::collections::HashMap<String, DefaultFeedPref> {
+    let mut prefs = std::collections::HashMap::new();
+
+    let conn = match get_db() {
+        Ok(c) => c,
+        Err(_) => return prefs,
+    };
+
+    let mut stmt = match conn.prepare(
+        "SELECT feed_id, enabled, deleted FROM default_rss_feed_preferences"
+    ) {
+        Ok(s) => s,
+        Err(_) => return prefs,
+    };
+
+    if let Ok(rows) = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            DefaultFeedPref {
+                enabled: row.get::<_, i32>(1)? == 1,
+                deleted: row.get::<_, i32>(2).unwrap_or(0) == 1,
+            }
+        ))
+    }) {
+        for row in rows.flatten() {
+            prefs.insert(row.0, row.1);
+        }
+    }
+
+    prefs
+}
+
+// Default RSS feeds (built-in, always available)
+fn get_default_rss_feeds() -> Vec<RSSFeed> {
+    let prefs = get_default_feed_preferences();
+
+    let default_feeds = vec![
+        ("default-yahoo", "Yahoo Finance", "https://finance.yahoo.com/news/rssindex", "MARKETS", "US", "YAHOO"),
+        ("default-investing", "Investing.com", "https://www.investing.com/rss/news.rss", "MARKETS", "GLOBAL", "INVESTING.COM"),
+        ("default-coindesk", "CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "CRYPTO", "GLOBAL", "COINDESK"),
+        ("default-cointelegraph", "CoinTelegraph", "https://cointelegraph.com/rss", "CRYPTO", "GLOBAL", "COINTELEGRAPH"),
+        ("default-decrypt", "Decrypt", "https://decrypt.co/feed", "CRYPTO", "GLOBAL", "DECRYPT"),
+        ("default-techcrunch", "TechCrunch", "https://techcrunch.com/feed/", "TECH", "US", "TECHCRUNCH"),
+        ("default-verge", "The Verge", "https://www.theverge.com/rss/index.xml", "TECH", "US", "THE VERGE"),
+        ("default-arstechnica", "Ars Technica", "https://feeds.arstechnica.com/arstechnica/index", "TECH", "US", "ARS TECHNICA"),
+        ("default-oilprice", "Oil Price", "https://oilprice.com/rss/main", "ENERGY", "GLOBAL", "OILPRICE"),
+        ("default-sec", "SEC Press Releases", "https://www.sec.gov/news/pressreleases.rss", "REGULATORY", "US", "SEC"),
+    ];
+
+    default_feeds.into_iter()
+        .filter_map(|(id, name, url, category, region, source)| {
+            let pref = prefs.get(id);
+            // If deleted, don't include in the list
+            if pref.map(|p| p.deleted).unwrap_or(false) {
+                return None;
+            }
+            let enabled = pref.map(|p| p.enabled).unwrap_or(true);
+            Some(RSSFeed {
+                id: Some(id.to_string()),
+                name: name.to_string(),
+                url: url.to_string(),
+                category: category.to_string(),
+                region: region.to_string(),
+                source: source.to_string(),
+                enabled,
+                is_default: true,
+            })
+        }).collect()
+}
+
+// Get user RSS feeds from database
+fn get_user_rss_feeds_from_db() -> Vec<RSSFeed> {
+    let conn = match get_db() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[News] Failed to get database connection: {}", e);
+            return vec![];
+        }
+    };
+
+    let mut stmt = match conn.prepare(
+        "SELECT id, name, url, category, region, source_name, enabled, is_default
+         FROM user_rss_feeds WHERE enabled = 1"
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[News] Failed to prepare statement: {}", e);
+            return vec![];
+        }
+    };
+
+    let feeds_result = stmt.query_map([], |row| {
+        Ok(RSSFeed {
+            id: Some(row.get::<_, String>(0)?),
+            name: row.get::<_, String>(1)?,
+            url: row.get::<_, String>(2)?,
+            category: row.get::<_, String>(3)?,
+            region: row.get::<_, String>(4)?,
+            source: row.get::<_, String>(5)?,
+            enabled: row.get::<_, i32>(6)? == 1,
+            is_default: row.get::<_, i32>(7)? == 1,
+        })
+    });
+
+    match feeds_result {
+        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+        Err(e) => {
+            eprintln!("[News] Query failed: {}", e);
+            vec![]
+        }
+    }
+}
+
+// Get all RSS feeds (default + user-configured)
+// Get all RSS feeds (default + user-configured) - only enabled ones for fetching
 fn get_rss_feeds() -> Vec<RSSFeed> {
-    vec![
-        // Major Financial News
-        RSSFeed {
-            name: "Yahoo Finance".to_string(),
-            url: "https://finance.yahoo.com/news/rssindex".to_string(),
-            category: "MARKETS".to_string(),
-            region: "US".to_string(),
-            source: "YAHOO".to_string(),
-        },
-        RSSFeed {
-            name: "Investing.com".to_string(),
-            url: "https://www.investing.com/rss/news.rss".to_string(),
-            category: "MARKETS".to_string(),
-            region: "GLOBAL".to_string(),
-            source: "INVESTING.COM".to_string(),
-        },
-        // Cryptocurrency
-        RSSFeed {
-            name: "CoinDesk".to_string(),
-            url: "https://www.coindesk.com/arc/outboundfeeds/rss/".to_string(),
-            category: "CRYPTO".to_string(),
-            region: "GLOBAL".to_string(),
-            source: "COINDESK".to_string(),
-        },
-        RSSFeed {
-            name: "CoinTelegraph".to_string(),
-            url: "https://cointelegraph.com/rss".to_string(),
-            category: "CRYPTO".to_string(),
-            region: "GLOBAL".to_string(),
-            source: "COINTELEGRAPH".to_string(),
-        },
-        RSSFeed {
-            name: "Decrypt".to_string(),
-            url: "https://decrypt.co/feed".to_string(),
-            category: "CRYPTO".to_string(),
-            region: "GLOBAL".to_string(),
-            source: "DECRYPT".to_string(),
-        },
-        // Technology
-        RSSFeed {
-            name: "TechCrunch".to_string(),
-            url: "https://techcrunch.com/feed/".to_string(),
-            category: "TECH".to_string(),
-            region: "US".to_string(),
-            source: "TECHCRUNCH".to_string(),
-        },
-        RSSFeed {
-            name: "The Verge".to_string(),
-            url: "https://www.theverge.com/rss/index.xml".to_string(),
-            category: "TECH".to_string(),
-            region: "US".to_string(),
-            source: "THE VERGE".to_string(),
-        },
-        RSSFeed {
-            name: "Ars Technica".to_string(),
-            url: "https://feeds.arstechnica.com/arstechnica/index".to_string(),
-            category: "TECH".to_string(),
-            region: "US".to_string(),
-            source: "ARS TECHNICA".to_string(),
-        },
-        // Energy & Commodities
-        RSSFeed {
-            name: "Oil Price".to_string(),
-            url: "https://oilprice.com/rss/main".to_string(),
-            category: "ENERGY".to_string(),
-            region: "GLOBAL".to_string(),
-            source: "OILPRICE".to_string(),
-        },
-        // SEC Press Releases
-        RSSFeed {
-            name: "SEC Press Releases".to_string(),
-            url: "https://www.sec.gov/news/pressreleases.rss".to_string(),
-            category: "REGULATORY".to_string(),
-            region: "US".to_string(),
-            source: "SEC".to_string(),
-        },
-    ]
+    let mut all_feeds: Vec<RSSFeed> = get_default_rss_feeds()
+        .into_iter()
+        .filter(|f| f.enabled)
+        .collect();
+    let user_feeds: Vec<RSSFeed> = get_user_rss_feeds_from_db()
+        .into_iter()
+        .filter(|f| f.enabled)
+        .collect();
+    all_feeds.extend(user_feeds);
+    all_feeds
 }
 
 // Parse RSS XML to articles
@@ -398,4 +472,262 @@ pub fn get_rss_feed_count() -> usize {
 #[tauri::command]
 pub fn get_active_sources() -> Vec<String> {
     get_rss_feeds().into_iter().map(|f| f.source).collect()
+}
+
+// ============================================================================
+// User RSS Feed CRUD Operations
+// ============================================================================
+
+/// Get all RSS feeds (default + user-configured)
+#[tauri::command]
+pub fn get_all_rss_feeds() -> Result<Vec<RSSFeed>, String> {
+    Ok(get_rss_feeds())
+}
+
+/// Get only default RSS feeds
+#[tauri::command]
+pub fn get_default_feeds() -> Result<Vec<RSSFeed>, String> {
+    Ok(get_default_rss_feeds())
+}
+
+/// Get only user-configured RSS feeds from database
+#[tauri::command]
+pub fn get_user_rss_feeds() -> Result<Vec<UserRSSFeed>, String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, name, url, category, region, source_name, enabled, is_default, created_at, updated_at
+         FROM user_rss_feeds ORDER BY created_at DESC"
+    ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    let feeds: Vec<UserRSSFeed> = stmt
+        .query_map([], |row| {
+            Ok(UserRSSFeed {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                url: row.get(2)?,
+                category: row.get(3)?,
+                region: row.get(4)?,
+                source_name: row.get(5)?,
+                enabled: row.get::<_, i32>(6)? == 1,
+                is_default: row.get::<_, i32>(7)? == 1,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(feeds)
+}
+
+/// Add a new user RSS feed
+#[tauri::command]
+pub fn add_user_rss_feed(
+    name: String,
+    url: String,
+    category: String,
+    region: String,
+    source_name: String,
+) -> Result<UserRSSFeed, String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+
+    // Generate unique ID
+    let id = format!("user-{}", uuid::Uuid::new_v4().to_string());
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT INTO user_rss_feeds (id, name, url, category, region, source_name, enabled, is_default, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, 0, ?7, ?7)",
+        rusqlite::params![id, name, url, category, region, source_name, now],
+    ).map_err(|e| format!("Failed to insert feed: {}", e))?;
+
+    Ok(UserRSSFeed {
+        id,
+        name,
+        url,
+        category,
+        region,
+        source_name,
+        enabled: true,
+        is_default: false,
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+/// Update an existing user RSS feed
+#[tauri::command]
+pub fn update_user_rss_feed(
+    id: String,
+    name: String,
+    url: String,
+    category: String,
+    region: String,
+    source_name: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let rows_updated = conn.execute(
+        "UPDATE user_rss_feeds SET name = ?1, url = ?2, category = ?3, region = ?4, source_name = ?5, enabled = ?6, updated_at = ?7
+         WHERE id = ?8",
+        rusqlite::params![name, url, category, region, source_name, if enabled { 1 } else { 0 }, now, id],
+    ).map_err(|e| format!("Failed to update feed: {}", e))?;
+
+    if rows_updated == 0 {
+        return Err("Feed not found".to_string());
+    }
+
+    Ok(())
+}
+
+/// Delete a user RSS feed
+#[tauri::command]
+pub fn delete_user_rss_feed(id: String) -> Result<(), String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+
+    let rows_deleted = conn.execute(
+        "DELETE FROM user_rss_feeds WHERE id = ?1",
+        rusqlite::params![id],
+    ).map_err(|e| format!("Failed to delete feed: {}", e))?;
+
+    if rows_deleted == 0 {
+        return Err("Feed not found".to_string());
+    }
+
+    Ok(())
+}
+
+/// Toggle enabled status of a user RSS feed
+#[tauri::command]
+pub fn toggle_user_rss_feed(id: String, enabled: bool) -> Result<(), String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let rows_updated = conn.execute(
+        "UPDATE user_rss_feeds SET enabled = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![if enabled { 1 } else { 0 }, now, id],
+    ).map_err(|e| format!("Failed to toggle feed: {}", e))?;
+
+    if rows_updated == 0 {
+        return Err("Feed not found".to_string());
+    }
+
+    Ok(())
+}
+
+/// Test if an RSS feed URL is valid and accessible
+#[tauri::command]
+pub async fn test_rss_feed_url(url: String) -> Result<bool, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(&url)
+        .header("Accept", "application/rss+xml, application/xml, text/xml, */*")
+        .header("User-Agent", "FinceptTerminal/3.0")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch URL: {}", e))?;
+
+    if !response.status().is_success() {
+        return Ok(false);
+    }
+
+    let text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+
+    // Check if it looks like valid RSS/XML
+    let is_valid = text.trim().starts_with('<') &&
+        (text.contains("<rss") || text.contains("<feed") || text.contains("<channel"));
+
+    Ok(is_valid)
+}
+
+/// Toggle enabled status of a default RSS feed
+#[tauri::command]
+pub fn toggle_default_rss_feed(feed_id: String, enabled: bool) -> Result<(), String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Use INSERT OR REPLACE to handle both new and existing preferences
+    conn.execute(
+        "INSERT OR REPLACE INTO default_rss_feed_preferences (feed_id, enabled, updated_at)
+         VALUES (?1, ?2, ?3)",
+        rusqlite::params![feed_id, if enabled { 1 } else { 0 }, now],
+    ).map_err(|e| format!("Failed to toggle default feed: {}", e))?;
+
+    Ok(())
+}
+
+/// Get all default feed preferences
+#[tauri::command]
+pub fn get_default_feed_prefs() -> Result<std::collections::HashMap<String, bool>, String> {
+    let prefs = get_default_feed_preferences();
+    Ok(prefs.into_iter().map(|(k, v)| (k, v.enabled)).collect())
+}
+
+/// Delete (hide) a default RSS feed
+#[tauri::command]
+pub fn delete_default_rss_feed(feed_id: String) -> Result<(), String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO default_rss_feed_preferences (feed_id, enabled, deleted, updated_at)
+         VALUES (?1, 0, 1, ?2)",
+        rusqlite::params![feed_id, now],
+    ).map_err(|e| format!("Failed to delete default feed: {}", e))?;
+
+    Ok(())
+}
+
+/// Restore a deleted default RSS feed
+#[tauri::command]
+pub fn restore_default_rss_feed(feed_id: String) -> Result<(), String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO default_rss_feed_preferences (feed_id, enabled, deleted, updated_at)
+         VALUES (?1, 1, 0, ?2)",
+        rusqlite::params![feed_id, now],
+    ).map_err(|e| format!("Failed to restore default feed: {}", e))?;
+
+    Ok(())
+}
+
+/// Get list of deleted default feed IDs
+#[tauri::command]
+pub fn get_deleted_default_feeds() -> Result<Vec<String>, String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+
+    let mut stmt = conn.prepare(
+        "SELECT feed_id FROM default_rss_feed_preferences WHERE deleted = 1"
+    ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    let feeds: Vec<String> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| format!("Query failed: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(feeds)
+}
+
+/// Restore all deleted default feeds
+#[tauri::command]
+pub fn restore_all_default_feeds() -> Result<(), String> {
+    let conn = get_db().map_err(|e| format!("Database error: {}", e))?;
+
+    conn.execute(
+        "DELETE FROM default_rss_feed_preferences",
+        [],
+    ).map_err(|e| format!("Failed to restore all feeds: {}", e))?;
+
+    Ok(())
 }

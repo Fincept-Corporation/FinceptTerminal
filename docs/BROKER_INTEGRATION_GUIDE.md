@@ -1,241 +1,379 @@
-# Indian Stock Broker Integration Guide
+# Broker Integration Guide
 
-Guide for integrating new Indian stock brokers (Zerodha, Fyers, Angel, Dhan, Upstox, etc.) into Fincept Terminal.
+Complete checklist for integrating Indian stock brokers from OpenAlgo into Fincept Terminal.
 
-## Architecture Overview
+## Pre-Integration Checklist
+
+### 1. Study OpenAlgo Source (Local Reference Project)
+
+**Local Path:** `C:\projects\featureimplement\openalgo\broker\{broker_name}\`
 
 ```
-src/brokers/stocks/
-├── types.ts                    # IStockBrokerAdapter interface
-├── BaseStockBrokerAdapter.ts   # Abstract base class
-├── registry.ts                 # Broker metadata & registration
-├── init.ts                     # Adapter initialization at startup
-└── india/
-    ├── fyers/
-    │   ├── FyersAdapter.ts     # ~1287 lines
-    │   ├── constants.ts
-    │   └── mapper.ts
-    └── zerodha/
-        ├── ZerodhaAdapter.ts   # ~1295 lines
-        ├── constants.ts
-        └── mapper.ts
+C:\projects\featureimplement\openalgo\broker\{broker_name}\
+├── api\
+│   ├── auth_api.py      # OAuth/TOTP flow, token exchange
+│   ├── order_api.py     # Place/modify/cancel orders
+│   ├── data.py          # Quotes, historical, depth
+│   └── funds.py         # Margins, balances
+├── database\
+│   └── master_contract_db.py  # Symbol database, CSV parsing
+├── mapping\
+│   ├── order_data.py    # Order field mapping
+│   └── transform_data.py # Response transformation
+└── streaming\           # WebSocket implementation
 ```
 
-## Step 1: Add Broker Metadata
+**Extract from OpenAlgo:**
+- [ ] API endpoints and headers format
+- [ ] Auth flow (OAuth redirect URI, token exchange)
+- [ ] Order/position/holding field mappings
+- [ ] Master contract CSV URLs and parsing logic
+- [ ] WebSocket connection and message format
 
-Update `src/brokers/stocks/registry.ts`:
+## Implementation Checklist
 
+### Phase 1: Rust Backend (`src-tauri/src/commands/brokers/`)
+
+Create `{broker}.rs` with these commands:
+
+| Command | Purpose | Priority |
+|---------|---------|----------|
+| `{broker}_exchange_token` | Exchange auth code for access token | P0 |
+| `{broker}_validate_token` | Validate existing token | P0 |
+| `{broker}_place_order` | Place new order | P0 |
+| `{broker}_modify_order` | Modify existing order | P0 |
+| `{broker}_cancel_order` | Cancel order | P0 |
+| `{broker}_get_orders` | Fetch all orders | P0 |
+| `{broker}_get_positions` | Fetch positions | P0 |
+| `{broker}_get_holdings` | Fetch holdings | P0 |
+| `{broker}_get_funds` | Fetch margins/balance | P0 |
+| `{broker}_get_quotes` | Get LTP/quotes | P0 |
+| `{broker}_get_history` | Historical OHLCV | P0 |
+| `{broker}_get_depth` | Market depth L5 | P1 |
+| `{broker}_get_trade_book` | Executed trades | P1 |
+| `{broker}_download_master_contract` | Download symbol CSV | P0 |
+| `{broker}_search_symbol` | Search in master contract | P0 |
+| `{broker}_get_token_for_symbol` | Symbol → Token lookup | P0 |
+| `{broker}_get_symbol_by_token` | Token → Symbol lookup | P1 |
+| `{broker}_get_master_contract_metadata` | Last updated timestamp | P0 |
+
+**Register in `lib.rs`:**
+```rust
+commands::brokers::{broker}_exchange_token,
+commands::brokers::{broker}_place_order,
+// ... all commands
+```
+
+### Phase 2: TypeScript Adapter (`src/brokers/stocks/india/{broker}/`)
+
+**File Structure:**
+```
+{broker}/
+├── {Broker}Adapter.ts   # Main adapter class
+├── constants.ts         # API URLs, exchange maps, metadata
+├── mapper.ts            # Response transformers
+└── index.ts             # Export barrel
+```
+
+**Required Methods in Adapter:**
+
+| Method | Invokes Rust Command | Notes |
+|--------|---------------------|-------|
+| `setCredentials()` | - | Store API key/secret in memory |
+| `getAuthUrl()` | - | Return OAuth URL |
+| `authenticate()` | `{broker}_exchange_token` | Handle OAuth callback |
+| `initFromStorage()` | `get_indian_broker_credentials` | Restore session |
+| `placeOrderInternal()` | `{broker}_place_order` | |
+| `modifyOrderInternal()` | `{broker}_modify_order` | |
+| `cancelOrderInternal()` | `{broker}_cancel_order` | |
+| `getOrdersInternal()` | `{broker}_get_orders` | |
+| `getTradeBookInternal()` | `{broker}_get_trade_book` | |
+| `getPositionsInternal()` | `{broker}_get_positions` | |
+| `getHoldingsInternal()` | `{broker}_get_holdings` | |
+| `getFundsInternal()` | `{broker}_get_funds` | |
+| `getQuoteInternal()` | `{broker}_get_quotes` | |
+| `getOHLCVInternal()` | `{broker}_get_history` | |
+| `getMarketDepthInternal()` | `{broker}_get_depth` | |
+| `searchSymbols()` | `{broker}_search_symbol` | **Don't forget!** |
+| `getInstrument()` | `{broker}_get_token_for_symbol` | **Don't forget!** |
+| `downloadMasterContract()` | `{broker}_download_master_contract` | **Don't forget!** |
+| `getMasterContractLastUpdated()` | `{broker}_get_master_contract_metadata` | **Don't forget!** |
+
+### Phase 3: Registration
+
+**`src/brokers/stocks/registry.ts`:**
 ```typescript
-mybroker: {
-  id: 'mybroker',
-  name: 'mybroker',
-  displayName: 'My Broker',
-  website: 'https://mybroker.com',
+{broker}: {
+  id: '{broker}',
+  name: '{broker}',
+  displayName: '{Broker Name}',
   region: 'india',
   country: 'IN',
   currency: 'INR',
   exchanges: ['NSE', 'BSE', 'NFO', 'MCX'],
-  marketHours: { open: '09:15', close: '15:30', timezone: 'Asia/Kolkata' },
-  features: {
-    webSocket: true, amo: true, gtt: false, bracketOrder: true,
-    coverOrder: true, marginCalculator: false, optionsChain: true, paperTrading: false,
-  },
-  tradingFeatures: {
-    marketOrders: true, limitOrders: true, stopOrders: true,
-    stopLimitOrders: true, trailingStopOrders: false,
-  },
-  productTypes: ['CASH', 'INTRADAY', 'MARGIN'],
-  authType: 'oauth',  // 'oauth' | 'totp' | 'password'
-  rateLimit: { ordersPerSecond: 10, quotesPerSecond: 5 },
-  defaultSymbols: ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK'],
-},
-```
-
-## Step 2: Create Adapter
-
-Create `src/brokers/stocks/india/mybroker/MyBrokerAdapter.ts`:
-
-```typescript
-import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
-import type { StockBrokerMetadata, BrokerCredentials, AuthResponse, OrderParams, OrderResponse,
-  ModifyOrderParams, Order, Trade, Position, Holding, Funds, Quote, OHLCV, MarketDepth,
-  TimeFrame, StockExchange, Instrument } from '../../types';
-import { STOCK_BROKER_REGISTRY } from '../../registry';
-
-export class MyBrokerAdapter extends BaseStockBrokerAdapter {
-  readonly brokerId = 'mybroker';
-  readonly brokerName = 'My Broker';
-  readonly region = 'india' as const;
-  readonly metadata: StockBrokerMetadata = STOCK_BROKER_REGISTRY.mybroker;
-
-  private apiKey = '';
-  private apiSecret = '';
-  private readonly BASE_URL = 'https://api.mybroker.com/v1';
-
-  // === AUTHENTICATION ===
-  setCredentials(apiKey: string, apiSecret: string): void {
-    this.apiKey = apiKey;
-    this.apiSecret = apiSecret;
-  }
-
-  getAuthUrl(): string {
-    return `https://api.mybroker.com/authorize?client_id=${this.apiKey}&redirect_uri=${encodeURIComponent('http://127.0.0.1/')}&response_type=code`;
-  }
-
-  async authenticate(credentials: BrokerCredentials): Promise<AuthResponse> {
-    const res = await fetch(`${this.BASE_URL}/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        client_id: this.apiKey,
-        client_secret: this.apiSecret,
-        code: credentials.accessToken,
-      }),
-    });
-    const data = await res.json();
-    if (data.access_token) {
-      this.accessToken = data.access_token;
-      this._isConnected = true;
-      await this.storeCredentials({ apiKey: this.apiKey, apiSecret: this.apiSecret, accessToken: data.access_token });
-      return { success: true, accessToken: data.access_token };
-    }
-    return { success: false, message: data.message || 'Auth failed' };
-  }
-
-  // === REQUIRED INTERNAL IMPLEMENTATIONS ===
-  protected async placeOrderInternal(params: OrderParams): Promise<OrderResponse> {
-    const res = await this.apiCall('POST', '/orders', { symbol: params.symbol, exchange: params.exchange,
-      side: params.side, qty: params.quantity, type: params.orderType, product: params.productType, price: params.price });
-    return { success: res.status === 'ok', orderId: res.data?.order_id, message: res.message };
-  }
-
-  protected async modifyOrderInternal(params: ModifyOrderParams): Promise<OrderResponse> {
-    const res = await this.apiCall('PUT', `/orders/${params.orderId}`, params);
-    return { success: res.status === 'ok', orderId: params.orderId };
-  }
-
-  protected async cancelOrderInternal(orderId: string): Promise<OrderResponse> {
-    const res = await this.apiCall('DELETE', `/orders/${orderId}`);
-    return { success: res.status === 'ok', orderId };
-  }
-
-  protected async getOrdersInternal(): Promise<Order[]> {
-    const res = await this.apiCall('GET', '/orders');
-    return res.data?.orders?.map((o: any) => this.mapOrder(o)) || [];
-  }
-
-  protected async getTradeBookInternal(): Promise<Trade[]> {
-    const res = await this.apiCall('GET', '/trades');
-    return res.data?.trades?.map((t: any) => this.mapTrade(t)) || [];
-  }
-
-  protected async getPositionsInternal(): Promise<Position[]> {
-    const res = await this.apiCall('GET', '/positions');
-    return res.data?.positions?.map((p: any) => this.mapPosition(p)) || [];
-  }
-
-  protected async getHoldingsInternal(): Promise<Holding[]> {
-    const res = await this.apiCall('GET', '/holdings');
-    return res.data?.holdings?.map((h: any) => this.mapHolding(h)) || [];
-  }
-
-  protected async getFundsInternal(): Promise<Funds> {
-    const res = await this.apiCall('GET', '/funds');
-    return { availableCash: res.data.available, usedMargin: res.data.used, availableMargin: res.data.available,
-      totalBalance: res.data.total, currency: 'INR' };
-  }
-
-  protected async getQuoteInternal(symbol: string, exchange: StockExchange): Promise<Quote> {
-    const res = await this.apiCall('GET', `/quote?symbol=${symbol}&exchange=${exchange}`);
-    return res.data;
-  }
-
-  protected async getQuotesInternal(instruments: Array<{ symbol: string; exchange: StockExchange }>): Promise<Quote[]> {
-    const symbols = instruments.map(i => `${i.exchange}:${i.symbol}`).join(',');
-    const res = await this.apiCall('GET', `/quotes?symbols=${symbols}`);
-    return res.data || [];
-  }
-
-  protected async getOHLCVInternal(symbol: string, exchange: StockExchange, tf: TimeFrame, from: Date, to: Date): Promise<OHLCV[]> {
-    const res = await this.apiCall('GET', `/historical?symbol=${symbol}&exchange=${exchange}&tf=${tf}&from=${from.getTime()}&to=${to.getTime()}`);
-    return res.data?.candles || [];
-  }
-
-  protected async getMarketDepthInternal(symbol: string, exchange: StockExchange): Promise<MarketDepth> {
-    const res = await this.apiCall('GET', `/depth?symbol=${symbol}&exchange=${exchange}`);
-    return { bids: res.data.bids, asks: res.data.asks };
-  }
-
-  protected async searchSymbolsInternal(query: string, exchange?: StockExchange): Promise<Instrument[]> {
-    const res = await this.apiCall('GET', `/search?q=${query}${exchange ? `&exchange=${exchange}` : ''}`);
-    return res.data || [];
-  }
-
-  // === HELPERS ===
-  private async apiCall(method: string, endpoint: string, body?: any): Promise<any> {
-    const res = await fetch(`${this.BASE_URL}${endpoint}`, {
-      method, headers: { 'Authorization': `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    return res.json();
-  }
-
-  private mapOrder(o: any): Order {
-    return { orderId: o.order_id, symbol: o.symbol, exchange: o.exchange, side: o.side, quantity: o.qty,
-      filledQuantity: o.filled_qty, pendingQuantity: o.pending_qty, price: o.price, averagePrice: o.avg_price,
-      orderType: o.type, productType: o.product, validity: 'DAY', status: o.status, placedAt: new Date(o.placed_at) };
-  }
-  private mapTrade(t: any): Trade {
-    return { tradeId: t.trade_id, orderId: t.order_id, symbol: t.symbol, exchange: t.exchange, side: t.side,
-      quantity: t.qty, price: t.price, productType: t.product, tradedAt: new Date(t.traded_at) };
-  }
-  private mapPosition(p: any): Position {
-    return { symbol: p.symbol, exchange: p.exchange, productType: p.product, quantity: p.qty, buyQuantity: p.buy_qty,
-      sellQuantity: p.sell_qty, buyValue: p.buy_value, sellValue: p.sell_value, averagePrice: p.avg_price,
-      lastPrice: p.ltp, pnl: p.pnl, pnlPercent: p.pnl_percent, dayPnl: p.day_pnl };
-  }
-  private mapHolding(h: any): Holding {
-    return { symbol: h.symbol, exchange: h.exchange, quantity: h.qty, averagePrice: h.avg_price, lastPrice: h.ltp,
-      investedValue: h.invested, currentValue: h.current, pnl: h.pnl, pnlPercent: h.pnl_percent };
-  }
+  authType: 'oauth', // or 'totp'
+  features: { webSocket: true, amo: true, gtt: false, ... },
+  tradingFeatures: { marketOrders: true, limitOrders: true, ... },
+  productTypes: ['CNC', 'INTRADAY', 'MARGIN'],
 }
 ```
 
-## Step 3: Register Adapter
-
-Update `src/brokers/stocks/init.ts`:
-
+**`src/brokers/stocks/init.ts`:**
 ```typescript
-import { MyBrokerAdapter } from './india/mybroker/MyBrokerAdapter';
-registerBrokerAdapter('mybroker', MyBrokerAdapter);
+import { {Broker}Adapter } from './india/{broker}/{Broker}Adapter';
+registerBrokerAdapter('{broker}', {Broker}Adapter);
 ```
 
-## Paper Trading
+### Phase 4: UI Integration
 
-Paper trading is separate from adapters - handled by `StockBrokerContext.tsx` which routes to:
-- **Live mode**: `adapter.getPositions()`, `adapter.getFunds()`, etc.
-- **Paper mode**: `unifiedTradingService.ts` → Rust backend (SQLite)
+**Files to update:**
+- `BrokerConfigPanel.tsx` - Add broker to dropdown
+- `BrokerAuthPanel.tsx` - Handle auth flow UI
+- `BrokerSwitcher.tsx` - Add broker option
 
-## Key Files
+**No code changes needed if:**
+- Adapter follows `IStockBrokerAdapter` interface
+- Broker registered in `registry.ts` and `init.ts`
 
-| File | Purpose |
-|------|---------|
-| `src/brokers/stocks/types.ts` | `IStockBrokerAdapter` interface |
-| `src/brokers/stocks/BaseStockBrokerAdapter.ts` | Abstract base class |
-| `src/brokers/stocks/registry.ts` | Broker metadata |
-| `src/contexts/StockBrokerContext.tsx` | State management, paper/live routing |
-| `src/services/unifiedTradingService.ts` | Paper trading backend bridge |
+## Common Mistakes to Avoid
 
-## Testing Checklist
+### ❌ Mistake 1: Missing Master Contract Methods
+**Problem:** Fyers was missing `searchSymbols()`, `getInstrument()`, `downloadMasterContract()`, `getMasterContractLastUpdated()` while Rust backend had the commands.
 
-- [ ] Metadata added to `registry.ts`
+**Fix:** Always implement ALL 4 master contract methods in TypeScript adapter.
+
+### ❌ Mistake 2: Inconsistent Rust Command Naming
+**Problem:** Mixed naming like `download_fyers_master_contract` vs `fyers_download_master_contract`.
+
+**Fix:** Use consistent prefix: `{broker}_{action}` (e.g., `fyers_place_order`).
+
+### ❌ Mistake 3: Not Registering Commands in lib.rs
+**Problem:** Rust command exists but not callable from TypeScript.
+
+**Fix:** Add every command to `tauri::generate_handler![]` in `lib.rs`.
+
+### ❌ Mistake 4: Missing Error Handling in Adapter
+**Problem:** API errors not properly caught and returned.
+
+**Fix:** Always wrap invoke calls in try-catch, return fallback data on error.
+
+### ❌ Mistake 5: Forgetting to Import `Instrument` Type
+**Problem:** TypeScript error when adding `searchSymbols()`.
+
+**Fix:** Add `Instrument` to imports from `../../types`.
+
+### ❌ Mistake 6: Master Contract Not Persisted (Zerodha)
+**Problem:** `downloadMasterContract` returns data but doesn't store to SQLite.
+
+**Fix:** Persist to database like Fyers implementation.
+
+### ❌ Mistake 7: Wrong ProductType Values in Metadata
+**Problem:** Using broker-specific product types ('CNC', 'MIS', 'NRML') in `productTypes` array instead of unified types.
+
+**Fix:** Always use unified ProductType values: `['CASH', 'INTRADAY', 'MARGIN']`. Map broker-specific codes in `mapper.ts`.
+
+### ❌ Mistake 8: Wrong ProductType Return in Mapper
+**Problem:** `fromBrokerProduct()` function returns broker-specific strings ('CNC', 'MIS') instead of unified ProductType.
+
+**Fix:** Mapper must convert broker codes to unified types:
+```typescript
+// Broker 'D' (Delivery) → 'CASH' for equity, 'MARGIN' for F&O
+// Broker 'I' (Intraday) → 'INTRADAY'
+export function fromBrokerProduct(product: string, exchange: string): ProductType {
+  if (product === 'D') {
+    return ['NFO', 'BFO', 'MCX', 'CDS'].includes(exchange) ? 'MARGIN' : 'CASH';
+  }
+  return 'INTRADAY';
+}
+```
+
+### ❌ Mistake 9: Wrong OrderStatus Values
+**Problem:** Using 'COMPLETED' instead of 'FILLED' in status mapping.
+
+**Fix:** Check `OrderStatus` type definition and use exact values:
+```typescript
+// Valid: 'PENDING' | 'OPEN' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELLED' | 'REJECTED' | 'EXPIRED' | 'TRIGGER_PENDING'
+// Wrong: 'COMPLETED' (doesn't exist)
+```
+
+### ❌ Mistake 10: Wrong Order Property Name
+**Problem:** Using `message` instead of `statusMessage` in Order object.
+
+**Fix:** Check the `Order` interface - it uses `statusMessage?: string`, not `message`.
+
+## Verification Checklist
+
+### Rust Backend
+- [ ] All commands compile (`cargo check`)
+- [ ] Commands registered in `lib.rs`
+- [ ] Proper error handling with `ApiResponse<T>`
+- [ ] Master contract stored in SQLite
+
+### TypeScript Adapter
+- [ ] Extends `BaseStockBrokerAdapter`
+- [ ] All required internal methods implemented
+- [ ] All 4 master contract methods implemented
+- [ ] `Instrument` and `ProductType` types imported
+- [ ] Mapper returns unified `ProductType` values (not broker-specific)
+- [ ] Order status uses valid `OrderStatus` values (FILLED not COMPLETED)
+- [ ] Order object uses `statusMessage` (not `message`)
+- [ ] No TypeScript errors (`bun run build`)
+
+### Registration
+- [ ] Metadata in `registry.ts`
 - [ ] Adapter registered in `init.ts`
-- [ ] OAuth: `getAuthUrl()` → `authenticate()` flow works
-- [ ] Credentials persist via `storeCredentials()`/`loadCredentials()`
-- [ ] `getPositions()`, `getHoldings()`, `getOrders()`, `getFunds()` return correct data
-- [ ] `placeOrder()` executes successfully
-- [ ] Paper mode shows paper data, Live mode shows broker data
+- [ ] Singleton exported from adapter file
+
+### UI
+- [ ] Broker appears in BrokerSwitcher
+- [ ] OAuth flow works (redirect → callback → token)
+- [ ] Credentials persist across app restart
+- [ ] Trading panel shows broker data
+
+### End-to-End Testing
+- [ ] Login flow completes
+- [ ] Funds/margins display correctly
+- [ ] Orders can be placed
+- [ ] Positions/holdings load
+- [ ] Historical charts work
+- [ ] Symbol search works
+- [ ] Master contract downloads
+
+## Post-Implementation Cross-Check
+
+**IMPORTANT:** After implementing a broker, perform this cross-check against the OpenAlgo source to verify correctness.
+
+### Cross-Check Checklist
+
+#### 1. API Endpoints Verification
+- [ ] **Base URL** matches OpenAlgo `baseurl.py` or constants
+- [ ] **Auth URL** (if separate) matches OpenAlgo `auth_api.py`
+- [ ] **Order endpoints** (`/orders`, `/orders/{id}`) match OpenAlgo `order_api.py`
+- [ ] **Portfolio endpoints** (`/positions`, `/holdings`, `/funds`) match OpenAlgo
+- [ ] **Market data endpoints** (`/quotes`, `/history`, `/depth`) match OpenAlgo `data.py`
+
+#### 2. Headers Verification
+- [ ] **Auth header** name correct (e.g., `access-token`, `Authorization`, `X-Auth-Token`)
+- [ ] **API key header** name correct (e.g., `api-key`, `client-id`, `appkey`)
+- [ ] **Content-Type** matches OpenAlgo (usually `application/json`)
+- [ ] Any **additional required headers** included
+
+#### 3. Exchange Mappings Verification
+Compare `constants.ts` EXCHANGE_MAP with OpenAlgo `transform_data.py`:
+- [ ] NSE → (broker format)
+- [ ] BSE → (broker format)
+- [ ] NFO → (broker format)
+- [ ] BFO → (broker format)
+- [ ] MCX → (broker format)
+- [ ] CDS → (broker format)
+- [ ] BCD → (broker format) if applicable
+- [ ] Index exchanges (NSE_INDEX, BSE_INDEX) if applicable
+
+#### 4. Product Type Mappings Verification
+Compare `constants.ts` PRODUCT_MAP with OpenAlgo `transform_data.py`:
+- [ ] CASH/CNC → (broker format)
+- [ ] INTRADAY/MIS → (broker format)
+- [ ] MARGIN/NRML → (broker format)
+
+#### 5. Order Type Mappings Verification
+Compare `constants.ts` ORDER_TYPE_MAP with OpenAlgo `transform_data.py`:
+- [ ] MARKET → (broker format)
+- [ ] LIMIT → (broker format)
+- [ ] STOP → (broker format, e.g., SL, STOP_LOSS)
+- [ ] STOP_LIMIT → (broker format, e.g., SL-M, STOP_LOSS_MARKET)
+
+#### 6. Response Field Mappings Verification
+Compare `mapper.ts` with OpenAlgo `order_data.py` / `transform_data.py`:
+
+**Order Response:**
+- [ ] `orderId` field name correct
+- [ ] `tradingSymbol` / `symbol` field name correct
+- [ ] `exchangeSegment` / `exchange` field name correct
+- [ ] `transactionType` / `side` field name correct
+- [ ] `quantity`, `filledQty`, `remainingQuantity` field names correct
+- [ ] `price`, `tradedPrice`, `averagePrice` field names correct
+- [ ] `orderStatus` field name and values correct (PENDING, TRADED, REJECTED, etc.)
+- [ ] `omsErrorDescription` / error message field name correct
+
+**Position Response:**
+- [ ] `netQty` field name correct
+- [ ] `dayBuyQty`, `daySellQty` field names correct
+- [ ] `costPrice`, `lastPrice` field names correct
+- [ ] `realizedProfit`, `unrealizedProfit` field names correct
+
+**Funds Response:**
+- [ ] `availableBalance` field name correct (watch for typos like `availabelBalance`)
+- [ ] `utilizedAmount` / `usedMargin` field name correct
+- [ ] `collateralAmount` field name correct
+
+**Quote Response:**
+- [ ] `last_price` / `lastPrice` field name (check both cases)
+- [ ] `ohlc.open/high/low/close` structure correct
+- [ ] `depth.buy/sell` array structure correct
+- [ ] `volume`, `oi` field names correct
+
+#### 7. Auth Flow Verification
+Compare with OpenAlgo `auth_api.py`:
+- [ ] OAuth flow steps match (consent → login → token exchange)
+- [ ] Token exchange endpoint and parameters correct
+- [ ] Token validation method correct
+- [ ] Response fields (`accessToken`, `userId`, etc.) correctly parsed
+
+#### 8. Master Contract Verification
+Compare with OpenAlgo `master_contract_db.py`:
+- [ ] CSV/JSON download URL correct
+- [ ] Column/field parsing matches OpenAlgo logic
+- [ ] Symbol, securityId, exchange mapping correct
+- [ ] Instrument type detection logic matches
+
+### Cross-Check Command
+
+After implementation, run:
+```bash
+# TypeScript compilation check
+bunx tsc --noEmit
+
+# Rust compilation check
+cargo check --manifest-path src-tauri/Cargo.toml
+```
+
+### Common Cross-Check Findings
+
+| Issue | Where to Check | Fix |
+|-------|----------------|-----|
+| Wrong header name | OpenAlgo `order_api.py` headers dict | Update Rust `dhan_request()` |
+| Wrong endpoint path | OpenAlgo `get_url()` calls | Update Rust endpoint strings |
+| Wrong field name | OpenAlgo response parsing | Update TS `mapper.ts` |
+| Missing exchange | OpenAlgo `map_exchange_type()` | Add to `constants.ts` |
+| Wrong order type | OpenAlgo `map_order_type()` | Update `ORDER_TYPE_MAP` |
+| Typo in API field | OpenAlgo source (e.g., `availabelBalance`) | Handle both spellings |
+
+## Quick Reference: File Locations
+
+| Component | Location |
+|-----------|----------|
+| Rust commands | `src-tauri/src/commands/brokers/{broker}.rs` |
+| Rust mod.rs | `src-tauri/src/commands/brokers/mod.rs` |
+| Rust lib.rs | `src-tauri/src/lib.rs` |
+| TS Adapter | `src/brokers/stocks/india/{broker}/{Broker}Adapter.ts` |
+| TS constants | `src/brokers/stocks/india/{broker}/constants.ts` |
+| TS mapper | `src/brokers/stocks/india/{broker}/mapper.ts` |
+| Registry | `src/brokers/stocks/registry.ts` |
+| Init | `src/brokers/stocks/init.ts` |
+| UI Setup | `src/components/tabs/equity-trading/components/BrokerSetupPanel.tsx` |
+| UI Auth | `src/components/tabs/equity-trading/components/BrokerAuthPanel.tsx` |
+
+## OpenAlgo → Fincept Mapping
+
+| OpenAlgo File | Fincept Equivalent |
+|---------------|-------------------|
+| `api/auth_api.py` | Rust: `{broker}_exchange_token`, TS: `authenticate()` |
+| `api/order_api.py` | Rust: `{broker}_place/modify/cancel_order` |
+| `api/data.py` | Rust: `{broker}_get_quotes/history/depth` |
+| `api/funds.py` | Rust: `{broker}_get_funds` |
+| `database/master_contract_db.py` | Rust: `{broker}_download_master_contract`, symbol search commands |
+| `mapping/order_data.py` | TS: `mapper.ts` |
+| `mapping/transform_data.py` | TS: `mapper.ts` |
 
 ---
-**Last Updated**: January 2025
+**Last Updated:** January 2025 | **Supported Brokers:** Angel One, Zerodha, Fyers, Upstox, Dhan

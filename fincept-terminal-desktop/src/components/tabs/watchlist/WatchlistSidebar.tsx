@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Watchlist } from '../../../services/core/watchlistService';
-import { BLOOMBERG_COLORS } from './utils';
+import { FINCEPT_COLORS } from './utils';
 import { Trash2, Plus } from 'lucide-react';
 
 interface WatchlistSidebarProps {
@@ -27,7 +27,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
   volumeLeaders
 }) => {
   const { t } = useTranslation('watchlist');
-  const { ORANGE, WHITE, GRAY, GREEN, RED, CYAN, YELLOW, DARK_BG, PANEL_BG } = BLOOMBERG_COLORS;
+  const { ORANGE, WHITE, GRAY, GREEN, RED, CYAN, YELLOW, DARK_BG, PANEL_BG } = FINCEPT_COLORS;
 
   const handleDelete = (e: React.MouseEvent, watchlistId: string) => {
     e.stopPropagation();

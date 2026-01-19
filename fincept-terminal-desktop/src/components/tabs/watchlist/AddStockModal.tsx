@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BLOOMBERG_COLORS } from './utils';
+import { FINCEPT_COLORS } from './utils';
 
 interface AddStockModalProps {
   onClose: () => void;
@@ -57,13 +57,13 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
       zIndex: 1000
     }}>
       <div style={{
-        backgroundColor: BLOOMBERG_COLORS.DARK_BG,
-        border: `2px solid ${BLOOMBERG_COLORS.GREEN}`,
+        backgroundColor: FINCEPT_COLORS.DARK_BG,
+        border: `2px solid ${FINCEPT_COLORS.GREEN}`,
         padding: '24px',
         minWidth: '400px'
       }}>
         <div style={{
-          color: BLOOMBERG_COLORS.GREEN,
+          color: FINCEPT_COLORS.GREEN,
           fontSize: '14px',
           fontWeight: 'bold',
           marginBottom: '16px'
@@ -73,7 +73,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
 
         <div style={{ marginBottom: '12px' }}>
           <label style={{
-            color: BLOOMBERG_COLORS.GRAY,
+            color: FINCEPT_COLORS.GRAY,
             fontSize: '10px',
             display: 'block',
             marginBottom: '4px'
@@ -87,9 +87,9 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
             onKeyPress={handleKeyPress}
             style={{
               width: '100%',
-              background: BLOOMBERG_COLORS.PANEL_BG,
-              border: `1px solid ${BLOOMBERG_COLORS.GRAY}`,
-              color: BLOOMBERG_COLORS.WHITE,
+              background: FINCEPT_COLORS.PANEL_BG,
+              border: `1px solid ${FINCEPT_COLORS.GRAY}`,
+              color: FINCEPT_COLORS.WHITE,
               padding: '8px',
               fontSize: '14px',
               fontFamily: 'Consolas, monospace',
@@ -102,7 +102,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
             autoFocus
           />
           <div style={{
-            color: BLOOMBERG_COLORS.GRAY,
+            color: FINCEPT_COLORS.GRAY,
             fontSize: '9px',
             marginTop: '4px'
           }}>
@@ -112,7 +112,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
 
         <div style={{ marginBottom: '16px' }}>
           <label style={{
-            color: BLOOMBERG_COLORS.GRAY,
+            color: FINCEPT_COLORS.GRAY,
             fontSize: '10px',
             display: 'block',
             marginBottom: '4px'
@@ -124,9 +124,9 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
             onChange={(e) => setNotes(e.target.value)}
             style={{
               width: '100%',
-              background: BLOOMBERG_COLORS.PANEL_BG,
-              border: `1px solid ${BLOOMBERG_COLORS.GRAY}`,
-              color: BLOOMBERG_COLORS.WHITE,
+              background: FINCEPT_COLORS.PANEL_BG,
+              border: `1px solid ${FINCEPT_COLORS.GRAY}`,
+              color: FINCEPT_COLORS.WHITE,
               padding: '8px',
               fontSize: '11px',
               fontFamily: 'Consolas, monospace',
@@ -143,7 +143,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
             onClick={onClose}
             disabled={loading}
             style={{
-              background: BLOOMBERG_COLORS.GRAY,
+              background: FINCEPT_COLORS.GRAY,
               color: 'black',
               border: 'none',
               padding: '8px 16px',
@@ -159,7 +159,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
             onClick={handleAdd}
             disabled={loading || !symbol.trim()}
             style={{
-              background: (!symbol.trim() || loading) ? BLOOMBERG_COLORS.GRAY : BLOOMBERG_COLORS.GREEN,
+              background: (!symbol.trim() || loading) ? FINCEPT_COLORS.GRAY : FINCEPT_COLORS.GREEN,
               color: 'black',
               border: 'none',
               padding: '8px 16px',

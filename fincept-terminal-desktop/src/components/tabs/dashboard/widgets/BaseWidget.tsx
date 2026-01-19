@@ -14,11 +14,11 @@ export interface BaseWidgetProps {
   headerColor?: string;
 }
 
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_PANEL_BG = '#000000';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_PANEL_BG = '#000000';
 
 export const BaseWidget: React.FC<BaseWidgetProps> = ({
   title,
@@ -28,15 +28,15 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
   children,
   isLoading = false,
   error = null,
-  headerColor = BLOOMBERG_ORANGE
+  headerColor = FINCEPT_ORANGE
 }) => {
   const { t } = useTranslation('dashboard');
   return (
     <div style={{
       height: '100%',
       width: '100%',
-      backgroundColor: BLOOMBERG_PANEL_BG,
-      border: `1px solid ${BLOOMBERG_GRAY}`,
+      backgroundColor: FINCEPT_PANEL_BG,
+      border: `1px solid ${FINCEPT_GRAY}`,
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden'
@@ -44,7 +44,7 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
       {/* Widget Header */}
       <div style={{
         backgroundColor: '#1a1a1a',
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        borderBottom: `1px solid ${FINCEPT_GRAY}`,
         padding: '4px 8px',
         display: 'flex',
         alignItems: 'center',
@@ -75,14 +75,14 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                color: BLOOMBERG_GRAY,
+                color: FINCEPT_GRAY,
                 cursor: 'pointer',
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.color = BLOOMBERG_WHITE}
-              onMouseLeave={(e) => e.currentTarget.style.color = BLOOMBERG_GRAY}
+              onMouseEnter={(e) => e.currentTarget.style.color = FINCEPT_WHITE}
+              onMouseLeave={(e) => e.currentTarget.style.color = FINCEPT_GRAY}
               title="Configure"
             >
               <Settings size={12} />
@@ -95,14 +95,14 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                color: isLoading ? BLOOMBERG_GRAY : BLOOMBERG_WHITE,
+                color: isLoading ? FINCEPT_GRAY : FINCEPT_WHITE,
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
               }}
               onMouseEnter={(e) => !isLoading && (e.currentTarget.style.color = headerColor)}
-              onMouseLeave={(e) => !isLoading && (e.currentTarget.style.color = BLOOMBERG_WHITE)}
+              onMouseLeave={(e) => !isLoading && (e.currentTarget.style.color = FINCEPT_WHITE)}
               title="Refresh"
             >
               <RefreshCw size={12} style={{ animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
@@ -114,14 +114,14 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                color: BLOOMBERG_GRAY,
+                color: FINCEPT_GRAY,
                 cursor: 'pointer',
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.color = BLOOMBERG_RED}
-              onMouseLeave={(e) => e.currentTarget.style.color = BLOOMBERG_GRAY}
+              onMouseEnter={(e) => e.currentTarget.style.color = FINCEPT_RED}
+              onMouseLeave={(e) => e.currentTarget.style.color = FINCEPT_GRAY}
               title="Remove"
             >
               <X size={12} />
@@ -139,7 +139,7 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
         {error ? (
           <div style={{
             padding: '12px',
-            color: BLOOMBERG_RED,
+            color: FINCEPT_RED,
             fontSize: '10px',
             textAlign: 'center'
           }}>
@@ -163,7 +163,7 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
               animation: 'spin 1s linear infinite'
             }} />
             <div style={{
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               fontSize: '9px',
               textAlign: 'center'
             }}>

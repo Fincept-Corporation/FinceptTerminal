@@ -1,5 +1,5 @@
 // File: src/components/chat-mode/components/ChatMessageBubble.tsx
-// Bloomberg-style message bubble component
+// Fincept-style message bubble component
 
 import React from 'react';
 import { Terminal, User } from 'lucide-react';

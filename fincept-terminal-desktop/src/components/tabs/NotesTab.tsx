@@ -1,5 +1,5 @@
 // File: src/components/tabs/NotesTab.tsx
-// Professional Bloomberg Terminal-Grade Financial Note-Taking Interface
+// Professional Fincept Terminal-Grade Financial Note-Taking Interface
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -14,8 +14,8 @@ import { toast } from 'sonner';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -365,27 +365,27 @@ export function NotesTab() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'HIGH': return BLOOMBERG.RED;
-      case 'MEDIUM': return BLOOMBERG.YELLOW;
-      case 'LOW': return BLOOMBERG.GREEN;
-      default: return BLOOMBERG.GRAY;
+      case 'HIGH': return FINCEPT.RED;
+      case 'MEDIUM': return FINCEPT.YELLOW;
+      case 'LOW': return FINCEPT.GREEN;
+      default: return FINCEPT.GRAY;
     }
   };
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
-      case 'BULLISH': return BLOOMBERG.GREEN;
-      case 'BEARISH': return BLOOMBERG.RED;
-      case 'NEUTRAL': return BLOOMBERG.YELLOW;
-      default: return BLOOMBERG.GRAY;
+      case 'BULLISH': return FINCEPT.GREEN;
+      case 'BEARISH': return FINCEPT.RED;
+      case 'NEUTRAL': return FINCEPT.YELLOW;
+      default: return FINCEPT.GRAY;
     }
   };
 
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
-      color: BLOOMBERG.WHITE,
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
       fontFamily: '"IBM Plex Mono", "Consolas", monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -395,51 +395,51 @@ export function NotesTab() {
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
         *::-webkit-scrollbar { width: 6px; height: 6px; }
-        *::-webkit-scrollbar-track { background: ${BLOOMBERG.DARK_BG}; }
-        *::-webkit-scrollbar-thumb { background: ${BLOOMBERG.BORDER}; border-radius: 3px; }
-        *::-webkit-scrollbar-thumb:hover { background: ${BLOOMBERG.MUTED}; }
+        *::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
+        *::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
 
         .terminal-glow {
-          text-shadow: 0 0 10px ${BLOOMBERG.ORANGE}40;
+          text-shadow: 0 0 10px ${FINCEPT.ORANGE}40;
         }
       `}</style>
 
       {/* ========== TOP NAVIGATION BAR ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
         padding: '6px 12px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
-        boxShadow: `0 2px 8px ${BLOOMBERG.ORANGE}20`
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FileText size={18} color={BLOOMBERG.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + BLOOMBERG.ORANGE + ')' }} />
+            <FileText size={18} color={FINCEPT.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + FINCEPT.ORANGE + ')' }} />
             <span style={{
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               fontWeight: 700,
               fontSize: '14px',
               letterSpacing: '0.5px',
-              textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
+              textShadow: `0 0 10px ${FINCEPT.ORANGE}40`
             }}>
               {t('title')}
             </span>
           </div>
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
           {statistics && (
             <>
-              <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN }}>
+              <div style={{ fontSize: '10px', color: FINCEPT.CYAN }}>
                 {t('header.total')}: <span style={{ fontWeight: 700 }}>{statistics.total}</span>
               </div>
-              <div style={{ fontSize: '10px', color: BLOOMBERG.YELLOW }}>
+              <div style={{ fontSize: '10px', color: FINCEPT.YELLOW }}>
                 {t('header.favorites')}: <span style={{ fontWeight: 700 }}>{statistics.favorites}</span>
               </div>
-              <div style={{ fontSize: '10px', color: BLOOMBERG.PURPLE }}>
+              <div style={{ fontSize: '10px', color: FINCEPT.PURPLE }}>
                 {t('header.words')}: <span style={{ fontWeight: 700 }}>{statistics.totalWords.toLocaleString()}</span>
               </div>
             </>
@@ -447,7 +447,7 @@ export function NotesTab() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: BLOOMBERG.CYAN }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: FINCEPT.CYAN }}>
             <Clock size={12} />
             {currentTime.toLocaleTimeString('en-US', { hour12: false })}
           </div>
@@ -460,8 +460,8 @@ export function NotesTab() {
             style={{
               padding: '4px 8px',
               backgroundColor: 'transparent',
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.GRAY,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -470,12 +470,12 @@ export function NotesTab() {
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
-              e.currentTarget.style.color = BLOOMBERG.ORANGE;
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+              e.currentTarget.style.color = FINCEPT.ORANGE;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-              e.currentTarget.style.color = BLOOMBERG.GRAY;
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
+              e.currentTarget.style.color = FINCEPT.GRAY;
             }}
           >
             <RefreshCw size={12} />
@@ -486,9 +486,9 @@ export function NotesTab() {
             onClick={() => setShowReminders(!showReminders)}
             style={{
               padding: '4px 8px',
-              backgroundColor: showReminders ? BLOOMBERG.YELLOW : 'transparent',
-              border: `1px solid ${upcomingReminders.length > 0 ? BLOOMBERG.YELLOW : BLOOMBERG.BORDER}`,
-              color: showReminders ? BLOOMBERG.DARK_BG : upcomingReminders.length > 0 ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY,
+              backgroundColor: showReminders ? FINCEPT.YELLOW : 'transparent',
+              border: `1px solid ${upcomingReminders.length > 0 ? FINCEPT.YELLOW : FINCEPT.BORDER}`,
+              color: showReminders ? FINCEPT.DARK_BG : upcomingReminders.length > 0 ? FINCEPT.YELLOW : FINCEPT.GRAY,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -507,8 +507,8 @@ export function NotesTab() {
 
       {/* ========== TOOLBAR ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px 12px',
         display: 'flex',
         alignItems: 'center',
@@ -517,7 +517,7 @@ export function NotesTab() {
       }}>
         {/* Search */}
         <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
-          <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: BLOOMBERG.GRAY }} />
+          <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: FINCEPT.GRAY }} />
           <input
             type="text"
             placeholder={t('toolbar.search')}
@@ -526,9 +526,9 @@ export function NotesTab() {
             style={{
               width: '100%',
               padding: '6px 8px 6px 32px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.WHITE,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.WHITE,
               fontSize: '11px',
               outline: 'none'
             }}
@@ -543,9 +543,9 @@ export function NotesTab() {
           }}
           style={{
             padding: '6px 12px',
-            backgroundColor: BLOOMBERG.GREEN,
+            backgroundColor: FINCEPT.GREEN,
             border: 'none',
-            color: BLOOMBERG.DARK_BG,
+            color: FINCEPT.DARK_BG,
             cursor: 'pointer',
             fontSize: '10px',
             fontWeight: 700,
@@ -562,9 +562,9 @@ export function NotesTab() {
           onClick={() => setShowTemplates(!showTemplates)}
           style={{
             padding: '6px 12px',
-            backgroundColor: showTemplates ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
-            color: showTemplates ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+            backgroundColor: showTemplates ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            color: showTemplates ? FINCEPT.DARK_BG : FINCEPT.GRAY,
             cursor: 'pointer',
             fontSize: '10px',
             fontWeight: 700,
@@ -581,9 +581,9 @@ export function NotesTab() {
           onClick={() => setShowFavorites(!showFavorites)}
           style={{
             padding: '6px 12px',
-            backgroundColor: showFavorites ? BLOOMBERG.YELLOW : BLOOMBERG.PANEL_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
-            color: showFavorites ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+            backgroundColor: showFavorites ? FINCEPT.YELLOW : FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            color: showFavorites ? FINCEPT.DARK_BG : FINCEPT.GRAY,
             cursor: 'pointer',
             fontSize: '10px',
             fontWeight: 700,
@@ -592,7 +592,7 @@ export function NotesTab() {
             gap: '4px'
           }}
         >
-          <Star size={14} fill={showFavorites ? BLOOMBERG.DARK_BG : 'none'} />
+          <Star size={14} fill={showFavorites ? FINCEPT.DARK_BG : 'none'} />
           {t('toolbar.favorites')}
         </button>
 
@@ -600,9 +600,9 @@ export function NotesTab() {
           onClick={() => setShowFilters(!showFilters)}
           style={{
             padding: '6px 12px',
-            backgroundColor: showFilters ? BLOOMBERG.CYAN : BLOOMBERG.PANEL_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
-            color: showFilters ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+            backgroundColor: showFilters ? FINCEPT.CYAN : FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            color: showFilters ? FINCEPT.DARK_BG : FINCEPT.GRAY,
             cursor: 'pointer',
             fontSize: '10px',
             fontWeight: 700,
@@ -619,9 +619,9 @@ export function NotesTab() {
           onClick={() => setShowArchived(!showArchived)}
           style={{
             padding: '6px 12px',
-            backgroundColor: showArchived ? BLOOMBERG.PURPLE : BLOOMBERG.PANEL_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
-            color: showArchived ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+            backgroundColor: showArchived ? FINCEPT.PURPLE : FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            color: showArchived ? FINCEPT.WHITE : FINCEPT.GRAY,
             cursor: 'pointer',
             fontSize: '10px',
             fontWeight: 700,
@@ -638,8 +638,8 @@ export function NotesTab() {
       {/* ========== FILTERS PANEL ========== */}
       {showFilters && (
         <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
           padding: '8px 12px',
           display: 'flex',
           alignItems: 'center',
@@ -647,19 +647,19 @@ export function NotesTab() {
           flexShrink: 0,
           fontSize: '10px'
         }}>
-          <span style={{ color: BLOOMBERG.ORANGE, fontWeight: 700 }}>FILTERS:</span>
+          <span style={{ color: FINCEPT.ORANGE, fontWeight: 700 }}>FILTERS:</span>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: BLOOMBERG.GRAY }}>Priority:</span>
+            <span style={{ color: FINCEPT.GRAY }}>Priority:</span>
             {PRIORITIES.map(priority => (
               <button
                 key={priority}
                 onClick={() => setFilterPriority(filterPriority === priority ? null : priority)}
                 style={{
                   padding: '4px 8px',
-                  backgroundColor: filterPriority === priority ? getPriorityColor(priority) : BLOOMBERG.HEADER_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: filterPriority === priority ? BLOOMBERG.DARK_BG : getPriorityColor(priority),
+                  backgroundColor: filterPriority === priority ? getPriorityColor(priority) : FINCEPT.HEADER_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: filterPriority === priority ? FINCEPT.DARK_BG : getPriorityColor(priority),
                   cursor: 'pointer',
                   fontSize: '9px',
                   fontWeight: 700
@@ -670,19 +670,19 @@ export function NotesTab() {
             ))}
           </div>
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: BLOOMBERG.GRAY }}>Sentiment:</span>
+            <span style={{ color: FINCEPT.GRAY }}>Sentiment:</span>
             {SENTIMENTS.map(sentiment => (
               <button
                 key={sentiment}
                 onClick={() => setFilterSentiment(filterSentiment === sentiment ? null : sentiment)}
                 style={{
                   padding: '4px 8px',
-                  backgroundColor: filterSentiment === sentiment ? getSentimentColor(sentiment) : BLOOMBERG.HEADER_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: filterSentiment === sentiment ? BLOOMBERG.DARK_BG : getSentimentColor(sentiment),
+                  backgroundColor: filterSentiment === sentiment ? getSentimentColor(sentiment) : FINCEPT.HEADER_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: filterSentiment === sentiment ? FINCEPT.DARK_BG : getSentimentColor(sentiment),
                   cursor: 'pointer',
                   fontSize: '9px',
                   fontWeight: 700
@@ -701,9 +701,9 @@ export function NotesTab() {
             style={{
               marginLeft: 'auto',
               padding: '4px 8px',
-              backgroundColor: BLOOMBERG.RED,
+              backgroundColor: FINCEPT.RED,
               border: 'none',
-              color: BLOOMBERG.WHITE,
+              color: FINCEPT.WHITE,
               cursor: 'pointer',
               fontSize: '9px',
               fontWeight: 700
@@ -717,12 +717,12 @@ export function NotesTab() {
       {/* ========== TEMPLATES PANEL ========== */}
       {showTemplates && (
         <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
           padding: '12px',
           flexShrink: 0
         }}>
-          <div style={{ color: BLOOMBERG.ORANGE, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+          <div style={{ color: FINCEPT.ORANGE, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
             SELECT TEMPLATE
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
@@ -732,24 +732,24 @@ export function NotesTab() {
                 onClick={() => createFromTemplate(template)}
                 style={{
                   padding: '12px',
-                  backgroundColor: BLOOMBERG.HEADER_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   cursor: 'pointer',
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                  e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
                 }}
               >
-                <div style={{ color: BLOOMBERG.CYAN, fontSize: '11px', fontWeight: 700, marginBottom: '4px' }}>
+                <div style={{ color: FINCEPT.CYAN, fontSize: '11px', fontWeight: 700, marginBottom: '4px' }}>
                   {template.name}
                 </div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', lineHeight: '1.4' }}>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', lineHeight: '1.4' }}>
                   {template.description}
                 </div>
               </div>
@@ -761,13 +761,13 @@ export function NotesTab() {
       {/* ========== UPCOMING REMINDERS PANEL ========== */}
       {showReminders && (
         <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
           padding: '12px',
           flexShrink: 0
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{ color: BLOOMBERG.YELLOW, fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ color: FINCEPT.YELLOW, fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Bell size={14} />
               UPCOMING REMINDERS (24H)
             </div>
@@ -778,9 +778,9 @@ export function NotesTab() {
               }}
               style={{
                 padding: '4px 8px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
-                color: BLOOMBERG.GRAY,
+                backgroundColor: FINCEPT.HEADER_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                color: FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '9px',
                 fontWeight: 700,
@@ -797,10 +797,10 @@ export function NotesTab() {
             <div style={{
               padding: '20px',
               textAlign: 'center',
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '10px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`
             }}>
               No upcoming reminders in the next 24 hours
             </div>
@@ -824,34 +824,34 @@ export function NotesTab() {
                     }}
                     style={{
                       padding: '10px',
-                      backgroundColor: isUrgent ? `${BLOOMBERG.RED}10` : BLOOMBERG.HEADER_BG,
-                      border: `1px solid ${isUrgent ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
+                      backgroundColor: isUrgent ? `${FINCEPT.RED}10` : FINCEPT.HEADER_BG,
+                      border: `1px solid ${isUrgent ? FINCEPT.RED : FINCEPT.BORDER}`,
                       borderLeft: `4px solid ${note.color_code}`,
                       cursor: 'pointer',
                       transition: 'all 0.2s'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                      e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = isUrgent ? `${BLOOMBERG.RED}10` : BLOOMBERG.HEADER_BG;
+                      e.currentTarget.style.backgroundColor = isUrgent ? `${FINCEPT.RED}10` : FINCEPT.HEADER_BG;
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <div style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 700 }}>
+                      <div style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 700 }}>
                         {note.title}
                       </div>
                       <div style={{
                         padding: '2px 6px',
-                        backgroundColor: isUrgent ? BLOOMBERG.RED : BLOOMBERG.YELLOW,
-                        color: BLOOMBERG.DARK_BG,
+                        backgroundColor: isUrgent ? FINCEPT.RED : FINCEPT.YELLOW,
+                        color: FINCEPT.DARK_BG,
                         fontSize: '8px',
                         fontWeight: 700
                       }}>
                         {isUrgent ? '🔴 URGENT' : ` ${timeText.toUpperCase()}`}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', fontSize: '9px', color: BLOOMBERG.GRAY }}>
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '9px', color: FINCEPT.GRAY }}>
                       <span style={{ color: getPriorityColor(note.priority) }}>{note.priority}</span>
                       <span>•</span>
                       <span style={{ color: getSentimentColor(note.sentiment) }}>{note.sentiment}</span>
@@ -860,11 +860,11 @@ export function NotesTab() {
                       {note.tickers && (
                         <>
                           <span>•</span>
-                          <span style={{ color: BLOOMBERG.CYAN }}>{note.tickers}</span>
+                          <span style={{ color: FINCEPT.CYAN }}>{note.tickers}</span>
                         </>
                       )}
                     </div>
-                    <div style={{ fontSize: '8px', color: BLOOMBERG.MUTED, marginTop: '4px' }}>
+                    <div style={{ fontSize: '8px', color: FINCEPT.MUTED, marginTop: '4px' }}>
                       Due: {new Date(note.reminder_date!).toLocaleString()}
                     </div>
                   </div>
@@ -880,19 +880,19 @@ export function NotesTab() {
         {/* LEFT SIDEBAR - Categories */}
         <div style={{
           width: '220px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderRight: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
           <div style={{
             padding: '8px 12px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             letterSpacing: '0.5px'
           }}>
             CATEGORIES
@@ -913,8 +913,8 @@ export function NotesTab() {
                   style={{
                     padding: '10px 12px',
                     cursor: 'pointer',
-                    backgroundColor: selectedCategory === category.id ? `${BLOOMBERG.ORANGE}20` : 'transparent',
-                    borderLeft: selectedCategory === category.id ? `3px solid ${BLOOMBERG.ORANGE}` : '3px solid transparent',
+                    backgroundColor: selectedCategory === category.id ? `${FINCEPT.ORANGE}20` : 'transparent',
+                    borderLeft: selectedCategory === category.id ? `3px solid ${FINCEPT.ORANGE}` : '3px solid transparent',
                     transition: 'all 0.2s',
                     display: 'flex',
                     alignItems: 'center',
@@ -922,7 +922,7 @@ export function NotesTab() {
                   }}
                   onMouseEnter={(e) => {
                     if (selectedCategory !== category.id) {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                      e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -932,11 +932,11 @@ export function NotesTab() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Icon size={14} color={selectedCategory === category.id ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY} />
+                    <Icon size={14} color={selectedCategory === category.id ? FINCEPT.ORANGE : FINCEPT.GRAY} />
                     <span style={{
                       fontSize: '10px',
                       fontWeight: 600,
-                      color: selectedCategory === category.id ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE
+                      color: selectedCategory === category.id ? FINCEPT.ORANGE : FINCEPT.WHITE
                     }}>
                       {category.label}
                     </span>
@@ -944,7 +944,7 @@ export function NotesTab() {
                   {category.id !== 'ALL' && (
                     <span style={{
                       fontSize: '9px',
-                      color: BLOOMBERG.CYAN,
+                      color: FINCEPT.CYAN,
                       fontWeight: 700
                     }}>
                       {count}
@@ -960,18 +960,18 @@ export function NotesTab() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{
             padding: '8px 12px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             letterSpacing: '0.5px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
             <span>NOTES ({filteredNotes.length})</span>
-            <span style={{ fontSize: '9px', color: BLOOMBERG.GRAY }}>
+            <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
               SORTED BY: RECENTLY UPDATED
             </span>
           </div>
@@ -981,7 +981,7 @@ export function NotesTab() {
               <div style={{
                 padding: '40px',
                 textAlign: 'center',
-                color: BLOOMBERG.GRAY,
+                color: FINCEPT.GRAY,
                 fontSize: '11px'
               }}>
                 {searchQuery ? 'No notes found matching your search' : 'No notes yet. Create your first note!'}
@@ -998,35 +998,35 @@ export function NotesTab() {
                   style={{
                     marginBottom: '8px',
                     padding: '12px',
-                    backgroundColor: selectedNote?.id === note.id ? `${BLOOMBERG.ORANGE}15` : BLOOMBERG.HEADER_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    backgroundColor: selectedNote?.id === note.id ? `${FINCEPT.ORANGE}15` : FINCEPT.HEADER_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     borderLeft: `4px solid ${note.color_code}`,
                     cursor: 'pointer',
                     transition: 'all 0.2s'
                   }}
                   onMouseEnter={(e) => {
                     if (selectedNote?.id !== note.id) {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                      e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (selectedNote?.id !== note.id) {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                      e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
                     }
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
-                      <span style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 700 }}>
+                      <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 700 }}>
                         {note.title}
                       </span>
-                      {note.is_favorite && <Star size={12} fill={BLOOMBERG.YELLOW} color={BLOOMBERG.YELLOW} />}
+                      {note.is_favorite && <Star size={12} fill={FINCEPT.YELLOW} color={FINCEPT.YELLOW} />}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{
                         padding: '2px 6px',
                         backgroundColor: getPriorityColor(note.priority),
-                        color: BLOOMBERG.DARK_BG,
+                        color: FINCEPT.DARK_BG,
                         fontSize: '8px',
                         fontWeight: 700
                       }}>
@@ -1035,7 +1035,7 @@ export function NotesTab() {
                       <span style={{
                         padding: '2px 6px',
                         backgroundColor: getSentimentColor(note.sentiment),
-                        color: BLOOMBERG.DARK_BG,
+                        color: FINCEPT.DARK_BG,
                         fontSize: '8px',
                         fontWeight: 700
                       }}>
@@ -1044,20 +1044,20 @@ export function NotesTab() {
                     </div>
                   </div>
 
-                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', lineHeight: '1.4', marginBottom: '6px' }}>
+                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', lineHeight: '1.4', marginBottom: '6px' }}>
                     {note.content.substring(0, 120)}{note.content.length > 120 ? '...' : ''}
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: BLOOMBERG.MUTED }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: FINCEPT.MUTED }}>
                       <span>{new Date(note.updated_at).toLocaleDateString()}</span>
                       {note.word_count > 0 && <span>{note.word_count} words</span>}
-                      {note.tickers && <span style={{ color: BLOOMBERG.CYAN }}>{note.tickers}</span>}
+                      {note.tickers && <span style={{ color: FINCEPT.CYAN }}>{note.tickers}</span>}
                     </div>
                     {note.tags && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Tag size={10} color={BLOOMBERG.PURPLE} />
-                        <span style={{ color: BLOOMBERG.PURPLE }}>{note.tags.split(',').slice(0, 2).join(', ')}</span>
+                        <Tag size={10} color={FINCEPT.PURPLE} />
+                        <span style={{ color: FINCEPT.PURPLE }}>{note.tags.split(',').slice(0, 2).join(', ')}</span>
                       </div>
                     )}
                   </div>
@@ -1071,8 +1071,8 @@ export function NotesTab() {
         {!isRightPanelMinimized && (
           <div style={{
             width: '500px',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            borderLeft: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.PANEL_BG,
+            borderLeft: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden'
@@ -1082,11 +1082,11 @@ export function NotesTab() {
               <>
                 <div style={{
                   padding: '8px 12px',
-                  backgroundColor: BLOOMBERG.HEADER_BG,
-                  borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
                   fontSize: '10px',
                   fontWeight: 700,
-                  color: BLOOMBERG.ORANGE,
+                  color: FINCEPT.ORANGE,
                   letterSpacing: '0.5px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1098,9 +1098,9 @@ export function NotesTab() {
                       onClick={isCreating ? handleCreateNote : handleUpdateNote}
                       style={{
                         padding: '4px 8px',
-                        backgroundColor: BLOOMBERG.GREEN,
+                        backgroundColor: FINCEPT.GREEN,
                         border: 'none',
-                        color: BLOOMBERG.DARK_BG,
+                        color: FINCEPT.DARK_BG,
                         cursor: 'pointer',
                         fontSize: '10px',
                         fontWeight: 700,
@@ -1120,9 +1120,9 @@ export function NotesTab() {
                       }}
                       style={{
                         padding: '4px 8px',
-                        backgroundColor: BLOOMBERG.RED,
+                        backgroundColor: FINCEPT.RED,
                         border: 'none',
-                        color: BLOOMBERG.WHITE,
+                        color: FINCEPT.WHITE,
                         cursor: 'pointer',
                         fontSize: '10px',
                         fontWeight: 700,
@@ -1140,7 +1140,7 @@ export function NotesTab() {
                 <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
                   {/* Title */}
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                    <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                       TITLE *
                     </label>
                     <input
@@ -1150,9 +1150,9 @@ export function NotesTab() {
                       style={{
                         width: '100%',
                         padding: '8px',
-                        backgroundColor: BLOOMBERG.HEADER_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: BLOOMBERG.WHITE,
+                        backgroundColor: FINCEPT.HEADER_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.WHITE,
                         fontSize: '12px',
                         fontWeight: 700,
                         outline: 'none'
@@ -1164,7 +1164,7 @@ export function NotesTab() {
                   {/* Metadata Row 1 */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
                     <div>
-                      <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                         CATEGORY
                       </label>
                       <select
@@ -1173,9 +1173,9 @@ export function NotesTab() {
                         style={{
                           width: '100%',
                           padding: '6px',
-                          backgroundColor: BLOOMBERG.HEADER_BG,
-                          border: `1px solid ${BLOOMBERG.BORDER}`,
-                          color: BLOOMBERG.WHITE,
+                          backgroundColor: FINCEPT.HEADER_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                          color: FINCEPT.WHITE,
                           fontSize: '10px',
                           outline: 'none'
                         }}
@@ -1187,7 +1187,7 @@ export function NotesTab() {
                     </div>
 
                     <div>
-                      <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                         PRIORITY
                       </label>
                       <select
@@ -1196,9 +1196,9 @@ export function NotesTab() {
                         style={{
                           width: '100%',
                           padding: '6px',
-                          backgroundColor: BLOOMBERG.HEADER_BG,
-                          border: `1px solid ${BLOOMBERG.BORDER}`,
-                          color: BLOOMBERG.WHITE,
+                          backgroundColor: FINCEPT.HEADER_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                          color: FINCEPT.WHITE,
                           fontSize: '10px',
                           outline: 'none'
                         }}
@@ -1213,7 +1213,7 @@ export function NotesTab() {
                   {/* Metadata Row 2 */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
                     <div>
-                      <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                         SENTIMENT
                       </label>
                       <select
@@ -1222,9 +1222,9 @@ export function NotesTab() {
                         style={{
                           width: '100%',
                           padding: '6px',
-                          backgroundColor: BLOOMBERG.HEADER_BG,
-                          border: `1px solid ${BLOOMBERG.BORDER}`,
-                          color: BLOOMBERG.WHITE,
+                          backgroundColor: FINCEPT.HEADER_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                          color: FINCEPT.WHITE,
                           fontSize: '10px',
                           outline: 'none'
                         }}
@@ -1236,7 +1236,7 @@ export function NotesTab() {
                     </div>
 
                     <div>
-                      <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                         COLOR
                       </label>
                       <div style={{ display: 'flex', gap: '4px' }}>
@@ -1248,7 +1248,7 @@ export function NotesTab() {
                               width: '24px',
                               height: '24px',
                               backgroundColor: color,
-                              border: editColorCode === color ? `2px solid ${BLOOMBERG.WHITE}` : `1px solid ${BLOOMBERG.BORDER}`,
+                              border: editColorCode === color ? `2px solid ${FINCEPT.WHITE}` : `1px solid ${FINCEPT.BORDER}`,
                               cursor: 'pointer'
                             }}
                           />
@@ -1259,7 +1259,7 @@ export function NotesTab() {
 
                   {/* Tags & Tickers */}
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                    <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                       TAGS (comma-separated)
                     </label>
                     <input
@@ -1269,9 +1269,9 @@ export function NotesTab() {
                       style={{
                         width: '100%',
                         padding: '6px',
-                        backgroundColor: BLOOMBERG.HEADER_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: BLOOMBERG.WHITE,
+                        backgroundColor: FINCEPT.HEADER_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.WHITE,
                         fontSize: '10px',
                         outline: 'none'
                       }}
@@ -1280,7 +1280,7 @@ export function NotesTab() {
                   </div>
 
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                    <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                       TICKERS (comma-separated)
                     </label>
                     <input
@@ -1290,9 +1290,9 @@ export function NotesTab() {
                       style={{
                         width: '100%',
                         padding: '6px',
-                        backgroundColor: BLOOMBERG.HEADER_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: BLOOMBERG.WHITE,
+                        backgroundColor: FINCEPT.HEADER_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.WHITE,
                         fontSize: '10px',
                         outline: 'none'
                       }}
@@ -1302,7 +1302,7 @@ export function NotesTab() {
 
                   {/* Reminder Date */}
                   <div style={{ marginBottom: '12px' }}>
-                    <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                    <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                       REMINDER DATE
                     </label>
                     <input
@@ -1312,9 +1312,9 @@ export function NotesTab() {
                       style={{
                         width: '100%',
                         padding: '6px',
-                        backgroundColor: BLOOMBERG.HEADER_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: BLOOMBERG.WHITE,
+                        backgroundColor: FINCEPT.HEADER_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.WHITE,
                         fontSize: '10px',
                         outline: 'none'
                       }}
@@ -1323,7 +1323,7 @@ export function NotesTab() {
 
                   {/* Content */}
                   <div>
-                    <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
+                    <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
                       CONTENT *
                     </label>
                     <textarea
@@ -1333,9 +1333,9 @@ export function NotesTab() {
                         width: '100%',
                         height: '400px',
                         padding: '8px',
-                        backgroundColor: BLOOMBERG.HEADER_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: BLOOMBERG.WHITE,
+                        backgroundColor: FINCEPT.HEADER_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.WHITE,
                         fontSize: '11px',
                         lineHeight: '1.6',
                         outline: 'none',
@@ -1352,11 +1352,11 @@ export function NotesTab() {
               <>
                 <div style={{
                   padding: '8px 12px',
-                  backgroundColor: BLOOMBERG.HEADER_BG,
-                  borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
                   fontSize: '10px',
                   fontWeight: 700,
-                  color: BLOOMBERG.ORANGE,
+                  color: FINCEPT.ORANGE,
                   letterSpacing: '0.5px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1369,8 +1369,8 @@ export function NotesTab() {
                       style={{
                         padding: '4px 8px',
                         backgroundColor: 'transparent',
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: selectedNote.is_favorite ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: selectedNote.is_favorite ? FINCEPT.YELLOW : FINCEPT.GRAY,
                         cursor: 'pointer',
                         fontSize: '10px',
                         display: 'flex',
@@ -1378,15 +1378,15 @@ export function NotesTab() {
                         gap: '4px'
                       }}
                     >
-                      <Star size={12} fill={selectedNote.is_favorite ? BLOOMBERG.YELLOW : 'none'} />
+                      <Star size={12} fill={selectedNote.is_favorite ? FINCEPT.YELLOW : 'none'} />
                     </button>
                     <button
                       onClick={() => startEditing(selectedNote)}
                       style={{
                         padding: '4px 8px',
-                        backgroundColor: BLOOMBERG.BLUE,
+                        backgroundColor: FINCEPT.BLUE,
                         border: 'none',
-                        color: BLOOMBERG.WHITE,
+                        color: FINCEPT.WHITE,
                         cursor: 'pointer',
                         fontSize: '10px',
                         fontWeight: 700,
@@ -1402,9 +1402,9 @@ export function NotesTab() {
                       onClick={() => handleToggleArchive(selectedNote)}
                       style={{
                         padding: '4px 8px',
-                        backgroundColor: BLOOMBERG.PURPLE,
+                        backgroundColor: FINCEPT.PURPLE,
                         border: 'none',
-                        color: BLOOMBERG.WHITE,
+                        color: FINCEPT.WHITE,
                         cursor: 'pointer',
                         fontSize: '10px',
                         fontWeight: 700,
@@ -1420,9 +1420,9 @@ export function NotesTab() {
                       onClick={() => handleDeleteNote(selectedNote.id!)}
                       style={{
                         padding: '4px 8px',
-                        backgroundColor: BLOOMBERG.RED,
+                        backgroundColor: FINCEPT.RED,
                         border: 'none',
-                        color: BLOOMBERG.WHITE,
+                        color: FINCEPT.WHITE,
                         cursor: 'pointer',
                         fontSize: '10px',
                         fontWeight: 700,
@@ -1440,7 +1440,7 @@ export function NotesTab() {
                 <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
                   {/* Title */}
                   <div style={{
-                    color: BLOOMBERG.WHITE,
+                    color: FINCEPT.WHITE,
                     fontSize: '16px',
                     fontWeight: 700,
                     marginBottom: '12px',
@@ -1457,57 +1457,57 @@ export function NotesTab() {
                     gap: '8px',
                     marginBottom: '16px',
                     padding: '12px',
-                    backgroundColor: BLOOMBERG.HEADER_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     fontSize: '9px'
                   }}>
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>CATEGORY: </span>
-                      <span style={{ color: BLOOMBERG.CYAN, fontWeight: 700 }}>{selectedNote.category}</span>
+                      <span style={{ color: FINCEPT.GRAY }}>CATEGORY: </span>
+                      <span style={{ color: FINCEPT.CYAN, fontWeight: 700 }}>{selectedNote.category}</span>
                     </div>
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>PRIORITY: </span>
+                      <span style={{ color: FINCEPT.GRAY }}>PRIORITY: </span>
                       <span style={{ color: getPriorityColor(selectedNote.priority), fontWeight: 700 }}>{selectedNote.priority}</span>
                     </div>
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>SENTIMENT: </span>
+                      <span style={{ color: FINCEPT.GRAY }}>SENTIMENT: </span>
                       <span style={{ color: getSentimentColor(selectedNote.sentiment), fontWeight: 700 }}>{selectedNote.sentiment}</span>
                     </div>
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>WORDS: </span>
-                      <span style={{ color: BLOOMBERG.WHITE, fontWeight: 700 }}>{selectedNote.word_count}</span>
+                      <span style={{ color: FINCEPT.GRAY }}>WORDS: </span>
+                      <span style={{ color: FINCEPT.WHITE, fontWeight: 700 }}>{selectedNote.word_count}</span>
                     </div>
                     {selectedNote.tickers && (
                       <div style={{ gridColumn: '1 / -1' }}>
-                        <span style={{ color: BLOOMBERG.GRAY }}>TICKERS: </span>
-                        <span style={{ color: BLOOMBERG.CYAN, fontWeight: 700 }}>{selectedNote.tickers}</span>
+                        <span style={{ color: FINCEPT.GRAY }}>TICKERS: </span>
+                        <span style={{ color: FINCEPT.CYAN, fontWeight: 700 }}>{selectedNote.tickers}</span>
                       </div>
                     )}
                     {selectedNote.tags && (
                       <div style={{ gridColumn: '1 / -1' }}>
-                        <span style={{ color: BLOOMBERG.GRAY }}>TAGS: </span>
-                        <span style={{ color: BLOOMBERG.PURPLE, fontWeight: 700 }}>{selectedNote.tags}</span>
+                        <span style={{ color: FINCEPT.GRAY }}>TAGS: </span>
+                        <span style={{ color: FINCEPT.PURPLE, fontWeight: 700 }}>{selectedNote.tags}</span>
                       </div>
                     )}
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>CREATED: </span>
-                      <span style={{ color: BLOOMBERG.WHITE }}>{new Date(selectedNote.created_at).toLocaleString()}</span>
+                      <span style={{ color: FINCEPT.GRAY }}>CREATED: </span>
+                      <span style={{ color: FINCEPT.WHITE }}>{new Date(selectedNote.created_at).toLocaleString()}</span>
                     </div>
                     <div>
-                      <span style={{ color: BLOOMBERG.GRAY }}>UPDATED: </span>
-                      <span style={{ color: BLOOMBERG.WHITE }}>{new Date(selectedNote.updated_at).toLocaleString()}</span>
+                      <span style={{ color: FINCEPT.GRAY }}>UPDATED: </span>
+                      <span style={{ color: FINCEPT.WHITE }}>{new Date(selectedNote.updated_at).toLocaleString()}</span>
                     </div>
                     {selectedNote.reminder_date && (
                       <div style={{ gridColumn: '1 / -1' }}>
-                        <span style={{ color: BLOOMBERG.GRAY }}>REMINDER: </span>
-                        <span style={{ color: BLOOMBERG.YELLOW, fontWeight: 700 }}>{new Date(selectedNote.reminder_date).toLocaleString()}</span>
+                        <span style={{ color: FINCEPT.GRAY }}>REMINDER: </span>
+                        <span style={{ color: FINCEPT.YELLOW, fontWeight: 700 }}>{new Date(selectedNote.reminder_date).toLocaleString()}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Content */}
                   <div style={{
-                    color: BLOOMBERG.WHITE,
+                    color: FINCEPT.WHITE,
                     fontSize: '11px',
                     lineHeight: '1.8',
                     whiteSpace: 'pre-wrap',
@@ -1524,12 +1524,12 @@ export function NotesTab() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: BLOOMBERG.GRAY,
+                color: FINCEPT.GRAY,
                 fontSize: '11px',
                 flexDirection: 'column',
                 gap: '12px'
               }}>
-                <FileText size={48} color={BLOOMBERG.MUTED} />
+                <FileText size={48} color={FINCEPT.MUTED} />
                 <div>Select a note to view or create a new one</div>
               </div>
             )}
@@ -1539,8 +1539,8 @@ export function NotesTab() {
         {/* Minimize/Maximize Toggle for Right Panel */}
         <div style={{
           width: '20px',
-          backgroundColor: BLOOMBERG.HEADER_BG,
-          borderLeft: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderLeft: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -1548,7 +1548,7 @@ export function NotesTab() {
         }}
           onClick={() => setIsRightPanelMinimized(!isRightPanelMinimized)}
         >
-          {isRightPanelMinimized ? <ChevronRight size={14} color={BLOOMBERG.GRAY} /> : <ChevronDown size={14} color={BLOOMBERG.GRAY} />}
+          {isRightPanelMinimized ? <ChevronRight size={14} color={FINCEPT.GRAY} /> : <ChevronDown size={14} color={FINCEPT.GRAY} />}
         </div>
       </div>
 
@@ -1556,17 +1556,17 @@ export function NotesTab() {
       <TabFooter
         tabName="FINANCIAL NOTES"
         leftInfo={[
-          { label: 'Professional Note-Taking', color: BLOOMBERG.GRAY },
+          { label: 'Professional Note-Taking', color: FINCEPT.GRAY },
         ]}
         statusInfo={
           <span>
-            Notes: <span style={{ color: BLOOMBERG.ORANGE }}>{statistics?.total || 0}</span> |
-            Category: <span style={{ color: BLOOMBERG.CYAN }}>{selectedCategory}</span> |
-            Displayed: <span style={{ color: BLOOMBERG.YELLOW }}>{filteredNotes.length}</span>
+            Notes: <span style={{ color: FINCEPT.ORANGE }}>{statistics?.total || 0}</span> |
+            Category: <span style={{ color: FINCEPT.CYAN }}>{selectedCategory}</span> |
+            Displayed: <span style={{ color: FINCEPT.YELLOW }}>{filteredNotes.length}</span>
           </span>
         }
-        backgroundColor={BLOOMBERG.HEADER_BG}
-        borderColor={BLOOMBERG.BORDER}
+        backgroundColor={FINCEPT.HEADER_BG}
+        borderColor={FINCEPT.BORDER}
       />
     </div>
   );

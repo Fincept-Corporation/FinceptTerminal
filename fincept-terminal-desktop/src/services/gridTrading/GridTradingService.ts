@@ -25,6 +25,7 @@ import {
   generateGridId,
   calculateGridDetails,
 } from './GridEngine';
+import { storageService } from '../core/storageService';
 
 type GridEventCallback = (event: GridEvent) => void;
 
@@ -682,34 +683,32 @@ export class GridTradingService implements IGridTradingService {
   // ============================================================================
 
   /**
-   * Persist a grid to storage
+   * Persist a grid to storage (SQLite)
    */
   private async persistGrid(grid: GridState): Promise<void> {
     try {
       const key = `grid_${grid.config.id}`;
-      localStorage.setItem(key, JSON.stringify(grid));
+      await storageService.setJSON(key, grid);
     } catch (error) {
       console.error('[GridTradingService] Failed to persist grid:', error);
     }
   }
 
   /**
-   * Load persisted grids
+   * Load persisted grids (SQLite)
    */
   private async loadPersistedGrids(): Promise<void> {
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith('grid_')) {
-          const data = localStorage.getItem(key);
-          if (data) {
-            const grid: GridState = JSON.parse(data);
-            this.grids.set(grid.config.id, grid);
+      const gridKeys = await storageService.keysWithPrefix('grid_');
 
-            // Don't auto-start grids, just load them
-            if (grid.status === 'running') {
-              grid.status = 'paused'; // Pause on load, user can resume
-            }
+      for (const key of gridKeys) {
+        const grid = await storageService.getJSON<GridState>(key);
+        if (grid) {
+          this.grids.set(grid.config.id, grid);
+
+          // Don't auto-start grids, just load them
+          if (grid.status === 'running') {
+            grid.status = 'paused'; // Pause on load, user can resume
           }
         }
       }
@@ -721,11 +720,11 @@ export class GridTradingService implements IGridTradingService {
   }
 
   /**
-   * Delete persisted grid
+   * Delete persisted grid (SQLite)
    */
   private async deletePersistedGrid(gridId: string): Promise<void> {
     try {
-      localStorage.removeItem(`grid_${gridId}`);
+      await storageService.remove(`grid_${gridId}`);
     } catch (error) {
       console.error('[GridTradingService] Failed to delete persisted grid:', error);
     }

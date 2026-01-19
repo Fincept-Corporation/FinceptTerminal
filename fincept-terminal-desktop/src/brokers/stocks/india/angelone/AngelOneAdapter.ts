@@ -240,7 +240,12 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
         const isValid = await this.validateToken(this.accessToken);
 
         if (!isValid) {
-          console.warn('[AngelOne] Access token expired or invalid');
+          console.warn('[AngelOne] Access token expired, clearing from storage...');
+
+          // Clear expired token from database but keep API key
+          await this.storeCredentials({
+            apiKey: this.apiKey,
+          });
           this.accessToken = null;
           this._isConnected = false;
           return false;

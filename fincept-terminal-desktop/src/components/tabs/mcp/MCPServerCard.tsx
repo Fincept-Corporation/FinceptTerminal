@@ -22,19 +22,19 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
   onToggleAutoStart,
   healthInfo
 }) => {
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_YELLOW = '#FFFF00';
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#000000';
+  const FINCEPT_GREEN = '#00C800';
+  const FINCEPT_RED = '#FF0000';
+  const FINCEPT_YELLOW = '#FFFF00';
 
   const statusColor = {
-    running: BLOOMBERG_GREEN,
-    stopped: BLOOMBERG_GRAY,
-    error: BLOOMBERG_RED
-  }[server.status] || BLOOMBERG_GRAY;
+    running: FINCEPT_GREEN,
+    stopped: FINCEPT_GRAY,
+    error: FINCEPT_RED
+  }[server.status] || FINCEPT_GRAY;
 
   const statusIcon = {
     running: '🟢',
@@ -50,7 +50,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
 
   return (
     <div style={{
-      backgroundColor: BLOOMBERG_DARK_BG,
+      backgroundColor: FINCEPT_DARK_BG,
       border: `1px solid ${statusColor}`,
       padding: '8px',
       marginBottom: '6px',
@@ -67,26 +67,26 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
             <span style={{ fontSize: '14px' }}>{server.icon || '🔧'}</span>
             <span style={{ fontSize: '12px' }}>{statusIcon}</span>
-            <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px', fontWeight: 'bold' }}>
+            <span style={{ color: FINCEPT_WHITE, fontSize: '11px', fontWeight: 'bold' }}>
               {server.name}
             </span>
             <span style={{
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               fontSize: '8px',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
+              backgroundColor: FINCEPT_DARK_BG,
+              border: `1px solid ${FINCEPT_GRAY}`,
               padding: '2px 4px'
             }}>
               {server.toolCount} tools
             </span>
           </div>
 
-          <div style={{ color: BLOOMBERG_GRAY, fontSize: '9px', marginBottom: '4px' }}>
+          <div style={{ color: FINCEPT_GRAY, fontSize: '9px', marginBottom: '4px' }}>
             {server.description}
           </div>
 
           <div style={{
-            color: server.status === 'running' ? BLOOMBERG_GREEN : BLOOMBERG_GRAY,
+            color: server.status === 'running' ? FINCEPT_GREEN : FINCEPT_GRAY,
             fontSize: '9px'
           }}>
             {statusText}
@@ -97,12 +97,12 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
             <div style={{
               marginTop: '4px',
               padding: '4px 6px',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_RED}`,
+              backgroundColor: FINCEPT_DARK_BG,
+              border: `1px solid ${FINCEPT_RED}`,
               borderRadius: '2px'
             }}>
               <div style={{
-                color: BLOOMBERG_RED,
+                color: FINCEPT_RED,
                 fontSize: '8px',
                 fontWeight: 'bold',
                 marginBottom: '2px'
@@ -111,7 +111,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
               </div>
               {healthInfo.lastError && (
                 <div style={{
-                  color: BLOOMBERG_GRAY,
+                  color: FINCEPT_GRAY,
                   fontSize: '8px',
                   fontFamily: 'Consolas, monospace'
                 }}>
@@ -120,7 +120,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
               )}
               {healthInfo.lastErrorTime && (
                 <div style={{
-                  color: BLOOMBERG_GRAY,
+                  color: FINCEPT_GRAY,
                   fontSize: '7px',
                   marginTop: '2px'
                 }}>
@@ -134,12 +134,12 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
 
       {/* Command Info */}
       <div style={{
-        backgroundColor: BLOOMBERG_DARK_BG,
-        border: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: FINCEPT_DARK_BG,
+        border: `1px solid ${FINCEPT_GRAY}`,
         padding: '4px 6px',
         marginBottom: '6px',
         fontSize: '8px',
-        color: BLOOMBERG_GRAY,
+        color: FINCEPT_GRAY,
         fontFamily: 'Consolas, monospace',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -159,7 +159,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
-          color: BLOOMBERG_WHITE,
+          color: FINCEPT_WHITE,
           fontSize: '9px',
           cursor: 'pointer'
         }}>
@@ -179,8 +179,8 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
           <button
             onClick={onStop}
             style={{
-              backgroundColor: BLOOMBERG_RED,
-              color: BLOOMBERG_WHITE,
+              backgroundColor: FINCEPT_RED,
+              color: FINCEPT_WHITE,
               border: 'none',
               padding: '4px 8px',
               fontSize: '9px',
@@ -198,7 +198,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
           <button
             onClick={onStart}
             style={{
-              backgroundColor: BLOOMBERG_GREEN,
+              backgroundColor: FINCEPT_GREEN,
               color: 'black',
               border: 'none',
               padding: '4px 8px',
@@ -218,9 +218,9 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
         <button
           onClick={onRemove}
           style={{
-            backgroundColor: BLOOMBERG_DARK_BG,
-            color: BLOOMBERG_RED,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: FINCEPT_DARK_BG,
+            color: FINCEPT_RED,
+            border: `1px solid ${FINCEPT_GRAY}`,
             padding: '4px 8px',
             fontSize: '9px',
             cursor: 'pointer',

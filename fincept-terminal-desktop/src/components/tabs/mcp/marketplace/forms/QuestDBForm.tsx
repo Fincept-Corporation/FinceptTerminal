@@ -16,11 +16,11 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
   const [qdbDatabase, setQdbDatabase] = useState('qdb');
   const [qdbSsl, setQdbSsl] = useState(false);
 
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_YELLOW = '#FFFF00';
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#000000';
+  const FINCEPT_YELLOW = '#FFFF00';
 
   const buildQuestDBUrl = () => {
     const encodedPassword = encodeURIComponent(qdbPassword);
@@ -39,7 +39,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
   return (
     <div>
       <div style={{
-        color: BLOOMBERG_WHITE,
+        color: FINCEPT_WHITE,
         fontSize: '10px',
         marginBottom: '12px'
       }}>
@@ -50,7 +50,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
       <div style={{ marginBottom: '12px' }}>
         <label style={{
           display: 'block',
-          color: BLOOMBERG_ORANGE,
+          color: FINCEPT_ORANGE,
           fontSize: '10px',
           marginBottom: '4px',
           fontWeight: 'bold'
@@ -64,9 +64,9 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
           placeholder="localhost"
           style={{
             width: '100%',
-            backgroundColor: BLOOMBERG_DARK_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
-            color: BLOOMBERG_WHITE,
+            backgroundColor: FINCEPT_DARK_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
+            color: FINCEPT_WHITE,
             padding: '6px',
             fontSize: '10px',
             fontFamily: 'Consolas, monospace'
@@ -79,7 +79,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
         <div style={{ flex: 1 }}>
           <label style={{
             display: 'block',
-            color: BLOOMBERG_ORANGE,
+            color: FINCEPT_ORANGE,
             fontSize: '10px',
             marginBottom: '4px',
             fontWeight: 'bold'
@@ -93,9 +93,9 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
             placeholder="8812"
             style={{
               width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
+              backgroundColor: FINCEPT_DARK_BG,
+              border: `1px solid ${FINCEPT_GRAY}`,
+              color: FINCEPT_WHITE,
               padding: '6px',
               fontSize: '10px',
               fontFamily: 'Consolas, monospace'
@@ -106,7 +106,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
         <div style={{ flex: 1 }}>
           <label style={{
             display: 'block',
-            color: BLOOMBERG_ORANGE,
+            color: FINCEPT_ORANGE,
             fontSize: '10px',
             marginBottom: '4px',
             fontWeight: 'bold'
@@ -120,9 +120,9 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
             placeholder="qdb"
             style={{
               width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
+              backgroundColor: FINCEPT_DARK_BG,
+              border: `1px solid ${FINCEPT_GRAY}`,
+              color: FINCEPT_WHITE,
               padding: '6px',
               fontSize: '10px',
               fontFamily: 'Consolas, monospace'
@@ -135,7 +135,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
       <div style={{ marginBottom: '12px' }}>
         <label style={{
           display: 'block',
-          color: BLOOMBERG_ORANGE,
+          color: FINCEPT_ORANGE,
           fontSize: '10px',
           marginBottom: '4px',
           fontWeight: 'bold'
@@ -149,9 +149,9 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
           placeholder="admin"
           style={{
             width: '100%',
-            backgroundColor: BLOOMBERG_DARK_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
-            color: BLOOMBERG_WHITE,
+            backgroundColor: FINCEPT_DARK_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
+            color: FINCEPT_WHITE,
             padding: '6px',
             fontSize: '10px',
             fontFamily: 'Consolas, monospace'
@@ -163,7 +163,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
       <div style={{ marginBottom: '12px' }}>
         <label style={{
           display: 'block',
-          color: BLOOMBERG_ORANGE,
+          color: FINCEPT_ORANGE,
           fontSize: '10px',
           marginBottom: '4px',
           fontWeight: 'bold'
@@ -177,9 +177,9 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
           placeholder="Enter database password"
           style={{
             width: '100%',
-            backgroundColor: BLOOMBERG_DARK_BG,
-            border: `1px solid ${qdbPassword ? BLOOMBERG_ORANGE : BLOOMBERG_GRAY}`,
-            color: BLOOMBERG_WHITE,
+            backgroundColor: FINCEPT_DARK_BG,
+            border: `1px solid ${qdbPassword ? FINCEPT_ORANGE : FINCEPT_GRAY}`,
+            color: FINCEPT_WHITE,
             padding: '6px',
             fontSize: '10px',
             fontFamily: 'Consolas, monospace'
@@ -193,7 +193,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
-          color: BLOOMBERG_WHITE,
+          color: FINCEPT_WHITE,
           fontSize: '10px',
           cursor: 'pointer'
         }}>
@@ -211,12 +211,12 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
       <div style={{
         marginTop: '12px',
         padding: '8px',
-        backgroundColor: BLOOMBERG_DARK_BG,
-        border: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: FINCEPT_DARK_BG,
+        border: `1px solid ${FINCEPT_GRAY}`,
         borderRadius: '2px'
       }}>
         <div style={{
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '8px',
           marginBottom: '4px',
           fontWeight: 'bold'
@@ -224,7 +224,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
           CONNECTION STRING PREVIEW:
         </div>
         <div style={{
-          color: BLOOMBERG_YELLOW,
+          color: FINCEPT_YELLOW,
           fontSize: '9px',
           fontFamily: 'Consolas, monospace',
           wordBreak: 'break-all'
@@ -240,14 +240,14 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
         justifyContent: 'flex-end',
         marginTop: '16px',
         paddingTop: '12px',
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`
+        borderTop: `1px solid ${FINCEPT_GRAY}`
       }}>
         <button
           onClick={onCancel}
           style={{
-            backgroundColor: BLOOMBERG_DARK_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
-            color: BLOOMBERG_WHITE,
+            backgroundColor: FINCEPT_DARK_BG,
+            border: `1px solid ${FINCEPT_GRAY}`,
+            color: FINCEPT_WHITE,
             padding: '6px 12px',
             fontSize: '10px',
             cursor: 'pointer'
@@ -259,7 +259,7 @@ const QuestDBForm: React.FC<QuestDBFormProps> = ({ onSubmit, onCancel }) => {
           onClick={handleSubmit}
           disabled={!qdbPassword.trim()}
           style={{
-            backgroundColor: qdbPassword.trim() ? BLOOMBERG_ORANGE : BLOOMBERG_GRAY,
+            backgroundColor: qdbPassword.trim() ? FINCEPT_ORANGE : FINCEPT_GRAY,
             border: 'none',
             color: 'black',
             padding: '6px 12px',

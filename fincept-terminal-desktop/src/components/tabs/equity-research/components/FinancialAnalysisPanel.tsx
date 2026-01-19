@@ -1,9 +1,9 @@
-// Financial Analysis Panel - Bloomberg Style
+// Financial Analysis Panel - Fincept Style
 import React, { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { AlertCircle, CheckCircle, BarChart3, DollarSign, PieChart, Activity, FileText, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 
-// Bloomberg color constants
+// Fincept color constants
 const COLORS = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',

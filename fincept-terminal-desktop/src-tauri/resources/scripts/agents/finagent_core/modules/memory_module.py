@@ -6,10 +6,14 @@ Provides:
 - User memory storage
 - Memory optimization strategies
 - Session persistence
+- Agentic memory (agent decides what to remember)
+- Financial context memory
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 import logging
+import json
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -285,3 +289,323 @@ class MemoryModule:
     def list_strategies(cls) -> List[str]:
         """List available optimization strategies"""
         return list(cls.OPTIMIZATION_STRATEGIES.keys())
+
+
+class AgenticMemoryModule:
+    """
+    Agentic memory - agent decides what to remember.
+
+    Features:
+    - Agent autonomously stores important information
+    - Retrieves relevant memories for context
+    - Financial-specific memory types
+    """
+
+    MEMORY_TYPES = {
+        "fact": "Factual information about markets/securities",
+        "preference": "User preferences and settings",
+        "analysis": "Previous analysis results",
+        "decision": "Trading decisions and rationale",
+        "alert": "Price alerts and triggers",
+        "watchlist": "Watched securities and reasons"
+    }
+
+    def __init__(
+        self,
+        user_id: str,
+        db_path: Optional[str] = None,
+        enable_auto_store: bool = True,
+        max_memories: int = 1000
+    ):
+        """
+        Initialize agentic memory.
+
+        Args:
+            user_id: User ID
+            db_path: Database path
+            enable_auto_store: Allow agent to auto-store
+            max_memories: Maximum memories to keep
+        """
+        self.user_id = user_id
+        self.db_path = db_path or f"./memories_{user_id}.db"
+        self.enable_auto_store = enable_auto_store
+        self.max_memories = max_memories
+
+        self._memories: List[Dict[str, Any]] = []
+        self._init_db()
+
+    def _init_db(self) -> None:
+        """Initialize database for memory persistence."""
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS memories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
+                    memory_type TEXT,
+                    content TEXT,
+                    metadata TEXT,
+                    relevance_score REAL DEFAULT 1.0,
+                    access_count INTEGER DEFAULT 0,
+                    created_at TEXT,
+                    last_accessed TEXT
+                )
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_type
+                ON memories(user_id, memory_type)
+            """)
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Failed to initialize memory DB: {e}")
+
+    def store(
+        self,
+        content: str,
+        memory_type: str = "fact",
+        metadata: Dict[str, Any] = None,
+        relevance_score: float = 1.0
+    ) -> int:
+        """
+        Store a memory.
+
+        Args:
+            content: Memory content
+            memory_type: Type of memory
+            metadata: Additional metadata
+            relevance_score: Importance score (0-1)
+
+        Returns:
+            Memory ID
+        """
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            now = datetime.utcnow().isoformat()
+
+            cursor.execute("""
+                INSERT INTO memories
+                (user_id, memory_type, content, metadata, relevance_score, created_at, last_accessed)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                self.user_id,
+                memory_type,
+                content,
+                json.dumps(metadata or {}),
+                relevance_score,
+                now,
+                now
+            ))
+
+            memory_id = cursor.lastrowid
+
+            # Enforce max memories
+            cursor.execute("""
+                DELETE FROM memories
+                WHERE user_id = ? AND id NOT IN (
+                    SELECT id FROM memories
+                    WHERE user_id = ?
+                    ORDER BY relevance_score DESC, last_accessed DESC
+                    LIMIT ?
+                )
+            """, (self.user_id, self.user_id, self.max_memories))
+
+            conn.commit()
+            conn.close()
+
+            logger.debug(f"Stored memory {memory_id}: {content[:50]}...")
+            return memory_id
+
+        except Exception as e:
+            logger.error(f"Failed to store memory: {e}")
+            return -1
+
+    def recall(
+        self,
+        query: str = None,
+        memory_type: str = None,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Recall memories.
+
+        Args:
+            query: Search query (searches content)
+            memory_type: Filter by type
+            limit: Maximum results
+
+        Returns:
+            List of memory dicts
+        """
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            sql = "SELECT * FROM memories WHERE user_id = ?"
+            params = [self.user_id]
+
+            if memory_type:
+                sql += " AND memory_type = ?"
+                params.append(memory_type)
+
+            if query:
+                sql += " AND content LIKE ?"
+                params.append(f"%{query}%")
+
+            sql += " ORDER BY relevance_score DESC, last_accessed DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+
+            # Update access counts
+            if rows:
+                ids = [row[0] for row in rows]
+                placeholders = ",".join("?" * len(ids))
+                cursor.execute(f"""
+                    UPDATE memories
+                    SET access_count = access_count + 1,
+                        last_accessed = ?
+                    WHERE id IN ({placeholders})
+                """, [datetime.utcnow().isoformat()] + ids)
+                conn.commit()
+
+            conn.close()
+
+            memories = []
+            for row in rows:
+                memory = dict(zip(columns, row))
+                memory["metadata"] = json.loads(memory.get("metadata", "{}"))
+                memories.append(memory)
+
+            return memories
+
+        except Exception as e:
+            logger.error(f"Failed to recall memories: {e}")
+            return []
+
+    def update_relevance(self, memory_id: int, relevance_score: float) -> None:
+        """Update memory relevance score."""
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                UPDATE memories SET relevance_score = ? WHERE id = ?
+            """, (relevance_score, memory_id))
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Failed to update relevance: {e}")
+
+    def forget(self, memory_id: int) -> None:
+        """Delete a memory."""
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Failed to forget memory: {e}")
+
+    def get_context_for_query(self, query: str, limit: int = 3) -> str:
+        """
+        Get relevant memory context for a query.
+
+        Args:
+            query: User query
+            limit: Max memories to include
+
+        Returns:
+            Formatted context string
+        """
+        memories = self.recall(query=query, limit=limit)
+
+        if not memories:
+            return ""
+
+        context_parts = ["Relevant memories:"]
+        for mem in memories:
+            context_parts.append(f"- [{mem['memory_type']}] {mem['content']}")
+
+        return "\n".join(context_parts)
+
+    def store_financial_context(
+        self,
+        symbol: str,
+        context_type: str,
+        data: Dict[str, Any]
+    ) -> int:
+        """
+        Store financial-specific context.
+
+        Args:
+            symbol: Financial symbol
+            context_type: Type (analysis, alert, decision)
+            data: Context data
+
+        Returns:
+            Memory ID
+        """
+        content = f"{symbol}: {json.dumps(data)}"
+        metadata = {
+            "symbol": symbol,
+            "context_type": context_type,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        return self.store(
+            content=content,
+            memory_type=context_type,
+            metadata=metadata
+        )
+
+    def get_symbol_context(self, symbol: str, limit: int = 5) -> List[Dict]:
+        """Get all memories related to a symbol."""
+        return self.recall(query=symbol, limit=limit)
+
+    def to_agent_config(self) -> Dict[str, Any]:
+        """
+        Convert to Agno agent config.
+
+        Returns config for Agent initialization.
+        """
+        return {
+            "enable_agentic_memory": True,
+            "enable_user_memories": True,
+            "add_memories_to_context": True
+        }
+
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> "AgenticMemoryModule":
+        """Create from configuration."""
+        return cls(
+            user_id=config.get("user_id", "default"),
+            db_path=config.get("db_path"),
+            enable_auto_store=config.get("enable_auto_store", True),
+            max_memories=config.get("max_memories", 1000)
+        )

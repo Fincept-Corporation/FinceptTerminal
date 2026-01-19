@@ -17,13 +17,13 @@ interface ThreatLevel {
   description: string;
 }
 
-const BLOOMBERG_GREEN = '#00FF00';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_YELLOW = '#FFD700';
-const BLOOMBERG_PURPLE = '#9D4EDD';
+const FINCEPT_GREEN = '#00FF00';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_YELLOW = '#FFD700';
+const FINCEPT_PURPLE = '#9D4EDD';
 
 export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
   id,
@@ -113,20 +113,20 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
   }, [selectedCountry]);
 
   const getLevelColor = (level: number) => {
-    if (level >= 7) return BLOOMBERG_RED;
-    if (level >= 5) return BLOOMBERG_ORANGE;
-    if (level >= 3) return BLOOMBERG_YELLOW;
-    return BLOOMBERG_GREEN;
+    if (level >= 7) return FINCEPT_RED;
+    if (level >= 5) return FINCEPT_ORANGE;
+    if (level >= 3) return FINCEPT_YELLOW;
+    return FINCEPT_GREEN;
   };
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
       case 'up':
-        return <TrendingUp size={10} style={{ color: BLOOMBERG_RED }} />;
+        return <TrendingUp size={10} style={{ color: FINCEPT_RED }} />;
       case 'down':
-        return <TrendingDown size={10} style={{ color: BLOOMBERG_GREEN }} />;
+        return <TrendingDown size={10} style={{ color: FINCEPT_GREEN }} />;
       default:
-        return <span style={{ color: BLOOMBERG_GRAY }}>—</span>;
+        return <span style={{ color: FINCEPT_GRAY }}>—</span>;
     }
   };
 
@@ -145,7 +145,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
       onRefresh={loadGeopoliticsData}
       isLoading={loading}
       error={error}
-      headerColor={BLOOMBERG_PURPLE}
+      headerColor={FINCEPT_PURPLE}
     >
       <div style={{ padding: '4px' }}>
         {/* Country selector */}
@@ -157,7 +157,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
               width: '100%',
               backgroundColor: '#111',
               border: '1px solid #333',
-              color: BLOOMBERG_WHITE,
+              color: FINCEPT_WHITE,
               padding: '4px',
               fontSize: '10px'
             }}
@@ -179,7 +179,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
           alignItems: 'center'
         }}>
           <div>
-            <div style={{ fontSize: '9px', color: BLOOMBERG_GRAY }}>OVERALL RISK</div>
+            <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>OVERALL RISK</div>
             <div style={{
               fontSize: '20px',
               fontWeight: 'bold',
@@ -213,10 +213,10 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
               }}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '10px', color: BLOOMBERG_WHITE }}>
+                <div style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
                   {threat.category}
                 </div>
-                <div style={{ fontSize: '8px', color: BLOOMBERG_GRAY }}>
+                <div style={{ fontSize: '8px', color: FINCEPT_GRAY }}>
                   {threat.description}
                 </div>
               </div>
@@ -256,7 +256,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: BLOOMBERG_PURPLE,
+              color: FINCEPT_PURPLE,
               fontSize: '9px',
               cursor: 'pointer',
               display: 'flex',

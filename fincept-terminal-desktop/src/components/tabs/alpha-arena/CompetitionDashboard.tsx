@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Play, Eye, Trash2, Plus, TrendingUp, Calendar, Clock } from 'lucide-react';
 import { sqliteService, AlphaCompetition } from '@/services/core/sqliteService';
 
-const BLOOMBERG = {
+const FINCEPT = {
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
   HEADER_BG: '#1A1A1A',
@@ -66,10 +66,10 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'running': return BLOOMBERG.GREEN;
-      case 'paused': return BLOOMBERG.YELLOW;
-      case 'completed': return BLOOMBERG.GRAY;
-      default: return BLOOMBERG.CYAN;
+      case 'running': return FINCEPT.GREEN;
+      case 'paused': return FINCEPT.YELLOW;
+      case 'completed': return FINCEPT.GRAY;
+      default: return FINCEPT.CYAN;
     }
   };
 
@@ -91,7 +91,7 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         fontSize: '11px',
         fontFamily: '"IBM Plex Mono", monospace'
       }}>
@@ -111,13 +111,13 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
         gap: '24px',
         padding: '48px'
       }}>
-        <Trophy size={64} color={BLOOMBERG.GRAY} strokeWidth={1.5} />
+        <Trophy size={64} color={FINCEPT.GRAY} strokeWidth={1.5} />
         <div style={{
           textAlign: 'center',
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontFamily: '"IBM Plex Mono", monospace'
         }}>
-          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: BLOOMBERG.WHITE }}>
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: FINCEPT.WHITE }}>
             NO COMPETITIONS YET
           </div>
           <div style={{ fontSize: '11px', maxWidth: '400px', lineHeight: '1.6' }}>
@@ -128,8 +128,8 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
           onClick={onCreateNew}
           style={{
             padding: '12px 32px',
-            backgroundColor: BLOOMBERG.ORANGE,
-            color: BLOOMBERG.DARK_BG,
+            backgroundColor: FINCEPT.ORANGE,
+            color: FINCEPT.DARK_BG,
             border: 'none',
             fontSize: '11px',
             fontWeight: 700,
@@ -141,7 +141,7 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
             gap: '8px'
           }}
           onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#FFA033'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.ORANGE}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = FINCEPT.ORANGE}
         >
           <Plus size={16} />
           CREATE COMPETITION
@@ -160,8 +160,8 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
       {/* Header */}
       <div style={{
         padding: '16px 20px',
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -169,7 +169,7 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
         <div style={{
           fontSize: '11px',
           fontWeight: 700,
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           letterSpacing: '0.5px',
           fontFamily: '"IBM Plex Mono", monospace'
         }}>
@@ -179,8 +179,8 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
           onClick={onCreateNew}
           style={{
             padding: '8px 16px',
-            backgroundColor: BLOOMBERG.ORANGE,
-            color: BLOOMBERG.DARK_BG,
+            backgroundColor: FINCEPT.ORANGE,
+            color: FINCEPT.DARK_BG,
             border: 'none',
             fontSize: '10px',
             fontWeight: 700,
@@ -192,7 +192,7 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
             gap: '6px'
           }}
           onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#FFA033'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.ORANGE}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = FINCEPT.ORANGE}
         >
           <Plus size={14} />
           NEW
@@ -215,8 +215,8 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
               key={comp.id}
               onClick={() => onViewCompetition(comp)}
               style={{
-                backgroundColor: comp.id === currentCompetitionId ? BLOOMBERG.HEADER_BG : BLOOMBERG.PANEL_BG,
-                border: `1px solid ${comp.id === currentCompetitionId ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                backgroundColor: comp.id === currentCompetitionId ? FINCEPT.HEADER_BG : FINCEPT.PANEL_BG,
+                border: `1px solid ${comp.id === currentCompetitionId ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
                 padding: '16px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
@@ -224,12 +224,12 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
               }}
               onMouseOver={(e) => {
                 if (comp.id !== currentCompetitionId) {
-                  e.currentTarget.style.borderColor = BLOOMBERG.GRAY;
+                  e.currentTarget.style.borderColor = FINCEPT.GRAY;
                 }
               }}
               onMouseOut={(e) => {
                 if (comp.id !== currentCompetitionId) {
-                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
                 }
               }}
             >
@@ -244,7 +244,7 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
                   <div style={{
                     fontSize: '12px',
                     fontWeight: 700,
-                    color: BLOOMBERG.WHITE,
+                    color: FINCEPT.WHITE,
                     marginBottom: '4px'
                   }}>
                     {comp.name}
@@ -267,8 +267,8 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
                     style={{
                       padding: '4px 8px',
                       backgroundColor: 'transparent',
-                      border: `1px solid ${BLOOMBERG.CYAN}`,
-                      color: BLOOMBERG.CYAN,
+                      border: `1px solid ${FINCEPT.CYAN}`,
+                      color: FINCEPT.CYAN,
                       fontSize: '9px',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -283,8 +283,8 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
                     style={{
                       padding: '4px 8px',
                       backgroundColor: 'transparent',
-                      border: `1px solid ${BLOOMBERG.RED}`,
-                      color: BLOOMBERG.RED,
+                      border: `1px solid ${FINCEPT.RED}`,
+                      color: FINCEPT.RED,
                       fontSize: '9px',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -305,29 +305,29 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
                 marginBottom: '12px'
               }}>
                 <div>
-                  <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '2px' }}>SYMBOL</div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN, fontWeight: 600 }}>{comp.symbol}</div>
+                  <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px' }}>SYMBOL</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.CYAN, fontWeight: 600 }}>{comp.symbol}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '2px' }}>MODE</div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.YELLOW, fontWeight: 600 }}>{comp.mode.toUpperCase()}</div>
+                  <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px' }}>MODE</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.YELLOW, fontWeight: 600 }}>{comp.mode.toUpperCase()}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '2px' }}>CYCLES</div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.WHITE, fontWeight: 600 }}>{comp.cycle_count}</div>
+                  <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px' }}>CYCLES</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.WHITE, fontWeight: 600 }}>{comp.cycle_count}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '2px' }}>CAPITAL</div>
-                  <div style={{ fontSize: '10px', color: BLOOMBERG.GREEN, fontWeight: 600 }}>${comp.initial_capital.toLocaleString()}</div>
+                  <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '2px' }}>CAPITAL</div>
+                  <div style={{ fontSize: '10px', color: FINCEPT.GREEN, fontWeight: 600 }}>${comp.initial_capital.toLocaleString()}</div>
                 </div>
               </div>
 
               {/* Timestamps */}
               <div style={{
-                borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
                 paddingTop: '8px',
                 fontSize: '8px',
-                color: BLOOMBERG.MUTED
+                color: FINCEPT.MUTED
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <Calendar size={10} />

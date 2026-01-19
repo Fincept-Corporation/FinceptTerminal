@@ -1491,3 +1491,22 @@ pub async fn zerodha_get_instrument(
         timestamp,
     })
 }
+
+/// Get master contract metadata (last updated, count)
+/// NOTE: Zerodha master contract is not yet persisted to database.
+/// This is a placeholder that returns not-available status.
+#[tauri::command]
+pub async fn zerodha_get_master_contract_metadata() -> Result<ApiResponse<Value>, String> {
+    let timestamp = chrono::Utc::now().timestamp();
+
+    // TODO: Implement proper database storage for Zerodha master contract
+    // Currently zerodha_download_master_contract just returns data without persisting
+    // Once database storage is implemented, this should query the database for metadata
+
+    Ok(ApiResponse {
+        success: false,
+        data: None,
+        error: Some("Master contract database not yet implemented for Zerodha".to_string()),
+        timestamp,
+    })
+}

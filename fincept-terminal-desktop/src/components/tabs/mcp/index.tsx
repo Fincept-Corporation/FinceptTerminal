@@ -1,5 +1,5 @@
 // MCP Integrations Tab - Main Component
-// Manage MCP servers and tools in Bloomberg-style interface
+// Manage MCP servers and tools in Fincept-style interface
 
 import React, { useState, useEffect } from 'react';
 import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare } from 'lucide-react';
@@ -21,7 +21,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   const [statusMessage, setStatusMessage] = useState('Initializing...');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Bloomberg colors
+  // Fincept colors
   const ORANGE = '#FFA500';
   const WHITE = '#FFFFFF';
   const GRAY = '#787878';

@@ -1,5 +1,5 @@
 // File: src/components/command-bar/CommandBar.tsx
-// Bloomberg-style command bar with autocomplete
+// Fincept-style command bar with autocomplete
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, ChevronRight } from 'lucide-react';

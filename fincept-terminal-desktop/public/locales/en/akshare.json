@@ -1,0 +1,117 @@
+{
+  "title": "AKShare Data Explorer",
+  "subtitle": "400+ Financial Data Endpoints",
+  "description": "Access comprehensive financial data covering bonds, derivatives, economics, funds, and alternative data from Chinese and global markets.",
+  "dataSources": {
+    "title": "DATA SOURCES",
+    "bonds": {
+      "name": "Bonds",
+      "description": "Chinese & International bond markets, yield curves, government & corporate bonds"
+    },
+    "derivatives": {
+      "name": "Derivatives",
+      "description": "Options, futures, Greeks, volatility, spreads from Chinese exchanges"
+    },
+    "chinaEconomics": {
+      "name": "China Economics",
+      "description": "Chinese macro indicators: GDP, CPI, PPI, PMI, money supply, trade data"
+    },
+    "globalEconomics": {
+      "name": "Global Economics",
+      "description": "US, Eurozone, UK, Japan, Australia, Canada macro data & global indicators"
+    },
+    "funds": {
+      "name": "Funds",
+      "description": "ETF analytics, mutual funds, fund ratings, risk metrics, flows"
+    },
+    "alternative": {
+      "name": "Alternative Data",
+      "description": "Air quality, carbon trading, energy, real estate, auto sales, sentiment"
+    },
+    "analysis": {
+      "name": "Market Analysis",
+      "description": "Technical analysis, market breadth, sector rotation, smart money"
+    }
+  },
+  "endpoints": {
+    "title": "ENDPOINTS",
+    "search": "Search endpoints...",
+    "available": "{{count}} endpoints available",
+    "noResults": "No endpoints match your search"
+  },
+  "data": {
+    "loading": "Loading data...",
+    "noData": "No data returned",
+    "records": "{{count}} records",
+    "showing": "Showing first {{shown}} of {{total}} records",
+    "queryFailed": "Query Failed"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "download": "Download CSV",
+    "copy": "Copy JSON",
+    "table": "Table",
+    "json": "JSON"
+  },
+  "panels": {
+    "favorites": "FAVORITES",
+    "history": "QUERY HISTORY",
+    "noFavorites": "No favorites yet. Click the bookmark icon on any endpoint to add it here.",
+    "noHistory": "No queries yet"
+  },
+  "categories": {
+    "chineseBondMarket": "Chinese Bond Market",
+    "yieldCurves": "Yield Curves",
+    "governmentBonds": "Government Bonds",
+    "corporateBonds": "Corporate Bonds",
+    "convertibleBonds": "Convertible Bonds",
+    "internationalBonds": "International Bonds",
+    "bondIndices": "Bond Indices",
+    "ratings": "Ratings",
+    "options": "Options",
+    "futures": "Futures",
+    "greeks": "Greeks",
+    "volatility": "Volatility",
+    "spreads": "Spreads",
+    "inventory": "Inventory",
+    "gdp": "GDP",
+    "inflation": "Inflation",
+    "pmi": "PMI",
+    "moneySupply": "Money Supply",
+    "trade": "Trade",
+    "industrial": "Industrial",
+    "consumer": "Consumer",
+    "fiscal": "Fiscal",
+    "banking": "Banking",
+    "realEstate": "Real Estate",
+    "us": "United States",
+    "eurozone": "Eurozone",
+    "uk": "United Kingdom",
+    "japan": "Japan",
+    "australia": "Australia",
+    "canada": "Canada",
+    "switzerland": "Switzerland",
+    "globalIndices": "Global Indices",
+    "commodities": "Commodities",
+    "etf": "ETF",
+    "mutualFunds": "Mutual Funds",
+    "fundRankings": "Fund Rankings",
+    "riskMetrics": "Risk Metrics",
+    "fundFlows": "Fund Flows",
+    "privateEquity": "Private Equity",
+    "airQuality": "Air Quality",
+    "carbonTrading": "Carbon Trading",
+    "energy": "Energy",
+    "autoSales": "Auto Sales",
+    "movies": "Movies",
+    "demographics": "Demographics",
+    "sentiment": "Sentiment",
+    "rankings": "Rankings"
+  },
+  "welcome": {
+    "title": "AKShare Data Explorer",
+    "description": "Access 400+ financial data endpoints covering bonds, derivatives, economics, funds, and alternative data from Chinese and global markets.",
+    "selectSource": "Select a data source to browse endpoints",
+    "categories": "{{count}} categories"
+  }
+}

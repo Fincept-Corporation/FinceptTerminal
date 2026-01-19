@@ -337,6 +337,9 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
                 // Note: Data will be auto-loaded by the useEffect that watches isAuthenticated
               } else {
                 console.log(`[StockBrokerContext] Session restore failed (token may be expired)`);
+                // Indian broker tokens expire at midnight IST - notify user
+                setError(`Session expired. Please re-authenticate with ${activeBroker}.`);
+                setIsAuthenticated(false);
               }
             } else {
               console.log(`[StockBrokerContext] No access token found, manual OAuth required`);
@@ -480,6 +483,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
             setAdapter(adapterToUse);
           }
           setIsAuthenticated(true);
+          setError(null); // Clear any previous session expired error
 
           // Initialize unified trading session
           try {

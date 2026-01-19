@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { marketDataService } from '../../../../services/markets/marketDataService';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../finceptStyles';
 
 interface AddAssetModalProps {
   show: boolean;
@@ -73,7 +73,7 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
         fontFamily: TYPOGRAPHY.MONO
       }}>
         <div style={{
-          color: BLOOMBERG.GREEN,
+          color: FINCEPT.GREEN,
           fontSize: TYPOGRAPHY.HEADING,
           fontWeight: TYPOGRAPHY.BOLD,
           marginBottom: SPACING.LARGE,
@@ -133,17 +133,17 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
               BUY PRICE *
             </label>
             {fetchingPrice && (
-              <span style={{ color: BLOOMBERG.YELLOW, fontSize: TYPOGRAPHY.TINY }}>
+              <span style={{ color: FINCEPT.YELLOW, fontSize: TYPOGRAPHY.TINY }}>
                 ● Fetching...
               </span>
             )}
             {!fetchingPrice && priceError && (
-              <span style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.TINY }}>
+              <span style={{ color: FINCEPT.RED, fontSize: TYPOGRAPHY.TINY }}>
                 {priceError}
               </span>
             )}
             {!fetchingPrice && !priceError && formState.price && formState.symbol && (
-              <span style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.TINY }}>
+              <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.TINY }}>
                 ✓ Auto-fetched
               </span>
             )}
@@ -154,7 +154,7 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
             onChange={(e) => onPriceChange(e.target.value)}
             style={{
               ...COMMON_STYLES.inputField,
-              borderColor: fetchingPrice ? BLOOMBERG.YELLOW : BLOOMBERG.BORDER
+              borderColor: fetchingPrice ? FINCEPT.YELLOW : FINCEPT.BORDER
             }}
             {...createFocusHandlers()}
             placeholder="150.00"
@@ -167,7 +167,7 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
             onClick={onClose}
             style={COMMON_STYLES.buttonSecondary}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+              e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
@@ -179,8 +179,8 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
             onClick={onAdd}
             style={{
               ...COMMON_STYLES.buttonPrimary,
-              backgroundColor: BLOOMBERG.GREEN,
-              borderColor: BLOOMBERG.GREEN
+              backgroundColor: FINCEPT.GREEN,
+              borderColor: FINCEPT.GREEN
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';

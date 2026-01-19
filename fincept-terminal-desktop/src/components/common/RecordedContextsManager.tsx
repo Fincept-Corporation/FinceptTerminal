@@ -1,7 +1,7 @@
 /**
  * Recorded Contexts Manager
  * UI for managing all recorded contexts across tabs
- * Bloomberg Terminal Style
+ * Fincept Terminal Style
  */
 
 import React, { useState, useEffect } from 'react';

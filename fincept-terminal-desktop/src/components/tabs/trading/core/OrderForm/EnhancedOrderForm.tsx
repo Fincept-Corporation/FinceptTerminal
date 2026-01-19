@@ -15,7 +15,7 @@ import type { UnifiedOrderRequest } from '../../types';
 import type { OrderType, OrderSide } from '../../../../../brokers/crypto/types';
 import { validateOrder, formatValidationErrors } from '../../utils/orderValidation';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -140,7 +140,7 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
             display: 'block',
             fontSize: '9px',
             fontWeight: 700,
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             marginBottom: '6px',
             letterSpacing: '0.5px',
           }}
@@ -155,9 +155,9 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
               style={{
                 flex: 1,
                 padding: '8px 6px',
-                backgroundColor: orderType === type ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                border: `1px solid ${orderType === type ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                color: orderType === type ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                backgroundColor: orderType === type ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+                border: `1px solid ${orderType === type ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                color: orderType === type ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 fontSize: '9px',
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -166,16 +166,16 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
               }}
               onMouseEnter={(e) => {
                 if (orderType !== type) {
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                  e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
-                  e.currentTarget.style.color = BLOOMBERG.ORANGE;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                  e.currentTarget.style.color = FINCEPT.ORANGE;
                 }
               }}
               onMouseLeave={(e) => {
                 if (orderType !== type) {
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.PANEL_BG;
-                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                  e.currentTarget.style.color = BLOOMBERG.GRAY;
+                  e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                  e.currentTarget.style.color = FINCEPT.GRAY;
                 }
               }}
             >
@@ -192,9 +192,9 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
           style={{
             flex: 1,
             padding: '10px',
-            backgroundColor: side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.PANEL_BG,
-            border: `2px solid ${side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
-            color: side === 'buy' ? BLOOMBERG.DARK_BG : BLOOMBERG.GREEN,
+            backgroundColor: side === 'buy' ? FINCEPT.GREEN : FINCEPT.PANEL_BG,
+            border: `2px solid ${side === 'buy' ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+            color: side === 'buy' ? FINCEPT.DARK_BG : FINCEPT.GREEN,
             fontSize: '11px',
             fontWeight: 700,
             cursor: 'pointer',
@@ -208,9 +208,9 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
           style={{
             flex: 1,
             padding: '10px',
-            backgroundColor: side === 'sell' ? BLOOMBERG.RED : BLOOMBERG.PANEL_BG,
-            border: `2px solid ${side === 'sell' ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
-            color: side === 'sell' ? BLOOMBERG.WHITE : BLOOMBERG.RED,
+            backgroundColor: side === 'sell' ? FINCEPT.RED : FINCEPT.PANEL_BG,
+            border: `2px solid ${side === 'sell' ? FINCEPT.RED : FINCEPT.BORDER}`,
+            color: side === 'sell' ? FINCEPT.WHITE : FINCEPT.RED,
             fontSize: '11px',
             fontWeight: 700,
             cursor: 'pointer',
@@ -254,9 +254,9 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
         <div
           style={{
             padding: '10px',
-            backgroundColor: `${BLOOMBERG.RED}15`,
-            border: `1px solid ${BLOOMBERG.RED}`,
-            color: BLOOMBERG.RED,
+            backgroundColor: `${FINCEPT.RED}15`,
+            border: `1px solid ${FINCEPT.RED}`,
+            color: FINCEPT.RED,
             fontSize: '10px',
             whiteSpace: 'pre-line',
           }}
@@ -270,9 +270,9 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
         <div
           style={{
             padding: '10px',
-            backgroundColor: `${BLOOMBERG.RED}15`,
-            border: `1px solid ${BLOOMBERG.RED}`,
-            color: BLOOMBERG.RED,
+            backgroundColor: `${FINCEPT.RED}15`,
+            border: `1px solid ${FINCEPT.RED}`,
+            color: FINCEPT.RED,
             fontSize: '10px',
           }}
         >
@@ -287,9 +287,9 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
         style={{
           width: '100%',
           padding: '12px',
-          backgroundColor: canSubmit ? (side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED) : BLOOMBERG.PANEL_BG,
-          border: `2px solid ${canSubmit ? (side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED) : BLOOMBERG.BORDER}`,
-          color: canSubmit ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+          backgroundColor: canSubmit ? (side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED) : FINCEPT.PANEL_BG,
+          border: `2px solid ${canSubmit ? (side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED) : FINCEPT.BORDER}`,
+          color: canSubmit ? FINCEPT.WHITE : FINCEPT.GRAY,
           fontSize: '12px',
           fontWeight: 700,
           cursor: canSubmit ? 'pointer' : 'not-allowed',

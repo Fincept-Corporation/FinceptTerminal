@@ -1,13 +1,13 @@
 import React from 'react';
 import { WatchlistStockWithQuote } from '../../../services/core/watchlistService';
-import { BLOOMBERG_COLORS, formatCurrency, formatPercent, formatVolume, getChangeColor } from './utils';
+import { FINCEPT_COLORS, formatCurrency, formatPercent, formatVolume, getChangeColor } from './utils';
 
 interface StockDetailPanelProps {
   stock: WatchlistStockWithQuote | null;
 }
 
 const StockDetailPanel: React.FC<StockDetailPanelProps> = ({ stock }) => {
-  const { ORANGE, WHITE, GRAY, GREEN, RED, YELLOW, CYAN, PANEL_BG } = BLOOMBERG_COLORS;
+  const { ORANGE, WHITE, GRAY, GREEN, RED, YELLOW, CYAN, PANEL_BG } = FINCEPT_COLORS;
 
   if (!stock) {
     return (

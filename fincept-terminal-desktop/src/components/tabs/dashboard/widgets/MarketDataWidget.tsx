@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { marketDataService, QuoteData } from '../../../../services/markets/marketDataService';
+import { useCache } from '../../../../hooks/useCache';
 
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GREEN = '#00C800';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_GRAY = '#787878';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GREEN = '#00C800';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_GRAY = '#787878';
 
 interface MarketDataWidgetProps {
   id: string;
@@ -22,33 +23,21 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
   onRemove
 }) => {
   const { t } = useTranslation('dashboard');
-  const [quotes, setQuotes] = useState<QuoteData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadQuotes = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Use cached quotes with 10 minute cache age (matches refresh interval)
-      const data = await marketDataService.getEnhancedQuotesWithCache(
-        tickers,
-        category,
-        10 // 10 minutes cache
-      );
-      setQuotes(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load market data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadQuotes();
-    const interval = setInterval(loadQuotes, 10 * 60 * 1000); // Refresh every 10 minutes
-    return () => clearInterval(interval);
-  }, [tickers.join(',')]);
+  // Use unified cache hook for market data
+  const {
+    data: quotes,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<QuoteData[]>({
+    key: `market-widget:${category}:${tickers.sort().join(',')}`,
+    category: 'market-quotes',
+    fetcher: () => marketDataService.getEnhancedQuotes(tickers),
+    ttl: '10m',
+    refetchInterval: 10 * 60 * 1000, // Auto-refresh every 10 minutes
+    staleWhileRevalidate: true
+  });
 
   const formatChange = (value: number) => value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
   const formatPercent = (value: number) => value >= 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`;
@@ -58,9 +47,9 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
       id={id}
       title={`MARKETS - ${category}`}
       onRemove={onRemove}
-      onRefresh={loadQuotes}
+      onRefresh={refresh}
       isLoading={loading}
-      error={error}
+      error={error?.message}
     >
       <div style={{ padding: '4px' }}>
         <div style={{
@@ -69,8 +58,8 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
           gap: '4px',
           fontSize: '9px',
           fontWeight: 'bold',
-          color: BLOOMBERG_WHITE,
-          borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+          color: FINCEPT_WHITE,
+          borderBottom: `1px solid ${FINCEPT_GRAY}`,
           padding: '4px 0',
           marginBottom: '4px'
         }}>
@@ -79,7 +68,7 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
           <div style={{ textAlign: 'right' }}>{t('widgets.change')}</div>
           <div style={{ textAlign: 'right' }}>{t('widgets.percentChange')}</div>
         </div>
-        {quotes.map((quote, index) => (
+        {(quotes || []).map((quote, index) => (
           <div
             key={index}
             style={{
@@ -91,16 +80,16 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
               borderBottom: `1px solid rgba(120,120,120,0.3)`
             }}
           >
-            <div style={{ color: BLOOMBERG_WHITE }}>{quote.symbol}</div>
-            <div style={{ color: BLOOMBERG_WHITE, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
+            <div style={{ color: FINCEPT_WHITE }}>{quote.symbol}</div>
+            <div style={{ color: FINCEPT_WHITE, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
             <div style={{
-              color: quote.change >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+              color: quote.change >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
               textAlign: 'right'
             }}>
               {formatChange(quote.change)}
             </div>
             <div style={{
-              color: quote.change_percent >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+              color: quote.change_percent >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
               textAlign: 'right'
             }}>
               {formatPercent(quote.change_percent)}

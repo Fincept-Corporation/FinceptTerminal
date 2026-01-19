@@ -56,20 +56,15 @@ interface PlansResponse {
 
 interface CheckoutResponse {
   order_id: string;
-  checkout_url: string;
+  cf_order_id: string;
   payment_session_id: string;
-  pricing: {
-    currency: string;
-    amount: number;
-    base_usd: number;
-    symbol: string;
-  };
-  plan: {
-    name: string;
-    credits: number;
-    validity_days: number;
-  };
-  expires_at: string;
+  order_status: string;
+  order_amount: number;
+  order_currency: string;
+  payment_uuid: string;
+  plan_name: string;
+  environment: string;
+  checkout_url?: string;
 }
 
 interface UserSubscriptionResponse {
@@ -255,13 +250,29 @@ export class PaymentApiService {
       'X-API-Key': apiKey
     };
 
-    // Send plan_id and currency (based on API spec)
     const requestBody = {
       plan_id: request.plan_id,
       currency: request.currency || 'USD'
     };
 
-    return await makePaymentApiRequest<CheckoutResponse>('POST', '/payment/create-order', requestBody, headers);
+    const response = await makePaymentApiRequest<{ data: CheckoutResponse }>('POST', '/payment/create-order', requestBody, headers);
+
+    // Construct checkout URL from payment_session_id
+    if (response.success && response.data?.data?.payment_session_id) {
+      const checkoutData = response.data.data;
+      checkoutData.checkout_url = `https://fincept.in/checkout.html?session=${checkoutData.payment_session_id}`;
+      return {
+        success: true,
+        data: checkoutData,
+        status_code: response.status_code
+      };
+    }
+
+    return {
+      success: false,
+      error: response.error || 'Failed to create checkout session',
+      status_code: response.status_code
+    };
   }
 
   // Handle payment success
@@ -339,7 +350,7 @@ export class PaymentApiService {
   ): Promise<PaymentApiResponse<any>> {
     return makePaymentApiRequest(
       'GET',
-      `/payment/status/${transactionId}`,
+      `/payment/order/${transactionId}`,
       undefined,
       { 'X-API-Key': apiKey }
     );

@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
-import { fetchNewsWithCache, NewsArticle } from '../../../../services/news/newsService';
+import { fetchAllNews, NewsArticle } from '../../../../services/news/newsService';
+import { useCache } from '../../../../hooks/useCache';
 
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GREEN = '#00C800';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_YELLOW = '#FFFF00';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_BLUE = '#6496FA';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GREEN = '#00C800';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_YELLOW = '#FFFF00';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_BLUE = '#6496FA';
 
 interface NewsWidgetProps {
   id: string;
@@ -24,38 +25,37 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
   onRemove
 }) => {
   const { t } = useTranslation('dashboard');
-  const [news, setNews] = useState<NewsArticle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadNews = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const articles = await fetchNewsWithCache();
-      const filtered = category === 'ALL'
-        ? articles
-        : articles.filter(a => a.category === category);
-      setNews(filtered.slice(0, limit));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load news');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Use unified cache hook for news data
+  const {
+    data: allNews,
+    isLoading: loading,
+    error,
+    refresh
+  } = useCache<NewsArticle[]>({
+    key: 'news:all-feeds',
+    category: 'news',
+    fetcher: fetchAllNews,
+    ttl: '10m',
+    refetchInterval: 10 * 60 * 1000, // Auto-refresh every 10 minutes
+    staleWhileRevalidate: true
+  });
 
-  useEffect(() => {
-    loadNews();
-    const interval = setInterval(loadNews, 10 * 60 * 1000); // Refresh every 10 minutes
-    return () => clearInterval(interval);
-  }, [category, limit]);
+  // Filter and limit news based on category
+  const news = useMemo(() => {
+    if (!allNews) return [];
+    const filtered = category === 'ALL'
+      ? allNews
+      : allNews.filter(a => a.category === category);
+    return filtered.slice(0, limit);
+  }, [allNews, category, limit]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'FLASH': return BLOOMBERG_RED;
+      case 'FLASH': return FINCEPT_RED;
       case 'URGENT': return '#FFA500';
-      case 'BREAKING': return BLOOMBERG_YELLOW;
-      default: return BLOOMBERG_GREEN;
+      case 'BREAKING': return FINCEPT_YELLOW;
+      default: return FINCEPT_GREEN;
     }
   };
 
@@ -64,9 +64,9 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
       id={id}
       title={`${t('widgets.news')} - ${category}`}
       onRemove={onRemove}
-      onRefresh={loadNews}
+      onRefresh={refresh}
       isLoading={loading}
-      error={error}
+      error={error?.message}
     >
       <div style={{ padding: '8px' }}>
         {news.map((article, index) => (
@@ -75,23 +75,23 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
             style={{
               marginBottom: '8px',
               paddingBottom: '8px',
-              borderBottom: index < news.length - 1 ? `1px solid ${BLOOMBERG_GRAY}` : 'none'
+              borderBottom: index < news.length - 1 ? `1px solid ${FINCEPT_GRAY}` : 'none'
             }}
           >
             <div style={{ display: 'flex', gap: '4px', marginBottom: '2px', fontSize: '8px' }}>
               <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold' }}>
                 [{article.priority}]
               </span>
-              <span style={{ color: BLOOMBERG_BLUE }}>[{article.category}]</span>
-              <span style={{ color: BLOOMBERG_GRAY }}>{article.time}</span>
+              <span style={{ color: FINCEPT_BLUE }}>[{article.category}]</span>
+              <span style={{ color: FINCEPT_GRAY }}>{article.time}</span>
             </div>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '10px', fontWeight: 'bold', marginBottom: '2px', lineHeight: '1.2' }}>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '10px', fontWeight: 'bold', marginBottom: '2px', lineHeight: '1.2' }}>
               {article.headline}
             </div>
-            <div style={{ color: BLOOMBERG_GRAY, fontSize: '9px', lineHeight: '1.2' }}>
+            <div style={{ color: FINCEPT_GRAY, fontSize: '9px', lineHeight: '1.2' }}>
               {article.summary.substring(0, 100)}...
             </div>
-            <div style={{ color: BLOOMBERG_GRAY, fontSize: '8px', marginTop: '2px' }}>
+            <div style={{ color: FINCEPT_GRAY, fontSize: '8px', marginTop: '2px' }}>
               {article.source}
             </div>
           </div>

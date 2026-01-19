@@ -1,6 +1,6 @@
 /**
  * Fortitudo.tech Analytics Panel - Portfolio Risk Analytics
- * Bloomberg Professional Design
+ * Fincept Professional Design
  * Integrated with fortitudo.tech library via PyO3
  */
 
@@ -57,8 +57,8 @@ import {
 import { type Portfolio, type PortfolioSummary } from '@/services/portfolio/portfolioService';
 import { Briefcase, Database } from 'lucide-react';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -482,25 +482,25 @@ export function FortitudoPanel() {
   // Render unavailable state
   if (isFortitudoAvailable === false) {
     return (
-      <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+      <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: FINCEPT.DARK_BG }}>
         <div className="max-w-lg text-center">
-          <AlertCircle size={64} color={BLOOMBERG.RED} className="mx-auto mb-6" />
-          <h2 className="text-2xl font-bold uppercase tracking-wide mb-4" style={{ color: BLOOMBERG.WHITE }}>
+          <AlertCircle size={64} color={FINCEPT.RED} className="mx-auto mb-6" />
+          <h2 className="text-2xl font-bold uppercase tracking-wide mb-4" style={{ color: FINCEPT.WHITE }}>
             FORTITUDO.TECH NOT INSTALLED
           </h2>
-          <p className="text-sm font-mono mb-6" style={{ color: BLOOMBERG.GRAY }}>
+          <p className="text-sm font-mono mb-6" style={{ color: FINCEPT.GRAY }}>
             Install the library to enable portfolio risk analytics:
           </p>
           <code
             className="block p-4 rounded text-sm font-mono mb-6"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, color: BLOOMBERG.ORANGE }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.ORANGE }}
           >
             pip install fortitudo.tech cvxopt
           </code>
           <button
             onClick={checkFortitudoStatus}
             className="px-6 py-2 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors inline-flex items-center gap-2"
-            style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+            style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
           >
             <RefreshCw size={16} />
             RETRY
@@ -513,43 +513,43 @@ export function FortitudoPanel() {
   // Loading state
   if (isFortitudoAvailable === null) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-        <RefreshCw size={48} color={BLOOMBERG.ORANGE} className="animate-spin" />
+      <div className="flex items-center justify-center h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+        <RefreshCw size={48} color={FINCEPT.ORANGE} className="animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-auto" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+    <div className="h-full overflow-auto" style={{ backgroundColor: FINCEPT.DARK_BG }}>
       <div className="p-4 space-y-4">
         {/* Header */}
         <div
           className="flex items-center justify-between p-3 rounded border"
-          style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+          style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded" style={{ backgroundColor: BLOOMBERG.ORANGE }}>
-              <Shield size={20} color={BLOOMBERG.DARK_BG} />
+            <div className="p-2 rounded" style={{ backgroundColor: FINCEPT.ORANGE }}>
+              <Shield size={20} color={FINCEPT.DARK_BG} />
             </div>
             <div>
-              <h2 className="font-bold text-sm uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+              <h2 className="font-bold text-sm uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                 FORTITUDO.TECH RISK ANALYTICS
               </h2>
-              <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                 VaR, CVaR, Option Pricing, Entropy Pooling
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} color={BLOOMBERG.GREEN} />
-            <span className="text-xs font-mono" style={{ color: BLOOMBERG.GREEN }}>READY</span>
+            <CheckCircle2 size={16} color={FINCEPT.GREEN} />
+            <span className="text-xs font-mono" style={{ color: FINCEPT.GREEN }}>READY</span>
           </div>
         </div>
 
         {/* Mode Selector */}
         <div
           className="flex rounded border overflow-hidden"
-          style={{ borderColor: BLOOMBERG.BORDER }}
+          style={{ borderColor: FINCEPT.BORDER }}
         >
           {[
             { id: 'portfolio', label: 'PORTFOLIO RISK', icon: Shield },
@@ -562,8 +562,8 @@ export function FortitudoPanel() {
               onClick={() => setActiveMode(mode.id as AnalysisMode)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide transition-all"
               style={{
-                backgroundColor: activeMode === mode.id ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                color: activeMode === mode.id ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                backgroundColor: activeMode === mode.id ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
+                color: activeMode === mode.id ? FINCEPT.DARK_BG : FINCEPT.GRAY
               }}
             >
               <mode.icon size={14} />
@@ -575,23 +575,23 @@ export function FortitudoPanel() {
         {/* Data Source Selector */}
         <div
           className="p-3 rounded border"
-          style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+          style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Database size={16} color={BLOOMBERG.CYAN} />
-              <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+              <Database size={16} color={FINCEPT.CYAN} />
+              <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                 DATA SOURCE
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex rounded border overflow-hidden" style={{ borderColor: BLOOMBERG.BORDER }}>
+              <div className="flex rounded border overflow-hidden" style={{ borderColor: FINCEPT.BORDER }}>
                 <button
                   onClick={() => setDataSource('sample')}
                   className="px-3 py-1.5 text-xs font-bold uppercase transition-all"
                   style={{
-                    backgroundColor: dataSource === 'sample' ? BLOOMBERG.ORANGE : BLOOMBERG.DARK_BG,
-                    color: dataSource === 'sample' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                    backgroundColor: dataSource === 'sample' ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
+                    color: dataSource === 'sample' ? FINCEPT.DARK_BG : FINCEPT.GRAY
                   }}
                 >
                   SAMPLE DATA
@@ -600,8 +600,8 @@ export function FortitudoPanel() {
                   onClick={() => setDataSource('portfolio')}
                   className="px-3 py-1.5 text-xs font-bold uppercase transition-all flex items-center gap-1"
                   style={{
-                    backgroundColor: dataSource === 'portfolio' ? BLOOMBERG.CYAN : BLOOMBERG.DARK_BG,
-                    color: dataSource === 'portfolio' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                    backgroundColor: dataSource === 'portfolio' ? FINCEPT.CYAN : FINCEPT.DARK_BG,
+                    color: dataSource === 'portfolio' ? FINCEPT.DARK_BG : FINCEPT.GRAY
                   }}
                 >
                   <Briefcase size={12} />
@@ -613,10 +613,10 @@ export function FortitudoPanel() {
 
           {/* Portfolio Selector (shown when portfolio data source is selected) */}
           {dataSource === 'portfolio' && (
-            <div className="mt-3 pt-3 border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: FINCEPT.BORDER }}>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     SELECT PORTFOLIO
                   </label>
                   <select
@@ -624,9 +624,9 @@ export function FortitudoPanel() {
                     onChange={e => setSelectedPortfolioId(e.target.value || null)}
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   >
                     <option value="">-- Select Portfolio --</option>
@@ -636,7 +636,7 @@ export function FortitudoPanel() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     HISTORICAL DAYS
                   </label>
                   <input
@@ -647,9 +647,9 @@ export function FortitudoPanel() {
                     max="1000"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
@@ -658,7 +658,7 @@ export function FortitudoPanel() {
                     onClick={() => selectedPortfolioId && loadPortfolioData(selectedPortfolioId)}
                     disabled={!selectedPortfolioId || isLoadingPortfolio}
                     className="px-4 py-2 rounded font-bold uppercase tracking-wide text-xs hover:bg-opacity-90 transition-colors flex items-center gap-2 disabled:opacity-50"
-                    style={{ backgroundColor: BLOOMBERG.CYAN, color: BLOOMBERG.DARK_BG }}
+                    style={{ backgroundColor: FINCEPT.CYAN, color: FINCEPT.DARK_BG }}
                   >
                     {isLoadingPortfolio ? (
                       <RefreshCw size={14} className="animate-spin" />
@@ -672,19 +672,19 @@ export function FortitudoPanel() {
 
               {/* Portfolio Summary */}
               {selectedPortfolioSummary && portfolioReturnsData && (
-                <div className="mt-3 p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+                <div className="mt-3 p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
                   <div className="flex items-center gap-6 text-xs font-mono">
-                    <span style={{ color: BLOOMBERG.GRAY }}>
-                      Portfolio: <span style={{ color: BLOOMBERG.WHITE }}>{selectedPortfolioSummary.portfolio.name}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>
+                      Portfolio: <span style={{ color: FINCEPT.WHITE }}>{selectedPortfolioSummary.portfolio.name}</span>
                     </span>
-                    <span style={{ color: BLOOMBERG.GRAY }}>
-                      Holdings: <span style={{ color: BLOOMBERG.CYAN }}>{selectedPortfolioSummary.holdings.length}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>
+                      Holdings: <span style={{ color: FINCEPT.CYAN }}>{selectedPortfolioSummary.holdings.length}</span>
                     </span>
-                    <span style={{ color: BLOOMBERG.GRAY }}>
-                      Data Points: <span style={{ color: BLOOMBERG.CYAN }}>{portfolioReturnsData.nScenarios}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>
+                      Data Points: <span style={{ color: FINCEPT.CYAN }}>{portfolioReturnsData.nScenarios}</span>
                     </span>
-                    <span style={{ color: BLOOMBERG.GRAY }}>
-                      Period: <span style={{ color: BLOOMBERG.WHITE }}>{portfolioReturnsData.startDate} to {portfolioReturnsData.endDate}</span>
+                    <span style={{ color: FINCEPT.GRAY }}>
+                      Period: <span style={{ color: FINCEPT.WHITE }}>{portfolioReturnsData.startDate} to {portfolioReturnsData.endDate}</span>
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -692,7 +692,7 @@ export function FortitudoPanel() {
                       <span
                         key={asset}
                         className="px-2 py-0.5 rounded text-xs font-mono"
-                        style={{ backgroundColor: BLOOMBERG.BORDER, color: BLOOMBERG.WHITE }}
+                        style={{ backgroundColor: FINCEPT.BORDER, color: FINCEPT.WHITE }}
                       >
                         {asset}: {(portfolioReturnsData.weights[asset] * 100).toFixed(1)}%
                       </span>
@@ -703,8 +703,8 @@ export function FortitudoPanel() {
 
               {/* No portfolios message */}
               {userPortfolios.length === 0 && (
-                <div className="mt-3 p-3 rounded text-center" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                  <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                <div className="mt-3 p-3 rounded text-center" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                  <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                     No portfolios found. Create a portfolio in the Portfolio tab first.
                   </p>
                 </div>
@@ -717,12 +717,12 @@ export function FortitudoPanel() {
         {error && (
           <div
             className="flex items-start gap-3 p-3 rounded border"
-            style={{ backgroundColor: '#1a0000', borderColor: BLOOMBERG.RED }}
+            style={{ backgroundColor: '#1a0000', borderColor: FINCEPT.RED }}
           >
-            <AlertCircle size={18} color={BLOOMBERG.RED} className="flex-shrink-0 mt-0.5" />
+            <AlertCircle size={18} color={FINCEPT.RED} className="flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-bold" style={{ color: BLOOMBERG.RED }}>Error</p>
-              <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>{error}</p>
+              <p className="text-sm font-bold" style={{ color: FINCEPT.RED }}>Error</p>
+              <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>{error}</p>
             </div>
           </div>
         )}
@@ -733,30 +733,30 @@ export function FortitudoPanel() {
             {/* Configuration */}
             <div
               className="rounded border"
-              style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+              style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
             >
               <button
                 onClick={() => toggleSection('config')}
                 className="w-full flex items-center justify-between p-3"
               >
                 <div className="flex items-center gap-2">
-                  <Settings size={16} color={BLOOMBERG.ORANGE} />
-                  <span className="text-sm font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                  <Settings size={16} color={FINCEPT.ORANGE} />
+                  <span className="text-sm font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                     CONFIGURATION
                   </span>
                 </div>
                 {expandedSections.config ? (
-                  <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                  <ChevronUp size={16} color={FINCEPT.GRAY} />
                 ) : (
-                  <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                  <ChevronDown size={16} color={FINCEPT.GRAY} />
                 )}
               </button>
 
               {expandedSections.config && (
-                <div className="p-4 border-t space-y-4" style={{ borderColor: BLOOMBERG.BORDER }}>
+                <div className="p-4 border-t space-y-4" style={{ borderColor: FINCEPT.BORDER }}>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                      <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                         PORTFOLIO WEIGHTS
                       </label>
                       <input
@@ -765,14 +765,14 @@ export function FortitudoPanel() {
                         onChange={e => setWeights(e.target.value)}
                         className="w-full px-3 py-2 rounded text-sm font-mono border"
                         style={{
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          borderColor: BLOOMBERG.BORDER,
-                          color: BLOOMBERG.WHITE
+                          backgroundColor: FINCEPT.DARK_BG,
+                          borderColor: FINCEPT.BORDER,
+                          color: FINCEPT.WHITE
                         }}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                      <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                         ALPHA (VaR/CVaR)
                       </label>
                       <input
@@ -784,14 +784,14 @@ export function FortitudoPanel() {
                         max="0.50"
                         className="w-full px-3 py-2 rounded text-sm font-mono border"
                         style={{
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          borderColor: BLOOMBERG.BORDER,
-                          color: BLOOMBERG.WHITE
+                          backgroundColor: FINCEPT.DARK_BG,
+                          borderColor: FINCEPT.BORDER,
+                          color: FINCEPT.WHITE
                         }}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                      <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                         HALF-LIFE (DAYS)
                       </label>
                       <input
@@ -802,9 +802,9 @@ export function FortitudoPanel() {
                         max="504"
                         className="w-full px-3 py-2 rounded text-sm font-mono border"
                         style={{
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          borderColor: BLOOMBERG.BORDER,
-                          color: BLOOMBERG.WHITE
+                          backgroundColor: FINCEPT.DARK_BG,
+                          borderColor: FINCEPT.BORDER,
+                          color: FINCEPT.WHITE
                         }}
                       />
                     </div>
@@ -814,7 +814,7 @@ export function FortitudoPanel() {
                     onClick={runPortfolioAnalysis}
                     disabled={isLoading}
                     className="w-full py-2.5 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                    style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+                    style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
                   >
                     {isLoading ? (
                       <RefreshCw size={16} className="animate-spin" />
@@ -833,31 +833,31 @@ export function FortitudoPanel() {
                 {/* Metrics Comparison */}
                 <div
                   className="rounded border"
-                  style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+                  style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
                 >
                   <button
                     onClick={() => toggleSection('metrics')}
                     className="w-full flex items-center justify-between p-3"
                   >
                     <div className="flex items-center gap-2">
-                      <BarChart2 size={16} color={BLOOMBERG.CYAN} />
-                      <span className="text-sm font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                      <BarChart2 size={16} color={FINCEPT.CYAN} />
+                      <span className="text-sm font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                         RISK METRICS
                       </span>
                     </div>
                     {expandedSections.metrics ? (
-                      <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                      <ChevronUp size={16} color={FINCEPT.GRAY} />
                     ) : (
-                      <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                      <ChevronDown size={16} color={FINCEPT.GRAY} />
                     )}
                   </button>
 
                   {expandedSections.metrics && (
-                    <div className="p-4 border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
+                    <div className="p-4 border-t" style={{ borderColor: FINCEPT.BORDER }}>
                       <div className="grid grid-cols-2 gap-6">
                         {/* Equal Weight Metrics */}
                         <div>
-                          <h3 className="text-xs font-bold uppercase mb-3" style={{ color: BLOOMBERG.ORANGE }}>
+                          <h3 className="text-xs font-bold uppercase mb-3" style={{ color: FINCEPT.ORANGE }}>
                             EQUAL WEIGHT SCENARIOS
                           </h3>
                           {analysisResult.metrics_equal_weight && (
@@ -892,7 +892,7 @@ export function FortitudoPanel() {
 
                         {/* Exp Decay Metrics */}
                         <div>
-                          <h3 className="text-xs font-bold uppercase mb-3" style={{ color: BLOOMBERG.CYAN }}>
+                          <h3 className="text-xs font-bold uppercase mb-3" style={{ color: FINCEPT.CYAN }}>
                             EXP DECAY WEIGHTED ({halfLife}d)
                           </h3>
                           {analysisResult.metrics_exp_decay && (
@@ -929,17 +929,17 @@ export function FortitudoPanel() {
                       {/* Summary */}
                       <div
                         className="mt-4 p-3 rounded"
-                        style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+                        style={{ backgroundColor: FINCEPT.DARK_BG }}
                       >
                         <div className="flex items-center gap-6 text-xs font-mono">
-                          <span style={{ color: BLOOMBERG.GRAY }}>
-                            Scenarios: <span style={{ color: BLOOMBERG.WHITE }}>{analysisResult.n_scenarios}</span>
+                          <span style={{ color: FINCEPT.GRAY }}>
+                            Scenarios: <span style={{ color: FINCEPT.WHITE }}>{analysisResult.n_scenarios}</span>
                           </span>
-                          <span style={{ color: BLOOMBERG.GRAY }}>
-                            Assets: <span style={{ color: BLOOMBERG.WHITE }}>{analysisResult.n_assets}</span>
+                          <span style={{ color: FINCEPT.GRAY }}>
+                            Assets: <span style={{ color: FINCEPT.WHITE }}>{analysisResult.n_assets}</span>
                           </span>
-                          <span style={{ color: BLOOMBERG.GRAY }}>
-                            Alpha: <span style={{ color: BLOOMBERG.WHITE }}>{alpha}</span>
+                          <span style={{ color: FINCEPT.GRAY }}>
+                            Alpha: <span style={{ color: FINCEPT.WHITE }}>{alpha}</span>
                           </span>
                         </div>
                       </div>
@@ -955,12 +955,12 @@ export function FortitudoPanel() {
         {activeMode === 'options' && (
           <div
             className="rounded border"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
           >
             <div className="p-4 space-y-4">
               <div className="grid grid-cols-6 gap-4">
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     SPOT PRICE
                   </label>
                   <input
@@ -969,14 +969,14 @@ export function FortitudoPanel() {
                     onChange={e => setSpotPrice(parseFloat(e.target.value))}
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     STRIKE
                   </label>
                   <input
@@ -985,14 +985,14 @@ export function FortitudoPanel() {
                     onChange={e => setStrike(parseFloat(e.target.value))}
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     VOLATILITY
                   </label>
                   <input
@@ -1002,14 +1002,14 @@ export function FortitudoPanel() {
                     step="0.01"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     RISK-FREE RATE
                   </label>
                   <input
@@ -1019,14 +1019,14 @@ export function FortitudoPanel() {
                     step="0.01"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     DIV YIELD
                   </label>
                   <input
@@ -1036,14 +1036,14 @@ export function FortitudoPanel() {
                     step="0.01"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     TIME (YEARS)
                   </label>
                   <input
@@ -1053,9 +1053,9 @@ export function FortitudoPanel() {
                     step="0.1"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
@@ -1066,7 +1066,7 @@ export function FortitudoPanel() {
                   onClick={runOptionPricing}
                   disabled={isLoading}
                   className="py-2.5 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                  style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+                  style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
                 >
                   {isLoading ? (
                     <RefreshCw size={16} className="animate-spin" />
@@ -1079,7 +1079,7 @@ export function FortitudoPanel() {
                   onClick={runOptionGreeks}
                   disabled={isLoading}
                   className="py-2.5 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                  style={{ backgroundColor: BLOOMBERG.CYAN, color: BLOOMBERG.DARK_BG }}
+                  style={{ backgroundColor: FINCEPT.CYAN, color: FINCEPT.DARK_BG }}
                 >
                   {isLoading ? (
                     <RefreshCw size={16} className="animate-spin" />
@@ -1093,27 +1093,27 @@ export function FortitudoPanel() {
               {/* Option Results */}
               {optionResult && optionResult.success && (
                 <div className="grid grid-cols-4 gap-4 mt-4">
-                  <div className="p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                    <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>FORWARD</p>
-                    <p className="text-lg font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                  <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                    <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>FORWARD</p>
+                    <p className="text-lg font-bold" style={{ color: FINCEPT.WHITE }}>
                       ${optionResult.forward_price?.toFixed(2)}
                     </p>
                   </div>
-                  <div className="p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                    <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>CALL PRICE</p>
-                    <p className="text-lg font-bold" style={{ color: BLOOMBERG.GREEN }}>
+                  <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                    <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>CALL PRICE</p>
+                    <p className="text-lg font-bold" style={{ color: FINCEPT.GREEN }}>
                       ${optionResult.call_price?.toFixed(4)}
                     </p>
                   </div>
-                  <div className="p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                    <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>PUT PRICE</p>
-                    <p className="text-lg font-bold" style={{ color: BLOOMBERG.RED }}>
+                  <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                    <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>PUT PRICE</p>
+                    <p className="text-lg font-bold" style={{ color: FINCEPT.RED }}>
                       ${optionResult.put_price?.toFixed(4)}
                     </p>
                   </div>
-                  <div className="p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                    <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>STRADDLE</p>
-                    <p className="text-lg font-bold" style={{ color: BLOOMBERG.CYAN }}>
+                  <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                    <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>STRADDLE</p>
+                    <p className="text-lg font-bold" style={{ color: FINCEPT.CYAN }}>
                       ${optionResult.straddle?.straddle_price?.toFixed(4)}
                     </p>
                   </div>
@@ -1122,14 +1122,14 @@ export function FortitudoPanel() {
 
               {/* Greeks Results */}
               {greeksResult && greeksResult.success && (
-                <div className="mt-4 p-4 rounded border" style={{ backgroundColor: BLOOMBERG.DARK_BG, borderColor: BLOOMBERG.BORDER }}>
-                  <h3 className="text-sm font-bold uppercase mb-4" style={{ color: BLOOMBERG.CYAN }}>
+                <div className="mt-4 p-4 rounded border" style={{ backgroundColor: FINCEPT.DARK_BG, borderColor: FINCEPT.BORDER }}>
+                  <h3 className="text-sm font-bold uppercase mb-4" style={{ color: FINCEPT.CYAN }}>
                     OPTION GREEKS
                   </h3>
                   <div className="grid grid-cols-2 gap-6">
                     {/* Call Greeks */}
                     <div>
-                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: BLOOMBERG.GREEN }}>
+                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: FINCEPT.GREEN }}>
                         CALL OPTION
                       </h4>
                       <div className="space-y-2">
@@ -1142,7 +1142,7 @@ export function FortitudoPanel() {
                     </div>
                     {/* Put Greeks */}
                     <div>
-                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: BLOOMBERG.RED }}>
+                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: FINCEPT.RED }}>
                         PUT OPTION
                       </h4>
                       <div className="space-y-2">
@@ -1164,17 +1164,17 @@ export function FortitudoPanel() {
         {activeMode === 'optimization' && (
           <div
             className="rounded border"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
           >
             <div className="p-4 space-y-4">
               {/* Optimization Type Toggle */}
-              <div className="flex rounded border overflow-hidden" style={{ borderColor: BLOOMBERG.BORDER }}>
+              <div className="flex rounded border overflow-hidden" style={{ borderColor: FINCEPT.BORDER }}>
                 <button
                   onClick={() => setOptimizationType('mv')}
                   className="flex-1 py-2 text-xs font-bold uppercase tracking-wide"
                   style={{
-                    backgroundColor: optimizationType === 'mv' ? BLOOMBERG.ORANGE : BLOOMBERG.DARK_BG,
-                    color: optimizationType === 'mv' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                    backgroundColor: optimizationType === 'mv' ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
+                    color: optimizationType === 'mv' ? FINCEPT.DARK_BG : FINCEPT.GRAY
                   }}
                 >
                   MEAN-VARIANCE
@@ -1183,8 +1183,8 @@ export function FortitudoPanel() {
                   onClick={() => setOptimizationType('cvar')}
                   className="flex-1 py-2 text-xs font-bold uppercase tracking-wide"
                   style={{
-                    backgroundColor: optimizationType === 'cvar' ? BLOOMBERG.CYAN : BLOOMBERG.DARK_BG,
-                    color: optimizationType === 'cvar' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+                    backgroundColor: optimizationType === 'cvar' ? FINCEPT.CYAN : FINCEPT.DARK_BG,
+                    color: optimizationType === 'cvar' ? FINCEPT.DARK_BG : FINCEPT.GRAY
                   }}
                 >
                   MEAN-CVaR
@@ -1194,7 +1194,7 @@ export function FortitudoPanel() {
               {/* Configuration */}
               <div className="grid grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     OBJECTIVE
                   </label>
                   <select
@@ -1202,9 +1202,9 @@ export function FortitudoPanel() {
                     onChange={e => setOptimizationObjective(e.target.value as OptimizationObjective)}
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   >
                     <option value="min_variance">{optimizationType === 'mv' ? 'Min Variance' : 'Min CVaR'}</option>
@@ -1213,7 +1213,7 @@ export function FortitudoPanel() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     MAX WEIGHT
                   </label>
                   <input
@@ -1225,15 +1225,15 @@ export function FortitudoPanel() {
                     max="1.0"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
                 {optimizationObjective === 'target_return' && (
                   <div>
-                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                    <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                       TARGET RETURN
                     </label>
                     <input
@@ -1243,16 +1243,16 @@ export function FortitudoPanel() {
                       step="0.01"
                       className="w-full px-3 py-2 rounded text-sm font-mono border"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        borderColor: BLOOMBERG.BORDER,
-                        color: BLOOMBERG.WHITE
+                        backgroundColor: FINCEPT.DARK_BG,
+                        borderColor: FINCEPT.BORDER,
+                        color: FINCEPT.WHITE
                       }}
                     />
                   </div>
                 )}
                 {optimizationType === 'cvar' && (
                   <div>
-                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                    <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                       CVaR ALPHA
                     </label>
                     <input
@@ -1264,9 +1264,9 @@ export function FortitudoPanel() {
                       max="0.50"
                       className="w-full px-3 py-2 rounded text-sm font-mono border"
                       style={{
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        borderColor: BLOOMBERG.BORDER,
-                        color: BLOOMBERG.WHITE
+                        backgroundColor: FINCEPT.DARK_BG,
+                        borderColor: FINCEPT.BORDER,
+                        color: FINCEPT.WHITE
                       }}
                     />
                   </div>
@@ -1279,7 +1279,7 @@ export function FortitudoPanel() {
                       onChange={e => setOptLongOnly(e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <span className="text-xs font-mono" style={{ color: BLOOMBERG.WHITE }}>LONG ONLY</span>
+                    <span className="text-xs font-mono" style={{ color: FINCEPT.WHITE }}>LONG ONLY</span>
                   </label>
                 </div>
               </div>
@@ -1290,7 +1290,7 @@ export function FortitudoPanel() {
                   onClick={runOptimization}
                   disabled={isLoading}
                   className="py-2.5 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                  style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+                  style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
                 >
                   {isLoading ? (
                     <RefreshCw size={16} className="animate-spin" />
@@ -1303,7 +1303,7 @@ export function FortitudoPanel() {
                   onClick={runEfficientFrontier}
                   disabled={isLoading}
                   className="py-2.5 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                  style={{ backgroundColor: BLOOMBERG.CYAN, color: BLOOMBERG.DARK_BG }}
+                  style={{ backgroundColor: FINCEPT.CYAN, color: FINCEPT.DARK_BG }}
                 >
                   {isLoading ? (
                     <RefreshCw size={16} className="animate-spin" />
@@ -1317,16 +1317,16 @@ export function FortitudoPanel() {
               {/* Optimization Result */}
               {optimizationResult && optimizationResult.success && (() => {
                 const normalizedWeights = normalizeWeights(optimizationResult.weights, optimizationResult.assets);
-                const PIE_COLORS = [BLOOMBERG.ORANGE, BLOOMBERG.CYAN, BLOOMBERG.GREEN, BLOOMBERG.PURPLE, BLOOMBERG.YELLOW, BLOOMBERG.BLUE, BLOOMBERG.RED];
+                const PIE_COLORS = [FINCEPT.ORANGE, FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.PURPLE, FINCEPT.YELLOW, FINCEPT.BLUE, FINCEPT.RED];
                 return (
-                <div className="p-4 rounded border" style={{ backgroundColor: BLOOMBERG.DARK_BG, borderColor: BLOOMBERG.BORDER }}>
-                  <h3 className="text-sm font-bold uppercase mb-4" style={{ color: BLOOMBERG.ORANGE }}>
+                <div className="p-4 rounded border" style={{ backgroundColor: FINCEPT.DARK_BG, borderColor: FINCEPT.BORDER }}>
+                  <h3 className="text-sm font-bold uppercase mb-4" style={{ color: FINCEPT.ORANGE }}>
                     OPTIMAL PORTFOLIO
                   </h3>
                   <div className="grid grid-cols-3 gap-6">
                     {/* Pie Chart */}
                     <div>
-                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: BLOOMBERG.CYAN }}>
+                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: FINCEPT.CYAN }}>
                         ALLOCATION
                       </h4>
                       <div style={{ height: 180 }}>
@@ -1347,7 +1347,7 @@ export function FortitudoPanel() {
                               outerRadius={60}
                               paddingAngle={2}
                               dataKey="value"
-                              stroke={BLOOMBERG.DARK_BG}
+                              stroke={FINCEPT.DARK_BG}
                               strokeWidth={2}
                             >
                               {normalizedWeights
@@ -1358,14 +1358,14 @@ export function FortitudoPanel() {
                             </Pie>
                             <Tooltip
                               contentStyle={{
-                                backgroundColor: BLOOMBERG.PANEL_BG,
-                                border: `1px solid ${BLOOMBERG.BORDER}`,
+                                backgroundColor: FINCEPT.PANEL_BG,
+                                border: `1px solid ${FINCEPT.BORDER}`,
                                 borderRadius: 4,
                                 padding: '6px 10px'
                               }}
                               formatter={(value: number) => [`${value.toFixed(1)}%`, 'Weight']}
-                              labelStyle={{ color: BLOOMBERG.WHITE, fontWeight: 'bold', fontSize: 11 }}
-                              itemStyle={{ color: BLOOMBERG.GRAY, fontSize: 10 }}
+                              labelStyle={{ color: FINCEPT.WHITE, fontWeight: 'bold', fontSize: 11 }}
+                              itemStyle={{ color: FINCEPT.GRAY, fontSize: 10 }}
                             />
                           </PieChart>
                         </ResponsiveContainer>
@@ -1377,8 +1377,8 @@ export function FortitudoPanel() {
                           .map((item, idx) => (
                             <div key={idx} className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
-                              <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>{item.asset}</span>
-                              <span className="text-xs font-mono font-bold ml-auto" style={{ color: BLOOMBERG.WHITE }}>
+                              <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>{item.asset}</span>
+                              <span className="text-xs font-mono font-bold ml-auto" style={{ color: FINCEPT.WHITE }}>
                                 {(item.weight * 100).toFixed(1)}%
                               </span>
                             </div>
@@ -1387,13 +1387,13 @@ export function FortitudoPanel() {
                     </div>
                     {/* Weight Bars */}
                     <div>
-                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: BLOOMBERG.CYAN }}>
+                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: FINCEPT.CYAN }}>
                         WEIGHTS
                       </h4>
                       <div className="space-y-2">
                         {normalizedWeights.map((item, i) => (
                           <div key={i} className="flex items-center justify-between">
-                            <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                            <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                               {item.asset}
                             </span>
                             <div className="flex items-center gap-2">
@@ -1401,10 +1401,10 @@ export function FortitudoPanel() {
                                 className="h-2 rounded"
                                 style={{
                                   width: `${Math.max(item.weight * 100, 5)}px`,
-                                  backgroundColor: item.weight > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                                  backgroundColor: item.weight > 0 ? FINCEPT.GREEN : FINCEPT.RED
                                 }}
                               />
-                              <span className="text-sm font-mono font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                              <span className="text-sm font-mono font-bold" style={{ color: FINCEPT.WHITE }}>
                                 {(item.weight * 100).toFixed(1)}%
                               </span>
                             </div>
@@ -1414,7 +1414,7 @@ export function FortitudoPanel() {
                     </div>
                     {/* Metrics */}
                     <div>
-                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: BLOOMBERG.CYAN }}>
+                      <h4 className="text-xs font-bold uppercase mb-3" style={{ color: FINCEPT.CYAN }}>
                         METRICS
                       </h4>
                       <div className="space-y-2">
@@ -1441,17 +1441,17 @@ export function FortitudoPanel() {
                         )}
                       </div>
                       {/* Optimization Info */}
-                      <div className="mt-4 p-2 rounded" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
-                        <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
-                          Type: <span style={{ color: optimizationType === 'mv' ? BLOOMBERG.ORANGE : BLOOMBERG.CYAN }}>
+                      <div className="mt-4 p-2 rounded" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
+                        <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+                          Type: <span style={{ color: optimizationType === 'mv' ? FINCEPT.ORANGE : FINCEPT.CYAN }}>
                             {optimizationType === 'mv' ? 'Mean-Variance' : 'Mean-CVaR'}
                           </span>
                         </p>
-                        <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
-                          Objective: <span style={{ color: BLOOMBERG.WHITE }}>{optimizationObjective.replace('_', ' ').toUpperCase()}</span>
+                        <p className="text-xs font-mono mt-1" style={{ color: FINCEPT.GRAY }}>
+                          Objective: <span style={{ color: FINCEPT.WHITE }}>{optimizationObjective.replace('_', ' ').toUpperCase()}</span>
                         </p>
-                        <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
-                          Constraints: <span style={{ color: BLOOMBERG.WHITE }}>{optLongOnly ? 'Long Only' : 'Allow Short'}</span>
+                        <p className="text-xs font-mono mt-1" style={{ color: FINCEPT.GRAY }}>
+                          Constraints: <span style={{ color: FINCEPT.WHITE }}>{optLongOnly ? 'Long Only' : 'Allow Short'}</span>
                         </p>
                       </div>
                     </div>
@@ -1462,8 +1462,8 @@ export function FortitudoPanel() {
 
               {/* Efficient Frontier Result */}
               {frontierResult && frontierResult.success && frontierResult.frontier && (
-                <div className="p-4 rounded border" style={{ backgroundColor: BLOOMBERG.DARK_BG, borderColor: BLOOMBERG.BORDER }}>
-                  <h3 className="text-sm font-bold uppercase mb-4" style={{ color: BLOOMBERG.CYAN }}>
+                <div className="p-4 rounded border" style={{ backgroundColor: FINCEPT.DARK_BG, borderColor: FINCEPT.BORDER }}>
+                  <h3 className="text-sm font-bold uppercase mb-4" style={{ color: FINCEPT.CYAN }}>
                     EFFICIENT FRONTIER ({frontierResult.frontier.length} POINTS)
                   </h3>
 
@@ -1475,7 +1475,7 @@ export function FortitudoPanel() {
                       >
                         <CartesianGrid
                           strokeDasharray="3 3"
-                          stroke={BLOOMBERG.BORDER}
+                          stroke={FINCEPT.BORDER}
                           vertical={true}
                         />
                         <XAxis
@@ -1484,12 +1484,12 @@ export function FortitudoPanel() {
                           name={optimizationType === 'mv' ? 'Volatility' : 'CVaR'}
                           domain={['auto', 'auto']}
                           tickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
-                          stroke={BLOOMBERG.GRAY}
-                          tick={{ fill: BLOOMBERG.GRAY, fontSize: 10 }}
+                          stroke={FINCEPT.GRAY}
+                          tick={{ fill: FINCEPT.GRAY, fontSize: 10 }}
                           label={{
                             value: optimizationType === 'mv' ? 'VOLATILITY (%)' : 'CVaR (%)',
                             position: 'bottom',
-                            fill: BLOOMBERG.GRAY,
+                            fill: FINCEPT.GRAY,
                             fontSize: 10,
                             offset: 0
                           }}
@@ -1500,20 +1500,20 @@ export function FortitudoPanel() {
                           name="Expected Return"
                           domain={['auto', 'auto']}
                           tickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
-                          stroke={BLOOMBERG.GRAY}
-                          tick={{ fill: BLOOMBERG.GRAY, fontSize: 10 }}
+                          stroke={FINCEPT.GRAY}
+                          tick={{ fill: FINCEPT.GRAY, fontSize: 10 }}
                           label={{
                             value: 'EXPECTED RETURN (%)',
                             angle: -90,
                             position: 'insideLeft',
-                            fill: BLOOMBERG.GRAY,
+                            fill: FINCEPT.GRAY,
                             fontSize: 10
                           }}
                         />
                         <Tooltip
                           contentStyle={{
-                            backgroundColor: BLOOMBERG.PANEL_BG,
-                            border: `1px solid ${BLOOMBERG.BORDER}`,
+                            backgroundColor: FINCEPT.PANEL_BG,
+                            border: `1px solid ${FINCEPT.BORDER}`,
                             borderRadius: 4,
                             padding: '8px 12px'
                           }}
@@ -1523,8 +1523,8 @@ export function FortitudoPanel() {
                             if (name === 'sharpe') return [value.toFixed(3), 'Sharpe'];
                             return [value, name];
                           }}
-                          labelStyle={{ color: BLOOMBERG.WHITE }}
-                          itemStyle={{ color: BLOOMBERG.GRAY }}
+                          labelStyle={{ color: FINCEPT.WHITE }}
+                          itemStyle={{ color: FINCEPT.GRAY }}
                         />
                         {/* Frontier Line */}
                         <Line
@@ -1536,7 +1536,7 @@ export function FortitudoPanel() {
                           }))}
                           type="monotone"
                           dataKey="return"
-                          stroke={BLOOMBERG.CYAN}
+                          stroke={FINCEPT.CYAN}
                           strokeWidth={2}
                           dot={false}
                         />
@@ -1549,7 +1549,7 @@ export function FortitudoPanel() {
                             index: idx,
                             isMaxSharpe: point.sharpe_ratio === Math.max(...frontierResult.frontier!.map(p => p.sharpe_ratio ?? 0))
                           }))}
-                          fill={BLOOMBERG.ORANGE}
+                          fill={FINCEPT.ORANGE}
                           onClick={(data: any) => {
                             if (data && typeof data.index === 'number') {
                               setSelectedFrontierIndex(data.index);
@@ -1565,8 +1565,8 @@ export function FortitudoPanel() {
                             return (
                               <Cell
                                 key={idx}
-                                fill={isSelected ? BLOOMBERG.YELLOW : isMaxSharpe ? BLOOMBERG.GREEN : isMinRisk ? BLOOMBERG.ORANGE : BLOOMBERG.CYAN}
-                                stroke={isSelected ? BLOOMBERG.WHITE : 'none'}
+                                fill={isSelected ? FINCEPT.YELLOW : isMaxSharpe ? FINCEPT.GREEN : isMinRisk ? FINCEPT.ORANGE : FINCEPT.CYAN}
+                                stroke={isSelected ? FINCEPT.WHITE : 'none'}
                                 strokeWidth={isSelected ? 2 : 0}
                                 r={isSelected ? 8 : isMaxSharpe || isMinRisk ? 6 : 4}
                               />
@@ -1580,21 +1580,21 @@ export function FortitudoPanel() {
                   {/* Legend */}
                   <div className="flex items-center justify-center gap-6 mb-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: BLOOMBERG.ORANGE }} />
-                      <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>MIN RISK</span>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: FINCEPT.ORANGE }} />
+                      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>MIN RISK</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: BLOOMBERG.GREEN }} />
-                      <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>MAX SHARPE</span>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: FINCEPT.GREEN }} />
+                      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>MAX SHARPE</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: BLOOMBERG.CYAN }} />
-                      <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>FRONTIER</span>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: FINCEPT.CYAN }} />
+                      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>FRONTIER</span>
                     </div>
                     {selectedFrontierIndex !== null && (
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full border-2" style={{ backgroundColor: BLOOMBERG.YELLOW, borderColor: BLOOMBERG.WHITE }} />
-                        <span className="text-xs font-mono" style={{ color: BLOOMBERG.YELLOW }}>SELECTED</span>
+                        <div className="w-3 h-3 rounded-full border-2" style={{ backgroundColor: FINCEPT.YELLOW, borderColor: FINCEPT.WHITE }} />
+                        <span className="text-xs font-mono" style={{ color: FINCEPT.YELLOW }}>SELECTED</span>
                       </div>
                     )}
                   </div>
@@ -1603,16 +1603,16 @@ export function FortitudoPanel() {
                   {selectedFrontierIndex !== null && frontierResult.frontier[selectedFrontierIndex] && (
                     <div
                       className="mb-4 p-4 rounded border"
-                      style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.YELLOW }}
+                      style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.YELLOW }}
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-bold uppercase" style={{ color: BLOOMBERG.YELLOW }}>
+                        <h4 className="text-sm font-bold uppercase" style={{ color: FINCEPT.YELLOW }}>
                           SELECTED PORTFOLIO (#{selectedFrontierIndex + 1})
                         </h4>
                         <button
                           onClick={() => setSelectedFrontierIndex(null)}
                           className="text-xs font-mono px-2 py-1 rounded hover:bg-opacity-80"
-                          style={{ backgroundColor: BLOOMBERG.BORDER, color: BLOOMBERG.GRAY }}
+                          style={{ backgroundColor: FINCEPT.BORDER, color: FINCEPT.GRAY }}
                         >
                           CLEAR
                         </button>
@@ -1620,7 +1620,7 @@ export function FortitudoPanel() {
                       <div className="grid grid-cols-3 gap-6">
                         {/* Pie Chart */}
                         <div>
-                          <h5 className="text-xs font-bold uppercase mb-2" style={{ color: BLOOMBERG.CYAN }}>
+                          <h5 className="text-xs font-bold uppercase mb-2" style={{ color: FINCEPT.CYAN }}>
                             ALLOCATION
                           </h5>
                           <div style={{ height: 180 }}>
@@ -1630,7 +1630,7 @@ export function FortitudoPanel() {
                                   data={(() => {
                                     const selectedPoint = frontierResult.frontier[selectedFrontierIndex];
                                     const weights = selectedPoint.weights;
-                                    const PIE_COLORS = [BLOOMBERG.ORANGE, BLOOMBERG.CYAN, BLOOMBERG.GREEN, BLOOMBERG.PURPLE, BLOOMBERG.YELLOW, BLOOMBERG.BLUE, BLOOMBERG.RED];
+                                    const PIE_COLORS = [FINCEPT.ORANGE, FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.PURPLE, FINCEPT.YELLOW, FINCEPT.BLUE, FINCEPT.RED];
                                     if (typeof weights === 'object' && !Array.isArray(weights)) {
                                       return Object.entries(weights)
                                         .filter(([_, w]) => (w as number) > 0.001)
@@ -1656,13 +1656,13 @@ export function FortitudoPanel() {
                                   outerRadius={60}
                                   paddingAngle={2}
                                   dataKey="value"
-                                  stroke={BLOOMBERG.DARK_BG}
+                                  stroke={FINCEPT.DARK_BG}
                                   strokeWidth={2}
                                 >
                                   {(() => {
                                     const selectedPoint = frontierResult.frontier[selectedFrontierIndex];
                                     const weights = selectedPoint.weights;
-                                    const PIE_COLORS = [BLOOMBERG.ORANGE, BLOOMBERG.CYAN, BLOOMBERG.GREEN, BLOOMBERG.PURPLE, BLOOMBERG.YELLOW, BLOOMBERG.BLUE, BLOOMBERG.RED];
+                                    const PIE_COLORS = [FINCEPT.ORANGE, FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.PURPLE, FINCEPT.YELLOW, FINCEPT.BLUE, FINCEPT.RED];
                                     if (typeof weights === 'object' && !Array.isArray(weights)) {
                                       return Object.entries(weights)
                                         .filter(([_, w]) => (w as number) > 0.001)
@@ -1681,14 +1681,14 @@ export function FortitudoPanel() {
                                 </Pie>
                                 <Tooltip
                                   contentStyle={{
-                                    backgroundColor: BLOOMBERG.PANEL_BG,
-                                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                                    backgroundColor: FINCEPT.PANEL_BG,
+                                    border: `1px solid ${FINCEPT.BORDER}`,
                                     borderRadius: 4,
                                     padding: '6px 10px'
                                   }}
                                   formatter={(value: number) => [`${value.toFixed(1)}%`, 'Weight']}
-                                  labelStyle={{ color: BLOOMBERG.WHITE, fontWeight: 'bold', fontSize: 11 }}
-                                  itemStyle={{ color: BLOOMBERG.GRAY, fontSize: 10 }}
+                                  labelStyle={{ color: FINCEPT.WHITE, fontWeight: 'bold', fontSize: 11 }}
+                                  itemStyle={{ color: FINCEPT.GRAY, fontSize: 10 }}
                                 />
                               </PieChart>
                             </ResponsiveContainer>
@@ -1698,15 +1698,15 @@ export function FortitudoPanel() {
                             {(() => {
                               const selectedPoint = frontierResult.frontier[selectedFrontierIndex];
                               const weights = selectedPoint.weights;
-                              const PIE_COLORS = [BLOOMBERG.ORANGE, BLOOMBERG.CYAN, BLOOMBERG.GREEN, BLOOMBERG.PURPLE, BLOOMBERG.YELLOW, BLOOMBERG.BLUE, BLOOMBERG.RED];
+                              const PIE_COLORS = [FINCEPT.ORANGE, FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.PURPLE, FINCEPT.YELLOW, FINCEPT.BLUE, FINCEPT.RED];
                               if (typeof weights === 'object' && !Array.isArray(weights)) {
                                 return Object.entries(weights)
                                   .filter(([_, w]) => (w as number) > 0.001)
                                   .map(([asset, weight], idx) => (
                                     <div key={asset} className="flex items-center gap-2">
                                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
-                                      <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>{asset}</span>
-                                      <span className="text-xs font-mono font-bold ml-auto" style={{ color: BLOOMBERG.WHITE }}>
+                                      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>{asset}</span>
+                                      <span className="text-xs font-mono font-bold ml-auto" style={{ color: FINCEPT.WHITE }}>
                                         {((weight as number) * 100).toFixed(1)}%
                                       </span>
                                     </div>
@@ -1717,8 +1717,8 @@ export function FortitudoPanel() {
                                   .map((w, idx) => (
                                     <div key={idx} className="flex items-center gap-2">
                                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
-                                      <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Asset {idx + 1}</span>
-                                      <span className="text-xs font-mono font-bold ml-auto" style={{ color: BLOOMBERG.WHITE }}>
+                                      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Asset {idx + 1}</span>
+                                      <span className="text-xs font-mono font-bold ml-auto" style={{ color: FINCEPT.WHITE }}>
                                         {(w * 100).toFixed(1)}%
                                       </span>
                                     </div>
@@ -1730,7 +1730,7 @@ export function FortitudoPanel() {
                         </div>
                         {/* Weight Bars */}
                         <div>
-                          <h5 className="text-xs font-bold uppercase mb-2" style={{ color: BLOOMBERG.CYAN }}>
+                          <h5 className="text-xs font-bold uppercase mb-2" style={{ color: FINCEPT.CYAN }}>
                             WEIGHTS
                           </h5>
                           <div className="space-y-1">
@@ -1740,7 +1740,7 @@ export function FortitudoPanel() {
                               if (typeof weights === 'object' && !Array.isArray(weights)) {
                                 return Object.entries(weights).map(([asset, weight]) => (
                                   <div key={asset} className="flex items-center justify-between">
-                                    <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                                    <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                                       {asset}
                                     </span>
                                     <div className="flex items-center gap-2">
@@ -1748,10 +1748,10 @@ export function FortitudoPanel() {
                                         className="h-2 rounded"
                                         style={{
                                           width: `${Math.max((weight as number) * 80, 3)}px`,
-                                          backgroundColor: (weight as number) > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                                          backgroundColor: (weight as number) > 0 ? FINCEPT.GREEN : FINCEPT.RED
                                         }}
                                       />
-                                      <span className="text-xs font-mono font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                                      <span className="text-xs font-mono font-bold" style={{ color: FINCEPT.WHITE }}>
                                         {((weight as number) * 100).toFixed(1)}%
                                       </span>
                                     </div>
@@ -1760,7 +1760,7 @@ export function FortitudoPanel() {
                               } else if (Array.isArray(weights)) {
                                 return weights.map((w, i) => (
                                   <div key={i} className="flex items-center justify-between">
-                                    <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                                    <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                                       Asset {i + 1}
                                     </span>
                                     <div className="flex items-center gap-2">
@@ -1768,10 +1768,10 @@ export function FortitudoPanel() {
                                         className="h-2 rounded"
                                         style={{
                                           width: `${Math.max(w * 80, 3)}px`,
-                                          backgroundColor: w > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                                          backgroundColor: w > 0 ? FINCEPT.GREEN : FINCEPT.RED
                                         }}
                                       />
-                                      <span className="text-xs font-mono font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                                      <span className="text-xs font-mono font-bold" style={{ color: FINCEPT.WHITE }}>
                                         {(w * 100).toFixed(1)}%
                                       </span>
                                     </div>
@@ -1784,45 +1784,45 @@ export function FortitudoPanel() {
                         </div>
                         {/* Metrics */}
                         <div>
-                          <h5 className="text-xs font-bold uppercase mb-2" style={{ color: BLOOMBERG.CYAN }}>
+                          <h5 className="text-xs font-bold uppercase mb-2" style={{ color: FINCEPT.CYAN }}>
                             METRICS
                           </h5>
                           <div className="space-y-1">
-                            <div className="flex items-center justify-between py-1 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
-                              <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Expected Return</span>
-                              <span className="text-sm font-mono font-bold" style={{ color: BLOOMBERG.GREEN }}>
+                            <div className="flex items-center justify-between py-1 border-b" style={{ borderColor: FINCEPT.BORDER }}>
+                              <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Expected Return</span>
+                              <span className="text-sm font-mono font-bold" style={{ color: FINCEPT.GREEN }}>
                                 {(frontierResult.frontier[selectedFrontierIndex].expected_return * 100).toFixed(2)}%
                               </span>
                             </div>
-                            <div className="flex items-center justify-between py-1 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
-                              <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                            <div className="flex items-center justify-between py-1 border-b" style={{ borderColor: FINCEPT.BORDER }}>
+                              <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                                 {optimizationType === 'mv' ? 'Volatility' : 'CVaR'}
                               </span>
-                              <span className="text-sm font-mono font-bold" style={{ color: BLOOMBERG.RED }}>
+                              <span className="text-sm font-mono font-bold" style={{ color: FINCEPT.RED }}>
                                 {((frontierResult.frontier[selectedFrontierIndex].volatility ?? frontierResult.frontier[selectedFrontierIndex].cvar ?? 0) * 100).toFixed(2)}%
                               </span>
                             </div>
                             <div className="flex items-center justify-between py-1">
-                              <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Sharpe Ratio</span>
-                              <span className="text-sm font-mono font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                              <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Sharpe Ratio</span>
+                              <span className="text-sm font-mono font-bold" style={{ color: FINCEPT.WHITE }}>
                                 {frontierResult.frontier[selectedFrontierIndex].sharpe_ratio?.toFixed(3) ?? 'N/A'}
                               </span>
                             </div>
                           </div>
                           {/* Position on Frontier */}
-                          <div className="mt-4 p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                            <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
-                              Position: <span style={{ color: BLOOMBERG.YELLOW }}>{selectedFrontierIndex + 1}</span> of {frontierResult.frontier.length}
+                          <div className="mt-4 p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                            <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+                              Position: <span style={{ color: FINCEPT.YELLOW }}>{selectedFrontierIndex + 1}</span> of {frontierResult.frontier.length}
                             </p>
-                            <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
+                            <p className="text-xs font-mono mt-1" style={{ color: FINCEPT.GRAY }}>
                               {selectedFrontierIndex === 0 ? (
-                                <span style={{ color: BLOOMBERG.ORANGE }}>Minimum Risk Portfolio</span>
+                                <span style={{ color: FINCEPT.ORANGE }}>Minimum Risk Portfolio</span>
                               ) : selectedFrontierIndex === frontierResult.frontier.length - 1 ? (
-                                <span style={{ color: BLOOMBERG.CYAN }}>Maximum Return Portfolio</span>
+                                <span style={{ color: FINCEPT.CYAN }}>Maximum Return Portfolio</span>
                               ) : frontierResult.frontier[selectedFrontierIndex].sharpe_ratio === Math.max(...frontierResult.frontier.map(p => p.sharpe_ratio ?? 0)) ? (
-                                <span style={{ color: BLOOMBERG.GREEN }}>Maximum Sharpe Portfolio</span>
+                                <span style={{ color: FINCEPT.GREEN }}>Maximum Sharpe Portfolio</span>
                               ) : (
-                                <span style={{ color: BLOOMBERG.MUTED }}>Intermediate Portfolio</span>
+                                <span style={{ color: FINCEPT.MUTED }}>Intermediate Portfolio</span>
                               )}
                             </p>
                           </div>
@@ -1832,28 +1832,28 @@ export function FortitudoPanel() {
                   )}
 
                   {/* Summary Stats */}
-                  <div className="grid grid-cols-3 gap-4 p-3 rounded" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
+                  <div className="grid grid-cols-3 gap-4 p-3 rounded" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
                     <div className="text-center">
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>MIN RISK</p>
-                      <p className="text-sm font-bold" style={{ color: BLOOMBERG.ORANGE }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>MIN RISK</p>
+                      <p className="text-sm font-bold" style={{ color: FINCEPT.ORANGE }}>
                         {((frontierResult.frontier[0]?.volatility ?? frontierResult.frontier[0]?.cvar ?? 0) * 100).toFixed(2)}%
                       </p>
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.MUTED }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.MUTED }}>
                         Return: {(frontierResult.frontier[0]?.expected_return * 100).toFixed(2)}%
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>MAX SHARPE</p>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>MAX SHARPE</p>
                       {(() => {
                         const maxSharpePoint = frontierResult.frontier.reduce((max, p) =>
                           (p.sharpe_ratio ?? 0) > (max.sharpe_ratio ?? 0) ? p : max
                         );
                         return (
                           <>
-                            <p className="text-sm font-bold" style={{ color: BLOOMBERG.GREEN }}>
+                            <p className="text-sm font-bold" style={{ color: FINCEPT.GREEN }}>
                               {maxSharpePoint.sharpe_ratio?.toFixed(3) ?? 'N/A'}
                             </p>
-                            <p className="text-xs font-mono" style={{ color: BLOOMBERG.MUTED }}>
+                            <p className="text-xs font-mono" style={{ color: FINCEPT.MUTED }}>
                               Return: {(maxSharpePoint.expected_return * 100).toFixed(2)}%
                             </p>
                           </>
@@ -1861,11 +1861,11 @@ export function FortitudoPanel() {
                       })()}
                     </div>
                     <div className="text-center">
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>MAX RETURN</p>
-                      <p className="text-sm font-bold" style={{ color: BLOOMBERG.CYAN }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>MAX RETURN</p>
+                      <p className="text-sm font-bold" style={{ color: FINCEPT.CYAN }}>
                         {(frontierResult.frontier[frontierResult.frontier.length - 1]?.expected_return * 100).toFixed(2)}%
                       </p>
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.MUTED }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.MUTED }}>
                         Risk: {((frontierResult.frontier[frontierResult.frontier.length - 1]?.volatility ?? frontierResult.frontier[frontierResult.frontier.length - 1]?.cvar ?? 0) * 100).toFixed(2)}%
                       </p>
                     </div>
@@ -1880,12 +1880,12 @@ export function FortitudoPanel() {
         {activeMode === 'entropy' && (
           <div
             className="rounded border"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
           >
             <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     NUMBER OF SCENARIOS
                   </label>
                   <input
@@ -1896,14 +1896,14 @@ export function FortitudoPanel() {
                     max="10000"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     MAX PROBABILITY (%)
                   </label>
                   <input
@@ -1915,9 +1915,9 @@ export function FortitudoPanel() {
                     max="100"
                     className="w-full px-3 py-2 rounded text-sm font-mono border"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      borderColor: BLOOMBERG.BORDER,
-                      color: BLOOMBERG.WHITE
+                      backgroundColor: FINCEPT.DARK_BG,
+                      borderColor: FINCEPT.BORDER,
+                      color: FINCEPT.WHITE
                     }}
                   />
                 </div>
@@ -1927,7 +1927,7 @@ export function FortitudoPanel() {
                 onClick={runEntropyPooling}
                 disabled={isLoading}
                 className="w-full py-2.5 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+                style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
               >
                 {isLoading ? (
                   <RefreshCw size={16} className="animate-spin" />
@@ -1940,24 +1940,24 @@ export function FortitudoPanel() {
               {/* Entropy Results */}
               {entropyResult && entropyResult.success && (
                 <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div className="p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                    <p className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>PRIOR</p>
+                  <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                    <p className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>PRIOR</p>
                     <div className="space-y-1">
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.WHITE }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.WHITE }}>
                         Effective Scenarios: {entropyResult.effective_scenarios_prior?.toFixed(1)}
                       </p>
                     </div>
                   </div>
-                  <div className="p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                    <p className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.CYAN }}>POSTERIOR</p>
+                  <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                    <p className="text-xs font-mono mb-2" style={{ color: FINCEPT.CYAN }}>POSTERIOR</p>
                     <div className="space-y-1">
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.WHITE }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.WHITE }}>
                         Effective Scenarios: {entropyResult.effective_scenarios_posterior?.toFixed(1)}
                       </p>
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.WHITE }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.WHITE }}>
                         Max Prob: {(entropyResult.max_probability * 100).toFixed(2)}%
                       </p>
-                      <p className="text-xs font-mono" style={{ color: BLOOMBERG.WHITE }}>
+                      <p className="text-xs font-mono" style={{ color: FINCEPT.WHITE }}>
                         Min Prob: {(entropyResult.min_probability * 100).toFixed(4)}%
                       </p>
                     </div>
@@ -1984,13 +1984,13 @@ function MetricRow({
   positive?: boolean;
   negative?: boolean;
 }) {
-  let valueColor = BLOOMBERG.WHITE;
-  if (positive) valueColor = BLOOMBERG.GREEN;
-  if (negative) valueColor = BLOOMBERG.RED;
+  let valueColor = FINCEPT.WHITE;
+  if (positive) valueColor = FINCEPT.GREEN;
+  if (negative) valueColor = FINCEPT.RED;
 
   return (
-    <div className="flex items-center justify-between py-1.5 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
-      <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>{label}</span>
+    <div className="flex items-center justify-between py-1.5 border-b" style={{ borderColor: FINCEPT.BORDER }}>
+      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>{label}</span>
       <span className="text-sm font-mono font-semibold" style={{ color: valueColor }}>{value}</span>
     </div>
   );
@@ -2012,17 +2012,17 @@ function GreekRow({
   };
 
   const getValueColor = (val: number | undefined) => {
-    if (val === undefined || val === null || isNaN(val)) return BLOOMBERG.GRAY;
-    if (val > 0) return BLOOMBERG.GREEN;
-    if (val < 0) return BLOOMBERG.RED;
-    return BLOOMBERG.WHITE;
+    if (val === undefined || val === null || isNaN(val)) return FINCEPT.GRAY;
+    if (val > 0) return FINCEPT.GREEN;
+    if (val < 0) return FINCEPT.RED;
+    return FINCEPT.WHITE;
   };
 
   return (
-    <div className="flex items-center justify-between py-1.5 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+    <div className="flex items-center justify-between py-1.5 border-b" style={{ borderColor: FINCEPT.BORDER }}>
       <div>
-        <span className="text-xs font-mono font-semibold" style={{ color: BLOOMBERG.WHITE }}>{label}</span>
-        <span className="text-xs font-mono ml-2" style={{ color: BLOOMBERG.MUTED }}>{description}</span>
+        <span className="text-xs font-mono font-semibold" style={{ color: FINCEPT.WHITE }}>{label}</span>
+        <span className="text-xs font-mono ml-2" style={{ color: FINCEPT.MUTED }}>{description}</span>
       </div>
       <span className="text-sm font-mono font-bold" style={{ color: getValueColor(value) }}>
         {formatGreek(value)}

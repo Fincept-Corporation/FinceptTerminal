@@ -58,11 +58,11 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
     onClose();
   };
 
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#1a1a1a';
-  const BLOOMBERG_PANEL_BG = '#000000';
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#1a1a1a';
+  const FINCEPT_PANEL_BG = '#000000';
 
   return (
     <div style={{
@@ -78,8 +78,8 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
       zIndex: 9999
     }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
+        backgroundColor: FINCEPT_PANEL_BG,
+        border: `2px solid ${FINCEPT_ORANGE}`,
         width: '90%',
         maxWidth: '600px',
         maxHeight: '80vh',
@@ -89,20 +89,20 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
       }}>
         {/* Header */}
         <div style={{
-          backgroundColor: BLOOMBERG_DARK_BG,
-          color: BLOOMBERG_ORANGE,
+          backgroundColor: FINCEPT_DARK_BG,
+          color: FINCEPT_ORANGE,
           padding: '12px 16px',
           fontSize: '14px',
           fontWeight: 'bold',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          borderBottom: `1px solid ${BLOOMBERG_GRAY}`
+          borderBottom: `1px solid ${FINCEPT_GRAY}`
         }}>
           <span>EDIT {title.toUpperCase()}</span>
           <X
             size={20}
-            style={{ cursor: 'pointer', color: BLOOMBERG_WHITE }}
+            style={{ cursor: 'pointer', color: FINCEPT_WHITE }}
             onClick={onClose}
           />
         </div>
@@ -110,8 +110,8 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
         {/* Add Ticker Section */}
         <div style={{
           padding: '16px',
-          borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-          backgroundColor: BLOOMBERG_DARK_BG
+          borderBottom: `1px solid ${FINCEPT_GRAY}`,
+          backgroundColor: FINCEPT_DARK_BG
         }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input
@@ -122,9 +122,9 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
               placeholder="Enter ticker symbol (e.g., AAPL)"
               style={{
                 flex: 1,
-                backgroundColor: BLOOMBERG_PANEL_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_PANEL_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '8px 12px',
                 fontSize: '12px',
                 fontFamily: 'Consolas, monospace'
@@ -133,7 +133,7 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
             <button
               onClick={handleAdd}
               style={{
-                backgroundColor: BLOOMBERG_ORANGE,
+                backgroundColor: FINCEPT_ORANGE,
                 border: 'none',
                 color: 'black',
                 padding: '8px 16px',
@@ -158,7 +158,7 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
         }}>
           {editedTickers.length === 0 ? (
             <div style={{
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               fontSize: '12px',
               textAlign: 'center',
               padding: '32px'
@@ -171,7 +171,7 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
                 key={index}
                 style={{
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
+                  border: `1px solid ${FINCEPT_GRAY}`,
                   padding: '8px 12px',
                   marginBottom: '4px',
                   display: 'flex',
@@ -182,7 +182,7 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
               >
                 {/* Position number */}
                 <div style={{
-                  color: BLOOMBERG_GRAY,
+                  color: FINCEPT_GRAY,
                   fontSize: '10px',
                   minWidth: '20px',
                   textAlign: 'center'
@@ -200,9 +200,9 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
                     onClick={() => handleMoveUp(index)}
                     disabled={index === 0}
                     style={{
-                      backgroundColor: index === 0 ? 'transparent' : BLOOMBERG_DARK_BG,
-                      border: `1px solid ${BLOOMBERG_GRAY}`,
-                      color: index === 0 ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
+                      backgroundColor: index === 0 ? 'transparent' : FINCEPT_DARK_BG,
+                      border: `1px solid ${FINCEPT_GRAY}`,
+                      color: index === 0 ? FINCEPT_GRAY : FINCEPT_ORANGE,
                       cursor: index === 0 ? 'not-allowed' : 'pointer',
                       padding: '2px',
                       display: 'flex',
@@ -218,9 +218,9 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
                     onClick={() => handleMoveDown(index)}
                     disabled={index === editedTickers.length - 1}
                     style={{
-                      backgroundColor: index === editedTickers.length - 1 ? 'transparent' : BLOOMBERG_DARK_BG,
-                      border: `1px solid ${BLOOMBERG_GRAY}`,
-                      color: index === editedTickers.length - 1 ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
+                      backgroundColor: index === editedTickers.length - 1 ? 'transparent' : FINCEPT_DARK_BG,
+                      border: `1px solid ${FINCEPT_GRAY}`,
+                      color: index === editedTickers.length - 1 ? FINCEPT_GRAY : FINCEPT_ORANGE,
                       cursor: index === editedTickers.length - 1 ? 'not-allowed' : 'pointer',
                       padding: '2px',
                       display: 'flex',
@@ -236,7 +236,7 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
 
                 {/* Ticker symbol */}
                 <span style={{
-                  color: BLOOMBERG_WHITE,
+                  color: FINCEPT_WHITE,
                   flex: 1,
                   fontWeight: 'bold'
                 }}>{ticker}</span>
@@ -246,7 +246,7 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
                   onClick={() => handleRemove(index)}
                   style={{
                     backgroundColor: 'transparent',
-                    border: `1px solid ${BLOOMBERG_GRAY}`,
+                    border: `1px solid ${FINCEPT_GRAY}`,
                     color: '#FF0000',
                     cursor: 'pointer',
                     padding: '4px 8px',
@@ -268,16 +268,16 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
         {/* Footer */}
         <div style={{
           padding: '16px',
-          borderTop: `1px solid ${BLOOMBERG_GRAY}`,
+          borderTop: `1px solid ${FINCEPT_GRAY}`,
           display: 'flex',
           justifyContent: 'flex-end',
           gap: '8px',
-          backgroundColor: BLOOMBERG_DARK_BG
+          backgroundColor: FINCEPT_DARK_BG
         }}>
           <button
             onClick={onClose}
             style={{
-              backgroundColor: BLOOMBERG_GRAY,
+              backgroundColor: FINCEPT_GRAY,
               border: 'none',
               color: 'black',
               padding: '8px 16px',
@@ -291,7 +291,7 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
           <button
             onClick={handleSave}
             style={{
-              backgroundColor: BLOOMBERG_ORANGE,
+              backgroundColor: FINCEPT_ORANGE,
               border: 'none',
               color: 'black',
               padding: '8px 16px',

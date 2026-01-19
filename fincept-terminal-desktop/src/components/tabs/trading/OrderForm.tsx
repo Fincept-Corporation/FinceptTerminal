@@ -1,5 +1,5 @@
 // File: src/components/tabs/trading/OrderForm.tsx
-// Bloomberg Terminal-styled order placement form
+// Fincept Terminal-styled order placement form
 
 import React, { useState } from 'react';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
@@ -12,8 +12,8 @@ interface OrderFormProps {
   isLoading?: boolean;
 }
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -107,9 +107,9 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             style={{
               flex: 1,
               padding: '8px',
-              backgroundColor: side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.HEADER_BG,
-              border: `1px solid ${side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
-              color: side === 'buy' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+              backgroundColor: side === 'buy' ? FINCEPT.GREEN : FINCEPT.HEADER_BG,
+              border: `1px solid ${side === 'buy' ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+              color: side === 'buy' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
               cursor: 'pointer',
               fontWeight: 700,
               fontSize: '10px',
@@ -118,12 +118,12 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             }}
             onMouseEnter={(e) => {
               if (side !== 'buy') {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
               }
             }}
             onMouseLeave={(e) => {
               if (side !== 'buy') {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
               }
             }}
           >
@@ -135,9 +135,9 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             style={{
               flex: 1,
               padding: '8px',
-              backgroundColor: side === 'sell' ? BLOOMBERG.RED : BLOOMBERG.HEADER_BG,
-              border: `1px solid ${side === 'sell' ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
-              color: side === 'sell' ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+              backgroundColor: side === 'sell' ? FINCEPT.RED : FINCEPT.HEADER_BG,
+              border: `1px solid ${side === 'sell' ? FINCEPT.RED : FINCEPT.BORDER}`,
+              color: side === 'sell' ? FINCEPT.WHITE : FINCEPT.GRAY,
               cursor: 'pointer',
               fontWeight: 700,
               fontSize: '10px',
@@ -146,12 +146,12 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             }}
             onMouseEnter={(e) => {
               if (side !== 'sell') {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
               }
             }}
             onMouseLeave={(e) => {
               if (side !== 'sell') {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
               }
             }}
           >
@@ -163,7 +163,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
         <div style={{ marginBottom: '12px' }}>
           <label style={{
             display: 'block',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             marginBottom: '4px',
             fontWeight: 600,
@@ -177,9 +177,9 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             style={{
               width: '100%',
               padding: '6px 8px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              color: BLOOMBERG.WHITE,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '10px',
               fontWeight: 600,
               outline: 'none',
@@ -197,7 +197,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
         <div style={{ marginBottom: '12px' }}>
           <label style={{
             display: 'block',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             marginBottom: '4px',
             fontWeight: 600,
@@ -214,16 +214,16 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             style={{
               width: '100%',
               padding: '6px 8px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              color: BLOOMBERG.YELLOW,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              color: FINCEPT.YELLOW,
+              border: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '11px',
               fontWeight: 600,
               outline: 'none',
               fontFamily: 'monospace'
             }}
-            onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
-            onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+            onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.ORANGE}
+            onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
           />
         </div>
 
@@ -232,7 +232,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '9px',
               marginBottom: '4px',
               fontWeight: 600,
@@ -249,16 +249,16 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
               style={{
                 width: '100%',
                 padding: '6px 8px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                color: BLOOMBERG.CYAN,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.HEADER_BG,
+                color: FINCEPT.CYAN,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 fontSize: '11px',
                 fontWeight: 600,
                 outline: 'none',
                 fontFamily: 'monospace'
               }}
-              onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
-              onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+              onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.ORANGE}
+              onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
             />
           </div>
         )}
@@ -268,7 +268,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '9px',
               marginBottom: '4px',
               fontWeight: 600,
@@ -285,16 +285,16 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
               style={{
                 width: '100%',
                 padding: '6px 8px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                color: BLOOMBERG.CYAN,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.HEADER_BG,
+                color: FINCEPT.CYAN,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 fontSize: '11px',
                 fontWeight: 600,
                 outline: 'none',
                 fontFamily: 'monospace'
               }}
-              onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
-              onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+              onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.ORANGE}
+              onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
             />
           </div>
         )}
@@ -305,7 +305,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           onClick={() => setEnableAdvanced(!enableAdvanced)}
           style={{
             marginBottom: '12px',
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             backgroundColor: 'transparent',
             border: 'none',
             cursor: 'pointer',
@@ -314,8 +314,8 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             letterSpacing: '0.5px',
             transition: 'all 0.2s'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.color = BLOOMBERG.YELLOW}
-          onMouseLeave={(e) => e.currentTarget.style.color = BLOOMBERG.ORANGE}
+          onMouseEnter={(e) => e.currentTarget.style.color = FINCEPT.YELLOW}
+          onMouseLeave={(e) => e.currentTarget.style.color = FINCEPT.ORANGE}
         >
           {enableAdvanced ? '▼' : '▶'} ADVANCED (SL/TP)
         </button>
@@ -325,13 +325,13 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           <div style={{
             marginBottom: '12px',
             padding: '10px',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`
           }}>
             <div style={{ marginBottom: '10px' }}>
               <label style={{
                 display: 'block',
-                color: BLOOMBERG.GREEN,
+                color: FINCEPT.GREEN,
                 fontSize: '9px',
                 marginBottom: '4px',
                 fontWeight: 600,
@@ -348,23 +348,23 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
                 style={{
                   width: '100%',
                   padding: '6px 8px',
-                  backgroundColor: BLOOMBERG.HEADER_BG,
-                  color: BLOOMBERG.GREEN,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  color: FINCEPT.GREEN,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   fontSize: '10px',
                   fontWeight: 600,
                   outline: 'none',
                   fontFamily: 'monospace'
                 }}
-                onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.GREEN}
-                onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+                onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.GREEN}
+                onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
               />
             </div>
 
             <div>
               <label style={{
                 display: 'block',
-                color: BLOOMBERG.RED,
+                color: FINCEPT.RED,
                 fontSize: '9px',
                 marginBottom: '4px',
                 fontWeight: 600,
@@ -381,16 +381,16 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
                 style={{
                   width: '100%',
                   padding: '6px 8px',
-                  backgroundColor: BLOOMBERG.HEADER_BG,
-                  color: BLOOMBERG.RED,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  backgroundColor: FINCEPT.HEADER_BG,
+                  color: FINCEPT.RED,
+                  border: `1px solid ${FINCEPT.BORDER}`,
                   fontSize: '10px',
                   fontWeight: 600,
                   outline: 'none',
                   fontFamily: 'monospace'
                 }}
-                onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.RED}
-                onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+                onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.RED}
+                onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
               />
             </div>
 
@@ -398,14 +398,14 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
               <div style={{
                 marginTop: '8px',
                 paddingTop: '8px',
-                borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
                 fontSize: '9px'
               }}>
                 {takeProfitPrice && (
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    color: BLOOMBERG.GREEN,
+                    color: FINCEPT.GREEN,
                     marginBottom: '4px'
                   }}>
                     <span>TP R/R:</span>
@@ -418,7 +418,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    color: BLOOMBERG.RED
+                    color: FINCEPT.RED
                   }}>
                     <span>SL RISK:</span>
                     <span style={{ fontWeight: 700 }}>
@@ -438,15 +438,15 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             justifyContent: 'space-between',
             marginBottom: '12px',
             padding: '8px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
             fontSize: '9px'
           }}>
-            <span style={{ color: BLOOMBERG.GRAY, fontWeight: 600 }}>
+            <span style={{ color: FINCEPT.GRAY, fontWeight: 600 }}>
               EST. {side === 'buy' ? 'COST' : 'PROCEEDS'}:
             </span>
             <span style={{
-              color: BLOOMBERG.YELLOW,
+              color: FINCEPT.YELLOW,
               fontWeight: 700,
               fontFamily: 'monospace',
               fontSize: '10px'
@@ -461,9 +461,9 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           <div style={{
             marginBottom: '12px',
             padding: '8px',
-            backgroundColor: `${BLOOMBERG.RED}20`,
-            border: `1px solid ${BLOOMBERG.RED}`,
-            color: BLOOMBERG.RED,
+            backgroundColor: `${FINCEPT.RED}20`,
+            border: `1px solid ${FINCEPT.RED}`,
+            color: FINCEPT.RED,
             fontSize: '9px',
             fontWeight: 600
           }}>
@@ -476,9 +476,9 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           <div style={{
             marginBottom: '12px',
             padding: '8px',
-            backgroundColor: `${BLOOMBERG.RED}20`,
-            border: `2px solid ${BLOOMBERG.RED}`,
-            color: BLOOMBERG.RED,
+            backgroundColor: `${FINCEPT.RED}20`,
+            border: `2px solid ${FINCEPT.RED}`,
+            color: FINCEPT.RED,
             fontSize: '9px',
             fontWeight: 700,
             textAlign: 'center',
@@ -496,21 +496,21 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             width: '100%',
             padding: '10px',
             backgroundColor: tradingMode === 'live'
-              ? BLOOMBERG.RED
+              ? FINCEPT.RED
               : side === 'buy'
-              ? BLOOMBERG.GREEN
-              : BLOOMBERG.RED,
+              ? FINCEPT.GREEN
+              : FINCEPT.RED,
             border: tradingMode === 'live'
-              ? `2px solid ${BLOOMBERG.YELLOW}`
-              : `1px solid ${side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
-            color: tradingMode === 'live' || side === 'sell' ? BLOOMBERG.WHITE : BLOOMBERG.DARK_BG,
+              ? `2px solid ${FINCEPT.YELLOW}`
+              : `1px solid ${side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED}`,
+            color: tradingMode === 'live' || side === 'sell' ? FINCEPT.WHITE : FINCEPT.DARK_BG,
             cursor: isLoading ? 'not-allowed' : 'pointer',
             fontWeight: 700,
             fontSize: '11px',
             letterSpacing: '1px',
             transition: 'all 0.2s',
             opacity: isLoading ? 0.6 : 1,
-            boxShadow: tradingMode === 'live' ? `0 0 10px ${BLOOMBERG.RED}40` : 'none'
+            boxShadow: tradingMode === 'live' ? `0 0 10px ${FINCEPT.RED}40` : 'none'
           }}
           onMouseEnter={(e) => {
             if (!isLoading) {
@@ -526,11 +526,11 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           onMouseLeave={(e) => {
             if (!isLoading) {
               if (tradingMode === 'live') {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.RED;
+                e.currentTarget.style.backgroundColor = FINCEPT.RED;
               } else if (side === 'buy') {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.GREEN;
+                e.currentTarget.style.backgroundColor = FINCEPT.GREEN;
               } else {
-                e.currentTarget.style.backgroundColor = BLOOMBERG.RED;
+                e.currentTarget.style.backgroundColor = FINCEPT.RED;
               }
             }
           }}
@@ -547,7 +547,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           <div style={{
             marginTop: '8px',
             textAlign: 'center',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '8px',
             fontStyle: 'italic'
           }}>

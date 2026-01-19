@@ -8,17 +8,17 @@ interface MarkdownRendererProps {
 }
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {} }) => {
-  // Bloomberg color scheme
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_YELLOW = '#FFFF00';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
-  const BLOOMBERG_GREEN = '#00C800';
+  // Fincept color scheme
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_YELLOW = '#FFFF00';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#000000';
+  const FINCEPT_PANEL_BG = '#0a0a0a';
+  const FINCEPT_GREEN = '#00C800';
 
   const markdownStyles: React.CSSProperties = {
-    color: BLOOMBERG_WHITE,
+    color: FINCEPT_WHITE,
     fontSize: '14px',
     lineHeight: '1.6',
     ...style
@@ -27,7 +27,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
   // Safety check for content
   if (!content || typeof content !== 'string') {
     return (
-      <div style={{ ...markdownStyles, color: BLOOMBERG_GRAY }}>
+      <div style={{ ...markdownStyles, color: FINCEPT_GRAY }}>
         (No content to display)
       </div>
     );
@@ -42,31 +42,31 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           // Headings
           h1: ({ children }) => (
             <h1 style={{
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '20px',
               fontWeight: 'bold',
               marginTop: '16px',
               marginBottom: '12px',
-              borderBottom: `2px solid ${BLOOMBERG_ORANGE}`
+              borderBottom: `2px solid ${FINCEPT_ORANGE}`
             }}>
               {children}
             </h1>
           ),
           h2: ({ children }) => (
             <h2 style={{
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '18px',
               fontWeight: 'bold',
               marginTop: '14px',
               marginBottom: '10px',
-              borderBottom: `1px solid ${BLOOMBERG_GRAY}`
+              borderBottom: `1px solid ${FINCEPT_GRAY}`
             }}>
               {children}
             </h2>
           ),
           h3: ({ children }) => (
             <h3 style={{
-              color: BLOOMBERG_YELLOW,
+              color: FINCEPT_YELLOW,
               fontSize: '16px',
               fontWeight: 'bold',
               marginTop: '12px',
@@ -77,7 +77,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           ),
           h4: ({ children }) => (
             <h4 style={{
-              color: BLOOMBERG_YELLOW,
+              color: FINCEPT_YELLOW,
               fontSize: '15px',
               fontWeight: 'bold',
               marginTop: '10px',
@@ -88,7 +88,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           ),
           h5: ({ children }) => (
             <h5 style={{
-              color: BLOOMBERG_WHITE,
+              color: FINCEPT_WHITE,
               fontSize: '14px',
               fontWeight: 'bold',
               marginTop: '8px',
@@ -99,7 +99,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           ),
           h6: ({ children }) => (
             <h6 style={{
-              color: BLOOMBERG_WHITE,
+              color: FINCEPT_WHITE,
               fontSize: '13px',
               fontWeight: 'bold',
               marginTop: '6px',
@@ -113,7 +113,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           p: ({ children }) => (
             <p style={{
               marginBottom: '12px',
-              color: BLOOMBERG_WHITE
+              color: FINCEPT_WHITE
             }}>
               {children}
             </p>
@@ -125,7 +125,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
               marginLeft: '20px',
               marginBottom: '12px',
               listStyleType: 'disc',
-              color: BLOOMBERG_WHITE
+              color: FINCEPT_WHITE
             }}>
               {children}
             </ul>
@@ -135,7 +135,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
               marginLeft: '20px',
               marginBottom: '12px',
               listStyleType: 'decimal',
-              color: BLOOMBERG_WHITE
+              color: FINCEPT_WHITE
             }}>
               {children}
             </ol>
@@ -143,7 +143,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           li: ({ children }) => (
             <li style={{
               marginBottom: '6px',
-              color: BLOOMBERG_WHITE
+              color: FINCEPT_WHITE
             }}>
               {children}
             </li>
@@ -154,13 +154,13 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
             if (inline) {
               return (
                 <code style={{
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  color: BLOOMBERG_GREEN,
+                  backgroundColor: FINCEPT_DARK_BG,
+                  color: FINCEPT_GREEN,
                   padding: '2px 6px',
                   borderRadius: '3px',
                   fontSize: '13px',
                   fontFamily: 'Consolas, monospace',
-                  border: `1px solid ${BLOOMBERG_GRAY}`
+                  border: `1px solid ${FINCEPT_GRAY}`
                 }} {...props}>
                   {children}
                 </code>
@@ -169,13 +169,13 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
             return (
               <code style={{
                 display: 'block',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                color: BLOOMBERG_GREEN,
+                backgroundColor: FINCEPT_DARK_BG,
+                color: FINCEPT_GREEN,
                 padding: '12px',
                 borderRadius: '4px',
                 fontSize: '13px',
                 fontFamily: 'Consolas, monospace',
-                border: `1px solid ${BLOOMBERG_GRAY}`,
+                border: `1px solid ${FINCEPT_GRAY}`,
                 marginBottom: '12px',
                 overflowX: 'auto',
                 whiteSpace: 'pre-wrap'
@@ -188,7 +188,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           // Pre blocks
           pre: ({ children }) => (
             <pre style={{
-              backgroundColor: BLOOMBERG_DARK_BG,
+              backgroundColor: FINCEPT_DARK_BG,
               padding: '0',
               margin: '0 0 12px 0',
               overflowX: 'auto'
@@ -200,11 +200,11 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           // Blockquotes
           blockquote: ({ children }) => (
             <blockquote style={{
-              borderLeft: `4px solid ${BLOOMBERG_ORANGE}`,
+              borderLeft: `4px solid ${FINCEPT_ORANGE}`,
               marginLeft: '0',
               paddingLeft: '16px',
               marginBottom: '12px',
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               fontStyle: 'italic'
             }}>
               {children}
@@ -214,7 +214,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           // Links
           a: ({ children, href }) => (
             <a href={href} style={{
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               textDecoration: 'underline',
               cursor: 'pointer'
             }} target="_blank" rel="noopener noreferrer">
@@ -228,14 +228,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
               borderCollapse: 'collapse',
               width: '100%',
               marginBottom: '12px',
-              border: `1px solid ${BLOOMBERG_GRAY}`
+              border: `1px solid ${FINCEPT_GRAY}`
             }}>
               {children}
             </table>
           ),
           thead: ({ children }) => (
             <thead style={{
-              backgroundColor: BLOOMBERG_DARK_BG
+              backgroundColor: FINCEPT_DARK_BG
             }}>
               {children}
             </thead>
@@ -247,7 +247,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           ),
           tr: ({ children }) => (
             <tr style={{
-              borderBottom: `1px solid ${BLOOMBERG_GRAY}`
+              borderBottom: `1px solid ${FINCEPT_GRAY}`
             }}>
               {children}
             </tr>
@@ -256,9 +256,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
             <th style={{
               padding: '8px',
               textAlign: 'left',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontWeight: 'bold',
-              border: `1px solid ${BLOOMBERG_GRAY}`
+              border: `1px solid ${FINCEPT_GRAY}`
             }}>
               {children}
             </th>
@@ -266,8 +266,8 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           td: ({ children }) => (
             <td style={{
               padding: '8px',
-              color: BLOOMBERG_WHITE,
-              border: `1px solid ${BLOOMBERG_GRAY}`
+              color: FINCEPT_WHITE,
+              border: `1px solid ${FINCEPT_GRAY}`
             }}>
               {children}
             </td>
@@ -277,7 +277,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           hr: () => (
             <hr style={{
               border: 'none',
-              borderTop: `1px solid ${BLOOMBERG_GRAY}`,
+              borderTop: `1px solid ${FINCEPT_GRAY}`,
               marginTop: '16px',
               marginBottom: '16px'
             }} />
@@ -286,7 +286,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           // Strong/Bold
           strong: ({ children }) => (
             <strong style={{
-              color: BLOOMBERG_YELLOW,
+              color: FINCEPT_YELLOW,
               fontWeight: 'bold'
             }}>
               {children}
@@ -296,7 +296,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           // Emphasis/Italic
           em: ({ children }) => (
             <em style={{
-              color: BLOOMBERG_WHITE,
+              color: FINCEPT_WHITE,
               fontStyle: 'italic'
             }}>
               {children}
@@ -306,7 +306,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           // Delete/Strikethrough
           del: ({ children }) => (
             <del style={{
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               textDecoration: 'line-through'
             }}>
               {children}
@@ -321,7 +321,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
   } catch (error) {
     console.error('Error rendering markdown:', error);
     return (
-      <div style={{ ...markdownStyles, color: BLOOMBERG_GRAY }}>
+      <div style={{ ...markdownStyles, color: FINCEPT_GRAY }}>
         <div style={{ color: '#ff6b6b', marginBottom: '8px' }}>
           Error rendering markdown content
         </div>
@@ -329,7 +329,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
           fontSize: '12px',
-          color: BLOOMBERG_WHITE
+          color: FINCEPT_WHITE
         }}>
           {content}
         </pre>

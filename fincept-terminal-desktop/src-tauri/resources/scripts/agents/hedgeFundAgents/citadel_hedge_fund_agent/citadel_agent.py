@@ -160,10 +160,15 @@ def fundamental_research_department(metrics: list, financial_line_items: list, m
     # Growth sustainability
     revenues = [item.revenue for item in financial_line_items if item.revenue]
     if len(revenues) >= 5:
-        revenue_cagr = (revenues[0] / revenues[-1]) ** (1 / len(revenues)) - 1
-        if 0.05 <= revenue_cagr <= 0.25:  # Sustainable growth
-            score += 2
-            details.append(f"Sustainable growth: {revenue_cagr:.1%} revenue CAGR")
+        # CAGR formula: (End Value / Start Value)^(1 / number_of_periods) - 1
+        # number_of_periods = len(revenues) - 1 (not len(revenues))
+        # revenues[0] is most recent, revenues[-1] is oldest
+        num_periods = len(revenues) - 1
+        if revenues[-1] > 0:  # Prevent division by zero
+            revenue_cagr = (revenues[0] / revenues[-1]) ** (1 / num_periods) - 1
+            if 0.05 <= revenue_cagr <= 0.25:  # Sustainable growth
+                score += 2
+                details.append(f"Sustainable growth: {revenue_cagr:.1%} revenue CAGR")
 
     # Competitive position
     margins = [item.operating_margin for item in financial_line_items if item.operating_margin]
@@ -497,9 +502,11 @@ def calculate_factor_loadings(metrics: list, financial_line_items: list) -> dict
 
     # Growth factor
     revenues = [item.revenue for item in financial_line_items if item.revenue]
-    if len(revenues) >= 3:
-        growth = (revenues[0] / revenues[-1]) ** (1 / len(revenues)) - 1
-        factors["growth_factor"] = min(growth / 0.15, 1.0)  # Normalize by 15%
+    if len(revenues) >= 3 and revenues[-1] > 0:
+        # CAGR: number of periods = len - 1
+        num_periods = len(revenues) - 1
+        growth = (revenues[0] / revenues[-1]) ** (1 / num_periods) - 1
+        factors["growth_factor"] = min(max(growth / 0.15, 0.0), 1.0)  # Normalize by 15%, clamp 0-1
 
     return factors
 
@@ -574,15 +581,33 @@ def analyze_international_exposure(financial_line_items: list) -> float:
 
 
 def analyze_pricing_power(financial_line_items: list) -> float:
-    """Analyze pricing power through margin stability"""
+    """
+    Analyze pricing power through margin stability.
+
+    High pricing power = stable margins over time (companies can maintain margins
+    regardless of input cost fluctuations or competitive pressure).
+
+    Returns 0-1 where 1 = very stable margins (strong pricing power)
+    """
     margins = []
     for item in financial_line_items:
-        if item.operating_margin:
+        if item.operating_margin is not None:
             margins.append(item.operating_margin)
 
     if len(margins) >= 3:
-        margin_stability = 1 - ((max(margins) - min(margins)) / max(margins))
-        return max(margin_stability, 0)
+        max_margin = max(margins)
+        min_margin = min(margins)
+
+        # Prevent division by zero when max_margin is 0 or negative
+        if max_margin > 0:
+            margin_stability = 1 - ((max_margin - min_margin) / max_margin)
+            return max(min(margin_stability, 1.0), 0.0)
+        elif max_margin == 0 and min_margin == 0:
+            # All zero margins - no pricing power signal
+            return 0.3
+        else:
+            # Negative margins indicate no pricing power
+            return 0.1
 
     return 0.5
 
@@ -675,18 +700,51 @@ def assess_business_concentration_risk(financial_line_items: list) -> float:
 
 
 def calculate_tail_risk_metrics(financial_line_items: list) -> float:
-    """Calculate tail risk metrics"""
-    earnings = [item.net_income for item in financial_line_items if item.net_income]
-    if earnings:
-        sorted_earnings = sorted(earnings)
-        worst_5pct = sorted_earnings[:max(1, len(earnings) // 20)]
-        if worst_5pct:
-            avg_earnings = sum(earnings) / len(earnings)
-            worst_performance = min(worst_5pct)
-            if avg_earnings > 0:
-                return abs(worst_performance) / avg_earnings
+    """
+    Calculate tail risk metrics using proper percentile-based approach.
 
-    return 0.5
+    Returns a score from 0 to 1 where:
+    - 0 = Low tail risk (worst case is close to average)
+    - 1 = High tail risk (worst case is much worse than average)
+    """
+    earnings = [item.net_income for item in financial_line_items if item.net_income is not None]
+
+    if not earnings or len(earnings) < 2:
+        return 0.5  # Default for insufficient data
+
+    sorted_earnings = sorted(earnings)
+    avg_earnings = sum(earnings) / len(earnings)
+
+    # Use proper percentile calculation
+    # For small samples (typical 5-10 years), use bottom 10-20% or minimum
+    if len(earnings) >= 10:
+        # Use 10th percentile for larger samples
+        percentile_index = max(0, int(len(earnings) * 0.10))
+        worst_performance = sorted_earnings[percentile_index]
+    elif len(earnings) >= 5:
+        # Use 20th percentile for medium samples
+        percentile_index = max(0, int(len(earnings) * 0.20))
+        worst_performance = sorted_earnings[percentile_index]
+    else:
+        # For very small samples, use minimum
+        worst_performance = sorted_earnings[0]
+
+    # Calculate tail risk score
+    if avg_earnings > 0:
+        # Ratio of worst to average (negative worst = higher risk)
+        if worst_performance < 0:
+            # Negative earnings in worst case = high tail risk
+            tail_risk = min(abs(worst_performance) / avg_earnings, 1.0)
+        else:
+            # Positive but lower than average
+            tail_risk = max(0, 1 - (worst_performance / avg_earnings)) * 0.5
+    elif avg_earnings < 0:
+        # Average is negative - company is unprofitable on average
+        tail_risk = 0.8  # High risk
+    else:
+        tail_risk = 0.5  # Neutral
+
+    return min(max(tail_risk, 0.0), 1.0)  # Clamp to 0-1
 
 
 def assess_regulatory_risk(financial_line_items: list) -> float:

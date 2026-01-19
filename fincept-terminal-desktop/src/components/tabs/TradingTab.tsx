@@ -1,5 +1,5 @@
 // File: src/components/tabs/TradingTab.tsx
-// Professional Bloomberg Terminal-Grade Trading Interface
+// Professional Fincept Terminal-Grade Trading Interface
 
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import {
@@ -64,8 +64,8 @@ interface Order {
   createdAt: string;
 }
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -508,18 +508,36 @@ export function TradingTab() {
     fetchMarkets();
   }, [realAdapter, defaultSymbols]);
 
-  // Handle order placement - re-validate adapter before each async operation
+  // Handle order placement - uses activeAdapter based on tradingMode
   const handlePlaceOrder = useCallback(async (orderRequest: OrderRequest) => {
+    // Use the correct adapter based on trading mode
+    const adapter = tradingMode === 'paper' ? paperAdapter : realAdapter;
+
     // Initial validation
-    if (!paperAdapter || !paperAdapter.isConnected()) {
-      alert('Paper trading adapter not available');
+    if (!adapter || !adapter.isConnected()) {
+      alert(`${tradingMode === 'paper' ? 'Paper' : 'Live'} trading adapter not available`);
       throw new Error('Adapter not available');
+    }
+
+    // CRITICAL: Confirm before placing LIVE orders
+    if (tradingMode === 'live') {
+      const confirmed = window.confirm(
+        `⚠️ LIVE TRADING WARNING ⚠️\n\n` +
+        `You are about to place a REAL order:\n\n` +
+        `${orderRequest.side.toUpperCase()} ${orderRequest.quantity} ${orderRequest.symbol}\n` +
+        `Type: ${orderRequest.type}\n` +
+        `${orderRequest.price ? `Price: $${orderRequest.price}` : 'Market Order'}\n\n` +
+        `This will use REAL funds. Continue?`
+      );
+      if (!confirmed) {
+        throw new Error('Order cancelled by user');
+      }
     }
 
     setIsPlacingOrder(true);
     try {
-      // Create order
-      const order = await paperAdapter.createOrder(
+      // Create order using the appropriate adapter
+      const order = await adapter.createOrder(
         orderRequest.symbol,
         orderRequest.type,
         orderRequest.side,
@@ -529,64 +547,78 @@ export function TradingTab() {
       );
 
       // Re-validate adapter is still connected after async operation
-      if (!paperAdapter || !paperAdapter.isConnected()) {
+      if (!adapter || !adapter.isConnected()) {
         throw new Error('Adapter disconnected during order placement');
       }
 
-      // Fetch updated orders
-      const ordersData = await paperAdapter.fetchOpenOrders();
-      const mappedOrders: Order[] = ordersData.map((o: any) => ({
-        id: o.id,
-        symbol: o.symbol,
-        side: o.side,
-        type: o.type,
-        quantity: o.amount,
-        price: o.price,
-        status: o.status,
-        createdAt: o.datetime,
-      }));
-      setOrders(mappedOrders);
+      // Fetch updated orders (only for paper trading - live orders come from exchange)
+      if (tradingMode === 'paper' && paperAdapter) {
+        const ordersData = await paperAdapter.fetchOpenOrders();
+        const mappedOrders: Order[] = ordersData.map((o: any) => ({
+          id: o.id,
+          symbol: o.symbol,
+          side: o.side,
+          type: o.type,
+          quantity: o.amount,
+          price: o.price,
+          status: o.status,
+          createdAt: o.datetime,
+        }));
+        setOrders(mappedOrders);
 
-      // Re-validate again before fetching balance
-      if (!paperAdapter || !paperAdapter.isConnected()) {
-        throw new Error('Adapter disconnected during order refresh');
+        // Fetch updated balance
+        const balanceData = await paperAdapter.fetchBalance();
+        const usdBalance = (balanceData.free as any)?.USD || 0;
+        setBalance(usdBalance);
       }
 
-      // Fetch updated balance
-      const balanceData = await paperAdapter.fetchBalance();
-      const usdBalance = (balanceData.free as any)?.USD || 0;
-      setBalance(usdBalance);
-
-      alert(`[OK] Order placed: ${order.id}`);
+      alert(`[OK] ${tradingMode.toUpperCase()} Order placed: ${order.id}`);
     } catch (error) {
       alert(`[FAIL] Order failed: ${(error as Error).message}`);
       throw error;
     } finally {
       setIsPlacingOrder(false);
     }
-  }, [paperAdapter]);
+  }, [tradingMode, paperAdapter, realAdapter]);
 
-  // Handle order cancellation
+  // Handle order cancellation - uses correct adapter based on mode
   const handleCancelOrder = useCallback(async (orderId: string, symbol: string) => {
-    if (!paperAdapter) return;
+    const adapter = tradingMode === 'paper' ? paperAdapter : realAdapter;
+    if (!adapter) return;
+
+    // Confirm for live orders
+    if (tradingMode === 'live') {
+      const confirmed = window.confirm(
+        `Cancel LIVE order ${orderId}?\n\nThis will cancel a real order on the exchange.`
+      );
+      if (!confirmed) return;
+    }
+
     try {
-      await paperAdapter.cancelOrder(orderId, symbol);
-      const ordersData = await paperAdapter.fetchOpenOrders();
-      const mappedOrders: Order[] = ordersData.map((o: any) => ({
-        id: o.id,
-        symbol: o.symbol,
-        side: o.side,
-        type: o.type,
-        quantity: o.amount,
-        price: o.price,
-        status: o.status,
-        createdAt: o.datetime,
-      }));
-      setOrders(mappedOrders);
+      await adapter.cancelOrder(orderId, symbol);
+
+      // Refresh orders for paper trading
+      if (tradingMode === 'paper' && paperAdapter) {
+        const ordersData = await paperAdapter.fetchOpenOrders();
+        const mappedOrders: Order[] = ordersData.map((o: any) => ({
+          id: o.id,
+          symbol: o.symbol,
+          side: o.side,
+          type: o.type,
+          quantity: o.amount,
+          price: o.price,
+          status: o.status,
+          createdAt: o.datetime,
+        }));
+        setOrders(mappedOrders);
+      }
+
+      alert(`[OK] Order ${orderId} cancelled`);
     } catch (error) {
       console.error('Cancel failed:', error);
+      alert(`[FAIL] Cancel failed: ${(error as Error).message}`);
     }
-  }, [paperAdapter]);
+  }, [tradingMode, paperAdapter, realAdapter]);
 
   // Handle broker change
   const handleBrokerChange = async (brokerId: string) => {
@@ -634,8 +666,8 @@ export function TradingTab() {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
-      color: BLOOMBERG.WHITE,
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
       fontFamily: '"IBM Plex Mono", "Consolas", monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -645,12 +677,12 @@ export function TradingTab() {
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
         *::-webkit-scrollbar { width: 6px; height: 6px; }
-        *::-webkit-scrollbar-track { background: ${BLOOMBERG.DARK_BG}; }
-        *::-webkit-scrollbar-thumb { background: ${BLOOMBERG.BORDER}; border-radius: 3px; }
-        *::-webkit-scrollbar-thumb:hover { background: ${BLOOMBERG.MUTED}; }
+        *::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
+        *::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
 
         .terminal-glow {
-          text-shadow: 0 0 10px ${BLOOMBERG.ORANGE}40;
+          text-shadow: 0 0 10px ${FINCEPT.ORANGE}40;
         }
 
         .price-flash {
@@ -658,37 +690,42 @@ export function TradingTab() {
         }
 
         @keyframes flash {
-          0% { background-color: ${BLOOMBERG.YELLOW}40; }
+          0% { background-color: ${FINCEPT.YELLOW}40; }
           100% { background-color: transparent; }
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       `}</style>
 
       {/* ========== TOP NAVIGATION BAR ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
         padding: '6px 12px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
-        boxShadow: `0 2px 8px ${BLOOMBERG.ORANGE}20`
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Activity size={18} color={BLOOMBERG.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + BLOOMBERG.ORANGE + ')' }} />
+            <Activity size={18} color={FINCEPT.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + FINCEPT.ORANGE + ')' }} />
             <span style={{
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               fontWeight: 700,
               fontSize: '14px',
               letterSpacing: '0.5px',
-              textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
+              textShadow: `0 0 10px ${FINCEPT.ORANGE}40`
             }}>
               {t('header.terminal')}
             </span>
           </div>
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
           {/* Broker Selector */}
           <div style={{ position: 'relative' }}>
@@ -699,16 +736,16 @@ export function TradingTab() {
                 alignItems: 'center',
                 gap: '6px',
                 padding: '4px 10px',
-                backgroundColor: BLOOMBERG.PANEL_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
-                color: BLOOMBERG.CYAN,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                color: FINCEPT.CYAN,
                 cursor: 'pointer',
                 fontSize: '11px',
                 fontWeight: 600,
                 transition: 'all 0.2s'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = BLOOMBERG.CYAN}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = FINCEPT.CYAN}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
             >
               <Globe size={12} />
               {activeBroker?.toUpperCase() || t('header.selectBroker')}
@@ -721,11 +758,11 @@ export function TradingTab() {
                 top: '100%',
                 left: 0,
                 marginTop: '4px',
-                backgroundColor: BLOOMBERG.PANEL_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 minWidth: '200px',
                 zIndex: 1000,
-                boxShadow: `0 4px 16px ${BLOOMBERG.DARK_BG}80`
+                boxShadow: `0 4px 16px ${FINCEPT.DARK_BG}80`
               }}>
                 {availableBrokers.map((broker) => (
                   <div
@@ -735,8 +772,8 @@ export function TradingTab() {
                       padding: '10px 12px',
                       cursor: 'pointer',
                       fontSize: '11px',
-                      backgroundColor: activeBroker === broker.id ? `${BLOOMBERG.ORANGE}20` : 'transparent',
-                      borderLeft: activeBroker === broker.id ? `3px solid ${BLOOMBERG.ORANGE}` : '3px solid transparent',
+                      backgroundColor: activeBroker === broker.id ? `${FINCEPT.ORANGE}20` : 'transparent',
+                      borderLeft: activeBroker === broker.id ? `3px solid ${FINCEPT.ORANGE}` : '3px solid transparent',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -744,7 +781,7 @@ export function TradingTab() {
                     }}
                     onMouseEnter={(e) => {
                       if (activeBroker !== broker.id) {
-                        e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -754,16 +791,16 @@ export function TradingTab() {
                     }}
                   >
                     <div>
-                      <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>{broker.name}</div>
-                      <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px' }}>{broker.type.toUpperCase()}</div>
+                      <div style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>{broker.name}</div>
+                      <div style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>{broker.type.toUpperCase()}</div>
                     </div>
                     {activeBroker === broker.id && (
                       <div style={{
                         width: '6px',
                         height: '6px',
                         borderRadius: '50%',
-                        backgroundColor: BLOOMBERG.GREEN,
-                        boxShadow: `0 0 6px ${BLOOMBERG.GREEN}`
+                        backgroundColor: FINCEPT.GREEN,
+                        boxShadow: `0 0 6px ${FINCEPT.GREEN}`
                       }} />
                     )}
                   </div>
@@ -772,17 +809,51 @@ export function TradingTab() {
             )}
           </div>
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
-          {/* Trading Mode Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Trading Mode Toggle - PROMINENT INDICATOR */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '4px 12px',
+            backgroundColor: tradingMode === 'live' ? `${FINCEPT.RED}20` : `${FINCEPT.GREEN}20`,
+            border: `2px solid ${tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN}`,
+            borderRadius: '4px'
+          }}>
+            {/* Mode Indicator */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN,
+                boxShadow: `0 0 8px ${tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN}`,
+                animation: tradingMode === 'live' ? 'pulse 1s infinite' : 'none'
+              }} />
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN,
+                letterSpacing: '1px'
+              }}>
+                {tradingMode === 'live' ? '🔴 LIVE' : '⚪ PAPER'}
+              </span>
+            </div>
+
+            <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
+
             <button
               onClick={() => setTradingMode('paper')}
               style={{
                 padding: '4px 10px',
-                backgroundColor: tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.PANEL_BG,
-                border: `1px solid ${tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
-                color: tradingMode === 'paper' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                backgroundColor: tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.PANEL_BG,
+                border: `1px solid ${tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+                color: tradingMode === 'paper' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '10px',
                 fontWeight: 700,
@@ -792,12 +863,27 @@ export function TradingTab() {
               {t('header.paper')}
             </button>
             <button
-              onClick={() => setTradingMode('live')}
+              onClick={() => {
+                // Require confirmation before switching to live mode
+                if (tradingMode !== 'live') {
+                  const confirmed = window.confirm(
+                    '⚠️ WARNING: SWITCHING TO LIVE TRADING ⚠️\n\n' +
+                    'You are about to enable LIVE trading mode.\n\n' +
+                    '• All orders will be placed with REAL funds\n' +
+                    '• Trades will be executed on the actual exchange\n' +
+                    '• You may lose money\n\n' +
+                    'Are you sure you want to continue?'
+                  );
+                  if (confirmed) {
+                    setTradingMode('live');
+                  }
+                }
+              }}
               style={{
                 padding: '4px 10px',
-                backgroundColor: tradingMode === 'live' ? BLOOMBERG.RED : BLOOMBERG.PANEL_BG,
-                border: `1px solid ${tradingMode === 'live' ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
-                color: tradingMode === 'live' ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+                backgroundColor: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.PANEL_BG,
+                border: `1px solid ${tradingMode === 'live' ? FINCEPT.RED : FINCEPT.BORDER}`,
+                color: tradingMode === 'live' ? FINCEPT.WHITE : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '10px',
                 fontWeight: 700,
@@ -813,18 +899,18 @@ export function TradingTab() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px' }}>
             {activeAdapter?.isConnected() ? (
               <>
-                <Wifi size={12} color={BLOOMBERG.GREEN} />
-                <span style={{ color: BLOOMBERG.GREEN }}>CONNECTED</span>
+                <Wifi size={12} color={FINCEPT.GREEN} />
+                <span style={{ color: FINCEPT.GREEN }}>CONNECTED</span>
               </>
             ) : (
               <>
-                <WifiOff size={12} color={BLOOMBERG.RED} />
-                <span style={{ color: BLOOMBERG.RED }}>DISCONNECTED</span>
+                <WifiOff size={12} color={FINCEPT.RED} />
+                <span style={{ color: FINCEPT.RED }}>DISCONNECTED</span>
               </>
             )}
           </div>
 
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
           <TimezoneSelector compact />
 
@@ -833,8 +919,8 @@ export function TradingTab() {
             style={{
               padding: '4px 8px',
               backgroundColor: 'transparent',
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.GRAY,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -843,12 +929,12 @@ export function TradingTab() {
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
-              e.currentTarget.style.color = BLOOMBERG.ORANGE;
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+              e.currentTarget.style.color = FINCEPT.ORANGE;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-              e.currentTarget.style.color = BLOOMBERG.GRAY;
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
+              e.currentTarget.style.color = FINCEPT.GRAY;
             }}
           >
             <SettingsIcon size={12} />
@@ -858,8 +944,8 @@ export function TradingTab() {
 
       {/* ========== TICKER BAR ========== */}
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         padding: '10px 12px',
         display: 'flex',
         alignItems: 'center',
@@ -872,16 +958,16 @@ export function TradingTab() {
             onClick={() => setShowSymbolDropdown(!showSymbolDropdown)}
             style={{
               padding: '6px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
               cursor: 'pointer',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}
           >
-            <span style={{ fontSize: '13px', fontWeight: 700, color: BLOOMBERG.ORANGE }}>{selectedSymbol}</span>
-            <ChevronDown size={12} color={BLOOMBERG.GRAY} />
+            <span style={{ fontSize: '13px', fontWeight: 700, color: FINCEPT.ORANGE }}>{selectedSymbol}</span>
+            <ChevronDown size={12} color={FINCEPT.GRAY} />
           </div>
 
           {showSymbolDropdown && (
@@ -891,14 +977,14 @@ export function TradingTab() {
               left: 0,
               right: 0,
               marginTop: '4px',
-              backgroundColor: BLOOMBERG.PANEL_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
               maxHeight: '400px',
               overflow: 'hidden',
               zIndex: 1000,
-              boxShadow: `0 4px 16px ${BLOOMBERG.DARK_BG}80`
+              boxShadow: `0 4px 16px ${FINCEPT.DARK_BG}80`
             }}>
-              <div style={{ padding: '8px', borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
+              <div style={{ padding: '8px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                 <input
                   type="text"
                   placeholder="Search symbols..."
@@ -908,9 +994,9 @@ export function TradingTab() {
                   style={{
                     width: '100%',
                     padding: '6px 8px',
-                    backgroundColor: BLOOMBERG.HEADER_BG,
-                    color: BLOOMBERG.WHITE,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     fontSize: '11px',
                     outline: 'none'
                   }}
@@ -931,13 +1017,13 @@ export function TradingTab() {
                         padding: '8px 12px',
                         cursor: 'pointer',
                         fontSize: '11px',
-                        backgroundColor: symbol === selectedSymbol ? `${BLOOMBERG.ORANGE}20` : 'transparent',
-                        color: symbol === selectedSymbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
-                        borderLeft: symbol === selectedSymbol ? `3px solid ${BLOOMBERG.ORANGE}` : 'none'
+                        backgroundColor: symbol === selectedSymbol ? `${FINCEPT.ORANGE}20` : 'transparent',
+                        color: symbol === selectedSymbol ? FINCEPT.ORANGE : FINCEPT.WHITE,
+                        borderLeft: symbol === selectedSymbol ? `3px solid ${FINCEPT.ORANGE}` : 'none'
                       }}
                       onMouseEnter={(e) => {
                         if (symbol !== selectedSymbol) {
-                          e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                          e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                         }
                       }}
                       onMouseLeave={(e) => {
@@ -956,69 +1042,69 @@ export function TradingTab() {
 
         {/* Price Display */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.YELLOW, willChange: 'contents', transition: 'none' }}>
+          <span style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.YELLOW, willChange: 'contents', transition: 'none' }}>
             {tickerState ? `$${(tickerState.last || tickerState.price)?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}` : '--'}
           </span>
           {tickerState && (priceChange !== 0 || priceChangePercent !== 0) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               {priceChange >= 0 ? (
-                <ArrowUp size={16} color={BLOOMBERG.GREEN} />
+                <ArrowUp size={16} color={FINCEPT.GREEN} />
               ) : (
-                <ArrowDown size={16} color={BLOOMBERG.RED} />
+                <ArrowDown size={16} color={FINCEPT.RED} />
               )}
               <span style={{
                 fontSize: '13px',
                 fontWeight: 600,
-                color: priceChange >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                color: priceChange >= 0 ? FINCEPT.GREEN : FINCEPT.RED
               }}>
                 {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%)
               </span>
             </div>
           )}
           {tickerState && priceChange === 0 && priceChangePercent === 0 && (
-            <div style={{ fontSize: '11px', color: BLOOMBERG.GRAY, fontStyle: 'italic' }}>
+            <div style={{ fontSize: '11px', color: FINCEPT.GRAY, fontStyle: 'italic' }}>
               No change data
             </div>
           )}
         </div>
 
-        <div style={{ height: '24px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+        <div style={{ height: '24px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
         {/* Market Stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '11px', willChange: 'contents' }}>
           <div style={{ minWidth: '60px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
-            <div style={{ color: BLOOMBERG.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
+            <div style={{ color: FINCEPT.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {tickerState?.bid ? `$${tickerState.bid.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '60px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
-            <div style={{ color: BLOOMBERG.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
+            <div style={{ color: FINCEPT.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {tickerState?.ask ? `$${tickerState.ask.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '120px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H RANGE</div>
-            <div style={{ color: BLOOMBERG.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H RANGE</div>
+            <div style={{ color: FINCEPT.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {spread24h > 0 ? `$${spread24h.toFixed(2)} (${spread24hPercent.toFixed(2)}%)` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '80px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H HIGH</div>
-            <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H HIGH</div>
+            <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {tickerState?.high ? `$${tickerState.high.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '80px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H LOW</div>
-            <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H LOW</div>
+            <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {tickerState?.low ? `$${tickerState.low.toFixed(2)}` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '100px' }}>
-            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H VOLUME</div>
-            <div style={{ color: BLOOMBERG.PURPLE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H VOLUME</div>
+            <div style={{ color: FINCEPT.PURPLE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
               {tickerState?.volume ? (
                 tickerState.quoteVolume
                   ? `$${tickerState.quoteVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -1032,15 +1118,15 @@ export function TradingTab() {
 
         {tradingMode === 'paper' && (
           <>
-            <div style={{ height: '24px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+            <div style={{ height: '24px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px' }}>
               <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>BALANCE</div>
-                <div style={{ color: BLOOMBERG.CYAN, fontWeight: 600 }}>${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>BALANCE</div>
+                <div style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
               <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>EQUITY</div>
-                <div style={{ color: BLOOMBERG.YELLOW, fontWeight: 600 }}>${equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>EQUITY</div>
+                <div style={{ color: FINCEPT.YELLOW, fontWeight: 600 }}>${equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
             </div>
           </>
@@ -1052,8 +1138,8 @@ export function TradingTab() {
         {/* LEFT SIDEBAR - Watchlist / AI Agents Toggle */}
         <div style={{
           width: '320px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderRight: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -1061,8 +1147,8 @@ export function TradingTab() {
           {/* Toggle Header */}
           <div style={{
             padding: '6px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             gap: '4px'
           }}>
@@ -1071,9 +1157,9 @@ export function TradingTab() {
               style={{
                 flex: 1,
                 padding: '6px 8px',
-                backgroundColor: leftSidebarView === 'watchlist' ? BLOOMBERG.ORANGE : 'transparent',
+                backgroundColor: leftSidebarView === 'watchlist' ? FINCEPT.ORANGE : 'transparent',
                 border: 'none',
-                color: leftSidebarView === 'watchlist' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                color: leftSidebarView === 'watchlist' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '9px',
                 fontWeight: 700,
@@ -1089,9 +1175,9 @@ export function TradingTab() {
               style={{
                 flex: 1,
                 padding: '6px 8px',
-                backgroundColor: leftSidebarView === 'ai-agents' ? BLOOMBERG.ORANGE : 'transparent',
+                backgroundColor: leftSidebarView === 'ai-agents' ? FINCEPT.ORANGE : 'transparent',
                 border: 'none',
-                color: leftSidebarView === 'ai-agents' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                color: leftSidebarView === 'ai-agents' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '9px',
                 fontWeight: 700,
@@ -1107,9 +1193,9 @@ export function TradingTab() {
               style={{
                 flex: 1,
                 padding: '6px 8px',
-                backgroundColor: leftSidebarView === 'leaderboard' ? BLOOMBERG.ORANGE : 'transparent',
+                backgroundColor: leftSidebarView === 'leaderboard' ? FINCEPT.ORANGE : 'transparent',
                 border: 'none',
-                color: leftSidebarView === 'leaderboard' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                color: leftSidebarView === 'leaderboard' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '9px',
                 fontWeight: 700,
@@ -1140,15 +1226,15 @@ export function TradingTab() {
                     style={{
                       padding: '8px 10px',
                       cursor: 'pointer',
-                      backgroundColor: selectedSymbol === symbol ? `${BLOOMBERG.ORANGE}15` : 'transparent',
-                      borderLeft: selectedSymbol === symbol ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
-                      borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRight: idx % 2 === 0 ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
+                      backgroundColor: selectedSymbol === symbol ? `${FINCEPT.ORANGE}15` : 'transparent',
+                      borderLeft: selectedSymbol === symbol ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                      borderRight: idx % 2 === 0 ? `1px solid ${FINCEPT.BORDER}` : 'none',
                       transition: 'all 0.2s'
                     }}
                     onMouseEnter={(e) => {
                       if (selectedSymbol !== symbol) {
-                        e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -1168,7 +1254,7 @@ export function TradingTab() {
                       <div style={{
                         fontSize: '11px',
                         fontWeight: 700,
-                        color: selectedSymbol === symbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                        color: selectedSymbol === symbol ? FINCEPT.ORANGE : FINCEPT.WHITE,
                         whiteSpace: 'nowrap'
                       }}>
                         {symbol.replace('/USD', '')}
@@ -1184,7 +1270,7 @@ export function TradingTab() {
                         }}>
                           <div style={{
                             fontSize: '10px',
-                            color: BLOOMBERG.WHITE,
+                            color: FINCEPT.WHITE,
                             fontFamily: 'monospace',
                             fontWeight: 600
                           }}>
@@ -1197,7 +1283,7 @@ export function TradingTab() {
                           </div>
                           <div style={{
                             fontSize: '9px',
-                            color: watchlistPrices[symbol].change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                            color: watchlistPrices[symbol].change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
                             fontFamily: 'monospace',
                             fontWeight: 700
                           }}>
@@ -1207,7 +1293,7 @@ export function TradingTab() {
                       ) : (
                         <div style={{
                           fontSize: '9px',
-                          color: BLOOMBERG.GRAY,
+                          color: FINCEPT.GRAY,
                           fontFamily: 'monospace'
                         }}>
                           ...
@@ -1250,8 +1336,8 @@ export function TradingTab() {
           {/* Chart Area */}
           <div style={{
             flex: isBottomPanelMinimized ? 1 : '0 0 55%',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.PANEL_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -1259,8 +1345,8 @@ export function TradingTab() {
           }}>
             <div style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
@@ -1271,9 +1357,9 @@ export function TradingTab() {
                   onClick={() => setSelectedView(view.toLowerCase() as any)}
                   style={{
                     padding: '4px 12px',
-                    backgroundColor: selectedView === view.toLowerCase() ? BLOOMBERG.ORANGE : 'transparent',
+                    backgroundColor: selectedView === view.toLowerCase() ? FINCEPT.ORANGE : 'transparent',
                     border: 'none',
-                    color: selectedView === view.toLowerCase() ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                    color: selectedView === view.toLowerCase() ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                     cursor: 'pointer',
                     fontSize: '10px',
                     fontWeight: 700,
@@ -1289,7 +1375,7 @@ export function TradingTab() {
               display: 'flex',
               alignItems: 'stretch',
               justifyContent: 'center',
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: '12px',
               overflow: 'visible',
               minHeight: 0
@@ -1313,26 +1399,26 @@ export function TradingTab() {
                 <div style={{ width: '100%', height: '100%', overflow: 'auto', padding: '8px' }}>
                   <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
-                        <th style={{ padding: '6px', textAlign: 'left', color: BLOOMBERG.GRAY }}>TIME</th>
-                        <th style={{ padding: '6px', textAlign: 'right', color: BLOOMBERG.GRAY }}>PRICE</th>
-                        <th style={{ padding: '6px', textAlign: 'right', color: BLOOMBERG.GRAY }}>SIZE</th>
+                      <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                        <th style={{ padding: '6px', textAlign: 'left', color: FINCEPT.GRAY }}>TIME</th>
+                        <th style={{ padding: '6px', textAlign: 'right', color: FINCEPT.GRAY }}>PRICE</th>
+                        <th style={{ padding: '6px', textAlign: 'right', color: FINCEPT.GRAY }}>SIZE</th>
                       </tr>
                     </thead>
                     <tbody>
                       {tradesData.slice(0, 20).map((trade, idx) => (
-                        <tr key={idx} style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}40` }}>
-                          <td style={{ padding: '4px 6px', color: BLOOMBERG.GRAY, fontSize: '9px' }}>
+                        <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
+                          <td style={{ padding: '4px 6px', color: FINCEPT.GRAY, fontSize: '9px' }}>
                             {new Date(trade.timestamp).toLocaleTimeString()}
                           </td>
                           <td style={{
                             padding: '4px 6px',
                             textAlign: 'right',
-                            color: trade.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                            color: trade.side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED
                           }}>
                             ${trade.price?.toFixed(2)}
                           </td>
-                          <td style={{ padding: '4px 6px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
+                          <td style={{ padding: '4px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>
                             {trade.quantity?.toFixed(4)}
                           </td>
                         </tr>
@@ -1354,8 +1440,8 @@ export function TradingTab() {
           }}>
             <div style={{
               padding: '6px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
@@ -1367,9 +1453,9 @@ export function TradingTab() {
                     onClick={() => setActiveBottomTab(tab)}
                     style={{
                       padding: '6px 16px',
-                      backgroundColor: activeBottomTab === tab ? BLOOMBERG.ORANGE : 'transparent',
+                      backgroundColor: activeBottomTab === tab ? FINCEPT.ORANGE : 'transparent',
                       border: 'none',
-                      color: activeBottomTab === tab ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                      color: activeBottomTab === tab ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                       cursor: 'pointer',
                       fontSize: '10px',
                       fontWeight: 700,
@@ -1388,8 +1474,8 @@ export function TradingTab() {
                 style={{
                   padding: '4px 8px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.GRAY,
                   cursor: 'pointer',
                   fontSize: '10px',
                   fontWeight: 600,
@@ -1400,12 +1486,12 @@ export function TradingTab() {
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                  e.currentTarget.style.borderColor = BLOOMBERG.GRAY;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  e.currentTarget.style.borderColor = FINCEPT.GRAY;
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
                 }}
                 title={isBottomPanelMinimized ? 'Maximize Panel' : 'Minimize Panel'}
               >
@@ -1437,50 +1523,50 @@ export function TradingTab() {
                 {/* Trades Tab */}
                 {activeBottomTab === 'trades' && (
                   trades.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: BLOOMBERG.GRAY, fontSize: '11px' }}>
+                    <div style={{ padding: '40px', textAlign: 'center', color: FINCEPT.GRAY, fontSize: '11px' }}>
                       No trade history
                     </div>
                   ) : (
                     <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
-                          <th style={{ padding: '8px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 600 }}>TIME</th>
-                          <th style={{ padding: '8px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 600 }}>SYMBOL</th>
-                          <th style={{ padding: '8px', textAlign: 'center', color: BLOOMBERG.GRAY, fontWeight: 600 }}>SIDE</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>QTY</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>PRICE</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>VALUE</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>FEE</th>
+                        <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                          <th style={{ padding: '8px', textAlign: 'left', color: FINCEPT.GRAY, fontWeight: 600 }}>TIME</th>
+                          <th style={{ padding: '8px', textAlign: 'left', color: FINCEPT.GRAY, fontWeight: 600 }}>SYMBOL</th>
+                          <th style={{ padding: '8px', textAlign: 'center', color: FINCEPT.GRAY, fontWeight: 600 }}>SIDE</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 600 }}>QTY</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 600 }}>PRICE</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 600 }}>VALUE</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: FINCEPT.GRAY, fontWeight: 600 }}>FEE</th>
                         </tr>
                       </thead>
                       <tbody>
                         {trades.map((trade, idx) => (
-                          <tr key={idx} style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}40` }}>
-                            <td style={{ padding: '8px', color: BLOOMBERG.GRAY, fontSize: '9px' }}>
+                          <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
+                            <td style={{ padding: '8px', color: FINCEPT.GRAY, fontSize: '9px' }}>
                               {new Date(trade.timestamp).toLocaleTimeString()}
                             </td>
-                            <td style={{ padding: '8px', color: BLOOMBERG.WHITE }}>{trade.symbol}</td>
+                            <td style={{ padding: '8px', color: FINCEPT.WHITE }}>{trade.symbol}</td>
                             <td style={{ padding: '8px', textAlign: 'center' }}>
                               <span style={{
                                 padding: '2px 8px',
-                                backgroundColor: trade.side === 'buy' ? `${BLOOMBERG.GREEN}20` : `${BLOOMBERG.RED}20`,
-                                color: trade.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                                backgroundColor: trade.side === 'buy' ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
+                                color: trade.side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED,
                                 fontSize: '9px',
                                 fontWeight: 700
                               }}>
                                 {trade.side.toUpperCase()}
                               </span>
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
+                            <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.WHITE }}>
                               {trade.amount?.toFixed(4) || '0.0000'}
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.YELLOW }}>
+                            <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.YELLOW }}>
                               ${trade.price?.toFixed(2) || '0.00'}
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.CYAN }}>
+                            <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.CYAN }}>
                               ${trade.cost?.toFixed(2) || '0.00'}
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.RED }}>
+                            <td style={{ padding: '8px', textAlign: 'right', color: FINCEPT.RED }}>
                               ${trade.fee?.cost?.toFixed(2) || '0.00'}
                             </td>
                           </tr>
@@ -1535,9 +1621,9 @@ export function TradingTab() {
                       <div style={{
                         padding: '40px',
                         textAlign: 'center',
-                        color: BLOOMBERG.GRAY,
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
+                        color: FINCEPT.GRAY,
+                        backgroundColor: FINCEPT.PANEL_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
                         borderRadius: '4px'
                       }}>
                         <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
@@ -1554,9 +1640,9 @@ export function TradingTab() {
                       <div style={{
                         padding: '40px',
                         textAlign: 'center',
-                        color: BLOOMBERG.GRAY,
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
+                        color: FINCEPT.GRAY,
+                        backgroundColor: FINCEPT.PANEL_BG,
+                        border: `1px solid ${FINCEPT.BORDER}`,
                         borderRadius: '4px'
                       }}>
                         <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
@@ -1601,8 +1687,8 @@ export function TradingTab() {
         {/* RIGHT SIDEBAR - Order Entry & Order Book */}
         <div style={{
           width: '300px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          borderLeft: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderLeft: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -1610,119 +1696,125 @@ export function TradingTab() {
           {/* Order Entry */}
           <div style={{
             height: '45%',
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden'
           }}>
             <div style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '10px',
               fontWeight: 700,
-              color: BLOOMBERG.ORANGE,
-              letterSpacing: '0.5px'
+              color: tradingMode === 'live' ? FINCEPT.WHITE : FINCEPT.ORANGE,
+              letterSpacing: '0.5px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              ORDER ENTRY
+              <span>ORDER ENTRY</span>
+              <span style={{
+                padding: '2px 8px',
+                backgroundColor: tradingMode === 'live' ? FINCEPT.WHITE : FINCEPT.GREEN,
+                color: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.DARK_BG,
+                fontSize: '9px',
+                fontWeight: 700,
+                borderRadius: '2px'
+              }}>
+                {tradingMode === 'live' ? '🔴 LIVE' : '⚪ PAPER'}
+              </span>
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-              {tradingMode === 'paper' ? (
-                isLoading ? (
-                  <div style={{
-                    padding: '20px',
-                    textAlign: 'center',
-                    border: `1px solid ${BLOOMBERG.CYAN}`,
-                    backgroundColor: `${BLOOMBERG.CYAN}10`
-                  }}>
-                    <div style={{ color: BLOOMBERG.CYAN, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
-                      ⏳ LOADING...
-                    </div>
-                    <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
-                      Loading broker configurations...
-                    </div>
+              {/* Loading State */}
+              {isLoading ? (
+                <div style={{
+                  padding: '20px',
+                  textAlign: 'center',
+                  border: `1px solid ${FINCEPT.CYAN}`,
+                  backgroundColor: `${FINCEPT.CYAN}10`
+                }}>
+                  <div style={{ color: FINCEPT.CYAN, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                    ⏳ LOADING...
                   </div>
-                ) : !paperAdapter ? (
+                  <div style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
+                    Loading broker configurations...
+                  </div>
+                </div>
+              ) : tradingMode === 'paper' ? (
+                /* PAPER TRADING MODE */
+                !paperAdapter ? (
                   <div style={{
                     padding: '20px',
                     textAlign: 'center',
-                    border: `1px solid ${BLOOMBERG.RED}`,
-                    backgroundColor: `${BLOOMBERG.RED}10`
+                    border: `1px solid ${FINCEPT.RED}`,
+                    backgroundColor: `${FINCEPT.RED}10`
                   }}>
-                    <div style={{ color: BLOOMBERG.RED, fontSize: '12px', fontWeight: 700, marginBottom: '12px' }}>
+                    <div style={{ color: FINCEPT.RED, fontSize: '12px', fontWeight: 700, marginBottom: '12px' }}>
                       {isConnecting ? '⏳ CONNECTING...' : '❌ ADAPTER NOT READY'}
                     </div>
                     {!isConnecting && (
                       <>
-                        <div style={{ color: BLOOMBERG.WHITE, fontSize: '10px', marginBottom: '12px', lineHeight: '1.5' }}>
+                        <div style={{ color: FINCEPT.WHITE, fontSize: '10px', marginBottom: '12px', lineHeight: '1.5' }}>
                           Paper trading adapter failed to initialize.
-                          <br />
-                          This is usually caused by:
-                        </div>
-                        <div style={{
-                          color: BLOOMBERG.GRAY,
-                          fontSize: '9px',
-                          textAlign: 'left',
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          padding: '8px',
-                          borderRadius: '2px',
-                          marginBottom: '12px',
-                          lineHeight: '1.6'
-                        }}>
-                          1. Database initialization failure<br />
-                          2. Missing write permissions<br />
-                          3. Broker adapter connection error
-                        </div>
-                        <div style={{ color: BLOOMBERG.YELLOW, fontSize: '9px', marginBottom: '8px' }}>
-                          Check the browser console (F12) and terminal for detailed error messages
                         </div>
                         <button
                           onClick={() => window.location.reload()}
                           style={{
                             padding: '6px 12px',
-                            backgroundColor: BLOOMBERG.ORANGE,
+                            backgroundColor: FINCEPT.ORANGE,
                             border: 'none',
-                            color: BLOOMBERG.DARK_BG,
+                            color: FINCEPT.DARK_BG,
                             cursor: 'pointer',
                             fontSize: '10px',
                             fontWeight: 700,
-                            borderRadius: '2px',
-                            marginTop: '4px'
+                            borderRadius: '2px'
                           }}
                         >
                           RELOAD APPLICATION
                         </button>
                       </>
                     )}
-                    {isConnecting && (
-                      <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
-                        Setting up paper trading adapter...
-                      </div>
-                    )}
                   </div>
                 ) : !paperAdapter.isConnected() ? (
                   <div style={{
                     padding: '20px',
                     textAlign: 'center',
-                    border: `1px solid ${BLOOMBERG.YELLOW}`,
-                    backgroundColor: `${BLOOMBERG.YELLOW}10`
+                    border: `1px solid ${FINCEPT.YELLOW}`,
+                    backgroundColor: `${FINCEPT.YELLOW}10`
                   }}>
-                    <div style={{ color: BLOOMBERG.YELLOW, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                    <div style={{ color: FINCEPT.YELLOW, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
                       ⏳ CONNECTING...
                     </div>
-                    <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
+                    <div style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
                       Establishing connection to {activeBroker}...
                     </div>
                   </div>
                 ) : (
                   <>
+                    {/* Paper Trading Banner */}
+                    <div style={{
+                      padding: '8px',
+                      marginBottom: '12px',
+                      backgroundColor: `${FINCEPT.GREEN}15`,
+                      border: `1px solid ${FINCEPT.GREEN}`,
+                      borderRadius: '4px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ color: FINCEPT.GREEN, fontSize: '10px', fontWeight: 700 }}>
+                        ⚪ PAPER TRADING MODE
+                      </div>
+                      <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                        Simulated orders • No real funds at risk
+                      </div>
+                    </div>
+
                     <EnhancedOrderForm
                       symbol={selectedSymbol}
                       currentPrice={currentPrice}
                       balance={balance}
                       onOrderPlaced={() => {
-                        // Reload positions and orders after successful order
-                        console.log('Order placed successfully');
+                        console.log('Paper order placed successfully');
                       }}
                     />
 
@@ -1731,16 +1823,85 @@ export function TradingTab() {
                   </>
                 )
               ) : (
-                <div style={{
-                  padding: '20px',
-                  textAlign: 'center',
-                  border: `1px solid ${BLOOMBERG.RED}`,
-                  backgroundColor: `${BLOOMBERG.RED}10`,
-                  color: BLOOMBERG.RED,
-                  fontSize: '11px'
-                }}>
-                  Live trading not yet enabled
-                </div>
+                /* LIVE TRADING MODE */
+                !realAdapter ? (
+                  <div style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    border: `1px solid ${FINCEPT.RED}`,
+                    backgroundColor: `${FINCEPT.RED}10`
+                  }}>
+                    <div style={{ color: FINCEPT.RED, fontSize: '12px', fontWeight: 700, marginBottom: '12px' }}>
+                      ❌ LIVE ADAPTER NOT CONFIGURED
+                    </div>
+                    <div style={{ color: FINCEPT.WHITE, fontSize: '10px', marginBottom: '12px' }}>
+                      Please configure API credentials for {activeBroker} to enable live trading.
+                    </div>
+                    <button
+                      onClick={() => setTradingMode('paper')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: FINCEPT.GREEN,
+                        border: 'none',
+                        color: FINCEPT.DARK_BG,
+                        cursor: 'pointer',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        borderRadius: '2px'
+                      }}
+                    >
+                      SWITCH TO PAPER MODE
+                    </button>
+                  </div>
+                ) : !realAdapter.isConnected() ? (
+                  <div style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    border: `1px solid ${FINCEPT.YELLOW}`,
+                    backgroundColor: `${FINCEPT.YELLOW}10`
+                  }}>
+                    <div style={{ color: FINCEPT.YELLOW, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                      ⏳ CONNECTING TO EXCHANGE...
+                    </div>
+                    <div style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
+                      Authenticating with {activeBroker}...
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* LIVE TRADING WARNING BANNER */}
+                    <div style={{
+                      padding: '10px',
+                      marginBottom: '12px',
+                      backgroundColor: `${FINCEPT.RED}20`,
+                      border: `2px solid ${FINCEPT.RED}`,
+                      borderRadius: '4px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ color: FINCEPT.RED, fontSize: '12px', fontWeight: 700 }}>
+                        🔴 LIVE TRADING MODE
+                      </div>
+                      <div style={{ color: FINCEPT.WHITE, fontSize: '10px', marginTop: '4px', fontWeight: 600 }}>
+                        ⚠️ REAL FUNDS AT RISK ⚠️
+                      </div>
+                      <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '4px' }}>
+                        Orders will be executed on {activeBroker?.toUpperCase()}
+                      </div>
+                    </div>
+
+                    <EnhancedOrderForm
+                      symbol={selectedSymbol}
+                      currentPrice={currentPrice}
+                      balance={balance}
+                      onOrderPlaced={() => {
+                        console.log('LIVE order placed successfully');
+                      }}
+                    />
+
+                    {/* HyperLiquid Vault Manager */}
+                    <HyperLiquidVaultManager />
+                  </>
+                )
               )}
             </div>
           </div>
@@ -1749,11 +1910,11 @@ export function TradingTab() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{
               padding: '8px 12px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '10px',
               fontWeight: 700,
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               letterSpacing: '0.5px',
               display: 'flex',
               justifyContent: 'space-between',
@@ -1766,9 +1927,9 @@ export function TradingTab() {
                     onClick={() => setRightPanelView(view as any)}
                     style={{
                       padding: '4px 8px',
-                      backgroundColor: rightPanelView === view ? BLOOMBERG.ORANGE : 'transparent',
+                      backgroundColor: rightPanelView === view ? FINCEPT.ORANGE : 'transparent',
                       border: 'none',
-                      color: rightPanelView === view ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                      color: rightPanelView === view ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                       cursor: 'pointer',
                       fontSize: '9px',
                       fontWeight: 700,
@@ -1780,7 +1941,7 @@ export function TradingTab() {
                 ))}
               </div>
               {rightPanelView === 'orderbook' && (
-                <span style={{ fontSize: '8px', color: BLOOMBERG.GRAY }}>
+                <span style={{ fontSize: '8px', color: FINCEPT.GRAY }}>
                   {orderBook.asks.length + orderBook.bids.length} LEVELS
                 </span>
               )}
@@ -1789,7 +1950,7 @@ export function TradingTab() {
               {rightPanelView === 'orderbook' && (
                 <>
                   <div style={{ marginBottom: '12px' }}>
-                    <div style={{ color: BLOOMBERG.RED, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
+                    <div style={{ color: FINCEPT.RED, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
                       ASKS ({orderBook.asks.length})
                     </div>
                     <table style={{ width: '100%', fontSize: '10px' }}>
@@ -1800,7 +1961,7 @@ export function TradingTab() {
                             <tr key={idx} style={{ position: 'relative' }}>
                               <td style={{
                                 padding: '2px 4px',
-                                color: BLOOMBERG.RED,
+                                color: FINCEPT.RED,
                                 position: 'relative',
                                 zIndex: 1
                               }}>
@@ -1810,12 +1971,12 @@ export function TradingTab() {
                                   top: 0,
                                   bottom: 0,
                                   width: `${depth}%`,
-                                  backgroundColor: `${BLOOMBERG.RED}15`,
+                                  backgroundColor: `${FINCEPT.RED}15`,
                                   zIndex: -1
                                 }} />
                                 ${ask.price.toFixed(2)}
                               </td>
-                              <td style={{ padding: '2px 4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>
+                              <td style={{ padding: '2px 4px', textAlign: 'right', color: FINCEPT.GRAY }}>
                                 {ask.size.toFixed(4)}
                               </td>
                             </tr>
@@ -1827,7 +1988,7 @@ export function TradingTab() {
 
                   <div style={{
                     height: '1px',
-                    backgroundColor: BLOOMBERG.BORDER,
+                    backgroundColor: FINCEPT.BORDER,
                     margin: '8px 0',
                     position: 'relative'
                   }}>
@@ -1836,18 +1997,18 @@ export function TradingTab() {
                       left: '50%',
                       top: '50%',
                       transform: 'translate(-50%, -50%)',
-                      backgroundColor: BLOOMBERG.PANEL_BG,
+                      backgroundColor: FINCEPT.PANEL_BG,
                       padding: '0 8px',
                       fontSize: '11px',
                       fontWeight: 700,
-                      color: BLOOMBERG.YELLOW
+                      color: FINCEPT.YELLOW
                     }}>
                       ${currentPrice.toFixed(2)}
                     </div>
                   </div>
 
                   <div>
-                    <div style={{ color: BLOOMBERG.GREEN, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
+                    <div style={{ color: FINCEPT.GREEN, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
                       BIDS ({orderBook.bids.length})
                     </div>
                     <table style={{ width: '100%', fontSize: '10px' }}>
@@ -1858,7 +2019,7 @@ export function TradingTab() {
                             <tr key={idx} style={{ position: 'relative' }}>
                               <td style={{
                                 padding: '2px 4px',
-                                color: BLOOMBERG.GREEN,
+                                color: FINCEPT.GREEN,
                                 position: 'relative',
                                 zIndex: 1
                               }}>
@@ -1868,12 +2029,12 @@ export function TradingTab() {
                                   top: 0,
                                   bottom: 0,
                                   width: `${depth}%`,
-                                  backgroundColor: `${BLOOMBERG.GREEN}15`,
+                                  backgroundColor: `${FINCEPT.GREEN}15`,
                                   zIndex: -1
                                 }} />
                                 ${bid.price.toFixed(2)}
                               </td>
-                              <td style={{ padding: '2px 4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>
+                              <td style={{ padding: '2px 4px', textAlign: 'right', color: FINCEPT.GRAY }}>
                                 {bid.size.toFixed(4)}
                               </td>
                             </tr>
@@ -1895,10 +2056,10 @@ export function TradingTab() {
             </div>
             <div style={{
               padding: '4px 8px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderTop: `1px solid ${FINCEPT.BORDER}`,
               fontSize: '8px',
-              color: BLOOMBERG.GRAY
+              color: FINCEPT.GRAY
             }}>
               Updated: {lastOrderBookUpdate > 0 ? new Date(lastOrderBookUpdate).toLocaleTimeString() : 'Never'}
             </div>
@@ -1908,11 +2069,11 @@ export function TradingTab() {
 
       {/* ========== STATUS BAR ========== */}
       <div style={{
-        borderTop: `1px solid ${BLOOMBERG.BORDER}`,
-        backgroundColor: BLOOMBERG.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.HEADER_BG,
         padding: '4px 12px',
         fontSize: '9px',
-        color: BLOOMBERG.GRAY,
+        color: FINCEPT.GRAY,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -1920,11 +2081,11 @@ export function TradingTab() {
       }}>
         <span>Fincept Terminal v3.1.4 | Professional Trading Platform</span>
         <span>
-          Broker: <span style={{ color: BLOOMBERG.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
-          Mode: <span style={{ color: tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+          Broker: <span style={{ color: FINCEPT.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
+          Mode: <span style={{ color: tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.RED }}>
             {tradingMode.toUpperCase()}
           </span> |
-          Status: <span style={{ color: activeAdapter?.isConnected() ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+          Status: <span style={{ color: activeAdapter?.isConnected() ? FINCEPT.GREEN : FINCEPT.RED }}>
             {activeAdapter?.isConnected() ? 'CONNECTED' : 'DISCONNECTED'}
           </span>
         </span>

@@ -1258,13 +1258,13 @@ export const DATA_SOURCE_CONFIGS: DataSourceConfig[] = [
     ],
   },
   {
-    id: 'bloomberg',
-    name: 'Bloomberg API',
-    type: 'bloomberg',
+    id: 'fincept',
+    name: 'Fincept Data API',
+    type: 'fincept',
     category: 'market-data',
     icon: '📰',
     color: '#F58025',
-    description: 'Bloomberg Terminal API (requires license)',
+    description: 'Fincept Terminal Data API',
     testable: true,
     requiresAuth: true,
     fields: [

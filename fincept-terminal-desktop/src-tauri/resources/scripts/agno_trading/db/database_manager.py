@@ -35,14 +35,18 @@ class DatabaseManager:
         """Create tables if they don't exist"""
         schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
 
+        conn = self.get_connection()
+
         if os.path.exists(schema_path):
             with open(schema_path, 'r') as f:
                 schema_sql = f.read()
-
-            conn = self.get_connection()
             conn.executescript(schema_sql)
-            conn.commit()
-            conn.close()
+
+        # Initialize competition-related tables
+        self._initialize_competition_tables(conn)
+
+        conn.commit()
+        conn.close()
 
     # ============================================================================
     # TRADE OPERATIONS
@@ -111,14 +115,29 @@ class DatabaseManager:
         else:  # sell/short
             pnl = (entry_price - exit_price) * quantity
 
-        pnl_percent = (pnl / (entry_price * quantity)) * 100 if (entry_price * quantity) > 0 else 0
+        # Calculate P&L percentage based on total cost basis (including estimated fees)
+        # This gives a more accurate return on capital deployed
+        # Note: If fees are tracked in metadata, use them; otherwise estimate ~0.1% round-trip
+        metadata = json.loads(trade['metadata']) if trade['metadata'] else {}
+        entry_fee = metadata.get('entry_fee', entry_price * quantity * 0.0005)  # 0.05% default
+        exit_fee = metadata.get('exit_fee', exit_price * quantity * 0.0005)  # 0.05% default
+        total_fees = entry_fee + exit_fee
 
-        # Update trade
+        # Actual P&L after fees
+        pnl_after_fees = pnl - total_fees
+
+        # Cost basis = entry cost + entry fee (capital actually deployed)
+        cost_basis = (entry_price * quantity) + entry_fee
+
+        # P&L percent based on cost basis
+        pnl_percent = (pnl_after_fees / cost_basis) * 100 if cost_basis > 0 else 0
+
+        # Update trade (store pnl_after_fees for accurate reporting)
         cursor.execute("""
             UPDATE agent_trades
             SET exit_price = ?, exit_timestamp = ?, pnl = ?, pnl_percent = ?, status = 'closed'
             WHERE id = ?
-        """, (exit_price, exit_timestamp, pnl, pnl_percent, trade_id))
+        """, (exit_price, exit_timestamp, pnl_after_fees, pnl_percent, trade_id))
 
         conn.commit()
         conn.close()
@@ -204,14 +223,52 @@ class DatabaseManager:
 
         profit_factor = (sum(wins) / sum(losses)) if losses and sum(losses) > 0 else 0
 
-        # Sharpe Ratio (simplified)
+        # Risk-free rate assumption (annualized, e.g., 4% = 0.04)
+        risk_free_rate_annual = 0.04
+
+        # Sharpe Ratio (properly annualized)
+        # Convert pnl_percent from percentage (e.g., 5.0) to decimal (0.05)
+        sharpe_ratio = 0.0
+        sortino_ratio = 0.0
+
         if len(trades) >= 2:
-            returns = [t['pnl_percent'] for t in trades]
-            avg_return = sum(returns) / len(returns)
-            std_dev = (sum((r - avg_return) ** 2 for r in returns) / len(returns)) ** 0.5
-            sharpe_ratio = (avg_return / std_dev) if std_dev > 0 else 0
-        else:
-            sharpe_ratio = 0
+            # Convert percentage returns to decimal returns
+            returns = [t['pnl_percent'] / 100.0 for t in trades if t['pnl_percent'] is not None]
+
+            if returns:
+                avg_return = sum(returns) / len(returns)
+
+                # Calculate standard deviation
+                variance = sum((r - avg_return) ** 2 for r in returns) / len(returns)
+                std_dev = variance ** 0.5
+
+                # Annualization factor (assuming daily trades, ~252 trading days/year)
+                # Adjust based on actual trading frequency
+                annualization_factor = 252 ** 0.5
+
+                # Daily risk-free rate
+                risk_free_rate_daily = risk_free_rate_annual / 252
+
+                # Sharpe Ratio: (avg_return - risk_free_rate) / std_dev * sqrt(252)
+                if std_dev > 0:
+                    sharpe_ratio = ((avg_return - risk_free_rate_daily) / std_dev) * annualization_factor
+                else:
+                    sharpe_ratio = 0.0
+
+                # Sortino Ratio: Uses downside deviation instead of standard deviation
+                # Only considers negative returns (downside risk)
+                negative_returns = [r for r in returns if r < 0]
+                if negative_returns:
+                    downside_variance = sum(r ** 2 for r in negative_returns) / len(returns)
+                    downside_deviation = downside_variance ** 0.5
+
+                    if downside_deviation > 0:
+                        sortino_ratio = ((avg_return - risk_free_rate_daily) / downside_deviation) * annualization_factor
+                    else:
+                        sortino_ratio = 0.0
+                else:
+                    # No negative returns - exceptional performance
+                    sortino_ratio = sharpe_ratio * 1.5 if sharpe_ratio > 0 else 0.0
 
         # Drawdown calculation
         cumulative_pnl = []
@@ -283,7 +340,7 @@ class DatabaseManager:
         """, (
             agent_id, model, total_trades, winning_trades, losing_trades,
             total_pnl, daily_pnl, weekly_pnl, monthly_pnl, win_rate,
-            sharpe_ratio, sharpe_ratio, max_drawdown, current_drawdown,
+            sharpe_ratio, sortino_ratio, max_drawdown, current_drawdown,
             avg_win, avg_loss, profit_factor, largest_win, largest_loss,
             consecutive_wins, consecutive_losses, max_consecutive_wins,
             max_consecutive_losses, total_volume, positions, last_trade_timestamp,
@@ -581,18 +638,9 @@ class DatabaseManager:
 
         return results
 
-    def initialize_database(self):
-        """Create tables if they don't exist"""
-        schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
-
-        conn = self.get_connection()
-
-        if os.path.exists(schema_path):
-            with open(schema_path, 'r') as f:
-                schema_sql = f.read()
-            conn.executescript(schema_sql)
-
-        # Also create competition config and model state tables (legacy table removed, using alpha_model_states from schema.sql)
+    def _initialize_competition_tables(self, conn: sqlite3.Connection):
+        """Create competition-related tables (called from initialize_database)"""
+        # Competition config and model state tables
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS competition_configs (
                 competition_id TEXT PRIMARY KEY,
@@ -644,8 +692,6 @@ class DatabaseManager:
             CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_cycle ON alpha_decision_logs(cycle_number);
         """)
 
-        conn.commit()
-        conn.close()
     def save_decision_log(self, competition_id: str, model_name: str, cycle_number: int,
                          action: str, symbol: str, quantity: float, confidence: float,
                          reasoning: str, trade_executed: bool, price_at_decision: float,
@@ -716,12 +762,40 @@ class DatabaseManager:
         return results
 
 
-# Global instance
+# Thread-safe singleton implementation
+import threading
+
 _db_manager = None
+_db_manager_lock = threading.Lock()
 
 def get_db_manager() -> DatabaseManager:
-    """Get singleton database manager instance"""
+    """
+    Get singleton database manager instance (thread-safe).
+
+    Uses double-checked locking pattern to ensure thread safety
+    while minimizing lock contention after initialization.
+    """
     global _db_manager
-    if _db_manager is None:
-        _db_manager = DatabaseManager()
+
+    # First check without lock (fast path for already-initialized case)
+    if _db_manager is not None:
+        return _db_manager
+
+    # Acquire lock for initialization
+    with _db_manager_lock:
+        # Double-check after acquiring lock (another thread may have initialized)
+        if _db_manager is None:
+            _db_manager = DatabaseManager()
+
     return _db_manager
+
+
+def reset_db_manager() -> None:
+    """
+    Reset the singleton instance (useful for testing).
+    Thread-safe reset of the database manager.
+    """
+    global _db_manager
+
+    with _db_manager_lock:
+        _db_manager = None

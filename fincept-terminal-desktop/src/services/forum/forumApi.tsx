@@ -125,14 +125,6 @@ const makeForumRequest = async <T = any>(
     }
 
     const url = getApiEndpoint(endpoint);
-    console.log('🔥 Forum API Request:', {
-      method,
-      url,
-      endpoint,
-      hasApiKey: !!apiKey,
-      hasDeviceId: !!deviceId,
-      data
-    });
 
     const config: RequestInit = {
       method,
@@ -145,22 +137,12 @@ const makeForumRequest = async <T = any>(
     }
 
     const response = await fetch(url, config);
-
-    console.log('📡 Forum Response:', {
-      status: response.status,
-      statusText: response.statusText,
-      url: response.url
-    });
-
     const responseText = await response.text();
-    console.log('📄 Forum Response Text:', responseText.substring(0, 200));
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
-      console.log('[OK] Forum Parsed JSON:', responseData);
     } catch (parseError) {
-      console.error('[ERROR] Forum JSON parse failed:', parseError);
       return {
         success: false,
         error: `Invalid JSON response: ${responseText.substring(0, 100)}...`,
@@ -176,8 +158,6 @@ const makeForumRequest = async <T = any>(
     };
 
   } catch (error) {
-    console.error('💥 Forum Request failed:', error);
-
     if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
       return {
         success: false,

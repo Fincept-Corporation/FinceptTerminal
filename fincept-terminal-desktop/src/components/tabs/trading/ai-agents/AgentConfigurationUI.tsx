@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import agnoTradingService, { type AgentConfig } from '../../../../services/trading/agnoTradingService';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -473,16 +473,16 @@ export function AgentConfigurationUI({ onAgentCreated }: AgentConfigUIProps) {
       {/* Error Display */}
       {error && (
         <div style={{
-          background: `${BLOOMBERG.RED}15`,
-          border: `1px solid ${BLOOMBERG.RED}`,
+          background: `${FINCEPT.RED}15`,
+          border: `1px solid ${FINCEPT.RED}`,
           borderRadius: '4px',
           padding: '12px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px'
         }}>
-          <AlertTriangle size={16} color={BLOOMBERG.RED} />
-          <span style={{ color: BLOOMBERG.RED, fontSize: '11px' }}>{error}</span>
+          <AlertTriangle size={16} color={FINCEPT.RED} />
+          <span style={{ color: FINCEPT.RED, fontSize: '11px' }}>{error}</span>
         </div>
       )}
 
@@ -491,9 +491,9 @@ export function AgentConfigurationUI({ onAgentCreated }: AgentConfigUIProps) {
         onClick={handleCreateAgent}
         disabled={isCreating || !agentName}
         style={{
-          background: `linear-gradient(135deg, ${BLOOMBERG.GREEN} 0%, #00B359 100%)`,
+          background: `linear-gradient(135deg, ${FINCEPT.GREEN} 0%, #00B359 100%)`,
           border: 'none',
-          color: BLOOMBERG.DARK_BG,
+          color: FINCEPT.DARK_BG,
           padding: '14px',
           borderRadius: '4px',
           fontSize: '12px',
@@ -520,28 +520,28 @@ export function AgentConfigurationUI({ onAgentCreated }: AgentConfigUIProps) {
 function ConfigSection({ title, icon, expanded, onToggle, children }: any) {
   return (
     <div style={{
-      background: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      background: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '4px',
       overflow: 'hidden'
     }}>
       <div
         onClick={onToggle}
         style={{
-          background: BLOOMBERG.HEADER_BG,
+          background: FINCEPT.HEADER_BG,
           padding: '10px 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           cursor: 'pointer',
-          borderBottom: expanded ? `1px solid ${BLOOMBERG.BORDER}` : 'none'
+          borderBottom: expanded ? `1px solid ${FINCEPT.BORDER}` : 'none'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: BLOOMBERG.ORANGE }}>{icon}</span>
-          <span style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: '700' }}>{title}</span>
+          <span style={{ color: FINCEPT.ORANGE }}>{icon}</span>
+          <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: '700' }}>{title}</span>
         </div>
-        {expanded ? <ChevronUp size={14} color={BLOOMBERG.GRAY} /> : <ChevronDown size={14} color={BLOOMBERG.GRAY} />}
+        {expanded ? <ChevronUp size={14} color={FINCEPT.GRAY} /> : <ChevronDown size={14} color={FINCEPT.GRAY} />}
       </div>
       {expanded && (
         <div style={{ padding: '12px' }}>
@@ -555,7 +555,7 @@ function ConfigSection({ title, icon, expanded, onToggle, children }: any) {
 function InputField({ label, value, onChange, placeholder = '', type = 'text' }: any) {
   return (
     <div>
-      <label style={{ color: BLOOMBERG.GRAY, fontSize: '10px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+      <label style={{ color: FINCEPT.GRAY, fontSize: '10px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
         {label}
       </label>
       <input
@@ -565,9 +565,9 @@ function InputField({ label, value, onChange, placeholder = '', type = 'text' }:
         placeholder={placeholder}
         style={{
           width: '100%',
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
-          color: BLOOMBERG.WHITE,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          color: FINCEPT.WHITE,
           padding: '8px',
           borderRadius: '3px',
           fontSize: '11px'
@@ -580,7 +580,7 @@ function InputField({ label, value, onChange, placeholder = '', type = 'text' }:
 function SelectField({ label, value, onChange, options }: any) {
   return (
     <div>
-      <label style={{ color: BLOOMBERG.GRAY, fontSize: '10px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+      <label style={{ color: FINCEPT.GRAY, fontSize: '10px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
         {label}
       </label>
       <select
@@ -588,9 +588,9 @@ function SelectField({ label, value, onChange, options }: any) {
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: '100%',
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
-          color: BLOOMBERG.WHITE,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          color: FINCEPT.WHITE,
           padding: '8px',
           borderRadius: '3px',
           fontSize: '11px',
@@ -608,7 +608,7 @@ function SelectField({ label, value, onChange, options }: any) {
 function TextArea({ label, value, onChange, rows = 3, placeholder = '' }: any) {
   return (
     <div>
-      <label style={{ color: BLOOMBERG.GRAY, fontSize: '10px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
+      <label style={{ color: FINCEPT.GRAY, fontSize: '10px', fontWeight: '600', display: 'block', marginBottom: '4px' }}>
         {label}
       </label>
       <textarea
@@ -618,9 +618,9 @@ function TextArea({ label, value, onChange, rows = 3, placeholder = '' }: any) {
         placeholder={placeholder}
         style={{
           width: '100%',
-          background: BLOOMBERG.DARK_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
-          color: BLOOMBERG.WHITE,
+          background: FINCEPT.DARK_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          color: FINCEPT.WHITE,
           padding: '8px',
           borderRadius: '3px',
           fontSize: '11px',
@@ -642,10 +642,10 @@ function CheckboxField({ label, checked, onChange, description = '' }: any) {
           onChange={(e) => onChange(e.target.checked)}
           style={{ cursor: 'pointer' }}
         />
-        <span style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: '600' }}>{label}</span>
+        <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: '600' }}>{label}</span>
       </label>
       {description && (
-        <p style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginTop: '4px', marginLeft: '24px' }}>
+        <p style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '4px', marginLeft: '24px' }}>
           {description}
         </p>
       )}
@@ -657,11 +657,11 @@ function SliderField({ label, value, onChange, min, max, step, showValue, suffix
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-        <label style={{ color: BLOOMBERG.GRAY, fontSize: '10px', fontWeight: '600' }}>
+        <label style={{ color: FINCEPT.GRAY, fontSize: '10px', fontWeight: '600' }}>
           {label}
         </label>
         {showValue && (
-          <span style={{ color: BLOOMBERG.CYAN, fontSize: '10px', fontWeight: '700' }}>
+          <span style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: '700' }}>
             {value}{suffix}
           </span>
         )}
@@ -676,11 +676,11 @@ function SliderField({ label, value, onChange, min, max, step, showValue, suffix
         style={{
           width: '100%',
           cursor: 'pointer',
-          accentColor: BLOOMBERG.ORANGE
+          accentColor: FINCEPT.ORANGE
         }}
       />
       {description && (
-        <p style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginTop: '4px' }}>
+        <p style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '4px' }}>
           {description}
         </p>
       )}

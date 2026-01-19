@@ -1,5 +1,5 @@
 // File: src/components/tabs/AboutTab.tsx
-// Bloomberg-style About & Legal Information Interface
+// Fincept-style About & Legal Information Interface
 
 import React from 'react';
 import { TabHeader } from '@/components/common/TabHeader';

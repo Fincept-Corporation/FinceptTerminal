@@ -1,5 +1,5 @@
 /**
- * Broker Authentication Panel - Bloomberg Style
+ * Broker Authentication Panel - Fincept Style
  *
  * Handles OAuth and credential-based authentication for stock brokers
  */
@@ -10,7 +10,7 @@ import { open } from '@tauri-apps/plugin-shell';
 import { useStockBrokerAuth, useStockBrokerSelection } from '@/contexts/StockBrokerContext';
 import type { BrokerCredentials } from '@/brokers/stocks/types';
 
-// Bloomberg color palette
+// Fincept color palette
 const COLORS = {
   ORANGE: '#FF8800',
   GREEN: '#00D66F',
@@ -160,8 +160,25 @@ export function BrokerAuthPanel({ onAuthSuccess }: BrokerAuthPanelProps) {
         const quote = await adapter.getQuote('SBIN', 'NSE');
         console.log('[BrokerAuthPanel] ✓ Quote received:', quote);
         alert(`Success! SBIN LTP: ₹${quote.lastPrice}\nCheck console for full response`);
+      } else if (adapter && metadata?.id === 'saxobank') {
+        // Test Saxo Bank with a major European stock
+        const quote = await adapter.getQuote('SIE:xetr', 'XETR');
+        console.log('[BrokerAuthPanel] ✓ Quote received:', quote);
+        alert(`Success! Siemens AG Quote: €${quote.lastPrice}\nCheck console for full response`);
+      } else if (adapter && metadata?.id === 'alpaca') {
+        const quote = await adapter.getQuote('AAPL', 'NASDAQ');
+        console.log('[BrokerAuthPanel] ✓ Quote received:', quote);
+        alert(`Success! AAPL LTP: $${quote.lastPrice}\nCheck console for full response`);
+      } else if (adapter && metadata?.id === 'ibkr') {
+        const quote = await adapter.getQuote('AAPL', 'NASDAQ');
+        console.log('[BrokerAuthPanel] ✓ Quote received:', quote);
+        alert(`Success! AAPL LTP: $${quote.lastPrice}\nCheck console for full response`);
+      } else if (adapter && metadata?.id === 'tradier') {
+        const quote = await adapter.getQuote('AAPL', 'NASDAQ');
+        console.log('[BrokerAuthPanel] ✓ Quote received:', quote);
+        alert(`Success! AAPL LTP: $${quote.lastPrice}\nCheck console for full response`);
       } else {
-        alert('Test only available for Zerodha, Fyers, and Angel One');
+        alert('Test only available for configured brokers');
       }
     } catch (err: any) {
       console.error('[BrokerAuthPanel] API test failed:', err);

@@ -1,5 +1,5 @@
 /**
- * Portfolio Management Tab - Bloomberg Terminal Style
+ * Portfolio Management Tab - Fincept Terminal Style
  * Professional portfolio tracking and analytics interface
  */
 
@@ -26,7 +26,7 @@ import SellAssetModal from './modals/SellAssetModal';
 import { usePortfolioOperations } from './hooks/usePortfolioOperations';
 import { formatCurrency, formatPercent } from './portfolio/utils';
 import { TabFooter } from '@/components/common/TabFooter';
-import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES } from './bloombergStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES } from './finceptStyles';
 
 type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization';
 
@@ -153,7 +153,7 @@ const PortfolioTab: React.FC = () => {
     <div style={{
       ...COMMON_STYLES.container,
     }}>
-      {/* Bloomberg-Style Header */}
+      {/* Fincept-Style Header */}
       <div style={{
         ...COMMON_STYLES.header,
         height: 'auto',
@@ -163,11 +163,11 @@ const PortfolioTab: React.FC = () => {
       }}>
         {/* Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <Briefcase size={12} color={BLOOMBERG.ORANGE} style={{ filter: EFFECTS.ICON_GLOW_ORANGE }} />
+          <Briefcase size={12} color={FINCEPT.ORANGE} style={{ filter: EFFECTS.ICON_GLOW_ORANGE }} />
           <span style={{
             fontSize: '10px',
             fontWeight: TYPOGRAPHY.BOLD,
-            color: BLOOMBERG.ORANGE,
+            color: FINCEPT.ORANGE,
             letterSpacing: '0.5px',
             textShadow: EFFECTS.ORANGE_GLOW
           }}>
@@ -181,8 +181,8 @@ const PortfolioTab: React.FC = () => {
             tour.drive();
           }}
           style={{
-            backgroundColor: BLOOMBERG.BLUE,
-            color: BLOOMBERG.DARK_BG,
+            backgroundColor: FINCEPT.BLUE,
+            color: FINCEPT.DARK_BG,
             border: 'none',
             padding: '2px 6px',
             fontSize: '8px',
@@ -219,8 +219,8 @@ const PortfolioTab: React.FC = () => {
                   fontSize: '8px',
                   fontWeight: TYPOGRAPHY.SEMIBOLD,
                   letterSpacing: '0.3px',
-                  color: !selectedPortfolio ? BLOOMBERG.MUTED : (isActive ? BLOOMBERG.DARK_BG : BLOOMBERG.CYAN),
-                  backgroundColor: isActive ? BLOOMBERG.ORANGE : 'transparent',
+                  color: !selectedPortfolio ? FINCEPT.MUTED : (isActive ? FINCEPT.DARK_BG : FINCEPT.CYAN),
+                  backgroundColor: isActive ? FINCEPT.ORANGE : 'transparent',
                   border: isActive ? BORDERS.ORANGE : BORDERS.STANDARD,
                   borderRadius: '2px',
                   cursor: selectedPortfolio ? 'pointer' : 'not-allowed',
@@ -232,14 +232,14 @@ const PortfolioTab: React.FC = () => {
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive && selectedPortfolio) {
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                    e.currentTarget.style.color = BLOOMBERG.WHITE;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                    e.currentTarget.style.color = FINCEPT.WHITE;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = selectedPortfolio ? BLOOMBERG.CYAN : BLOOMBERG.MUTED;
+                    e.currentTarget.style.color = selectedPortfolio ? FINCEPT.CYAN : FINCEPT.MUTED;
                   }
                 }}
               >
@@ -264,9 +264,9 @@ const PortfolioTab: React.FC = () => {
               }}
               style={{
                 padding: '2px 4px',
-                backgroundColor: BLOOMBERG.DARK_BG,
+                backgroundColor: FINCEPT.DARK_BG,
                 border: BORDERS.STANDARD,
-                color: BLOOMBERG.WHITE,
+                color: FINCEPT.WHITE,
                 fontSize: '8px',
                 fontWeight: TYPOGRAPHY.BOLD,
                 fontFamily: TYPOGRAPHY.MONO,
@@ -291,9 +291,9 @@ const PortfolioTab: React.FC = () => {
             onClick={() => setShowCreatePortfolio(true)}
             style={{
               padding: '2px 4px',
-              backgroundColor: BLOOMBERG.DARK_BG,
+              backgroundColor: FINCEPT.DARK_BG,
               border: BORDERS.ORANGE,
-              color: BLOOMBERG.ORANGE,
+              color: FINCEPT.ORANGE,
               fontSize: '8px',
               cursor: 'pointer',
               display: 'flex',
@@ -313,9 +313,9 @@ const PortfolioTab: React.FC = () => {
                 onClick={() => setShowAddAsset(true)}
                 style={{
                   padding: '2px 4px',
-                  backgroundColor: BLOOMBERG.DARK_BG,
+                  backgroundColor: FINCEPT.DARK_BG,
                   border: BORDERS.STANDARD,
-                  color: BLOOMBERG.GREEN,
+                  color: FINCEPT.GREEN,
                   fontSize: '8px',
                   cursor: 'pointer',
                   display: 'flex',
@@ -332,9 +332,9 @@ const PortfolioTab: React.FC = () => {
                 onClick={() => setShowSellAsset(true)}
                 style={{
                   padding: '2px 4px',
-                  backgroundColor: BLOOMBERG.DARK_BG,
+                  backgroundColor: FINCEPT.DARK_BG,
                   border: BORDERS.STANDARD,
-                  color: BLOOMBERG.RED,
+                  color: FINCEPT.RED,
                   fontSize: '8px',
                   cursor: 'pointer',
                   display: 'flex',
@@ -352,9 +352,9 @@ const PortfolioTab: React.FC = () => {
                 disabled={refreshing}
                 style={{
                   padding: '2px 4px',
-                  backgroundColor: BLOOMBERG.DARK_BG,
+                  backgroundColor: FINCEPT.DARK_BG,
                   border: BORDERS.STANDARD,
-                  color: refreshing ? BLOOMBERG.MUTED : BLOOMBERG.CYAN,
+                  color: refreshing ? FINCEPT.MUTED : FINCEPT.CYAN,
                   fontSize: '8px',
                   cursor: refreshing ? 'wait' : 'pointer',
                   display: 'flex',
@@ -369,9 +369,9 @@ const PortfolioTab: React.FC = () => {
                 onClick={exportToCSV}
                 style={{
                   padding: '2px 4px',
-                  backgroundColor: BLOOMBERG.DARK_BG,
+                  backgroundColor: FINCEPT.DARK_BG,
                   border: BORDERS.STANDARD,
-                  color: BLOOMBERG.CYAN,
+                  color: FINCEPT.CYAN,
                   fontSize: '8px',
                   cursor: 'pointer',
                   display: 'flex',
@@ -396,11 +396,11 @@ const PortfolioTab: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'center',
             gap: SPACING.XLARGE,
-            backgroundColor: BLOOMBERG.DARK_BG
+            backgroundColor: FINCEPT.DARK_BG
           }}>
-            <Briefcase size={80} color={BLOOMBERG.MUTED} style={{ opacity: 0.3 }} />
+            <Briefcase size={80} color={FINCEPT.MUTED} style={{ opacity: 0.3 }} />
             <div style={{
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: TYPOGRAPHY.HEADING,
               textAlign: 'center',
               fontWeight: TYPOGRAPHY.SEMIBOLD,
@@ -410,7 +410,7 @@ const PortfolioTab: React.FC = () => {
               NO PORTFOLIO SELECTED
             </div>
             <div style={{
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               fontSize: TYPOGRAPHY.DEFAULT,
               textAlign: 'center',
               fontFamily: TYPOGRAPHY.MONO
@@ -423,9 +423,9 @@ const PortfolioTab: React.FC = () => {
                 style={{
                   marginTop: SPACING.LARGE,
                   padding: `${SPACING.MEDIUM} ${SPACING.LARGE}`,
-                  backgroundColor: BLOOMBERG.ORANGE,
+                  backgroundColor: FINCEPT.ORANGE,
                   border: BORDERS.ORANGE,
-                  color: BLOOMBERG.DARK_BG,
+                  color: FINCEPT.DARK_BG,
                   fontSize: TYPOGRAPHY.DEFAULT,
                   fontWeight: TYPOGRAPHY.BOLD,
                   letterSpacing: TYPOGRAPHY.WIDE,
@@ -446,7 +446,7 @@ const PortfolioTab: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: TYPOGRAPHY.SUBHEADING,
             fontWeight: TYPOGRAPHY.SEMIBOLD,
             letterSpacing: TYPOGRAPHY.WIDE,
@@ -485,38 +485,38 @@ const PortfolioTab: React.FC = () => {
       {/* Tab Footer */}
       <TabFooter
         tabName="PORTFOLIO MANAGER"
-        backgroundColor={BLOOMBERG.HEADER_BG}
-        borderColor={BLOOMBERG.ORANGE}
+        backgroundColor={FINCEPT.HEADER_BG}
+        borderColor={FINCEPT.ORANGE}
         leftInfo={
           portfolioSummary
             ? [
                 {
                   label: 'Positions',
                   value: portfolioSummary.total_positions.toString(),
-                  color: BLOOMBERG.WHITE
+                  color: FINCEPT.WHITE
                 },
                 {
                   label: 'Total Value',
                   value: formatCurrency(portfolioSummary.total_market_value, currency),
-                  color: BLOOMBERG.WHITE
+                  color: FINCEPT.WHITE
                 },
                 {
                   label: 'Total P&L',
                   value: `${portfolioSummary.total_unrealized_pnl >= 0 ? '+' : ''}${formatCurrency(portfolioSummary.total_unrealized_pnl, currency)}`,
-                  color: portfolioSummary.total_unrealized_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                  color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED
                 }
               ]
             : []
         }
         statusInfo={
-          <span style={{ color: BLOOMBERG.GRAY, fontFamily: TYPOGRAPHY.MONO }}>
+          <span style={{ color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO }}>
             {selectedPortfolio ? `${selectedPortfolio.name} | ` : ''}
             Last Updated: {currentTime.toLocaleTimeString('en-US', { hour12: false })}
           </span>
         }
       />
 
-      {/* Bloomberg Terminal CSS */}
+      {/* Fincept Terminal CSS */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
@@ -528,7 +528,7 @@ const PortfolioTab: React.FC = () => {
         }
 
         @keyframes priceFlash {
-          0% { background-color: ${BLOOMBERG.YELLOW}40; }
+          0% { background-color: ${FINCEPT.YELLOW}40; }
           100% { background-color: transparent; }
         }
       `}</style>

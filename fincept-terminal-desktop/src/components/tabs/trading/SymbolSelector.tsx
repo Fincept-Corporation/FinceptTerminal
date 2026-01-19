@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
 import { Search } from 'lucide-react';
 
-const BLOOMBERG_COLORS = {
+const FINCEPT_COLORS = {
   ORANGE: '#ea580c',
   WHITE: '#ffffff',
   GRAY: '#525252',
@@ -23,7 +23,7 @@ export function SymbolSelector({ selectedSymbol, onSymbolChange }: SymbolSelecto
   const [searchValue, setSearchValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
-  const { ORANGE, WHITE, GRAY, PANEL_BG } = BLOOMBERG_COLORS;
+  const { ORANGE, WHITE, GRAY, PANEL_BG } = FINCEPT_COLORS;
 
   // Update search value when selected symbol changes
   useEffect(() => {

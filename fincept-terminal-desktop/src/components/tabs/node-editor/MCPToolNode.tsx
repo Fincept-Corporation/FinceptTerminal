@@ -26,7 +26,7 @@ const MCPToolNode: React.FC<MCPToolNodeProps> = ({ data, selected }) => {
   const [lastResult, setLastResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Bloomberg colors
+  // Fincept colors
   const ORANGE = '#FFA500';
   const WHITE = '#FFFFFF';
   const GRAY = '#787878';

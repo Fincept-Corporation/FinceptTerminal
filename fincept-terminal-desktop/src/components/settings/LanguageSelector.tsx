@@ -1,13 +1,13 @@
 // File: src/components/settings/LanguageSelector.tsx
-// Bloomberg Terminal-styled language selector
+// Fincept Terminal-styled language selector
 
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTranslation } from 'react-i18next';
 import { Globe, Check } from 'lucide-react';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -38,16 +38,16 @@ export const LanguageSelector: React.FC = () => {
         gap: '12px',
         marginBottom: '24px',
         paddingBottom: '12px',
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`
       }}>
-        <Globe size={20} color={BLOOMBERG.ORANGE} style={{ filter: `drop-shadow(0 0 4px ${BLOOMBERG.ORANGE})` }} />
+        <Globe size={20} color={FINCEPT.ORANGE} style={{ filter: `drop-shadow(0 0 4px ${FINCEPT.ORANGE})` }} />
         <h2 style={{
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           fontSize: '16px',
           fontWeight: 700,
           letterSpacing: '1px',
           margin: 0,
-          textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
+          textShadow: `0 0 10px ${FINCEPT.ORANGE}40`
         }}>
           {t('language.title', 'LANGUAGE SETTINGS')}
         </h2>
@@ -57,12 +57,12 @@ export const LanguageSelector: React.FC = () => {
       <div style={{
         marginBottom: '20px',
         padding: '12px',
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
-        borderLeft: `3px solid ${BLOOMBERG.CYAN}`
+        backgroundColor: FINCEPT.HEADER_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderLeft: `3px solid ${FINCEPT.CYAN}`
       }}>
         <p style={{
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           fontSize: '10px',
           margin: 0,
           lineHeight: '1.6'
@@ -90,9 +90,9 @@ export const LanguageSelector: React.FC = () => {
                 alignItems: 'center',
                 gap: '12px',
                 padding: '14px',
-                backgroundColor: isActive ? BLOOMBERG.PANEL_BG : BLOOMBERG.HEADER_BG,
-                border: `1px solid ${isActive ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                borderLeft: `3px solid ${isActive ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                backgroundColor: isActive ? FINCEPT.PANEL_BG : FINCEPT.HEADER_BG,
+                border: `1px solid ${isActive ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                borderLeft: `3px solid ${isActive ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
                 position: 'relative',
@@ -100,14 +100,14 @@ export const LanguageSelector: React.FC = () => {
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                  e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  e.currentTarget.style.borderColor = FINCEPT.MUTED;
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
-                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                  e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
                 }
               }}
             >
@@ -123,7 +123,7 @@ export const LanguageSelector: React.FC = () => {
               {/* Language Info */}
               <div style={{ flex: 1, textAlign: 'left' }}>
                 <div style={{
-                  color: isActive ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                  color: isActive ? FINCEPT.ORANGE : FINCEPT.WHITE,
                   fontSize: '12px',
                   fontWeight: 700,
                   marginBottom: '2px',
@@ -132,7 +132,7 @@ export const LanguageSelector: React.FC = () => {
                   {lang.nativeName}
                 </div>
                 <div style={{
-                  color: BLOOMBERG.GRAY,
+                  color: FINCEPT.GRAY,
                   fontSize: '9px',
                   fontWeight: 500
                 }}>
@@ -147,13 +147,13 @@ export const LanguageSelector: React.FC = () => {
                   alignItems: 'center',
                   gap: '4px'
                 }}>
-                  <Check size={14} color={BLOOMBERG.GREEN} />
+                  <Check size={14} color={FINCEPT.GREEN} />
                   <div style={{
                     width: '8px',
                     height: '8px',
                     borderRadius: '50%',
-                    backgroundColor: BLOOMBERG.GREEN,
-                    boxShadow: `0 0 8px ${BLOOMBERG.GREEN}`
+                    backgroundColor: FINCEPT.GREEN,
+                    boxShadow: `0 0 8px ${FINCEPT.GREEN}`
                   }} />
                 </div>
               )}
@@ -166,7 +166,7 @@ export const LanguageSelector: React.FC = () => {
                   left: 0,
                   right: 0,
                   height: '1px',
-                  background: `linear-gradient(90deg, transparent, ${BLOOMBERG.ORANGE}, transparent)`,
+                  background: `linear-gradient(90deg, transparent, ${FINCEPT.ORANGE}, transparent)`,
                   opacity: 0.5
                 }} />
               )}
@@ -178,9 +178,9 @@ export const LanguageSelector: React.FC = () => {
       {/* Current Language Status */}
       <div style={{
         padding: '16px',
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
-        borderTop: `2px solid ${BLOOMBERG.GREEN}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderTop: `2px solid ${FINCEPT.GREEN}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
@@ -190,11 +190,11 @@ export const LanguageSelector: React.FC = () => {
             width: '6px',
             height: '6px',
             borderRadius: '50%',
-            backgroundColor: BLOOMBERG.GREEN,
-            boxShadow: `0 0 8px ${BLOOMBERG.GREEN}`
+            backgroundColor: FINCEPT.GREEN,
+            boxShadow: `0 0 8px ${FINCEPT.GREEN}`
           }} />
           <span style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '10px',
             fontWeight: 600,
             letterSpacing: '0.5px'
@@ -213,7 +213,7 @@ export const LanguageSelector: React.FC = () => {
             {availableLanguages.find(lang => lang.code === currentLanguage)?.flag || '🌐'}
           </span>
           <span style={{
-            color: BLOOMBERG.CYAN,
+            color: FINCEPT.CYAN,
             fontSize: '12px',
             fontWeight: 700,
             letterSpacing: '0.5px'
@@ -227,18 +227,18 @@ export const LanguageSelector: React.FC = () => {
       <div style={{
         marginTop: '20px',
         padding: '12px 16px',
-        backgroundColor: `${BLOOMBERG.CYAN}10`,
-        border: `1px solid ${BLOOMBERG.CYAN}40`,
-        borderLeft: `3px solid ${BLOOMBERG.CYAN}`
+        backgroundColor: `${FINCEPT.CYAN}10`,
+        border: `1px solid ${FINCEPT.CYAN}40`,
+        borderLeft: `3px solid ${FINCEPT.CYAN}`
       }}>
         <div style={{
           display: 'flex',
           alignItems: 'flex-start',
           gap: '10px'
         }}>
-          <Globe size={14} color={BLOOMBERG.CYAN} style={{ marginTop: '1px', flexShrink: 0 }} />
+          <Globe size={14} color={FINCEPT.CYAN} style={{ marginTop: '1px', flexShrink: 0 }} />
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             lineHeight: '1.5'
           }}>
@@ -257,12 +257,12 @@ export const LanguageSelector: React.FC = () => {
       }}>
         <div style={{
           padding: '12px',
-          backgroundColor: BLOOMBERG.HEADER_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           textAlign: 'center'
         }}>
           <div style={{
-            color: BLOOMBERG.YELLOW,
+            color: FINCEPT.YELLOW,
             fontSize: '20px',
             fontWeight: 700,
             marginBottom: '4px'
@@ -270,7 +270,7 @@ export const LanguageSelector: React.FC = () => {
             {availableLanguages.length}
           </div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             fontWeight: 600,
             letterSpacing: '0.5px'
@@ -281,12 +281,12 @@ export const LanguageSelector: React.FC = () => {
 
         <div style={{
           padding: '12px',
-          backgroundColor: BLOOMBERG.HEADER_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           textAlign: 'center'
         }}>
           <div style={{
-            color: BLOOMBERG.GREEN,
+            color: FINCEPT.GREEN,
             fontSize: '20px',
             fontWeight: 700,
             marginBottom: '4px'
@@ -294,7 +294,7 @@ export const LanguageSelector: React.FC = () => {
             100%
           </div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             fontWeight: 600,
             letterSpacing: '0.5px'
@@ -305,12 +305,12 @@ export const LanguageSelector: React.FC = () => {
 
         <div style={{
           padding: '12px',
-          backgroundColor: BLOOMBERG.HEADER_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: FINCEPT.HEADER_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
           textAlign: 'center'
         }}>
           <div style={{
-            color: BLOOMBERG.CYAN,
+            color: FINCEPT.CYAN,
             fontSize: '20px',
             fontWeight: 700,
             marginBottom: '4px'
@@ -318,7 +318,7 @@ export const LanguageSelector: React.FC = () => {
             RTL
           </div>
           <div style={{
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             fontSize: '9px',
             fontWeight: 600,
             letterSpacing: '0.5px'

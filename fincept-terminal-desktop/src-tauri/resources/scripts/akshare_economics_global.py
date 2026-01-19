@@ -44,6 +44,19 @@ class GlobalEconomicsWrapper:
         self.default_start_date = (datetime.now() - timedelta(days=3650)).strftime('%Y%m%d')  # 10 years
         self.default_end_date = datetime.now().strftime('%Y%m%d')
 
+    def _convert_dataframe_to_json_safe(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Convert DataFrame to JSON-safe format, handling dates and other non-serializable types"""
+        df_copy = df.copy()
+        for col in df_copy.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
+                df_copy[col] = df_copy[col].astype(str)
+            elif df_copy[col].dtype == 'object':
+                try:
+                    df_copy[col] = df_copy[col].apply(lambda x: str(x) if hasattr(x, 'strftime') else x)
+                except:
+                    pass
+        return df_copy.to_dict('records')
+
     def _safe_call_with_retry(self, func, *args, max_retries: int = 3, **kwargs) -> Dict[str, Any]:
         """Safely call AKShare function with enhanced error handling and retry logic"""
         last_error = None
@@ -57,7 +70,7 @@ class GlobalEconomicsWrapper:
                     if hasattr(result, 'empty') and not result.empty:
                         return {
                             "success": True,
-                            "data": result.to_dict('records'),
+                            "data": self._convert_dataframe_to_json_safe(result),
                             "count": len(result),
                             "timestamp": int(datetime.now().timestamp()),
                             "data_quality": "high",
@@ -116,19 +129,15 @@ class GlobalEconomicsWrapper:
 
     def get_macro_usa_gdp(self) -> Dict[str, Any]:
         """Get USA GDP data"""
-        return self._safe_call_with_retry(ak.macro_usa_gdp)
-
-    def get_macro_usa_gdp_nowcast(self) -> Dict[str, Any]:
-        """Get USA GDP nowcast"""
-        return self._safe_call_with_retry(ak.macro_usa_gdp_nowcast)
+        return self._safe_call_with_retry(ak.macro_usa_gdp_monthly)
 
     def get_macro_usa_cpi(self) -> Dict[str, Any]:
         """Get USA Consumer Price Index"""
-        return self._safe_call_with_retry(ak.macro_usa_cpi)
+        return self._safe_call_with_retry(ak.macro_usa_cpi_monthly)
 
     def get_macro_usa_cpi_core(self) -> Dict[str, Any]:
         """Get USA Core CPI"""
-        return self._safe_call_with_retry(ak.macro_usa_cpi_core)
+        return self._safe_call_with_retry(ak.macro_usa_core_cpi_monthly)
 
     def get_macro_usa_ppi(self) -> Dict[str, Any]:
         """Get USA Producer Price Index"""
@@ -136,15 +145,7 @@ class GlobalEconomicsWrapper:
 
     def get_macro_usa_pmi(self) -> Dict[str, Any]:
         """Get USA PMI data"""
-        return self._safe_call_with_retry(ak.macro_usa_pmi)
-
-    def get_macro_usa_pmi_manufacturing(self) -> Dict[str, Any]:
-        """Get USA Manufacturing PMI"""
-        return self._safe_call_with_retry(ak.macro_usa_pmi_manufacturing)
-
-    def get_macro_usa_pmi_services(self) -> Dict[str, Any]:
-        """Get USA Services PMI"""
-        return self._safe_call_with_retry(ak.macro_usa_pmi_services)
+        return self._safe_call_with_retry(ak.macro_usa_ism_pmi)
 
     def get_macro_usa_unemployment(self) -> Dict[str, Any]:
         """Get USA unemployment rate"""

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   GREEN: '#00D66F',
@@ -55,8 +55,8 @@ export function HyperLiquidVaultManager() {
     <div
       style={{
         padding: '12px',
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
         marginTop: '12px',
       }}
     >
@@ -65,7 +65,7 @@ export function HyperLiquidVaultManager() {
         style={{
           fontSize: '10px',
           fontWeight: 700,
-          color: BLOOMBERG.ORANGE,
+          color: FINCEPT.ORANGE,
           marginBottom: '12px',
           letterSpacing: '0.5px',
         }}
@@ -80,7 +80,7 @@ export function HyperLiquidVaultManager() {
             display: 'block',
             fontSize: '9px',
             fontWeight: 700,
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             marginBottom: '4px',
           }}
         >
@@ -95,9 +95,9 @@ export function HyperLiquidVaultManager() {
             style={{
               flex: 1,
               padding: '6px 8px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.WHITE,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.WHITE,
               fontSize: '10px',
               fontFamily: 'inherit',
             }}
@@ -107,9 +107,9 @@ export function HyperLiquidVaultManager() {
             disabled={isLoading || !vaultAddress}
             style={{
               padding: '6px 12px',
-              backgroundColor: BLOOMBERG.CYAN,
+              backgroundColor: FINCEPT.CYAN,
               border: 'none',
-              color: BLOOMBERG.PANEL_BG,
+              color: FINCEPT.PANEL_BG,
               fontSize: '9px',
               fontWeight: 700,
               cursor: !vaultAddress || isLoading ? 'not-allowed' : 'pointer',
@@ -128,7 +128,7 @@ export function HyperLiquidVaultManager() {
             display: 'block',
             fontSize: '9px',
             fontWeight: 700,
-            color: BLOOMBERG.GRAY,
+            color: FINCEPT.GRAY,
             marginBottom: '4px',
           }}
         >
@@ -143,9 +143,9 @@ export function HyperLiquidVaultManager() {
             style={{
               flex: 1,
               padding: '6px 8px',
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.WHITE,
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.WHITE,
               fontSize: '10px',
               fontFamily: 'inherit',
             }}
@@ -155,9 +155,9 @@ export function HyperLiquidVaultManager() {
             disabled={!subAccountAddress}
             style={{
               padding: '6px 12px',
-              backgroundColor: BLOOMBERG.GREEN,
+              backgroundColor: FINCEPT.GREEN,
               border: 'none',
-              color: BLOOMBERG.PANEL_BG,
+              color: FINCEPT.PANEL_BG,
               fontSize: '9px',
               fontWeight: 700,
               cursor: !subAccountAddress ? 'not-allowed' : 'pointer',
@@ -174,10 +174,10 @@ export function HyperLiquidVaultManager() {
         <div
           style={{
             padding: '8px',
-            backgroundColor: `${BLOOMBERG.CYAN}15`,
-            border: `1px solid ${BLOOMBERG.CYAN}40`,
+            backgroundColor: `${FINCEPT.CYAN}15`,
+            border: `1px solid ${FINCEPT.CYAN}40`,
             fontSize: '9px',
-            color: BLOOMBERG.CYAN,
+            color: FINCEPT.CYAN,
           }}
         >
           [OK] Vault Balance: ${vaultBalance.total?.USD?.toFixed(2) || '0.00'}
@@ -189,10 +189,10 @@ export function HyperLiquidVaultManager() {
         style={{
           marginTop: '12px',
           padding: '8px',
-          backgroundColor: `${BLOOMBERG.ORANGE}10`,
-          border: `1px solid ${BLOOMBERG.ORANGE}40`,
+          backgroundColor: `${FINCEPT.ORANGE}10`,
+          border: `1px solid ${FINCEPT.ORANGE}40`,
           fontSize: '8px',
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           lineHeight: '1.4',
         }}
       >

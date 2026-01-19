@@ -1,6 +1,6 @@
 import React from 'react';
 import { WatchlistStockWithQuote } from '../../../services/core/watchlistService';
-import { BLOOMBERG_COLORS, formatCurrency, formatPercent, formatVolume, getChangeColor, SortCriteria } from './utils';
+import { FINCEPT_COLORS, formatCurrency, formatPercent, formatVolume, getChangeColor, SortCriteria } from './utils';
 import { Trash2 } from 'lucide-react';
 
 interface StockListViewProps {
@@ -22,7 +22,7 @@ const StockListView: React.FC<StockListViewProps> = ({
   onRemoveStock,
   selectedSymbol
 }) => {
-  const { ORANGE, WHITE, GRAY, GREEN, RED, YELLOW, CYAN, DARK_BG, PANEL_BG } = BLOOMBERG_COLORS;
+  const { ORANGE, WHITE, GRAY, GREEN, RED, YELLOW, CYAN, DARK_BG, PANEL_BG } = FINCEPT_COLORS;
 
   const handleRemove = (e: React.MouseEvent, symbol: string) => {
     e.stopPropagation();

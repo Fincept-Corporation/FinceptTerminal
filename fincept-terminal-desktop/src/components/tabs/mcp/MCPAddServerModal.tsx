@@ -20,12 +20,12 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
     icon: '🔧'
   });
 
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
-  const BLOOMBERG_RED = '#FF0000';
+  const FINCEPT_ORANGE = '#FFA500';
+  const FINCEPT_WHITE = '#FFFFFF';
+  const FINCEPT_GRAY = '#787878';
+  const FINCEPT_DARK_BG = '#000000';
+  const FINCEPT_PANEL_BG = '#0a0a0a';
+  const FINCEPT_RED = '#FF0000';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,23 +84,23 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
       fontFamily: 'Consolas, monospace'
     }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
+        backgroundColor: FINCEPT_PANEL_BG,
+        border: `2px solid ${FINCEPT_ORANGE}`,
         width: '500px',
         maxHeight: '80vh',
         overflow: 'auto'
       }}>
         {/* Header */}
         <div style={{
-          backgroundColor: BLOOMBERG_DARK_BG,
-          borderBottom: `1px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_DARK_BG,
+          borderBottom: `1px solid ${FINCEPT_ORANGE}`,
           padding: '10px 12px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
           <span style={{
-            color: BLOOMBERG_ORANGE,
+            color: FINCEPT_ORANGE,
             fontSize: '12px',
             fontWeight: 'bold'
           }}>
@@ -111,7 +111,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
             style={{
               backgroundColor: 'transparent',
               border: 'none',
-              color: BLOOMBERG_WHITE,
+              color: FINCEPT_WHITE,
               cursor: 'pointer',
               padding: '4px'
             }}
@@ -126,7 +126,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '10px',
               marginBottom: '4px',
               fontWeight: 'bold'
@@ -141,9 +141,9 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               required
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '10px',
                 fontFamily: 'Consolas, monospace'
@@ -155,7 +155,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '10px',
               marginBottom: '4px',
               fontWeight: 'bold'
@@ -169,9 +169,9 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               placeholder="What does this server do?"
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '10px',
                 fontFamily: 'Consolas, monospace'
@@ -183,7 +183,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '10px',
               marginBottom: '4px',
               fontWeight: 'bold'
@@ -198,9 +198,9 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               required
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '10px',
                 fontFamily: 'Consolas, monospace'
@@ -212,7 +212,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '10px',
               marginBottom: '4px',
               fontWeight: 'bold'
@@ -227,16 +227,16 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               required
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '10px',
                 fontFamily: 'Consolas, monospace'
               }}
             />
             <div style={{
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               fontSize: '8px',
               marginTop: '2px'
             }}>
@@ -248,7 +248,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '10px',
               marginBottom: '4px',
               fontWeight: 'bold'
@@ -262,9 +262,9 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               rows={3}
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '10px',
                 fontFamily: 'Consolas, monospace',
@@ -272,7 +272,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               }}
             />
             <div style={{
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               fontSize: '8px',
               marginTop: '2px'
             }}>
@@ -284,7 +284,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
           <div style={{ marginBottom: '12px' }}>
             <label style={{
               display: 'block',
-              color: BLOOMBERG_ORANGE,
+              color: FINCEPT_ORANGE,
               fontSize: '10px',
               marginBottom: '4px',
               fontWeight: 'bold'
@@ -299,9 +299,9 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               maxLength={2}
               style={{
                 width: '60px',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px',
                 fontSize: '16px',
                 textAlign: 'center'
@@ -316,15 +316,15 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
             justifyContent: 'flex-end',
             marginTop: '16px',
             paddingTop: '12px',
-            borderTop: `1px solid ${BLOOMBERG_GRAY}`
+            borderTop: `1px solid ${FINCEPT_GRAY}`
           }}>
             <button
               type="button"
               onClick={onClose}
               style={{
-                backgroundColor: BLOOMBERG_DARK_BG,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
-                color: BLOOMBERG_WHITE,
+                backgroundColor: FINCEPT_DARK_BG,
+                border: `1px solid ${FINCEPT_GRAY}`,
+                color: FINCEPT_WHITE,
                 padding: '6px 12px',
                 fontSize: '10px',
                 cursor: 'pointer'
@@ -335,7 +335,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
             <button
               type="submit"
               style={{
-                backgroundColor: BLOOMBERG_ORANGE,
+                backgroundColor: FINCEPT_ORANGE,
                 border: 'none',
                 color: 'black',
                 padding: '6px 12px',

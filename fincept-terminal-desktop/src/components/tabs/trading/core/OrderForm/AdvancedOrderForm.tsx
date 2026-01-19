@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import type { UnifiedOrderRequest } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 
-const BLOOMBERG = {
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -77,9 +77,9 @@ export function AdvancedOrderForm({
         style={{
           width: '100%',
           padding: '8px',
-          backgroundColor: showAdvanced ? `${BLOOMBERG.CYAN}15` : BLOOMBERG.PANEL_BG,
-          border: `1px solid ${showAdvanced ? BLOOMBERG.CYAN : BLOOMBERG.BORDER}`,
-          color: showAdvanced ? BLOOMBERG.CYAN : BLOOMBERG.GRAY,
+          backgroundColor: showAdvanced ? `${FINCEPT.CYAN}15` : FINCEPT.PANEL_BG,
+          border: `1px solid ${showAdvanced ? FINCEPT.CYAN : FINCEPT.BORDER}`,
+          color: showAdvanced ? FINCEPT.CYAN : FINCEPT.GRAY,
           fontSize: '10px',
           fontWeight: 700,
           cursor: 'pointer',
@@ -90,14 +90,14 @@ export function AdvancedOrderForm({
         }}
         onMouseEnter={(e) => {
           if (!showAdvanced) {
-            e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
-            e.currentTarget.style.color = BLOOMBERG.CYAN;
+            e.currentTarget.style.borderColor = FINCEPT.CYAN;
+            e.currentTarget.style.color = FINCEPT.CYAN;
           }
         }}
         onMouseLeave={(e) => {
           if (!showAdvanced) {
-            e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-            e.currentTarget.style.color = BLOOMBERG.GRAY;
+            e.currentTarget.style.borderColor = FINCEPT.BORDER;
+            e.currentTarget.style.color = FINCEPT.GRAY;
           }
         }}
       >
@@ -111,8 +111,8 @@ export function AdvancedOrderForm({
           style={{
             marginTop: '8px',
             padding: '12px',
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            border: `1px solid ${BLOOMBERG.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
@@ -126,7 +126,7 @@ export function AdvancedOrderForm({
                   display: 'block',
                   fontSize: '9px',
                   fontWeight: 700,
-                  color: BLOOMBERG.GRAY,
+                  color: FINCEPT.GRAY,
                   marginBottom: '4px',
                   letterSpacing: '0.5px',
                 }}
@@ -141,18 +141,18 @@ export function AdvancedOrderForm({
                 style={{
                   width: '100%',
                   padding: '8px 10px',
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.WHITE,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
                   fontSize: '11px',
                   fontFamily: 'inherit',
                   outline: 'none',
                 }}
-                onFocus={(e) => (e.target.style.borderColor = BLOOMBERG.RED)}
-                onBlur={(e) => (e.target.style.borderColor = BLOOMBERG.BORDER)}
+                onFocus={(e) => (e.target.style.borderColor = FINCEPT.RED)}
+                onBlur={(e) => (e.target.style.borderColor = FINCEPT.BORDER)}
               />
               {stopLossPrice && (
-                <div style={{ fontSize: '8px', color: BLOOMBERG.RED, marginTop: '4px' }}>
+                <div style={{ fontSize: '8px', color: FINCEPT.RED, marginTop: '4px' }}>
                   {parseFloat(stopLossPrice) < currentPrice ? '↓' : '↑'}{' '}
                   {Math.abs(((parseFloat(stopLossPrice) - currentPrice) / currentPrice) * 100).toFixed(2)}% from current
                 </div>
@@ -168,7 +168,7 @@ export function AdvancedOrderForm({
                   display: 'block',
                   fontSize: '9px',
                   fontWeight: 700,
-                  color: BLOOMBERG.GRAY,
+                  color: FINCEPT.GRAY,
                   marginBottom: '4px',
                   letterSpacing: '0.5px',
                 }}
@@ -183,18 +183,18 @@ export function AdvancedOrderForm({
                 style={{
                   width: '100%',
                   padding: '8px 10px',
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.WHITE,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
                   fontSize: '11px',
                   fontFamily: 'inherit',
                   outline: 'none',
                 }}
-                onFocus={(e) => (e.target.style.borderColor = BLOOMBERG.GREEN)}
-                onBlur={(e) => (e.target.style.borderColor = BLOOMBERG.BORDER)}
+                onFocus={(e) => (e.target.style.borderColor = FINCEPT.GREEN)}
+                onBlur={(e) => (e.target.style.borderColor = FINCEPT.BORDER)}
               />
               {takeProfitPrice && (
-                <div style={{ fontSize: '8px', color: BLOOMBERG.GREEN, marginTop: '4px' }}>
+                <div style={{ fontSize: '8px', color: FINCEPT.GREEN, marginTop: '4px' }}>
                   {parseFloat(takeProfitPrice) > currentPrice ? '↑' : '↓'}{' '}
                   {Math.abs(((parseFloat(takeProfitPrice) - currentPrice) / currentPrice) * 100).toFixed(2)}% from current
                 </div>
@@ -210,7 +210,7 @@ export function AdvancedOrderForm({
                   display: 'block',
                   fontSize: '9px',
                   fontWeight: 700,
-                  color: BLOOMBERG.GRAY,
+                  color: FINCEPT.GRAY,
                   marginBottom: '4px',
                   letterSpacing: '0.5px',
                 }}
@@ -225,18 +225,18 @@ export function AdvancedOrderForm({
                 style={{
                   width: '100%',
                   padding: '8px 10px',
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.WHITE,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
                   fontSize: '11px',
                   fontFamily: 'inherit',
                   outline: 'none',
                 }}
-                onFocus={(e) => (e.target.style.borderColor = BLOOMBERG.ORANGE)}
-                onBlur={(e) => (e.target.style.borderColor = BLOOMBERG.BORDER)}
+                onFocus={(e) => (e.target.style.borderColor = FINCEPT.ORANGE)}
+                onBlur={(e) => (e.target.style.borderColor = FINCEPT.BORDER)}
               />
               {trailingPercent && (
-                <div style={{ fontSize: '8px', color: BLOOMBERG.ORANGE, marginTop: '4px' }}>
+                <div style={{ fontSize: '8px', color: FINCEPT.ORANGE, marginTop: '4px' }}>
                   Trailing {trailingPercent}% ({formatCurrency((currentPrice * parseFloat(trailingPercent)) / 100)})
                 </div>
               )}
@@ -247,10 +247,10 @@ export function AdvancedOrderForm({
           <div
             style={{
               padding: '8px',
-              backgroundColor: `${BLOOMBERG.CYAN}10`,
-              border: `1px solid ${BLOOMBERG.CYAN}40`,
+              backgroundColor: `${FINCEPT.CYAN}10`,
+              border: `1px solid ${FINCEPT.CYAN}40`,
               fontSize: '9px',
-              color: BLOOMBERG.GRAY,
+              color: FINCEPT.GRAY,
               lineHeight: '1.4',
             }}
           >

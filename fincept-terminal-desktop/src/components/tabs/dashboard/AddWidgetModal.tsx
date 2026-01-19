@@ -6,11 +6,11 @@ import { watchlistService } from '../../../services/core/watchlistService';
 import { getAllDataSources } from '../../../services/data-sources/dataSourceRegistry';
 import { DataSource } from '../../../services/core/sqliteService';
 
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_DARK_BG = '#000000';
-const BLOOMBERG_PANEL_BG = '#0a0a0a';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_DARK_BG = '#000000';
+const FINCEPT_PANEL_BG = '#0a0a0a';
 
 interface AddWidgetModalProps {
   isOpen: boolean;
@@ -124,25 +124,25 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
       zIndex: 1000
     }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
+        backgroundColor: FINCEPT_PANEL_BG,
+        border: `2px solid ${FINCEPT_ORANGE}`,
         borderRadius: '4px',
         width: '500px',
         maxHeight: '80vh',
         overflow: 'auto',
-        boxShadow: `0 0 20px ${BLOOMBERG_ORANGE}`
+        boxShadow: `0 0 20px ${FINCEPT_ORANGE}`
       }}>
         {/* Header */}
         <div style={{
-          backgroundColor: BLOOMBERG_DARK_BG,
-          borderBottom: `2px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: FINCEPT_DARK_BG,
+          borderBottom: `2px solid ${FINCEPT_ORANGE}`,
           padding: '12px 16px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
           <div style={{
-            color: BLOOMBERG_ORANGE,
+            color: FINCEPT_ORANGE,
             fontSize: '14px',
             fontWeight: 'bold'
           }}>
@@ -153,7 +153,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
             style={{
               background: 'none',
               border: 'none',
-              color: BLOOMBERG_GRAY,
+              color: FINCEPT_GRAY,
               cursor: 'pointer',
               padding: '0',
               display: 'flex'
@@ -167,7 +167,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
         <div style={{ padding: '16px' }}>
           {/* Widget Type Selection */}
           <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '8px', fontWeight: 'bold' }}>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '8px', fontWeight: 'bold' }}>
               WIDGET TYPE
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
@@ -176,9 +176,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                   key={type}
                   onClick={() => setSelectedType(type)}
                   style={{
-                    backgroundColor: selectedType === type ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
-                    color: selectedType === type ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
-                    border: `1px solid ${selectedType === type ? BLOOMBERG_ORANGE : BLOOMBERG_GRAY}`,
+                    backgroundColor: selectedType === type ? FINCEPT_ORANGE : FINCEPT_DARK_BG,
+                    color: selectedType === type ? FINCEPT_DARK_BG : FINCEPT_WHITE,
+                    border: `1px solid ${selectedType === type ? FINCEPT_ORANGE : FINCEPT_GRAY}`,
                     padding: '8px',
                     fontSize: '11px',
                     fontWeight: 'bold',
@@ -194,7 +194,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
 
           {/* Widget Configuration */}
           <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '8px', fontWeight: 'bold' }}>
+            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '8px', fontWeight: 'bold' }}>
               CONFIGURATION
             </div>
 
@@ -205,9 +205,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                 onChange={(e) => setNewsCategory(e.target.value)}
                 style={{
                   width: '100%',
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
+                  backgroundColor: FINCEPT_DARK_BG,
+                  border: `1px solid ${FINCEPT_GRAY}`,
+                  color: FINCEPT_WHITE,
                   padding: '8px',
                   fontSize: '11px'
                 }}
@@ -227,9 +227,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                 onChange={(e) => setMarketCategory(e.target.value)}
                 style={{
                   width: '100%',
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
+                  backgroundColor: FINCEPT_DARK_BG,
+                  border: `1px solid ${FINCEPT_GRAY}`,
+                  color: FINCEPT_WHITE,
                   padding: '8px',
                   fontSize: '11px'
                 }}
@@ -248,9 +248,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                   onChange={(e) => setSelectedWatchlist(e.target.value)}
                   style={{
                     width: '100%',
-                    backgroundColor: BLOOMBERG_DARK_BG,
-                    border: `1px solid ${BLOOMBERG_GRAY}`,
-                    color: BLOOMBERG_WHITE,
+                    backgroundColor: FINCEPT_DARK_BG,
+                    border: `1px solid ${FINCEPT_GRAY}`,
+                    color: FINCEPT_WHITE,
                     padding: '8px',
                     fontSize: '11px'
                   }}
@@ -260,7 +260,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                   ))}
                 </select>
               ) : (
-                <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px' }}>
+                <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px' }}>
                   No watchlists available. Create one in the Watchlist tab first.
                 </div>
               )
@@ -273,9 +273,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                 onChange={(e) => setForumCategory(e.target.value)}
                 style={{
                   width: '100%',
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
+                  backgroundColor: FINCEPT_DARK_BG,
+                  border: `1px solid ${FINCEPT_GRAY}`,
+                  color: FINCEPT_WHITE,
                   padding: '8px',
                   fontSize: '11px'
                 }}
@@ -293,9 +293,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                   onChange={(e) => setSelectedDataSource(e.target.value)}
                   style={{
                     width: '100%',
-                    backgroundColor: BLOOMBERG_DARK_BG,
-                    border: `1px solid ${BLOOMBERG_GRAY}`,
-                    color: BLOOMBERG_WHITE,
+                    backgroundColor: FINCEPT_DARK_BG,
+                    border: `1px solid ${FINCEPT_GRAY}`,
+                    color: FINCEPT_WHITE,
                     padding: '8px',
                     fontSize: '11px'
                   }}
@@ -307,7 +307,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                   ))}
                 </select>
               ) : (
-                <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px' }}>
+                <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px' }}>
                   No data sources available. Create one in Settings → Data Sources first.
                 </div>
               )
@@ -315,56 +315,56 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
 
             {/* Crypto, Commodities, Indices, Forex, Maritime - No Config */}
             {['crypto', 'commodities', 'indices', 'forex', 'maritime'].includes(selectedType) && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 This widget shows live {selectedType === 'maritime' ? 'maritime intelligence' : selectedType} data with automatic updates. No configuration required.
               </div>
             )}
 
             {/* New widgets - No Config */}
             {selectedType === 'polymarket' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 Shows top prediction markets from Polymarket with YES/NO probabilities and trading volume.
               </div>
             )}
 
             {selectedType === 'economic' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 Displays key economic indicators: GDP, Unemployment, CPI, Fed Funds Rate, and Treasury yields.
               </div>
             )}
 
             {selectedType === 'portfolio' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 Shows portfolio summary with total value, P&L, and top positions. Requires a portfolio in the Portfolio tab.
               </div>
             )}
 
             {selectedType === 'alerts' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 Displays active price alerts and recently triggered alerts. Configure alerts in the Monitoring tab.
               </div>
             )}
 
             {selectedType === 'calendar' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 Shows upcoming economic events with impact ratings (FOMC, CPI, PMI, employment data, etc.).
               </div>
             )}
 
             {selectedType === 'quicktrade' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 One-click trading panel for quick market orders on popular assets (BTC, ETH, SPY, etc.).
               </div>
             )}
 
             {selectedType === 'geopolitics' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 Geopolitical risk monitor showing trade restrictions, tariff risks, and supply chain threats by country.
               </div>
             )}
 
             {selectedType === 'performance' && (
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 Tracks trading performance with P&L by period (today, week, month, YTD) and win rate statistics.
               </div>
             )}
@@ -375,8 +375,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
             <button
               onClick={onClose}
               style={{
-                backgroundColor: BLOOMBERG_GRAY,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: FINCEPT_GRAY,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '8px 16px',
                 fontSize: '11px',
@@ -391,8 +391,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
               onClick={handleAdd}
               disabled={(selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)}
               style={{
-                backgroundColor: ((selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)) ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
-                color: BLOOMBERG_DARK_BG,
+                backgroundColor: ((selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)) ? FINCEPT_GRAY : FINCEPT_ORANGE,
+                color: FINCEPT_DARK_BG,
                 border: 'none',
                 padding: '8px 16px',
                 fontSize: '11px',

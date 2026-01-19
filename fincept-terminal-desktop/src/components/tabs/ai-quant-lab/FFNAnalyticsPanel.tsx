@@ -1,6 +1,6 @@
 /**
  * FFN Analytics Panel - Portfolio Performance Analysis
- * Bloomberg Professional Design
+ * Fincept Professional Design
  * Integrated with FFN library via PyO3
  *
  * Features:
@@ -47,8 +47,8 @@ import { ffnService, type PerformanceMetrics, type DrawdownInfo, type FFNConfig,
 import { portfolioService, type Portfolio } from '@/services/portfolio/portfolioService';
 import { yfinanceService } from '@/services/markets/yfinanceService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -446,13 +446,13 @@ export function FFNAnalyticsPanel() {
   };
 
   const getValueColor = (value: number | null | undefined, inverse = false): string => {
-    if (value === null || value === undefined) return BLOOMBERG.GRAY;
-    if (inverse) return value < 0 ? BLOOMBERG.GREEN : value > 0 ? BLOOMBERG.RED : BLOOMBERG.WHITE;
-    return value > 0 ? BLOOMBERG.GREEN : value < 0 ? BLOOMBERG.RED : BLOOMBERG.WHITE;
+    if (value === null || value === undefined) return FINCEPT.GRAY;
+    if (inverse) return value < 0 ? FINCEPT.GREEN : value > 0 ? FINCEPT.RED : FINCEPT.WHITE;
+    return value > 0 ? FINCEPT.GREEN : value < 0 ? FINCEPT.RED : FINCEPT.WHITE;
   };
 
   const getHeatmapColor = (value: number | null): string => {
-    if (value === null || value === undefined) return BLOOMBERG.PANEL_BG;
+    if (value === null || value === undefined) return FINCEPT.PANEL_BG;
     if (value > 0.05) return '#00D66F';
     if (value > 0.02) return '#00A050';
     if (value > 0) return '#006030';
@@ -464,30 +464,30 @@ export function FFNAnalyticsPanel() {
   // Loading/Error states
   if (isFFNAvailable === null) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-        <RefreshCw size={32} color={BLOOMBERG.ORANGE} className="animate-spin" />
+      <div className="flex items-center justify-center h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+        <RefreshCw size={32} color={FINCEPT.ORANGE} className="animate-spin" />
       </div>
     );
   }
 
   if (!isFFNAvailable) {
     return (
-      <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+      <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: FINCEPT.DARK_BG }}>
         <div className="text-center max-w-md">
-          <AlertCircle size={48} color={BLOOMBERG.RED} className="mx-auto mb-4" />
-          <h3 className="text-lg font-bold uppercase mb-2" style={{ color: BLOOMBERG.WHITE }}>
+          <AlertCircle size={48} color={FINCEPT.RED} className="mx-auto mb-4" />
+          <h3 className="text-lg font-bold uppercase mb-2" style={{ color: FINCEPT.WHITE }}>
             FFN Library Not Installed
           </h3>
           <code
             className="block p-4 rounded text-sm font-mono mt-4"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, color: BLOOMBERG.ORANGE }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.ORANGE }}
           >
             pip install ffn
           </code>
           <button
             onClick={checkFFNStatus}
             className="mt-6 px-6 py-2 rounded font-bold text-sm uppercase flex items-center gap-2 mx-auto"
-            style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+            style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
           >
             <RefreshCw size={14} />
             Check Again
@@ -498,32 +498,32 @@ export function FFNAnalyticsPanel() {
   }
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
       {/* Left Panel - Input */}
       <div
         className="w-80 flex flex-col border-r overflow-auto"
-        style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}
+        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
       >
         {/* Data Source Section */}
         <div
           className="rounded overflow-hidden m-2"
-          style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+          style={{ border: `1px solid ${FINCEPT.BORDER}` }}
         >
           <button
             onClick={() => toggleSection('dataSource')}
             className="w-full px-3 py-2 flex items-center justify-between"
-            style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+            style={{ backgroundColor: FINCEPT.HEADER_BG }}
           >
             <div className="flex items-center gap-2">
-              <Database size={14} color={BLOOMBERG.CYAN} />
-              <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+              <Database size={14} color={FINCEPT.CYAN} />
+              <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
                 Data Source
               </span>
             </div>
             {expandedSections.dataSource ? (
-              <ChevronUp size={14} color={BLOOMBERG.GRAY} />
+              <ChevronUp size={14} color={FINCEPT.GRAY} />
             ) : (
-              <ChevronDown size={14} color={BLOOMBERG.GRAY} />
+              <ChevronDown size={14} color={FINCEPT.GRAY} />
             )}
           </button>
 
@@ -535,9 +535,9 @@ export function FFNAnalyticsPanel() {
                   onClick={() => setDataSourceType('manual')}
                   className="flex-1 px-2 py-1.5 rounded text-xs font-mono"
                   style={{
-                    backgroundColor: dataSourceType === 'manual' ? BLOOMBERG.ORANGE : 'transparent',
-                    color: dataSourceType === 'manual' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: dataSourceType === 'manual' ? FINCEPT.ORANGE : 'transparent',
+                    color: dataSourceType === 'manual' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 >
                   Manual
@@ -546,9 +546,9 @@ export function FFNAnalyticsPanel() {
                   onClick={() => setDataSourceType('portfolio')}
                   className="flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
                   style={{
-                    backgroundColor: dataSourceType === 'portfolio' ? BLOOMBERG.ORANGE : 'transparent',
-                    color: dataSourceType === 'portfolio' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: dataSourceType === 'portfolio' ? FINCEPT.ORANGE : 'transparent',
+                    color: dataSourceType === 'portfolio' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 >
                   <Briefcase size={12} />
@@ -558,9 +558,9 @@ export function FFNAnalyticsPanel() {
                   onClick={() => setDataSourceType('symbol')}
                   className="flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
                   style={{
-                    backgroundColor: dataSourceType === 'symbol' ? BLOOMBERG.ORANGE : 'transparent',
-                    color: dataSourceType === 'symbol' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                    border: `1px solid ${BLOOMBERG.BORDER}`
+                    backgroundColor: dataSourceType === 'symbol' ? FINCEPT.ORANGE : 'transparent',
+                    color: dataSourceType === 'symbol' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                    border: `1px solid ${FINCEPT.BORDER}`
                   }}
                 >
                   <Search size={12} />
@@ -571,7 +571,7 @@ export function FFNAnalyticsPanel() {
               {/* Portfolio selector */}
               {dataSourceType === 'portfolio' && (
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     SELECT PORTFOLIO
                   </label>
                   <select
@@ -579,9 +579,9 @@ export function FFNAnalyticsPanel() {
                     onChange={(e) => setSelectedPortfolioId(e.target.value)}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   >
                     {portfolios.map(p => (
@@ -594,7 +594,7 @@ export function FFNAnalyticsPanel() {
               {/* Symbol input */}
               {dataSourceType === 'symbol' && (
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     {(analysisMode === 'comparison' || analysisMode === 'optimize') ? 'SYMBOLS (comma-separated)' : 'SYMBOL'}
                   </label>
                   <input
@@ -607,9 +607,9 @@ export function FFNAnalyticsPanel() {
                     placeholder={(analysisMode === 'comparison' || analysisMode === 'optimize') ? "AAPL,MSFT,GOOGL" : "AAPL"}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   />
                 </div>
@@ -618,7 +618,7 @@ export function FFNAnalyticsPanel() {
               {/* Historical days */}
               {dataSourceType !== 'manual' && (
                 <div>
-                  <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
                     HISTORICAL DAYS
                   </label>
                   <input
@@ -627,9 +627,9 @@ export function FFNAnalyticsPanel() {
                     onChange={(e) => setHistoricalDays(parseInt(e.target.value) || 365)}
                     className="w-full p-2 rounded text-xs font-mono"
                     style={{
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      color: BLOOMBERG.WHITE,
-                      border: `1px solid ${BLOOMBERG.BORDER}`
+                      backgroundColor: FINCEPT.DARK_BG,
+                      color: FINCEPT.WHITE,
+                      border: `1px solid ${FINCEPT.BORDER}`
                     }}
                   />
                 </div>
@@ -642,8 +642,8 @@ export function FFNAnalyticsPanel() {
                   disabled={priceDataLoading}
                   className="w-full py-2 rounded text-xs font-bold uppercase flex items-center justify-center gap-2"
                   style={{
-                    backgroundColor: BLOOMBERG.CYAN,
-                    color: BLOOMBERG.DARK_BG,
+                    backgroundColor: FINCEPT.CYAN,
+                    color: FINCEPT.DARK_BG,
                     opacity: priceDataLoading ? 0.5 : 1
                   }}
                 >
@@ -666,7 +666,7 @@ export function FFNAnalyticsPanel() {
 
         {/* Analysis Mode */}
         <div className="px-2 py-2">
-          <label className="block text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+          <label className="block text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
             ANALYSIS MODE
           </label>
           <div className="grid grid-cols-2 gap-1">
@@ -674,9 +674,9 @@ export function FFNAnalyticsPanel() {
               onClick={() => setAnalysisMode('performance')}
               className="px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: analysisMode === 'performance' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'performance' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: analysisMode === 'performance' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'performance' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               <Activity size={12} />
@@ -686,9 +686,9 @@ export function FFNAnalyticsPanel() {
               onClick={() => setAnalysisMode('monthly')}
               className="px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: analysisMode === 'monthly' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'monthly' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: analysisMode === 'monthly' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'monthly' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               <Calendar size={12} />
@@ -698,9 +698,9 @@ export function FFNAnalyticsPanel() {
               onClick={() => setAnalysisMode('rolling')}
               className="px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: analysisMode === 'rolling' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'rolling' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: analysisMode === 'rolling' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'rolling' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               <LineChart size={12} />
@@ -710,9 +710,9 @@ export function FFNAnalyticsPanel() {
               onClick={() => setAnalysisMode('comparison')}
               className="px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: analysisMode === 'comparison' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'comparison' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: analysisMode === 'comparison' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'comparison' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               <Layers size={12} />
@@ -722,9 +722,9 @@ export function FFNAnalyticsPanel() {
               onClick={() => setAnalysisMode('optimize')}
               className="px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: analysisMode === 'optimize' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'optimize' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: analysisMode === 'optimize' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'optimize' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               <Scale size={12} />
@@ -734,9 +734,9 @@ export function FFNAnalyticsPanel() {
               onClick={() => setAnalysisMode('benchmark')}
               className="px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: analysisMode === 'benchmark' ? BLOOMBERG.ORANGE : 'transparent',
-                color: analysisMode === 'benchmark' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: analysisMode === 'benchmark' ? FINCEPT.ORANGE : 'transparent',
+                color: analysisMode === 'benchmark' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               <GitCompare size={12} />
@@ -748,7 +748,7 @@ export function FFNAnalyticsPanel() {
         {/* Optimization Method Selector */}
         {analysisMode === 'optimize' && (
           <div className="px-2 py-2">
-            <label className="block text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+            <label className="block text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
               OPTIMIZATION METHOD
             </label>
             <div className="grid grid-cols-2 gap-1">
@@ -756,9 +756,9 @@ export function FFNAnalyticsPanel() {
                 onClick={() => setOptimizationMethod('erc')}
                 className="px-2 py-1.5 rounded text-xs font-mono"
                 style={{
-                  backgroundColor: optimizationMethod === 'erc' ? BLOOMBERG.CYAN : 'transparent',
-                  color: optimizationMethod === 'erc' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
+                  backgroundColor: optimizationMethod === 'erc' ? FINCEPT.CYAN : 'transparent',
+                  color: optimizationMethod === 'erc' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`
                 }}
               >
                 ERC
@@ -767,9 +767,9 @@ export function FFNAnalyticsPanel() {
                 onClick={() => setOptimizationMethod('inv_vol')}
                 className="px-2 py-1.5 rounded text-xs font-mono"
                 style={{
-                  backgroundColor: optimizationMethod === 'inv_vol' ? BLOOMBERG.CYAN : 'transparent',
-                  color: optimizationMethod === 'inv_vol' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
+                  backgroundColor: optimizationMethod === 'inv_vol' ? FINCEPT.CYAN : 'transparent',
+                  color: optimizationMethod === 'inv_vol' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`
                 }}
               >
                 Inv Vol
@@ -778,9 +778,9 @@ export function FFNAnalyticsPanel() {
                 onClick={() => setOptimizationMethod('mean_var')}
                 className="px-2 py-1.5 rounded text-xs font-mono"
                 style={{
-                  backgroundColor: optimizationMethod === 'mean_var' ? BLOOMBERG.CYAN : 'transparent',
-                  color: optimizationMethod === 'mean_var' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
+                  backgroundColor: optimizationMethod === 'mean_var' ? FINCEPT.CYAN : 'transparent',
+                  color: optimizationMethod === 'mean_var' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`
                 }}
               >
                 Mean-Var
@@ -789,9 +789,9 @@ export function FFNAnalyticsPanel() {
                 onClick={() => setOptimizationMethod('equal')}
                 className="px-2 py-1.5 rounded text-xs font-mono"
                 style={{
-                  backgroundColor: optimizationMethod === 'equal' ? BLOOMBERG.CYAN : 'transparent',
-                  color: optimizationMethod === 'equal' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
+                  backgroundColor: optimizationMethod === 'equal' ? FINCEPT.CYAN : 'transparent',
+                  color: optimizationMethod === 'equal' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  border: `1px solid ${FINCEPT.BORDER}`
                 }}
               >
                 Equal Wt
@@ -803,7 +803,7 @@ export function FFNAnalyticsPanel() {
         {/* Benchmark Symbol Input */}
         {analysisMode === 'benchmark' && (
           <div className="px-2 py-2">
-            <label className="block text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+            <label className="block text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
               BENCHMARK SYMBOL
             </label>
             <input
@@ -813,12 +813,12 @@ export function FFNAnalyticsPanel() {
               placeholder="SPY"
               className="w-full p-2 rounded text-xs font-mono"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             />
-            <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.MUTED }}>
+            <p className="text-xs font-mono mt-1" style={{ color: FINCEPT.MUTED }}>
               Common: SPY, QQQ, IWM, DIA
             </p>
           </div>
@@ -827,7 +827,7 @@ export function FFNAnalyticsPanel() {
         {/* Price Input (for manual mode) */}
         {dataSourceType === 'manual' && (
           <div className="flex-1 p-2 overflow-auto">
-            <label className="block text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+            <label className="block text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
               PRICE DATA (JSON)
             </label>
             <textarea
@@ -835,9 +835,9 @@ export function FFNAnalyticsPanel() {
               onChange={(e) => setPriceInput(e.target.value)}
               className="w-full h-48 p-3 rounded text-xs font-mono resize-none"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
               placeholder='{"2023-01-01": 100, "2023-01-02": 101, ...}'
             />
@@ -847,7 +847,7 @@ export function FFNAnalyticsPanel() {
         {/* Config Options */}
         <div className="p-2 space-y-3">
           <div>
-            <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+            <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
               RISK-FREE RATE
             </label>
             <input
@@ -857,15 +857,15 @@ export function FFNAnalyticsPanel() {
               onChange={(e) => setConfig({ ...config, risk_free_rate: parseFloat(e.target.value) || 0 })}
               className="w-full p-2 rounded text-xs font-mono"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+            <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
               DRAWDOWN THRESHOLD
             </label>
             <input
@@ -875,21 +875,21 @@ export function FFNAnalyticsPanel() {
               onChange={(e) => setConfig({ ...config, drawdown_threshold: parseFloat(e.target.value) || 0.05 })}
               className="w-full p-2 rounded text-xs font-mono"
               style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             />
           </div>
         </div>
 
         {/* Run Button */}
-        <div className="p-2 border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
+        <div className="p-2 border-t" style={{ borderColor: FINCEPT.BORDER }}>
           <button
             onClick={runAnalysis}
             disabled={isLoading}
             className="w-full py-3 rounded font-bold text-sm uppercase flex items-center justify-center gap-2 disabled:opacity-50"
-            style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
+            style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
           >
             {isLoading ? (
               <>
@@ -911,18 +911,18 @@ export function FFNAnalyticsPanel() {
         {error && (
           <div
             className="mb-4 p-4 rounded flex items-center gap-3"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderLeft: `3px solid ${BLOOMBERG.RED}` }}
+            style={{ backgroundColor: FINCEPT.PANEL_BG, borderLeft: `3px solid ${FINCEPT.RED}` }}
           >
-            <AlertCircle size={20} color={BLOOMBERG.RED} />
-            <span className="text-sm font-mono" style={{ color: BLOOMBERG.RED }}>{error}</span>
+            <AlertCircle size={20} color={FINCEPT.RED} />
+            <span className="text-sm font-mono" style={{ color: FINCEPT.RED }}>{error}</span>
           </div>
         )}
 
         {!analysisResult && !error && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <BarChart2 size={64} color={BLOOMBERG.MUTED} className="mx-auto mb-4" />
-              <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              <BarChart2 size={64} color={FINCEPT.MUTED} className="mx-auto mb-4" />
+              <p className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
                 {analysisMode === 'performance' && 'Enter price data and click "Run Analysis" to see performance metrics'}
                 {analysisMode === 'monthly' && 'Click "Run Analysis" to see monthly returns heatmap'}
                 {analysisMode === 'rolling' && 'Click "Run Analysis" to see rolling performance metrics'}
@@ -940,23 +940,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.performance && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('performance')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <TrendingUp size={16} color={BLOOMBERG.GREEN} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <TrendingUp size={16} color={FINCEPT.GREEN} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Performance Metrics
                     </span>
                   </div>
                   {expandedSections.performance ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -989,7 +989,7 @@ export function FFNAnalyticsPanel() {
                     <MetricCard
                       label="Volatility"
                       value={formatPercent(analysisResult.performance.volatility)}
-                      color={BLOOMBERG.YELLOW}
+                      color={FINCEPT.YELLOW}
                       icon={<Activity size={14} />}
                     />
                     <MetricCard
@@ -1001,13 +1001,13 @@ export function FFNAnalyticsPanel() {
                     <MetricCard
                       label="Best Day"
                       value={formatPercent(analysisResult.performance.best_day)}
-                      color={BLOOMBERG.GREEN}
+                      color={FINCEPT.GREEN}
                       icon={<TrendingUp size={14} />}
                     />
                     <MetricCard
                       label="Worst Day"
                       value={formatPercent(analysisResult.performance.worst_day)}
-                      color={BLOOMBERG.RED}
+                      color={FINCEPT.RED}
                       icon={<TrendingDown size={14} />}
                     />
                     <MetricCard
@@ -1025,23 +1025,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.drawdowns && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('drawdowns')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <TrendingDown size={16} color={BLOOMBERG.RED} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <TrendingDown size={16} color={FINCEPT.RED} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Drawdown Analysis
                     </span>
                   </div>
                   {expandedSections.drawdowns ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1051,7 +1051,7 @@ export function FFNAnalyticsPanel() {
                       <MetricCard
                         label="Max Drawdown"
                         value={formatPercent(analysisResult.drawdowns.max_drawdown)}
-                        color={BLOOMBERG.RED}
+                        color={FINCEPT.RED}
                         icon={<TrendingDown size={14} />}
                         large
                       />
@@ -1059,7 +1059,7 @@ export function FFNAnalyticsPanel() {
 
                     {analysisResult.drawdowns.top_drawdowns && analysisResult.drawdowns.top_drawdowns.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                           TOP DRAWDOWN PERIODS
                         </h4>
                         <div className="space-y-2">
@@ -1067,22 +1067,22 @@ export function FFNAnalyticsPanel() {
                             <div
                               key={idx}
                               className="p-3 rounded flex items-center justify-between"
-                              style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+                              style={{ backgroundColor: FINCEPT.DARK_BG }}
                             >
                               <div className="flex items-center gap-3">
                                 <span
                                   className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                                  style={{ backgroundColor: BLOOMBERG.RED, color: BLOOMBERG.WHITE }}
+                                  style={{ backgroundColor: FINCEPT.RED, color: FINCEPT.WHITE }}
                                 >
                                   {idx + 1}
                                 </span>
                                 <div>
-                                  <span className="text-xs font-mono" style={{ color: BLOOMBERG.WHITE }}>
+                                  <span className="text-xs font-mono" style={{ color: FINCEPT.WHITE }}>
                                     {dd.start} → {dd.end}
                                   </span>
                                 </div>
                               </div>
-                              <span className="text-sm font-bold" style={{ color: BLOOMBERG.RED }}>
+                              <span className="text-sm font-bold" style={{ color: FINCEPT.RED }}>
                                 {formatPercent(dd.drawdown)}
                               </span>
                             </div>
@@ -1099,23 +1099,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.riskMetrics && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('risk')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <AlertCircle size={16} color={BLOOMBERG.YELLOW} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <AlertCircle size={16} color={FINCEPT.YELLOW} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Risk Metrics
                     </span>
                   </div>
                   {expandedSections.risk ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1124,31 +1124,31 @@ export function FFNAnalyticsPanel() {
                     <MetricCard
                       label="Ulcer Index"
                       value={formatRatio(analysisResult.riskMetrics.ulcer_index, 4)}
-                      color={BLOOMBERG.YELLOW}
+                      color={FINCEPT.YELLOW}
                       icon={<Activity size={14} />}
                     />
                     <MetricCard
                       label="Skewness"
                       value={formatRatio(analysisResult.riskMetrics.skewness)}
-                      color={BLOOMBERG.CYAN}
+                      color={FINCEPT.CYAN}
                       icon={<BarChart2 size={14} />}
                     />
                     <MetricCard
                       label="Kurtosis"
                       value={formatRatio(analysisResult.riskMetrics.kurtosis)}
-                      color={BLOOMBERG.CYAN}
+                      color={FINCEPT.CYAN}
                       icon={<BarChart2 size={14} />}
                     />
                     <MetricCard
                       label="VaR (95%)"
                       value={formatPercent(analysisResult.riskMetrics.var_95)}
-                      color={BLOOMBERG.RED}
+                      color={FINCEPT.RED}
                       icon={<TrendingDown size={14} />}
                     />
                     <MetricCard
                       label="CVaR (95%)"
                       value={formatPercent(analysisResult.riskMetrics.cvar_95)}
-                      color={BLOOMBERG.RED}
+                      color={FINCEPT.RED}
                       icon={<TrendingDown size={14} />}
                     />
                   </div>
@@ -1160,23 +1160,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.monthlyReturns && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('monthly')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <Calendar size={16} color={BLOOMBERG.CYAN} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <Calendar size={16} color={FINCEPT.CYAN} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Monthly Returns Heatmap
                     </span>
                   </div>
                   {expandedSections.monthly ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1185,11 +1185,11 @@ export function FFNAnalyticsPanel() {
                     <div className="min-w-[600px]">
                       {/* Month headers */}
                       <div className="flex">
-                        <div className="w-16 text-xs font-mono text-center" style={{ color: BLOOMBERG.GRAY }}>
+                        <div className="w-16 text-xs font-mono text-center" style={{ color: FINCEPT.GRAY }}>
                           Year
                         </div>
                         {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(m => (
-                          <div key={m} className="flex-1 text-xs font-mono text-center" style={{ color: BLOOMBERG.GRAY }}>
+                          <div key={m} className="flex-1 text-xs font-mono text-center" style={{ color: FINCEPT.GRAY }}>
                             {m}
                           </div>
                         ))}
@@ -1197,7 +1197,7 @@ export function FFNAnalyticsPanel() {
                       {/* Year rows */}
                       {Object.entries(analysisResult.monthlyReturns).sort().map(([year, months]) => (
                         <div key={year} className="flex mt-1">
-                          <div className="w-16 text-xs font-mono text-center py-2" style={{ color: BLOOMBERG.WHITE }}>
+                          <div className="w-16 text-xs font-mono text-center py-2" style={{ color: FINCEPT.WHITE }}>
                             {year}
                           </div>
                           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => {
@@ -1208,7 +1208,7 @@ export function FFNAnalyticsPanel() {
                                 className="flex-1 text-xs font-mono text-center py-2 mx-0.5 rounded"
                                 style={{
                                   backgroundColor: getHeatmapColor(value),
-                                  color: BLOOMBERG.WHITE
+                                  color: FINCEPT.WHITE
                                 }}
                                 title={value !== null ? `${(value * 100).toFixed(2)}%` : 'N/A'}
                               >
@@ -1228,23 +1228,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.rollingMetrics && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('rolling')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <LineChart size={16} color={BLOOMBERG.PURPLE} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <LineChart size={16} color={FINCEPT.PURPLE} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Rolling Metrics (63-Day)
                     </span>
                   </div>
                   {expandedSections.rolling ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1252,7 +1252,7 @@ export function FFNAnalyticsPanel() {
                   <div className="p-4">
                     {analysisResult.rollingMetrics.rolling_sharpe && (
                       <div className="mb-4">
-                        <h4 className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                           ROLLING SHARPE RATIO
                         </h4>
                         <div className="h-32 flex items-end gap-px">
@@ -1264,7 +1264,7 @@ export function FFNAnalyticsPanel() {
                                 className="flex-1 rounded-t"
                                 style={{
                                   height: `${height}%`,
-                                  backgroundColor: value > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
+                                  backgroundColor: value > 0 ? FINCEPT.GREEN : FINCEPT.RED
                                 }}
                               />
                             );
@@ -1274,7 +1274,7 @@ export function FFNAnalyticsPanel() {
                     )}
                     {analysisResult.rollingMetrics.rolling_volatility && (
                       <div>
-                        <h4 className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                           ROLLING VOLATILITY
                         </h4>
                         <div className="h-32 flex items-end gap-px">
@@ -1286,7 +1286,7 @@ export function FFNAnalyticsPanel() {
                                 className="flex-1 rounded-t"
                                 style={{
                                   height: `${height}%`,
-                                  backgroundColor: BLOOMBERG.YELLOW
+                                  backgroundColor: FINCEPT.YELLOW
                                 }}
                               />
                             );
@@ -1303,23 +1303,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.comparison && analysisResult.comparison.success && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('comparison')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <Layers size={16} color={BLOOMBERG.BLUE} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <Layers size={16} color={FINCEPT.BLUE} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Asset Comparison
                     </span>
                   </div>
                   {expandedSections.comparison ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1328,16 +1328,16 @@ export function FFNAnalyticsPanel() {
                     {/* Correlation Matrix */}
                     {analysisResult.comparison.correlation_matrix && (
                       <div>
-                        <h4 className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                           CORRELATION MATRIX
                         </h4>
                         <div className="overflow-auto">
                           <table className="w-full text-xs font-mono">
                             <thead>
                               <tr>
-                                <th className="p-2" style={{ color: BLOOMBERG.GRAY }}></th>
+                                <th className="p-2" style={{ color: FINCEPT.GRAY }}></th>
                                 {Object.keys(analysisResult.comparison.correlation_matrix).map(symbol => (
-                                  <th key={symbol} className="p-2" style={{ color: BLOOMBERG.WHITE }}>
+                                  <th key={symbol} className="p-2" style={{ color: FINCEPT.WHITE }}>
                                     {symbol}
                                   </th>
                                 ))}
@@ -1346,14 +1346,14 @@ export function FFNAnalyticsPanel() {
                             <tbody>
                               {Object.entries(analysisResult.comparison.correlation_matrix).map(([symbol, correlations]) => (
                                 <tr key={symbol}>
-                                  <td className="p-2" style={{ color: BLOOMBERG.WHITE }}>{symbol}</td>
+                                  <td className="p-2" style={{ color: FINCEPT.WHITE }}>{symbol}</td>
                                   {Object.entries(correlations).map(([otherSymbol, corr]) => (
                                     <td
                                       key={otherSymbol}
                                       className="p-2 text-center rounded"
                                       style={{
                                         backgroundColor: `rgba(0, 136, 255, ${Math.abs(corr)})`,
-                                        color: BLOOMBERG.WHITE
+                                        color: FINCEPT.WHITE
                                       }}
                                     >
                                       {corr.toFixed(2)}
@@ -1370,34 +1370,34 @@ export function FFNAnalyticsPanel() {
                     {/* Asset Stats Comparison */}
                     {analysisResult.comparison.asset_stats && (
                       <div>
-                        <h4 className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                           PERFORMANCE COMPARISON
                         </h4>
                         <div className="overflow-auto">
                           <table className="w-full text-xs font-mono">
                             <thead>
                               <tr>
-                                <th className="p-2 text-left" style={{ color: BLOOMBERG.GRAY }}>Asset</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>Return</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>Vol</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>Sharpe</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>MaxDD</th>
+                                <th className="p-2 text-left" style={{ color: FINCEPT.GRAY }}>Asset</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>Return</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>Vol</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>Sharpe</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>MaxDD</th>
                               </tr>
                             </thead>
                             <tbody>
                               {Object.entries(analysisResult.comparison.asset_stats).map(([symbol, stats]) => (
-                                <tr key={symbol} className="border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
-                                  <td className="p-2" style={{ color: BLOOMBERG.WHITE }}>{symbol}</td>
+                                <tr key={symbol} className="border-t" style={{ borderColor: FINCEPT.BORDER }}>
+                                  <td className="p-2" style={{ color: FINCEPT.WHITE }}>{symbol}</td>
                                   <td className="p-2 text-right" style={{ color: getValueColor(stats.total_return) }}>
                                     {formatPercent(stats.total_return)}
                                   </td>
-                                  <td className="p-2 text-right" style={{ color: BLOOMBERG.YELLOW }}>
+                                  <td className="p-2 text-right" style={{ color: FINCEPT.YELLOW }}>
                                     {formatPercent(stats.volatility)}
                                   </td>
                                   <td className="p-2 text-right" style={{ color: getValueColor(stats.sharpe_ratio) }}>
                                     {formatRatio(stats.sharpe_ratio)}
                                   </td>
-                                  <td className="p-2 text-right" style={{ color: BLOOMBERG.RED }}>
+                                  <td className="p-2 text-right" style={{ color: FINCEPT.RED }}>
                                     {formatPercent(stats.max_drawdown)}
                                   </td>
                                 </tr>
@@ -1416,23 +1416,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.optimization && analysisResult.optimization.success && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('optimization')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <Scale size={16} color={BLOOMBERG.CYAN} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <Scale size={16} color={FINCEPT.CYAN} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Portfolio Optimization - {analysisResult.optimization.method}
                     </span>
                   </div>
                   {expandedSections.optimization ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1441,7 +1441,7 @@ export function FFNAnalyticsPanel() {
                     {/* Optimal Weights */}
                     {analysisResult.optimization.weights && (
                       <div>
-                        <h4 className="text-xs font-mono mb-3" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-3" style={{ color: FINCEPT.GRAY }}>
                           OPTIMAL WEIGHTS
                         </h4>
                         <div className="space-y-2">
@@ -1449,19 +1449,19 @@ export function FFNAnalyticsPanel() {
                             .sort(([, a], [, b]) => b - a)
                             .map(([symbol, weight]) => (
                               <div key={symbol} className="flex items-center gap-3">
-                                <span className="w-16 text-xs font-mono font-bold" style={{ color: BLOOMBERG.WHITE }}>
+                                <span className="w-16 text-xs font-mono font-bold" style={{ color: FINCEPT.WHITE }}>
                                   {symbol}
                                 </span>
-                                <div className="flex-1 h-6 rounded overflow-hidden" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+                                <div className="flex-1 h-6 rounded overflow-hidden" style={{ backgroundColor: FINCEPT.DARK_BG }}>
                                   <div
                                     className="h-full rounded"
                                     style={{
                                       width: `${weight * 100}%`,
-                                      backgroundColor: BLOOMBERG.CYAN
+                                      backgroundColor: FINCEPT.CYAN
                                     }}
                                   />
                                 </div>
-                                <span className="w-16 text-right text-xs font-mono font-bold" style={{ color: BLOOMBERG.CYAN }}>
+                                <span className="w-16 text-right text-xs font-mono font-bold" style={{ color: FINCEPT.CYAN }}>
                                   {formatPercent(weight)}
                                 </span>
                               </div>
@@ -1473,7 +1473,7 @@ export function FFNAnalyticsPanel() {
                     {/* Portfolio Stats */}
                     {analysisResult.optimization.portfolio_stats && (
                       <div>
-                        <h4 className="text-xs font-mono mb-3" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-3" style={{ color: FINCEPT.GRAY }}>
                           OPTIMIZED PORTFOLIO METRICS
                         </h4>
                         <div className="grid grid-cols-3 gap-3">
@@ -1492,7 +1492,7 @@ export function FFNAnalyticsPanel() {
                           <MetricCard
                             label="Volatility"
                             value={formatPercent(analysisResult.optimization.portfolio_stats.volatility)}
-                            color={BLOOMBERG.YELLOW}
+                            color={FINCEPT.YELLOW}
                             icon={<Activity size={14} />}
                           />
                           <MetricCard
@@ -1510,7 +1510,7 @@ export function FFNAnalyticsPanel() {
                           <MetricCard
                             label="Max Drawdown"
                             value={formatPercent(analysisResult.optimization.portfolio_stats.max_drawdown)}
-                            color={BLOOMBERG.RED}
+                            color={FINCEPT.RED}
                             icon={<TrendingDown size={14} />}
                           />
                         </div>
@@ -1520,34 +1520,34 @@ export function FFNAnalyticsPanel() {
                     {/* Asset Contributions */}
                     {analysisResult.optimization.asset_contributions && (
                       <div>
-                        <h4 className="text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
                           ASSET CONTRIBUTIONS
                         </h4>
                         <div className="overflow-auto">
                           <table className="w-full text-xs font-mono">
                             <thead>
                               <tr>
-                                <th className="p-2 text-left" style={{ color: BLOOMBERG.GRAY }}>Asset</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>Weight</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>Vol</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>Return</th>
-                                <th className="p-2 text-right" style={{ color: BLOOMBERG.GRAY }}>Risk Contrib</th>
+                                <th className="p-2 text-left" style={{ color: FINCEPT.GRAY }}>Asset</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>Weight</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>Vol</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>Return</th>
+                                <th className="p-2 text-right" style={{ color: FINCEPT.GRAY }}>Risk Contrib</th>
                               </tr>
                             </thead>
                             <tbody>
                               {Object.entries(analysisResult.optimization.asset_contributions).map(([symbol, contrib]) => (
-                                <tr key={symbol} className="border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
-                                  <td className="p-2" style={{ color: BLOOMBERG.WHITE }}>{symbol}</td>
-                                  <td className="p-2 text-right" style={{ color: BLOOMBERG.CYAN }}>
+                                <tr key={symbol} className="border-t" style={{ borderColor: FINCEPT.BORDER }}>
+                                  <td className="p-2" style={{ color: FINCEPT.WHITE }}>{symbol}</td>
+                                  <td className="p-2 text-right" style={{ color: FINCEPT.CYAN }}>
                                     {formatPercent(contrib.weight)}
                                   </td>
-                                  <td className="p-2 text-right" style={{ color: BLOOMBERG.YELLOW }}>
+                                  <td className="p-2 text-right" style={{ color: FINCEPT.YELLOW }}>
                                     {formatPercent(contrib.volatility)}
                                   </td>
                                   <td className="p-2 text-right" style={{ color: getValueColor(contrib.return) }}>
                                     {formatPercent(contrib.return)}
                                   </td>
-                                  <td className="p-2 text-right" style={{ color: BLOOMBERG.PURPLE }}>
+                                  <td className="p-2 text-right" style={{ color: FINCEPT.PURPLE }}>
                                     {formatPercent(contrib.risk_contribution)}
                                   </td>
                                 </tr>
@@ -1566,23 +1566,23 @@ export function FFNAnalyticsPanel() {
             {analysisResult.benchmark && analysisResult.benchmark.success && (
               <div
                 className="rounded overflow-hidden"
-                style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
               >
                 <button
                   onClick={() => toggleSection('benchmark')}
                   className="w-full px-4 py-3 flex items-center justify-between"
-                  style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+                  style={{ backgroundColor: FINCEPT.HEADER_BG }}
                 >
                   <div className="flex items-center gap-2">
-                    <GitCompare size={16} color={BLOOMBERG.PURPLE} />
-                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                    <GitCompare size={16} color={FINCEPT.PURPLE} />
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
                       Benchmark Comparison - {analysisResult.benchmark.benchmark_name || 'Benchmark'}
                     </span>
                   </div>
                   {expandedSections.benchmark ? (
-                    <ChevronUp size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronUp size={16} color={FINCEPT.GRAY} />
                   ) : (
-                    <ChevronDown size={16} color={BLOOMBERG.GRAY} />
+                    <ChevronDown size={16} color={FINCEPT.GRAY} />
                   )}
                 </button>
 
@@ -1592,40 +1592,40 @@ export function FFNAnalyticsPanel() {
                     <div className="grid grid-cols-2 gap-4">
                       {/* Portfolio Stats */}
                       <div>
-                        <h4 className="text-xs font-mono mb-3 flex items-center gap-2" style={{ color: BLOOMBERG.CYAN }}>
+                        <h4 className="text-xs font-mono mb-3 flex items-center gap-2" style={{ color: FINCEPT.CYAN }}>
                           <Briefcase size={14} />
                           PORTFOLIO
                         </h4>
                         <div className="space-y-2">
                           {analysisResult.benchmark.portfolio_stats && (
                             <>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Total Return</span>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Total Return</span>
                                 <span className="text-xs font-mono font-bold" style={{ color: getValueColor(analysisResult.benchmark.portfolio_stats.total_return) }}>
                                   {formatPercent(analysisResult.benchmark.portfolio_stats.total_return)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>CAGR</span>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>CAGR</span>
                                 <span className="text-xs font-mono font-bold" style={{ color: getValueColor(analysisResult.benchmark.portfolio_stats.cagr) }}>
                                   {formatPercent(analysisResult.benchmark.portfolio_stats.cagr)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Volatility</span>
-                                <span className="text-xs font-mono font-bold" style={{ color: BLOOMBERG.YELLOW }}>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Volatility</span>
+                                <span className="text-xs font-mono font-bold" style={{ color: FINCEPT.YELLOW }}>
                                   {formatPercent(analysisResult.benchmark.portfolio_stats.volatility)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Sharpe Ratio</span>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Sharpe Ratio</span>
                                 <span className="text-xs font-mono font-bold" style={{ color: getValueColor(analysisResult.benchmark.portfolio_stats.sharpe_ratio) }}>
                                   {formatRatio(analysisResult.benchmark.portfolio_stats.sharpe_ratio)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Max Drawdown</span>
-                                <span className="text-xs font-mono font-bold" style={{ color: BLOOMBERG.RED }}>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Max Drawdown</span>
+                                <span className="text-xs font-mono font-bold" style={{ color: FINCEPT.RED }}>
                                   {formatPercent(analysisResult.benchmark.portfolio_stats.max_drawdown)}
                                 </span>
                               </div>
@@ -1636,40 +1636,40 @@ export function FFNAnalyticsPanel() {
 
                       {/* Benchmark Stats */}
                       <div>
-                        <h4 className="text-xs font-mono mb-3 flex items-center gap-2" style={{ color: BLOOMBERG.ORANGE }}>
+                        <h4 className="text-xs font-mono mb-3 flex items-center gap-2" style={{ color: FINCEPT.ORANGE }}>
                           <Target size={14} />
                           {analysisResult.benchmark.benchmark_name || 'BENCHMARK'}
                         </h4>
                         <div className="space-y-2">
                           {analysisResult.benchmark.benchmark_stats && (
                             <>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Total Return</span>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Total Return</span>
                                 <span className="text-xs font-mono font-bold" style={{ color: getValueColor(analysisResult.benchmark.benchmark_stats.total_return) }}>
                                   {formatPercent(analysisResult.benchmark.benchmark_stats.total_return)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>CAGR</span>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>CAGR</span>
                                 <span className="text-xs font-mono font-bold" style={{ color: getValueColor(analysisResult.benchmark.benchmark_stats.cagr) }}>
                                   {formatPercent(analysisResult.benchmark.benchmark_stats.cagr)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Volatility</span>
-                                <span className="text-xs font-mono font-bold" style={{ color: BLOOMBERG.YELLOW }}>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Volatility</span>
+                                <span className="text-xs font-mono font-bold" style={{ color: FINCEPT.YELLOW }}>
                                   {formatPercent(analysisResult.benchmark.benchmark_stats.volatility)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Sharpe Ratio</span>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Sharpe Ratio</span>
                                 <span className="text-xs font-mono font-bold" style={{ color: getValueColor(analysisResult.benchmark.benchmark_stats.sharpe_ratio) }}>
                                   {formatRatio(analysisResult.benchmark.benchmark_stats.sharpe_ratio)}
                                 </span>
                               </div>
-                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-                                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>Max Drawdown</span>
-                                <span className="text-xs font-mono font-bold" style={{ color: BLOOMBERG.RED }}>
+                              <div className="flex justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+                                <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>Max Drawdown</span>
+                                <span className="text-xs font-mono font-bold" style={{ color: FINCEPT.RED }}>
                                   {formatPercent(analysisResult.benchmark.benchmark_stats.max_drawdown)}
                                 </span>
                               </div>
@@ -1682,7 +1682,7 @@ export function FFNAnalyticsPanel() {
                     {/* Relative Metrics */}
                     {analysisResult.benchmark.relative_metrics && (
                       <div>
-                        <h4 className="text-xs font-mono mb-3" style={{ color: BLOOMBERG.GRAY }}>
+                        <h4 className="text-xs font-mono mb-3" style={{ color: FINCEPT.GRAY }}>
                           RELATIVE METRICS
                         </h4>
                         <div className="grid grid-cols-4 gap-3">
@@ -1695,19 +1695,19 @@ export function FFNAnalyticsPanel() {
                           <MetricCard
                             label="Beta"
                             value={formatRatio(analysisResult.benchmark.relative_metrics.beta)}
-                            color={BLOOMBERG.CYAN}
+                            color={FINCEPT.CYAN}
                             icon={<Activity size={14} />}
                           />
                           <MetricCard
                             label="Correlation"
                             value={formatRatio(analysisResult.benchmark.relative_metrics.correlation)}
-                            color={BLOOMBERG.BLUE}
+                            color={FINCEPT.BLUE}
                             icon={<LineChart size={14} />}
                           />
                           <MetricCard
                             label="Tracking Error"
                             value={formatPercent(analysisResult.benchmark.relative_metrics.tracking_error)}
-                            color={BLOOMBERG.YELLOW}
+                            color={FINCEPT.YELLOW}
                             icon={<Target size={14} />}
                           />
                           <MetricCard
@@ -1719,13 +1719,13 @@ export function FFNAnalyticsPanel() {
                           <MetricCard
                             label="Up Capture"
                             value={formatPercent(analysisResult.benchmark.relative_metrics.up_capture)}
-                            color={BLOOMBERG.GREEN}
+                            color={FINCEPT.GREEN}
                             icon={<TrendingUp size={14} />}
                           />
                           <MetricCard
                             label="Down Capture"
                             value={formatPercent(analysisResult.benchmark.relative_metrics.down_capture)}
-                            color={BLOOMBERG.RED}
+                            color={FINCEPT.RED}
                             icon={<TrendingDown size={14} />}
                           />
                         </div>
@@ -1734,14 +1734,14 @@ export function FFNAnalyticsPanel() {
 
                     {/* Date Range Info */}
                     {analysisResult.benchmark.date_range && (
-                      <div className="flex items-center justify-between p-3 rounded" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+                      <div className="flex items-center justify-between p-3 rounded" style={{ backgroundColor: FINCEPT.DARK_BG }}>
                         <div className="flex items-center gap-2">
-                          <Calendar size={14} color={BLOOMBERG.GRAY} />
-                          <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                          <Calendar size={14} color={FINCEPT.GRAY} />
+                          <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
                             {analysisResult.benchmark.date_range.start} to {analysisResult.benchmark.date_range.end}
                           </span>
                         </div>
-                        <span className="text-xs font-mono" style={{ color: BLOOMBERG.MUTED }}>
+                        <span className="text-xs font-mono" style={{ color: FINCEPT.MUTED }}>
                           {analysisResult.benchmark.date_range.data_points} data points
                         </span>
                       </div>
@@ -1774,11 +1774,11 @@ function MetricCard({
   return (
     <div
       className={`p-3 rounded ${large ? 'col-span-3' : ''}`}
-      style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+      style={{ backgroundColor: FINCEPT.DARK_BG }}
     >
       <div className="flex items-center gap-2 mb-1">
-        <span style={{ color: BLOOMBERG.GRAY }}>{icon}</span>
-        <span className="text-xs font-mono uppercase" style={{ color: BLOOMBERG.GRAY }}>
+        <span style={{ color: FINCEPT.GRAY }}>{icon}</span>
+        <span className="text-xs font-mono uppercase" style={{ color: FINCEPT.GRAY }}>
           {label}
         </span>
       </div>

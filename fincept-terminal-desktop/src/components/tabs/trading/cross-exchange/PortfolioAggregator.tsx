@@ -1,14 +1,14 @@
 /**
  * PortfolioAggregator - Unified view of balances across all exchanges
- * Bloomberg Terminal Style
+ * Fincept Terminal Style
  */
 
 import React from 'react';
 import { Wallet, TrendingUp, RefreshCw, Loader, PieChart } from 'lucide-react';
 import { useCrossExchangePortfolio } from '../hooks/useCrossExchange';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -47,8 +47,8 @@ export function PortfolioAggregator() {
   if (isLoading) {
     return (
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
         borderRadius: '4px',
         padding: '24px'
       }}>
@@ -58,7 +58,7 @@ export function PortfolioAggregator() {
           justifyContent: 'center',
           padding: '32px 0'
         }}>
-          <Loader style={{ width: 24, height: 24, color: BLOOMBERG.BLUE, animation: 'spin 1s linear infinite' }} />
+          <Loader style={{ width: 24, height: 24, color: FINCEPT.BLUE, animation: 'spin 1s linear infinite' }} />
         </div>
       </div>
     );
@@ -67,15 +67,15 @@ export function PortfolioAggregator() {
   if (error) {
     return (
       <div style={{
-        backgroundColor: BLOOMBERG.PANEL_BG,
-        border: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
         borderRadius: '4px',
         padding: '24px'
       }}>
         <div style={{
           textAlign: 'center',
           padding: '32px 0',
-          color: BLOOMBERG.RED,
+          color: FINCEPT.RED,
           fontSize: '12px'
         }}>
           {error}
@@ -86,8 +86,8 @@ export function PortfolioAggregator() {
 
   return (
     <div style={{
-      backgroundColor: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       borderRadius: '4px',
       padding: '16px',
       height: '100%',
@@ -100,11 +100,11 @@ export function PortfolioAggregator() {
         justifyContent: 'space-between',
         marginBottom: '16px',
         paddingBottom: '12px',
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+        borderBottom: `1px solid ${FINCEPT.BORDER}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <PieChart style={{ width: 18, height: 18, color: BLOOMBERG.CYAN }} />
-          <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>
+          <PieChart style={{ width: 18, height: 18, color: FINCEPT.CYAN }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>
             CROSS-EXCHANGE PORTFOLIO
           </span>
         </div>
@@ -113,9 +113,9 @@ export function PortfolioAggregator() {
           style={{
             padding: '6px 12px',
             fontSize: '10px',
-            color: BLOOMBERG.CYAN,
+            color: FINCEPT.CYAN,
             backgroundColor: 'transparent',
-            border: `1px solid ${BLOOMBERG.BORDER}`,
+            border: `1px solid ${FINCEPT.BORDER}`,
             borderRadius: '2px',
             cursor: 'pointer',
             display: 'flex',
@@ -124,11 +124,11 @@ export function PortfolioAggregator() {
             transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
-            e.currentTarget.style.backgroundColor = `${BLOOMBERG.CYAN}15`;
+            e.currentTarget.style.borderColor = FINCEPT.CYAN;
+            e.currentTarget.style.backgroundColor = `${FINCEPT.CYAN}15`;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+            e.currentTarget.style.borderColor = FINCEPT.BORDER;
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
@@ -141,23 +141,23 @@ export function PortfolioAggregator() {
       <div style={{
         marginBottom: '20px',
         padding: '16px',
-        backgroundColor: `${BLOOMBERG.CYAN}08`,
-        border: `1px solid ${BLOOMBERG.CYAN}25`,
+        backgroundColor: `${FINCEPT.CYAN}08`,
+        border: `1px solid ${FINCEPT.CYAN}25`,
         borderRadius: '2px'
       }}>
-        <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
+        <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
           TOTAL PORTFOLIO VALUE
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace' }}>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
             ${formatCurrency(totalPortfolioValue)}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: BLOOMBERG.GREEN, fontSize: '11px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: FINCEPT.GREEN, fontSize: '11px' }}>
             <TrendingUp style={{ width: 14, height: 14 }} />
             <span>+2.45%</span>
           </div>
         </div>
-        <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED, marginTop: '6px' }}>
+        <div style={{ fontSize: '10px', color: FINCEPT.MUTED, marginTop: '6px' }}>
           ACROSS {aggregatedBalances.length} ASSETS
         </div>
       </div>
@@ -167,7 +167,7 @@ export function PortfolioAggregator() {
         <div style={{
           fontSize: '11px',
           fontWeight: 600,
-          color: BLOOMBERG.GRAY,
+          color: FINCEPT.GRAY,
           marginBottom: '12px',
           letterSpacing: '0.5px'
         }}>
@@ -178,9 +178,9 @@ export function PortfolioAggregator() {
           <div style={{
             textAlign: 'center',
             padding: '40px 0',
-            color: BLOOMBERG.MUTED
+            color: FINCEPT.MUTED
           }}>
-            <Wallet style={{ width: 48, height: 48, margin: '0 auto 12px', color: BLOOMBERG.MUTED }} />
+            <Wallet style={{ width: 48, height: 48, margin: '0 auto 12px', color: FINCEPT.MUTED }} />
             <div style={{ fontSize: '11px' }}>NO BALANCES FOUND</div>
           </div>
         ) : (
@@ -192,18 +192,18 @@ export function PortfolioAggregator() {
                   key={balance.currency}
                   style={{
                     padding: '12px',
-                    backgroundColor: BLOOMBERG.HEADER_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     borderRadius: '2px',
                     transition: 'all 0.2s'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                    e.currentTarget.style.borderColor = FINCEPT.CYAN;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
                   }}
                 >
                   {/* Currency Header */}
@@ -212,12 +212,12 @@ export function PortfolioAggregator() {
                       <div style={{
                         width: 32,
                         height: 32,
-                        background: `linear-gradient(135deg, ${BLOOMBERG.CYAN}, ${BLOOMBERG.PURPLE})`,
+                        background: `linear-gradient(135deg, ${FINCEPT.CYAN}, ${FINCEPT.PURPLE})`,
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: BLOOMBERG.WHITE,
+                        color: FINCEPT.WHITE,
                         fontWeight: 700,
                         fontSize: '11px',
                         fontFamily: 'monospace'
@@ -225,19 +225,19 @@ export function PortfolioAggregator() {
                         {balance.currency.substring(0, 2)}
                       </div>
                       <div>
-                        <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, fontSize: '12px', fontFamily: 'monospace' }}>
+                        <div style={{ color: FINCEPT.WHITE, fontWeight: 600, fontSize: '12px', fontFamily: 'monospace' }}>
                           {balance.currency}
                         </div>
-                        <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, fontFamily: 'monospace' }}>
+                        <div style={{ fontSize: '10px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
                           {formatCrypto(balance.totalAmount)} {balance.currency}
                         </div>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, fontSize: '12px', fontFamily: 'monospace' }}>
+                      <div style={{ color: FINCEPT.WHITE, fontWeight: 600, fontSize: '12px', fontFamily: 'monospace' }}>
                         ${formatCurrency(balance.totalUsdValue)}
                       </div>
-                      <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>
+                      <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>
                         {((balance.totalUsdValue / totalPortfolioValue) * 100).toFixed(2)}%
                       </div>
                     </div>
@@ -254,27 +254,27 @@ export function PortfolioAggregator() {
                           justifyContent: 'space-between',
                           fontSize: '10px',
                           padding: '6px 8px',
-                          backgroundColor: `${BLOOMBERG.DARK_BG}80`,
+                          backgroundColor: `${FINCEPT.DARK_BG}80`,
                           borderRadius: '2px'
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{
                             padding: '2px 8px',
-                            backgroundColor: BLOOMBERG.HEADER_BG,
+                            backgroundColor: FINCEPT.HEADER_BG,
                             borderRadius: '2px',
-                            color: BLOOMBERG.GRAY,
+                            color: FINCEPT.GRAY,
                             textTransform: 'uppercase',
                             fontSize: '9px',
                             letterSpacing: '0.5px'
                           }}>
                             {exch.exchange}
                           </span>
-                          <span style={{ color: BLOOMBERG.GRAY, fontFamily: 'monospace' }}>
+                          <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
                             {formatCrypto(exch.amount)} {balance.currency}
                           </span>
                         </div>
-                        <span style={{ color: BLOOMBERG.WHITE, fontFamily: 'monospace' }}>
+                        <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
                           ${formatCurrency(exch.usdValue)}
                         </span>
                       </div>
@@ -285,14 +285,14 @@ export function PortfolioAggregator() {
                   <div style={{
                     marginTop: '10px',
                     height: '4px',
-                    backgroundColor: BLOOMBERG.HEADER_BG,
+                    backgroundColor: FINCEPT.HEADER_BG,
                     borderRadius: '2px',
                     overflow: 'hidden'
                   }}>
                     <div
                       style={{
                         height: '100%',
-                        background: `linear-gradient(90deg, ${BLOOMBERG.CYAN}, ${BLOOMBERG.PURPLE})`,
+                        background: `linear-gradient(90deg, ${FINCEPT.CYAN}, ${FINCEPT.PURPLE})`,
                         width: `${(balance.totalUsdValue / totalPortfolioValue) * 100}%`,
                         transition: 'width 0.3s'
                       }}
@@ -308,11 +308,11 @@ export function PortfolioAggregator() {
       <div style={{
         marginTop: '16px',
         padding: '10px',
-        backgroundColor: `${BLOOMBERG.CYAN}08`,
-        border: `1px solid ${BLOOMBERG.CYAN}25`,
+        backgroundColor: `${FINCEPT.CYAN}08`,
+        border: `1px solid ${FINCEPT.CYAN}25`,
         borderRadius: '2px'
       }}>
-        <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN, lineHeight: '1.5' }}>
+        <div style={{ fontSize: '10px', color: FINCEPT.CYAN, lineHeight: '1.5' }}>
           <strong>NOTE:</strong> This view aggregates balances from all connected exchanges. Values
           are updated every 30 seconds. Exchange-specific details are shown for each asset.
         </div>

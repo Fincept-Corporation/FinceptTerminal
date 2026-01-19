@@ -64,7 +64,7 @@ export function TradingChart({
       width: '100%',
       position: 'relative'
     }}>
-      {/* Timeframe selector with OHLC data - Bloomberg style */}
+      {/* Timeframe selector with OHLC data - Fincept style */}
       <div style={{
         display: 'flex',
         alignItems: 'center',

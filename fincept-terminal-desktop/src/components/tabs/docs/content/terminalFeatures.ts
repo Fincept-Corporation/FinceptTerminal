@@ -9,7 +9,7 @@ export const terminalFeaturesDoc: DocSection = {
     {
       id: 'overview',
       title: 'Terminal Overview',
-      content: `Fincept Terminal is a Bloomberg-style professional financial terminal designed for traders, analysts, and investors.
+      content: `Fincept Terminal is a Fincept-style professional financial terminal designed for traders, analysts, and investors.
 
 **Key Features:**
 • Real-time market data and quotes
@@ -18,7 +18,7 @@ export const terminalFeaturesDoc: DocSection = {
 • Portfolio management and tracking
 • Custom alerts and notifications
 • Multi-tab workspace for efficient workflow
-• Bloomberg-inspired dark theme interface
+• Fincept-inspired dark theme interface
 • Customizable layouts and settings
 
 **Target Users:**
@@ -89,7 +89,7 @@ plot ema(AAPL, 21), "EMA 21"
       content: `Customize the terminal to match your workflow:
 
 **Themes:**
-• Bloomberg Classic (default)
+• Fincept Classic (default)
 • Dark Mode
 • Light Mode
 • Custom themes via CSS
@@ -115,7 +115,7 @@ plot ema(AAPL, 21), "EMA 21"
 • Quick switching between setups`,
       codeExample: `// Example settings.json
 {
-  "theme": "bloomberg-classic",
+  "theme": "fincept-classic",
   "editor": {
     "fontSize": 14,
     "fontFamily": "Consolas",

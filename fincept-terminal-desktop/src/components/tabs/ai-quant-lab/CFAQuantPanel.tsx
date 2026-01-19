@@ -50,9 +50,9 @@ import {
 import { quantAnalyticsService, type QuantAnalyticsResult } from '@/services/aiQuantLab/quantAnalyticsService';
 import { yfinanceService } from '@/services/markets/yfinanceService';
 
-// Bloomberg-style color palette
+// Fincept-style color palette
 const BB = {
-  // Core Bloomberg colors
+  // Core Fincept colors
   black: '#000000',
   darkBg: '#0a0a0a',
   panelBg: '#121212',
@@ -82,7 +82,7 @@ const BB = {
   chartArea: 'rgba(0, 212, 255, 0.1)',
   chartGrid: '#1f1f1f',
 
-  // Bloomberg blue
+  // Fincept blue
   blue: '#0066CC',
   blueLight: '#0088FF',
 };
@@ -631,7 +631,7 @@ export function CFAQuantPanel() {
     return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Bloomberg-style header
+  // Fincept-style header
   const renderHeader = () => (
     <div className="flex items-center justify-between px-4 py-2" style={{ backgroundColor: BB.black, borderBottom: `1px solid ${BB.borderDark}` }}>
       <div className="flex items-center gap-4">
@@ -683,7 +683,7 @@ export function CFAQuantPanel() {
     </div>
   );
 
-  // Data Step - Bloomberg style
+  // Data Step - Fincept style
   const renderDataStep = () => (
     <div className="flex h-full">
       {/* Left Panel - Input Controls */}
@@ -964,7 +964,7 @@ export function CFAQuantPanel() {
     </div>
   );
 
-  // Analysis Step - Bloomberg style
+  // Analysis Step - Fincept style
   const renderAnalysisStep = () => {
     const selectedConfig = analysisConfigs.find(a => a.id === selectedAnalysis);
     const canRun = priceData.length >= (selectedConfig?.minDataPoints || 0);
@@ -1103,7 +1103,7 @@ export function CFAQuantPanel() {
     );
   };
 
-  // Results Step - Bloomberg style
+  // Results Step - Fincept style
   const renderResultsStep = () => {
     if (!analysisResult?.result) return null;
 

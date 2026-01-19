@@ -71,7 +71,7 @@ import { CloudflareR2Adapter } from './CloudflareR2Adapter';
 import { OracleCloudStorageAdapter } from './OracleCloudStorageAdapter';
 import { IBMCloudStorageAdapter } from './IBMCloudStorageAdapter';
 import { MSGraphAdapter } from './MSGraphAdapter';
-import { BloombergAdapter } from './BloombergAdapter';
+import { FinceptDataAdapter } from './FinceptDataAdapter';
 import { RefinitivAdapter } from './RefinitivAdapter';
 import { FinageAdapter } from './FinageAdapter';
 import { TradierAdapter } from './TradierAdapter';
@@ -200,7 +200,7 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   tiingo: TiingoAdapter,
   intrinio: IntrinioAdapter,
   marketstack: MarketstackAdapter,
-  bloomberg: BloombergAdapter,
+  fincept: FinceptDataAdapter,
   reuters: RefinitivAdapter,
   finage: FinageAdapter,
   tradier: TradierAdapter,
@@ -343,7 +343,7 @@ export {
   OracleCloudStorageAdapter,
   IBMCloudStorageAdapter,
   MSGraphAdapter,
-  BloombergAdapter,
+  FinceptDataAdapter,
   RefinitivAdapter,
   FinageAdapter,
   TradierAdapter,

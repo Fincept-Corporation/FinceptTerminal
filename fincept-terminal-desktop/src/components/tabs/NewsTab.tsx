@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Info } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Info, Settings } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/news/newsService';
+import { fetchAllNews, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData, setNewsCacheTTL, invalidateNewsCache } from '../../services/news/newsService';
 import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TimezoneSelector } from '../common/TimezoneSelector';
 import { useTranslation } from 'react-i18next';
 import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '../../services/news/newsAnalysisService';
 import { createNewsTabTour } from './tours/newsTabTour';
+import RSSFeedSettingsModal from './news/RSSFeedSettingsModal';
 
 // Extend Window interface for Tauri
 declare global {
@@ -35,6 +36,7 @@ const NewsTab: React.FC = () => {
   const [analysisData, setAnalysisData] = useState<NewsAnalysisData | null>(null);
   const [analyzingArticle, setAnalyzingArticle] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showFeedSettings, setShowFeedSettings] = useState(false);
 
   // Function to record current news data
   const recordCurrentData = async () => {
@@ -62,12 +64,13 @@ const NewsTab: React.FC = () => {
     }
   };
 
-  // Manual refresh function with force refresh
-  const handleRefresh = async () => {
+  // Manual refresh function - always fetches fresh data (bypasses cache)
+  const handleRefresh = useCallback(async (forceRefresh: boolean = true) => {
     setLoading(true);
     try {
+      // Force refresh bypasses cache to get fresh data
       const [articles, sources, count] = await Promise.all([
-        fetchNewsWithCache(true),
+        fetchAllNews(forceRefresh),
         getActiveSources(),
         getRSSFeedCount()
       ]);
@@ -104,7 +107,7 @@ const NewsTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isRecording, activeFilter]);
 
   // Handle AI analysis of article
   const handleAnalyzeArticle = async () => {
@@ -130,13 +133,22 @@ const NewsTab: React.FC = () => {
     }
   };
 
-  // Fetch real news on mount and every 5 minutes
+  // Track if this is the initial mount to use cached data
+  const isInitialMount = useRef(true);
+
+  // Update cache TTL when refresh interval changes
   useEffect(() => {
-    const loadNews = async () => {
+    setNewsCacheTTL(refreshInterval);
+  }, [refreshInterval]);
+
+  // Fetch real news on mount and based on refresh interval
+  useEffect(() => {
+    const loadNews = async (forceRefresh: boolean = false) => {
       setLoading(true);
       try {
+        // On initial mount, try to use cached data; on interval refreshes, force fresh data
         const [articles, sources, count] = await Promise.all([
-          fetchNewsWithCache(),
+          fetchAllNews(forceRefresh),
           getActiveSources(),
           getRSSFeedCount()
         ]);
@@ -175,10 +187,20 @@ const NewsTab: React.FC = () => {
       }
     };
 
-    loadNews();
+    // On initial mount, use cached data if available
+    // Otherwise, interval refreshes force fresh data
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      loadNews(false); // Use cache on initial mount
+    } else {
+      loadNews(true); // Force refresh when interval changes
+    }
 
-    // Refresh news based on user interval
-    const newsRefreshInterval = setInterval(loadNews, refreshInterval * 60 * 1000);
+    // Refresh news based on user interval - ALWAYS force fresh data on interval
+    const newsRefreshInterval = setInterval(() => {
+      console.log(`[NewsTab] Auto-refresh triggered (${refreshInterval}min interval) - fetching fresh data`);
+      loadNews(true); // Always force refresh on interval
+    }, refreshInterval * 60 * 1000);
 
     return () => clearInterval(newsRefreshInterval);
   }, [refreshInterval, isRecording, activeFilter]);
@@ -310,7 +332,7 @@ const NewsTab: React.FC = () => {
           <span style={{ color: colors.text }}>|</span>
           <button
             id="news-refresh"
-            onClick={handleRefresh}
+            onClick={() => handleRefresh(true)}
             disabled={loading}
             style={{
               backgroundColor: loading ? colors.textMuted : colors.secondary,
@@ -346,6 +368,27 @@ const NewsTab: React.FC = () => {
             title="Auto-refresh settings"
           >
             ⏱ {refreshInterval}min
+          </button>
+          <span style={{ color: colors.text }}>|</span>
+          <button
+            onClick={() => setShowFeedSettings(true)}
+            style={{
+              backgroundColor: colors.purple,
+              color: colors.text,
+              border: 'none',
+              padding: '2px 8px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              borderRadius: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="RSS Feed Settings"
+          >
+            <Settings size={12} />
+            SOURCES
           </button>
           <span style={{ color: colors.text }}>|</span>
           <RecordingControlPanel
@@ -397,7 +440,7 @@ const NewsTab: React.FC = () => {
           </div>
         )}
 
-        {/* News Ticker - Continuous seamless scroll like Bloomberg */}
+        {/* News Ticker - Continuous seamless scroll like Fincept */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>
           <span style={{ color: colors.warning, fontWeight: 'bold' }}>{t('messages.breaking')}:</span>
           <div className="ticker-wrap" style={{
@@ -1570,6 +1613,13 @@ const NewsTab: React.FC = () => {
           background: transparent;
         }
       `}</style>
+
+      {/* RSS Feed Settings Modal */}
+      <RSSFeedSettingsModal
+        isOpen={showFeedSettings}
+        onClose={() => setShowFeedSettings(false)}
+        onFeedsUpdated={() => handleRefresh(true)}
+      />
     </div>
   );
 };

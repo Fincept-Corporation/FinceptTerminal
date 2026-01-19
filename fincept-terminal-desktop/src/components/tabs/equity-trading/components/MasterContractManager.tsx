@@ -14,8 +14,8 @@ import {
   getBrokerDisplayName,
 } from '@/services/trading/masterContractService';
 
-// Bloomberg Professional Color Palette
-const BLOOMBERG = {
+// Fincept Professional Color Palette
+const FINCEPT = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
@@ -150,8 +150,8 @@ export function MasterContractManager({
 
   return (
     <div style={{
-      backgroundColor: BLOOMBERG.PANEL_BG,
-      border: `1px solid ${BLOOMBERG.BORDER}`,
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
       padding: compact ? '12px' : '16px'
     }}>
       {/* Header */}
@@ -161,14 +161,14 @@ export function MasterContractManager({
         alignItems: 'center',
         marginBottom: compact ? '12px' : '16px',
         paddingBottom: '12px',
-        borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+        borderBottom: `1px solid ${FINCEPT.BORDER}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Database size={compact ? 16 : 20} color={BLOOMBERG.ORANGE} />
+          <Database size={compact ? 16 : 20} color={FINCEPT.ORANGE} />
           <span style={{
             fontSize: compact ? '12px' : '14px',
             fontWeight: 700,
-            color: BLOOMBERG.WHITE
+            color: FINCEPT.WHITE
           }}>
             Symbol Database
           </span>
@@ -179,9 +179,9 @@ export function MasterContractManager({
           disabled={isUpdatingAll}
           style={{
             padding: '6px 12px',
-            backgroundColor: BLOOMBERG.ORANGE,
+            backgroundColor: FINCEPT.ORANGE,
             border: 'none',
-            color: BLOOMBERG.DARK_BG,
+            color: FINCEPT.DARK_BG,
             cursor: isUpdatingAll ? 'not-allowed' : 'pointer',
             fontSize: '10px',
             fontWeight: 700,
@@ -219,8 +219,8 @@ export function MasterContractManager({
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '10px 12px',
-                backgroundColor: BLOOMBERG.HEADER_BG,
-                border: `1px solid ${BLOOMBERG.BORDER}`
+                backgroundColor: FINCEPT.HEADER_BG,
+                border: `1px solid ${FINCEPT.BORDER}`
               }}
             >
               {/* Broker Info */}
@@ -229,12 +229,12 @@ export function MasterContractManager({
                   <span style={{
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: BLOOMBERG.WHITE
+                    color: FINCEPT.WHITE
                   }}>
                     {getBrokerDisplayName(brokerId)}
                   </span>
                   {status.error && (
-                    <AlertCircle size={12} color={BLOOMBERG.RED} />
+                    <AlertCircle size={12} color={FINCEPT.RED} />
                   )}
                 </div>
                 <div style={{
@@ -242,7 +242,7 @@ export function MasterContractManager({
                   gap: '12px',
                   marginTop: '4px',
                   fontSize: '10px',
-                  color: BLOOMBERG.GRAY
+                  color: FINCEPT.GRAY
                 }}>
                   <span>
                     {status.symbolCount > 0
@@ -258,7 +258,7 @@ export function MasterContractManager({
                 {status.error && (
                   <div style={{
                     fontSize: '9px',
-                    color: BLOOMBERG.RED,
+                    color: FINCEPT.RED,
                     marginTop: '4px'
                   }}>
                     {status.error}
@@ -273,8 +273,8 @@ export function MasterContractManager({
                 style={{
                   padding: '6px 10px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${status.isLoading ? BLOOMBERG.MUTED : BLOOMBERG.CYAN}`,
-                  color: status.isLoading ? BLOOMBERG.MUTED : BLOOMBERG.CYAN,
+                  border: `1px solid ${status.isLoading ? FINCEPT.MUTED : FINCEPT.CYAN}`,
+                  color: status.isLoading ? FINCEPT.MUTED : FINCEPT.CYAN,
                   cursor: status.isLoading ? 'not-allowed' : 'pointer',
                   fontSize: '9px',
                   fontWeight: 600,
@@ -309,9 +309,9 @@ export function MasterContractManager({
       <div style={{
         marginTop: '12px',
         padding: '8px',
-        backgroundColor: BLOOMBERG.DARK_BG,
+        backgroundColor: FINCEPT.DARK_BG,
         fontSize: '9px',
-        color: BLOOMBERG.MUTED,
+        color: FINCEPT.MUTED,
         lineHeight: 1.4
       }}>
         Symbol data is cached locally for fast offline search.

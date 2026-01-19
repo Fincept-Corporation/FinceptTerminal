@@ -1,5 +1,5 @@
 // File: src/components/chat-mode/ChatModeInterface.tsx
-// Bloomberg-style Chat Mode interface with professional terminal design
+// Fincept-style Chat Mode interface with professional terminal design
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Terminal, Activity, Zap, Database, TrendingUp } from 'lucide-react';
@@ -131,7 +131,7 @@ const ChatModeInterface: React.FC = () => {
         overflow: 'hidden'
       }}
     >
-      {/* Bloomberg-style Header */}
+      {/* Fincept-style Header */}
       <div
         style={{
           padding: '8px 16px',

@@ -17,12 +17,12 @@ interface Indicator {
   date: string;
 }
 
-const BLOOMBERG_GREEN = '#00FF00';
-const BLOOMBERG_RED = '#FF0000';
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_CYAN = '#00E5FF';
+const FINCEPT_GREEN = '#00FF00';
+const FINCEPT_RED = '#FF0000';
+const FINCEPT_ORANGE = '#FFA500';
+const FINCEPT_WHITE = '#FFFFFF';
+const FINCEPT_GRAY = '#787878';
+const FINCEPT_CYAN = '#00E5FF';
 
 // Key economic indicators with their display info
 const KEY_INDICATORS = [
@@ -125,7 +125,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
       onRefresh={loadIndicators}
       isLoading={loading}
       error={error}
-      headerColor={BLOOMBERG_CYAN}
+      headerColor={FINCEPT_CYAN}
     >
       <div style={{ padding: '4px' }}>
         {/* Header row */}
@@ -135,7 +135,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
           gap: '8px',
           padding: '4px 8px',
           borderBottom: '1px solid #333',
-          color: BLOOMBERG_GRAY,
+          color: FINCEPT_GRAY,
           fontSize: '9px'
         }}>
           <span>INDICATOR</span>
@@ -156,21 +156,21 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
             }}
           >
             <div>
-              <div style={{ fontSize: '10px', color: BLOOMBERG_WHITE }}>{ind.name}</div>
-              <div style={{ fontSize: '8px', color: BLOOMBERG_GRAY }}>{ind.date}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT_WHITE }}>{ind.name}</div>
+              <div style={{ fontSize: '8px', color: FINCEPT_GRAY }}>{ind.date}</div>
             </div>
             <div style={{
               textAlign: 'right',
               fontSize: '11px',
               fontWeight: 'bold',
-              color: BLOOMBERG_ORANGE
+              color: FINCEPT_ORANGE
             }}>
               {ind.value}
             </div>
             <div style={{
               textAlign: 'right',
               fontSize: '10px',
-              color: ind.change > 0 ? BLOOMBERG_GREEN : ind.change < 0 ? BLOOMBERG_RED : BLOOMBERG_GRAY,
+              color: ind.change > 0 ? FINCEPT_GREEN : ind.change < 0 ? FINCEPT_RED : FINCEPT_GRAY,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
@@ -188,7 +188,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: BLOOMBERG_CYAN,
+              color: FINCEPT_CYAN,
               fontSize: '9px',
               cursor: 'pointer',
               display: 'flex',

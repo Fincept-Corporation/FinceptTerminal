@@ -182,7 +182,7 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
   // Estimated order value
   const estimatedValue = Number(quantity) * (orderType === 'MARKET' ? (lastPrice || 0) : Number(price) || 0);
 
-  // Bloomberg color constants
+  // Fincept color constants
   const COLORS = {
     ORANGE: '#FF8800',
     GREEN: '#00D66F',

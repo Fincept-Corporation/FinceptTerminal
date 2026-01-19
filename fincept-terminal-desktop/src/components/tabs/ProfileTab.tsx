@@ -1,5 +1,5 @@
 // File: src/components/tabs/ProfileTab.tsx
-// Bloomberg-style Professional Profile & Account Management Interface
+// Fincept-style Professional Profile & Account Management Interface
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,7 +12,7 @@ import {
   LogOut, Crown, Zap, FileText, CheckCircle, AlertCircle, Eye, EyeOff, BarChart
 } from 'lucide-react';
 
-// Bloomberg Professional Color Palette
+// Fincept Professional Color Palette
 const COLORS = {
   ORANGE: '#ea580c',
   WHITE: '#ffffff',
@@ -59,7 +59,7 @@ const ProfileTab: React.FC = () => {
         if (result.success) setPaymentHistory(result.data?.payments || []);
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      // Silently handle errors
     } finally {
       setLoading(false);
     }
@@ -119,7 +119,12 @@ const ProfileTab: React.FC = () => {
         <span style={{ color: COLORS.ORANGE, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
       </div>
       <button
-        onClick={() => fetchSectionData()}
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          fetchSectionData();
+        }}
         style={{
           padding: '6px 12px',
           backgroundColor: COLORS.HEADER_BG,
