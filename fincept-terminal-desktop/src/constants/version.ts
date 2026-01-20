@@ -6,7 +6,7 @@
 // Run `bun run sync-version` to sync from package.json
 // Or edit package.json and run build/dev to auto-sync
 
-export const APP_VERSION = '3.1.6';
+export const APP_VERSION = '3.2.0';
 export const APP_NAME = 'Fincept Terminal';
 export const APP_BUILD_DATE = new Date().toISOString().split('T')[0];
 

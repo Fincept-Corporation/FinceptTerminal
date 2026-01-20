@@ -1,7 +1,7 @@
 {
   "name": "fincept-terminal-desktop",
   "private": true,
-  "version": "3.1.6",
+  "version": "3.2.0",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "scripts": {
