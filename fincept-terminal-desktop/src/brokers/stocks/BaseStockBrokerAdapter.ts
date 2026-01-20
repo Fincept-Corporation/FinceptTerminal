@@ -63,6 +63,7 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
   protected wsConnected: boolean = false;
   protected wsConfig: WebSocketConfig | null = null;
   protected tickCallbacks: Set<(tick: TickData) => void> = new Set();
+  protected depthCallbacks: Set<(depth: MarketDepth & { symbol: string; exchange: StockExchange }) => void> = new Set();
   protected subscriptions: Map<string, { symbol: string; exchange: StockExchange; mode: SubscriptionMode }> = new Map();
 
   // Rate limiting
@@ -190,7 +191,7 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
     }
   }
 
-  protected async loadCredentials(): Promise<BrokerCredentials | null> {
+  protected async loadCredentials(): Promise<(BrokerCredentials & { tokenTimestamp?: number; userId?: string }) | null> {
     try {
       console.log(`[${this.brokerId}] Loading credentials from Rust backend...`);
       const response = await invoke<{
@@ -199,6 +200,8 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
           apiKey?: string;
           apiSecret?: string;
           accessToken?: string;
+          userId?: string;
+          tokenTimestamp?: number;
           additionalData?: string;
         };
       }>('get_indian_broker_credentials', {
@@ -209,8 +212,8 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
         success: response.success,
         hasData: !!response.data,
         hasApiKey: !!(response.data?.apiKey),
-        hasApiSecret: !!(response.data?.apiSecret),
-        apiKeyLength: response.data?.apiKey?.length || 0,
+        hasAccessToken: !!(response.data?.accessToken),
+        tokenTimestamp: response.data?.tokenTimestamp,
       });
 
       if (!response.success || !response.data) {
@@ -222,9 +225,11 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
         apiKey: response.data.apiKey || '',
         apiSecret: response.data.apiSecret,
         accessToken: response.data.accessToken,
+        userId: response.data.userId,
+        tokenTimestamp: response.data.tokenTimestamp,
       };
 
-      console.log(`[${this.brokerId}] ✓ Credentials loaded successfully`);
+      console.log(`[${this.brokerId}] ✓ Credentials loaded successfully (token from: ${creds.tokenTimestamp ? new Date(creds.tokenTimestamp).toISOString() : 'N/A'})`);
       return creds;
     } catch (error) {
       console.error(`[${this.brokerId}] Failed to load credentials:`, error);
@@ -240,6 +245,38 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
     } catch (error) {
       console.error(`[${this.brokerId}] Failed to clear credentials:`, error);
     }
+  }
+
+  /**
+   * Check if token was generated today (IST timezone)
+   * Indian broker tokens expire at midnight IST
+   * This is a static utility that can be used for session validation
+   */
+  public static isTokenValidForTodayIST(tokenTimestamp?: number): boolean {
+    if (!tokenTimestamp) return false;
+
+    // Get current time in IST
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const nowIST = new Date(now.getTime() + istOffset + now.getTimezoneOffset() * 60 * 1000);
+
+    // Get token time in IST
+    const tokenDate = new Date(tokenTimestamp);
+    const tokenIST = new Date(tokenDate.getTime() + istOffset + tokenDate.getTimezoneOffset() * 60 * 1000);
+
+    // Check if same day in IST
+    return (
+      nowIST.getFullYear() === tokenIST.getFullYear() &&
+      nowIST.getMonth() === tokenIST.getMonth() &&
+      nowIST.getDate() === tokenIST.getDate()
+    );
+  }
+
+  /**
+   * Instance method that calls the static version
+   */
+  public isTokenValidForToday(tokenTimestamp?: number): boolean {
+    return BaseStockBrokerAdapter.isTokenValidForTodayIST(tokenTimestamp);
   }
 
   // ============================================================================
@@ -516,6 +553,25 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
         callback(tick);
       } catch (error) {
         console.error(`[${this.brokerId}] Tick callback error:`, error);
+      }
+    }
+  }
+
+  // Depth event handlers
+  onDepth(callback: (depth: MarketDepth & { symbol: string; exchange: StockExchange }) => void): void {
+    this.depthCallbacks.add(callback);
+  }
+
+  offDepth(callback: (depth: MarketDepth & { symbol: string; exchange: StockExchange }) => void): void {
+    this.depthCallbacks.delete(callback);
+  }
+
+  protected emitDepth(depth: MarketDepth & { symbol: string; exchange: StockExchange }): void {
+    for (const callback of this.depthCallbacks) {
+      try {
+        callback(depth);
+      } catch (error) {
+        console.error(`[${this.brokerId}] Depth callback error:`, error);
       }
     }
   }

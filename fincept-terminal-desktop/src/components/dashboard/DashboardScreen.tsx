@@ -26,7 +26,7 @@ import AboutTab from '@/components/tabs/AboutTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/portfolio-tab/PortfolioTab';
 import DocsTab from '@/components/tabs/docs/DocsTab';
-import SettingsTab from '@/components/tabs/SettingsTab';
+import SettingsTab from '@/components/tabs/settings-tab';
 import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
 import MCPTab from '@/components/tabs/mcp';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
@@ -59,6 +59,7 @@ const ExcelTab = React.lazy(() => import('@/components/tabs/ExcelTab'));
 const Visualization3DTab = React.lazy(() => import('@/components/tabs/Visualization3DTab'));
 const PolymarketTab = React.lazy(() => import('@/components/tabs/PolymarketTabEnhanced'));
 const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/TradeVisualizationTab'));
+const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena/AlphaArenaTab'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -552,7 +553,8 @@ function FinxeptTerminalContent() {
     { label: 'Stock Screener', shortcut: 'F8', action: () => setActiveTab('screener') },
     { label: 'Polygon Data', action: () => setActiveTab('polygon'), separator: true },
     { label: 'Economics', action: () => setActiveTab('economics') },
-    { label: 'DBnomics', action: () => setActiveTab('dbnomics') }
+    { label: 'DBnomics', action: () => setActiveTab('dbnomics') },
+    { label: 'AKShare Data', action: () => setActiveTab('akshare') }
   ];
 
   const researchMenuItems = [
@@ -568,6 +570,7 @@ function FinxeptTerminalContent() {
   const tradingMenuItems = [
     { label: 'Crypto Trading', shortcut: 'F9', action: () => setActiveTab('trading') },
     { label: 'Equity Trading', action: () => setActiveTab('equity-trading') },
+    { label: 'Alpha Arena', action: () => setActiveTab('alpha-arena') },
     { label: 'Polymarket', action: () => setActiveTab('polymarket') },
     { label: 'Derivatives Pricing', action: () => setActiveTab('derivatives') },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
@@ -1115,12 +1118,12 @@ function FinxeptTerminalContent() {
                 <MaritimeTab />
               </React.Suspense>
             </TabsContent>
-            <TabsContent value="trading" className="h-full m-0 p-0">
+            <TabsContent value="trading" className="h-full m-0 p-0" forceMount>
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <TradingTab />
               </React.Suspense>
             </TabsContent>
-            <TabsContent value="equity-trading" className="h-full m-0 p-0">
+            <TabsContent value="equity-trading" className="h-full m-0 p-0" forceMount>
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <EquityTradingTab />
               </React.Suspense>
@@ -1178,6 +1181,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="3d-viz" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <Visualization3DTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="alpha-arena" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <AlphaArenaTab />
               </React.Suspense>
             </TabsContent>
           </Tabs>

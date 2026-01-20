@@ -8,6 +8,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
 import type {
   StockBrokerMetadata,
@@ -63,9 +64,15 @@ export class ShoonyaAdapter extends BaseStockBrokerAdapter {
   private apiKey: string | null = null;      // vendor_code
   private apiSecret: string | null = null;   // api_secretkey
 
-  // REST API polling for quotes
+  // Tauri event unlisteners for WebSocket events
+  private tickerUnlisten: UnlistenFn | null = null;
+  private orderbookUnlisten: UnlistenFn | null = null;
+  private statusUnlisten: UnlistenFn | null = null;
+
+  // Fallback: REST API polling for quotes (when WebSocket fails)
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange; token: string }> = new Map();
+  private usePollingFallback: boolean = false;
 
   // ============================================================================
   // Authentication
@@ -637,18 +644,184 @@ export class ShoonyaAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // WebSocket - Internal Implementations (REST polling)
+  // WebSocket - Real WebSocket via Rust Backend
   // ============================================================================
 
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureAuthenticated();
-    // Start REST API polling
-    this.startQuotePolling();
-    console.log('[Shoonya] REST API polling started');
+
+    try {
+      // Try real WebSocket connection via Rust backend
+      await this.connectRealWebSocket();
+      console.log('[Shoonya] ✓ WebSocket connected via Rust backend');
+    } catch (error) {
+      console.warn('[Shoonya] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
+    }
+  }
+
+  /**
+   * Connect to real Shoonya WebSocket via Tauri/Rust backend
+   */
+  private async connectRealWebSocket(): Promise<void> {
+    if (!this.accessToken || !this.userId) {
+      throw new Error('Access token and user ID required');
+    }
+
+    // Call Rust backend to connect WebSocket
+    const result = await invoke<{
+      success: boolean;
+      data?: boolean;
+      error?: string;
+    }>('shoonya_ws_connect', {
+      userId: this.userId,
+      accessToken: this.accessToken,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'WebSocket connection failed');
+    }
+
+    // Listen for ticker events from Rust backend
+    this.tickerUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      price: number;
+      bid?: number;
+      ask?: number;
+      volume?: number;
+      change_percent?: number;
+      timestamp: number;
+    }>('shoonya_ticker', (event) => {
+      const tick = event.payload;
+
+      // Lookup symbol from token
+      let symbolInfo: { symbol: string; exchange: StockExchange } | undefined;
+      for (const [, info] of this.pollingSymbols) {
+        if (info.token === tick.symbol) {
+          symbolInfo = info;
+          break;
+        }
+      }
+
+      this.emitTick({
+        symbol: symbolInfo?.symbol || tick.symbol,
+        exchange: symbolInfo?.exchange || ('NSE' as StockExchange),
+        mode: 'quote',
+        lastPrice: tick.price,
+        bid: tick.bid,
+        ask: tick.ask,
+        volume: tick.volume || 0,
+        changePercent: tick.change_percent || 0,
+        timestamp: tick.timestamp,
+      });
+    });
+
+    // Listen for orderbook/depth events
+    this.orderbookUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      bids: Array<{ price: number; quantity: number; orders?: number }>;
+      asks: Array<{ price: number; quantity: number; orders?: number }>;
+      timestamp: number;
+    }>('shoonya_orderbook', (event) => {
+      const data = event.payload;
+
+      const [exchangePart, symbolPart] = data.symbol.includes(':')
+        ? data.symbol.split(':')
+        : ['NSE', data.symbol];
+      const symbol = symbolPart || data.symbol;
+      const exchange = (exchangePart as StockExchange) || 'NSE';
+
+      console.log(`[Shoonya WebSocket] Depth update for ${symbol}:`, {
+        bids: data.bids?.length || 0,
+        asks: data.asks?.length || 0,
+      });
+
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      const tick: TickData = {
+        symbol,
+        exchange,
+        mode: 'full',
+        lastPrice: bestBid?.price || 0,
+        bid: bestBid?.price,
+        ask: bestAsk?.price,
+        bidQty: bestBid?.quantity,
+        askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        depth: {
+          bids: data.bids?.map((b) => ({ price: b.price, quantity: b.quantity, orders: b.orders || 0 })) || [],
+          asks: data.asks?.map((a) => ({ price: a.price, quantity: a.quantity, orders: a.orders || 0 })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+
+      if (tick.depth) {
+        this.emitDepth({ symbol, exchange, bids: tick.depth.bids, asks: tick.depth.asks });
+      }
+    });
+
+    // Listen for status/connection events
+    this.statusUnlisten = await listen<{
+      provider: string;
+      status: string;
+      message?: string;
+      timestamp: number;
+    }>('shoonya_status', (event) => {
+      const status = event.payload;
+      console.log(`[Shoonya WebSocket] Status: ${status.status} - ${status.message || ''}`);
+
+      if (status.status === 'disconnected' || status.status === 'error') {
+        this.wsConnected = false;
+        if (!this.usePollingFallback) {
+          console.warn('[Shoonya] WebSocket disconnected, enabling polling fallback');
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      } else if (status.status === 'connected') {
+        this.wsConnected = true;
+        if (this.usePollingFallback) {
+          console.log('[Shoonya] WebSocket reconnected, disabling polling fallback');
+          this.usePollingFallback = false;
+          this.stopQuotePolling();
+        }
+      }
+    });
+
+    this.wsConnected = true;
+  }
+
+  private async disconnectRealWebSocket(): Promise<void> {
+    if (this.tickerUnlisten) {
+      this.tickerUnlisten();
+      this.tickerUnlisten = null;
+    }
+    if (this.orderbookUnlisten) {
+      this.orderbookUnlisten();
+      this.orderbookUnlisten = null;
+    }
+    if (this.statusUnlisten) {
+      this.statusUnlisten();
+      this.statusUnlisten = null;
+    }
+
+    try {
+      await invoke('shoonya_ws_disconnect');
+    } catch (err) {
+      console.warn('[Shoonya] WebSocket disconnect error:', err);
+    }
+
+    this.wsConnected = false;
   }
 
   private startQuotePolling(): void {
     this.stopQuotePolling();
+
+    console.log('[Shoonya] Starting REST API polling (fallback mode, 2 min interval)');
 
     // Poll every 2 minutes
     this.quotePollingInterval = setInterval(async () => {
@@ -705,8 +878,30 @@ export class ShoonyaAdapter extends BaseStockBrokerAdapter {
       const key = `${exchange}:${symbol}`;
       this.pollingSymbols.set(key, { symbol, exchange, token });
 
-      console.log(`[Shoonya] Added ${key} to polling list`);
-      this.pollQuotesSequentially();
+      if (this.wsConnected && !this.usePollingFallback) {
+        try {
+          const wsMode = mode === 'full' ? 'd' : 't'; // d = depth, t = touchline
+
+          await invoke('shoonya_ws_subscribe', {
+            symbol: token,
+            exchange: SHOONYA_EXCHANGE_MAP[exchange] || exchange,
+            mode: wsMode,
+          });
+
+          console.log(`[Shoonya] ✓ WebSocket subscribed to ${symbol} (token: ${token}, mode: ${wsMode})`);
+        } catch (error) {
+          console.error(`[Shoonya] WebSocket subscribe failed:`, error);
+          if (!this.usePollingFallback) {
+            this.usePollingFallback = true;
+            this.startQuotePolling();
+          }
+        }
+      } else {
+        console.log(`[Shoonya] Added ${key} to polling list`);
+        if (this.usePollingFallback) {
+          this.pollQuotesSequentially();
+        }
+      }
     } catch (error) {
       console.error('Failed to subscribe:', error);
     }
@@ -714,13 +909,29 @@ export class ShoonyaAdapter extends BaseStockBrokerAdapter {
 
   protected async unsubscribeInternal(symbol: string, exchange: StockExchange): Promise<void> {
     const key = `${exchange}:${symbol}`;
+    const symbolInfo = this.pollingSymbols.get(key);
     this.pollingSymbols.delete(key);
-    console.log(`[Shoonya] Removed ${key} from polling list`);
+
+    if (this.wsConnected && !this.usePollingFallback && symbolInfo) {
+      try {
+        await invoke('shoonya_ws_unsubscribe', {
+          symbol: symbolInfo.token,
+          exchange: SHOONYA_EXCHANGE_MAP[exchange] || exchange,
+        });
+        console.log(`[Shoonya] ✓ WebSocket unsubscribed from ${symbol}`);
+      } catch (error) {
+        console.warn(`[Shoonya] WebSocket unsubscribe failed:`, error);
+      }
+    } else {
+      console.log(`[Shoonya] Removed ${key} from polling list`);
+    }
   }
 
   async logout(): Promise<void> {
+    await this.disconnectRealWebSocket();
     this.stopQuotePolling();
     this.pollingSymbols.clear();
+    this.usePollingFallback = false;
     await super.logout();
   }
 

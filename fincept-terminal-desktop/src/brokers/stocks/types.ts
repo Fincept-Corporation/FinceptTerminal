@@ -291,6 +291,8 @@ export interface Quote {
   // Circuit limits (India specific)
   upperCircuit?: number;
   lowerCircuit?: number;
+  // Error message if quote fetch failed
+  error?: string;
 }
 
 export interface OHLCV {
@@ -474,6 +476,8 @@ export interface IStockBrokerAdapter {
   unsubscribe(symbol: string, exchange: StockExchange): Promise<void>;
   onTick(callback: (tick: TickData) => void): void;
   offTick(callback: (tick: TickData) => void): void;
+  onDepth(callback: (depth: MarketDepth & { symbol: string; exchange: StockExchange }) => void): void;
+  offDepth(callback: (depth: MarketDepth & { symbol: string; exchange: StockExchange }) => void): void;
 
   // Master Contract (Symbol Database)
   downloadMasterContract?(): Promise<void>;

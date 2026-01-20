@@ -1203,6 +1203,24 @@ class SqliteService {
     }
   }
 
+  async updateLLMModelId(id: string, newModelId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      return await invoke<{ success: boolean; message: string }>('db_update_llm_model_id', { id, newModelId });
+    } catch (error) {
+      console.error('[SqliteService] Failed to update LLM model ID:', error);
+      return { success: false, message: String(error) };
+    }
+  }
+
+  async fixGoogleModelIds(): Promise<{ success: boolean; message: string }> {
+    try {
+      return await invoke<{ success: boolean; message: string }>('db_fix_google_model_ids');
+    } catch (error) {
+      console.error('[SqliteService] Failed to fix Google model IDs:', error);
+      return { success: false, message: String(error) };
+    }
+  }
+
   async setActiveLLMProvider(provider: string): Promise<void> {
     try {
       await invoke('db_set_active_llm_provider', { provider });

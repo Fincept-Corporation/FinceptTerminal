@@ -5,7 +5,7 @@
  * Supports multiple brokers across different regions with real-time market data.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, Activity, DollarSign, BarChart3,
   Settings as SettingsIcon, Globe, Wifi, WifiOff, Bell,
@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { StockBrokerProvider, useStockBrokerContext, useStockTradingMode, useStockTradingData } from '@/contexts/StockBrokerContext';
 import {
   BrokerSelector,
-  BrokerSetupPanel,
+  BrokersManagementPanel,
   StockOrderForm,
   PositionsPanel,
   HoldingsPanel,
@@ -29,8 +29,12 @@ import {
 } from './components';
 import type { SymbolSearchResult, SupportedBroker } from '@/services/trading/masterContractService';
 
-import type { StockExchange, Quote } from '@/brokers/stocks/types';
+import type { StockExchange, Quote, MarketDepth } from '@/brokers/stocks/types';
 import { GridTradingPanel } from '../trading/grid-trading';
+
+// Market hours and caching utilities
+import { getMarketStatus, getPollingInterval, getCacheTTL, isMarketOpen, getMarketStatusMessage } from '@/services/markets/marketHoursService';
+import cacheService from '@/services/cache/cacheService';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -51,14 +55,33 @@ const FINCEPT = {
   MUTED: '#4A4A4A'
 };
 
-// Default Indian market watchlist
+// NIFTY 50 Components - Full watchlist (current constituents as of Jan 2025)
 const DEFAULT_WATCHLIST = [
-  'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-  'HINDUNILVR', 'SBIN', 'BHARTIARTL', 'ITC', 'KOTAKBANK',
-  'LT', 'AXISBANK', 'BAJFINANCE', 'MARUTI', 'ASIANPAINT',
-  'HCLTECH', 'SUNPHARMA', 'TITAN', 'WIPRO', 'ULTRACEMCO',
-  'NESTLEIND', 'M&M', 'TATASTEEL', 'POWERGRID', 'NTPC',
-  'JSWSTEEL', 'TECHM', 'ADANIPORTS', 'DIVISLAB', 'DRREDDY'
+  // Financials (Weight: ~35%)
+  'HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK',
+  'BAJFINANCE', 'BAJAJFINSV', 'HDFCLIFE', 'SBILIFE', 'INDUSINDBK',
+
+  // IT (Weight: ~13%)
+  'TCS', 'INFY', 'WIPRO', 'HCLTECH', 'TECHM', 'LTIM',
+
+  // Oil & Gas / Energy (Weight: ~12%)
+  'RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'ADANIPORTS', 'ADANIENT',
+
+  // Auto (Weight: ~7%)
+  'MARUTI', 'TATAMOTORS', 'M&M', 'BAJAJ-AUTO', 'HEROMOTOCO', 'EICHERMOT',
+
+  // FMCG (Weight: ~8%)
+  'HINDUNILVR', 'ITC', 'NESTLEIND', 'BRITANNIA', 'TATACONSUM',
+
+  // Metals & Mining (Weight: ~4%)
+  'TATASTEEL', 'JSWSTEEL', 'HINDALCO', 'COALINDIA',
+
+  // Pharma & Healthcare (Weight: ~4%)
+  'SUNPHARMA', 'DRREDDY', 'CIPLA', 'APOLLOHOSP', 'DIVISLAB',
+
+  // Infrastructure & Others (Weight: ~17%)
+  'LT', 'BHARTIARTL', 'ULTRACEMCO', 'GRASIM', 'TITAN',
+  'ASIANPAINT', 'BPCL', 'SHRIRAMFIN', 'TRENT',
 ];
 
 // Market indices
@@ -69,7 +92,7 @@ const MARKET_INDICES = [
   { symbol: 'NIFTYIT', exchange: 'NSE' as StockExchange },
 ];
 
-type BottomPanelTab = 'positions' | 'holdings' | 'orders' | 'history' | 'stats' | 'market' | 'grid-trading';
+type BottomPanelTab = 'positions' | 'holdings' | 'orders' | 'history' | 'stats' | 'market' | 'grid-trading' | 'brokers';
 type LeftSidebarView = 'watchlist' | 'indices' | 'sectors';
 type CenterView = 'chart' | 'depth' | 'trades';
 type RightPanelView = 'orderbook' | 'marketdepth' | 'info';
@@ -87,7 +110,7 @@ function EquityTradingContent() {
     isConnecting,
   } = useStockBrokerContext();
   const { mode: tradingMode, setMode: setTradingMode, isLive, isPaper } = useStockTradingMode();
-  const { positions, holdings, orders, funds, refreshAll, isRefreshing } = useStockTradingData();
+  const { positions, holdings, orders, trades, funds, refreshAll, refreshTrades, isRefreshing } = useStockTradingData();
 
   // Time state
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -99,11 +122,17 @@ function EquityTradingContent() {
 
   // Quote data
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [marketDepth, setMarketDepth] = useState<MarketDepth | null>(null);
   const [wsError, setWsError] = useState<string | null>(null);
+  const [isLoadingQuote, setIsLoadingQuote] = useState(false);
 
   // Watchlist
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, Quote>>({});
+  // Auto-set WebSocket based on market hours - ON during market hours, OFF when closed
+  const [useWebSocketForWatchlist, setUseWebSocketForWatchlist] = useState<boolean>(() => {
+    return isMarketOpen(selectedExchange || 'NSE');
+  });
 
   // UI State
   const [leftSidebarView, setLeftSidebarView] = useState<LeftSidebarView>('watchlist');
@@ -113,8 +142,15 @@ function EquityTradingContent() {
   const [isBottomPanelMinimized, setIsBottomPanelMinimized] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Recent trades for trades view
-  const [recentTrades, setRecentTrades] = useState<any[]>([]);
+  // Filter trades for the selected symbol (memoized)
+  const symbolTrades = useMemo(() => {
+    if (!selectedSymbol || !trades || trades.length === 0) return [];
+    // Filter trades for current symbol and sort by time (most recent first)
+    return trades
+      .filter(t => t.symbol === selectedSymbol)
+      .sort((a, b) => new Date(b.tradedAt).getTime() - new Date(a.tradedAt).getTime())
+      .slice(0, 50); // Keep last 50 trades
+  }, [trades, selectedSymbol]);
 
   // Update clock
   useEffect(() => {
@@ -122,97 +158,449 @@ function EquityTradingContent() {
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-toggle WebSocket based on market hours
+  // Check every minute and switch WS on when market opens, off when it closes
+  useEffect(() => {
+    const checkMarketStatus = () => {
+      const marketOpen = isMarketOpen(selectedExchange);
+      setUseWebSocketForWatchlist(prev => {
+        if (prev !== marketOpen) {
+          console.log(`[EquityTrading] Market ${marketOpen ? 'OPEN' : 'CLOSED'} - WebSocket ${marketOpen ? 'enabled' : 'disabled'}`);
+        }
+        return marketOpen;
+      });
+    };
+
+    // Check immediately
+    checkMarketStatus();
+
+    // Check every minute
+    const interval = setInterval(checkMarketStatus, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [selectedExchange]);
+
   // Set default symbol when broker changes
   useEffect(() => {
     if (defaultSymbols.length > 0 && !selectedSymbol) {
       setSelectedSymbol(defaultSymbols[0]);
     }
-    // Update watchlist from broker defaults
+    // Update watchlist - use broker defaults if available, otherwise use full Nifty 50
     if (defaultSymbols.length > 0) {
-      setWatchlist(defaultSymbols.slice(0, 30));
+      // Use broker's default symbols (but not sliced - show all 50)
+      setWatchlist(defaultSymbols.slice(0, 50));
+    } else {
+      // Fallback to our DEFAULT_WATCHLIST (full Nifty 50)
+      setWatchlist(DEFAULT_WATCHLIST);
     }
   }, [defaultSymbols, selectedSymbol]);
 
-  // Subscribe to WebSocket for live prices
+  // Subscribe to WebSocket for live prices and fetch initial data
   useEffect(() => {
     if (!adapter || !isAuthenticated || !selectedSymbol) return;
+
+    let isCancelled = false;
 
     const subscribeToSymbol = async () => {
       try {
         console.log(`[EquityTrading] Subscribing to ${selectedSymbol} via WebSocket...`);
+        setIsLoadingQuote(true);
 
-        await adapter.subscribe(selectedSymbol, selectedExchange, 'quote');
+        // Fetch initial quote immediately
+        try {
+          const initialQuote = await adapter.getQuote(selectedSymbol, selectedExchange);
+          if (!isCancelled && initialQuote) {
+            setQuote(initialQuote);
+            console.log(`[EquityTrading] Initial quote loaded for ${selectedSymbol}:`, {
+              lastPrice: initialQuote.lastPrice,
+              bid: initialQuote.bid,
+              ask: initialQuote.ask,
+            });
+          }
+        } catch (quoteErr) {
+          console.warn(`[EquityTrading] Failed to fetch initial quote:`, quoteErr);
+        }
+
+        // Fetch initial market depth
+        try {
+          const initialDepth = await adapter.getMarketDepth(selectedSymbol, selectedExchange);
+          if (!isCancelled && initialDepth) {
+            setMarketDepth(initialDepth);
+            console.log(`[EquityTrading] Initial depth loaded for ${selectedSymbol}:`, {
+              bids: initialDepth.bids?.length || 0,
+              asks: initialDepth.asks?.length || 0,
+            });
+          }
+        } catch (depthErr) {
+          console.warn(`[EquityTrading] Failed to fetch initial depth:`, depthErr);
+        }
+
+        setIsLoadingQuote(false);
+
+        // Subscribe to WebSocket for live updates
+        await adapter.subscribe(selectedSymbol, selectedExchange, 'full');
 
         const handleTick = (tick: any) => {
-          if (tick.symbol === selectedSymbol) {
-            setQuote({
+          if (tick.symbol === selectedSymbol && !isCancelled) {
+            // Update quote with tick data
+            setQuote((prevQuote) => ({
               symbol: tick.symbol,
               exchange: tick.exchange,
-              lastPrice: tick.lastPrice || tick.price,
-              open: tick.open || tick.lastPrice,
-              high: tick.high || tick.lastPrice,
-              low: tick.low || tick.lastPrice,
-              close: tick.close || tick.lastPrice,
-              previousClose: tick.close || tick.lastPrice,
-              volume: tick.volume || 0,
-              change: tick.change || 0,
-              changePercent: tick.changePercent || 0,
-              bid: tick.bid || 0,
-              bidQty: tick.bidQty || 0,
-              ask: tick.ask || 0,
-              askQty: tick.askQty || 0,
+              lastPrice: tick.lastPrice || tick.price || prevQuote?.lastPrice || 0,
+              open: tick.open || prevQuote?.open || tick.lastPrice,
+              high: tick.high || prevQuote?.high || tick.lastPrice,
+              low: tick.low || prevQuote?.low || tick.lastPrice,
+              close: tick.close || prevQuote?.close || tick.lastPrice,
+              previousClose: tick.previousClose || prevQuote?.previousClose || tick.close || tick.lastPrice,
+              volume: tick.volume ?? prevQuote?.volume ?? 0,
+              change: tick.change ?? prevQuote?.change ?? 0,
+              changePercent: tick.changePercent ?? prevQuote?.changePercent ?? 0,
+              // Update bid/ask from tick or preserve previous values
+              bid: tick.bid || prevQuote?.bid || 0,
+              bidQty: tick.bidQty || prevQuote?.bidQty || 0,
+              ask: tick.ask || prevQuote?.ask || 0,
+              askQty: tick.askQty || prevQuote?.askQty || 0,
               timestamp: Date.now(),
+            }));
+
+            // Also update market depth if tick includes depth data
+            if (tick.depth && (tick.depth.bids?.length > 0 || tick.depth.asks?.length > 0)) {
+              setMarketDepth({
+                bids: tick.depth.bids || [],
+                asks: tick.depth.asks || [],
+              });
+            }
+          }
+        };
+
+        const handleDepth = (depth: any) => {
+          if (depth.symbol === selectedSymbol && !isCancelled) {
+            setMarketDepth({
+              bids: depth.bids || [],
+              asks: depth.asks || [],
             });
+
+            // Also update quote's bid/ask from depth data (best bid/ask)
+            const bestBid = depth.bids?.[0];
+            const bestAsk = depth.asks?.[0];
+            if (bestBid || bestAsk) {
+              setQuote((prevQuote) => {
+                if (!prevQuote) return prevQuote;
+                return {
+                  ...prevQuote,
+                  bid: bestBid?.price || prevQuote.bid,
+                  bidQty: bestBid?.quantity || prevQuote.bidQty,
+                  ask: bestAsk?.price || prevQuote.ask,
+                  askQty: bestAsk?.quantity || prevQuote.askQty,
+                };
+              });
+            }
           }
         };
 
         adapter.onTick(handleTick);
+        adapter.onDepth(handleDepth);
         setWsError(null);
       } catch (err: any) {
         console.error('[EquityTrading] WebSocket subscription failed:', err);
         setWsError(err.message);
+        setIsLoadingQuote(false);
       }
     };
 
     subscribeToSymbol();
 
     return () => {
+      isCancelled = true;
       if (adapter && selectedSymbol) {
         adapter.unsubscribe(selectedSymbol, selectedExchange).catch(console.error);
       }
     };
   }, [adapter, isAuthenticated, selectedSymbol, selectedExchange]);
 
-  // Fetch watchlist quotes periodically
+  // Subscribe to watchlist via WebSocket for real-time updates
   useEffect(() => {
-    if (!adapter || !isAuthenticated) return;
+    if (!adapter || !isAuthenticated || !useWebSocketForWatchlist) return;
 
-    const fetchWatchlistQuotes = async () => {
-      try {
-        const quotes: Record<string, Quote> = {};
-        // Batch fetch quotes for watchlist
-        for (const symbol of watchlist.slice(0, 15)) {
-          try {
-            const q = await adapter.getQuote(symbol, selectedExchange);
-            if (q) {
-              quotes[symbol] = q;
+    let isCancelled = false;
+    const subscribedSymbols: string[] = [];
+
+    const subscribeWatchlist = async () => {
+      console.log('[EquityTrading] Subscribing to watchlist via WebSocket...');
+
+      // Handle incoming ticks for watchlist symbols
+      const handleWatchlistTick = (tick: any) => {
+        if (watchlist.includes(tick.symbol) && !isCancelled) {
+          setWatchlistQuotes(prev => ({
+            ...prev,
+            [tick.symbol]: {
+              symbol: tick.symbol,
+              exchange: tick.exchange || selectedExchange,
+              lastPrice: tick.lastPrice || tick.price,
+              open: tick.open || prev[tick.symbol]?.open || 0,
+              high: tick.high || prev[tick.symbol]?.high || tick.lastPrice,
+              low: tick.low || prev[tick.symbol]?.low || tick.lastPrice,
+              close: tick.close || prev[tick.symbol]?.close || tick.lastPrice,
+              previousClose: tick.previousClose || prev[tick.symbol]?.previousClose || tick.close || tick.lastPrice,
+              volume: tick.volume || prev[tick.symbol]?.volume || 0,
+              change: tick.change || 0,
+              changePercent: tick.changePercent || 0,
+              bid: tick.bid || prev[tick.symbol]?.bid || 0,
+              bidQty: tick.bidQty || prev[tick.symbol]?.bidQty || 0,
+              ask: tick.ask || prev[tick.symbol]?.ask || 0,
+              askQty: tick.askQty || prev[tick.symbol]?.askQty || 0,
+              timestamp: tick.timestamp || Date.now(),
             }
+          }));
+        }
+      };
+
+      // Register tick handler
+      adapter.onTick(handleWatchlistTick);
+
+      // Subscribe to all watchlist symbols in batches
+      const BATCH_SIZE = 10;
+      const BATCH_DELAY = 500; // 500ms between subscription batches
+
+      for (let i = 0; i < watchlist.length && !isCancelled; i += BATCH_SIZE) {
+        const batch = watchlist.slice(i, i + BATCH_SIZE);
+
+        for (const symbol of batch) {
+          if (isCancelled) break;
+          try {
+            await adapter.subscribe(symbol, selectedExchange, 'quote');
+            subscribedSymbols.push(symbol);
           } catch (err) {
-            // Skip individual quote errors
+            console.warn(`[EquityTrading] Failed to subscribe to ${symbol}:`, err);
           }
         }
-        if (Object.keys(quotes).length > 0) {
-          setWatchlistQuotes(quotes);
+
+        // Small delay between batches
+        if (i + BATCH_SIZE < watchlist.length && !isCancelled) {
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+        }
+      }
+
+      console.log(`[EquityTrading] Subscribed to ${subscribedSymbols.length} watchlist symbols via WebSocket`);
+
+      // Store the tick handler for cleanup
+      return handleWatchlistTick;
+    };
+
+    let tickHandler: ((tick: any) => void) | undefined;
+
+    subscribeWatchlist().then(handler => {
+      tickHandler = handler;
+    }).catch(err => {
+      console.error('[EquityTrading] WebSocket watchlist subscription failed:', err);
+    });
+
+    return () => {
+      isCancelled = true;
+
+      // Unsubscribe from all watchlist symbols
+      if (tickHandler) {
+        adapter.offTick(tickHandler);
+      }
+
+      // Unsubscribe symbols (but not the selected symbol)
+      for (const symbol of subscribedSymbols) {
+        if (symbol !== selectedSymbol) {
+          adapter.unsubscribe(symbol, selectedExchange).catch(() => {});
+        }
+      }
+    };
+  }, [adapter, isAuthenticated, watchlist, selectedExchange, useWebSocketForWatchlist, selectedSymbol]);
+
+  // Fallback: Fetch watchlist quotes via REST if WebSocket is disabled
+  // Uses smart polling based on market hours - polls frequently when open, uses cache when closed
+  useEffect(() => {
+    if (!adapter || !isAuthenticated || useWebSocketForWatchlist) return;
+
+    let isCancelled = false;
+    let isPolling = false;
+    let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+    let hasFetchedInitial = false;
+
+    const fetchWatchlistQuotes = async (useCache = false) => {
+      if (isCancelled || isPolling) return;
+
+      const marketOpen = isMarketOpen(selectedExchange);
+      const cacheKey = `watchlist:quotes:${selectedExchange}:${watchlist.slice(0, 5).join('-')}`;
+
+      // If market is closed and we already fetched, skip polling (use cached data)
+      if (!marketOpen && hasFetchedInitial && useCache) {
+        console.log('[EquityTrading] Market closed, using cached watchlist data');
+        return;
+      }
+
+      isPolling = true;
+
+      try {
+        // Try to get from cache first when market is closed
+        if (!marketOpen) {
+          const cached = await cacheService.get<Record<string, Quote>>(cacheKey);
+          if (cached && !cached.isStale) {
+            setWatchlistQuotes(prev => ({ ...prev, ...cached.data }));
+            console.log('[EquityTrading] ✓ Loaded watchlist from cache (market closed)');
+            hasFetchedInitial = true;
+            return;
+          }
+        }
+
+        console.log(`[EquityTrading] Fetching watchlist quotes (market ${marketOpen ? 'OPEN' : 'CLOSED'})...`);
+
+        const quotes = await adapter.getQuotes(
+          watchlist.map(s => ({ symbol: s, exchange: selectedExchange }))
+        );
+
+        if (quotes && quotes.length > 0 && !isCancelled) {
+          const newQuotes: Record<string, Quote> = {};
+          quotes.forEach(q => {
+            newQuotes[q.symbol] = q;
+          });
+          setWatchlistQuotes(prev => ({ ...prev, ...newQuotes }));
+
+          // Cache the quotes with TTL based on market status
+          const ttl = getCacheTTL(selectedExchange);
+          await cacheService.set(cacheKey, newQuotes, 'market-quotes', ttl);
+
+          console.log(`[EquityTrading] ✓ Received ${quotes.length} watchlist quotes`);
+          hasFetchedInitial = true;
         }
       } catch (err) {
         console.error('[EquityTrading] Failed to fetch watchlist quotes:', err);
+      } finally {
+        isPolling = false;
       }
     };
 
-    fetchWatchlistQuotes();
-    const interval = setInterval(fetchWatchlistQuotes, 30000);
-    return () => clearInterval(interval);
-  }, [adapter, isAuthenticated, watchlist, selectedExchange]);
+    // Get polling interval based on market hours
+    const interval = getPollingInterval(selectedExchange);
+    const marketStatus = getMarketStatus(selectedExchange);
+
+    console.log(`[EquityTrading] Watchlist poll interval: ${interval / 1000}s (${marketStatus.status})`);
+
+    // Initial fetch after 3 seconds
+    const initialTimeout = setTimeout(() => {
+      fetchWatchlistQuotes(false);
+    }, 3000);
+
+    // Setup polling interval
+    pollingIntervalId = setInterval(() => {
+      fetchWatchlistQuotes(true);
+    }, interval);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(initialTimeout);
+      if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+      }
+    };
+  }, [adapter, isAuthenticated, watchlist, selectedExchange, useWebSocketForWatchlist]);
+
+  // Smart polling for selected symbol's quote and depth data
+  // Polls based on market hours - more frequently when open, uses cache when closed
+  useEffect(() => {
+    if (!adapter || !isAuthenticated || !selectedSymbol) return;
+
+    let isCancelled = false;
+    let isPolling = false;
+    let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+    let hasFetchedInitial = false;
+
+    const fetchQuoteAndDepth = async (useCache = false) => {
+      if (isCancelled || isPolling) return;
+
+      const marketOpen = isMarketOpen(selectedExchange);
+      const quoteCacheKey = `quote:${selectedExchange}:${selectedSymbol}`;
+      const depthCacheKey = `depth:${selectedExchange}:${selectedSymbol}`;
+
+      // If market is closed and we already fetched, skip polling
+      if (!marketOpen && hasFetchedInitial && useCache) {
+        console.log(`[EquityTrading] Market closed, skipping poll for ${selectedSymbol}`);
+        return;
+      }
+
+      isPolling = true;
+
+      try {
+        // Try cache first when market is closed
+        if (!marketOpen) {
+          const [cachedQuote, cachedDepth] = await Promise.all([
+            cacheService.get<Quote>(quoteCacheKey),
+            cacheService.get<MarketDepth>(depthCacheKey),
+          ]);
+
+          if (cachedQuote && !cachedQuote.isStale) {
+            setQuote(cachedQuote.data);
+            console.log(`[EquityTrading] ✓ Loaded ${selectedSymbol} quote from cache`);
+          }
+          if (cachedDepth && !cachedDepth.isStale) {
+            setMarketDepth(cachedDepth.data);
+            console.log(`[EquityTrading] ✓ Loaded ${selectedSymbol} depth from cache`);
+          }
+
+          // If both are cached and fresh, skip fetch
+          if (cachedQuote && !cachedQuote.isStale && cachedDepth && !cachedDepth.isStale) {
+            hasFetchedInitial = true;
+            return;
+          }
+        }
+
+        console.log(`[EquityTrading] Polling ${selectedSymbol} (market ${marketOpen ? 'OPEN' : 'CLOSED'})...`);
+
+        // Fetch quote and depth in parallel
+        const [freshQuote, freshDepth] = await Promise.all([
+          adapter.getQuote(selectedSymbol, selectedExchange).catch(() => null),
+          adapter.getMarketDepth(selectedSymbol, selectedExchange).catch(() => null),
+        ]);
+
+        const ttl = getCacheTTL(selectedExchange);
+
+        if (freshQuote && !isCancelled) {
+          setQuote(freshQuote);
+          await cacheService.set(quoteCacheKey, freshQuote, 'market-quotes', ttl);
+        }
+
+        if (freshDepth && !isCancelled) {
+          setMarketDepth(freshDepth);
+          await cacheService.set(depthCacheKey, freshDepth, 'market-quotes', ttl);
+          console.log(`[EquityTrading] ✓ Depth updated: ${freshDepth.bids?.length || 0} bids, ${freshDepth.asks?.length || 0} asks`);
+        }
+
+        hasFetchedInitial = true;
+      } catch (err) {
+        console.error(`[EquityTrading] Failed to poll ${selectedSymbol}:`, err);
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    // Get polling interval based on market hours
+    const interval = getPollingInterval(selectedExchange);
+    const marketStatus = getMarketStatus(selectedExchange);
+
+    console.log(`[EquityTrading] ${selectedSymbol} poll interval: ${interval / 1000}s (${marketStatus.status})`);
+
+    // Initial fetch after a short delay (let WebSocket subscription settle first)
+    const initialTimeout = setTimeout(() => {
+      fetchQuoteAndDepth(false);
+    }, 5000);
+
+    // Setup polling interval
+    pollingIntervalId = setInterval(() => {
+      fetchQuoteAndDepth(true);
+    }, interval);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(initialTimeout);
+      if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+      }
+    };
+  }, [adapter, isAuthenticated, selectedSymbol, selectedExchange]);
 
   // Select symbol from search (supports both legacy search and master contract search)
   const handleSelectSymbol = (symbol: string, exchange: StockExchange, result?: SymbolSearchResult) => {
@@ -234,8 +622,13 @@ function EquityTradingContent() {
   const currentPrice = quote?.lastPrice || 0;
   const priceChange = quote?.change || 0;
   const priceChangePercent = quote?.changePercent || 0;
-  const spread = quote ? (quote.ask - quote.bid) : 0;
-  const spreadPercent = quote && quote.bid > 0 ? (spread / quote.bid) * 100 : 0;
+  // Spread = Ask - Bid (only calculate if both values are valid and positive)
+  const spread = (quote?.ask && quote?.bid && quote.ask > 0 && quote.bid > 0)
+    ? (quote.ask - quote.bid)
+    : 0;
+  const spreadPercent = (spread > 0 && quote?.bid && quote.bid > 0)
+    ? (spread / quote.bid) * 100
+    : 0;
   const dayRange = quote ? (quote.high - quote.low) : 0;
   const dayRangePercent = quote && quote.low > 0 ? (dayRange / quote.low) * 100 : 0;
 
@@ -317,67 +710,51 @@ function EquityTradingContent() {
 
           <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
-          {/* Trading Mode Toggle - PROMINENT INDICATOR */}
+          {/* Trading Mode Toggle */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            padding: '4px 12px',
-            backgroundColor: isLive ? `${FINCEPT.RED}20` : `${FINCEPT.GREEN}20`,
-            border: `2px solid ${isLive ? FINCEPT.RED : FINCEPT.GREEN}`,
-            borderRadius: '4px'
+            gap: '2px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            padding: '2px',
           }}>
-            {/* Mode Indicator */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              <div style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: isLive ? FINCEPT.RED : FINCEPT.GREEN,
-                boxShadow: `0 0 8px ${isLive ? FINCEPT.RED : FINCEPT.GREEN}`,
-                animation: isLive ? 'pulse 1s infinite' : 'none'
-              }} />
-              <span style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: isLive ? FINCEPT.RED : FINCEPT.GREEN,
-                letterSpacing: '1px'
-              }}>
-                {isLive ? '🔴 LIVE' : '⚪ PAPER'}
-              </span>
-            </div>
-
-            <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
-
             <button
               onClick={() => setTradingMode('paper')}
               style={{
-                padding: '4px 10px',
-                backgroundColor: isPaper ? FINCEPT.GREEN : FINCEPT.PANEL_BG,
-                border: `1px solid ${isPaper ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+                padding: '6px 14px',
+                backgroundColor: isPaper ? FINCEPT.GREEN : 'transparent',
+                border: 'none',
                 color: isPaper ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '10px',
                 fontWeight: 700,
-                transition: 'all 0.2s'
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
+              {isPaper && (
+                <div style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: FINCEPT.DARK_BG,
+                }} />
+              )}
               PAPER
             </button>
             <button
               onClick={() => {
-                // Require confirmation before switching to live mode
                 if (!isLive) {
                   const confirmed = window.confirm(
-                    '⚠️ WARNING: SWITCHING TO LIVE TRADING ⚠️\n\n' +
+                    'WARNING: SWITCHING TO LIVE TRADING\n\n' +
                     'You are about to enable LIVE trading mode.\n\n' +
-                    '• All orders will be placed with REAL funds\n' +
-                    '• Trades will be executed on the actual exchange\n' +
-                    '• You may lose money\n\n' +
+                    '- All orders will be placed with REAL funds\n' +
+                    '- Trades will be executed on the actual exchange\n' +
+                    '- You may lose money\n\n' +
                     'Are you sure you want to continue?'
                   );
                   if (confirmed) {
@@ -386,16 +763,30 @@ function EquityTradingContent() {
                 }
               }}
               style={{
-                padding: '4px 10px',
-                backgroundColor: isLive ? FINCEPT.RED : FINCEPT.PANEL_BG,
-                border: `1px solid ${isLive ? FINCEPT.RED : FINCEPT.BORDER}`,
+                padding: '6px 14px',
+                backgroundColor: isLive ? FINCEPT.RED : 'transparent',
+                border: 'none',
                 color: isLive ? FINCEPT.WHITE : FINCEPT.GRAY,
                 cursor: 'pointer',
                 fontSize: '10px',
                 fontWeight: 700,
-                transition: 'all 0.2s'
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
+              {isLive && (
+                <div style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: FINCEPT.WHITE,
+                  boxShadow: `0 0 6px ${FINCEPT.WHITE}`,
+                  animation: 'pulse 1s infinite',
+                }} />
+              )}
               LIVE
             </button>
           </div>
@@ -615,6 +1006,39 @@ function EquityTradingContent() {
             ))}
           </div>
 
+          {/* WebSocket Toggle for Watchlist */}
+          {leftSidebarView === 'watchlist' && (
+            <div style={{
+              padding: '4px 8px',
+              backgroundColor: FINCEPT.PANEL_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                {useWebSocketForWatchlist ? '⚡ REALTIME' : '🔄 POLLING'}
+              </span>
+              <button
+                onClick={() => setUseWebSocketForWatchlist(!useWebSocketForWatchlist)}
+                style={{
+                  padding: '3px 8px',
+                  backgroundColor: useWebSocketForWatchlist ? FINCEPT.GREEN : FINCEPT.MUTED,
+                  border: 'none',
+                  color: useWebSocketForWatchlist ? FINCEPT.DARK_BG : FINCEPT.WHITE,
+                  cursor: 'pointer',
+                  fontSize: '8px',
+                  fontWeight: 700,
+                  borderRadius: '2px',
+                  transition: 'all 0.2s',
+                }}
+                title={useWebSocketForWatchlist ? 'Switch to REST polling' : 'Switch to WebSocket real-time'}
+              >
+                {useWebSocketForWatchlist ? 'WS ON' : 'WS OFF'}
+              </button>
+            </div>
+          )}
+
           {/* Content */}
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {leftSidebarView === 'watchlist' && (
@@ -672,7 +1096,7 @@ function EquityTradingContent() {
                           {symbol}
                         </div>
 
-                        {q ? (
+                        {q && q.lastPrice != null ? (
                           <div style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -692,11 +1116,11 @@ function EquityTradingContent() {
                             </div>
                             <div style={{
                               fontSize: '9px',
-                              color: q.changePercent >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
+                              color: (q.changePercent ?? 0) >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
                               fontFamily: 'monospace',
                               fontWeight: 700
                             }}>
-                              {q.changePercent >= 0 ? '▲' : '▼'} {Math.abs(q.changePercent).toFixed(2)}%
+                              {(q.changePercent ?? 0) >= 0 ? '▲' : '▼'} {Math.abs(q.changePercent ?? 0).toFixed(2)}%
                             </div>
                           </div>
                         ) : (
@@ -912,34 +1336,43 @@ function EquityTradingContent() {
               )}
               {centerView === 'trades' && (
                 <div style={{ width: '100%', height: '100%', overflow: 'auto', padding: '8px' }}>
-                  {recentTrades.length === 0 ? (
+                  {symbolTrades.length === 0 ? (
                     <div style={{
                       padding: '40px',
                       textAlign: 'center',
                       color: FINCEPT.GRAY,
                       fontSize: '11px'
                     }}>
-                      No recent trades
+                      No recent trades for {selectedSymbol || 'selected symbol'}
                     </div>
                   ) : (
                     <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                           <th style={{ padding: '6px', textAlign: 'left', color: FINCEPT.GRAY }}>TIME</th>
+                          <th style={{ padding: '6px', textAlign: 'left', color: FINCEPT.GRAY }}>SIDE</th>
                           <th style={{ padding: '6px', textAlign: 'right', color: FINCEPT.GRAY }}>PRICE</th>
                           <th style={{ padding: '6px', textAlign: 'right', color: FINCEPT.GRAY }}>QTY</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {recentTrades.slice(0, 20).map((trade, idx) => (
-                          <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
+                        {symbolTrades.slice(0, 20).map((trade, idx) => (
+                          <tr key={trade.tradeId || idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
                             <td style={{ padding: '4px 6px', color: FINCEPT.GRAY, fontSize: '9px' }}>
-                              {new Date(trade.timestamp).toLocaleTimeString()}
+                              {new Date(trade.tradedAt).toLocaleTimeString()}
+                            </td>
+                            <td style={{
+                              padding: '4px 6px',
+                              color: trade.side === 'BUY' ? FINCEPT.GREEN : FINCEPT.RED,
+                              fontWeight: 600,
+                              fontSize: '9px'
+                            }}>
+                              {trade.side}
                             </td>
                             <td style={{
                               padding: '4px 6px',
                               textAlign: 'right',
-                              color: trade.side === 'buy' ? FINCEPT.GREEN : FINCEPT.RED
+                              color: trade.side === 'BUY' ? FINCEPT.GREEN : FINCEPT.RED
                             }}>
                               ₹{trade.price?.toFixed(2)}
                             </td>
@@ -956,11 +1389,11 @@ function EquityTradingContent() {
             </div>
           </div>
 
-          {/* Bottom Panel - Positions/Holdings/Orders - Compact by default */}
+          {/* Bottom Panel - Positions/Holdings/Orders - Compact by default, larger for brokers */}
           <div style={{
-            flex: isBottomPanelMinimized ? '0 0 32px' : '0 0 200px',
-            minHeight: isBottomPanelMinimized ? '32px' : '150px',
-            maxHeight: isBottomPanelMinimized ? '32px' : '220px',
+            flex: isBottomPanelMinimized ? '0 0 32px' : activeBottomTab === 'brokers' ? '0 0 350px' : '0 0 200px',
+            minHeight: isBottomPanelMinimized ? '32px' : activeBottomTab === 'brokers' ? '300px' : '150px',
+            maxHeight: isBottomPanelMinimized ? '32px' : activeBottomTab === 'brokers' ? '450px' : '220px',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -983,6 +1416,7 @@ function EquityTradingContent() {
                   { id: 'history', label: 'HISTORY', count: null },
                   { id: 'stats', label: 'STATS', count: null },
                   { id: 'grid-trading', label: 'GRID BOT', count: null },
+                  { id: 'brokers', label: 'BROKERS', count: null },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -1119,6 +1553,13 @@ function EquityTradingContent() {
                     />
                   </div>
                 )}
+
+                {/* Brokers Management Tab */}
+                {activeBottomTab === 'brokers' && (
+                  <div style={{ height: '100%', overflow: 'hidden' }}>
+                    <BrokersManagementPanel />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1156,7 +1597,39 @@ function EquityTradingContent() {
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
               {!isAuthenticated ? (
-                <BrokerSetupPanel />
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  gap: '12px',
+                  textAlign: 'center',
+                }}>
+                  <AlertCircle size={32} color={FINCEPT.ORANGE} />
+                  <div>
+                    <p style={{ color: FINCEPT.WHITE, fontSize: '12px', fontWeight: 600, margin: '0 0 4px 0' }}>
+                      No Broker Connected
+                    </p>
+                    <p style={{ color: FINCEPT.GRAY, fontSize: '10px', margin: 0 }}>
+                      Configure your broker in the BROKERS tab below
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveBottomTab('brokers')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: FINCEPT.ORANGE,
+                      border: 'none',
+                      color: FINCEPT.DARK_BG,
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    CONNECT BROKER
+                  </button>
+                </div>
               ) : (
                 <StockOrderForm
                   symbol={selectedSymbol}
@@ -1225,11 +1698,20 @@ function EquityTradingContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[1, 2, 3, 4, 5].map((i) => (
+                        {(marketDepth?.bids && marketDepth.bids.length > 0
+                          ? marketDepth.bids.slice(0, 5)
+                          : [null, null, null, null, null]
+                        ).map((bid, i) => (
                           <tr key={i} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
-                            <td style={{ padding: '4px', color: FINCEPT.WHITE }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GREEN }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>--</td>
+                            <td style={{ padding: '4px', color: FINCEPT.WHITE }}>
+                              {bid?.quantity ? bid.quantity.toLocaleString('en-IN') : '--'}
+                            </td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GREEN }}>
+                              {bid?.price ? `₹${bid.price.toFixed(2)}` : '--'}
+                            </td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>
+                              {bid?.orders || '--'}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1264,11 +1746,20 @@ function EquityTradingContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[1, 2, 3, 4, 5].map((i) => (
+                        {(marketDepth?.asks && marketDepth.asks.length > 0
+                          ? marketDepth.asks.slice(0, 5)
+                          : [null, null, null, null, null]
+                        ).map((ask, i) => (
                           <tr key={i} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
-                            <td style={{ padding: '4px', color: FINCEPT.RED }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.WHITE }}>--</td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>--</td>
+                            <td style={{ padding: '4px', color: FINCEPT.RED }}>
+                              {ask?.price ? `₹${ask.price.toFixed(2)}` : '--'}
+                            </td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.WHITE }}>
+                              {ask?.quantity ? ask.quantity.toLocaleString('en-IN') : '--'}
+                            </td>
+                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>
+                              {ask?.orders || '--'}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1281,16 +1772,105 @@ function EquityTradingContent() {
                 <div style={{
                   height: '100%',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   flexDirection: 'column',
-                  gap: '12px'
+                  gap: '8px'
                 }}>
-                  <Layers size={48} color={FINCEPT.GRAY} />
-                  <span style={{ fontSize: '12px', color: FINCEPT.GRAY }}>Market Depth</span>
-                  <span style={{ fontSize: '10px', color: FINCEPT.MUTED, textAlign: 'center' }}>
-                    Connect to broker for<br />real-time depth visualization
-                  </span>
+                  {marketDepth && (marketDepth.bids?.length > 0 || marketDepth.asks?.length > 0) ? (
+                    <>
+                      {/* Depth Chart Visualization */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {/* Bid depth bars */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '2px' }}>
+                          {marketDepth.bids?.slice(0, 5).reverse().map((bid, i) => {
+                            const maxQty = Math.max(
+                              ...marketDepth.bids.slice(0, 5).map(b => b.quantity),
+                              ...marketDepth.asks.slice(0, 5).map(a => a.quantity)
+                            );
+                            const widthPercent = (bid.quantity / maxQty) * 100;
+                            return (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '20px' }}>
+                                <span style={{ fontSize: '9px', color: FINCEPT.GREEN, width: '60px', textAlign: 'right' }}>
+                                  ₹{bid.price.toFixed(2)}
+                                </span>
+                                <div style={{ flex: 1, height: '16px', backgroundColor: FINCEPT.PANEL_BG, position: 'relative' }}>
+                                  <div style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    height: '100%',
+                                    width: `${widthPercent}%`,
+                                    backgroundColor: `${FINCEPT.GREEN}40`,
+                                    borderRight: `2px solid ${FINCEPT.GREEN}`,
+                                  }} />
+                                </div>
+                                <span style={{ fontSize: '9px', color: FINCEPT.WHITE, width: '50px' }}>
+                                  {bid.quantity.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Spread line */}
+                        <div style={{
+                          padding: '4px 8px',
+                          backgroundColor: FINCEPT.HEADER_BG,
+                          textAlign: 'center',
+                          fontSize: '9px',
+                          color: FINCEPT.YELLOW,
+                          borderTop: `1px solid ${FINCEPT.BORDER}`,
+                          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                        }}>
+                          Spread: {spread > 0 ? `₹${spread.toFixed(2)}` : '--'}
+                        </div>
+
+                        {/* Ask depth bars */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {marketDepth.asks?.slice(0, 5).map((ask, i) => {
+                            const maxQty = Math.max(
+                              ...marketDepth.bids.slice(0, 5).map(b => b.quantity),
+                              ...marketDepth.asks.slice(0, 5).map(a => a.quantity)
+                            );
+                            const widthPercent = (ask.quantity / maxQty) * 100;
+                            return (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '20px' }}>
+                                <span style={{ fontSize: '9px', color: FINCEPT.RED, width: '60px', textAlign: 'right' }}>
+                                  ₹{ask.price.toFixed(2)}
+                                </span>
+                                <div style={{ flex: 1, height: '16px', backgroundColor: FINCEPT.PANEL_BG, position: 'relative' }}>
+                                  <div style={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    height: '100%',
+                                    width: `${widthPercent}%`,
+                                    backgroundColor: `${FINCEPT.RED}40`,
+                                    borderLeft: `2px solid ${FINCEPT.RED}`,
+                                  }} />
+                                </div>
+                                <span style={{ fontSize: '9px', color: FINCEPT.WHITE, width: '50px' }}>
+                                  {ask.quantity.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}>
+                      <Layers size={48} color={FINCEPT.GRAY} />
+                      <span style={{ fontSize: '12px', color: FINCEPT.GRAY }}>Market Depth</span>
+                      <span style={{ fontSize: '10px', color: FINCEPT.MUTED, textAlign: 'center' }}>
+                        {isLoadingQuote ? 'Loading depth data...' : 'Select a symbol to view depth'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

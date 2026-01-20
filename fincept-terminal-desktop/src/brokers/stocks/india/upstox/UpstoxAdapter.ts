@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
 import type {
   StockBrokerMetadata,
@@ -64,9 +65,15 @@ export class UpstoxAdapter extends BaseStockBrokerAdapter {
   private apiSecret: string | null = null;
   private redirectUri: string = 'http://localhost:5000/callback';
 
-  // REST API polling for quotes
+  // Tauri event unlisteners for WebSocket events
+  private tickerUnlisten: UnlistenFn | null = null;
+  private orderbookUnlisten: UnlistenFn | null = null;
+  private statusUnlisten: UnlistenFn | null = null;
+
+  // Fallback: REST API polling for quotes (when WebSocket fails)
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
+  private usePollingFallback: boolean = false;
 
   // ============================================================================
   // Authentication
@@ -725,24 +732,206 @@ export class UpstoxAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // WebSocket / Polling
+  // WebSocket - Real WebSocket via Rust Backend
   // ============================================================================
 
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
     try {
-      this.startQuotePolling();
-      this.wsConnected = true;
-      console.log('[Upstox] REST API polling started');
+      // Try real WebSocket connection via Rust backend
+      await this.connectRealWebSocket();
+      console.log('[Upstox] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.error('[Upstox] Failed to start polling:', error);
-      throw error;
+      console.warn('[Upstox] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
     }
+  }
+
+  /**
+   * Connect to real Upstox WebSocket via Tauri/Rust backend
+   */
+  private async connectRealWebSocket(): Promise<void> {
+    if (!this.accessToken) {
+      throw new Error('Access token not available');
+    }
+
+    // Call Rust backend to connect WebSocket
+    const result = await invoke<{
+      success: boolean;
+      data?: boolean;
+      error?: string;
+    }>('upstox_ws_connect', {
+      accessToken: this.accessToken,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'WebSocket connection failed');
+    }
+
+    // Listen for ticker events from Rust backend
+    this.tickerUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      price: number;
+      bid?: number;
+      ask?: number;
+      volume?: number;
+      change_percent?: number;
+      timestamp: number;
+    }>('upstox_ticker', (event) => {
+      const tick = event.payload;
+
+      // Parse exchange from instrument key (format: "NSE_EQ|RELIANCE")
+      const parts = tick.symbol.split('|');
+      const exchangePart = parts[0] || 'NSE_EQ';
+      const exchange = exchangePart.startsWith('BSE') ? 'BSE' : 'NSE';
+      const symbolName = parts[1] || tick.symbol;
+
+      this.emitTick({
+        symbol: symbolName,
+        exchange: exchange as StockExchange,
+        mode: 'quote',
+        lastPrice: tick.price,
+        bid: tick.bid,
+        ask: tick.ask,
+        volume: tick.volume || 0,
+        changePercent: tick.change_percent || 0,
+        timestamp: tick.timestamp,
+      });
+    });
+
+    // Listen for orderbook/depth events
+    this.orderbookUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      bids: Array<{ price: number; quantity: number; orders?: number }>;
+      asks: Array<{ price: number; quantity: number; orders?: number }>;
+      timestamp: number;
+    }>('upstox_orderbook', (event) => {
+      const data = event.payload;
+
+      // Parse symbol from Upstox format (e.g., "NSE_EQ|RELIANCE" -> "RELIANCE")
+      const [exchangePart, symbolPart] = data.symbol.includes('|')
+        ? data.symbol.split('|')
+        : [data.symbol.split(':')[0], data.symbol.split(':')[1] || data.symbol];
+      const symbol = symbolPart?.replace('-EQ', '') || data.symbol;
+      const exchange = exchangePart?.replace('_EQ', '').replace('_FO', '') as StockExchange || 'NSE';
+
+      console.log(`[Upstox WebSocket] Depth update for ${symbol}:`, {
+        bids: data.bids?.length || 0,
+        asks: data.asks?.length || 0,
+      });
+
+      // Get best bid/ask from depth
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      // Create tick data with depth information
+      const tick: TickData = {
+        symbol,
+        exchange,
+        mode: 'full',
+        lastPrice: bestBid?.price || 0,
+        bid: bestBid?.price,
+        ask: bestAsk?.price,
+        bidQty: bestBid?.quantity,
+        askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        depth: {
+          bids: data.bids?.map((b) => ({
+            price: b.price,
+            quantity: b.quantity,
+            orders: b.orders || 0,
+          })) || [],
+          asks: data.asks?.map((a) => ({
+            price: a.price,
+            quantity: a.quantity,
+            orders: a.orders || 0,
+          })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+
+      // Also emit depth data separately for UI components
+      if (tick.depth) {
+        this.emitDepth({
+          symbol,
+          exchange,
+          bids: tick.depth.bids,
+          asks: tick.depth.asks,
+        });
+      }
+    });
+
+    // Listen for status/connection events
+    this.statusUnlisten = await listen<{
+      provider: string;
+      status: string;
+      message?: string;
+      timestamp: number;
+    }>('upstox_status', (event) => {
+      const status = event.payload;
+      console.log(`[Upstox WebSocket] Status: ${status.status} - ${status.message || ''}`);
+
+      // Handle disconnection
+      if (status.status === 'disconnected' || status.status === 'error') {
+        this.wsConnected = false;
+
+        // Auto-fallback to polling on disconnect
+        if (!this.usePollingFallback) {
+          console.warn('[Upstox] WebSocket disconnected, enabling polling fallback');
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      } else if (status.status === 'connected') {
+        this.wsConnected = true;
+        // Disable polling fallback when connected
+        if (this.usePollingFallback) {
+          console.log('[Upstox] WebSocket reconnected, disabling polling fallback');
+          this.usePollingFallback = false;
+          this.stopQuotePolling();
+        }
+      }
+    });
+
+    this.wsConnected = true;
+  }
+
+  /**
+   * Disconnect from WebSocket
+   */
+  private async disconnectRealWebSocket(): Promise<void> {
+    // Cleanup Tauri event listeners
+    if (this.tickerUnlisten) {
+      this.tickerUnlisten();
+      this.tickerUnlisten = null;
+    }
+    if (this.orderbookUnlisten) {
+      this.orderbookUnlisten();
+      this.orderbookUnlisten = null;
+    }
+    if (this.statusUnlisten) {
+      this.statusUnlisten();
+      this.statusUnlisten = null;
+    }
+
+    // Call Rust backend to disconnect
+    try {
+      await invoke('upstox_ws_disconnect');
+    } catch (err) {
+      console.warn('[Upstox] WebSocket disconnect error:', err);
+    }
+
+    this.wsConnected = false;
   }
 
   private startQuotePolling(): void {
     this.stopQuotePolling();
+
+    console.log('[Upstox] Starting REST API polling (fallback mode, 2 min interval)');
 
     // Poll every 2 minutes
     this.quotePollingInterval = setInterval(async () => {
@@ -801,10 +990,16 @@ export class UpstoxAdapter extends BaseStockBrokerAdapter {
   }
 
   async disconnectWebSocket(): Promise<void> {
+    // Disconnect real WebSocket
+    await this.disconnectRealWebSocket();
+
+    // Stop polling fallback
     this.stopQuotePolling();
     this.pollingSymbols.clear();
+    this.usePollingFallback = false;
+
     this.wsConnected = false;
-    console.log('[Upstox] Polling stopped');
+    console.log('[Upstox] WebSocket disconnected');
   }
 
   protected async subscribeInternal(
@@ -812,18 +1007,77 @@ export class UpstoxAdapter extends BaseStockBrokerAdapter {
     exchange: StockExchange,
     mode: SubscriptionMode
   ): Promise<void> {
+    const instrumentKey = await this.getInstrumentKey(symbol, exchange);
     const key = `${exchange}:${symbol}`;
-    this.pollingSymbols.set(key, { symbol, exchange });
-    console.log(`[Upstox] Added ${key} to polling (${this.pollingSymbols.size} total)`);
 
-    // Trigger immediate poll
-    this.pollQuotes();
+    // Always track in pollingSymbols for fallback
+    this.pollingSymbols.set(key, { symbol, exchange });
+
+    if (this.wsConnected && !this.usePollingFallback) {
+      // Use real WebSocket subscription
+      try {
+        const wsMode = mode === 'full' ? 'full' : 'ltpc';
+
+        await invoke('upstox_ws_subscribe', {
+          symbol: instrumentKey,
+          mode: wsMode,
+        });
+
+        console.log(`[Upstox] ✓ WebSocket subscribed to ${instrumentKey} (mode: ${wsMode})`);
+      } catch (error) {
+        console.error(`[Upstox] WebSocket subscribe failed for ${instrumentKey}:`, error);
+        // Fallback to polling for this symbol
+        if (!this.usePollingFallback) {
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      }
+    } else {
+      // Using polling fallback
+      console.log(`[Upstox] Added ${key} to polling list (${this.pollingSymbols.size} symbols)`);
+
+      // Trigger immediate poll
+      if (this.usePollingFallback) {
+        this.pollQuotes();
+      }
+    }
   }
 
   protected async unsubscribeInternal(symbol: string, exchange: StockExchange): Promise<void> {
+    const instrumentKey = await this.getInstrumentKey(symbol, exchange);
     const key = `${exchange}:${symbol}`;
+
+    // Remove from polling symbols
     this.pollingSymbols.delete(key);
-    console.log(`[Upstox] Removed ${key} from polling`);
+
+    if (this.wsConnected && !this.usePollingFallback) {
+      // Unsubscribe via real WebSocket
+      try {
+        await invoke('upstox_ws_unsubscribe', {
+          symbol: instrumentKey,
+        });
+        console.log(`[Upstox] ✓ WebSocket unsubscribed from ${instrumentKey}`);
+      } catch (error) {
+        console.warn(`[Upstox] WebSocket unsubscribe failed for ${instrumentKey}:`, error);
+      }
+    } else {
+      console.log(`[Upstox] Removed ${key} from polling list (${this.pollingSymbols.size} remaining)`);
+    }
+  }
+
+  /**
+   * Cleanup WebSocket and polling on logout
+   */
+  async logout(): Promise<void> {
+    // Disconnect real WebSocket
+    await this.disconnectRealWebSocket();
+
+    // Stop polling fallback
+    this.stopQuotePolling();
+    this.pollingSymbols.clear();
+    this.usePollingFallback = false;
+
+    await super.logout();
   }
 
   // ============================================================================

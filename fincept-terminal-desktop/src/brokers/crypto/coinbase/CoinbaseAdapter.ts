@@ -311,7 +311,17 @@ export class CoinbaseAdapter extends BaseExchangeAdapter {
    * Note: Not applicable for spot-only exchange
    */
   async setMarginMode(symbol: string, marginMode: 'cross' | 'isolated') {
-    throw new Error('Margin mode not supported on Coinbase (spot-only exchange)');
+    // Return a no-op response for spot-only exchange
+    return { symbol, marginMode: 'cross', info: { message: 'Margin mode not applicable for spot trading' } };
+  }
+
+  /**
+   * Set position mode (one-way or hedge mode)
+   * Note: Not applicable for spot-only exchange
+   */
+  async setPositionMode(hedgeMode: boolean) {
+    // Return a no-op response for spot-only exchange
+    return { hedgeMode: false, info: { message: 'Position mode not applicable for spot trading' } };
   }
 
   // ============================================================================

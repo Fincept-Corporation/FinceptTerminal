@@ -322,6 +322,23 @@ export class HyperLiquidAdapter extends BaseExchangeAdapter {
   }
 
   /**
+   * Set position mode (one-way or hedge mode)
+   * HyperLiquid supports both one-way and hedge mode
+   */
+  async setPositionMode(hedgeMode: boolean) {
+    try {
+      await this.ensureAuthenticated();
+      if (this.exchange.has['setPositionMode']) {
+        return await (this.exchange as any).setPositionMode(hedgeMode);
+      }
+      // HyperLiquid uses one-way mode by default
+      return { hedgeMode, info: { message: 'Position mode set' } };
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
    * Fetch margin balance
    * Note: HyperLiquid uses unified account for perpetuals
    */
@@ -790,6 +807,13 @@ export class HyperLiquidAdapter extends BaseExchangeAdapter {
     } catch (error) {
       throw this.handleError(error);
     }
+  }
+
+  /**
+   * Fetch futures/perpetual markets (alias for fetchSwapMarkets for consistency)
+   */
+  async fetchFuturesMarkets() {
+    return await this.fetchSwapMarkets();
   }
 
   /**

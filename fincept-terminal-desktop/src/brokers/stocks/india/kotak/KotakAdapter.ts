@@ -12,6 +12,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
 import type {
   StockBrokerMetadata,
@@ -75,9 +76,15 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
   private viewToken: string | null = null;
   private viewSid: string | null = null;
 
-  // REST API polling for quotes
+  // Tauri event unlisteners for WebSocket events
+  private tickerUnlisten: UnlistenFn | null = null;
+  private orderbookUnlisten: UnlistenFn | null = null;
+  private statusUnlisten: UnlistenFn | null = null;
+
+  // Fallback: REST API polling for quotes (when WebSocket fails)
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
+  private usePollingFallback: boolean = false;
 
   // ============================================================================
   // Authentication
@@ -774,105 +781,199 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // WebSocket / Polling
+  // WebSocket - Real WebSocket via Rust Backend
   // ============================================================================
 
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
     try {
-      this.startQuotePolling();
-      this.wsConnected = true;
-      console.log('[Kotak] REST API polling started');
+      await this.connectRealWebSocket();
+      console.log('[Kotak] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.error('[Kotak] Failed to start polling:', error);
-      throw error;
+      console.warn('[Kotak] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
     }
+  }
+
+  private async connectRealWebSocket(): Promise<void> {
+    if (!this.accessToken) {
+      throw new Error('Access token required');
+    }
+
+    const result = await invoke<{
+      success: boolean;
+      data?: boolean;
+      error?: string;
+    }>('kotak_ws_connect', {
+      accessToken: this.accessToken,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'WebSocket connection failed');
+    }
+
+    this.tickerUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      price: number;
+      bid?: number;
+      ask?: number;
+      volume?: number;
+      change_percent?: number;
+      timestamp: number;
+    }>('kotak_ticker', (event) => {
+      const tick = event.payload;
+      this.emitTick({
+        symbol: tick.symbol,
+        exchange: 'NSE' as StockExchange,
+        mode: 'quote',
+        lastPrice: tick.price,
+        bid: tick.bid,
+        ask: tick.ask,
+        volume: tick.volume || 0,
+        changePercent: tick.change_percent || 0,
+        timestamp: tick.timestamp,
+      });
+    });
+
+    this.orderbookUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      bids: Array<{ price: number; quantity: number; orders?: number }>;
+      asks: Array<{ price: number; quantity: number; orders?: number }>;
+      timestamp: number;
+    }>('kotak_orderbook', (event) => {
+      const data = event.payload;
+      const [exchangePart, symbolPart] = data.symbol.includes(':') ? data.symbol.split(':') : ['NSE', data.symbol];
+      const symbol = symbolPart || data.symbol;
+      const exchange = (exchangePart as StockExchange) || 'NSE';
+
+      console.log(`[Kotak WebSocket] Depth update for ${symbol}`);
+
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      const tick: TickData = {
+        symbol, exchange, mode: 'full',
+        lastPrice: bestBid?.price || 0,
+        bid: bestBid?.price, ask: bestAsk?.price,
+        bidQty: bestBid?.quantity, askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        depth: {
+          bids: data.bids?.map((b) => ({ price: b.price, quantity: b.quantity, orders: b.orders || 0 })) || [],
+          asks: data.asks?.map((a) => ({ price: a.price, quantity: a.quantity, orders: a.orders || 0 })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+      if (tick.depth) {
+        this.emitDepth({ symbol, exchange, bids: tick.depth.bids, asks: tick.depth.asks });
+      }
+    });
+
+    this.statusUnlisten = await listen<{
+      provider: string;
+      status: string;
+      message?: string;
+      timestamp: number;
+    }>('kotak_status', (event) => {
+      const status = event.payload;
+      console.log(`[Kotak WebSocket] Status: ${status.status}`);
+      if (status.status === 'disconnected' || status.status === 'error') {
+        this.wsConnected = false;
+        if (!this.usePollingFallback) {
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      } else if (status.status === 'connected') {
+        this.wsConnected = true;
+        if (this.usePollingFallback) {
+          this.usePollingFallback = false;
+          this.stopQuotePolling();
+        }
+      }
+    });
+
+    this.wsConnected = true;
+  }
+
+  private async disconnectRealWebSocket(): Promise<void> {
+    if (this.tickerUnlisten) { this.tickerUnlisten(); this.tickerUnlisten = null; }
+    if (this.orderbookUnlisten) { this.orderbookUnlisten(); this.orderbookUnlisten = null; }
+    if (this.statusUnlisten) { this.statusUnlisten(); this.statusUnlisten = null; }
+    try { await invoke('kotak_ws_disconnect'); } catch (err) { console.warn('[Kotak] WS disconnect error:', err); }
+    this.wsConnected = false;
   }
 
   private startQuotePolling(): void {
     this.stopQuotePolling();
-
-    // Poll every 30 seconds
-    this.quotePollingInterval = setInterval(async () => {
-      await this.pollQuotes();
-    }, 30000);
-
-    // Initial poll
+    console.log('[Kotak] Starting REST API polling (fallback mode)');
+    this.quotePollingInterval = setInterval(async () => { await this.pollQuotes(); }, 30000);
     this.pollQuotes();
   }
 
   private stopQuotePolling(): void {
-    if (this.quotePollingInterval) {
-      clearInterval(this.quotePollingInterval);
-      this.quotePollingInterval = null;
-    }
+    if (this.quotePollingInterval) { clearInterval(this.quotePollingInterval); this.quotePollingInterval = null; }
   }
 
   private async pollQuotes(): Promise<void> {
     if (this.pollingSymbols.size === 0) return;
-
-    console.log(`[Kotak] Polling ${this.pollingSymbols.size} symbols...`);
-
     for (const [key, { symbol, exchange }] of this.pollingSymbols) {
       try {
         const quote = await this.getQuoteInternal(symbol, exchange);
-
-        const tick: TickData = {
-          symbol,
-          exchange,
-          lastPrice: quote.lastPrice,
-          open: quote.open,
-          high: quote.high,
-          low: quote.low,
-          close: quote.close,
-          volume: quote.volume,
-          change: quote.change,
-          changePercent: quote.changePercent,
-          timestamp: quote.timestamp,
-          bid: quote.bid,
-          bidQty: quote.bidQty,
-          ask: quote.ask,
-          askQty: quote.askQty,
-          mode: 'full',
-        };
-
-        this.emitTick(tick);
-      } catch (error) {
-        console.error(`[Kotak] Poll error for ${symbol}:`, error);
-      }
-
-      // Small delay between requests
+        this.emitTick({
+          symbol, exchange,
+          lastPrice: quote.lastPrice, open: quote.open, high: quote.high, low: quote.low,
+          close: quote.close, volume: quote.volume, change: quote.change,
+          changePercent: quote.changePercent, timestamp: quote.timestamp,
+          bid: quote.bid, bidQty: quote.bidQty, ask: quote.ask, askQty: quote.askQty, mode: 'full',
+        });
+      } catch (error) { console.error(`[Kotak] Poll error for ${symbol}:`, error); }
       await new Promise(resolve => setTimeout(resolve, 200));
     }
-
-    console.log(`[Kotak] Polling complete`);
   }
 
   async disconnectWebSocket(): Promise<void> {
+    await this.disconnectRealWebSocket();
     this.stopQuotePolling();
     this.pollingSymbols.clear();
+    this.usePollingFallback = false;
     this.wsConnected = false;
-    console.log('[Kotak] Polling stopped');
   }
 
-  protected async subscribeInternal(
-    symbol: string,
-    exchange: StockExchange,
-    mode: SubscriptionMode
-  ): Promise<void> {
+  protected async subscribeInternal(symbol: string, exchange: StockExchange, mode: SubscriptionMode): Promise<void> {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.set(key, { symbol, exchange });
-    console.log(`[Kotak] Added ${key} to polling (${this.pollingSymbols.size} total)`);
-
-    // Trigger immediate poll
-    this.pollQuotes();
+    if (this.wsConnected && !this.usePollingFallback) {
+      try {
+        await invoke('kotak_ws_subscribe', { symbol, mode: mode === 'full' ? 'full' : 'ltp' });
+        console.log(`[Kotak] ✓ WebSocket subscribed to ${symbol}`);
+      } catch (error) {
+        console.error(`[Kotak] WebSocket subscribe failed:`, error);
+        if (!this.usePollingFallback) { this.usePollingFallback = true; this.startQuotePolling(); }
+      }
+    } else {
+      console.log(`[Kotak] Added ${key} to polling`);
+      if (this.usePollingFallback) this.pollQuotes();
+    }
   }
 
   protected async unsubscribeInternal(symbol: string, exchange: StockExchange): Promise<void> {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.delete(key);
-    console.log(`[Kotak] Removed ${key} from polling`);
+    if (this.wsConnected && !this.usePollingFallback) {
+      try { await invoke('kotak_ws_unsubscribe', { symbol }); } catch (err) { console.warn('[Kotak] Unsubscribe failed:', err); }
+    }
+  }
+
+  async logout(): Promise<void> {
+    await this.disconnectRealWebSocket();
+    this.stopQuotePolling();
+    this.pollingSymbols.clear();
+    this.usePollingFallback = false;
+    await super.logout();
   }
 
   // ============================================================================

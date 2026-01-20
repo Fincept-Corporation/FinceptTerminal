@@ -30,7 +30,28 @@ import {
   Sparkles,
   ChevronDown,
   MessageSquare,
-  Maximize2
+  Maximize2,
+  Palette,
+  Wand2,
+  BookmarkPlus,
+  Quote,
+  List,
+  ListOrdered,
+  Hash,
+  Stamp,
+  QrCode,
+  PenTool,
+  AlertTriangle,
+  Activity,
+  TrendingUp,
+  Database,
+  MessageCircle,
+  History,
+  Search,
+  Undo2,
+  Redo2,
+  Keyboard,
+  LayoutTemplate,
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -47,6 +68,52 @@ import { sqliteService } from '@/services/core/sqliteService';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { AdvancedStylingPanel } from './report-builder/AdvancedStylingPanel';
+import { ExportDialog } from './report-builder/ExportDialog';
+import {
+  brandKitService,
+  BrandKit,
+  ComponentTemplate,
+  HeaderFooterTemplate,
+  ParagraphStyles,
+} from '@/services/core/brandKitService';
+
+// New feature imports
+import {
+  LiveDataTable,
+  KPICardsRow,
+  Sparkline,
+  DynamicChart,
+  FinancialMetricsWidget,
+  ChartDataEditor,
+} from './report-builder/DataComponents';
+import {
+  QuoteBox,
+  ListComponent,
+  FootnotesList,
+  TableOfContents,
+  Watermark,
+  QRCodeComponent,
+  SignatureBlock,
+  DisclaimerSection,
+  SectionHeader,
+} from './report-builder/AdditionalComponents';
+import { TemplateGallery } from './report-builder/TemplateGallery';
+import {
+  CommentsPanel,
+  VersionHistoryPanel,
+  RevisionMode,
+  useCollaboration,
+} from './report-builder/CollaborationFeatures';
+import {
+  useUndoRedo,
+  useAutoSave,
+  useKeyboardShortcuts,
+  useFullscreen,
+  FindReplaceDialog,
+  ShortcutsDialog,
+  ProductivityToolbar,
+} from './report-builder/ProductivityFeatures';
 
 // Fincept color palette
 const FINCEPT_COLORS = {
@@ -97,6 +164,16 @@ function SortableComponent({
       case 'image': return <ImageIcon size={14} />;
       case 'code': return <Code size={14} />;
       case 'divider': return <Minus size={14} />;
+      case 'quote': return <Quote size={14} />;
+      case 'list': return <List size={14} />;
+      case 'toc': return <Hash size={14} />;
+      case 'kpi': return <TrendingUp size={14} />;
+      case 'sparkline': return <Activity size={14} />;
+      case 'liveTable': return <Database size={14} />;
+      case 'signature': return <PenTool size={14} />;
+      case 'disclaimer': return <AlertTriangle size={14} />;
+      case 'qrcode': return <QrCode size={14} />;
+      case 'watermark': return <Stamp size={14} />;
       default: return <FileText size={14} />;
     }
   };
@@ -175,6 +252,7 @@ const ReportBuilderTab: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [generatedPdfPath, setGeneratedPdfPath] = useState<string>('');
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [pageTheme, setPageTheme] = useState<'classic' | 'modern' | 'geometric' | 'gradient' | 'minimal' | 'pattern'>('classic');
   const [fontFamily, setFontFamily] = useState<string>('Arial, sans-serif');
   const [defaultFontSize, setDefaultFontSize] = useState<number>(11);
@@ -192,8 +270,28 @@ const ReportBuilderTab: React.FC = () => {
   const [streamingContent, setStreamingContent] = useState('');
   const aiMessagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Right panel view toggle: 'split' | 'properties' | 'chat'
-  const [rightPanelView, setRightPanelView] = useState<'split' | 'properties' | 'chat'>('split');
+  // Right panel view toggle
+  const [rightPanelView, setRightPanelView] = useState<'split' | 'properties' | 'chat' | 'styling' | 'comments' | 'history'>('split');
+
+  // New feature states
+  const [showTemplateGallery, setShowTemplateGallery] = useState(false);
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [revisionModeEnabled, setRevisionModeEnabled] = useState(false);
+
+  // Brand Kit and Advanced Styling state
+  const [activeBrandKit, setActiveBrandKit] = useState<BrandKit | null>(null);
+  const [advancedStyles, setAdvancedStyles] = useState<{
+    customCSS: string;
+    headerTemplate: HeaderFooterTemplate | null;
+    footerTemplate: HeaderFooterTemplate | null;
+    paragraphStyles: ParagraphStyles | null;
+  }>({
+    customCSS: '',
+    headerTemplate: null,
+    footerTemplate: null,
+    paragraphStyles: null,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -202,10 +300,79 @@ const ReportBuilderTab: React.FC = () => {
     })
   );
 
+  // Undo/Redo hook
+  const {
+    state: templateHistory,
+    set: setTemplateWithHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useUndoRedo(template);
+
+  // Auto-save hook
+  const { isSaving: isAutoSaving, lastSaved, forceSave } = useAutoSave(
+    template,
+    async (data) => {
+      try {
+        await reportService.saveTemplate(data);
+        console.log('Auto-saved report');
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    },
+    { interval: 60000, enabled: true }
+  );
+
+  // Collaboration hook
+  const collaboration = useCollaboration(template);
+
+  // Fullscreen hook
+  const { isFullscreen, toggleFullscreen, fullscreenRef } = useFullscreen();
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    'ctrl+z': () => undo(),
+    'ctrl+y': () => redo(),
+    'ctrl+shift+z': () => redo(),
+    'ctrl+s': () => { forceSave(); toast.success('Saved'); },
+    'ctrl+f': () => setShowFindReplace(true),
+    'ctrl+shift+/': () => setShowShortcuts(true),
+    'f11': () => toggleFullscreen(),
+  });
+
+  // Sync template with undo/redo history
+  useEffect(() => {
+    if (JSON.stringify(templateHistory) !== JSON.stringify(template)) {
+      setTemplate(templateHistory);
+    }
+  }, [templateHistory]);
+
   // Update time
   React.useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Load active brand kit on mount
+  useEffect(() => {
+    const loadBrandKit = async () => {
+      try {
+        const kit = await brandKitService.getActiveBrandKit();
+        if (kit) {
+          setActiveBrandKit(kit);
+          setAdvancedStyles({
+            customCSS: kit.customCSS || '',
+            headerTemplate: kit.headerTemplate || null,
+            footerTemplate: kit.footerTemplate || null,
+            paragraphStyles: kit.paragraphStyles || null,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load brand kit:', error);
+      }
+    };
+    loadBrandKit();
   }, []);
 
   // Load available AI models
@@ -248,7 +415,9 @@ const ReportBuilderTab: React.FC = () => {
       content: (type === 'divider' || type === 'pagebreak' || type === 'coverpage' || type === 'section' || type === 'columns') ? '' :
         type === 'heading' ? 'New Heading' :
           type === 'subheading' ? 'New Subheading' :
-            type === 'text' ? 'Enter text here...' : '',
+            type === 'text' ? 'Enter text here...' :
+              type === 'quote' ? 'Enter quote text here...' :
+                type === 'disclaimer' ? 'This report is for informational purposes only.' : '',
       config: {
         fontSize: type === 'heading' ? '2xl' : type === 'subheading' ? 'xl' : 'base',
         fontWeight: type === 'heading' || type === 'subheading' ? 'bold' : 'normal',
@@ -265,18 +434,74 @@ const ReportBuilderTab: React.FC = () => {
           subtitle: '',
           backgroundColor: '#0a0a0a',
         }),
+        // New component configs
+        ...(type === 'quote' && {
+          quoteType: 'quote',
+          author: '',
+        }),
+        ...(type === 'list' && {
+          items: ['Item 1', 'Item 2', 'Item 3'],
+          ordered: false,
+        }),
+        ...(type === 'toc' && {
+          showPageNumbers: true,
+        }),
+        ...(type === 'kpi' && {
+          kpis: [
+            { label: 'Revenue', value: '$1.2M', change: 12.5, trend: 'up' },
+            { label: 'Profit', value: '$340K', change: 8.2, trend: 'up' },
+            { label: 'Margin', value: '28.3%', change: -2.1, trend: 'down' },
+          ],
+        }),
+        ...(type === 'sparkline' && {
+          data: [10, 25, 15, 30, 20, 35, 28],
+          color: '#FFA500',
+        }),
+        ...(type === 'liveTable' && {
+          dataSource: 'portfolio',
+          columns: ['Symbol', 'Price', 'Change', 'Volume'],
+        }),
+        ...(type === 'dynamicChart' && {
+          chartType: 'line',
+          data: [
+            { name: 'Jan', value: 100 },
+            { name: 'Feb', value: 120 },
+            { name: 'Mar', value: 115 },
+            { name: 'Apr', value: 140 },
+          ],
+        }),
+        ...(type === 'signature' && {
+          name: 'John Doe',
+          title: 'Analyst',
+          showLine: true,
+        }),
+        ...(type === 'disclaimer' && {
+          disclaimerType: 'standard',
+        }),
+        ...(type === 'qrcode' && {
+          value: 'https://example.com',
+          size: 100,
+          label: 'Scan for more info',
+        }),
+        ...(type === 'watermark' && {
+          text: 'CONFIDENTIAL',
+          opacity: 0.1,
+          rotation: -45,
+        }),
       },
       ...(type === 'columns' || type === 'section' ? { children: [] } : {}),
     };
 
-    setTemplate(prev => ({
-      ...prev,
-      components: [...prev.components, newComponent],
-    }));
+    const newTemplate = {
+      ...template,
+      components: [...template.components, newComponent],
+    };
+    setTemplate(newTemplate);
+    setTemplateWithHistory(newTemplate);
 
     setSelectedComponent(newComponent.id);
     toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} added`);
-  }, []);
+  }, [template, setTemplateWithHistory]);
 
   // Update component
   const updateComponent = useCallback((id: string, updates: Partial<ReportComponent>) => {
@@ -423,6 +648,92 @@ const ReportBuilderTab: React.FC = () => {
       toast.error('Failed to open folder');
     }
   };
+
+  // Handle brand kit change
+  const handleBrandKitChange = useCallback((brandKit: BrandKit) => {
+    setActiveBrandKit(brandKit);
+    // Apply brand kit fonts
+    const bodyFont = brandKit.fonts.find(f => f.usage === 'body');
+    if (bodyFont) {
+      setFontFamily(bodyFont.family);
+    }
+    // Update advanced styles
+    setAdvancedStyles({
+      customCSS: brandKit.customCSS || '',
+      headerTemplate: brandKit.headerTemplate || null,
+      footerTemplate: brandKit.footerTemplate || null,
+      paragraphStyles: brandKit.paragraphStyles || null,
+    });
+    toast.success(`Applied brand kit: ${brandKit.name}`);
+  }, []);
+
+  // Handle component template selection
+  const handleComponentTemplateSelect = useCallback((template: ComponentTemplate) => {
+    const newComponent: ReportComponent = {
+      id: `component-${Date.now()}`,
+      type: template.component.type as ReportComponent['type'],
+      content: template.component.content,
+      config: template.component.config,
+      children: template.component.children,
+    };
+    setTemplate(prev => ({
+      ...prev,
+      components: [...prev.components, newComponent],
+    }));
+    setSelectedComponent(newComponent.id);
+    toast.success(`Added template: ${template.name}`);
+  }, []);
+
+  // Handle advanced styles change
+  const handleStylesChange = useCallback((styles: {
+    customCSS: string;
+    headerTemplate: HeaderFooterTemplate;
+    footerTemplate: HeaderFooterTemplate;
+    paragraphStyles: ParagraphStyles;
+  }) => {
+    setAdvancedStyles(styles);
+  }, []);
+
+  // Save component as template
+  const saveAsTemplate = useCallback(async () => {
+    if (!selectedComp) return;
+    const templateName = prompt('Enter template name:', `${selectedComp.type} Template`);
+    if (!templateName) return;
+
+    const newTemplate: ComponentTemplate = {
+      id: `template-${Date.now()}`,
+      name: templateName,
+      description: `Custom ${selectedComp.type} template`,
+      category: selectedComp.type === 'section' || selectedComp.type === 'columns' ? 'layout' :
+                selectedComp.type === 'image' ? 'media' :
+                selectedComp.type === 'chart' || selectedComp.type === 'table' ? 'data' : 'text',
+      component: {
+        type: selectedComp.type,
+        content: selectedComp.content,
+        config: selectedComp.config,
+        children: selectedComp.children,
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      await brandKitService.saveComponentTemplate(newTemplate);
+      toast.success('Component saved as template');
+    } catch (error) {
+      toast.error('Failed to save template');
+    }
+  }, [selectedComp]);
+
+  // Generate TOC items from headings
+  const tocItems = template.components
+    .filter(c => c.type === 'heading' || c.type === 'subheading')
+    .map((c, idx) => ({
+      id: c.id,
+      title: String(c.content || `Section ${idx + 1}`),
+      level: c.type === 'heading' ? 1 : 2,
+      page: Math.floor(idx / 3) + 1,
+    }));
 
   // AI Chat - Send message
   const handleAiSendMessage = async () => {
@@ -597,11 +908,55 @@ const ReportBuilderTab: React.FC = () => {
             <FileText className="w-5 h-5" style={{ color: FINCEPT_COLORS.ORANGE }} />
             <span className="font-bold text-sm" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('title')}</span>
           </div>
-          <span className="text-xs" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
-            {currentTime.toLocaleTimeString()}
-          </span>
+          {/* Productivity Toolbar */}
+          <div className="flex items-center gap-1 border-l border-[#333333] pl-3">
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              className="p-1.5 rounded hover:bg-[#2a2a2a] disabled:opacity-30"
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 size={14} />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              className="p-1.5 rounded hover:bg-[#2a2a2a] disabled:opacity-30"
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 size={14} />
+            </button>
+            <button
+              onClick={() => setShowFindReplace(true)}
+              className="p-1.5 rounded hover:bg-[#2a2a2a]"
+              title="Find & Replace (Ctrl+F)"
+            >
+              <Search size={14} />
+            </button>
+            <button
+              onClick={() => setShowShortcuts(true)}
+              className="p-1.5 rounded hover:bg-[#2a2a2a]"
+              title="Keyboard Shortcuts"
+            >
+              <Keyboard size={14} />
+            </button>
+          </div>
+          {/* Auto-save status */}
+          {lastSaved && (
+            <span className="text-[10px]" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              {isAutoSaving ? 'Saving...' : `Saved ${lastSaved.toLocaleTimeString()}`}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTemplateGallery(true)}
+            className="px-3 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-1"
+            style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+          >
+            <LayoutTemplate size={14} />
+            Templates
+          </button>
           <button
             onClick={loadTemplate}
             className="px-3 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-1"
@@ -620,8 +975,8 @@ const ReportBuilderTab: React.FC = () => {
             {isSaving ? t('header.saving') : t('header.save')}
           </button>
           <button
-            onClick={generatePdf}
-            disabled={isGenerating || template.components.length === 0}
+            onClick={() => setShowExportDialog(true)}
+            disabled={template.components.length === 0}
             className="px-3 py-1 text-xs rounded transition-colors flex items-center gap-1 disabled:opacity-50"
             style={{
               backgroundColor: FINCEPT_COLORS.ORANGE,
@@ -630,7 +985,7 @@ const ReportBuilderTab: React.FC = () => {
             }}
           >
             <Download size={14} />
-            {isGenerating ? t('header.generating') : t('header.exportPdf')}
+            Export
           </button>
         </div>
       </div>
@@ -699,6 +1054,108 @@ const ReportBuilderTab: React.FC = () => {
                 >
                   <Minus size={14} />
                   Divider
+                </button>
+                <button
+                  onClick={() => addComponent('quote' as any)}
+                  className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <Quote size={14} />
+                  Quote/Callout
+                </button>
+                <button
+                  onClick={() => addComponent('list' as any)}
+                  className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <List size={14} />
+                  List
+                </button>
+              </div>
+            </div>
+
+            {/* Data Components */}
+            <div className="mb-4">
+              <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>DATA</h3>
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  onClick={() => addComponent('kpi' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <TrendingUp size={14} />
+                  <span className="text-[9px]">KPI</span>
+                </button>
+                <button
+                  onClick={() => addComponent('sparkline' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <Activity size={14} />
+                  <span className="text-[9px]">Sparkline</span>
+                </button>
+                <button
+                  onClick={() => addComponent('liveTable' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <Database size={14} />
+                  <span className="text-[9px]">Data Table</span>
+                </button>
+                <button
+                  onClick={() => addComponent('dynamicChart' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <BarChart3 size={14} />
+                  <span className="text-[9px]">Chart</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Document Components */}
+            <div className="mb-4">
+              <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>DOCUMENT</h3>
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  onClick={() => addComponent('toc' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <Hash size={14} />
+                  <span className="text-[9px]">TOC</span>
+                </button>
+                <button
+                  onClick={() => addComponent('signature' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <PenTool size={14} />
+                  <span className="text-[9px]">Signature</span>
+                </button>
+                <button
+                  onClick={() => addComponent('disclaimer' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <AlertTriangle size={14} />
+                  <span className="text-[9px]">Disclaimer</span>
+                </button>
+                <button
+                  onClick={() => addComponent('qrcode' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <QrCode size={14} />
+                  <span className="text-[9px]">QR Code</span>
+                </button>
+                <button
+                  onClick={() => addComponent('watermark' as any)}
+                  className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                >
+                  <Stamp size={14} />
+                  <span className="text-[9px]">Watermark</span>
                 </button>
               </div>
             </div>
@@ -1111,9 +1568,43 @@ const ReportBuilderTab: React.FC = () => {
               fontSize: `${defaultFontSize}pt`,
               fontWeight: isBold ? 'bold' : 'normal',
               fontStyle: isItalic ? 'italic' : 'normal',
+              ...(advancedStyles.paragraphStyles && {
+                lineHeight: advancedStyles.paragraphStyles.lineHeight,
+                letterSpacing: `${advancedStyles.paragraphStyles.letterSpacing}px`,
+                wordSpacing: `${advancedStyles.paragraphStyles.wordSpacing}px`,
+              }),
               ...getThemeBackground(),
             }}
           >
+            {/* Header (if enabled) */}
+            {advancedStyles.headerTemplate?.enabled && (
+              <div
+                className="mb-4 -mt-4 -mx-4 px-4"
+                style={{
+                  backgroundColor: advancedStyles.headerTemplate.backgroundColor,
+                  color: advancedStyles.headerTemplate.textColor,
+                  fontSize: `${advancedStyles.headerTemplate.fontSize}pt`,
+                  minHeight: advancedStyles.headerTemplate.height,
+                  textAlign: advancedStyles.headerTemplate.alignment,
+                  borderBottom: advancedStyles.headerTemplate.borderBottom ? '1px solid #E0E0E0' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: advancedStyles.headerTemplate.alignment === 'center' ? 'center' :
+                    advancedStyles.headerTemplate.alignment === 'right' ? 'flex-end' : 'space-between',
+                  padding: '8px 20px',
+                }}
+              >
+                <span>
+                  {advancedStyles.headerTemplate.content
+                    .replace('{company}', template.metadata.company || 'Company')
+                    .replace('{title}', template.metadata.title || 'Report')
+                    .replace('{date}', template.metadata.date || new Date().toLocaleDateString())}
+                </span>
+                {advancedStyles.headerTemplate.showPageNumbers && (
+                  <span>Page 1</span>
+                )}
+              </div>
+            )}
             {/* Document Metadata */}
             <div className="mb-8 border-b border-gray-300 pb-4">
               <h1 className="text-3xl font-bold mb-2">{template.metadata.title}</h1>
@@ -1246,44 +1737,180 @@ const ReportBuilderTab: React.FC = () => {
                           <span className="text-xs text-gray-400 bg-white px-3 py-1 rounded-full">Page Break</span>
                         </div>
                       )}
+                      {/* New component types */}
+                      {component.type === 'quote' && (
+                        <QuoteBox
+                          content={String(component.content || '')}
+                          author={component.config.author}
+                          type={component.config.quoteType || 'quote'}
+                        />
+                      )}
+                      {component.type === 'list' && (
+                        <ListComponent
+                          items={component.config.items || ['Item 1', 'Item 2']}
+                          ordered={component.config.ordered}
+                        />
+                      )}
+                      {component.type === 'toc' && (
+                        <TableOfContents
+                          items={tocItems}
+                          showPageNumbers={component.config.showPageNumbers}
+                        />
+                      )}
+                      {component.type === 'kpi' && (
+                        <KPICardsRow
+                          cards={(component.config.kpis || []).map((k: any) => ({
+                            title: k.label,
+                            value: k.value,
+                            change: k.change,
+                          }))}
+                        />
+                      )}
+                      {component.type === 'sparkline' && (
+                        <div className="inline-block">
+                          <Sparkline
+                            config={{
+                              data: component.config.data as number[] || [10, 20, 15, 25],
+                              color: component.config.color || '#FFA500',
+                              height: 50,
+                            }}
+                          />
+                        </div>
+                      )}
+                      {component.type === 'liveTable' && (
+                        <LiveDataTable
+                          config={{
+                            source: component.config.dataSource as 'portfolio' | 'watchlist' || 'portfolio',
+                            columns: component.config.columns,
+                          }}
+                        />
+                      )}
+                      {component.type === 'dynamicChart' && (
+                        <DynamicChart
+                          config={{
+                            type: (component.config.chartType || 'line') as 'line' | 'bar' | 'area' | 'pie',
+                            data: component.config.data as Array<{ name: string; value: number }> || [],
+                            height: 250,
+                          }}
+                        />
+                      )}
+                      {component.type === 'signature' && (
+                        <SignatureBlock
+                          name={component.config.name || 'Name'}
+                          title={component.config.title}
+                          date={template.metadata.date}
+                          showLine={component.config.showLine}
+                        />
+                      )}
+                      {component.type === 'disclaimer' && (
+                        <DisclaimerSection
+                          content={String(component.content || '')}
+                          type={component.config.disclaimerType || 'standard'}
+                        />
+                      )}
+                      {component.type === 'qrcode' && (
+                        <QRCodeComponent
+                          value={component.config.value || 'https://example.com'}
+                          size={component.config.size || 100}
+                          label={component.config.label}
+                        />
+                      )}
+                      {component.type === 'watermark' && (
+                        <Watermark
+                          text={component.config.text || 'CONFIDENTIAL'}
+                          opacity={component.config.opacity || 0.1}
+                          rotation={component.config.rotation || -45}
+                        />
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
+
+            {/* Footer (if enabled) */}
+            {advancedStyles.footerTemplate?.enabled && (
+              <div
+                className="mt-8 -mb-4 -mx-4 px-4"
+                style={{
+                  backgroundColor: advancedStyles.footerTemplate.backgroundColor,
+                  color: advancedStyles.footerTemplate.textColor,
+                  fontSize: `${advancedStyles.footerTemplate.fontSize}pt`,
+                  minHeight: advancedStyles.footerTemplate.height,
+                  textAlign: advancedStyles.footerTemplate.alignment,
+                  borderTop: advancedStyles.footerTemplate.borderTop ? '1px solid #E0E0E0' : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: advancedStyles.footerTemplate.alignment === 'center' ? 'center' :
+                    advancedStyles.footerTemplate.alignment === 'right' ? 'flex-end' : 'space-between',
+                  padding: '8px 20px',
+                }}
+              >
+                <span>
+                  {advancedStyles.footerTemplate.content
+                    .replace('{company}', template.metadata.company || 'Company')
+                    .replace('{title}', template.metadata.title || 'Report')
+                    .replace('{date}', template.metadata.date || new Date().toLocaleDateString())}
+                </span>
+                {advancedStyles.footerTemplate.showPageNumbers && advancedStyles.footerTemplate.pageNumberPosition !== advancedStyles.footerTemplate.alignment && (
+                  <span>Page 1</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right Panel - Properties and AI Chat */}
+        {/* Right Panel - Properties, AI Chat, and Advanced Styling */}
         <div className="w-1/5 border-l flex flex-col min-h-0" style={{ borderColor: FINCEPT_COLORS.BORDER, backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
           {/* Toggle Buttons */}
-          <div className="flex border-b" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
+          <div className="flex flex-wrap border-b" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
             <button
               onClick={() => setRightPanelView('properties')}
-              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'properties' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'properties' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
                 }`}
               style={{ color: rightPanelView === 'properties' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              title="Component Properties"
             >
-              <SettingsIcon size={14} />
-              Properties
+              <SettingsIcon size={12} />
+              Props
+            </button>
+            <button
+              onClick={() => setRightPanelView('styling')}
+              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'styling' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+                }`}
+              style={{ color: rightPanelView === 'styling' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              title="Advanced Styling"
+            >
+              <Palette size={12} />
+              Style
             </button>
             <button
               onClick={() => setRightPanelView('chat')}
-              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'chat' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'chat' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
                 }`}
               style={{ color: rightPanelView === 'chat' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              title="AI Writing Assistant"
             >
-              <MessageSquare size={14} />
-              AI Chat
+              <Bot size={12} />
+              AI
             </button>
             <button
-              onClick={() => setRightPanelView('split')}
-              className={`px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center ${rightPanelView === 'split' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              onClick={() => setRightPanelView('comments')}
+              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'comments' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
                 }`}
-              style={{ color: rightPanelView === 'split' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
-              title="Split View"
+              style={{ color: rightPanelView === 'comments' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              title="Comments"
             >
-              <Maximize2 size={14} />
+              <MessageCircle size={12} />
+            </button>
+            <button
+              onClick={() => setRightPanelView('history')}
+              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'history' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+                }`}
+              style={{ color: rightPanelView === 'history' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              title="Version History"
+            >
+              <History size={12} />
             </button>
           </div>
 
@@ -1465,7 +2092,7 @@ const ReportBuilderTab: React.FC = () => {
 
                     {/* Actions */}
                     <div className="pt-4 border-t" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 mb-2">
                         <button
                           onClick={() => duplicateComponent(selectedComp.id)}
                           className="flex-1 px-3 py-2 text-xs rounded bg-[#0a0a0a] hover:bg-[#2a2a2a] transition-colors flex items-center justify-center gap-2"
@@ -1481,6 +2108,14 @@ const ReportBuilderTab: React.FC = () => {
                           Delete
                         </button>
                       </div>
+                      <button
+                        onClick={saveAsTemplate}
+                        className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors flex items-center justify-center gap-2"
+                        style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                      >
+                        <BookmarkPlus size={14} />
+                        Save as Template
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1665,6 +2300,52 @@ const ReportBuilderTab: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Advanced Styling Panel */}
+          {rightPanelView === 'styling' && (
+            <div className="flex-1 overflow-hidden">
+              <AdvancedStylingPanel
+                onBrandKitChange={handleBrandKitChange}
+                onComponentTemplateSelect={handleComponentTemplateSelect}
+                onStylesChange={handleStylesChange}
+              />
+            </div>
+          )}
+
+          {/* Comments Panel */}
+          {rightPanelView === 'comments' && (
+            <div className="flex-1 overflow-hidden">
+              <CommentsPanel
+                comments={collaboration.comments}
+                onAddComment={(componentId: string, content: string) =>
+                  collaboration.addComment(componentId, content)
+                }
+                onResolveComment={collaboration.resolveComment}
+                onDeleteComment={collaboration.deleteComment}
+                onReplyComment={collaboration.replyToComment}
+                selectedComponentId={selectedComponent}
+              />
+            </div>
+          )}
+
+          {/* Version History Panel */}
+          {rightPanelView === 'history' && (
+            <div className="flex-1 overflow-hidden">
+              <VersionHistoryPanel
+                history={collaboration.versionHistory}
+                onPreview={(entry) => {
+                  toast.info(`Previewing version: ${entry.description}`);
+                }}
+                onRestore={(entry) => {
+                  if (entry.template) {
+                    setTemplate(entry.template);
+                    setTemplateWithHistory(entry.template);
+                    toast.success(`Restored version: ${entry.description}`);
+                  }
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1702,13 +2383,50 @@ const ReportBuilderTab: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Export Dialog */}
+      <ExportDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        template={template}
+        brandKit={activeBrandKit}
+      />
+
+      {/* Template Gallery Dialog */}
+      <TemplateGallery
+        open={showTemplateGallery}
+        onClose={() => setShowTemplateGallery(false)}
+        onSelectTemplate={(t) => {
+          setTemplate(t);
+          setTemplateWithHistory(t);
+          toast.success(`Applied template: ${t.name}`);
+        }}
+        currentTemplate={template}
+      />
+
+      {/* Find & Replace Dialog */}
+      <FindReplaceDialog
+        open={showFindReplace}
+        onClose={() => setShowFindReplace(false)}
+        onReplace={(componentId, oldText, newText) => {
+          updateComponent(componentId, { content: newText });
+        }}
+        components={template.components}
+      />
+
+      {/* Keyboard Shortcuts Dialog */}
+      <ShortcutsDialog
+        open={showShortcuts}
+        onClose={() => setShowShortcuts(false)}
+      />
+
       <TabFooter
         tabName="REPORT BUILDER"
         leftInfo={[
           { label: `Components: ${template.components.length}`, color: FINCEPT_COLORS.TEXT_PRIMARY },
           { label: `Theme: ${pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}`, color: FINCEPT_COLORS.TEXT_PRIMARY },
+          ...(activeBrandKit ? [{ label: `Brand: ${activeBrandKit.name}`, color: FINCEPT_COLORS.ORANGE }] : []),
         ]}
-        statusInfo={`${currentTime.toLocaleTimeString()} | PDF Generator: Rust printpdf`}
+        statusInfo={`${currentTime.toLocaleTimeString()} | Multi-format Export`}
         backgroundColor={FINCEPT_COLORS.PANEL_BG}
         borderColor={FINCEPT_COLORS.ORANGE}
       />

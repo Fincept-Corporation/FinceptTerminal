@@ -37,8 +37,6 @@ import type {
 import {
   FYERS_METADATA,
   FYERS_LOGIN_URL,
-  FYERS_EXCHANGE_MAP,
-  FYERS_WS_URL,
 } from './constants';
 import {
   toFyersOrderParams,
@@ -69,9 +67,20 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
   // Tauri event unlisteners
   private eventUnlisteners: UnlistenFn[] = [];
 
-  // REST API polling for quotes (instead of WebSocket)
-  private quotePollingInterval: NodeJS.Timeout | null = null;
-  private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
+  // WebSocket state (protected to match base class)
+  protected override wsConnected: boolean = false;
+  protected wsSubscriptions: Set<string> = new Set();
+
+  // Tauri event unlisteners for WebSocket
+  protected wsUnlisteners: Array<() => void> = [];
+
+  // Hybrid data strategy: WebSocket during market hours, polling off-hours
+  private pollingInterval: NodeJS.Timeout | null = null;
+  private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange; mode: SubscriptionMode }> = new Map();
+  // Off-market polling interval: 30 minutes (data won't change when market is closed)
+  private readonly POLLING_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes for off-market polling
+  private usePollingMode: boolean = false;
+  private marketHoursCheckInterval: NodeJS.Timeout | null = null;
 
   // ============================================================================
   // Authentication
@@ -266,6 +275,16 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
           await this.getFundsInternal();
           this._isConnected = true;
           console.log(`[${this.brokerId}] ✓ Session restored successfully`);
+
+          // Download master contract for WebSocket symbol lookup (uses correct public Fyers URL)
+          try {
+            console.log(`[${this.brokerId}] Downloading master contract for WebSocket...`);
+            await invoke('download_fyers_master_contract');
+            console.log(`[${this.brokerId}] ✓ Master contract ready`);
+          } catch (mcErr) {
+            console.warn(`[${this.brokerId}] Master contract download failed:`, mcErr);
+          }
+
           return true;
         } catch (err) {
           console.warn(`[${this.brokerId}] Access token expired or invalid, clearing from storage...`);
@@ -705,14 +724,15 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
   /**
    * Get quotes for multiple symbols (batch processing)
    * Automatically batches into groups of 50 symbols
+   * Fyers API rate limit: ~10 requests per second
    */
   protected async getMultipleQuotesInternal(
     symbols: Array<{ symbol: string; exchange: StockExchange }>
   ): Promise<Quote[]> {
     this.ensureAuthenticated();
 
-    const BATCH_SIZE = 50;
-    const RATE_LIMIT_DELAY = 100; // 100ms delay between batches
+    const BATCH_SIZE = 50; // Fyers supports up to 50 symbols per request
+    const RATE_LIMIT_DELAY = 1000; // 1 second delay between batches (safe for Fyers rate limits)
     const allResults: Quote[] = [];
 
     try {
@@ -861,11 +881,47 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // WebSocket - Internal Implementations
+  // WebSocket - Internal Implementations (Hybrid: WebSocket + Polling)
   // ============================================================================
 
   /**
-   * Connect to WebSocket (internal) - Uses REST API polling instead
+   * Check if Indian stock market is currently open
+   * NSE/BSE: Monday-Friday, 9:15 AM - 3:30 PM IST
+   */
+  private isMarketOpen(): boolean {
+    // Get current time in IST using Intl.DateTimeFormat
+    const now = new Date();
+    const istFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+      weekday: 'short',
+    });
+
+    const parts = istFormatter.formatToParts(now);
+    const weekday = parts.find(p => p.type === 'weekday')?.value || '';
+    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+
+    const timeInMinutes = hour * 60 + minute;
+
+    // Market hours: 9:15 AM (555 min) to 3:30 PM (930 min), Mon-Fri
+    const marketOpen = 9 * 60 + 15;  // 9:15 AM = 555 minutes
+    const marketClose = 15 * 60 + 30; // 3:30 PM = 930 minutes
+
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    const isWeekday = weekdays.includes(weekday);
+    const isWithinHours = timeInMinutes >= marketOpen && timeInMinutes <= marketClose;
+
+    console.log(`[Fyers] Market check: ${weekday} ${hour}:${minute.toString().padStart(2, '0')} IST | open=${isWeekday && isWithinHours}`);
+
+    return isWeekday && isWithinHours;
+  }
+
+  /**
+   * Connect to Fyers WebSocket for real-time market data
+   * Uses hybrid approach: WebSocket during market hours, polling off-hours
    */
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureAuthenticated();
@@ -875,62 +931,663 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
         throw new Error('API credentials not set');
       }
 
-      // Start REST API polling (every 2 minutes as requested)
-      this.startQuotePolling();
+      // Check if market is open to decide connection strategy
+      const marketOpen = this.isMarketOpen();
 
-      console.log('Fyers: REST API polling started (2 min interval)');
+      if (marketOpen) {
+        // Market is open - try WebSocket first
+        console.log('[Fyers] Market is OPEN - attempting WebSocket connection...');
+        await this.connectWebSocketDirect();
+      } else {
+        // Market is closed - use polling mode
+        console.log('[Fyers] Market is CLOSED - using polling mode for data');
+        this.usePollingMode = true;
+        this.startPolling();
+      }
+
+      // Set up periodic market hours check to switch modes
+      this.startMarketHoursMonitor();
+
     } catch (error) {
-      console.error('Failed to start Fyers polling:', error);
-      throw error;
+      console.error('[Fyers] Connection failed, falling back to polling:', error);
+      // Fallback to polling on any error
+      this.usePollingMode = true;
+      this.startPolling();
     }
   }
 
   /**
-   * Start REST API polling for quotes
+   * Direct WebSocket connection via Tauri backend
    */
-  private startQuotePolling(): void {
-    // Stop existing polling
-    this.stopQuotePolling();
+  private async connectWebSocketDirect(): Promise<void> {
+    const wsAccessToken = `${this.apiKey}:${this.accessToken}`;
 
-    // Poll every 2 minutes (120000ms)
-    this.quotePollingInterval = setInterval(async () => {
-      await this.pollQuotesSequentially();
-    }, 120000);
+    console.log('[Fyers WS] Connecting...', {
+      hasApiKey: !!this.apiKey,
+      apiKeyLength: this.apiKey?.length || 0,
+      accessTokenLength: this.accessToken?.length || 0,
+      wsAccessTokenLength: wsAccessToken.length,
+    });
 
-    // Initial poll
-    this.pollQuotesSequentially();
+    try {
+      const response = await invoke<{
+        success: boolean;
+        data?: boolean;
+        error?: string;
+      }>('fyers_ws_connect', {
+        app: undefined,
+        apiKey: this.apiKey,
+        accessToken: wsAccessToken,
+      });
+
+      console.log('[Fyers WS] Response:', response);
+
+      if (!response.success) {
+        const errorMsg = response.error || 'WebSocket connection failed (no error details)';
+        console.error('[Fyers WS] ✗ Connection failed:', errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      this.wsConnected = true;
+      this.usePollingMode = false;
+      console.log('[Fyers WS] ✓ Connected successfully');
+
+      await this.setupWebSocketListeners();
+      await this.resubscribeViaWebSocket();
+    } catch (invokeError) {
+      console.error('[Fyers WS] ✗ Tauri invoke error:', invokeError);
+      throw invokeError;
+    }
+  }
+
+  /**
+   * Start periodic market hours monitoring
+   * Switches between WebSocket and polling based on market status
+   */
+  private startMarketHoursMonitor(): void {
+    // Clear existing monitor
+    if (this.marketHoursCheckInterval) {
+      clearInterval(this.marketHoursCheckInterval);
+    }
+
+    // Check every 5 minutes
+    this.marketHoursCheckInterval = setInterval(async () => {
+      const marketOpen = this.isMarketOpen();
+
+      if (marketOpen && this.usePollingMode) {
+        // Market just opened - switch to WebSocket
+        console.log('[Fyers] Market opened - switching to WebSocket');
+        this.stopPolling();
+        try {
+          await this.connectWebSocketDirect();
+        } catch (err) {
+          console.warn('[Fyers] WebSocket failed, continuing with polling:', err);
+          this.startPolling();
+        }
+      } else if (!marketOpen && !this.usePollingMode && this.wsConnected) {
+        // Market just closed - switch to polling
+        console.log('[Fyers] Market closed - switching to polling');
+        await this.disconnectWebSocket();
+        this.usePollingMode = true;
+        this.startPolling();
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+  }
+
+  /**
+   * Resubscribe all polling symbols via WebSocket (BATCH mode for speed!)
+   */
+  private async resubscribeViaWebSocket(): Promise<void> {
+    if (this.pollingSymbols.size === 0) {
+      console.log('[Fyers] No symbols to resubscribe');
+      return;
+    }
+
+    // Group symbols by mode
+    const depthSymbols: string[] = [];
+    const quoteSymbols: string[] = [];
+
+    for (const [fyersSymbol, data] of this.pollingSymbols) {
+      if (data.mode === 'full') {
+        depthSymbols.push(fyersSymbol);
+      } else {
+        quoteSymbols.push(fyersSymbol);
+      }
+    }
+
+    // Batch subscribe depth symbols
+    if (depthSymbols.length > 0) {
+      console.log(`[Fyers] Batch subscribing ${depthSymbols.length} depth symbols...`);
+      try {
+        const response = await invoke<{ success: boolean; error?: string }>('fyers_ws_subscribe_batch', {
+          symbols: depthSymbols,
+          mode: 'depth',
+        });
+        if (response.success) {
+          depthSymbols.forEach(s => this.wsSubscriptions.add(s));
+          console.log(`[Fyers] ✓ Batch subscribed ${depthSymbols.length} depth symbols`);
+        } else {
+          console.warn(`[Fyers] Batch depth subscription failed: ${response.error}`);
+        }
+      } catch (err) {
+        console.error('[Fyers] Batch depth subscription error:', err);
+      }
+    }
+
+    // Batch subscribe quote symbols
+    if (quoteSymbols.length > 0) {
+      console.log(`[Fyers] Batch subscribing ${quoteSymbols.length} quote symbols...`);
+      try {
+        const response = await invoke<{ success: boolean; error?: string }>('fyers_ws_subscribe_batch', {
+          symbols: quoteSymbols,
+          mode: 'quote',
+        });
+        if (response.success) {
+          quoteSymbols.forEach(s => this.wsSubscriptions.add(s));
+          console.log(`[Fyers] ✓ Batch subscribed ${quoteSymbols.length} quote symbols`);
+        } else {
+          console.warn(`[Fyers] Batch quote subscription failed: ${response.error}`);
+        }
+      } catch (err) {
+        console.error('[Fyers] Batch quote subscription error:', err);
+      }
+    }
+  }
+
+  /**
+   * Set up Tauri event listeners for WebSocket messages
+   */
+  private async setupWebSocketListeners(): Promise<void> {
+    // Clean up existing listeners
+    this.cleanupWebSocketListeners();
+
+    // Listen for ticker data
+    const tickerUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      price: number;
+      bid?: number;
+      ask?: number;
+      bid_size?: number;
+      ask_size?: number;
+      volume?: number;
+      high?: number;
+      low?: number;
+      open?: number;
+      close?: number;
+      change?: number;
+      change_percent?: number;
+      timestamp: number;
+    }>('fyers_ticker', (event) => {
+      const data = event.payload;
+
+      // Extract symbol and exchange from Fyers format (e.g., "NSE:RELIANCE-EQ")
+      const [exchange, symbolPart] = data.symbol.split(':');
+      const symbol = symbolPart?.replace('-EQ', '').replace('-INDEX', '') || data.symbol;
+
+      console.log('[Fyers] Ticker update:', symbol, 'LTP:', data.price, 'change:', data.change_percent?.toFixed(2) + '%');
+
+      const tick: TickData = {
+        symbol,
+        exchange: (exchange as StockExchange) || 'NSE',
+        mode: 'quote',
+        lastPrice: data.price,
+        open: data.open,
+        high: data.high,
+        low: data.low,
+        close: data.close,
+        volume: data.volume,
+        change: data.change,
+        changePercent: data.change_percent,
+        bid: data.bid,
+        ask: data.ask,
+        bidQty: data.bid_size,
+        askQty: data.ask_size,
+        timestamp: data.timestamp,
+      };
+
+      this.emitTick(tick);
+    });
+
+    this.wsUnlisteners.push(tickerUnlisten);
+
+    // Listen for orderbook/depth data
+    const orderbookUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      bids: Array<{ price: number; quantity: number; count?: number }>;
+      asks: Array<{ price: number; quantity: number; count?: number }>;
+      timestamp: number;
+      is_snapshot?: boolean;
+    }>('fyers_orderbook', (event) => {
+      const data = event.payload;
+
+      // Parse symbol from Fyers format (e.g., "NSE:RELIANCE-EQ" -> "RELIANCE")
+      const [exchange, symbolPart] = data.symbol.split(':');
+      const symbol = symbolPart?.replace('-EQ', '').replace('-INDEX', '') || data.symbol;
+
+      console.log('[Fyers] Depth update:', symbol, 'bids:', data.bids?.length, 'asks:', data.asks?.length);
+
+      // Get best bid/ask from depth
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      // Create tick data with depth information
+      const tick: TickData = {
+        symbol,
+        exchange: (exchange as StockExchange) || 'NSE',
+        mode: 'full',
+        lastPrice: bestBid?.price || 0, // Use bid as approximate LTP
+        bid: bestBid?.price,
+        ask: bestAsk?.price,
+        bidQty: bestBid?.quantity,
+        askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        // Include full depth data
+        depth: {
+          bids: data.bids?.map((b) => ({
+            price: b.price,
+            quantity: b.quantity,
+            orders: b.count || 0,
+          })) || [],
+          asks: data.asks?.map((a) => ({
+            price: a.price,
+            quantity: a.quantity,
+            orders: a.count || 0,
+          })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+
+      // Also emit depth data separately for UI components that listen for depth updates
+      if (tick.depth) {
+        this.emitDepth({
+          symbol,
+          exchange: (exchange as StockExchange) || 'NSE',
+          bids: tick.depth.bids,
+          asks: tick.depth.asks,
+        });
+      }
+    });
+
+    this.wsUnlisteners.push(orderbookUnlisten);
+
+    // Listen for status updates
+    const statusUnlisten = await listen<{
+      provider: string;
+      status: string;
+      message: string;
+      timestamp: number;
+    }>('fyers_status', (event) => {
+      const data = event.payload;
+      console.log(`[Fyers] Status: ${data.status} - ${data.message}`);
+
+      if (data.status === 'disconnected' || data.status === 'error') {
+        this.wsConnected = false;
+      }
+    });
+
+    this.wsUnlisteners.push(statusUnlisten);
+
+    console.log('[Fyers] WebSocket event listeners set up');
+  }
+
+  /**
+   * Clean up WebSocket event listeners
+   */
+  private cleanupWebSocketListeners(): void {
+    for (const unlisten of this.wsUnlisteners) {
+      unlisten();
+    }
+    this.wsUnlisteners = [];
+  }
+
+  // ============================================================================
+  // Polling Mode - For Off-Market Hours
+  // ============================================================================
+
+  /**
+   * Start REST API polling for subscribed symbols
+   */
+  private startPolling(): void {
+    if (this.pollingInterval) {
+      return; // Already polling
+    }
+
+    console.log(`[Fyers] Polling mode started (${this.POLLING_INTERVAL_MS / 1000}s interval)`);
+
+    this.pollingInterval = setInterval(async () => {
+      await this.pollSubscribedSymbols();
+    }, this.POLLING_INTERVAL_MS);
+
+    // Do an immediate poll
+    this.pollSubscribedSymbols();
   }
 
   /**
    * Stop REST API polling
    */
-  private stopQuotePolling(): void {
-    if (this.quotePollingInterval) {
-      clearInterval(this.quotePollingInterval);
-      this.quotePollingInterval = null;
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+      console.log('[Fyers] Polling stopped');
     }
   }
 
   /**
-   * Poll quotes sequentially (not parallel) for all subscribed symbols
+   * Poll all subscribed symbols via REST API
    */
-  private async pollQuotesSequentially(): Promise<void> {
+  private async pollSubscribedSymbols(): Promise<void> {
     if (this.pollingSymbols.size === 0) {
       return;
     }
 
-    console.log(`[Fyers] Polling ${this.pollingSymbols.size} symbols sequentially...`);
+    try {
+      // Get all symbols to poll
+      const fyersSymbols: string[] = [];
 
-    // Process each symbol one by one
-    for (const [key, { symbol, exchange }] of this.pollingSymbols) {
+      for (const [fyersSymbol] of this.pollingSymbols) {
+        fyersSymbols.push(fyersSymbol);
+      }
+
+      // Fetch quotes in batch
+      const response = await invoke<{
+        success: boolean;
+        data?: unknown[];
+        error?: string;
+      }>('fyers_get_quotes', {
+        apiKey: this.apiKey!,
+        accessToken: this.accessToken!,
+        symbols: fyersSymbols,
+      });
+
+      if (response.success && response.data) {
+        // Emit tick data for each quote
+        for (const quoteData of response.data) {
+          const quote = fromFyersQuote(quoteData as Record<string, unknown>);
+
+          // Skip quotes with errors silently
+          if (quote.error) continue;
+
+          const tick: TickData = {
+            symbol: quote.symbol,
+            exchange: quote.exchange,
+            mode: 'quote',
+            lastPrice: quote.lastPrice,
+            open: quote.open,
+            high: quote.high,
+            low: quote.low,
+            close: quote.close,
+            volume: quote.volume,
+            change: quote.change,
+            changePercent: quote.changePercent,
+            bid: quote.bid,
+            ask: quote.ask,
+            bidQty: quote.bidQty,
+            askQty: quote.askQty,
+            timestamp: quote.timestamp,
+          };
+
+          this.emitTick(tick);
+        }
+      } else if (!response.success) {
+        console.error('[Fyers] Poll failed:', response.error);
+      }
+    } catch (error) {
+      console.error('[Fyers] Polling error:', error);
+    }
+  }
+
+  // ============================================================================
+  // Subscribe/Unsubscribe - Hybrid Mode (Override base class)
+  // ============================================================================
+
+  /**
+   * Override base class subscribe to implement hybrid WebSocket/Polling
+   */
+  async subscribe(symbol: string, exchange: StockExchange, mode: SubscriptionMode): Promise<void> {
+    console.log(`[Fyers] >>> SUBSCRIBE: ${symbol}@${exchange} mode=${mode} | ws=${this.wsConnected} poll=${this.usePollingMode}`);
+    await this.subscribeInternal(symbol, exchange, mode);
+  }
+
+  /**
+   * FAST batch subscribe - subscribes to multiple symbols at once!
+   * Use this for watchlists or any batch of symbols for much faster subscription.
+   */
+  async subscribeBatch(symbols: Array<{ symbol: string; exchange: StockExchange }>, mode: SubscriptionMode = 'quote'): Promise<void> {
+    if (symbols.length === 0) return;
+
+    console.log(`[Fyers] >>> BATCH SUBSCRIBE: ${symbols.length} symbols, mode=${mode}`);
+    const startTime = Date.now();
+
+    // Convert to Fyers format
+    const fyersSymbols = symbols.map(({ symbol, exchange }) => {
+      const fyersSymbol = toFyersSymbol(symbol, exchange);
+      this.pollingSymbols.set(fyersSymbol, { symbol, exchange, mode });
+      return fyersSymbol;
+    });
+
+    // Initialize connection if needed
+    if (!this.wsConnected && !this.usePollingMode && !this.pollingInterval) {
+      const marketOpen = this.isMarketOpen();
+      console.log(`[Fyers] Init strategy: market=${marketOpen ? 'OPEN' : 'CLOSED'}`);
+
+      if (marketOpen) {
+        try {
+          await this.connectWebSocketDirect();
+          this.startMarketHoursMonitor();
+        } catch (wsError) {
+          console.error('[Fyers] WS failed, fallback to polling:', wsError);
+          this.usePollingMode = true;
+          this.startPolling();
+        }
+      } else {
+        this.usePollingMode = true;
+        this.startPolling();
+        this.startMarketHoursMonitor();
+      }
+    }
+
+    // Use batch subscribe if WebSocket is connected
+    if (this.wsConnected && !this.usePollingMode) {
       try {
-        // Fetch quote via REST API
-        const quote = await this.getQuoteInternal(symbol, exchange);
+        const wsMode = mode === 'full' ? 'depth' : 'quote';
+        const response = await invoke<{ success: boolean; error?: string }>('fyers_ws_subscribe_batch', {
+          symbols: fyersSymbols,
+          mode: wsMode,
+        });
 
-        // Convert quote to tick and emit
+        if (response.success) {
+          fyersSymbols.forEach(s => this.wsSubscriptions.add(s));
+          console.log(`[Fyers] ✓ Batch WS subscribed to ${fyersSymbols.length} symbols in ${Date.now() - startTime}ms`);
+          return;
+        } else {
+          console.warn(`[Fyers] Batch WS subscribe failed: ${response.error}, falling back to polling`);
+        }
+      } catch (err) {
+        console.error('[Fyers] Batch WS subscribe error:', err);
+      }
+    }
+
+    // Fallback: fetch initial quotes via REST
+    console.log(`[Fyers] Fetching ${fyersSymbols.length} quotes via REST (polling mode)`);
+    await this.fetchBatchQuotes(fyersSymbols);
+
+    if (!this.pollingInterval) {
+      this.usePollingMode = true;
+      this.startPolling();
+    }
+
+    console.log(`[Fyers] ✓ Batch subscribe complete in ${Date.now() - startTime}ms`);
+  }
+
+  // Debounce timer for batched initial fetch
+  private pendingInitialFetch: NodeJS.Timeout | null = null;
+  private pendingSymbols: Set<string> = new Set();
+
+  // Track symbols with errors (to avoid repeated error logging)
+  private errorSymbols: Set<string> = new Set();
+
+  /**
+   * Subscribe to symbol - uses WebSocket or polling based on market hours
+   */
+  protected async subscribeInternal(symbol: string, exchange: StockExchange, mode: SubscriptionMode): Promise<void> {
+    const fyersSymbol = toFyersSymbol(symbol, exchange);
+    this.pollingSymbols.set(fyersSymbol, { symbol, exchange, mode });
+
+    try {
+      // Initialize connection strategy on first subscription
+      if (!this.wsConnected && !this.usePollingMode && !this.pollingInterval) {
+        const marketOpen = this.isMarketOpen();
+        console.log(`[Fyers] Init strategy: market=${marketOpen ? 'OPEN' : 'CLOSED'}`);
+
+        if (marketOpen) {
+          try {
+            await this.connectWebSocketDirect();
+            this.startMarketHoursMonitor();
+          } catch (wsError) {
+            console.error('[Fyers] WS failed, fallback to polling:', wsError);
+            this.usePollingMode = true;
+            this.startPolling();
+          }
+        } else {
+          this.usePollingMode = true;
+          this.startPolling();
+          this.startMarketHoursMonitor();
+        }
+      }
+
+      // Handle subscription based on current mode
+      if (this.usePollingMode) {
+        if (!this.pollingInterval) this.startPolling();
+        this.queueInitialFetch(fyersSymbol);
+      } else if (this.wsConnected) {
+        const channel = mode === 'full' ? 'depth' : 'SymbolUpdate';
+        const response = await invoke<{ success: boolean; error?: string }>('fyers_ws_subscribe', {
+          symbol: fyersSymbol,
+          mode: channel,
+        });
+        if (!response.success) {
+          console.warn(`[Fyers] WS subscribe failed for ${fyersSymbol}: ${response.error}`);
+          this.queueInitialFetch(fyersSymbol);
+        }
+        this.wsSubscriptions.add(fyersSymbol);
+      } else {
+        this.queueInitialFetch(fyersSymbol);
+        if (!this.pollingInterval) {
+          this.usePollingMode = true;
+          this.startPolling();
+        }
+      }
+    } catch (error) {
+      console.error(`[Fyers] Subscribe error for ${fyersSymbol}:`, error);
+      this.queueInitialFetch(fyersSymbol);
+    }
+  }
+
+  /**
+   * Queue symbol for batched initial fetch
+   * Uses debouncing to collect multiple symbols and fetch them in one batch
+   */
+  private queueInitialFetch(fyersSymbol: string): void {
+    this.pendingSymbols.add(fyersSymbol);
+
+    // Clear existing timer
+    if (this.pendingInitialFetch) {
+      clearTimeout(this.pendingInitialFetch);
+    }
+
+    // Set new timer - wait 200ms for more symbols to be added
+    this.pendingInitialFetch = setTimeout(async () => {
+      const symbols = Array.from(this.pendingSymbols);
+      this.pendingSymbols.clear();
+      this.pendingInitialFetch = null;
+
+      if (symbols.length > 0) {
+        console.log(`[Fyers] Batch fetching ${symbols.length} symbols for initial data`);
+        await this.fetchBatchQuotes(symbols);
+      }
+    }, 200);
+  }
+
+  /**
+   * Fetch quotes for multiple symbols in one batch request
+   */
+  private async fetchBatchQuotes(fyersSymbols: string[]): Promise<void> {
+    try {
+      const response = await invoke<{
+        success: boolean;
+        data?: unknown[];
+        error?: string;
+      }>('fyers_get_quotes', {
+        apiKey: this.apiKey!,
+        accessToken: this.accessToken!,
+        symbols: fyersSymbols,
+      });
+
+      if (response.success && response.data) {
+        let successCount = 0;
+        for (const quoteData of response.data) {
+          const quote = fromFyersQuote(quoteData as Record<string, unknown>);
+
+          // Skip quotes with errors silently
+          if (quote.error) continue;
+
+          const tick: TickData = {
+            symbol: quote.symbol,
+            exchange: quote.exchange,
+            mode: 'quote',
+            lastPrice: quote.lastPrice,
+            open: quote.open,
+            high: quote.high,
+            low: quote.low,
+            close: quote.close,
+            volume: quote.volume,
+            change: quote.change,
+            changePercent: quote.changePercent,
+            bid: quote.bid,
+            ask: quote.ask,
+            bidQty: quote.bidQty,
+            askQty: quote.askQty,
+            timestamp: quote.timestamp,
+          };
+
+          this.emitTick(tick);
+          successCount++;
+        }
+        console.log(`[Fyers] Batch fetch: ${successCount}/${fyersSymbols.length} quotes`);
+      } else {
+        console.error('[Fyers] Batch fetch failed:', response.error);
+      }
+    } catch (error) {
+      console.error('[Fyers] Batch fetch error:', error);
+    }
+  }
+
+  /**
+   * Fetch a single quote and emit as tick data
+   * Used for immediate data when subscribing
+   */
+  private async fetchAndEmitQuote(fyersSymbol: string, symbol: string, exchange: StockExchange): Promise<void> {
+    try {
+      const response = await invoke<{
+        success: boolean;
+        data?: unknown[];
+        error?: string;
+      }>('fyers_get_quotes', {
+        apiKey: this.apiKey!,
+        accessToken: this.accessToken!,
+        symbols: [fyersSymbol],
+      });
+
+      if (response.success && response.data && response.data.length > 0) {
+        const quote = fromFyersQuote(response.data[0] as Record<string, unknown>);
+
         const tick: TickData = {
-          symbol,
-          exchange,
+          symbol: quote.symbol || symbol,
+          exchange: quote.exchange || exchange,
           mode: 'quote',
           lastPrice: quote.lastPrice,
           open: quote.open,
@@ -940,59 +1597,99 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
           volume: quote.volume,
           change: quote.change,
           changePercent: quote.changePercent,
+          bid: quote.bid,
+          ask: quote.ask,
+          bidQty: quote.bidQty,
+          askQty: quote.askQty,
           timestamp: quote.timestamp,
         };
 
         this.emitTick(tick);
-      } catch (error) {
-        console.error(`[Fyers] Failed to poll ${symbol}:`, error);
+        console.log(`[Fyers] Fetched quote for ${fyersSymbol}: ${tick.lastPrice}`);
       }
-
-      // Small delay between requests to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    console.log(`[Fyers] ✓ Polling complete for ${this.pollingSymbols.size} symbols`);
-  }
-
-  /**
-   * Subscribe to symbol (internal) - Adds to polling list
-   */
-  protected async subscribeInternal(symbol: string, exchange: StockExchange, mode: SubscriptionMode): Promise<void> {
-    try {
-      const key = `${exchange}:${symbol}`;
-      this.pollingSymbols.set(key, { symbol, exchange });
-
-      console.log(`Fyers: Added ${key} to polling list (${this.pollingSymbols.size} symbols total)`);
-
-      // Trigger immediate poll for this symbol
-      this.pollQuotesSequentially();
     } catch (error) {
-      console.error('Failed to subscribe:', error);
-      throw error;
+      console.error(`[Fyers] Failed to fetch quote for ${fyersSymbol}:`, error);
     }
   }
 
   /**
-   * Unsubscribe from symbol (internal) - Removes from polling list
+   * Unsubscribe from symbol
    */
   protected async unsubscribeInternal(symbol: string, exchange: StockExchange): Promise<void> {
     try {
-      const key = `${exchange}:${symbol}`;
-      this.pollingSymbols.delete(key);
+      const fyersSymbol = toFyersSymbol(symbol, exchange);
 
-      console.log(`Fyers: Removed ${key} from polling list (${this.pollingSymbols.size} symbols remaining)`);
+      // Remove from polling map
+      this.pollingSymbols.delete(fyersSymbol);
+
+      // If WebSocket connected, unsubscribe there too
+      if (this.wsConnected && this.wsSubscriptions.has(fyersSymbol)) {
+        const response = await invoke<{
+          success: boolean;
+          data?: boolean;
+          error?: string;
+        }>('fyers_ws_unsubscribe', {
+          symbol: fyersSymbol,
+        });
+
+        if (!response.success) {
+          console.warn(`[Fyers] WebSocket unsubscribe failed: ${response.error}`);
+        }
+
+        this.wsSubscriptions.delete(fyersSymbol);
+      }
+
+      console.log(`[Fyers] Unsubscribed from ${fyersSymbol} (${this.pollingSymbols.size} remaining)`);
+
+      // Stop polling if no more symbols
+      if (this.pollingSymbols.size === 0 && this.pollingInterval) {
+        this.stopPolling();
+      }
+
     } catch (error) {
-      console.error('Failed to unsubscribe:', error);
-      throw error;
+      console.error('[Fyers] Unsubscribe error:', error);
     }
   }
 
   /**
-   * Cleanup polling on logout
+   * Disconnect WebSocket (override base class method)
+   */
+  async disconnectWebSocket(): Promise<void> {
+    try {
+      await invoke('fyers_ws_disconnect');
+      this.wsConnected = false;
+      this.wsSubscriptions.clear();
+      this.cleanupWebSocketListeners();
+      console.log('[Fyers] WebSocket disconnected');
+    } catch (error) {
+      console.error('[Fyers] WebSocket disconnect error:', error);
+    }
+  }
+
+  /**
+   * Check if WebSocket is connected
+   */
+  async isWebSocketConnected(): Promise<boolean> {
+    try {
+      const connected = await invoke<boolean>('fyers_ws_is_connected');
+      this.wsConnected = connected;
+      return connected;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Cleanup on logout
    */
   async logout(): Promise<void> {
-    this.stopQuotePolling();
+    // Stop all data feeds
+    this.stopPolling();
+    if (this.marketHoursCheckInterval) {
+      clearInterval(this.marketHoursCheckInterval);
+      this.marketHoursCheckInterval = null;
+    }
+    await this.disconnectWebSocket();
     this.pollingSymbols.clear();
     await super.logout();
   }

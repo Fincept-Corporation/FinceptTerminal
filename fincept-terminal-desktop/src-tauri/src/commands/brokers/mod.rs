@@ -69,6 +69,9 @@ pub mod tradier;
 // European Brokers
 pub mod saxobank;
 
+// WebSocket Commands for all brokers
+pub mod websocket_commands;
+
 // Re-export everything from fyers (includes tauri command wrappers)
 pub use fyers::*;
 
@@ -116,3 +119,6 @@ pub use saxobank::*;
 
 // Re-export common utility commands
 pub use common_commands::*;
+
+// Re-export WebSocket commands for all brokers
+pub use websocket_commands::*;

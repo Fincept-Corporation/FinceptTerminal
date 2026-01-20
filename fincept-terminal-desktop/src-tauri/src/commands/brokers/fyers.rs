@@ -728,10 +728,16 @@ pub async fn fyers_get_depth(
 
     if status.is_success() && body.get("s").and_then(|s| s.as_str()) == Some("ok") {
         // Fyers depth API returns:
-        // { "s": "ok", "d": { "totalbuyqty": N, "totalsellqty": N, "bids": [...], "ask": [...] } }
+        // { "s": "ok", "d": { "NSE:SYMBOL-EQ": { "totalbuyqty": N, "totalsellqty": N, "bids": [...], "ask": [...] } } }
+        // We need to extract the data under the symbol key
+        let depth_data = body.get("d")
+            .and_then(|d| d.get(&symbol))
+            .cloned()
+            .or_else(|| body.get("d").cloned());
+
         Ok(ApiResponse {
             success: true,
-            data: body.get("d").cloned(),
+            data: depth_data,
             error: None,
             timestamp,
         })
@@ -1115,10 +1121,12 @@ pub async fn fyers_ws_connect(
         url: "wss://socket.fyers.in/hsm/v1-5/prod".to_string(),
         api_key: Some(access_token.clone()),
         api_secret: None,
+        client_id: None,
         enabled: true,
         reconnect_delay_ms: 5000,
         max_reconnect_attempts: 10,
         heartbeat_interval_ms: 30000,
+        extra: None,
     };
 
     let mut adapter = crate::websocket::adapters::FyersAdapter::new(config);
@@ -1316,6 +1324,59 @@ pub async fn fyers_ws_unsubscribe(
             success: false,
             data: Some(false),
             error: Some("WebSocket not connected".to_string()),
+            timestamp,
+        })
+    }
+}
+
+/// Batch subscribe to multiple symbols via Fyers WebSocket (FAST!)
+/// This is much faster than subscribing one-by-one as it fetches all fytokens in one API call
+#[tauri::command]
+pub async fn fyers_ws_subscribe_batch(
+    symbols: Vec<String>,
+    mode: String,
+) -> Result<ApiResponse<bool>, String> {
+    eprintln!("[fyers_ws_subscribe_batch] Subscribing to {} symbols in {} mode", symbols.len(), mode);
+
+    let timestamp = chrono::Utc::now().timestamp_millis();
+    let start_time = std::time::Instant::now();
+
+    let mut ws_guard = FYERS_WS.write().await;
+
+    if let Some(ref mut adapter) = *ws_guard {
+        // Map mode to data type
+        let data_type = match mode.as_str() {
+            "depth" | "market_depth" | "full" => crate::websocket::adapters::fyers::FyersDataType::DepthUpdate,
+            "index" => crate::websocket::adapters::fyers::FyersDataType::IndexUpdate,
+            _ => crate::websocket::adapters::fyers::FyersDataType::SymbolUpdate,
+        };
+
+        match adapter.subscribe_batch(&symbols, data_type).await {
+            Ok(_) => {
+                let elapsed = start_time.elapsed();
+                eprintln!("[fyers_ws_subscribe_batch] ✓ Subscribed to {} symbols in {:?}", symbols.len(), elapsed);
+                Ok(ApiResponse {
+                    success: true,
+                    data: Some(true),
+                    error: None,
+                    timestamp,
+                })
+            }
+            Err(e) => {
+                eprintln!("[fyers_ws_subscribe_batch] ✗ Batch subscription failed: {}", e);
+                Ok(ApiResponse {
+                    success: false,
+                    data: Some(false),
+                    error: Some(format!("Batch subscription failed: {}", e)),
+                    timestamp,
+                })
+            }
+        }
+    } else {
+        Ok(ApiResponse {
+            success: false,
+            data: Some(false),
+            error: Some("WebSocket not connected. Call fyers_ws_connect first.".to_string()),
             timestamp,
         })
     }

@@ -350,6 +350,61 @@ pub fn toggle_llm_model_config_enabled(id: &str) -> Result<OperationResult> {
     }
 }
 
+/// Update model_id for a specific LLM model config
+pub fn update_llm_model_id(id: &str, new_model_id: &str) -> Result<OperationResult> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let rows_affected = conn.execute(
+        "UPDATE llm_model_configs SET model_id = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+        params![new_model_id, id],
+    )?;
+
+    if rows_affected > 0 {
+        Ok(OperationResult {
+            success: true,
+            message: format!("Model ID updated to: {}", new_model_id),
+        })
+    } else {
+        Ok(OperationResult {
+            success: false,
+            message: "Model configuration not found".to_string(),
+        })
+    }
+}
+
+/// Fix all Google model IDs to use correct format (without prefix)
+pub fn fix_google_model_ids() -> Result<OperationResult> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    // Fix model_ids that have incorrect prefixes like "google/" or "models/"
+    let rows_affected = conn.execute(
+        "UPDATE llm_model_configs
+         SET model_id = REPLACE(REPLACE(model_id, 'google/', ''), 'models/', ''),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE provider = 'google'
+         AND (model_id LIKE 'google/%' OR model_id LIKE 'models/%')",
+        [],
+    )?;
+
+    // Also ensure common model names are correct
+    conn.execute(
+        "UPDATE llm_model_configs
+         SET model_id = 'gemini-1.5-flash',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE provider = 'google'
+         AND model_id NOT LIKE 'gemini-%'
+         AND model_id != ''",
+        [],
+    )?;
+
+    Ok(OperationResult {
+        success: true,
+        message: format!("Fixed {} Google model configurations", rows_affected),
+    })
+}
+
 // ============================================================================
 // Chat Operations
 // ============================================================================

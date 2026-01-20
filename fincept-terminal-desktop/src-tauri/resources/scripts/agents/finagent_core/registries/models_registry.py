@@ -211,14 +211,6 @@ class ModelsRegistry:
             "default_model": "anthropic/claude-3.5-sonnet",
         },
 
-        # LiteLLM (Multi-provider wrapper)
-        "litellm": {
-            "class": "agno.models.litellm.LiteLLM",
-            "models": [],
-            "api_key_env": None,
-            "default_model": None,
-        },
-
         # Portkey (Multi-provider)
         "portkey": {
             "class": "agno.models.portkey.Portkey",

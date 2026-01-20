@@ -65,7 +65,62 @@ from finagent_core.modules.reasoning_module import ReasoningBuilder
 from finagent_core.agent_factory import AgentFactory
 from finagent_core.config_loader import ConfigLoader
 
-__version__ = "2.0.0"
+# New modules (v2.1)
+from finagent_core.agent_loader import (
+    AgentLoader,
+    AgentCard,
+    AgentRegistry,
+    get_loader,
+    discover_agents,
+    create_agent,
+    list_agents,
+    list_categories,
+)
+from finagent_core.super_agent import (
+    SuperAgent,
+    QueryIntent,
+    RouteConfig,
+    RoutingResult,
+    IntentClassifier,
+    route_query,
+    execute_query,
+)
+from finagent_core.execution_planner import (
+    ExecutionPlanner,
+    ExecutionPlan,
+    PlanStep,
+    PlanBuilder,
+    StepStatus,
+    StepType,
+    create_stock_analysis_plan,
+    execute_plan,
+)
+from finagent_core.repositories import (
+    Repository,
+    AgentSession,
+    AgentMemory,
+    TradeDecision,
+    PerformanceSnapshot,
+    AgentSessionRepository,
+    AgentMemoryRepository,
+    TradeDecisionRepository,
+    PerformanceSnapshotRepository,
+    RepositoryFactory,
+)
+from finagent_core.paper_trading_bridge import (
+    PaperTradingBridge,
+    Portfolio,
+    Order,
+    Position,
+    Trade,
+    Stats,
+    get_bridge,
+    execute_trade,
+    get_portfolio_value,
+    get_positions_summary,
+)
+
+__version__ = "2.1.0"
 
 __all__ = [
     # Core
@@ -96,6 +151,59 @@ __all__ = [
     # Legacy
     "AgentFactory",
     "ConfigLoader",
+
+    # Dynamic Agent Loading (v2.1)
+    "AgentLoader",
+    "AgentCard",
+    "AgentRegistry",
+    "get_loader",
+    "discover_agents",
+    "create_agent",
+    "list_agents",
+    "list_categories",
+
+    # SuperAgent Routing (v2.1)
+    "SuperAgent",
+    "QueryIntent",
+    "RouteConfig",
+    "RoutingResult",
+    "IntentClassifier",
+    "route_query",
+    "execute_query",
+
+    # Execution Planner (v2.1)
+    "ExecutionPlanner",
+    "ExecutionPlan",
+    "PlanStep",
+    "PlanBuilder",
+    "StepStatus",
+    "StepType",
+    "create_stock_analysis_plan",
+    "execute_plan",
+
+    # Repository Pattern (v2.1)
+    "Repository",
+    "AgentSession",
+    "AgentMemory",
+    "TradeDecision",
+    "PerformanceSnapshot",
+    "AgentSessionRepository",
+    "AgentMemoryRepository",
+    "TradeDecisionRepository",
+    "PerformanceSnapshotRepository",
+    "RepositoryFactory",
+
+    # Paper Trading Bridge (v2.1)
+    "PaperTradingBridge",
+    "Portfolio",
+    "Order",
+    "Position",
+    "Trade",
+    "Stats",
+    "get_bridge",
+    "execute_trade",
+    "get_portfolio_value",
+    "get_positions_summary",
 ]
 
 

@@ -144,10 +144,12 @@ pub struct ProviderConfig {
     pub url: String,
     pub api_key: Option<String>,
     pub api_secret: Option<String>,
+    pub client_id: Option<String>,
     pub enabled: bool,
     pub reconnect_delay_ms: u64,
     pub max_reconnect_attempts: u32,
     pub heartbeat_interval_ms: u64,
+    pub extra: Option<HashMap<String, serde_json::Value>>,
 }
 
 impl Default for ProviderConfig {
@@ -157,10 +159,12 @@ impl Default for ProviderConfig {
             url: String::new(),
             api_key: None,
             api_secret: None,
+            client_id: None,
             enabled: true,
             reconnect_delay_ms: 5000,
             max_reconnect_attempts: 10,
             heartbeat_interval_ms: 30000,
+            extra: None,
         }
     }
 }

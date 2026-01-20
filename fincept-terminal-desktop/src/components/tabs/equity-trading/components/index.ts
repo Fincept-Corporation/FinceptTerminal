@@ -8,6 +8,7 @@ export { BrokerSelector } from './BrokerSelector';
 export { BrokerAuthPanel } from './BrokerAuthPanel';
 export { BrokerConfigPanel } from './BrokerConfigPanel';
 export { BrokerSetupPanel } from './BrokerSetupPanel';
+export { BrokersManagementPanel } from './BrokersManagementPanel';
 export { StockOrderForm } from './StockOrderForm';
 export { PositionsPanel } from './PositionsPanel';
 export { HoldingsPanel } from './HoldingsPanel';

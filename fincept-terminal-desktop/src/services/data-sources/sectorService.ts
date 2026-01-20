@@ -1,5 +1,8 @@
 // Sector Classification Service
 // Maps stock symbols to their sectors and industries
+// Uses yfinance .info for real-time sector data - fully dynamic
+
+import { invoke } from '@tauri-apps/api/core';
 
 export interface SectorInfo {
   sector: string;
@@ -7,162 +10,140 @@ export interface SectorInfo {
   description?: string;
 }
 
-// Common sector classifications (GICS sectors)
-export const SECTORS = {
-  TECHNOLOGY: 'Technology',
-  HEALTHCARE: 'Healthcare',
-  FINANCIAL: 'Financial Services',
-  CONSUMER_CYCLICAL: 'Consumer Cyclical',
-  CONSUMER_DEFENSIVE: 'Consumer Defensive',
-  INDUSTRIALS: 'Industrials',
-  ENERGY: 'Energy',
-  UTILITIES: 'Utilities',
-  REAL_ESTATE: 'Real Estate',
-  MATERIALS: 'Basic Materials',
-  COMMUNICATION: 'Communication Services',
-  CRYPTO: 'Cryptocurrency',
-  OTHER: 'Other'
-};
+// Default sector for unknown/missing values
+export const DEFAULT_SECTOR = 'Other';
 
-// Known symbol to sector mappings
-const SYMBOL_SECTOR_MAP: Record<string, SectorInfo> = {
-  // Technology
-  'AAPL': { sector: SECTORS.TECHNOLOGY, industry: 'Consumer Electronics' },
-  'MSFT': { sector: SECTORS.TECHNOLOGY, industry: 'Software' },
-  'GOOGL': { sector: SECTORS.COMMUNICATION, industry: 'Internet Content' },
-  'GOOG': { sector: SECTORS.COMMUNICATION, industry: 'Internet Content' },
-  'AMZN': { sector: SECTORS.CONSUMER_CYCLICAL, industry: 'Internet Retail' },
-  'META': { sector: SECTORS.COMMUNICATION, industry: 'Social Media' },
-  'NVDA': { sector: SECTORS.TECHNOLOGY, industry: 'Semiconductors' },
-  'TSLA': { sector: SECTORS.CONSUMER_CYCLICAL, industry: 'Auto Manufacturers' },
-  'AMD': { sector: SECTORS.TECHNOLOGY, industry: 'Semiconductors' },
-  'INTC': { sector: SECTORS.TECHNOLOGY, industry: 'Semiconductors' },
-  'CRM': { sector: SECTORS.TECHNOLOGY, industry: 'Software' },
-  'ORCL': { sector: SECTORS.TECHNOLOGY, industry: 'Software' },
-  'ADBE': { sector: SECTORS.TECHNOLOGY, industry: 'Software' },
-  'CSCO': { sector: SECTORS.TECHNOLOGY, industry: 'Communication Equipment' },
-  'IBM': { sector: SECTORS.TECHNOLOGY, industry: 'Information Technology Services' },
+// Crypto sector constant (for pattern matching)
+export const CRYPTO_SECTOR = 'Cryptocurrency';
 
-  // Healthcare
-  'JNJ': { sector: SECTORS.HEALTHCARE, industry: 'Drug Manufacturers' },
-  'UNH': { sector: SECTORS.HEALTHCARE, industry: 'Healthcare Plans' },
-  'PFE': { sector: SECTORS.HEALTHCARE, industry: 'Drug Manufacturers' },
-  'ABBV': { sector: SECTORS.HEALTHCARE, industry: 'Drug Manufacturers' },
-  'TMO': { sector: SECTORS.HEALTHCARE, industry: 'Diagnostics & Research' },
-  'ABT': { sector: SECTORS.HEALTHCARE, industry: 'Medical Devices' },
-  'MRK': { sector: SECTORS.HEALTHCARE, industry: 'Drug Manufacturers' },
+// Runtime cache for fetched sector data (fully dynamic)
+const sectorCache: Record<string, SectorInfo> = {};
 
-  // Financial
-  'JPM': { sector: SECTORS.FINANCIAL, industry: 'Banks' },
-  'BAC': { sector: SECTORS.FINANCIAL, industry: 'Banks' },
-  'WFC': { sector: SECTORS.FINANCIAL, industry: 'Banks' },
-  'GS': { sector: SECTORS.FINANCIAL, industry: 'Capital Markets' },
-  'MS': { sector: SECTORS.FINANCIAL, industry: 'Capital Markets' },
-  'V': { sector: SECTORS.FINANCIAL, industry: 'Credit Services' },
-  'MA': { sector: SECTORS.FINANCIAL, industry: 'Credit Services' },
-  'BRK.B': { sector: SECTORS.FINANCIAL, industry: 'Insurance' },
-
-  // Consumer
-  'WMT': { sector: SECTORS.CONSUMER_DEFENSIVE, industry: 'Discount Stores' },
-  'PG': { sector: SECTORS.CONSUMER_DEFENSIVE, industry: 'Household Products' },
-  'KO': { sector: SECTORS.CONSUMER_DEFENSIVE, industry: 'Beverages' },
-  'PEP': { sector: SECTORS.CONSUMER_DEFENSIVE, industry: 'Beverages' },
-  'COST': { sector: SECTORS.CONSUMER_DEFENSIVE, industry: 'Discount Stores' },
-  'NKE': { sector: SECTORS.CONSUMER_CYCLICAL, industry: 'Footwear & Accessories' },
-  'MCD': { sector: SECTORS.CONSUMER_CYCLICAL, industry: 'Restaurants' },
-  'SBUX': { sector: SECTORS.CONSUMER_CYCLICAL, industry: 'Restaurants' },
-  'DIS': { sector: SECTORS.COMMUNICATION, industry: 'Entertainment' },
-  'NFLX': { sector: SECTORS.COMMUNICATION, industry: 'Entertainment' },
-
-  // Energy
-  'XOM': { sector: SECTORS.ENERGY, industry: 'Oil & Gas' },
-  'CVX': { sector: SECTORS.ENERGY, industry: 'Oil & Gas' },
-  'COP': { sector: SECTORS.ENERGY, industry: 'Oil & Gas' },
-
-  // Industrials
-  'BA': { sector: SECTORS.INDUSTRIALS, industry: 'Aerospace & Defense' },
-  'HON': { sector: SECTORS.INDUSTRIALS, industry: 'Conglomerates' },
-  'UPS': { sector: SECTORS.INDUSTRIALS, industry: 'Integrated Freight & Logistics' },
-  'CAT': { sector: SECTORS.INDUSTRIALS, industry: 'Farm & Heavy Machinery' },
-
-  // Indian Stocks
-  'RELIANCE.NS': { sector: SECTORS.ENERGY, industry: 'Oil & Gas Refining' },
-  'RELIANCE.BO': { sector: SECTORS.ENERGY, industry: 'Oil & Gas Refining' },
-  'TCS.NS': { sector: SECTORS.TECHNOLOGY, industry: 'Information Technology Services' },
-  'TCS.BO': { sector: SECTORS.TECHNOLOGY, industry: 'Information Technology Services' },
-  'INFY.NS': { sector: SECTORS.TECHNOLOGY, industry: 'Information Technology Services' },
-  'INFY.BO': { sector: SECTORS.TECHNOLOGY, industry: 'Information Technology Services' },
-  'HDFCBANK.NS': { sector: SECTORS.FINANCIAL, industry: 'Banks' },
-  'HDFCBANK.BO': { sector: SECTORS.FINANCIAL, industry: 'Banks' },
-  'ITC.NS': { sector: SECTORS.CONSUMER_DEFENSIVE, industry: 'Tobacco' },
-  'ITC.BO': { sector: SECTORS.CONSUMER_DEFENSIVE, industry: 'Tobacco' },
-
-  // Cryptocurrency
-  'BTC-USD': { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' },
-  'ETH-USD': { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' },
-  'USDT-USD': { sector: SECTORS.CRYPTO, industry: 'Stablecoin' },
-  'BNB-USD': { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' },
-  'XRP-USD': { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' },
-  'SOL-USD': { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' },
-  'ADA-USD': { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' },
-  'DOGE-USD': { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' },
-
-  // ETFs
-  'SPY': { sector: SECTORS.OTHER, industry: 'Index ETF' },
-  'QQQ': { sector: SECTORS.OTHER, industry: 'Index ETF' },
-  'VOO': { sector: SECTORS.OTHER, industry: 'Index ETF' },
-  'VTI': { sector: SECTORS.OTHER, industry: 'Index ETF' },
-  'IWM': { sector: SECTORS.OTHER, industry: 'Index ETF' },
-};
+// Pending fetch promises to avoid duplicate requests
+const pendingFetches: Record<string, Promise<SectorInfo>> = {};
 
 class SectorService {
   /**
-   * Get sector information for a symbol
+   * Get sector information for a symbol (synchronous - uses cache)
+   * Returns cached data or pattern-based fallback
    */
   getSectorInfo(symbol: string): SectorInfo {
-    // Normalize symbol (uppercase, remove exchange suffix variations)
     const normalizedSymbol = symbol.toUpperCase().trim();
 
-    // Check direct mapping
-    if (SYMBOL_SECTOR_MAP[normalizedSymbol]) {
-      return SYMBOL_SECTOR_MAP[normalizedSymbol];
+    // Check runtime cache first
+    if (sectorCache[normalizedSymbol]) {
+      return sectorCache[normalizedSymbol];
     }
 
-    // Check without exchange suffix (.NS, .BO, etc.)
+    // Check without exchange suffix
     const baseSymbol = normalizedSymbol.split('.')[0];
-    if (SYMBOL_SECTOR_MAP[baseSymbol]) {
-      return SYMBOL_SECTOR_MAP[baseSymbol];
+    if (sectorCache[baseSymbol]) {
+      return sectorCache[baseSymbol];
     }
 
-    // Heuristic classification based on symbol patterns
+    // Return pattern-based fallback (async fetch will update cache)
     return this.classifyByPattern(normalizedSymbol);
   }
 
   /**
-   * Classify symbol by patterns (fallback)
+   * Fetch sector info from yfinance API (async)
    */
-  private classifyByPattern(symbol: string): SectorInfo {
-    // Crypto patterns
-    if (symbol.endsWith('-USD') || symbol.endsWith('USD') || symbol.endsWith('USDT')) {
-      return { sector: SECTORS.CRYPTO, industry: 'Cryptocurrency' };
+  async fetchSectorInfo(symbol: string): Promise<SectorInfo> {
+    const normalizedSymbol = symbol.toUpperCase().trim();
+
+    // Check cache
+    if (sectorCache[normalizedSymbol]) {
+      return sectorCache[normalizedSymbol];
     }
 
-    // ETF patterns
-    if (symbol.length === 3 && (symbol.startsWith('V') || symbol.startsWith('I') || symbol.startsWith('S'))) {
-      return { sector: SECTORS.OTHER, industry: 'Index ETF' };
+    // Check if already fetching
+    if (normalizedSymbol in pendingFetches) {
+      return pendingFetches[normalizedSymbol];
     }
 
-    // Indian stocks
-    if (symbol.endsWith('.NS') || symbol.endsWith('.BO')) {
-      return { sector: SECTORS.OTHER, industry: 'Indian Stock' };
+    // Pattern-based symbols (crypto, etc.) - no API call needed
+    const patternInfo = this.classifyByPattern(normalizedSymbol);
+    if (patternInfo.sector !== DEFAULT_SECTOR || patternInfo.industry !== 'Unknown') {
+      sectorCache[normalizedSymbol] = patternInfo;
+      return patternInfo;
     }
 
-    // Default fallback
-    return { sector: SECTORS.OTHER, industry: 'Unknown' };
+    // Fetch from yfinance API
+    const fetchPromise = this.fetchFromYfinance(normalizedSymbol);
+    pendingFetches[normalizedSymbol] = fetchPromise;
+
+    try {
+      const result = await fetchPromise;
+      sectorCache[normalizedSymbol] = result;
+      return result;
+    } finally {
+      delete pendingFetches[normalizedSymbol];
+    }
   }
 
   /**
-   * Get all unique sectors from a list of symbols
+   * Fetch sector data from yfinance API
+   * Returns whatever sector/industry yfinance provides - fully dynamic
+   */
+  private async fetchFromYfinance(symbol: string): Promise<SectorInfo> {
+    try {
+      const response = await invoke<string>('execute_yfinance_command', {
+        command: 'info',
+        args: [symbol]
+      });
+      const data = JSON.parse(response);
+
+      // Check for error response
+      if (data.error) {
+        console.warn(`[SectorService] yfinance error for ${symbol}:`, data.error);
+        return { sector: DEFAULT_SECTOR, industry: 'Unknown' };
+      }
+
+      // Use sector/industry directly from yfinance - no normalization needed
+      const sector = data.sector && data.sector !== 'N/A' ? data.sector : DEFAULT_SECTOR;
+      const industry = data.industry && data.industry !== 'N/A' ? data.industry : undefined;
+      const description = data.description && data.description !== 'N/A' ? data.description : undefined;
+
+      return { sector, industry, description };
+    } catch (error) {
+      console.warn(`[SectorService] Failed to fetch sector for ${symbol}:`, error);
+      return { sector: DEFAULT_SECTOR, industry: 'Unknown' };
+    }
+  }
+
+  /**
+   * Prefetch sector data for multiple symbols
+   */
+  async prefetchSectors(symbols: string[]): Promise<void> {
+    const unknownSymbols = symbols.filter(s => {
+      const normalized = s.toUpperCase().trim();
+      return !sectorCache[normalized];
+    });
+
+    // Fetch in parallel (limit concurrency to avoid overwhelming API)
+    const batchSize = 5;
+    for (let i = 0; i < unknownSymbols.length; i += batchSize) {
+      const batch = unknownSymbols.slice(i, i + batchSize);
+      await Promise.all(batch.map(s => this.fetchSectorInfo(s)));
+    }
+  }
+
+  /**
+   * Classify symbol by patterns (fallback for crypto, ETFs, etc.)
+   */
+  private classifyByPattern(symbol: string): SectorInfo {
+    // Crypto patterns
+    if (symbol.endsWith('-USD') || symbol.endsWith('USDT') ||
+        symbol.includes('BTC') || symbol.includes('ETH') || symbol.includes('USDC')) {
+      return { sector: CRYPTO_SECTOR, industry: 'Cryptocurrency' };
+    }
+
+    // Default fallback - will be updated by async fetch
+    return { sector: DEFAULT_SECTOR, industry: 'Unknown' };
+  }
+
+  /**
+   * Get all unique sectors from a list of symbols (from cache)
    */
   getUniqueSectors(symbols: string[]): string[] {
     const sectors = new Set<string>();
@@ -174,7 +155,7 @@ class SectorService {
   }
 
   /**
-   * Group symbols by sector
+   * Group symbols by sector (from cache)
    */
   groupBySector(symbols: string[]): Record<string, string[]> {
     const grouped: Record<string, string[]> = {};
@@ -191,17 +172,26 @@ class SectorService {
   }
 
   /**
-   * Add custom sector mapping
+   * Manually add sector mapping to cache
    */
   addSectorMapping(symbol: string, sectorInfo: SectorInfo): void {
-    SYMBOL_SECTOR_MAP[symbol.toUpperCase()] = sectorInfo;
+    sectorCache[symbol.toUpperCase()] = sectorInfo;
   }
 
   /**
-   * Get all supported sectors
+   * Get all sectors currently in cache
    */
-  getAllSectors(): string[] {
-    return Object.values(SECTORS);
+  getCachedSectors(): string[] {
+    const sectors = new Set<string>();
+    Object.values(sectorCache).forEach(info => sectors.add(info.sector));
+    return Array.from(sectors).sort();
+  }
+
+  /**
+   * Clear cache (useful for refresh)
+   */
+  clearCache(): void {
+    Object.keys(sectorCache).forEach(key => delete sectorCache[key]);
   }
 }
 

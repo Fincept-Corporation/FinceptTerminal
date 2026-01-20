@@ -69,15 +69,17 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
   private apiKey: string | null = null;
   private apiSecret: string | null = null;
 
-  // REST API polling for quotes (instead of WebSocket)
+  // WebSocket polling fallback flag
+  private usePollingFallback: boolean = false;
+
+  // Fallback: REST API polling (used when WebSocket fails)
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
 
-  // Legacy WebSocket support (deprecated - use REST API polling)
-  // Token to symbol mapping for WebSocket
+  // Token to symbol mapping for WebSocket subscriptions
   private tokenSymbolMap: Map<number, { symbol: string; exchange: StockExchange }> = new Map();
 
-  // Tauri event unlisteners
+  // Tauri event unlisteners for WebSocket events
   private eventUnlisteners: UnlistenFn[] = [];
 
   // ============================================================================
@@ -830,9 +832,13 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // REST API Polling (replaces WebSocket)
+  // WebSocket - Real WebSocket via Rust Backend with Polling Fallback
   // ============================================================================
 
+  /**
+   * Connect to WebSocket (internal) - Uses real Zerodha WebSocket via Rust backend
+   * Falls back to REST polling if WebSocket connection fails
+   */
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
@@ -841,15 +847,55 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
         throw new Error('API credentials not set');
       }
 
-      // Start REST API polling (every 2 minutes as per requirement)
-      this.startQuotePolling();
-
-      this.wsConnected = true;
-      console.log('Zerodha: REST API polling started (2 min interval)');
+      // Try real WebSocket connection via Rust backend
+      await this.connectRealWebSocket();
+      console.log('[Zerodha] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.error('Failed to start Zerodha polling:', error);
-      throw error;
+      console.warn('[Zerodha] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
     }
+  }
+
+  /**
+   * Connect to real Zerodha WebSocket via Tauri/Rust backend
+   */
+  private async connectRealWebSocket(): Promise<void> {
+    // Call Rust backend to connect WebSocket
+    const result = await invoke<{
+      success: boolean;
+      data?: boolean;
+      error?: string;
+    }>('zerodha_ws_connect', {
+      apiKey: this.apiKey!,
+      accessToken: this.accessToken!,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'WebSocket connection failed');
+    }
+
+    // Set up Tauri event listeners
+    await this.setupWebSocketEventListeners();
+
+    this.wsConnected = true;
+  }
+
+  /**
+   * Disconnect from real WebSocket
+   */
+  private async disconnectRealWebSocket(): Promise<void> {
+    // Cleanup Tauri event listeners
+    await this.cleanupWebSocketEventListeners();
+
+    // Call Rust backend to disconnect
+    try {
+      await invoke('zerodha_ws_disconnect');
+    } catch (err) {
+      console.warn('[Zerodha] WebSocket disconnect error:', err);
+    }
+
+    this.wsConnected = false;
   }
 
   /**
@@ -1061,8 +1107,22 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
 
     if (data.status === 'error' || data.status === 'disconnected') {
       this.wsConnected = false;
+
+      // Auto-fallback to polling on disconnect
+      if (!this.usePollingFallback && this.pollingSymbols.size > 0) {
+        console.warn('[Zerodha] WebSocket disconnected, enabling polling fallback');
+        this.usePollingFallback = true;
+        this.startQuotePolling();
+      }
     } else if (data.status === 'connected') {
       this.wsConnected = true;
+
+      // Disable polling fallback when connected
+      if (this.usePollingFallback) {
+        console.log('[Zerodha] WebSocket reconnected, disabling polling fallback');
+        this.usePollingFallback = false;
+        this.stopQuotePolling();
+      }
     }
   }
 
@@ -1080,11 +1140,19 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
     const exchange = (parts[0] || 'NSE') as StockExchange;
     const symbol = parts[1] || data.symbol;
 
+    // Get best bid/ask
+    const bestBid = data.bids?.[0];
+    const bestAsk = data.asks?.[0];
+
     // Emit orderbook update
     const tickData: TickData = {
       symbol,
       exchange,
-      lastPrice: data.bids[0]?.price || 0,
+      lastPrice: bestBid?.price || 0,
+      bid: bestBid?.price,
+      ask: bestAsk?.price,
+      bidQty: bestBid?.quantity,
+      askQty: bestAsk?.quantity,
       timestamp: data.timestamp,
       mode: 'full',
       depth: {
@@ -1102,6 +1170,16 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
     };
 
     this.emitTick(tickData);
+
+    // Also emit depth data separately for UI components
+    if (tickData.depth) {
+      this.emitDepth({
+        symbol,
+        exchange,
+        bids: tickData.depth.bids,
+        asks: tickData.depth.asks,
+      });
+    }
   }
 
   /**
@@ -1118,38 +1196,123 @@ export class ZerodhaAdapter extends BaseStockBrokerAdapter {
    * Disconnect from WebSocket
    */
   async disconnectWebSocket(): Promise<void> {
+    // Disconnect real WebSocket
+    await this.disconnectRealWebSocket();
+
     // Stop REST API polling
     this.stopQuotePolling();
     this.pollingSymbols.clear();
+    this.tokenSymbolMap.clear();
+    this.usePollingFallback = false;
 
     this.wsConnected = false;
-    console.log('[Zerodha] REST API polling stopped');
+    console.log('[Zerodha] WebSocket disconnected');
   }
 
+  /**
+   * Subscribe to symbol (internal) - Uses real WebSocket or polling fallback
+   */
   protected async subscribeInternal(
     symbol: string,
     exchange: StockExchange,
     mode: SubscriptionMode
   ): Promise<void> {
-    try {
-      const key = `${exchange}:${symbol}`;
-      this.pollingSymbols.set(key, { symbol, exchange });
+    const key = `${exchange}:${symbol}`;
 
-      console.log(`Zerodha: Added ${key} to polling list (${this.pollingSymbols.size} symbols total)`);
+    // Always track in pollingSymbols for fallback
+    this.pollingSymbols.set(key, { symbol, exchange });
+
+    if (this.wsConnected && !this.usePollingFallback) {
+      // Use real WebSocket subscription
+      try {
+        // Get instrument token for the symbol
+        const tokenResponse = await invoke<{
+          success: boolean;
+          data?: number;
+          error?: string;
+        }>('zerodha_get_instrument_token', {
+          symbol,
+          exchange,
+        });
+
+        if (tokenResponse.success && tokenResponse.data) {
+          const token = tokenResponse.data;
+
+          // Store token-symbol mapping
+          this.tokenSymbolMap.set(token, { symbol, exchange });
+
+          // Update token map in Rust backend
+          await invoke('zerodha_ws_set_token_map', {
+            tokenMap: Object.fromEntries(
+              Array.from(this.tokenSymbolMap.entries()).map(([t, s]) => [
+                t,
+                `${s.exchange}:${s.symbol}`,
+              ])
+            ),
+          });
+
+          // Subscribe via WebSocket
+          const wsMode = toZerodhaWSMode(mode);
+          await invoke('zerodha_ws_subscribe', {
+            tokens: [token],
+            mode: wsMode,
+          });
+
+          console.log(`[Zerodha] ✓ WebSocket subscribed to ${key} (token: ${token}, mode: ${wsMode})`);
+        } else {
+          console.warn(`[Zerodha] Could not get token for ${key}, using polling`);
+          // Fallback to polling for this symbol
+          if (!this.usePollingFallback) {
+            this.pollQuotesSequentially();
+          }
+        }
+      } catch (error) {
+        console.error(`[Zerodha] WebSocket subscribe failed for ${key}:`, error);
+        // Fallback to polling
+        if (!this.usePollingFallback) {
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      }
+    } else {
+      // Using polling fallback
+      console.log(`[Zerodha] Added ${key} to polling list (${this.pollingSymbols.size} symbols)`);
 
       // Trigger immediate poll for this symbol
-      this.pollQuotesSequentially();
-    } catch (error) {
-      console.error('Failed to subscribe:', error);
-      throw error;
+      if (this.usePollingFallback) {
+        this.pollQuotesSequentially();
+      }
     }
   }
 
+  /**
+   * Unsubscribe from symbol (internal)
+   */
   protected async unsubscribeInternal(symbol: string, exchange: StockExchange): Promise<void> {
     const key = `${exchange}:${symbol}`;
+
+    // Remove from polling symbols
     this.pollingSymbols.delete(key);
 
-    console.log(`Zerodha: Removed ${key} from polling list (${this.pollingSymbols.size} symbols remaining)`);
+    if (this.wsConnected && !this.usePollingFallback) {
+      // Find and remove token from map
+      for (const [token, info] of this.tokenSymbolMap.entries()) {
+        if (info.symbol === symbol && info.exchange === exchange) {
+          try {
+            await invoke('zerodha_ws_unsubscribe', {
+              tokens: [token],
+            });
+            this.tokenSymbolMap.delete(token);
+            console.log(`[Zerodha] ✓ WebSocket unsubscribed from ${key} (token: ${token})`);
+          } catch (error) {
+            console.warn(`[Zerodha] WebSocket unsubscribe failed for ${key}:`, error);
+          }
+          break;
+        }
+      }
+    } else {
+      console.log(`[Zerodha] Removed ${key} from polling list (${this.pollingSymbols.size} remaining)`);
+    }
   }
 
   /**

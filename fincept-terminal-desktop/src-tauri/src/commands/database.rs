@@ -118,6 +118,16 @@ pub async fn db_toggle_llm_model_config_enabled(id: String) -> Result<OperationR
     operations::toggle_llm_model_config_enabled(&id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn db_update_llm_model_id(id: String, new_model_id: String) -> Result<OperationResult, String> {
+    operations::update_llm_model_id(&id, &new_model_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_fix_google_model_ids() -> Result<OperationResult, String> {
+    operations::fix_google_model_ids().map_err(|e| e.to_string())
+}
+
 // ============================================================================
 // Chat Commands
 // ============================================================================

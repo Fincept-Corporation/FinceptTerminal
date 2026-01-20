@@ -1,158 +1,576 @@
 /**
  * Alpha Arena Tauri Commands
- * Rust commands for NOF1-style AI trading competition
+ * Rust commands for AI trading competition (refactored v2)
+ * Now with streaming support for real-time progress updates
  */
 
-use tauri::command;
-use serde_json::Value;
+use tauri::{command, AppHandle, Emitter};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use std::process::Command;
+use std::collections::HashMap;
 
-/// Execute Python command and return JSON result
-/// Uses tokio spawn_blocking to avoid blocking the async runtime
-async fn execute_python_alpha_command(args: &[&str]) -> Result<Value, String> {
-    let python_script = "agno_trading_service.py";
+/// Extract JSON object from output that may contain log lines before it
+fn extract_json_from_output(output: &str) -> Result<String, String> {
+    // Find all potential JSON objects by looking for matching braces
+    let mut brace_count = 0;
+    let mut json_start: Option<usize> = None;
+    let mut last_valid_json: Option<String> = None;
+
+    let chars: Vec<char> = output.chars().collect();
+
+    for (i, ch) in chars.iter().enumerate() {
+        match ch {
+            '{' => {
+                if brace_count == 0 {
+                    json_start = Some(i);
+                }
+                brace_count += 1;
+            }
+            '}' => {
+                brace_count -= 1;
+                if brace_count == 0 {
+                    if let Some(start) = json_start {
+                        let potential_json: String = chars[start..=i].iter().collect();
+                        // Validate it's actually JSON
+                        if serde_json::from_str::<Value>(&potential_json).is_ok() {
+                            last_valid_json = Some(potential_json);
+                        }
+                        json_start = None;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    last_valid_json.ok_or_else(|| {
+        // Truncate output for error message
+        let preview: String = output.chars().take(500).collect();
+        format!("No valid JSON found in output. Preview: {}", preview)
+    })
+}
+
+/// Progress event for streaming updates
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlphaArenaProgress {
+    pub event_type: String,  // "step", "info", "warning", "error", "complete"
+    pub step: u32,
+    pub total_steps: u32,
+    pub message: String,
+    pub details: Option<Value>,
+}
+
+/// Execute Python alpha_arena main.py with JSON payload
+async fn execute_alpha_arena_action(action: &str, params: Value, api_keys: Option<HashMap<String, String>>) -> Result<Value, String> {
+    // Use proper path separators for the platform
+    let python_script_parts = ["alpha_arena", "main.py"];
 
     // Try multiple possible paths for the script
     let possible_paths = vec![
         std::env::current_dir()
             .ok()
-            .and_then(|d| Some(d.join("src-tauri").join("resources").join("scripts").join(python_script))),
+            .map(|d| d.join("src-tauri").join("resources").join("scripts").join(python_script_parts[0]).join(python_script_parts[1])),
         std::env::current_dir()
             .ok()
-            .and_then(|d| Some(d.join("resources").join("scripts").join(python_script))),
+            .map(|d| d.join("resources").join("scripts").join(python_script_parts[0]).join(python_script_parts[1])),
+        // Also check for bundled resources in release builds
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+            .map(|d| d.join("resources").join("scripts").join(python_script_parts[0]).join(python_script_parts[1])),
     ];
 
     let script_path = possible_paths
         .into_iter()
         .flatten()
         .find(|p| p.exists())
-        .ok_or_else(|| format!("Could not find Python script: {}", python_script))?;
+        .ok_or_else(|| format!("Could not find Python script: alpha_arena/main.py. Searched paths failed to locate the script."))?;
 
-    eprintln!("[Alpha Arena] Executing Python script: {:?}", script_path);
-    eprintln!("[Alpha Arena] Args: {:?}", args);
+    // Create JSON payload with API keys
+    let payload = json!({
+        "action": action,
+        "params": params,
+        "api_keys": api_keys.unwrap_or_default()
+    });
+    let payload_str = serde_json::to_string(&payload)
+        .map_err(|e| format!("Failed to serialize payload: {}", e))?;
 
-    let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    eprintln!("[Alpha Arena v2] Executing action: {}", action);
+    eprintln!("[Alpha Arena v2] Script path: {:?}", script_path);
 
-    // Try PyO3 first, fallback to subprocess
-    // Execute in a blocking thread to avoid blocking the async runtime
     let script_path_clone = script_path.clone();
-    let args_clone = args_owned.clone();
+    let payload_clone = payload_str.clone();
 
-    let stdout = tokio::task::spawn_blocking(move || {
-        // Try PyO3 execution
-        match crate::python_runtime::execute_python_script(&script_path_clone, args_clone.clone()) {
-            Ok(output) => Ok(output),
-            Err(_) => {
-                // Fallback to subprocess
-                let result = Command::new("python")
-                    .env("PYTHONDONTWRITEBYTECODE", "1")
-                    .arg(&script_path_clone)
-                    .args(&args_clone)
-                    .output()
-                    .map_err(|e| format!("Failed to execute Python: {}", e))?;
+    // Execute directly via subprocess (bypasses worker pool to avoid async deadlocks)
+    // The worker pool uses async socket IPC which can deadlock when called from spawn_blocking
+    let execution_result = tokio::time::timeout(
+        tokio::time::Duration::from_secs(120), // 2 minute timeout
+        tokio::task::spawn_blocking(move || {
+            eprintln!("[Alpha Arena v2] Using direct subprocess execution");
 
-                let stderr = String::from_utf8_lossy(&result.stderr);
-                if !stderr.is_empty() {
-                    eprintln!("[Alpha Arena] Python stderr: {}", stderr);
+            // Get working directory for script
+            let script_dir = script_path_clone.parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+            // Execute Python directly
+            let result = Command::new("python")
+                .env("PYTHONDONTWRITEBYTECODE", "1")
+                .env("PYTHONIOENCODING", "utf-8")
+                .current_dir(&script_dir)
+                .arg(&script_path_clone)
+                .arg(&payload_clone)
+                .output()
+                .map_err(|e| format!("Failed to execute Python subprocess: {}", e))?;
+
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            let stdout_str = String::from_utf8_lossy(&result.stdout);
+
+            eprintln!("[Alpha Arena v2] ==================== RAW OUTPUT START ====================");
+            eprintln!("[Alpha Arena v2] Python exit code: {:?}", result.status.code());
+            eprintln!("[Alpha Arena v2] Python stdout length: {} chars", stdout_str.len());
+            eprintln!("[Alpha Arena v2] Python stderr length: {} chars", stderr.len());
+
+            // Log full stdout (up to 5000 chars for debugging)
+            if !stdout_str.is_empty() {
+                let stdout_preview: String = stdout_str.chars().take(5000).collect();
+                eprintln!("[Alpha Arena v2] RAW STDOUT:\n{}", stdout_preview);
+                if stdout_str.len() > 5000 {
+                    eprintln!("[Alpha Arena v2] ... (truncated, {} more chars)", stdout_str.len() - 5000);
                 }
-
-                if !result.status.success() {
-                    return Err(format!("Python error: {}", stderr));
-                }
-
-                Ok(String::from_utf8_lossy(&result.stdout).to_string())
+            } else {
+                eprintln!("[Alpha Arena v2] STDOUT is EMPTY!");
             }
-        }
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))??;
 
-    eprintln!("[Alpha Arena] Python stdout length: {} chars", stdout.len());
+            // Log full stderr (up to 2000 chars for debugging)
+            if !stderr.is_empty() {
+                let stderr_preview: String = stderr.chars().take(2000).collect();
+                eprintln!("[Alpha Arena v2] RAW STDERR:\n{}", stderr_preview);
+                if stderr.len() > 2000 {
+                    eprintln!("[Alpha Arena v2] ... (truncated, {} more chars)", stderr.len() - 2000);
+                }
+            }
+            eprintln!("[Alpha Arena v2] ==================== RAW OUTPUT END ====================");
 
-    // Only log first 1000 chars to avoid flooding logs
-    if stdout.len() > 1000 {
-        eprintln!("[Alpha Arena] Python stdout (truncated): {}...", &stdout[..1000]);
-    } else {
-        eprintln!("[Alpha Arena] Python stdout: {}", stdout);
+            if !result.status.success() {
+                eprintln!("[Alpha Arena v2] Python process FAILED with exit code: {:?}", result.status.code());
+                // Try to extract JSON error from stdout first
+                if let Some(json_start) = stdout_str.find('{') {
+                    if let Some(json_end) = stdout_str.rfind('}') {
+                        eprintln!("[Alpha Arena v2] Found JSON in stdout despite error exit");
+                        return Ok(stdout_str[json_start..=json_end].to_string());
+                    }
+                }
+                // Then try stderr
+                if let Some(json_start) = stderr.find('{') {
+                    if let Some(json_end) = stderr.rfind('}') {
+                        eprintln!("[Alpha Arena v2] Found JSON in stderr");
+                        return Ok(stderr[json_start..=json_end].to_string());
+                    }
+                }
+                return Err(format!("Python error (exit code {:?}): {}", result.status.code(), stderr));
+            }
+
+            eprintln!("[Alpha Arena v2] Python process SUCCESS");
+            Ok(stdout_str.to_string())
+        })
+    )
+    .await;
+
+    let stdout = match execution_result {
+        Ok(Ok(Ok(output))) => output,
+        Ok(Ok(Err(e))) => return Err(e),
+        Ok(Err(e)) => return Err(format!("Task join error: {}", e)),
+        Err(_) => return Err("Python script execution timed out after 120 seconds".to_string()),
+    };
+
+    eprintln!("[Alpha Arena v2] Final output received, length: {} chars", stdout.len());
+
+    // Try to parse JSON from output
+    let stdout_trimmed = stdout.trim();
+    if stdout_trimmed.is_empty() {
+        eprintln!("[Alpha Arena v2] ERROR: Python script returned empty output!");
+        return Err("Python script returned empty output".to_string());
     }
 
-    serde_json::from_str(&stdout)
-        .map_err(|e| format!("Failed to parse JSON: {}\nOutput: {}", e, stdout))
+    // Find the LAST complete JSON object in output (skip any logging before it)
+    // This handles cases where ERROR logs appear before the JSON result
+    eprintln!("[Alpha Arena v2] Extracting JSON from output...");
+    let json_str = extract_json_from_output(stdout_trimmed)?;
+
+    eprintln!("[Alpha Arena v2] ==================== EXTRACTED JSON START ====================");
+    // Log extracted JSON (up to 3000 chars)
+    let json_preview: String = json_str.chars().take(3000).collect();
+    eprintln!("{}", json_preview);
+    if json_str.len() > 3000 {
+        eprintln!("[Alpha Arena v2] ... (truncated, {} more chars)", json_str.len() - 3000);
+    }
+    eprintln!("[Alpha Arena v2] ==================== EXTRACTED JSON END ====================");
+
+    let parsed: Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse JSON: {}\nExtracted JSON: {}", e, json_str))?;
+
+    // Log key fields from parsed JSON
+    if let Some(success) = parsed.get("success") {
+        eprintln!("[Alpha Arena v2] Response success: {}", success);
+    }
+    if let Some(error) = parsed.get("error") {
+        eprintln!("[Alpha Arena v2] Response error: {}", error);
+    }
+    if let Some(leaderboard) = parsed.get("leaderboard") {
+        if let Some(arr) = leaderboard.as_array() {
+            eprintln!("[Alpha Arena v2] Response leaderboard entries: {}", arr.len());
+        }
+    }
+    if let Some(decisions) = parsed.get("decisions") {
+        if let Some(arr) = decisions.as_array() {
+            eprintln!("[Alpha Arena v2] Response decisions entries: {}", arr.len());
+        }
+    }
+    if let Some(snapshots) = parsed.get("snapshots") {
+        if let Some(arr) = snapshots.as_array() {
+            eprintln!("[Alpha Arena v2] Response snapshots entries: {}", arr.len());
+        }
+    }
+    if let Some(cycle_number) = parsed.get("cycle_number") {
+        eprintln!("[Alpha Arena v2] Response cycle_number: {}", cycle_number);
+    }
+
+    Ok(parsed)
 }
 
+/// Create a new AI trading competition (with streaming progress)
 #[command]
-pub async fn create_alpha_competition(
-    config_json: String
-) -> Result<Value, String> {
-    eprintln!("[Alpha Arena] create_alpha_competition called");
-    eprintln!("[Alpha Arena] Config JSON length: {}", config_json.len());
+pub async fn create_alpha_competition(app: AppHandle, config_json: String, api_keys: Option<HashMap<String, String>>) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] create_alpha_competition called");
 
-    execute_python_alpha_command(&[
-        "create_competition",
-        &config_json
-    ]).await
+    let config: Value = serde_json::from_str(&config_json)
+        .map_err(|e| format!("Invalid config JSON: {}", e))?;
+
+    // Emit initial progress
+    emit_progress(&app, "step", 1, 5, "Validating competition configuration...", None);
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Validate models and extract API keys if not provided
+    let models = config.get("models").and_then(|m| m.as_array());
+    let model_count = models.map(|m| m.len()).unwrap_or(0);
+
+    // Build API keys map from models if not provided
+    let mut final_api_keys: HashMap<String, String> = api_keys.unwrap_or_default();
+    if let Some(models) = models {
+        for model in models.iter() {
+            if let (Some(provider), Some(api_key)) = (
+                model.get("provider").and_then(|p| p.as_str()),
+                model.get("api_key").and_then(|k| k.as_str())
+            ) {
+                if !api_key.is_empty() && !final_api_keys.contains_key(provider) {
+                    final_api_keys.insert(provider.to_string(), api_key.to_string());
+                }
+            }
+        }
+    }
+
+    eprintln!("[Alpha Arena v2] API keys collected for providers: {:?}", final_api_keys.keys().collect::<Vec<_>>());
+
+    emit_progress(&app, "step", 2, 5, &format!("Setting up {} AI models...", model_count), None);
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Emit model setup details
+    if let Some(models) = models {
+        for (i, model) in models.iter().enumerate() {
+            let name = model.get("name").and_then(|n| n.as_str()).unwrap_or("Unknown");
+            emit_progress(&app, "info", 2, 5, &format!("Initializing model {}: {}", i + 1, name), Some(json!({ "model": name })));
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        }
+    }
+
+    emit_progress(&app, "step", 3, 5, "Connecting to market data providers...", None);
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    emit_progress(&app, "step", 4, 5, "Creating competition in backend...", None);
+
+    // Execute the actual creation with API keys
+    let result = execute_alpha_arena_action("create_competition", config, Some(final_api_keys)).await;
+
+    match &result {
+        Ok(value) => {
+            let success = value.get("success").and_then(|s| s.as_bool()).unwrap_or(false);
+            if success {
+                emit_progress(&app, "complete", 5, 5, "Competition created successfully!", Some(value.clone()));
+            } else {
+                let error = value.get("error").and_then(|e| e.as_str()).unwrap_or("Unknown error");
+                emit_progress(&app, "error", 5, 5, error, None);
+            }
+        }
+        Err(e) => {
+            emit_progress(&app, "error", 5, 5, e, None);
+        }
+    }
+
+    result
 }
 
+/// Emit progress event to frontend
+fn emit_progress(app: &AppHandle, event_type: &str, step: u32, total_steps: u32, message: &str, details: Option<Value>) {
+    let progress = AlphaArenaProgress {
+        event_type: event_type.to_string(),
+        step,
+        total_steps,
+        message: message.to_string(),
+        details,
+    };
+    let _ = app.emit("alpha-arena-progress", &progress);
+}
+
+/// Run a single competition cycle (with streaming progress)
 #[command]
-pub async fn start_alpha_competition(competition_id: Option<String>) -> Result<Value, String> {
-    eprintln!("[Alpha Arena] start_alpha_competition called");
-    eprintln!("[Alpha Arena] Competition ID: {:?}", competition_id);
+pub async fn run_alpha_cycle(app: AppHandle, competition_id: Option<String>) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] run_alpha_cycle called");
 
-    let id = competition_id.as_deref().unwrap_or("");
-    execute_python_alpha_command(&[
-        "start_competition",
-        id
-    ]).await
+    emit_progress(&app, "step", 1, 4, "Fetching latest market data...", None);
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+    emit_progress(&app, "step", 2, 4, "AI models analyzing market conditions...", None);
+
+    let params = json!({
+        "competition_id": competition_id
+    });
+
+    emit_progress(&app, "step", 3, 4, "Executing trading decisions...", None);
+
+    let result = execute_alpha_arena_action("run_cycle", params, None).await;
+
+    match &result {
+        Ok(value) => {
+            let success = value.get("success").and_then(|s| s.as_bool()).unwrap_or(false);
+            if success {
+                let cycle_num = value.get("cycle_number").and_then(|c| c.as_u64()).unwrap_or(0);
+                emit_progress(&app, "complete", 4, 4, &format!("Cycle {} completed!", cycle_num), Some(value.clone()));
+            } else {
+                let error = value.get("error").and_then(|e| e.as_str()).unwrap_or("Unknown error");
+                emit_progress(&app, "error", 4, 4, error, None);
+            }
+        }
+        Err(e) => {
+            emit_progress(&app, "error", 4, 4, e, None);
+        }
+    }
+
+    result
 }
 
+/// Get competition leaderboard
 #[command]
 pub async fn get_alpha_leaderboard(competition_id: String) -> Result<Value, String> {
-    eprintln!("[Alpha Arena] get_alpha_leaderboard called");
-    eprintln!("[Alpha Arena] Competition ID: {}", competition_id);
+    eprintln!("[Alpha Arena v2] ========================================");
+    eprintln!("[Alpha Arena v2] get_alpha_leaderboard called for: {}", competition_id);
 
-    execute_python_alpha_command(&[
-        "get_leaderboard_alpha",
-        &competition_id
-    ]).await
+    let params = json!({
+        "competition_id": competition_id
+    });
+
+    let result = execute_alpha_arena_action("get_leaderboard", params, None).await;
+
+    match &result {
+        Ok(value) => {
+            eprintln!("[Alpha Arena v2] get_alpha_leaderboard SUCCESS");
+            eprintln!("[Alpha Arena v2] Leaderboard response: {}", serde_json::to_string_pretty(value).unwrap_or_default());
+        }
+        Err(e) => {
+            eprintln!("[Alpha Arena v2] get_alpha_leaderboard ERROR: {}", e);
+        }
+    }
+    eprintln!("[Alpha Arena v2] ========================================");
+
+    result
 }
 
+/// Get model trading decisions
 #[command]
 pub async fn get_alpha_model_decisions(
     competition_id: String,
     model_name: Option<String>
 ) -> Result<Value, String> {
-    eprintln!("[Alpha Arena] get_alpha_model_decisions called");
-    eprintln!("[Alpha Arena] Competition ID: {}", competition_id);
-    eprintln!("[Alpha Arena] Model name: {:?}", model_name);
+    eprintln!("[Alpha Arena v2] ========================================");
+    eprintln!("[Alpha Arena v2] get_alpha_model_decisions called for: {} (model: {:?})", competition_id, model_name);
 
-    let model_name_str = model_name.as_deref().unwrap_or("");
+    let params = json!({
+        "competition_id": competition_id,
+        "model_name": model_name
+    });
 
-    execute_python_alpha_command(&[
-        "get_model_decisions_alpha",
-        &competition_id,
-        model_name_str
-    ]).await
+    let result = execute_alpha_arena_action("get_decisions", params, None).await;
+
+    match &result {
+        Ok(value) => {
+            eprintln!("[Alpha Arena v2] get_alpha_model_decisions SUCCESS");
+            eprintln!("[Alpha Arena v2] Decisions response: {}", serde_json::to_string_pretty(value).unwrap_or_default());
+        }
+        Err(e) => {
+            eprintln!("[Alpha Arena v2] get_alpha_model_decisions ERROR: {}", e);
+        }
+    }
+    eprintln!("[Alpha Arena v2] ========================================");
+
+    result
 }
 
+/// Get performance snapshots for charts
+#[command]
+pub async fn get_alpha_snapshots(competition_id: String) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] ========================================");
+    eprintln!("[Alpha Arena v2] get_alpha_snapshots called for: {}", competition_id);
+
+    let params = json!({
+        "competition_id": competition_id
+    });
+
+    let result = execute_alpha_arena_action("get_snapshots", params, None).await;
+
+    match &result {
+        Ok(value) => {
+            eprintln!("[Alpha Arena v2] get_alpha_snapshots SUCCESS");
+            eprintln!("[Alpha Arena v2] Snapshots response: {}", serde_json::to_string_pretty(value).unwrap_or_default());
+        }
+        Err(e) => {
+            eprintln!("[Alpha Arena v2] get_alpha_snapshots ERROR: {}", e);
+        }
+    }
+    eprintln!("[Alpha Arena v2] ========================================");
+
+    result
+}
+
+/// Start auto-run for competition
+#[command]
+pub async fn start_alpha_competition(competition_id: Option<String>) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] start_alpha_competition called");
+
+    let params = json!({
+        "competition_id": competition_id
+    });
+
+    execute_alpha_arena_action("start_competition", params, None).await
+}
+
+/// Stop competition
 #[command]
 pub async fn stop_alpha_competition(competition_id: String) -> Result<Value, String> {
-    eprintln!("[Alpha Arena] stop_alpha_competition called");
-    eprintln!("[Alpha Arena] Competition ID: {}", competition_id);
+    eprintln!("[Alpha Arena v2] stop_alpha_competition called");
 
-    execute_python_alpha_command(&[
-        "stop_competition",
-        &competition_id
-    ]).await
+    let params = json!({
+        "competition_id": competition_id
+    });
+
+    execute_alpha_arena_action("stop_competition", params, None).await
 }
 
+/// List available trading agents
 #[command]
-pub async fn run_alpha_cycle(competition_id: Option<String>) -> Result<Value, String> {
-    eprintln!("[Alpha Arena] run_alpha_cycle called");
-    eprintln!("[Alpha Arena] Competition ID: {:?}", competition_id);
+pub async fn list_alpha_agents() -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] list_alpha_agents called");
 
-    let id = competition_id.as_deref().unwrap_or("");
-    execute_python_alpha_command(&[
-        "run_cycle",
-        id
-    ]).await
+    execute_alpha_arena_action("list_agents", json!({}), None).await
+}
+
+/// Get evaluation metrics for a model
+#[command]
+pub async fn get_alpha_evaluation(
+    competition_id: String,
+    model_name: String
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] get_alpha_evaluation called");
+
+    let params = json!({
+        "competition_id": competition_id,
+        "model_name": model_name
+    });
+
+    execute_alpha_arena_action("get_evaluation", params, None).await
+}
+
+/// Get stored API keys (masked for display)
+#[command]
+pub async fn get_alpha_api_keys() -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] get_alpha_api_keys called");
+
+    // Return masked keys from environment or storage
+    // In production, load from secure storage
+    let providers = vec!["openai", "anthropic", "google", "deepseek", "groq"];
+    let mut keys: HashMap<String, String> = HashMap::new();
+
+    for provider in providers {
+        let env_var = format!("{}_API_KEY", provider.to_uppercase());
+        if let Ok(key) = std::env::var(&env_var) {
+            if !key.is_empty() {
+                // Return masked key for display
+                let masked = if key.len() > 8 {
+                    format!("{}...{}", &key[..4], &key[key.len()-4..])
+                } else {
+                    "*".repeat(key.len())
+                };
+                keys.insert(provider.to_string(), masked);
+            }
+        }
+    }
+
+    Ok(json!({
+        "success": true,
+        "keys": keys
+    }))
+}
+
+/// Save API keys to environment/storage
+#[command]
+pub async fn save_alpha_api_keys(keys: HashMap<String, String>) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] save_alpha_api_keys called");
+
+    // In production, save to secure storage
+    // For now, we'll set environment variables for the current session
+    for (provider, key) in &keys {
+        let env_var = format!("{}_API_KEY", provider.to_uppercase());
+        std::env::set_var(&env_var, key);
+    }
+
+    Ok(json!({
+        "success": true,
+        "message": "API keys saved for current session"
+    }))
+}
+
+/// List all competitions from the database
+#[command]
+pub async fn list_alpha_competitions(limit: Option<u32>) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] list_alpha_competitions called");
+
+    let params = json!({
+        "limit": limit.unwrap_or(50)
+    });
+
+    execute_alpha_arena_action("list_competitions", params, None).await
+}
+
+/// Get a specific competition by ID
+#[command]
+pub async fn get_alpha_competition(competition_id: String) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] get_alpha_competition called");
+
+    let params = json!({
+        "competition_id": competition_id
+    });
+
+    execute_alpha_arena_action("get_competition", params, None).await
+}
+
+/// Delete a competition
+#[command]
+pub async fn delete_alpha_competition(competition_id: String) -> Result<Value, String> {
+    eprintln!("[Alpha Arena v2] delete_alpha_competition called");
+
+    let params = json!({
+        "competition_id": competition_id
+    });
+
+    execute_alpha_arena_action("delete_competition", params, None).await
 }

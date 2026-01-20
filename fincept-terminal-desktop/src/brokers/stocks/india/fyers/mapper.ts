@@ -293,13 +293,45 @@ export function fromFyersFunds(funds: Record<string, unknown>): Funds {
 
 /**
  * Convert Fyers quote to standard format
+ *
+ * Handles both successful responses and error responses gracefully.
+ * Error response format: { n: "NSE:SYMBOL-EQ", v: { errmsg: "...", code: -300, s: "error" } }
  */
 export function fromFyersQuote(quote: Record<string, unknown>): Quote {
   // Parse symbol
   const symbolStr = String(quote.n || quote.symbol || '');
-  const [exchange, symbol] = symbolStr.includes(':') ? symbolStr.split(':') : ['NSE', symbolStr];
+  const [exchange, symbolWithSuffix] = symbolStr.includes(':') ? symbolStr.split(':') : ['NSE', symbolStr];
+
+  // Remove -EQ suffix from symbol
+  const symbol = symbolWithSuffix.includes('-') ? symbolWithSuffix.split('-')[0] : symbolWithSuffix;
 
   const v = quote.v as Record<string, unknown> || quote;
+
+  // Check for error response (don't log repeatedly - caller handles logging)
+  if (v.s === 'error' || v.errmsg || v.code === -300) {
+    // Return a quote with zeros but valid symbol info
+    return {
+      symbol,
+      exchange: exchange as StockExchange,
+      lastPrice: 0,
+      open: 0,
+      high: 0,
+      low: 0,
+      close: 0,
+      previousClose: 0,
+      change: 0,
+      changePercent: 0,
+      volume: 0,
+      averagePrice: 0,
+      bid: 0,
+      bidQty: 0,
+      ask: 0,
+      askQty: 0,
+      timestamp: Date.now(),
+      openInterest: 0,
+      error: String(v.errmsg || 'Invalid symbol'),
+    };
+  }
 
   const lastPrice = Number(v.lp || quote.ltp || 0);
   const prevClose = Number(v.prev_close_price || quote.prev_close_price || 0);
@@ -318,7 +350,7 @@ export function fromFyersQuote(quote: Record<string, unknown>): Quote {
     change,
     changePercent: Number(v.chp || quote.chp || changePercent),
     volume: Number(v.volume || v.vol_traded_today || quote.volume || 0),
-    averagePrice: Number(v.avg_trade_price || quote.avg_trade_price || 0),
+    averagePrice: Number(v.avg_trade_price || v.atp || quote.avg_trade_price || 0),
     bid: Number(v.bid || v.bid_price || quote.best_bid_price || 0),
     bidQty: Number(v.bid_size || quote.best_bid_qty || 0),
     ask: Number(v.ask || v.ask_price || quote.best_ask_price || 0),
@@ -367,30 +399,36 @@ export function fromFyersTickData(tick: Record<string, unknown>): TickData {
 
 /**
  * Convert Fyers market depth to standard format
+ *
+ * Fyers API response format:
+ * - "ask" (singular) for asks array
+ * - "bids" (plural) for bids array
+ * - Each level has: { price, volume, ord }
  */
 export function fromFyersDepth(depth: Record<string, unknown>): MarketDepth {
   const bids: DepthLevel[] = [];
   const asks: DepthLevel[] = [];
 
-  // Fyers provides depth data in asks and bids arrays
-  const asksData = (depth.asks as Array<Record<string, unknown>>) || [];
+  // Fyers uses 'ask' (singular) not 'asks'
+  const asksData = (depth.ask as Array<Record<string, unknown>>) ||
+                   (depth.asks as Array<Record<string, unknown>>) || [];
   const bidsData = (depth.bids as Array<Record<string, unknown>>) || [];
 
-  // Convert asks
+  // Convert asks - Fyers uses 'volume' and 'ord'
   for (const ask of asksData.slice(0, 5)) {
     asks.push({
       price: Number(ask.price || 0),
-      quantity: Number(ask.qty || ask.volume || 0),
-      orders: Number(ask.nord || ask.orders || 0),
+      quantity: Number(ask.volume || ask.qty || 0),
+      orders: Number(ask.ord || ask.orders || ask.nord || 1),
     });
   }
 
-  // Convert bids
+  // Convert bids - Fyers uses 'volume' and 'ord'
   for (const bid of bidsData.slice(0, 5)) {
     bids.push({
       price: Number(bid.price || 0),
-      quantity: Number(bid.qty || bid.volume || 0),
-      orders: Number(bid.nord || bid.orders || 0),
+      quantity: Number(bid.volume || bid.qty || 0),
+      orders: Number(bid.ord || bid.orders || bid.nord || 1),
     });
   }
 

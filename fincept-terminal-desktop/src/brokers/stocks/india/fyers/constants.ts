@@ -205,8 +205,71 @@ export const FYERS_METADATA: StockBrokerMetadata = {
   },
 
   defaultSymbols: [
-    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-    'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-    'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
+    // Financials (Weight: ~35%)
+    'HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK',
+    'BAJFINANCE', 'BAJAJFINSV', 'HDFCLIFE', 'SBILIFE', 'INDUSINDBK',
+    // IT (Weight: ~13%)
+    'TCS', 'INFY', 'WIPRO', 'HCLTECH', 'TECHM', 'LTIM',
+    // Oil & Gas / Energy
+    'RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'ADANIPORTS', 'ADANIENT',
+    // Auto
+    'MARUTI', 'TATAMOTORS', 'M&M', 'BAJAJ-AUTO', 'HEROMOTOCO', 'EICHERMOT',
+    // FMCG
+    'HINDUNILVR', 'ITC', 'NESTLEIND', 'BRITANNIA', 'TATACONSUM',
+    // Metals & Mining
+    'TATASTEEL', 'JSWSTEEL', 'HINDALCO', 'COALINDIA',
+    // Pharma & Healthcare
+    'SUNPHARMA', 'DRREDDY', 'CIPLA', 'APOLLOHOSP', 'DIVISLAB',
+    // Infrastructure & Others
+    'LT', 'BHARTIARTL', 'ULTRACEMCO', 'GRASIM', 'TITAN',
+    'ASIANPAINT', 'BPCL', 'SHRIRAMFIN', 'TRENT',
   ],
 };
+
+// ============================================================================
+// NIFTY 50 COMPONENTS (Current constituents as of Jan 2025)
+// ============================================================================
+
+export const NIFTY_50_SYMBOLS = [
+  // Financials
+  'HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK',
+  'BAJFINANCE', 'BAJAJFINSV', 'HDFCLIFE', 'SBILIFE', 'INDUSINDBK',
+
+  // IT
+  'TCS', 'INFY', 'WIPRO', 'HCLTECH', 'TECHM', 'LTIM',
+
+  // Oil & Gas / Energy
+  'RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'ADANIPORTS', 'ADANIENT',
+
+  // Auto
+  'MARUTI', 'TATAMOTORS', 'M&M', 'BAJAJ-AUTO', 'HEROMOTOCO', 'EICHERMOT',
+
+  // FMCG
+  'HINDUNILVR', 'ITC', 'NESTLEIND', 'BRITANNIA', 'TATACONSUM',
+
+  // Metals & Mining
+  'TATASTEEL', 'JSWSTEEL', 'HINDALCO', 'COALINDIA',
+
+  // Pharma & Healthcare
+  'SUNPHARMA', 'DRREDDY', 'CIPLA', 'APOLLOHOSP', 'DIVISLAB',
+
+  // Infrastructure & Others
+  'LT', 'BHARTIARTL', 'ULTRACEMCO', 'GRASIM', 'TITAN',
+  'ASIANPAINT', 'BPCL', 'SHRIRAMFIN', 'TRENT',
+] as const;
+
+// Nifty 50 with exchange for quick subscription
+export const NIFTY_50_WATCHLIST = NIFTY_50_SYMBOLS.map(symbol => ({
+  symbol,
+  exchange: 'NSE' as const,
+  name: symbol, // Could be enhanced with full names
+}));
+
+// Popular indices for watchlist
+export const POPULAR_INDICES_FYERS = [
+  { symbol: 'NSE:NIFTY50-INDEX', name: 'Nifty 50' },
+  { symbol: 'NSE:NIFTYBANK-INDEX', name: 'Bank Nifty' },
+  { symbol: 'NSE:NIFTYIT-INDEX', name: 'Nifty IT' },
+  { symbol: 'NSE:FINNIFTY-INDEX', name: 'Fin Nifty' },
+  { symbol: 'NSE:NIFTYMIDCAP50-INDEX', name: 'Nifty Midcap 50' },
+];

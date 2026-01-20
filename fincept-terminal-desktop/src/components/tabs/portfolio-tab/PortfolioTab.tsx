@@ -23,6 +23,7 @@ import PortfolioOptimizationView from './portfolio/PortfolioOptimizationView';
 import CreatePortfolioModal from './modals/CreatePortfolioModal';
 import AddAssetModal from './modals/AddAssetModal';
 import SellAssetModal from './modals/SellAssetModal';
+import ConfirmDeleteModal from './modals/ConfirmDeleteModal';
 import { usePortfolioOperations } from './hooks/usePortfolioOperations';
 import { formatCurrency, formatPercent } from './portfolio/utils';
 import { TabFooter } from '@/components/common/TabFooter';
@@ -38,6 +39,8 @@ const PortfolioTab: React.FC = () => {
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
   const [showAddAsset, setShowAddAsset] = useState(false);
   const [showSellAsset, setShowSellAsset] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [portfolioToDelete, setPortfolioToDelete] = useState<string | null>(null);
 
   // Form states
   const [newPortfolioName, setNewPortfolioName] = useState('');
@@ -119,17 +122,24 @@ const PortfolioTab: React.FC = () => {
     }
   };
 
-  // Handle delete portfolio
-  const handleDeletePortfolio = async (portfolioId: string) => {
-    if (!confirm('Are you sure you want to delete this portfolio? This action cannot be undone.')) {
-      return;
-    }
+  // Handle delete portfolio - show confirmation modal
+  const handleDeletePortfolio = (portfolioId: string) => {
+    setPortfolioToDelete(portfolioId);
+    setShowDeleteConfirm(true);
+  };
+
+  // Confirm delete portfolio
+  const confirmDeletePortfolio = async () => {
+    if (!portfolioToDelete) return;
 
     try {
-      await deletePortfolio(portfolioId);
+      await deletePortfolio(portfolioToDelete);
+      setShowDeleteConfirm(false);
+      setPortfolioToDelete(null);
     } catch (error) {
       console.error('[PortfolioTab] Error deleting portfolio:', error);
-      alert('Failed to delete portfolio');
+      setShowDeleteConfirm(false);
+      setPortfolioToDelete(null);
     }
   };
 
@@ -574,6 +584,16 @@ const PortfolioTab: React.FC = () => {
         onPriceChange={setSellAssetPrice}
         onClose={() => setShowSellAsset(false)}
         onSell={handleSellAsset}
+      />
+
+      <ConfirmDeleteModal
+        show={showDeleteConfirm}
+        portfolioName={portfolios.find(p => p.id === portfolioToDelete)?.name || ''}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setPortfolioToDelete(null);
+        }}
+        onConfirm={confirmDeletePortfolio}
       />
     </div>
   );

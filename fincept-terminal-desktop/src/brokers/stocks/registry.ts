@@ -8,6 +8,31 @@
 import type { StockBrokerMetadata, Region, IStockBrokerAdapter } from './types';
 
 // ============================================================================
+// NIFTY 50 COMPONENTS (Jan 2025)
+// ============================================================================
+
+const NIFTY_50_SYMBOLS = [
+  // Financials (~35% weight)
+  'HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK',
+  'BAJFINANCE', 'BAJAJFINSV', 'HDFCLIFE', 'SBILIFE', 'INDUSINDBK',
+  // IT (~13% weight)
+  'TCS', 'INFY', 'WIPRO', 'HCLTECH', 'TECHM', 'LTIM',
+  // Oil & Gas / Energy (~12% weight)
+  'RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'ADANIPORTS', 'ADANIENT',
+  // Auto (~7% weight)
+  'MARUTI', 'TATAMOTORS', 'M&M', 'BAJAJ-AUTO', 'HEROMOTOCO', 'EICHERMOT',
+  // FMCG (~8% weight)
+  'HINDUNILVR', 'ITC', 'NESTLEIND', 'BRITANNIA', 'TATACONSUM',
+  // Metals & Mining (~4% weight)
+  'TATASTEEL', 'JSWSTEEL', 'HINDALCO', 'COALINDIA',
+  // Pharma & Healthcare (~4% weight)
+  'SUNPHARMA', 'DRREDDY', 'CIPLA', 'APOLLOHOSP', 'DIVISLAB',
+  // Infrastructure & Others (~17% weight)
+  'LT', 'BHARTIARTL', 'ULTRACEMCO', 'GRASIM', 'TITAN',
+  'ASIANPAINT', 'BPCL', 'SHRIRAMFIN', 'TRENT',
+];
+
+// ============================================================================
 // BROKER REGISTRY
 // ============================================================================
 
@@ -69,11 +94,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   fyers: {
@@ -129,11 +150,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   angelone: {
@@ -189,11 +206,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   upstox: {
@@ -249,11 +262,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   dhan: {
@@ -309,11 +318,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   kotak: {
@@ -369,11 +374,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   groww: {
@@ -429,11 +430,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   aliceblue: {
@@ -489,11 +486,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 15 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   fivepaisa: {
@@ -549,11 +542,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   iifl: {
@@ -609,11 +598,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   motilal: {
@@ -669,11 +654,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 20 },
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   shoonya: {
@@ -729,11 +710,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       fno: { brokerage: 0 },                   // Zero brokerage
     },
 
-    defaultSymbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-      'SBIN', 'BHARTIARTL', 'HINDUNILVR', 'ITC', 'KOTAKBANK',
-      'LT', 'AXISBANK', 'MARUTI', 'TATAMOTORS', 'WIPRO',
-    ],
+    defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
   // ============================================================================

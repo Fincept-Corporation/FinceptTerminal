@@ -1,18 +1,28 @@
 /**
  * LLM Models Service
- * Fetches available models from various LLM providers
- * Uses official API endpoints to get real-time model listings
+ * Fetches available models from LiteLLM library via Tauri commands
+ * Supports 52+ providers and 1700+ models
  * CACHING: Uses unified cache system (cacheService)
  */
 
+import { invoke } from '@tauri-apps/api/core';
 import { cacheService } from './cache/cacheService';
 
 export interface ModelInfo {
   id: string;
   name: string;
+  provider?: string;
   description?: string;
   context_window?: number;
+  input_cost_per_token?: number;
+  output_cost_per_token?: number;
   deprecated?: boolean;
+}
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  model_count: number;
 }
 
 export interface ProviderModels {
@@ -22,319 +32,111 @@ export interface ProviderModels {
   error?: string;
 }
 
+export interface LLMStats {
+  total_providers: number;
+  total_models: number;
+  top_providers: Array<{
+    provider: string;
+    model_count: number;
+  }>;
+}
+
 /**
- * Static fallback model lists (minimal, used only if API fails)
+ * Provider name mappings (UI name → LiteLLM provider name)
+ * Some providers have different names in the UI vs LiteLLM data
  */
-const FALLBACK_MODELS: Record<string, ModelInfo[]> = {
-  openai: [
-    { id: 'gpt-4o', name: 'GPT-4o', description: 'Latest flagship', context_window: 128000 },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & affordable', context_window: 128000 },
-    { id: 'o1', name: 'o1', description: 'Reasoning model', context_window: 200000 },
-  ],
-  anthropic: [
-    { id: 'claude-opus-4-5-20251101', name: 'Claude Opus 4.5', description: 'Most capable', context_window: 200000 },
-    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', description: 'Balanced', context_window: 200000 },
-    { id: 'claude-haiku-4-5-20251031', name: 'Claude Haiku 4.5', description: 'Fastest', context_window: 200000 },
-  ],
-  google: [
-    { id: 'gemini-2.5-pro-latest', name: 'Gemini 2.5 Pro', description: 'Latest flagship', context_window: 1000000 },
-    { id: 'gemini-2.5-flash-latest', name: 'Gemini 2.5 Flash', description: 'Fast', context_window: 1000000 },
-  ],
-  groq: [
-    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Meta Llama', context_window: 128000 },
-    { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', description: 'Mistral', context_window: 32768 },
-  ],
-  deepseek: [
-    { id: 'deepseek-chat', name: 'DeepSeek Chat', description: 'General chat', context_window: 64000 },
-    { id: 'deepseek-coder', name: 'DeepSeek Coder', description: 'Code generation', context_window: 64000 },
-  ],
-  openrouter: [],
+const PROVIDER_MAPPINGS: Record<string, string> = {
+  'google': 'gemini',      // UI uses 'google', LiteLLM uses 'gemini'
+  'azure_openai': 'azure', // UI might use 'azure_openai', LiteLLM uses 'azure'
 };
 
 /**
- * Fetch models from OpenAI API
+ * Reverse mappings (LiteLLM name → UI name)
  */
-async function fetchOpenAIModels(apiKey: string): Promise<ModelInfo[]> {
-  try {
-    const response = await fetch('https://api.openai.com/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Filter to only show GPT and o1 models
-    const models = data.data
-      .filter((m: any) => m.id.startsWith('gpt-') || m.id.startsWith('o1'))
-      .map((m: any) => ({
-        id: m.id,
-        name: m.id,
-        description: `OpenAI ${m.id}`,
-      }))
-      .sort((a: ModelInfo, b: ModelInfo) => b.id.localeCompare(a.id));
-
-    return models.length > 0 ? models : FALLBACK_MODELS.openai;
-  } catch (error) {
-    console.error('[LLMModels] Failed to fetch OpenAI models:', error);
-    return FALLBACK_MODELS.openai;
-  }
-}
+const REVERSE_PROVIDER_MAPPINGS: Record<string, string> = {
+  'gemini': 'google',
+  'azure': 'azure_openai',
+};
 
 /**
- * Fetch models from Anthropic API
+ * Get the LiteLLM provider name for a UI provider name
  */
-async function fetchAnthropicModels(apiKey: string): Promise<ModelInfo[]> {
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/models', {
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    const models = data.data.map((m: any) => ({
-      id: m.id,
-      name: m.display_name || m.id,
-      description: `Anthropic ${m.display_name || m.id}`,
-      context_window: m.max_tokens,
-    }));
-
-    return models.length > 0 ? models : FALLBACK_MODELS.anthropic;
-  } catch (error) {
-    console.error('[LLMModels] Failed to fetch Anthropic models:', error);
-    return FALLBACK_MODELS.anthropic;
-  }
-}
-
-/**
- * Fetch models from Google Gemini API
- */
-async function fetchGoogleModels(apiKey: string): Promise<ModelInfo[]> {
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Google API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Filter to only Gemini models that support generateContent
-    const models = data.models
-      .filter((m: any) =>
-        m.name.includes('gemini') &&
-        m.supportedGenerationMethods?.includes('generateContent')
-      )
-      .map((m: any) => ({
-        id: m.name.replace('models/', ''),
-        name: m.displayName || m.name.replace('models/', ''),
-        description: m.description || `Google ${m.displayName}`,
-        context_window: m.inputTokenLimit,
-      }));
-
-    return models.length > 0 ? models : FALLBACK_MODELS.google;
-  } catch (error) {
-    console.error('[LLMModels] Failed to fetch Google models:', error);
-    return FALLBACK_MODELS.google;
-  }
-}
-
-/**
- * Fetch all models from OpenRouter API (public, no auth required)
- * Returns 400+ models from multiple providers, grouped and sorted
- */
-async function fetchOpenRouterModels(): Promise<ModelInfo[]> {
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/models');
-
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.data || !Array.isArray(data.data)) {
-      throw new Error('Invalid response format');
-    }
-
-    // Group models by provider
-    const providerGroups: Record<string, ModelInfo[]> = {};
-
-    data.data.forEach((m: any) => {
-      const provider = m.id.split('/')[0]; // e.g., "openai/gpt-4" -> "openai"
-      const modelName = m.id.split('/')[1] || m.id;
-
-      if (!providerGroups[provider]) {
-        providerGroups[provider] = [];
-      }
-
-      providerGroups[provider].push({
-        id: m.id,
-        name: m.name || modelName,
-        description: m.description?.substring(0, 150) || modelName,
-        context_window: m.context_length || 0,
-      });
-    });
-
-    // Sort providers and flatten models
-    const sortedModels: ModelInfo[] = [];
-    const providers = Object.keys(providerGroups).sort();
-
-    console.log(`[LLMModels] OpenRouter providers found: ${providers.join(', ')}`);
-    console.log(`[LLMModels] Total models: ${data.data.length}`);
-
-    providers.forEach(provider => {
-      // Sort models within each provider by name
-      const sortedProviderModels = providerGroups[provider].sort((a, b) =>
-        a.name.localeCompare(b.name)
-      );
-      sortedModels.push(...sortedProviderModels);
-    });
-
-    return sortedModels;
-  } catch (error) {
-    console.error('[LLMModels] Failed to fetch OpenRouter models:', error);
-    return FALLBACK_MODELS.openrouter;
-  }
-}
-
-/**
- * Fetch models from Groq API
- */
-async function fetchGroqModels(apiKey: string): Promise<ModelInfo[]> {
-  try {
-    const response = await fetch('https://api.groq.com/openai/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Groq API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    const models = data.data.map((m: any) => ({
-      id: m.id,
-      name: m.id,
-      description: `Groq ${m.id}`,
-      context_window: m.context_window,
-    }));
-
-    return models.length > 0 ? models : FALLBACK_MODELS.groq;
-  } catch (error) {
-    console.error('[LLMModels] Failed to fetch Groq models:', error);
-    return FALLBACK_MODELS.groq;
-  }
+function getLiteLLMProviderName(uiProvider: string): string {
+  return PROVIDER_MAPPINGS[uiProvider.toLowerCase()] || uiProvider;
 }
 
 /**
  * Main service class for LLM models
+ * Uses LiteLLM library via Tauri Python commands
  */
 export class LLMModelsService {
   /**
-   * Get models from OpenRouter filtered by provider prefix
+   * Get all available providers from LiteLLM
    */
-  static async getOpenRouterModelsByProvider(providerPrefix: string): Promise<ModelInfo[]> {
-    const allModels = await fetchOpenRouterModels();
-    return allModels.filter(m => m.id.startsWith(`${providerPrefix}/`));
-  }
+  static async getProviders(): Promise<ProviderInfo[]> {
+    const cacheKey = 'llm-providers:all';
 
-  /**
-   * Get models for a specific provider
-   */
-  static async getModels(provider: string, apiKey?: string, baseUrl?: string): Promise<ProviderModels> {
-    const cacheKey = `llm-models:${provider}:${apiKey?.substring(0, 10) || 'no-key'}`;
-
-    // Check unified cache first
-    const cached = await cacheService.get<ModelInfo[]>(cacheKey);
+    // Check cache first
+    const cached = await cacheService.get<ProviderInfo[]>(cacheKey);
     if (cached) {
-      console.log(`[LLMModels] Serving ${provider} models from cache`);
-      return {
-        provider,
-        models: cached.data,
-        lastFetched: Date.now(),
-      };
+      console.log('[LLMModels] Serving providers from cache');
+      return cached.data;
     }
 
     try {
-      let models: ModelInfo[] = [];
+      const providers = await invoke<ProviderInfo[]>('get_llm_providers');
+      console.log(`[LLMModels] Loaded ${providers.length} providers from LiteLLM`);
 
-      switch (provider.toLowerCase()) {
-        case 'openai':
-          if (!apiKey) {
-            models = FALLBACK_MODELS.openai;
-          } else {
-            models = await fetchOpenAIModels(apiKey);
-          }
-          break;
+      // Cache for 24 hours (provider list rarely changes)
+      await cacheService.set(cacheKey, providers, 'reference', '24h');
 
-        case 'anthropic':
-          if (!apiKey) {
-            models = FALLBACK_MODELS.anthropic;
-          } else {
-            models = await fetchAnthropicModels(apiKey);
-          }
-          break;
+      return providers;
+    } catch (error) {
+      console.error('[LLMModels] Failed to fetch providers:', error);
+      // Return empty list on error - all models come from LiteLLM data
+      return [];
+    }
+  }
 
-        case 'google':
-          if (!apiKey) {
-            models = FALLBACK_MODELS.google;
-          } else {
-            models = await fetchGoogleModels(apiKey);
-          }
-          break;
+  /**
+   * Get models for a specific provider from LiteLLM
+   */
+  static async getModelsByProvider(provider: string): Promise<ModelInfo[]> {
+    // Map UI provider name to LiteLLM provider name
+    const litellmProvider = getLiteLLMProviderName(provider);
+    const cacheKey = `llm-models:${provider}`; // Use original provider for cache key
 
-        case 'groq':
-          if (!apiKey) {
-            models = FALLBACK_MODELS.groq;
-          } else {
-            models = await fetchGroqModels(apiKey);
-          }
-          break;
+    // Check cache first
+    const cached = await cacheService.get<ModelInfo[]>(cacheKey);
+    if (cached) {
+      console.log(`[LLMModels] Serving ${provider} models from cache`);
+      return cached.data;
+    }
 
-        case 'deepseek':
-          models = FALLBACK_MODELS.deepseek;
-          break;
+    try {
+      // Use mapped provider name for the API call
+      const models = await invoke<ModelInfo[]>('get_llm_models_by_provider', { provider: litellmProvider });
+      console.log(`[LLMModels] Loaded ${models.length} models for ${provider} (litellm: ${litellmProvider})`);
 
-        case 'openrouter':
-          models = await fetchOpenRouterModels();
-          break;
-
-        case 'ollama':
-          // Ollama models are fetched separately via ollamaService
-          models = [];
-          break;
-
-        case 'fincept':
-          // Fincept models - auto-configured
-          models = [
-            { id: 'fincept-ai', name: 'Fincept AI', description: 'Auto-configured Fincept model' },
-          ];
-          break;
-
-        default:
-          models = [];
-      }
-
-      // Cache the result using unified cache (1 hour TTL)
+      // Cache for 6 hours
       if (models.length > 0) {
-        await cacheService.set(cacheKey, models, 'reference', '1h');
+        await cacheService.set(cacheKey, models, 'reference', '6h');
       }
+
+      return models;
+    } catch (error) {
+      console.error(`[LLMModels] Failed to fetch models for ${provider}:`, error);
+      // Return empty list on error - all models come from LiteLLM data
+      return [];
+    }
+  }
+
+  /**
+   * Get models for a specific provider (alias for backward compatibility)
+   */
+  static async getModels(provider: string, _apiKey?: string, _baseUrl?: string): Promise<ProviderModels> {
+    try {
+      const models = await this.getModelsByProvider(provider);
 
       return {
         provider,
@@ -344,48 +146,168 @@ export class LLMModelsService {
     } catch (error) {
       console.error(`[LLMModels] Error fetching models for ${provider}:`, error);
 
-      // Return fallback models on error
-      const fallback = FALLBACK_MODELS[provider.toLowerCase()] || [];
       return {
         provider,
-        models: fallback,
+        models: [],
         error: error instanceof Error ? error.message : 'Failed to fetch models',
       };
     }
   }
 
   /**
-   * Get fallback models (static list) for a provider
+   * Search models by name or provider
    */
-  static getFallbackModels(provider: string): ModelInfo[] {
-    return FALLBACK_MODELS[provider.toLowerCase()] || [];
+  static async searchModels(query: string): Promise<ModelInfo[]> {
+    // Map provider names in query if needed
+    let mappedQuery = query;
+    for (const [uiName, litellmName] of Object.entries(PROVIDER_MAPPINGS)) {
+      if (query.toLowerCase() === uiName) {
+        mappedQuery = litellmName;
+        break;
+      }
+    }
+
+    const cacheKey = `llm-search:${query.toLowerCase()}`;
+
+    // Check cache first
+    const cached = await cacheService.get<ModelInfo[]>(cacheKey);
+    if (cached) {
+      return cached.data;
+    }
+
+    try {
+      const models = await invoke<ModelInfo[]>('search_llm_models', { query: mappedQuery });
+      console.log(`[LLMModels] Search '${query}' (mapped: ${mappedQuery}) returned ${models.length} models`);
+
+      // Cache search results for 1 hour
+      if (models.length > 0) {
+        await cacheService.set(cacheKey, models, 'reference', '1h');
+      }
+
+      return models;
+    } catch (error) {
+      console.error(`[LLMModels] Search failed for '${query}':`, error);
+      return [];
+    }
   }
 
   /**
-   * Clear the cache for a specific provider
+   * Get LLM statistics
+   */
+  static async getStats(): Promise<LLMStats | null> {
+    const cacheKey = 'llm-stats';
+
+    const cached = await cacheService.get<LLMStats>(cacheKey);
+    if (cached) {
+      return cached.data;
+    }
+
+    try {
+      const stats = await invoke<LLMStats>('get_llm_stats');
+      console.log(`[LLMModels] Stats: ${stats.total_providers} providers, ${stats.total_models} models`);
+
+      await cacheService.set(cacheKey, stats, 'reference', '24h');
+
+      return stats;
+    } catch (error) {
+      console.error('[LLMModels] Failed to fetch stats:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Clear the cache for a specific provider or all
    */
   static async clearCache(provider?: string): Promise<void> {
     if (provider) {
-      await cacheService.invalidatePattern(`llm-models:${provider}:%`);
+      await cacheService.invalidatePattern(`llm-models:${provider}`);
+      await cacheService.invalidatePattern(`llm-search:%`);
     } else {
       await cacheService.invalidatePattern('llm-models:%');
+      await cacheService.invalidatePattern('llm-providers:%');
+      await cacheService.invalidatePattern('llm-search:%');
+      await cacheService.invalidatePattern('llm-stats');
     }
     console.log(`[LLMModels] Cache cleared${provider ? ` for ${provider}` : ''}`);
   }
 
   /**
-   * Get all supported providers
+   * Get all supported providers from LiteLLM
    */
-  static getSupportedProviders(): string[] {
-    return [
-      'fincept',
-      'openai',
-      'anthropic',
-      'google',
-      'groq',
-      'deepseek',
-      'openrouter',
-      'ollama',
-    ];
+  static async getSupportedProviders(): Promise<string[]> {
+    try {
+      const providers = await this.getProviders();
+      return providers.map(p => p.id);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get provider display name
+   */
+  static getProviderDisplayName(providerId: string): string {
+    const displayNames: Record<string, string> = {
+      'openai': 'OpenAI',
+      'anthropic': 'Anthropic',
+      'google': 'Google AI',
+      'gemini': 'Google Gemini',
+      'groq': 'Groq',
+      'deepseek': 'DeepSeek',
+      'mistral': 'Mistral AI',
+      'openrouter': 'OpenRouter',
+      'ollama': 'Ollama (Local)',
+      'fincept': 'Fincept AI',
+      'azure': 'Azure OpenAI',
+      'azure_ai': 'Azure AI',
+      'bedrock': 'AWS Bedrock',
+      'vertex_ai': 'Google Vertex AI',
+      'fireworks_ai': 'Fireworks AI',
+      'together_ai': 'Together AI',
+      'perplexity': 'Perplexity',
+      'cohere': 'Cohere',
+      'replicate': 'Replicate',
+      'huggingface': 'Hugging Face',
+      'deepinfra': 'DeepInfra',
+      'anyscale': 'Anyscale',
+      'databricks': 'Databricks',
+      'xai': 'xAI (Grok)',
+      'cerebras': 'Cerebras',
+      'sambanova': 'SambaNova',
+      'novita': 'Novita AI',
+      'cloudflare': 'Cloudflare AI',
+      'nlp_cloud': 'NLP Cloud',
+      'ai21': 'AI21 Labs',
+      'aleph_alpha': 'Aleph Alpha',
+      'palm': 'Google PaLM',
+      'watsonx': 'IBM watsonx',
+    };
+
+    return displayNames[providerId.toLowerCase()] || providerId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  /**
+   * Get provider base URL
+   */
+  static getProviderBaseUrl(provider: string): string {
+    const urls: Record<string, string> = {
+      'openai': 'https://api.openai.com/v1',
+      'anthropic': 'https://api.anthropic.com/v1',
+      'google': 'https://generativelanguage.googleapis.com/v1beta',
+      'gemini': 'https://generativelanguage.googleapis.com/v1beta',
+      'groq': 'https://api.groq.com/openai/v1',
+      'deepseek': 'https://api.deepseek.com/v1',
+      'mistral': 'https://api.mistral.ai/v1',
+      'openrouter': 'https://openrouter.ai/api/v1',
+      'together_ai': 'https://api.together.xyz/v1',
+      'fireworks_ai': 'https://api.fireworks.ai/inference/v1',
+      'perplexity': 'https://api.perplexity.ai',
+      'cohere': 'https://api.cohere.ai/v1',
+      'anyscale': 'https://api.endpoints.anyscale.com/v1',
+      'deepinfra': 'https://api.deepinfra.com/v1/openai',
+      'xai': 'https://api.x.ai/v1',
+    };
+
+    return urls[provider.toLowerCase()] || '';
   }
 }

@@ -5,7 +5,9 @@ import { reportLogger } from './loggerService';
 
 export interface ReportComponent {
   id: string;
-  type: 'text' | 'heading' | 'subheading' | 'chart' | 'table' | 'image' | 'divider' | 'code' | 'section' | 'columns' | 'coverpage' | 'pagebreak';
+  type: 'text' | 'heading' | 'subheading' | 'chart' | 'table' | 'image' | 'divider' | 'code' | 'section' | 'columns' | 'coverpage' | 'pagebreak' |
+    // New component types
+    'quote' | 'list' | 'toc' | 'kpi' | 'sparkline' | 'liveTable' | 'dynamicChart' | 'signature' | 'disclaimer' | 'qrcode' | 'watermark';
   content: any;
   config: {
     fontSize?: string;
@@ -28,6 +30,34 @@ export interface ReportComponent {
     // Cover page configs
     subtitle?: string;
     logo?: string;
+    // Quote/Callout configs
+    quoteType?: 'quote' | 'info' | 'warning' | 'success' | 'error';
+    author?: string;
+    // List configs
+    items?: string[];
+    ordered?: boolean;
+    // TOC configs
+    showPageNumbers?: boolean;
+    // KPI configs
+    kpis?: Array<{ label: string; value: string; change: number; trend: 'up' | 'down' }>;
+    // Sparkline configs
+    data?: number[] | Array<{ name: string; value: number }>;
+    // Signature configs
+    name?: string;
+    title?: string;
+    showLine?: boolean;
+    // Disclaimer configs
+    disclaimerType?: 'standard' | 'legal' | 'confidential';
+    // QR Code configs
+    value?: string;
+    size?: number;
+    label?: string;
+    // Watermark configs
+    text?: string;
+    opacity?: number;
+    rotation?: number;
+    // Data source configs
+    dataSource?: string;
   };
   // For column and section types that contain other components
   children?: ReportComponent[];

@@ -20,7 +20,12 @@ export const usePortfolioOperations = () => {
       setLoading(true);
       try {
         await portfolioService.initialize();
-        await loadPortfolios();
+        const result = await portfolioService.getPortfolios();
+        setPortfolios(result);
+        // Select first portfolio on initial load
+        if (result.length > 0) {
+          setSelectedPortfolio(result[0]);
+        }
       } catch (error) {
         console.error('[usePortfolioOperations] Initialization error:', error);
       } finally {
@@ -30,14 +35,46 @@ export const usePortfolioOperations = () => {
     initService();
   }, []);
 
-  // Auto-refresh portfolio data
+  // Auto-refresh portfolio data only when tab is visible
   useEffect(() => {
-    if (selectedPortfolio) {
-      const refreshTimer = setInterval(() => {
-        refreshPortfolioData();
-      }, 60000); // Refresh every minute
-      return () => clearInterval(refreshTimer);
+    if (!selectedPortfolio) return;
+
+    let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+    const startRefresh = () => {
+      if (!refreshTimer) {
+        refreshTimer = setInterval(() => {
+          refreshPortfolioData();
+        }, 60000);
+      }
+    };
+
+    const stopRefresh = () => {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopRefresh();
+      } else {
+        startRefresh();
+      }
+    };
+
+    // Start refresh only if page is visible
+    if (!document.hidden) {
+      startRefresh();
     }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopRefresh();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [selectedPortfolio]);
 
   // Load portfolio summary when selection changes
@@ -52,13 +89,10 @@ export const usePortfolioOperations = () => {
     try {
       const result = await portfolioService.getPortfolios();
       setPortfolios(result);
-
-      // Select first portfolio if none selected
-      if (result.length > 0 && !selectedPortfolio) {
-        setSelectedPortfolio(result[0]);
-      }
+      return result;
     } catch (error) {
       console.error('[usePortfolioOperations] Error loading portfolios:', error);
+      return [];
     }
   };
 
@@ -132,10 +166,12 @@ export const usePortfolioOperations = () => {
   // Delete portfolio
   const deletePortfolio = async (portfolioId: string) => {
     await portfolioService.deletePortfolio(portfolioId);
-    await loadPortfolios();
+    const updatedPortfolios = await loadPortfolios();
 
     if (selectedPortfolio?.id === portfolioId) {
-      setSelectedPortfolio(portfolios.length > 1 ? portfolios[0] : null);
+      // Use fresh list, exclude deleted portfolio
+      const remaining = updatedPortfolios.filter(p => p.id !== portfolioId);
+      setSelectedPortfolio(remaining.length > 0 ? remaining[0] : null);
       setPortfolioSummary(null);
     }
   };

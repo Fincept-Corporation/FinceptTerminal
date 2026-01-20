@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { PortfolioSummary, PortfolioHolding } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent } from './utils';
 import { sectorService } from '../../../../services/data-sources/sectorService';
@@ -18,6 +18,8 @@ interface SectorAllocation {
 
 const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
   const currency = portfolioSummary.portfolio.currency;
+  const [sectorsLoaded, setSectorsLoaded] = useState(false);
+  const [, forceUpdate] = useState(0);
 
   // Fincept color palette for sectors
   const sectorColors = [
@@ -29,6 +31,18 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
     FINCEPT.YELLOW,
     FINCEPT.RED
   ];
+
+  // Prefetch sector data for all holdings
+  useEffect(() => {
+    const symbols = portfolioSummary.holdings.map(h => h.symbol);
+    if (symbols.length > 0) {
+      setSectorsLoaded(false);
+      sectorService.prefetchSectors(symbols).then(() => {
+        setSectorsLoaded(true);
+        forceUpdate(n => n + 1); // Trigger re-render with updated cache
+      });
+    }
+  }, [portfolioSummary.holdings]);
 
   // Group holdings by sector using real sector classification
   const sectorAllocations = useMemo((): SectorAllocation[] => {
@@ -55,7 +69,7 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
         color: sectorColors[index % sectorColors.length]
       }))
       .sort((a, b) => b.weight - a.weight);
-  }, [portfolioSummary.holdings, portfolioSummary.total_market_value]);
+  }, [portfolioSummary.holdings, portfolioSummary.total_market_value, sectorsLoaded]);
 
   // Calculate pie chart angles
   let currentAngle = 0;
@@ -106,6 +120,23 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
       }}>
         SECTOR ALLOCATION
       </div>
+
+      {!sectorsLoaded && portfolioSummary.holdings.length > 0 && (
+        <div style={{
+          padding: SPACING.MEDIUM,
+          marginBottom: SPACING.MEDIUM,
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: BORDERS.CYAN,
+          color: FINCEPT.CYAN,
+          fontSize: TYPOGRAPHY.BODY,
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.SMALL
+        }}>
+          <span style={{ animation: 'pulse 1.5s infinite' }}>●</span>
+          Loading sector data from API...
+        </div>
+      )}
 
       {sectorAllocations.length === 0 ? (
         <div style={{

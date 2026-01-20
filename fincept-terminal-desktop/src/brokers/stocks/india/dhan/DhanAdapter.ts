@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
 import type {
   StockBrokerMetadata,
@@ -62,9 +63,15 @@ export class DhanAdapter extends BaseStockBrokerAdapter {
   private apiSecret: string | null = null;
   private clientId: string | null = null;
 
-  // REST API polling for quotes
+  // Tauri event unlisteners for WebSocket events
+  private tickerUnlisten: UnlistenFn | null = null;
+  private orderbookUnlisten: UnlistenFn | null = null;
+  private statusUnlisten: UnlistenFn | null = null;
+
+  // Fallback: REST API polling for quotes (when WebSocket fails)
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
+  private usePollingFallback: boolean = false;
 
   // ============================================================================
   // Authentication
@@ -784,24 +791,178 @@ export class DhanAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // WebSocket / Polling
+  // WebSocket - Real WebSocket via Rust Backend
   // ============================================================================
 
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
     try {
-      this.startQuotePolling();
-      this.wsConnected = true;
-      console.log('[Dhan] REST API polling started');
+      // Try real WebSocket connection via Rust backend
+      await this.connectRealWebSocket();
+      console.log('[Dhan] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.error('[Dhan] Failed to start polling:', error);
-      throw error;
+      console.warn('[Dhan] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
     }
+  }
+
+  /**
+   * Connect to real Dhan WebSocket via Tauri/Rust backend
+   */
+  private async connectRealWebSocket(): Promise<void> {
+    if (!this.accessToken || !this.clientId) {
+      throw new Error('Access token and client ID not available');
+    }
+
+    // Call Rust backend to connect WebSocket
+    const result = await invoke<{
+      success: boolean;
+      data?: boolean;
+      error?: string;
+    }>('dhan_ws_connect', {
+      clientId: this.clientId,
+      accessToken: this.accessToken,
+      is20Depth: false, // Use 5-level depth by default
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'WebSocket connection failed');
+    }
+
+    // Listen for ticker events from Rust backend
+    this.tickerUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      price: number;
+      bid?: number;
+      ask?: number;
+      volume?: number;
+      change_percent?: number;
+      timestamp: number;
+    }>('dhan_ticker', (event) => {
+      const tick = event.payload;
+
+      // Parse symbol (format depends on Dhan - usually security_id)
+      this.emitTick({
+        symbol: tick.symbol,
+        exchange: 'NSE' as StockExchange, // Will be parsed from actual data
+        mode: 'quote',
+        lastPrice: tick.price,
+        bid: tick.bid,
+        ask: tick.ask,
+        volume: tick.volume || 0,
+        changePercent: tick.change_percent || 0,
+        timestamp: tick.timestamp,
+      });
+    });
+
+    // Listen for orderbook/depth events
+    this.orderbookUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      bids: Array<{ price: number; quantity: number; orders?: number }>;
+      asks: Array<{ price: number; quantity: number; orders?: number }>;
+      timestamp: number;
+    }>('dhan_orderbook', (event) => {
+      const data = event.payload;
+
+      // Parse symbol from Dhan format
+      const [exchangePart, symbolPart] = data.symbol.includes(':')
+        ? data.symbol.split(':')
+        : ['NSE', data.symbol];
+      const symbol = symbolPart || data.symbol;
+      const exchange = (exchangePart as StockExchange) || 'NSE';
+
+      console.log(`[Dhan WebSocket] Depth update for ${symbol}:`, {
+        bids: data.bids?.length || 0,
+        asks: data.asks?.length || 0,
+      });
+
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      const tick: TickData = {
+        symbol,
+        exchange,
+        mode: 'full',
+        lastPrice: bestBid?.price || 0,
+        bid: bestBid?.price,
+        ask: bestAsk?.price,
+        bidQty: bestBid?.quantity,
+        askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        depth: {
+          bids: data.bids?.map((b) => ({ price: b.price, quantity: b.quantity, orders: b.orders || 0 })) || [],
+          asks: data.asks?.map((a) => ({ price: a.price, quantity: a.quantity, orders: a.orders || 0 })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+
+      if (tick.depth) {
+        this.emitDepth({ symbol, exchange, bids: tick.depth.bids, asks: tick.depth.asks });
+      }
+    });
+
+    // Listen for status/connection events
+    this.statusUnlisten = await listen<{
+      provider: string;
+      status: string;
+      message?: string;
+      timestamp: number;
+    }>('dhan_status', (event) => {
+      const status = event.payload;
+      console.log(`[Dhan WebSocket] Status: ${status.status} - ${status.message || ''}`);
+
+      if (status.status === 'disconnected' || status.status === 'error') {
+        this.wsConnected = false;
+        if (!this.usePollingFallback) {
+          console.warn('[Dhan] WebSocket disconnected, enabling polling fallback');
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      } else if (status.status === 'connected') {
+        this.wsConnected = true;
+        if (this.usePollingFallback) {
+          console.log('[Dhan] WebSocket reconnected, disabling polling fallback');
+          this.usePollingFallback = false;
+          this.stopQuotePolling();
+        }
+      }
+    });
+
+    this.wsConnected = true;
+  }
+
+  private async disconnectRealWebSocket(): Promise<void> {
+    if (this.tickerUnlisten) {
+      this.tickerUnlisten();
+      this.tickerUnlisten = null;
+    }
+    if (this.orderbookUnlisten) {
+      this.orderbookUnlisten();
+      this.orderbookUnlisten = null;
+    }
+    if (this.statusUnlisten) {
+      this.statusUnlisten();
+      this.statusUnlisten = null;
+    }
+
+    try {
+      await invoke('dhan_ws_disconnect');
+    } catch (err) {
+      console.warn('[Dhan] WebSocket disconnect error:', err);
+    }
+
+    this.wsConnected = false;
   }
 
   private startQuotePolling(): void {
     this.stopQuotePolling();
+
+    console.log('[Dhan] Starting REST API polling (fallback mode, 2 min interval)');
 
     // Poll every 2 minutes (Dhan has strict rate limits)
     this.quotePollingInterval = setInterval(async () => {
@@ -860,10 +1021,12 @@ export class DhanAdapter extends BaseStockBrokerAdapter {
   }
 
   async disconnectWebSocket(): Promise<void> {
+    await this.disconnectRealWebSocket();
     this.stopQuotePolling();
     this.pollingSymbols.clear();
+    this.usePollingFallback = false;
     this.wsConnected = false;
-    console.log('[Dhan] Polling stopped');
+    console.log('[Dhan] WebSocket disconnected');
   }
 
   protected async subscribeInternal(
@@ -873,16 +1036,56 @@ export class DhanAdapter extends BaseStockBrokerAdapter {
   ): Promise<void> {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.set(key, { symbol, exchange });
-    console.log(`[Dhan] Added ${key} to polling (${this.pollingSymbols.size} total)`);
 
-    // Trigger immediate poll
-    this.pollQuotes();
+    if (this.wsConnected && !this.usePollingFallback) {
+      try {
+        const securityId = await this.getSecurityId(symbol, exchange);
+        const wsMode = mode === 'full' ? 'full' : mode === 'quote' ? 'quote' : 'ticker';
+
+        await invoke('dhan_ws_subscribe', {
+          symbol: securityId,
+          mode: wsMode,
+        });
+
+        console.log(`[Dhan] ✓ WebSocket subscribed to ${symbol} (mode: ${wsMode})`);
+      } catch (error) {
+        console.error(`[Dhan] WebSocket subscribe failed:`, error);
+        if (!this.usePollingFallback) {
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      }
+    } else {
+      console.log(`[Dhan] Added ${key} to polling (${this.pollingSymbols.size} total)`);
+      if (this.usePollingFallback) {
+        this.pollQuotes();
+      }
+    }
   }
 
   protected async unsubscribeInternal(symbol: string, exchange: StockExchange): Promise<void> {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.delete(key);
-    console.log(`[Dhan] Removed ${key} from polling`);
+
+    if (this.wsConnected && !this.usePollingFallback) {
+      try {
+        const securityId = await this.getSecurityId(symbol, exchange);
+        await invoke('dhan_ws_unsubscribe', { symbol: securityId });
+        console.log(`[Dhan] ✓ WebSocket unsubscribed from ${symbol}`);
+      } catch (error) {
+        console.warn(`[Dhan] WebSocket unsubscribe failed:`, error);
+      }
+    } else {
+      console.log(`[Dhan] Removed ${key} from polling`);
+    }
+  }
+
+  async logout(): Promise<void> {
+    await this.disconnectRealWebSocket();
+    this.stopQuotePolling();
+    this.pollingSymbols.clear();
+    this.usePollingFallback = false;
+    await super.logout();
   }
 
   // ============================================================================

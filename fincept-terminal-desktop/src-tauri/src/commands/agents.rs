@@ -1,4 +1,4 @@
-// agents.rs - Simplified agent commands following yfinance pattern
+// agents.rs - Unified agent commands with single JSON payload
 use crate::utils::python::get_script_path;
 use crate::python_runtime;
 use serde::{Deserialize, Serialize};
@@ -40,22 +40,160 @@ pub struct AgentExecutionResult {
     pub agent_type: String,
 }
 
-/// Execute CoreAgent - unified single agent system
-/// Follows same pattern as yfinance_data.py - command + args
+/// Execute CoreAgent with single JSON payload (unified entry point)
+///
+/// Payload format:
+/// {
+///     "action": "run|run_team|run_workflow|list_tools|system_info|...",
+///     "api_keys": {...},
+///     "user_id": "optional",
+///     "config": {...},
+///     "params": {...}
+/// }
+///
+/// Supported actions:
+/// - Core: run, run_team, run_workflow, run_structured
+/// - Agent loader: discover_agents, list_agents, create_agent
+/// - SuperAgent: route_query, execute_query, execute_multi_query
+/// - Planner: create_stock_plan, create_portfolio_plan, execute_plan
+/// - Paper trading: paper_execute_trade, paper_get_portfolio, paper_get_positions
+/// - Repository: save_session, get_session, add_message, save_memory, search_memories
+/// - System: system_info, list_tools, list_models, list_output_models
 #[tauri::command]
 pub async fn execute_core_agent(
     app: tauri::AppHandle,
-    command: String,
-    args: Vec<String>,
+    payload: serde_json::Value,
 ) -> Result<String, String> {
-    let script_path = get_script_path(&app, "agents/finagent_core/core_agent.py")?;
-    let mut cmd_args = vec![command];
-    cmd_args.extend(args);
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    // Use main.py as unified entry point for all actions
+    let script_path = get_script_path(&app, "agents/finagent_core/main.py")?;
+    let payload_str = serde_json::to_string(&payload)
+        .map_err(|e| format!("Failed to serialize payload: {}", e))?;
+    python_runtime::execute_python_script(&script_path, vec![payload_str])
 }
 
-/// DEPRECATED - Old agent manager commands removed
-/// Use execute_core_agent instead for all agent operations
+/// Route a query to the appropriate agent using SuperAgent
+#[tauri::command]
+pub async fn route_query(
+    app: tauri::AppHandle,
+    query: String,
+    api_keys: Option<std::collections::HashMap<String, String>>,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "route_query",
+        "api_keys": api_keys.unwrap_or_default(),
+        "params": { "query": query }
+    });
+    execute_core_agent(app, payload).await
+}
+
+/// Execute a query with automatic routing via SuperAgent
+#[tauri::command]
+pub async fn execute_routed_query(
+    app: tauri::AppHandle,
+    query: String,
+    api_keys: Option<std::collections::HashMap<String, String>>,
+    session_id: Option<String>,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "execute_query",
+        "api_keys": api_keys.unwrap_or_default(),
+        "params": {
+            "query": query,
+            "session_id": session_id
+        }
+    });
+    execute_core_agent(app, payload).await
+}
+
+/// Discover all available agents from config files and directories
+#[tauri::command]
+pub async fn discover_agents(app: tauri::AppHandle) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "discover_agents",
+        "params": {}
+    });
+    execute_core_agent(app, payload).await
+}
+
+/// Create a stock analysis execution plan
+#[tauri::command]
+pub async fn create_stock_analysis_plan(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "create_stock_plan",
+        "params": { "symbol": symbol }
+    });
+    execute_core_agent(app, payload).await
+}
+
+/// Execute an execution plan
+#[tauri::command]
+pub async fn execute_plan(
+    app: tauri::AppHandle,
+    plan: serde_json::Value,
+    api_keys: Option<std::collections::HashMap<String, String>>,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "execute_plan",
+        "api_keys": api_keys.unwrap_or_default(),
+        "params": { "plan": plan }
+    });
+    execute_core_agent(app, payload).await
+}
+
+/// Save a trade decision to repository
+#[tauri::command]
+pub async fn save_trade_decision(
+    app: tauri::AppHandle,
+    competition_id: String,
+    model_name: String,
+    cycle_number: i32,
+    symbol: String,
+    action: String,
+    quantity: f64,
+    price: Option<f64>,
+    reasoning: String,
+    confidence: f64,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "save_trade_decision",
+        "params": {
+            "competition_id": competition_id,
+            "model_name": model_name,
+            "cycle_number": cycle_number,
+            "symbol": symbol,
+            "action": action,
+            "quantity": quantity,
+            "price": price,
+            "reasoning": reasoning,
+            "confidence": confidence
+        }
+    });
+    execute_core_agent(app, payload).await
+}
+
+/// Get trade decisions from repository
+#[tauri::command]
+pub async fn get_trade_decisions(
+    app: tauri::AppHandle,
+    competition_id: Option<String>,
+    model_name: Option<String>,
+    cycle_number: Option<i32>,
+    limit: Option<i32>,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "action": "get_decisions",
+        "params": {
+            "competition_id": competition_id,
+            "model_name": model_name,
+            "cycle_number": cycle_number,
+            "limit": limit.unwrap_or(100)
+        }
+    });
+    execute_core_agent(app, payload).await
+}
 
 // Legacy commands for Node Editor compatibility
 fn get_agent_script_path(agent_type: &str) -> Option<&'static str> {
@@ -178,7 +316,6 @@ struct AgentConfigFile {
 pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMetadata>, String> {
     let mut all_agents = Vec::new();
 
-    // Define agent categories and their config files
     let categories = vec![
         ("TraderInvestorsAgent", "agent_definitions.json", "trader", "📈", "#22c55e"),
         ("hedgeFundAgents", "team_config.json", "hedge-fund", "🏦", "#6366f1"),
@@ -204,7 +341,6 @@ pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMet
             resource_dir.join(&config_path)
         };
 
-        // Read and parse the config file
         if let Ok(content) = std::fs::read_to_string(&full_path) {
             if let Ok(config) = serde_json::from_str::<AgentConfigFile>(&content) {
                 for agent_def in config.agents {
@@ -231,11 +367,7 @@ pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMet
                         color: color.to_string(),
                     });
                 }
-            } else {
-                eprintln!("Failed to parse agent config: {}", full_path.display());
             }
-        } else {
-            eprintln!("Agent config file not found: {}", full_path.display());
         }
     }
 
@@ -244,7 +376,7 @@ pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMet
 
 #[tauri::command]
 pub async fn get_agent_metadata(agent_type: String) -> Result<AgentMetadata, String> {
-    Err(format!("Legacy command - use get_agent_config instead for: {}", agent_type))
+    Err(format!("Legacy command - use execute_core_agent with action='system_info' instead for: {}", agent_type))
 }
 
 /// Read agent configuration file from resources
@@ -273,14 +405,4 @@ pub async fn read_agent_config(
 
     std::fs::read_to_string(&full_path)
         .map_err(|e| format!("Failed to read config file {}: {}", full_path.display(), e))
-}
-
-#[tauri::command]
-pub async fn execute_python_agent_command(
-    _app: tauri::AppHandle,
-    action: String,
-    _parameters: serde_json::Value,
-    _inputs: Option<serde_json::Value>,
-) -> Result<serde_json::Value, String> {
-    Err(format!("Legacy command '{}' is deprecated. Use new agent commands instead.", action))
 }

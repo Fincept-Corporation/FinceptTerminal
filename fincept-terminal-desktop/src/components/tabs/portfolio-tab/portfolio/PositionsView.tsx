@@ -68,7 +68,7 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
         ) : (
           portfolioSummary.holdings.map((holding, index) => (
             <div
-              key={holding.id}
+              key={holding.id || `${holding.symbol}-${index}`}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr 1fr 1.2fr 1fr',

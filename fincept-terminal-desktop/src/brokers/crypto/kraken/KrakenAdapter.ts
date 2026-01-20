@@ -223,6 +223,25 @@ export class KrakenAdapter extends BaseExchangeAdapter {
   }
 
   /**
+   * Set position mode (one-way or hedge mode)
+   * Note: Kraken Futures uses one-way mode by default
+   */
+  async setPositionMode(hedgeMode: boolean) {
+    try {
+      await this.ensureAuthenticated();
+      if (!this.exchange.has['setPositionMode']) {
+        // Kraken spot/margin doesn't support position mode
+        // Kraken Futures uses one-way mode
+        console.warn('[Kraken] setPositionMode: Kraken uses one-way position mode by default');
+        return { hedgeMode: false, info: { message: 'Kraken uses one-way position mode' } };
+      }
+      return await (this.exchange as any).setPositionMode(hedgeMode);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
    * Create margin order
    */
   async createMarginOrder(

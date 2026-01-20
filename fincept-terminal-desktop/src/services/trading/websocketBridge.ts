@@ -293,7 +293,7 @@ export function getWebSocketManager() {
  * Get available providers
  */
 export function getAvailableProviders(): string[] {
-  return ['kraken', 'binance', 'hyperliquid', 'okx', 'coinbase'];
+  return ['kraken', 'binance', 'hyperliquid', 'okx', 'coinbase', 'bybit', 'kucoin', 'gateio'];
 }
 
 /**

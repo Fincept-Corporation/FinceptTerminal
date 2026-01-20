@@ -10,6 +10,9 @@ import { HyperLiquidAdapter } from './crypto/hyperliquid/HyperLiquidAdapter';
 import { BinanceAdapter } from './crypto/binance/BinanceAdapter';
 import { OKXAdapter } from './crypto/okx/OKXAdapter';
 import { CoinbaseAdapter } from './crypto/coinbase/CoinbaseAdapter';
+import { BybitAdapter } from './crypto/bybit/BybitAdapter';
+import { KucoinAdapter } from './crypto/kucoin/KucoinAdapter';
+import { GateioAdapter } from './crypto/gateio/GateioAdapter';
 import { ZerodhaAdapter } from './india/zerodha/ZerodhaAdapter';
 import { FyersAdapter } from './stocks/india/fyers/FyersAdapter';
 import type { IExchangeAdapter, ExchangeConfig } from './crypto/types';
@@ -411,6 +414,213 @@ export const BROKER_REGISTRY: Record<string, BrokerMetadata> = {
     fees: {
       maker: 0.004,
       taker: 0.006,
+    },
+  },
+
+  bybit: {
+    id: 'bybit',
+    name: 'bybit',
+    displayName: 'Bybit',
+    type: 'crypto',
+    category: 'centralized',
+    region: 'global',
+    adapterClass: BybitAdapter,
+
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      perpetuals: true,
+      options: true,
+      staking: false,
+      vaults: false,
+      subaccounts: true,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: true,
+      icebergOrders: true,
+      batchOrders: true,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 100,
+      marginMode: true,
+      transfers: true,
+      withdrawals: true,
+      deposits: true,
+    },
+
+    defaultSymbols: [
+      'BTC/USDT',
+      'ETH/USDT',
+      'SOL/USDT',
+      'XRP/USDT',
+      'DOGE/USDT',
+      'ADA/USDT',
+      'AVAX/USDT',
+      'DOT/USDT',
+      'MATIC/USDT',
+      'LINK/USDT',
+      'UNI/USDT',
+      'ATOM/USDT',
+      'LTC/USDT',
+      'OP/USDT',
+      'ARB/USDT',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://stream.bybit.com/v5/public/spot',
+    },
+
+    fees: {
+      maker: 0.001,
+      taker: 0.001,
+    },
+  },
+
+  kucoin: {
+    id: 'kucoin',
+    name: 'kucoin',
+    displayName: 'KuCoin',
+    type: 'crypto',
+    category: 'centralized',
+    region: 'global',
+    adapterClass: KucoinAdapter,
+
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      staking: true,
+      vaults: false,
+      subaccounts: true,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: false,
+      icebergOrders: true,
+      batchOrders: true,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 100,
+      marginMode: true,
+      transfers: true,
+      withdrawals: true,
+      deposits: true,
+    },
+
+    defaultSymbols: [
+      'BTC/USDT',
+      'ETH/USDT',
+      'SOL/USDT',
+      'XRP/USDT',
+      'DOGE/USDT',
+      'ADA/USDT',
+      'AVAX/USDT',
+      'DOT/USDT',
+      'MATIC/USDT',
+      'LINK/USDT',
+      'UNI/USDT',
+      'ATOM/USDT',
+      'LTC/USDT',
+      'KCS/USDT',
+      'PEPE/USDT',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://ws-api-spot.kucoin.com',
+    },
+
+    fees: {
+      maker: 0.001,
+      taker: 0.001,
+    },
+  },
+
+  gateio: {
+    id: 'gateio',
+    name: 'gateio',
+    displayName: 'Gate.io',
+    type: 'crypto',
+    category: 'centralized',
+    region: 'global',
+    adapterClass: GateioAdapter,
+
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      perpetuals: true,
+      options: true,
+      staking: true,
+      vaults: false,
+      subaccounts: true,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: true,
+      icebergOrders: true,
+      batchOrders: true,
+      editOrders: true,
+    },
+
+    advancedFeatures: {
+      leverage: true,
+      maxLeverage: 100,
+      marginMode: true,
+      transfers: true,
+      withdrawals: true,
+      deposits: true,
+    },
+
+    defaultSymbols: [
+      'BTC/USDT',
+      'ETH/USDT',
+      'SOL/USDT',
+      'XRP/USDT',
+      'DOGE/USDT',
+      'ADA/USDT',
+      'AVAX/USDT',
+      'DOT/USDT',
+      'MATIC/USDT',
+      'LINK/USDT',
+      'UNI/USDT',
+      'ATOM/USDT',
+      'LTC/USDT',
+      'GT/USDT',
+      'SHIB/USDT',
+    ],
+
+    websocket: {
+      enabled: true,
+      endpoint: 'wss://ws.gate.io/v4',
+    },
+
+    fees: {
+      maker: 0.002,  // 0.2% standard, VIP tiers reduce
+      taker: 0.002,
     },
   },
 

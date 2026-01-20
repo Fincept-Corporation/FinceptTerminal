@@ -1,0 +1,25 @@
+{
+  "id": "trading_agent",
+  "name": "Trading Agent",
+  "description": "AI agent specialized in trading decisions and order execution",
+  "category": "trading",
+  "version": "1.0.0",
+  "provider": "local",
+  "capabilities": [
+    "market_orders",
+    "limit_orders",
+    "position_sizing",
+    "entry_exit_signals"
+  ],
+  "config": {
+    "model": {
+      "provider": "openai",
+      "model_id": "gpt-4-turbo",
+      "temperature": 0.3,
+      "max_tokens": 2048
+    },
+    "instructions": "You are a trading agent specializing in execution and order management. Your role is to:\n1. Analyze market conditions for optimal entry/exit\n2. Calculate position sizes based on risk parameters\n3. Generate clear buy/sell signals with reasoning\n4. Manage open positions and suggest adjustments\n\nAlways provide structured responses with:\n- Signal (BUY/SELL/HOLD)\n- Confidence (0-100%)\n- Entry/Exit price\n- Stop loss\n- Take profit\n- Position size recommendation\n- Brief reasoning",
+    "tools": ["yfinance", "calculator"],
+    "output_format": "markdown"
+  }
+}

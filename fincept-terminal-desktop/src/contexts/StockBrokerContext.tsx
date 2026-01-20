@@ -26,6 +26,7 @@ import {
   stockBrokerSupportsTradingFeature,
   getStockBrokerDefaultSymbols,
 } from '../brokers/stocks';
+import { BaseStockBrokerAdapter } from '../brokers/stocks/BaseStockBrokerAdapter';
 
 import type {
   IStockBrokerAdapter,
@@ -265,17 +266,43 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       setIsLoading(true);
 
       try {
-        // Load saved broker preference
-        const savedBroker = await safeStorageGet(STORAGE_KEYS.ACTIVE_STOCK_BROKER);
-        if (savedBroker && STOCK_BROKER_REGISTRY[savedBroker]) {
-          setActiveBrokerState(savedBroker);
-        }
-
-        // Load saved trading mode
+        // Load saved trading mode first
         const savedModeStr = await safeStorageGet(STORAGE_KEYS.STOCK_TRADING_MODE);
         const savedMode = validateTradingMode(savedModeStr);
         if (savedMode) {
           setTradingModeState(savedMode);
+        }
+
+        // Load saved broker preference
+        const savedBroker = await safeStorageGet(STORAGE_KEYS.ACTIVE_STOCK_BROKER);
+
+        // If we have a saved broker, try to use it
+        if (savedBroker && STOCK_BROKER_REGISTRY[savedBroker]) {
+          console.log(`[StockBrokerContext] Found saved broker: ${savedBroker}`);
+          setActiveBrokerState(savedBroker);
+        } else {
+          // No saved broker - scan all brokers to find one with valid session
+          console.log('[StockBrokerContext] No saved broker, scanning for valid sessions...');
+          const allBrokers = getAllStockBrokers();
+
+          for (const broker of allBrokers) {
+            try {
+              const tempAdapter = createStockBrokerAdapter(broker.id);
+              const creds = await (tempAdapter as any).loadCredentials?.();
+
+              if (creds?.accessToken && creds?.tokenTimestamp) {
+                // Check if token is valid for today (IST check for Indian brokers)
+                const isValid = BaseStockBrokerAdapter.isTokenValidForTodayIST(creds.tokenTimestamp);
+                if (isValid) {
+                  console.log(`[StockBrokerContext] Found valid session for: ${broker.id}`);
+                  setActiveBrokerState(broker.id);
+                  break;
+                }
+              }
+            } catch (err) {
+              // Skip broker if check fails
+            }
+          }
         }
 
         console.log('[StockBrokerContext] Preferences loaded', {

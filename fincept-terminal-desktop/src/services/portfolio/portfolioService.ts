@@ -147,12 +147,22 @@ class PortfolioService {
     };
   }
 
-  async removeAsset(portfolioId: string, symbol: string): Promise<void> {
+  async removeAsset(portfolioId: string, symbol: string, sellPrice?: number): Promise<void> {
     // Sell all quantity
     const assets = await this.getPortfolioAssets(portfolioId);
     const asset = assets.find(a => a.symbol === symbol.toUpperCase());
     if (asset) {
-      await this.sellAsset(portfolioId, symbol, asset.quantity, 0);
+      // Use provided price, or fetch current price, or fallback to avg buy price
+      let price = sellPrice;
+      if (price === undefined || price === null) {
+        try {
+          const quotes = await marketDataService.getQuotes([symbol]);
+          price = quotes[0]?.price ?? asset.avg_buy_price;
+        } catch {
+          price = asset.avg_buy_price;
+        }
+      }
+      await this.sellAsset(portfolioId, symbol, asset.quantity, price);
     }
   }
 
@@ -224,9 +234,9 @@ class PortfolioService {
       const marketValue = currentPrice * asset.quantity;
       const costBasis = asset.avg_buy_price * asset.quantity;
       const unrealizedPnl = marketValue - costBasis;
-      const unrealizedPnlPercent = (unrealizedPnl / costBasis) * 100;
+      const unrealizedPnlPercent = costBasis > 0 ? (unrealizedPnl / costBasis) * 100 : 0;
       const dayChange = (currentPrice - previousClose) * asset.quantity;
-      const dayChangePercent = ((currentPrice - previousClose) / previousClose) * 100;
+      const dayChangePercent = previousClose > 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0;
 
       totalMarketValue += marketValue;
       totalCostBasis += costBasis;
@@ -322,13 +332,92 @@ class PortfolioService {
   }
 
   async calculateAdvancedMetrics(portfolioId: string): Promise<any> {
-    // Advanced features not implemented yet
-    return {};
+    portfolioLogger.info(`Calculating advanced metrics for portfolio: ${portfolioId}`);
+
+    const summary = await this.getPortfolioSummary(portfolioId);
+    const holdings = summary.holdings;
+
+    if (holdings.length === 0) {
+      return {
+        sharpe_ratio: 0,
+        portfolio_volatility: 0,
+        value_at_risk_95: 0,
+        max_drawdown: 0,
+        portfolio_return: 0,
+      };
+    }
+
+    // Calculate basic metrics from holdings data
+    const weights = holdings.map(h => h.weight / 100);
+    const returns = holdings.map(h => (h.unrealized_pnl_percent || 0) / 100);
+
+    // Portfolio return (weighted average)
+    const portfolioReturn = weights.reduce((sum, w, i) => sum + w * returns[i], 0);
+
+    // Portfolio volatility estimate (simplified - using day change variance)
+    const dayChanges = holdings.map(h => (h.day_change_percent || 0) / 100);
+    const avgDayChange = dayChanges.reduce((sum, d) => sum + d, 0) / dayChanges.length;
+    const variance = dayChanges.reduce((sum, d) => sum + Math.pow(d - avgDayChange, 2), 0) / dayChanges.length;
+    const dailyVolatility = Math.sqrt(variance);
+    const annualizedVolatility = dailyVolatility * Math.sqrt(252);
+
+    // Sharpe ratio (assuming 4% risk-free rate)
+    const riskFreeRate = 0.04;
+    const excessReturn = portfolioReturn - riskFreeRate;
+    const sharpeRatio = annualizedVolatility > 0 ? excessReturn / annualizedVolatility : 0;
+
+    // VaR 95% (parametric)
+    const var95 = avgDayChange - 1.645 * dailyVolatility;
+
+    // Max drawdown estimate from unrealized losses
+    const maxLoss = Math.min(...returns, 0);
+
+    return {
+      sharpe_ratio: sharpeRatio,
+      portfolio_volatility: annualizedVolatility,
+      value_at_risk_95: Math.abs(var95),
+      max_drawdown: Math.abs(maxLoss),
+      portfolio_return: portfolioReturn,
+    };
   }
 
-  async optimizePortfolioWeights(portfolioId: string, constraints: any): Promise<any> {
-    // Advanced features not implemented yet
-    return {};
+  async optimizePortfolioWeights(portfolioId: string, method: string = 'max_sharpe'): Promise<any> {
+    portfolioLogger.info(`Optimizing portfolio weights: ${portfolioId}, method: ${method}`);
+
+    const summary = await this.getPortfolioSummary(portfolioId);
+    const holdings = summary.holdings;
+
+    if (holdings.length === 0) {
+      return {
+        optimal_weights: [],
+        sharpe_ratio: 0,
+        expected_return: 0,
+        volatility: 0,
+      };
+    }
+
+    // Simple equal-weight optimization as fallback
+    // In production, this would call the Python optimizer
+    const n = holdings.length;
+    const equalWeight = 1 / n;
+
+    // Calculate metrics for equal-weight portfolio
+    const returns = holdings.map(h => (h.unrealized_pnl_percent || 0) / 100);
+    const expectedReturn = returns.reduce((sum, r) => sum + r * equalWeight, 0);
+
+    const dayChanges = holdings.map(h => (h.day_change_percent || 0) / 100);
+    const avgChange = dayChanges.reduce((sum, d) => sum + d, 0) / n;
+    const variance = dayChanges.reduce((sum, d) => sum + Math.pow(d - avgChange, 2), 0) / n;
+    const volatility = Math.sqrt(variance) * Math.sqrt(252);
+
+    const sharpeRatio = volatility > 0 ? (expectedReturn - 0.04) / volatility : 0;
+
+    return {
+      optimal_weights: holdings.map(() => equalWeight),
+      sharpe_ratio: sharpeRatio,
+      expected_return: expectedReturn,
+      volatility: volatility,
+    };
   }
 
   async generateAssetAllocation(portfolioId: string, strategy: string): Promise<any> {

@@ -13,6 +13,9 @@ export { HyperLiquidAdapter } from './hyperliquid/HyperLiquidAdapter';
 export { BinanceAdapter } from './binance/BinanceAdapter';
 export { OKXAdapter } from './okx/OKXAdapter';
 export { CoinbaseAdapter } from './coinbase/CoinbaseAdapter';
+export { BybitAdapter } from './bybit/BybitAdapter';
+export { KucoinAdapter } from './kucoin/KucoinAdapter';
+export { GateioAdapter } from './gateio/GateioAdapter';
 
 // Note: Paper Trading now in standalone src/paper-trading/ module
 
@@ -22,6 +25,9 @@ import { HyperLiquidAdapter } from './hyperliquid/HyperLiquidAdapter';
 import { BinanceAdapter } from './binance/BinanceAdapter';
 import { OKXAdapter } from './okx/OKXAdapter';
 import { CoinbaseAdapter } from './coinbase/CoinbaseAdapter';
+import { BybitAdapter } from './bybit/BybitAdapter';
+import { KucoinAdapter } from './kucoin/KucoinAdapter';
+import { GateioAdapter } from './gateio/GateioAdapter';
 import type { ExchangeConfig } from './types';
 
 export const SUPPORTED_EXCHANGES = {
@@ -105,6 +111,61 @@ export const SUPPORTED_EXCHANGES = {
       perpetuals: false,
       staking: true,
       earn: true,
+    },
+  },
+  bybit: {
+    id: 'bybit',
+    name: 'Bybit',
+    adapter: BybitAdapter,
+    type: 'centralized',
+    assetClass: 'crypto',
+    region: 'global',
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      options: true,
+      perpetuals: true,
+      copyTrading: true,
+      earn: true,
+      unifiedAccount: true,
+    },
+  },
+  kucoin: {
+    id: 'kucoin',
+    name: 'KuCoin',
+    adapter: KucoinAdapter,
+    type: 'centralized',
+    assetClass: 'crypto',
+    region: 'global',
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      options: false,
+      perpetuals: true,
+      lending: true,
+      staking: true,
+      subaccounts: true,
+    },
+  },
+  gateio: {
+    id: 'gateio',
+    name: 'Gate.io',
+    adapter: GateioAdapter,
+    type: 'centralized',
+    assetClass: 'crypto',
+    region: 'global',
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      options: true,
+      perpetuals: true,
+      copyTrading: true,
+      lending: true,
+      earn: true,
+      subaccounts: true,
     },
   },
 } as const;

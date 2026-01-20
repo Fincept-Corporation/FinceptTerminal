@@ -47,7 +47,19 @@ export const UPSTOX_METADATA: StockBrokerMetadata = {
     ordersPerSecond: 10,
     quotesPerSecond: 10,
   },
-  defaultSymbols: ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK'],
+  defaultSymbols: [
+    // NIFTY 50 Components (Jan 2025)
+    'HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK',
+    'BAJFINANCE', 'BAJAJFINSV', 'HDFCLIFE', 'SBILIFE', 'INDUSINDBK',
+    'TCS', 'INFY', 'WIPRO', 'HCLTECH', 'TECHM', 'LTIM',
+    'RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'ADANIPORTS', 'ADANIENT',
+    'MARUTI', 'TATAMOTORS', 'M&M', 'BAJAJ-AUTO', 'HEROMOTOCO', 'EICHERMOT',
+    'HINDUNILVR', 'ITC', 'NESTLEIND', 'BRITANNIA', 'TATACONSUM',
+    'TATASTEEL', 'JSWSTEEL', 'HINDALCO', 'COALINDIA',
+    'SUNPHARMA', 'DRREDDY', 'CIPLA', 'APOLLOHOSP', 'DIVISLAB',
+    'LT', 'BHARTIARTL', 'ULTRACEMCO', 'GRASIM', 'TITAN',
+    'ASIANPAINT', 'BPCL', 'SHRIRAMFIN', 'TRENT',
+  ],
 };
 
 // Exchange mapping (internal → Upstox API)

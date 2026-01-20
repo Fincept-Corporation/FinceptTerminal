@@ -1,5 +1,130 @@
 // Type definitions for Equity Research module
 
+// ===== Core Data Types =====
+
+export interface StockInfo {
+  symbol: string;
+  company_name: string;
+  sector: string;
+  industry: string;
+  market_cap: number | null;
+  pe_ratio: number | null;
+  forward_pe: number | null;
+  dividend_yield: number | null;
+  beta: number | null;
+  fifty_two_week_high: number | null;
+  fifty_two_week_low: number | null;
+  average_volume: number | null;
+  description: string;
+  website: string;
+  country: string;
+  currency: string;
+  exchange: string;
+  employees: number | null;
+  current_price: number | null;
+  target_high_price: number | null;
+  target_low_price: number | null;
+  target_mean_price: number | null;
+  recommendation_mean: number | null;
+  recommendation_key: string | null;
+  number_of_analyst_opinions: number | null;
+  total_cash: number | null;
+  total_debt: number | null;
+  total_revenue: number | null;
+  revenue_per_share: number | null;
+  return_on_assets: number | null;
+  return_on_equity: number | null;
+  gross_profits: number | null;
+  free_cashflow: number | null;
+  operating_cashflow: number | null;
+  earnings_growth: number | null;
+  revenue_growth: number | null;
+  gross_margins: number | null;
+  operating_margins: number | null;
+  ebitda_margins: number | null;
+  profit_margins: number | null;
+  book_value: number | null;
+  price_to_book: number | null;
+  enterprise_value: number | null;
+  enterprise_to_revenue: number | null;
+  enterprise_to_ebitda: number | null;
+  shares_outstanding: number | null;
+  float_shares: number | null;
+  held_percent_insiders: number | null;
+  held_percent_institutions: number | null;
+  short_ratio: number | null;
+  short_percent_of_float: number | null;
+  peg_ratio: number | null;
+}
+
+export interface HistoricalData {
+  symbol: string;
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface QuoteData {
+  symbol: string;
+  price: number;
+  change: number;
+  change_percent: number;
+  volume: number | null;
+  high: number | null;
+  low: number | null;
+  open: number | null;
+  previous_close: number | null;
+}
+
+export interface FinancialsData {
+  symbol: string;
+  income_statement: Record<string, Record<string, number>>;
+  balance_sheet: Record<string, Record<string, number>>;
+  cash_flow: Record<string, Record<string, number>>;
+  timestamp: number;
+}
+
+export interface SearchResult {
+  symbol: string;
+  name: string;
+  type: string;
+}
+
+export interface NewsArticle {
+  title: string;
+  description?: string;
+  url: string;
+  publisher?: string;
+  published_date?: string;
+}
+
+export interface NewsData {
+  success: boolean;
+  error?: string;
+  data: NewsArticle[];
+  count?: number;
+}
+
+export interface TechnicalsData {
+  success: boolean;
+  data: Record<string, any>[];
+  indicator_columns?: {
+    trend?: string[];
+    momentum?: string[];
+    volatility?: string[];
+    volume?: string[];
+    others?: string[];
+  };
+}
+
+export type ChartPeriod = '1M' | '3M' | '6M' | '1Y' | '5Y';
+export type ActiveTab = 'overview' | 'financials' | 'analysis' | 'technicals' | 'peers' | 'news';
+
+// ===== Indicator Types =====
+
 export interface CandleData {
   time: number;
   open: number;

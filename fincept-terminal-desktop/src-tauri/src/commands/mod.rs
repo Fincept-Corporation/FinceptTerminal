@@ -63,6 +63,7 @@ pub mod jupyter;
 
 // Python Agents
 pub mod agents;
+pub mod agent_streaming;
 
 // Portfolio Analytics
 pub mod portfolio;
@@ -153,3 +154,6 @@ pub mod unified_trading;
 
 // AKShare - Free Chinese & Global market data
 pub mod akshare;
+
+// LLM Models - LiteLLM provider and model listing
+pub mod llm_models;

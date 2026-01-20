@@ -51,10 +51,17 @@ pub async fn store_indian_broker_credentials(
         .and_then(|v| v.as_str())
         .map(String::from);
 
-    // Store additional data as JSON
+    // Get token timestamp for Indian broker midnight expiry check
+    let token_timestamp = credentials.get("tokenTimestamp")
+        .or_else(|| credentials.get("token_timestamp"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+
+    // Store additional data as JSON (includes tokenTimestamp for expiry check)
     let additional_data = json!({
         "userId": user_id,
         "expiresAt": credentials.get("expiresAt").or_else(|| credentials.get("expires_at")),
+        "tokenTimestamp": token_timestamp,
     }).to_string();
 
     // Use the existing save_broker_credentials command
@@ -104,7 +111,7 @@ pub async fn get_indian_broker_credentials(
             eprintln!("  - access_token: {:?}",
                 creds.access_token.as_ref().map(|s| if s.len() > 0 { "***PRESENT***" } else { "EMPTY" }));
 
-            // Parse additional_data JSON to extract userId
+            // Parse additional_data JSON to extract userId and tokenTimestamp
             let additional_data: Option<Value> = creds.additional_data.as_ref()
                 .and_then(|data| serde_json::from_str(data).ok());
 
@@ -113,7 +120,11 @@ pub async fn get_indian_broker_credentials(
                 .and_then(|v| v.as_str())
                 .map(String::from);
 
-            eprintln!("[get_indian_broker_credentials] Extracted user_id: {:?}", user_id);
+            let token_timestamp = additional_data.as_ref()
+                .and_then(|data| data.get("tokenTimestamp"))
+                .and_then(|v| v.as_i64());
+
+            eprintln!("[get_indian_broker_credentials] Extracted user_id: {:?}, token_timestamp: {:?}", user_id, token_timestamp);
 
             // Return camelCase JSON for TypeScript
             let creds_json = json!({
@@ -122,6 +133,7 @@ pub async fn get_indian_broker_credentials(
                 "apiSecret": creds.api_secret,
                 "accessToken": creds.access_token,
                 "userId": user_id,
+                "tokenTimestamp": token_timestamp,
                 "additionalData": creds.additional_data,
             });
 

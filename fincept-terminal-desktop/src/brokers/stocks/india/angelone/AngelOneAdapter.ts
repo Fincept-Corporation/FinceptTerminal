@@ -75,15 +75,18 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   private password: string | null = null;
   private feedToken: string | null = null;
 
-  // REST API polling for quotes
+  // Tauri event unlisteners for WebSocket events
+  private tickerUnlisten: UnlistenFn | null = null;
+  private orderbookUnlisten: UnlistenFn | null = null;
+  private statusUnlisten: UnlistenFn | null = null;
+
+  // Fallback: REST API polling for quotes (when WebSocket fails)
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
+  private usePollingFallback: boolean = false;
 
   // Token to symbol mapping
   private tokenSymbolMap: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
-
-  // Tauri event unlisteners
-  private eventUnlisteners: UnlistenFn[] = [];
 
   // ============================================================================
   // Authentication
@@ -920,25 +923,196 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // WebSocket / Polling
+  // WebSocket - Real WebSocket via Rust Backend
   // ============================================================================
 
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
     try {
-      // Start REST API polling (Angel One rate limit: 1 req/sec)
-      this.startQuotePolling();
-      this.wsConnected = true;
-      console.log('[AngelOne] REST API polling started');
+      // Try real WebSocket connection via Rust backend
+      await this.connectRealWebSocket();
+      console.log('[AngelOne] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.error('[AngelOne] Failed to start polling:', error);
-      throw error;
+      console.warn('[AngelOne] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
     }
+  }
+
+  /**
+   * Connect to real Angel One WebSocket via Tauri/Rust backend
+   */
+  private async connectRealWebSocket(): Promise<void> {
+    if (!this.accessToken || !this.apiKey || !this.feedToken) {
+      throw new Error('Access token, API key, and feed token required');
+    }
+
+    // Call Rust backend to connect WebSocket
+    const result = await invoke<{
+      success: boolean;
+      data?: boolean;
+      error?: string;
+    }>('angelone_ws_connect', {
+      apiKey: this.apiKey,
+      clientCode: this.clientCode || this.userId || '',
+      feedToken: this.feedToken,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'WebSocket connection failed');
+    }
+
+    // Listen for ticker events from Rust backend
+    this.tickerUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      price: number;
+      bid?: number;
+      ask?: number;
+      volume?: number;
+      change_percent?: number;
+      timestamp: number;
+    }>('angelone_ticker', (event) => {
+      const tick = event.payload;
+
+      // Lookup symbol from token map
+      const symbolInfo = this.tokenSymbolMap.get(tick.symbol);
+
+      this.emitTick({
+        symbol: symbolInfo?.symbol || tick.symbol,
+        exchange: symbolInfo?.exchange || ('NSE' as StockExchange),
+        mode: 'quote',
+        lastPrice: tick.price,
+        bid: tick.bid,
+        ask: tick.ask,
+        volume: tick.volume || 0,
+        changePercent: tick.change_percent || 0,
+        timestamp: tick.timestamp,
+      });
+    });
+
+    // Listen for orderbook/depth events
+    this.orderbookUnlisten = await listen<{
+      provider: string;
+      symbol: string;
+      bids: Array<{ price: number; quantity: number; orders?: number }>;
+      asks: Array<{ price: number; quantity: number; orders?: number }>;
+      timestamp: number;
+    }>('angelone_orderbook', (event) => {
+      const data = event.payload;
+
+      // Parse symbol from AngelOne format (e.g., "NSE:RELIANCE-EQ" -> "RELIANCE")
+      const [exchangePart, symbolPart] = data.symbol.includes(':')
+        ? data.symbol.split(':')
+        : ['NSE', data.symbol];
+      const symbol = symbolPart?.replace('-EQ', '') || data.symbol;
+      const exchange = (exchangePart as StockExchange) || 'NSE';
+
+      console.log(`[AngelOne WebSocket] Depth update for ${symbol}:`, {
+        bids: data.bids?.length || 0,
+        asks: data.asks?.length || 0,
+      });
+
+      // Get best bid/ask from depth
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      // Create tick data with depth information
+      const tick: TickData = {
+        symbol,
+        exchange,
+        mode: 'full',
+        lastPrice: bestBid?.price || 0,
+        bid: bestBid?.price,
+        ask: bestAsk?.price,
+        bidQty: bestBid?.quantity,
+        askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        depth: {
+          bids: data.bids?.map((b) => ({
+            price: b.price,
+            quantity: b.quantity,
+            orders: b.orders || 0,
+          })) || [],
+          asks: data.asks?.map((a) => ({
+            price: a.price,
+            quantity: a.quantity,
+            orders: a.orders || 0,
+          })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+
+      // Also emit depth data separately for UI components
+      if (tick.depth) {
+        this.emitDepth({
+          symbol,
+          exchange,
+          bids: tick.depth.bids,
+          asks: tick.depth.asks,
+        });
+      }
+    });
+
+    // Listen for status/connection events
+    this.statusUnlisten = await listen<{
+      provider: string;
+      status: string;
+      message?: string;
+      timestamp: number;
+    }>('angelone_status', (event) => {
+      const status = event.payload;
+      console.log(`[AngelOne WebSocket] Status: ${status.status} - ${status.message || ''}`);
+
+      if (status.status === 'disconnected' || status.status === 'error') {
+        this.wsConnected = false;
+        if (!this.usePollingFallback) {
+          console.warn('[AngelOne] WebSocket disconnected, enabling polling fallback');
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      } else if (status.status === 'connected') {
+        this.wsConnected = true;
+        if (this.usePollingFallback) {
+          console.log('[AngelOne] WebSocket reconnected, disabling polling fallback');
+          this.usePollingFallback = false;
+          this.stopQuotePolling();
+        }
+      }
+    });
+
+    this.wsConnected = true;
+  }
+
+  private async disconnectRealWebSocket(): Promise<void> {
+    if (this.tickerUnlisten) {
+      this.tickerUnlisten();
+      this.tickerUnlisten = null;
+    }
+    if (this.orderbookUnlisten) {
+      this.orderbookUnlisten();
+      this.orderbookUnlisten = null;
+    }
+    if (this.statusUnlisten) {
+      this.statusUnlisten();
+      this.statusUnlisten = null;
+    }
+
+    try {
+      await invoke('angelone_ws_disconnect');
+    } catch (err) {
+      console.warn('[AngelOne] WebSocket disconnect error:', err);
+    }
+
+    this.wsConnected = false;
   }
 
   private startQuotePolling(): void {
     this.stopQuotePolling();
+
+    console.log('[AngelOne] Starting REST API polling (fallback mode, 2 min interval)');
 
     // Poll every 2 minutes (to stay within rate limits)
     this.quotePollingInterval = setInterval(async () => {
@@ -997,10 +1171,12 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   }
 
   async disconnectWebSocket(): Promise<void> {
+    await this.disconnectRealWebSocket();
     this.stopQuotePolling();
     this.pollingSymbols.clear();
+    this.usePollingFallback = false;
     this.wsConnected = false;
-    console.log('[AngelOne] Polling stopped');
+    console.log('[AngelOne] WebSocket disconnected');
   }
 
   protected async subscribeInternal(
@@ -1010,16 +1186,69 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   ): Promise<void> {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.set(key, { symbol, exchange });
-    console.log(`[AngelOne] Added ${key} to polling (${this.pollingSymbols.size} total)`);
 
-    // Trigger immediate poll
-    this.pollQuotesSequentially();
+    // Get token and store in map for lookup
+    const instrument = await this.getInstrument(symbol, exchange);
+    const token = instrument?.token || '0';
+    this.tokenSymbolMap.set(token, { symbol, exchange });
+
+    if (this.wsConnected && !this.usePollingFallback) {
+      try {
+        const wsMode = toAngelOneWSMode(mode);
+
+        await invoke('angelone_ws_subscribe', {
+          symbol: token,
+          exchange: ANGELONE_EXCHANGE_MAP[exchange] || exchange,
+          mode: wsMode,
+        });
+
+        console.log(`[AngelOne] ✓ WebSocket subscribed to ${symbol} (token: ${token}, mode: ${wsMode})`);
+      } catch (error) {
+        console.error(`[AngelOne] WebSocket subscribe failed:`, error);
+        if (!this.usePollingFallback) {
+          this.usePollingFallback = true;
+          this.startQuotePolling();
+        }
+      }
+    } else {
+      console.log(`[AngelOne] Added ${key} to polling (${this.pollingSymbols.size} total)`);
+      if (this.usePollingFallback) {
+        this.pollQuotesSequentially();
+      }
+    }
   }
 
   protected async unsubscribeInternal(symbol: string, exchange: StockExchange): Promise<void> {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.delete(key);
-    console.log(`[AngelOne] Removed ${key} from polling`);
+
+    // Get token
+    const instrument = await this.getInstrument(symbol, exchange);
+    const token = instrument?.token || '0';
+    this.tokenSymbolMap.delete(token);
+
+    if (this.wsConnected && !this.usePollingFallback) {
+      try {
+        await invoke('angelone_ws_unsubscribe', {
+          symbol: token,
+          exchange: ANGELONE_EXCHANGE_MAP[exchange] || exchange,
+        });
+        console.log(`[AngelOne] ✓ WebSocket unsubscribed from ${symbol}`);
+      } catch (error) {
+        console.warn(`[AngelOne] WebSocket unsubscribe failed:`, error);
+      }
+    } else {
+      console.log(`[AngelOne] Removed ${key} from polling`);
+    }
+  }
+
+  async logout(): Promise<void> {
+    await this.disconnectRealWebSocket();
+    this.stopQuotePolling();
+    this.pollingSymbols.clear();
+    this.tokenSymbolMap.clear();
+    this.usePollingFallback = false;
+    await super.logout();
   }
 
   // ============================================================================

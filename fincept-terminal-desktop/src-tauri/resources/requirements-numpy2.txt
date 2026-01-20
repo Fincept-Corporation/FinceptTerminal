@@ -58,8 +58,8 @@ anthropic>=0.71.0,<1.0
 google-generativeai>=0.8.5,<1.0
 langchain>=0.1.0
 langchain-community>=0.0.1
-litellm>=1.73
 tiktoken>=0.5.0
+# Note: litellm removed - model data extracted to llm_models_data.json (240KB static file)
 
 # ML/DL (NumPy 2.x compatible)
 # PyTorch 2.3.1+ doesn't support macOS Intel, use 2.2.2 for compatibility

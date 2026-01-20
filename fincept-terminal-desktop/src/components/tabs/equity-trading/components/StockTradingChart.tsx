@@ -17,6 +17,7 @@ interface StockTradingChartProps {
   exchange: StockExchange;
   interval?: TimeFrame;
   height?: number;
+  timezone?: string; // e.g., 'Asia/Kolkata' for IST
 }
 
 // Available timeframes
@@ -53,12 +54,36 @@ const timeframeToDays = (tf: TimeFrame): number => {
   }
 };
 
+// Map exchange to timezone
+const EXCHANGE_TIMEZONES: Record<string, string> = {
+  // Indian exchanges - IST (UTC+5:30)
+  NSE: 'Asia/Kolkata',
+  BSE: 'Asia/Kolkata',
+  MCX: 'Asia/Kolkata',
+  NFO: 'Asia/Kolkata',
+  BFO: 'Asia/Kolkata',
+  CDS: 'Asia/Kolkata',
+  // US exchanges - Eastern Time
+  NYSE: 'America/New_York',
+  NASDAQ: 'America/New_York',
+  AMEX: 'America/New_York',
+  // European exchanges
+  LSE: 'Europe/London',
+  XETRA: 'Europe/Berlin',
+  EURONEXT: 'Europe/Paris',
+  // Default
+  DEFAULT: 'UTC',
+};
+
 export function StockTradingChart({
   symbol,
   exchange,
   interval: initialInterval = '5m',
-  height
+  height,
+  timezone: propTimezone
 }: StockTradingChartProps) {
+  // Auto-detect timezone based on exchange if not provided
+  const timezone = propTimezone || EXCHANGE_TIMEZONES[exchange] || EXCHANGE_TIMEZONES.DEFAULT;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedInterval, setSelectedInterval] = useState<TimeFrame>(initialInterval);
@@ -324,6 +349,7 @@ export function StockTradingChart({
               showVolume={true}
               showToolbar={true}
               showHeader={false}
+              timezone={timezone}
             />
           </div>
         )}

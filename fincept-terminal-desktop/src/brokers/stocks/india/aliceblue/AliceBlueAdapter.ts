@@ -5,6 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
 import type {
   StockBrokerMetadata,
@@ -65,9 +66,15 @@ export class AliceBlueAdapter extends BaseStockBrokerAdapter {
   private encKey: string | null = null;
   private sessionId: string | null = null;
 
-  // REST API polling for quotes
+  // Tauri event unlisteners for WebSocket events
+  private tickerUnlisten: UnlistenFn | null = null;
+  private orderbookUnlisten: UnlistenFn | null = null;
+  private statusUnlisten: UnlistenFn | null = null;
+
+  // Fallback: REST API polling for quotes
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
+  private usePollingFallback: boolean = false;
 
   // ============================================================================
   // Authentication
@@ -613,87 +620,128 @@ export class AliceBlueAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // REST API Polling (replaces WebSocket)
+  // WebSocket - Real WebSocket via Rust Backend
   // ============================================================================
 
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
     try {
-      // Start REST API polling
-      this.startQuotePolling();
-      this.wsConnected = true;
-      console.log('AliceBlue: REST API polling started (2 min interval)');
+      await this.connectRealWebSocket();
+      console.log('[AliceBlue] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.error('Failed to start AliceBlue polling:', error);
-      throw error;
+      console.warn('[AliceBlue] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
     }
   }
 
-  /**
-   * Start REST API polling for quotes
-   */
+  private async connectRealWebSocket(): Promise<void> {
+    if (!this.accessToken || !this.userId) {
+      throw new Error('Access token and user ID required');
+    }
+
+    const result = await invoke<{ success: boolean; data?: boolean; error?: string }>('aliceblue_ws_connect', {
+      userId: this.userId,
+      accessToken: this.accessToken,
+    });
+
+    if (!result.success) throw new Error(result.error || 'WebSocket connection failed');
+
+    this.tickerUnlisten = await listen<{
+      provider: string; symbol: string; price: number; bid?: number; ask?: number;
+      volume?: number; change_percent?: number; timestamp: number;
+    }>('aliceblue_ticker', (event) => {
+      const tick = event.payload;
+      this.emitTick({
+        symbol: tick.symbol, exchange: 'NSE' as StockExchange, mode: 'quote',
+        lastPrice: tick.price, bid: tick.bid, ask: tick.ask,
+        volume: tick.volume || 0, changePercent: tick.change_percent || 0, timestamp: tick.timestamp,
+      });
+    });
+
+    this.orderbookUnlisten = await listen<{
+      provider: string; symbol: string;
+      bids: Array<{ price: number; quantity: number; orders?: number }>; asks: Array<{ price: number; quantity: number; orders?: number }>;
+      timestamp: number;
+    }>('aliceblue_orderbook', (event) => {
+      const data = event.payload;
+      const [exchangePart, symbolPart] = data.symbol.includes(':') ? data.symbol.split(':') : ['NSE', data.symbol];
+      const symbol = symbolPart || data.symbol;
+      const exchange = (exchangePart as StockExchange) || 'NSE';
+
+      console.log(`[AliceBlue WebSocket] Depth update for ${symbol}`);
+
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      const tick: TickData = {
+        symbol, exchange, mode: 'full',
+        lastPrice: bestBid?.price || 0,
+        bid: bestBid?.price, ask: bestAsk?.price,
+        bidQty: bestBid?.quantity, askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        depth: {
+          bids: data.bids?.map((b) => ({ price: b.price, quantity: b.quantity, orders: b.orders || 0 })) || [],
+          asks: data.asks?.map((a) => ({ price: a.price, quantity: a.quantity, orders: a.orders || 0 })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+      if (tick.depth) {
+        this.emitDepth({ symbol, exchange, bids: tick.depth.bids, asks: tick.depth.asks });
+      }
+    });
+
+    this.statusUnlisten = await listen<{
+      provider: string; status: string; message?: string; timestamp: number;
+    }>('aliceblue_status', (event) => {
+      const status = event.payload;
+      if (status.status === 'disconnected' || status.status === 'error') {
+        this.wsConnected = false;
+        if (!this.usePollingFallback) { this.usePollingFallback = true; this.startQuotePolling(); }
+      } else if (status.status === 'connected') {
+        this.wsConnected = true;
+        if (this.usePollingFallback) { this.usePollingFallback = false; this.stopQuotePolling(); }
+      }
+    });
+
+    this.wsConnected = true;
+  }
+
+  private async disconnectRealWebSocket(): Promise<void> {
+    if (this.tickerUnlisten) { this.tickerUnlisten(); this.tickerUnlisten = null; }
+    if (this.orderbookUnlisten) { this.orderbookUnlisten(); this.orderbookUnlisten = null; }
+    if (this.statusUnlisten) { this.statusUnlisten(); this.statusUnlisten = null; }
+    try { await invoke('aliceblue_ws_disconnect'); } catch (err) { console.warn('[AliceBlue] WS disconnect error:', err); }
+    this.wsConnected = false;
+  }
+
   private startQuotePolling(): void {
     this.stopQuotePolling();
-
-    // Poll every 2 minutes (120000ms)
-    this.quotePollingInterval = setInterval(async () => {
-      await this.pollQuotesSequentially();
-    }, 120000);
-
-    // Initial poll
+    console.log('[AliceBlue] Starting REST API polling (fallback mode, 2 min interval)');
+    this.quotePollingInterval = setInterval(async () => { await this.pollQuotesSequentially(); }, 120000);
     this.pollQuotesSequentially();
   }
 
-  /**
-   * Stop REST API polling
-   */
   private stopQuotePolling(): void {
-    if (this.quotePollingInterval) {
-      clearInterval(this.quotePollingInterval);
-      this.quotePollingInterval = null;
-    }
+    if (this.quotePollingInterval) { clearInterval(this.quotePollingInterval); this.quotePollingInterval = null; }
   }
 
-  /**
-   * Poll quotes sequentially for all subscribed symbols
-   */
   private async pollQuotesSequentially(): Promise<void> {
-    if (this.pollingSymbols.size === 0) {
-      return;
-    }
-
-    console.log(`[AliceBlue] Polling ${this.pollingSymbols.size} symbols sequentially...`);
+    if (this.pollingSymbols.size === 0) return;
 
     for (const [key, { symbol, exchange }] of this.pollingSymbols) {
       try {
         const quote = await this.getQuoteInternal(symbol, exchange);
-
-        const tick: TickData = {
-          symbol,
-          exchange,
-          mode: 'full',
-          lastPrice: quote.lastPrice,
-          open: quote.open,
-          high: quote.high,
-          low: quote.low,
-          close: quote.close,
-          volume: quote.volume,
-          change: quote.change,
-          changePercent: quote.changePercent,
-          timestamp: quote.timestamp,
-          bid: quote.bid,
-          bidQty: quote.bidQty,
-          ask: quote.ask,
-          askQty: quote.askQty,
-        };
-
-        this.emitTick(tick);
-      } catch (error) {
-        console.error(`[AliceBlue] Failed to poll ${symbol}:`, error);
-      }
-
-      // Small delay between requests to avoid rate limiting
+        this.emitTick({
+          symbol, exchange, mode: 'full',
+          lastPrice: quote.lastPrice, open: quote.open, high: quote.high, low: quote.low,
+          close: quote.close, volume: quote.volume, change: quote.change,
+          changePercent: quote.changePercent, timestamp: quote.timestamp,
+          bid: quote.bid, bidQty: quote.bidQty, ask: quote.ask, askQty: quote.askQty,
+        });
+      } catch (error) { console.error(`[AliceBlue] Failed to poll ${symbol}:`, error); }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
@@ -704,10 +752,11 @@ export class AliceBlueAdapter extends BaseStockBrokerAdapter {
    * Disconnect from WebSocket (stop polling)
    */
   async disconnectWebSocket(): Promise<void> {
+    await this.disconnectRealWebSocket();
     this.stopQuotePolling();
     this.pollingSymbols.clear();
-    this.wsConnected = false;
-    console.log('[AliceBlue] REST API polling stopped');
+    this.usePollingFallback = false;
+    console.log('[AliceBlue] WebSocket disconnected');
   }
 
   protected async subscribeInternal(
@@ -719,10 +768,22 @@ export class AliceBlueAdapter extends BaseStockBrokerAdapter {
       const key = `${exchange}:${symbol}`;
       this.pollingSymbols.set(key, { symbol, exchange });
 
-      console.log(`AliceBlue: Added ${key} to polling list (${this.pollingSymbols.size} symbols total)`);
-
-      // Trigger immediate poll for this symbol
-      this.pollQuotesSequentially();
+      // If real WebSocket is connected, subscribe via Tauri command
+      if (this.wsConnected && !this.usePollingFallback) {
+        try {
+          await invoke('aliceblue_ws_subscribe', {
+            symbol: `${exchange}:${symbol}`,
+            mode: mode === 'full' ? 'depth' : mode === 'quote' ? 'quotes' : 'ltp',
+          });
+          console.log(`[AliceBlue] WebSocket subscribed to ${key}`);
+        } catch (err) {
+          console.warn(`[AliceBlue] WebSocket subscribe failed for ${key}, using polling:`, err);
+        }
+      } else {
+        console.log(`AliceBlue: Added ${key} to polling list (${this.pollingSymbols.size} symbols total)`);
+        // Trigger immediate poll for this symbol
+        this.pollQuotesSequentially();
+      }
     } catch (error) {
       console.error('Failed to subscribe:', error);
       throw error;
@@ -733,7 +794,17 @@ export class AliceBlueAdapter extends BaseStockBrokerAdapter {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.delete(key);
 
-    console.log(`AliceBlue: Removed ${key} from polling list (${this.pollingSymbols.size} symbols remaining)`);
+    // If real WebSocket is connected, unsubscribe via Tauri command
+    if (this.wsConnected && !this.usePollingFallback) {
+      try {
+        await invoke('aliceblue_ws_unsubscribe', { symbol: `${exchange}:${symbol}` });
+        console.log(`[AliceBlue] WebSocket unsubscribed from ${key}`);
+      } catch (err) {
+        console.warn(`[AliceBlue] WebSocket unsubscribe failed for ${key}:`, err);
+      }
+    } else {
+      console.log(`AliceBlue: Removed ${key} from polling list (${this.pollingSymbols.size} symbols remaining)`);
+    }
   }
 
   // ============================================================================

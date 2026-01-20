@@ -1,66 +1,65 @@
-// File: src/components/tabs/AgentConfigTab.tsx
-// Professional Fincept Terminal-Grade Agent Configuration Interface
-// Extended with Teams, Workflows, Tools, Structured Outputs
+/**
+ * AgentConfigTab - Professional Agent Studio Interface (v2.1)
+ *
+ * Features:
+ * - Dynamic agent discovery from backend
+ * - Full agent configuration editor (LLM, tools, memory, reasoning)
+ * - SuperAgent query routing with auto-route toggle
+ * - Execution plan builder and visualizer
+ * - Multi-agent team builder
+ * - Tools browser with selection
+ * - Chat interface with routing
+ * - System capabilities view
+ */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { resolveResource } from '@tauri-apps/api/path';
-import { readTextFile } from '@tauri-apps/plugin-fs';
 import {
-  Bot,
-  RefreshCw,
-  Play,
-  Code,
-  AlertCircle,
-  CheckCircle,
-  Eye,
-  EyeOff,
-  Users,
-  TrendingUp,
-  Globe,
-  Building2,
-  Wrench,
-  Database,
-  Brain,
-  GitBranch,
-  FileText,
-  Settings,
-  Zap,
-  Shield,
-  Activity,
-  Cpu,
-  MessageSquare,
-  Trash2,
-  Plus,
-  ChevronRight,
-  ChevronDown,
-  Search,
-  Copy,
-  Check,
+  Bot, RefreshCw, Play, Code, AlertCircle, CheckCircle,
+  Users, TrendingUp, Globe, Building2, Wrench, Brain,
+  GitBranch, Settings, Zap, MessageSquare, Trash2, Plus,
+  ChevronRight, ChevronDown, Search, Copy, Check, Cpu,
+  Sparkles, Route, ListTree, Save, Edit3, ToggleLeft, ToggleRight,
+  Loader2, Target, FileJson, Sliders, Database, Eye,
 } from 'lucide-react';
-import { getLLMConfigs } from '@/services/core/sqliteService';
+import {
+  getLLMConfigs,
+  getActiveLLMConfig,
+  type LLMConfig as DbLLMConfig,
+  LLM_PROVIDERS as DB_LLM_PROVIDERS,
+  sqliteService,
+} from '@/services/core/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
+import agentService, {
+  type AgentConfig as ServiceAgentConfig,
+  type SystemInfo,
+  type ToolsInfo,
+  type AgentCard,
+  type ExecutionPlan,
+  type PlanStep,
+  type RoutingResult,
+} from '@/services/agentService';
 
-// Fincept Professional Color Palette
-const FINCEPT = {
+// =============================================================================
+// Constants & Types
+// =============================================================================
+
+const COLORS = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
   GREEN: '#00D66F',
+  BLUE: '#3B82F6',
+  PURPLE: '#8B5CF6',
   GRAY: '#787878',
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
   BORDER: '#2A2A2A',
   HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
+  MUTED: '#4A4A4A',
 };
 
-interface AgentConfig {
+interface AgentDefinition {
   id: string;
   name: string;
   role: string;
@@ -78,190 +77,238 @@ interface AgentConfig {
   instructions: string;
 }
 
-interface SystemInfo {
-  version: string;
-  framework: string;
-  capabilities: {
-    model_providers: number;
-    tools: number;
-    tool_categories: string[];
-    vectordbs: string[];
-    embedders: string[];
-    output_models: string[];
-  };
-  features: string[];
-}
-
-interface ToolsInfo {
-  tools: Record<string, string[]>;
-  categories: string[];
-  total_count: number;
-}
-
 interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
   agentName?: string;
-  outputModel?: string;
+  routingInfo?: RoutingResult;
 }
 
-type ViewMode = 'agents' | 'teams' | 'workflows' | 'tools' | 'system' | 'chat';
+// LLMConfig is imported from sqliteService as DbLLMConfig
+
+type ViewMode = 'agents' | 'teams' | 'workflows' | 'planner' | 'tools' | 'system' | 'chat';
+
+const VIEW_MODES = [
+  { id: 'agents' as ViewMode, name: 'AGENTS', icon: Bot },
+  { id: 'teams' as ViewMode, name: 'TEAMS', icon: Users },
+  { id: 'workflows' as ViewMode, name: 'WORKFLOWS', icon: GitBranch },
+  { id: 'planner' as ViewMode, name: 'PLANNER', icon: ListTree },
+  { id: 'tools' as ViewMode, name: 'TOOLS', icon: Wrench },
+  { id: 'chat' as ViewMode, name: 'CHAT', icon: MessageSquare },
+  { id: 'system' as ViewMode, name: 'SYSTEM', icon: Cpu },
+];
+
+const OUTPUT_MODELS = [
+  { id: 'trade_signal', name: 'Trade Signal', desc: 'Buy/Sell signals with confidence' },
+  { id: 'stock_analysis', name: 'Stock Analysis', desc: 'Comprehensive stock report' },
+  { id: 'portfolio_analysis', name: 'Portfolio Analysis', desc: 'Portfolio metrics & allocation' },
+  { id: 'risk_assessment', name: 'Risk Assessment', desc: 'Risk metrics & warnings' },
+  { id: 'market_analysis', name: 'Market Analysis', desc: 'Market conditions & trends' },
+];
+
+// Use LLM_PROVIDERS from sqliteService - includes fincept-llm and all configured providers
+
+// =============================================================================
+// Component
+// =============================================================================
 
 const AgentConfigTab: React.FC = () => {
-  // Core state
+  // View state
   const [viewMode, setViewMode] = useState<ViewMode>('agents');
-  const [selectedCategory, setSelectedCategory] = useState('TraderInvestorsAgent');
-  const [agents, setAgents] = useState<AgentConfig[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
-  const [jsonText, setJsonText] = useState('');
+
+  // Agent state - now using dynamic discovery
+  const [discoveredAgents, setDiscoveredAgents] = useState<AgentCard[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<AgentCard | null>(null);
+  const [agentsByCategory, setAgentsByCategory] = useState<Record<string, AgentCard[]>>({});
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [loading, setLoading] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
-  const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [testQuery, setTestQuery] = useState('Analyze AAPL stock and provide your investment thesis.');
 
-  // Extended state
+  // Agent config editor state
+  const [editMode, setEditMode] = useState(false);
+  const [editedConfig, setEditedConfig] = useState<{
+    provider: string;
+    model_id: string;
+    temperature: number;
+    max_tokens: number;
+    tools: string[];
+    instructions: string;
+    enable_memory: boolean;
+    enable_reasoning: boolean;
+  }>({
+    provider: 'openai',
+    model_id: 'gpt-4-turbo',
+    temperature: 0.7,
+    max_tokens: 4096,
+    tools: [],
+    instructions: '',
+    enable_memory: false,
+    enable_reasoning: false,
+  });
+
+  // System state (cached via service)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [toolsInfo, setToolsInfo] = useState<ToolsInfo | null>(null);
-  const [selectedOutputModel, setSelectedOutputModel] = useState<string>('');
+  const [configuredLLMs, setConfiguredLLMs] = useState<DbLLMConfig[]>([]);
+  const [llmProvidersList, setLlmProvidersList] = useState(DB_LLM_PROVIDERS);
+
+  // Query & execution state
+  const [testQuery, setTestQuery] = useState('Analyze AAPL stock and provide your investment thesis.');
+  const [testResult, setTestResult] = useState<any>(null);
+  const [selectedOutputModel, setSelectedOutputModel] = useState('');
+  const [showJsonEditor, setShowJsonEditor] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+
+  // SuperAgent routing state
+  const [useAutoRouting, setUseAutoRouting] = useState(true);
+  const [lastRoutingResult, setLastRoutingResult] = useState<RoutingResult | null>(null);
+
+  // Team state
+  const [teamMembers, setTeamMembers] = useState<AgentCard[]>([]);
+  const [teamMode, setTeamMode] = useState<'coordinate' | 'route' | 'collaborate'>('coordinate');
+
+  // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['finance']));
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Tools state
   const [toolSearch, setToolSearch] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['finance']));
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [copiedTool, setCopiedTool] = useState<string | null>(null);
 
-  // Team state
-  const [teamMembers, setTeamMembers] = useState<AgentConfig[]>([]);
-  const [teamMode, setTeamMode] = useState<'coordinate' | 'route' | 'collaborate'>('coordinate');
+  // Workflow/Planner state
+  const [workflowSymbol, setWorkflowSymbol] = useState('AAPL');
+  const [currentPlan, setCurrentPlan] = useState<ExecutionPlan | null>(null);
+  const [planExecuting, setPlanExecuting] = useState(false);
 
-  const categories = [
-    { id: 'TraderInvestorsAgent', name: 'TRADERS', icon: TrendingUp, configFile: 'agent_definitions.json' },
-    { id: 'GeopoliticsAgents', name: 'GEOPOLITICS', icon: Globe, configFile: 'agent_definitions.json' },
-    { id: 'EconomicAgents', name: 'ECONOMICS', icon: Building2, configFile: 'agent_definitions.json' },
-    { id: 'hedgeFundAgents', name: 'HEDGE FUNDS', icon: Users, configFile: 'team_config.json' },
-  ];
+  // =============================================================================
+  // Effects
+  // =============================================================================
 
-  const viewModes = [
-    { id: 'agents' as ViewMode, name: 'AGENTS', icon: Bot },
-    { id: 'teams' as ViewMode, name: 'TEAMS', icon: Users },
-    { id: 'workflows' as ViewMode, name: 'WORKFLOWS', icon: GitBranch },
-    { id: 'tools' as ViewMode, name: 'TOOLS', icon: Wrench },
-    { id: 'chat' as ViewMode, name: 'CHAT', icon: MessageSquare },
-    { id: 'system' as ViewMode, name: 'SYSTEM', icon: Cpu },
-  ];
-
-  const outputModels = [
-    { id: 'trade_signal', name: 'Trade Signal', icon: TrendingUp, description: 'Buy/sell recommendations with confidence' },
-    { id: 'stock_analysis', name: 'Stock Analysis', icon: Activity, description: 'Comprehensive stock analysis report' },
-    { id: 'portfolio_analysis', name: 'Portfolio Analysis', icon: Database, description: 'Portfolio metrics and allocation' },
-    { id: 'risk_assessment', name: 'Risk Assessment', icon: Shield, description: 'Risk scoring and mitigation strategies' },
-    { id: 'market_analysis', name: 'Market Analysis', icon: Globe, description: 'Market trends and sentiment' },
-    { id: 'research_report', name: 'Research Report', icon: FileText, description: 'Full investment research report' },
-  ];
-
-  // Load agents on mount and category change
   useEffect(() => {
-    loadAgents();
-  }, [selectedCategory]);
-
-  // Update JSON when selected agent changes
-  useEffect(() => {
-    if (selectedAgent) {
-      setJsonText(JSON.stringify(selectedAgent, null, 2));
-    }
-  }, [selectedAgent]);
-
-  // Load system info on mount
-  useEffect(() => {
-    loadSystemInfo();
-    loadToolsInfo();
+    loadDiscoveredAgents();
+    loadSystemData();
+    loadLLMConfigs();
   }, []);
 
-  const loadSystemInfo = async () => {
+  useEffect(() => {
+    // Scroll chat to bottom
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const loadLLMConfigs = async () => {
     try {
-      const result = await invoke<string>('execute_core_agent', {
-        command: 'system_info',
-        args: [],
-      });
-      const parsed = JSON.parse(result);
-      if (parsed.success) {
-        setSystemInfo(parsed);
+      // Load configured LLMs from settings database
+      const configs = await getLLMConfigs();
+      setConfiguredLLMs(configs);
+
+      // Set active config as default if available
+      const activeConfig = await getActiveLLMConfig();
+      if (activeConfig) {
+        setEditedConfig(prev => ({
+          ...prev,
+          provider: activeConfig.provider,
+          model_id: activeConfig.model,
+        }));
+      } else if (configs.length > 0) {
+        // Use first configured LLM if no active one
+        setEditedConfig(prev => ({
+          ...prev,
+          provider: configs[0].provider,
+          model_id: configs[0].model,
+        }));
       }
+
+      console.log('[AgentConfigTab] Loaded LLM configs from settings:', configs.length);
     } catch (err) {
-      console.error('Failed to load system info:', err);
+      console.error('Failed to load LLM configs:', err);
     }
   };
 
-  const loadToolsInfo = async () => {
-    try {
-      const result = await invoke<string>('execute_core_agent', {
-        command: 'list_tools',
-        args: [],
-      });
-      const parsed = JSON.parse(result);
-      if (parsed.success) {
-        setToolsInfo(parsed);
-      }
-    } catch (err) {
-      console.error('Failed to load tools info:', err);
-    }
+  const loadSystemData = async () => {
+    const [sysInfo, tools] = await Promise.all([
+      agentService.getSystemInfo(),
+      agentService.getTools(),
+    ]);
+    if (sysInfo) setSystemInfo(sysInfo);
+    if (tools) setToolsInfo(tools);
   };
 
-  const loadAgents = async () => {
+  const loadDiscoveredAgents = async () => {
     setLoading(true);
     setError(null);
-    setAgents([]);
-    setSelectedAgent(null);
 
     try {
-      const category = categories.find(c => c.id === selectedCategory);
-      if (!category) {
-        setError('Invalid category');
-        setLoading(false);
-        return;
-      }
+      // Use the new discover_agents endpoint
+      const agents = await agentService.discoverAgents();
+      setDiscoveredAgents(agents);
 
-      const configPath = `resources/scripts/agents/${selectedCategory}/configs/${category.configFile}`;
+      // Group by category
+      const byCategory: Record<string, AgentCard[]> = { all: agents };
+      agents.forEach(agent => {
+        const cat = agent.category || 'other';
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(agent);
+      });
+      setAgentsByCategory(byCategory);
 
-      try {
-        const resourcePath = await resolveResource(configPath);
-        const content = await readTextFile(resourcePath);
-        const data = JSON.parse(content);
-
-        const agentList = data.agents || [];
-        setAgents(agentList);
-        if (agentList.length > 0) {
-          setSelectedAgent(agentList[0]);
-        }
-      } catch (fileError) {
-        try {
-          const result = await invoke<string>('read_agent_config', {
-            category: selectedCategory,
-            configFile: category.configFile,
-          });
-          const data = JSON.parse(result);
-          const agentList = data.agents || [];
-          setAgents(agentList);
-          if (agentList.length > 0) {
-            setSelectedAgent(agentList[0]);
-          }
-        } catch (invokeError) {
-          console.error('Failed to load agents via invoke:', invokeError);
-          setError(`Failed to load agents: ${fileError}`);
-        }
+      if (agents.length > 0) {
+        setSelectedAgent(agents[0]);
+        updateEditedConfigFromAgent(agents[0]);
       }
     } catch (err: any) {
-      console.error('Failed to load agents:', err);
       setError(err.toString());
+      // Fallback to legacy loading
+      await loadLegacyAgents();
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchApiKeysFromSettings = async (): Promise<Record<string, string>> => {
+  const loadLegacyAgents = async () => {
+    // Fallback to reading config files directly
+    try {
+      const result = await invoke<string>('list_available_agents');
+      const agents = JSON.parse(result) as AgentCard[];
+      setDiscoveredAgents(agents);
+
+      const byCategory: Record<string, AgentCard[]> = { all: agents };
+      agents.forEach(agent => {
+        const cat = agent.category || 'other';
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(agent);
+      });
+      setAgentsByCategory(byCategory);
+    } catch (err) {
+      console.error('Legacy agent loading failed:', err);
+    }
+  };
+
+  const updateEditedConfigFromAgent = (agent: AgentCard) => {
+    const config = agent.config || {};
+    const model = config.model || {};
+    setEditedConfig({
+      provider: model.provider || 'openai',
+      model_id: model.model_id || 'gpt-4-turbo',
+      temperature: model.temperature ?? 0.7,
+      max_tokens: model.max_tokens ?? 4096,
+      tools: config.tools || [],
+      instructions: config.instructions || '',
+      enable_memory: config.memory?.enabled || false,
+      enable_reasoning: config.reasoning || false,
+    });
+    setJsonText(JSON.stringify(agent, null, 2));
+  };
+
+  // =============================================================================
+  // API Key Helper
+  // =============================================================================
+
+  const getApiKeys = async (): Promise<Record<string, string>> => {
     try {
       const llmConfigs = await getLLMConfigs();
       const apiKeys: Record<string, string> = {};
@@ -271,195 +318,241 @@ const AgentConfigTab: React.FC = () => {
           const providerUpper = config.provider.toUpperCase();
           apiKeys[`${providerUpper}_API_KEY`] = config.api_key;
           apiKeys[config.provider] = config.api_key;
-          apiKeys[providerUpper] = config.api_key;
         }
       }
-
       return apiKeys;
-    } catch (err) {
-      console.error('Failed to fetch API keys from settings:', err);
+    } catch {
       return {};
     }
   };
 
-  const runAgent = async (query: string, outputModel?: string) => {
-    if (!selectedAgent || !query.trim()) return;
+  // =============================================================================
+  // Agent Execution
+  // =============================================================================
+
+  const runAgent = async () => {
+    if (!testQuery.trim()) return;
 
     setLoading(true);
     setError(null);
     setTestResult(null);
-    setSuccess(null);
 
     try {
-      const apiKeys = await fetchApiKeysFromSettings();
-      const provider = selectedAgent.llm_config.provider;
+      const apiKeys = await getApiKeys();
 
-      if (!apiKeys[provider] && !apiKeys[`${provider.toUpperCase()}_API_KEY`] && provider !== 'ollama' && provider !== 'fincept') {
-        setError(`No API key found for ${provider}. Configure it in Settings > LLM Config.`);
-        setLoading(false);
-        return;
-      }
+      // Check if we should use auto-routing
+      if (useAutoRouting) {
+        // First, route the query
+        const routingResult = await agentService.routeQuery(testQuery, apiKeys);
+        setLastRoutingResult(routingResult);
 
-      const config = {
-        model: {
-          provider: selectedAgent.llm_config.provider,
-          model_id: selectedAgent.llm_config.model_id,
-          temperature: selectedAgent.llm_config.temperature,
-          max_tokens: selectedAgent.llm_config.max_tokens,
-        },
-        instructions: selectedAgent.instructions,
-        tools: selectedTools.length > 0 ? selectedTools : selectedAgent.tools,
-        memory: { enabled: selectedAgent.enable_memory },
-        debug: false,
-      };
+        // Add system message about routing
+        setChatMessages(prev => [
+          ...prev,
+          {
+            role: 'system',
+            content: `🎯 Routed to: ${routingResult.agent_id} (${routingResult.intent}) - Confidence: ${(routingResult.confidence * 100).toFixed(0)}%`,
+            timestamp: new Date(),
+            routingInfo: routingResult,
+          },
+        ]);
 
-      let result: string;
+        // Execute with routing
+        const result = await agentService.executeRoutedQuery(testQuery, apiKeys);
+        setTestResult(result);
 
-      if (outputModel) {
-        const queryJson = JSON.stringify({ query, output_model: outputModel });
-        result = await invoke<string>('execute_core_agent', {
-          command: 'run_structured',
-          args: [queryJson, JSON.stringify(config), JSON.stringify(apiKeys)],
-        });
+        setChatMessages(prev => [
+          ...prev,
+          { role: 'user', content: testQuery, timestamp: new Date() },
+          {
+            role: 'assistant',
+            content: result.response || result.error || JSON.stringify(result, null, 2),
+            timestamp: new Date(),
+            agentName: routingResult.agent_id,
+          },
+        ]);
       } else {
-        const queryJson = JSON.stringify({ query });
-        result = await invoke<string>('execute_core_agent', {
-          command: 'run',
-          args: [queryJson, JSON.stringify(config), JSON.stringify(apiKeys)],
-        });
+        // Use selected agent directly
+        const config = agentService.buildAgentConfig(
+          editedConfig.provider,
+          editedConfig.model_id,
+          editedConfig.instructions,
+          {
+            tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
+            temperature: editedConfig.temperature,
+            maxTokens: editedConfig.max_tokens,
+            memory: editedConfig.enable_memory,
+            reasoning: editedConfig.enable_reasoning,
+          }
+        );
+
+        let result;
+        if (selectedOutputModel) {
+          result = await agentService.runAgentStructured(testQuery, config, selectedOutputModel, apiKeys);
+        } else {
+          result = await agentService.runAgent(testQuery, config, apiKeys);
+        }
+
+        setTestResult(result);
+
+        setChatMessages(prev => [
+          ...prev,
+          { role: 'user', content: testQuery, timestamp: new Date() },
+          {
+            role: 'assistant',
+            content: result.response || result.error || JSON.stringify(result, null, 2),
+            timestamp: new Date(),
+            agentName: selectedAgent?.name || 'Agent',
+          },
+        ]);
       }
 
-      const parsed = JSON.parse(result);
-      setTestResult(parsed);
-
-      // Add to chat history
-      setChatMessages(prev => [
-        ...prev,
-        { role: 'user', content: query, timestamp: new Date() },
-        {
-          role: 'assistant',
-          content: parsed.response || parsed.error || JSON.stringify(parsed, null, 2),
-          timestamp: new Date(),
-          agentName: selectedAgent.name,
-          outputModel
-        },
-      ]);
-
-      if (parsed.success) {
-        setSuccess('Agent executed successfully');
-        setTimeout(() => setSuccess(null), 3000);
-      }
+      setSuccess('Query executed successfully');
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
-      console.error('Failed to run agent:', err);
       setError(err.toString());
     } finally {
       setLoading(false);
     }
   };
 
-  const runTeam = async (query: string) => {
-    if (teamMembers.length === 0 || !query.trim()) return;
+  const runTeam = async () => {
+    if (teamMembers.length === 0 || !testQuery.trim()) return;
 
     setLoading(true);
     setError(null);
-    setTestResult(null);
 
     try {
-      const apiKeys = await fetchApiKeysFromSettings();
+      const apiKeys = await getApiKeys();
 
-      const teamConfig = {
-        name: 'Custom Team',
-        mode: teamMode,
-        members: teamMembers.map(agent => ({
+      const teamConfig = agentService.buildTeamConfig(
+        'Custom Team',
+        teamMode,
+        teamMembers.map(agent => ({
           name: agent.name,
-          role: agent.role,
-          model: agent.llm_config,
-          tools: agent.tools,
-          instructions: agent.instructions,
-        })),
-      };
+          role: agent.description,
+          provider: agent.config?.model?.provider || 'openai',
+          modelId: agent.config?.model?.model_id || 'gpt-4-turbo',
+          tools: agent.config?.tools || [],
+          instructions: agent.config?.instructions || '',
+        }))
+      );
 
-      const queryJson = JSON.stringify({ query });
-      const result = await invoke<string>('execute_core_agent', {
-        command: 'run_team',
-        args: [queryJson, JSON.stringify(teamConfig), JSON.stringify(apiKeys)],
-      });
-
-      const parsed = JSON.parse(result);
-      setTestResult(parsed);
+      const result = await agentService.runTeam(testQuery, teamConfig, apiKeys);
+      setTestResult(result);
 
       setChatMessages(prev => [
         ...prev,
-        { role: 'user', content: query, timestamp: new Date() },
+        { role: 'user', content: testQuery, timestamp: new Date() },
         {
           role: 'assistant',
-          content: parsed.response || parsed.error || JSON.stringify(parsed, null, 2),
+          content: result.response || result.error || JSON.stringify(result, null, 2),
           timestamp: new Date(),
           agentName: `Team (${teamMembers.length} agents)`,
         },
       ]);
 
-      if (parsed.success) {
+      if (result.success) {
         setSuccess('Team executed successfully');
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err: any) {
-      console.error('Failed to run team:', err);
       setError(err.toString());
     } finally {
       setLoading(false);
     }
   };
 
-  const runWorkflow = async (workflowType: string, input: any) => {
+  const runWorkflow = async (workflowType: string) => {
     setLoading(true);
     setError(null);
-    setTestResult(null);
 
     try {
-      const apiKeys = await fetchApiKeysFromSettings();
-
-      let command = '';
-      let queryJson = '';
+      const apiKeys = await getApiKeys();
+      let result;
 
       switch (workflowType) {
         case 'stock_analysis':
-          command = 'stock_analysis';
-          queryJson = JSON.stringify({ symbol: input.symbol });
+          result = await agentService.runStockAnalysis(workflowSymbol, apiKeys);
           break;
         case 'portfolio_rebal':
-          command = 'portfolio_rebal';
-          queryJson = JSON.stringify(input);
+          result = await agentService.runPortfolioRebalancing({ holdings: [] }, apiKeys);
           break;
         case 'risk_assessment':
-          command = 'risk_assessment';
-          queryJson = JSON.stringify(input);
+          result = await agentService.runRiskAssessment({ holdings: [] }, apiKeys);
           break;
         default:
           throw new Error(`Unknown workflow: ${workflowType}`);
       }
 
-      const result = await invoke<string>('execute_core_agent', {
-        command,
-        args: [queryJson, JSON.stringify({}), JSON.stringify(apiKeys)],
-      });
-
-      const parsed = JSON.parse(result);
-      setTestResult(parsed);
-
-      if (parsed.success) {
-        setSuccess(`${workflowType} workflow completed`);
+      setTestResult(result);
+      if (result.success) {
+        setSuccess(`${workflowType} completed`);
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err: any) {
-      console.error('Failed to run workflow:', err);
       setError(err.toString());
     } finally {
       setLoading(false);
     }
   };
 
-  const addToTeam = (agent: AgentConfig) => {
+  // =============================================================================
+  // Execution Planner
+  // =============================================================================
+
+  const createPlan = async () => {
+    if (!workflowSymbol.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const plan = await agentService.createStockAnalysisPlan(workflowSymbol);
+      if (plan) {
+        setCurrentPlan(plan);
+        setSuccess('Execution plan created');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError('Failed to create plan');
+      }
+    } catch (err: any) {
+      setError(err.toString());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const executePlan = async () => {
+    if (!currentPlan) return;
+
+    setPlanExecuting(true);
+    setError(null);
+
+    try {
+      const apiKeys = await getApiKeys();
+      const result = await agentService.executePlan(currentPlan, apiKeys);
+
+      if (result) {
+        setCurrentPlan(result);
+        if (result.is_complete) {
+          setSuccess('Plan executed successfully');
+        } else if (result.has_failed) {
+          setError('Plan execution failed');
+        }
+      }
+    } catch (err: any) {
+      setError(err.toString());
+    } finally {
+      setPlanExecuting(false);
+    }
+  };
+
+  // =============================================================================
+  // Team Management
+  // =============================================================================
+
+  const addToTeam = (agent: AgentCard) => {
     if (!teamMembers.find(m => m.id === agent.id)) {
       setTeamMembers(prev => [...prev, agent]);
     }
@@ -469,24 +562,16 @@ const AgentConfigTab: React.FC = () => {
     setTeamMembers(prev => prev.filter(m => m.id !== agentId));
   };
 
-  const toggleCategory = (category: string) => {
+  // =============================================================================
+  // Tools Management
+  // =============================================================================
+
+  const toggleToolCategory = (category: string) => {
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(category)) {
-        newSet.delete(category);
-      } else {
-        newSet.add(category);
-      }
+      if (newSet.has(category)) newSet.delete(category);
+      else newSet.add(category);
       return newSet;
-    });
-  };
-
-  const toggleTool = (tool: string) => {
-    setSelectedTools(prev => {
-      if (prev.includes(tool)) {
-        return prev.filter(t => t !== tool);
-      }
-      return [...prev, tool];
     });
   };
 
@@ -496,428 +581,447 @@ const AgentConfigTab: React.FC = () => {
     setTimeout(() => setCopiedTool(null), 2000);
   };
 
-  const handleChatSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-
-    if (viewMode === 'teams' && teamMembers.length > 0) {
-      runTeam(chatInput);
-    } else if (selectedAgent) {
-      runAgent(chatInput, selectedOutputModel || undefined);
-    }
-    setChatInput('');
+  const toggleToolSelection = (tool: string) => {
+    setSelectedTools(prev =>
+      prev.includes(tool) ? prev.filter(t => t !== tool) : [...prev, tool]
+    );
+    // Also update edited config
+    setEditedConfig(prev => ({
+      ...prev,
+      tools: prev.tools.includes(tool)
+        ? prev.tools.filter(t => t !== tool)
+        : [...prev.tools, tool],
+    }));
   };
 
-  const filteredTools = toolsInfo ? Object.entries(toolsInfo.tools).reduce((acc, [category, tools]) => {
-    const filtered = tools.filter(tool =>
-      tool.toLowerCase().includes(toolSearch.toLowerCase()) ||
-      category.toLowerCase().includes(toolSearch.toLowerCase())
-    );
-    if (filtered.length > 0) {
-      acc[category] = filtered;
-    }
-    return acc;
-  }, {} as Record<string, string[]>) : {};
+  // =============================================================================
+  // Render: Agent Config Editor
+  // =============================================================================
 
-  const CategoryIcon = categories.find(c => c.id === selectedCategory)?.icon || Bot;
+  const renderAgentConfigEditor = () => (
+    <div className="space-y-4 p-4 rounded-lg" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: COLORS.WHITE }}>
+          <Sliders size={16} style={{ color: COLORS.ORANGE }} />
+          Agent Configuration
+        </h3>
+        <button
+          onClick={() => setEditMode(!editMode)}
+          className="px-2 py-1 rounded text-xs flex items-center gap-1"
+          style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
+        >
+          <Edit3 size={12} />
+          {editMode ? 'Done' : 'Edit'}
+        </button>
+      </div>
 
-  // Render different views
-  const renderAgentsView = () => (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-      {/* Left Panel - Agent List */}
-      <div style={{
-        width: '280px',
-        borderRight: `1px solid ${FINCEPT.BORDER}`,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: FINCEPT.PANEL_BG
-      }}>
-        {/* Category Tabs */}
-        <div style={{
-          padding: '8px',
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '4px'
-        }}>
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                style={{
-                  padding: '4px 8px',
-                  backgroundColor: selectedCategory === cat.id ? FINCEPT.ORANGE : 'transparent',
-                  border: `1px solid ${selectedCategory === cat.id ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
-                  color: selectedCategory === cat.id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                  cursor: 'pointer',
-                  fontSize: '8px',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <Icon size={10} />
-                {cat.name}
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{
-          padding: '8px 12px',
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.HEADER_BG,
-          fontSize: '11px',
-          fontWeight: 600,
-          color: FINCEPT.GRAY
-        }}>
-          AVAILABLE AGENTS ({agents.length})
-        </div>
-
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-          {loading && agents.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px', color: FINCEPT.GRAY }}>
-              <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto' }} />
-              <div style={{ marginTop: '8px', fontSize: '10px' }}>Loading agents...</div>
-            </div>
-          ) : agents.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px', color: FINCEPT.GRAY }}>
-              <AlertCircle size={20} style={{ margin: '0 auto' }} />
-              <div style={{ marginTop: '8px', fontSize: '10px' }}>No agents found</div>
-            </div>
-          ) : (
-            agents.map((agent) => (
-              <div
-                key={agent.id}
-                style={{
-                  marginBottom: '6px',
-                  border: `1px solid ${selectedAgent?.id === agent.id ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
-                  backgroundColor: selectedAgent?.id === agent.id ? FINCEPT.HOVER : 'transparent',
-                }}
-              >
+      {/* LLM Selection - Only from Settings */}
+      {configuredLLMs.length > 0 ? (
+        <div className="p-3 rounded-lg" style={{ backgroundColor: COLORS.DARK_BG, border: `1px solid ${COLORS.GREEN}40` }}>
+          <div className="text-xs font-medium mb-2 flex items-center gap-2" style={{ color: COLORS.GREEN }}>
+            <CheckCircle size={12} />
+            SELECT LLM (from Settings)
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {configuredLLMs.map((llm, idx) => {
+              const hasKey = !!llm.api_key && llm.api_key.length > 0;
+              const isSelected = editedConfig.provider === llm.provider && editedConfig.model_id === llm.model;
+              return (
                 <button
-                  onClick={() => setSelectedAgent(agent)}
+                  key={idx}
+                  onClick={() => editMode && setEditedConfig(prev => ({
+                    ...prev,
+                    provider: llm.provider,
+                    model_id: llm.model,
+                  }))}
+                  className="px-3 py-2 rounded text-xs flex items-center gap-2 transition-colors"
                   style={{
-                    width: '100%',
-                    padding: '10px',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    color: FINCEPT.WHITE,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: '10px',
+                    backgroundColor: isSelected ? COLORS.ORANGE : COLORS.BORDER,
+                    color: COLORS.WHITE,
+                    cursor: editMode ? 'pointer' : 'default',
+                    opacity: hasKey ? 1 : 0.5,
                   }}
                 >
-                  <div style={{ fontWeight: 600, color: FINCEPT.CYAN, marginBottom: '4px' }}>
-                    {agent.name}
-                  </div>
-                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '4px', lineHeight: 1.3 }}>
-                    {agent.role?.substring(0, 60)}{agent.role?.length > 60 ? '...' : ''}
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    <span style={{
-                      padding: '2px 6px',
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      fontSize: '8px',
-                      color: FINCEPT.YELLOW
-                    }}>
-                      {agent.llm_config?.provider || 'N/A'}
-                    </span>
+                  {llm.is_active && <span style={{ color: COLORS.GREEN }}>●</span>}
+                  <span className="font-medium">{llm.provider}</span>
+                  <span style={{ color: isSelected ? COLORS.WHITE : COLORS.GRAY }}>/ {llm.model}</span>
+                  {!hasKey && <AlertCircle size={10} style={{ color: COLORS.RED }} />}
+                </button>
+              );
+            })}
+          </div>
+          {configuredLLMs.some(l => !l.api_key || l.api_key.length === 0) && (
+            <div className="text-xs mt-2" style={{ color: COLORS.RED }}>
+              ⚠ Some providers missing API keys - configure in Settings → LLM Configuration
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-3 rounded-lg" style={{ backgroundColor: COLORS.DARK_BG, border: `1px solid ${COLORS.RED}40` }}>
+          <div className="text-xs font-medium mb-2 flex items-center gap-2" style={{ color: COLORS.RED }}>
+            <AlertCircle size={12} />
+            NO LLM CONFIGURED
+          </div>
+          <p className="text-xs" style={{ color: COLORS.GRAY }}>
+            Go to Settings → LLM Configuration to add API keys for your preferred providers.
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Current Selection Display */}
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Selected Provider</label>
+          <div
+            className="w-full px-3 py-2 rounded text-sm"
+            style={{
+              backgroundColor: COLORS.DARK_BG,
+              color: COLORS.WHITE,
+              border: `1px solid ${COLORS.BORDER}`,
+            }}
+          >
+            {editedConfig.provider || 'None selected'}
+          </div>
+        </div>
+
+        {/* Current Model Display */}
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Selected Model</label>
+          <div
+            className="w-full px-3 py-2 rounded text-sm"
+            style={{
+              backgroundColor: COLORS.DARK_BG,
+              color: COLORS.WHITE,
+              border: `1px solid ${COLORS.BORDER}`,
+            }}
+          >
+            {editedConfig.model_id || 'None selected'}
+          </div>
+        </div>
+
+        {/* Temperature */}
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>
+            Temperature: {editedConfig.temperature.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.1"
+            value={editedConfig.temperature}
+            onChange={e => setEditedConfig(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+            disabled={!editMode}
+            className="w-full"
+            style={{ accentColor: COLORS.ORANGE }}
+          />
+        </div>
+
+        {/* Max Tokens */}
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Max Tokens</label>
+          <input
+            type="number"
+            value={editedConfig.max_tokens}
+            onChange={e => setEditedConfig(prev => ({ ...prev, max_tokens: parseInt(e.target.value) || 4096 }))}
+            disabled={!editMode}
+            className="w-full px-3 py-2 rounded text-sm"
+            style={{
+              backgroundColor: COLORS.DARK_BG,
+              color: COLORS.WHITE,
+              border: `1px solid ${COLORS.BORDER}`,
+              opacity: editMode ? 1 : 0.7,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Toggle Options */}
+      <div className="flex gap-4">
+        <button
+          onClick={() => editMode && setEditedConfig(prev => ({ ...prev, enable_memory: !prev.enable_memory }))}
+          className="flex items-center gap-2 px-3 py-2 rounded text-sm"
+          style={{
+            backgroundColor: editedConfig.enable_memory ? COLORS.ORANGE + '20' : COLORS.BORDER,
+            color: editedConfig.enable_memory ? COLORS.ORANGE : COLORS.GRAY,
+            cursor: editMode ? 'pointer' : 'default',
+          }}
+        >
+          {editedConfig.enable_memory ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+          Memory
+        </button>
+
+        <button
+          onClick={() => editMode && setEditedConfig(prev => ({ ...prev, enable_reasoning: !prev.enable_reasoning }))}
+          className="flex items-center gap-2 px-3 py-2 rounded text-sm"
+          style={{
+            backgroundColor: editedConfig.enable_reasoning ? COLORS.PURPLE + '20' : COLORS.BORDER,
+            color: editedConfig.enable_reasoning ? COLORS.PURPLE : COLORS.GRAY,
+            cursor: editMode ? 'pointer' : 'default',
+          }}
+        >
+          {editedConfig.enable_reasoning ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+          Reasoning
+        </button>
+      </div>
+
+      {/* Instructions */}
+      {editMode && (
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Instructions</label>
+          <textarea
+            value={editedConfig.instructions}
+            onChange={e => setEditedConfig(prev => ({ ...prev, instructions: e.target.value }))}
+            rows={4}
+            className="w-full px-3 py-2 rounded text-sm font-mono"
+            style={{
+              backgroundColor: COLORS.DARK_BG,
+              color: COLORS.WHITE,
+              border: `1px solid ${COLORS.BORDER}`,
+            }}
+            placeholder="Enter agent instructions..."
+          />
+        </div>
+      )}
+
+      {/* Selected Tools */}
+      {editedConfig.tools.length > 0 && (
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>
+            Tools ({editedConfig.tools.length})
+          </label>
+          <div className="flex flex-wrap gap-1">
+            {editedConfig.tools.map(tool => (
+              <span
+                key={tool}
+                onClick={() => editMode && toggleToolSelection(tool)}
+                className="px-2 py-0.5 rounded text-xs cursor-pointer"
+                style={{ backgroundColor: COLORS.ORANGE + '30', color: COLORS.ORANGE }}
+              >
+                {tool} {editMode && '×'}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // =============================================================================
+  // Render: Agents View
+  // =============================================================================
+
+  const renderAgentsView = () => (
+    <div className="flex h-full">
+      {/* Sidebar */}
+      <div className="w-72 border-r flex flex-col" style={{ borderColor: COLORS.BORDER }}>
+        {/* Header with Refresh */}
+        <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
+          <div className="text-xs font-medium" style={{ color: COLORS.GRAY }}>
+            DISCOVERED AGENTS ({discoveredAgents.length})
+          </div>
+          <button
+            onClick={loadDiscoveredAgents}
+            disabled={loading}
+            className="p-1.5 rounded hover:bg-[#1F1F1F]"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} style={{ color: COLORS.ORANGE }} />
+          </button>
+        </div>
+
+        {/* Category Filter */}
+        <div className="p-2 border-b" style={{ borderColor: COLORS.BORDER }}>
+          <select
+            value={selectedCategory}
+            onChange={e => setSelectedCategory(e.target.value)}
+            className="w-full px-2 py-1.5 rounded text-sm"
+            style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+          >
+            <option value="all">All Categories ({discoveredAgents.length})</option>
+            {Object.entries(agentsByCategory)
+              .filter(([k]) => k !== 'all')
+              .map(([cat, agents]) => (
+                <option key={cat} value={cat}>{cat} ({agents.length})</option>
+              ))}
+          </select>
+        </div>
+
+        {/* Agent List */}
+        <div className="flex-1 overflow-y-auto p-2">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin" style={{ color: COLORS.ORANGE }} />
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {(agentsByCategory[selectedCategory] || []).map(agent => (
+                <button
+                  key={agent.id}
+                  onClick={() => {
+                    setSelectedAgent(agent);
+                    updateEditedConfigFromAgent(agent);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded text-sm transition-colors"
+                  style={{
+                    backgroundColor: selectedAgent?.id === agent.id ? COLORS.HOVER : 'transparent',
+                    color: selectedAgent?.id === agent.id ? COLORS.ORANGE : COLORS.WHITE,
+                  }}
+                >
+                  <div className="font-medium truncate">{agent.name}</div>
+                  <div className="text-xs truncate" style={{ color: COLORS.GRAY }}>
+                    {agent.category} • v{agent.version}
                   </div>
                 </button>
-                <div style={{ padding: '0 10px 8px', display: 'flex', gap: '4px' }}>
-                  <button
-                    onClick={() => addToTeam(agent)}
-                    disabled={teamMembers.some(m => m.id === agent.id)}
-                    style={{
-                      padding: '2px 6px',
-                      backgroundColor: teamMembers.some(m => m.id === agent.id) ? FINCEPT.GREEN + '40' : FINCEPT.PANEL_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      color: teamMembers.some(m => m.id === agent.id) ? FINCEPT.GREEN : FINCEPT.GRAY,
-                      cursor: teamMembers.some(m => m.id === agent.id) ? 'default' : 'pointer',
-                      fontSize: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '2px',
-                    }}
-                  >
-                    <Plus size={8} />
-                    {teamMembers.some(m => m.id === agent.id) ? 'In Team' : 'Add to Team'}
-                  </button>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Right Panel - Agent Details */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
         {selectedAgent ? (
           <>
             {/* Agent Header */}
-            <div style={{
-              padding: '12px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-              backgroundColor: FINCEPT.HEADER_BG
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+            <div className="p-4 border-b" style={{ borderColor: COLORS.BORDER }}>
+              <div className="flex items-center justify-between">
                 <div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.CYAN, marginBottom: '4px' }}>
-                    {selectedAgent.name}
-                  </div>
-                  <div style={{ fontSize: '10px', color: FINCEPT.GRAY, lineHeight: 1.4 }}>
-                    {selectedAgent.description}
-                  </div>
+                  <h2 className="text-lg font-semibold" style={{ color: COLORS.WHITE }}>{selectedAgent.name}</h2>
+                  <p className="text-sm" style={{ color: COLORS.GRAY }}>{selectedAgent.description}</p>
                 </div>
-                <button
-                  onClick={() => setShowJsonEditor(!showJsonEditor)}
-                  style={{
-                    padding: '4px 8px',
-                    backgroundColor: showJsonEditor ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: showJsonEditor ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                    cursor: 'pointer',
-                    fontSize: '9px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Code size={10} />
-                  JSON
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => addToTeam(selectedAgent)}
+                    className="px-3 py-1.5 rounded text-sm flex items-center gap-1"
+                    style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
+                  >
+                    <Plus size={14} /> Add to Team
+                  </button>
+                  <button
+                    onClick={() => setShowJsonEditor(!showJsonEditor)}
+                    className="px-3 py-1.5 rounded text-sm flex items-center gap-1"
+                    style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
+                  >
+                    <FileJson size={14} /> {showJsonEditor ? 'Hide' : 'Show'} JSON
+                  </button>
+                </div>
               </div>
 
-              {/* Output Model Selector */}
-              <div style={{ marginBottom: '8px' }}>
-                <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px' }}>STRUCTURED OUTPUT (Optional)</div>
-                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => setSelectedOutputModel('')}
-                    style={{
-                      padding: '3px 8px',
-                      backgroundColor: !selectedOutputModel ? FINCEPT.BLUE : FINCEPT.PANEL_BG,
-                      border: `1px solid ${!selectedOutputModel ? FINCEPT.BLUE : FINCEPT.BORDER}`,
-                      color: !selectedOutputModel ? FINCEPT.WHITE : FINCEPT.GRAY,
-                      cursor: 'pointer',
-                      fontSize: '8px',
-                    }}
-                  >
-                    None
-                  </button>
-                  {outputModels.map(model => (
-                    <button
-                      key={model.id}
-                      onClick={() => setSelectedOutputModel(model.id)}
-                      title={model.description}
-                      style={{
-                        padding: '3px 8px',
-                        backgroundColor: selectedOutputModel === model.id ? FINCEPT.PURPLE : FINCEPT.PANEL_BG,
-                        border: `1px solid ${selectedOutputModel === model.id ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
-                        color: selectedOutputModel === model.id ? FINCEPT.WHITE : FINCEPT.GRAY,
-                        cursor: 'pointer',
-                        fontSize: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                      }}
-                    >
-                      {model.name}
-                    </button>
+              {/* Capabilities */}
+              {selectedAgent.capabilities && selectedAgent.capabilities.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {selectedAgent.capabilities.map(cap => (
+                    <span key={cap} className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: COLORS.BLUE + '20', color: COLORS.BLUE }}>
+                      {cap}
+                    </span>
                   ))}
                 </div>
-              </div>
-
-              {/* Test Query Input */}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  value={testQuery}
-                  onChange={(e) => setTestQuery(e.target.value)}
-                  placeholder="Enter test query..."
-                  style={{
-                    flex: 1,
-                    padding: '6px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
-                    fontSize: '10px',
-                    outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={() => runAgent(testQuery, selectedOutputModel || undefined)}
-                  disabled={loading || !testQuery.trim()}
-                  style={{
-                    padding: '6px 12px',
-                    backgroundColor: FINCEPT.BLUE,
-                    border: 'none',
-                    color: FINCEPT.WHITE,
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    opacity: loading || !testQuery.trim() ? 0.5 : 1,
-                  }}
-                >
-                  <Play size={12} />
-                  {loading ? 'Running...' : 'Run'}
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* Content Area */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {showJsonEditor ? (
-                <div style={{ height: '100%' }}>
-                  <textarea
-                    value={jsonText}
-                    onChange={(e) => setJsonText(e.target.value)}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      color: FINCEPT.CYAN,
-                      padding: '12px',
-                      fontSize: '11px',
-                      fontFamily: '"IBM Plex Mono", monospace',
-                      resize: 'none',
-                      outline: 'none'
-                    }}
-                    spellCheck={false}
-                  />
-                </div>
+                <textarea
+                  value={jsonText}
+                  onChange={e => setJsonText(e.target.value)}
+                  className="w-full h-64 p-3 rounded font-mono text-sm"
+                  style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+                />
               ) : (
-                <div style={{ display: 'grid', gap: '12px' }}>
-                  {/* LLM Config */}
-                  <div>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.GRAY, marginBottom: '6px' }}>LLM CONFIGURATION</div>
-                    <div style={{
-                      padding: '8px',
-                      backgroundColor: FINCEPT.PANEL_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(4, 1fr)',
-                      gap: '8px',
-                      fontSize: '10px'
-                    }}>
-                      <div><span style={{ color: FINCEPT.GRAY }}>Provider:</span> <span style={{ color: FINCEPT.CYAN }}>{selectedAgent.llm_config?.provider}</span></div>
-                      <div><span style={{ color: FINCEPT.GRAY }}>Model:</span> <span style={{ color: FINCEPT.PURPLE }}>{selectedAgent.llm_config?.model_id}</span></div>
-                      <div><span style={{ color: FINCEPT.GRAY }}>Temp:</span> <span style={{ color: FINCEPT.YELLOW }}>{selectedAgent.llm_config?.temperature}</span></div>
-                      <div><span style={{ color: FINCEPT.GRAY }}>Max Tokens:</span> <span style={{ color: FINCEPT.YELLOW }}>{selectedAgent.llm_config?.max_tokens}</span></div>
-                    </div>
-                  </div>
+                <>
+                  {/* Config Editor */}
+                  {renderAgentConfigEditor()}
 
-                  {/* Tools */}
-                  <div>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.GRAY, marginBottom: '6px' }}>
-                      TOOLS ({selectedAgent.tools?.length || 0})
-                      {selectedTools.length > 0 && <span style={{ color: FINCEPT.GREEN }}> + {selectedTools.length} custom</span>}
-                    </div>
-                    <div style={{
-                      padding: '8px',
-                      backgroundColor: FINCEPT.PANEL_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      display: 'flex',
-                      gap: '6px',
-                      flexWrap: 'wrap'
-                    }}>
-                      {(selectedAgent.tools || []).map((tool, idx) => (
-                        <span key={idx} style={{
-                          padding: '4px 8px',
-                          backgroundColor: FINCEPT.DARK_BG,
-                          border: `1px solid ${FINCEPT.BORDER}`,
-                          color: FINCEPT.GREEN,
-                          fontSize: '9px'
-                        }}>
-                          {tool}
-                        </span>
-                      ))}
-                      {selectedTools.filter(t => !selectedAgent.tools?.includes(t)).map((tool, idx) => (
-                        <span key={`custom-${idx}`} style={{
-                          padding: '4px 8px',
-                          backgroundColor: FINCEPT.PURPLE + '30',
-                          border: `1px solid ${FINCEPT.PURPLE}`,
-                          color: FINCEPT.PURPLE,
-                          fontSize: '9px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}>
-                          {tool}
-                          <button
-                            onClick={() => toggleTool(tool)}
-                            style={{ background: 'none', border: 'none', color: FINCEPT.PURPLE, cursor: 'pointer', padding: 0 }}
-                          >
-                            <Trash2 size={8} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Instructions */}
-                  <div>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.GRAY, marginBottom: '6px' }}>INSTRUCTIONS</div>
-                    <div style={{
-                      padding: '8px',
-                      backgroundColor: FINCEPT.PANEL_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      fontSize: '10px',
-                      maxHeight: '120px',
-                      overflow: 'auto',
-                      lineHeight: '1.5',
-                      whiteSpace: 'pre-wrap',
-                    }}>
-                      {selectedAgent.instructions}
-                    </div>
-                  </div>
-
-                  {/* Test Result */}
-                  {testResult && (
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.GRAY, marginBottom: '6px' }}>
-                        RESULT {selectedOutputModel && <span style={{ color: FINCEPT.PURPLE }}>({selectedOutputModel})</span>}
+                  {/* SuperAgent Routing Toggle */}
+                  <div className="p-3 rounded-lg flex items-center justify-between" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+                    <div className="flex items-center gap-2">
+                      <Route size={16} style={{ color: COLORS.PURPLE }} />
+                      <div>
+                        <div className="text-sm font-medium" style={{ color: COLORS.WHITE }}>SuperAgent Auto-Routing</div>
+                        <div className="text-xs" style={{ color: COLORS.GRAY }}>Automatically route queries to the best agent</div>
                       </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: FINCEPT.DARK_BG,
-                        border: `1px solid ${testResult.success ? FINCEPT.GREEN : FINCEPT.RED}`,
-                        fontSize: '10px',
-                        maxHeight: '200px',
-                        overflow: 'auto',
-                        fontFamily: 'monospace'
-                      }}>
-                        <pre style={{ margin: 0, color: testResult.success ? FINCEPT.GREEN : FINCEPT.RED, whiteSpace: 'pre-wrap' }}>
-                          {testResult.response || testResult.error || JSON.stringify(testResult, null, 2)}
-                        </pre>
+                    </div>
+                    <button
+                      onClick={() => setUseAutoRouting(!useAutoRouting)}
+                      className="p-2 rounded"
+                      style={{ color: useAutoRouting ? COLORS.GREEN : COLORS.GRAY }}
+                    >
+                      {useAutoRouting ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+                    </button>
+                  </div>
+
+                  {/* Last Routing Result */}
+                  {lastRoutingResult && (
+                    <div className="p-3 rounded-lg" style={{ backgroundColor: COLORS.PURPLE + '10', border: `1px solid ${COLORS.PURPLE}40` }}>
+                      <div className="text-xs font-medium mb-1" style={{ color: COLORS.PURPLE }}>LAST ROUTING</div>
+                      <div className="text-sm" style={{ color: COLORS.WHITE }}>
+                        Intent: <span style={{ color: COLORS.ORANGE }}>{lastRoutingResult.intent}</span>
+                        {' • '}Agent: <span style={{ color: COLORS.ORANGE }}>{lastRoutingResult.agent_id}</span>
+                        {' • '}Confidence: <span style={{ color: COLORS.GREEN }}>{(lastRoutingResult.confidence * 100).toFixed(0)}%</span>
                       </div>
                     </div>
                   )}
+                </>
+              )}
+
+              {/* Query Input */}
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xs font-medium mb-1" style={{ color: COLORS.GRAY }}>OUTPUT MODEL (Optional)</div>
+                  <select
+                    value={selectedOutputModel}
+                    onChange={e => setSelectedOutputModel(e.target.value)}
+                    className="w-full px-3 py-2 rounded text-sm"
+                    style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+                  >
+                    <option value="">None (free text)</option>
+                    {OUTPUT_MODELS.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <div className="text-xs font-medium mb-1" style={{ color: COLORS.GRAY }}>QUERY</div>
+                  <textarea
+                    value={testQuery}
+                    onChange={e => setTestQuery(e.target.value)}
+                    placeholder="Enter your query..."
+                    rows={3}
+                    className="w-full px-3 py-2 rounded text-sm"
+                    style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+                  />
+                </div>
+
+                <button
+                  onClick={runAgent}
+                  disabled={loading}
+                  className="w-full py-2 rounded font-medium flex items-center justify-center gap-2"
+                  style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE, opacity: loading ? 0.5 : 1 }}
+                >
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                  {useAutoRouting ? 'Run with Auto-Routing' : 'Run Agent'}
+                </button>
+              </div>
+
+              {/* Result */}
+              {testResult && (
+                <div className="p-3 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+                  <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>RESULT</div>
+                  <pre className="text-sm whitespace-pre-wrap" style={{ color: COLORS.WHITE }}>
+                    {typeof testResult === 'string' ? testResult : JSON.stringify(testResult, null, 2)}
+                  </pre>
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: FINCEPT.GRAY,
-            fontSize: '11px'
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <CategoryIcon size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-              <div>Select an agent to view configuration</div>
+          <div className="flex-1 flex items-center justify-center" style={{ color: COLORS.GRAY }}>
+            <div className="text-center">
+              <Bot size={48} className="mx-auto mb-4 opacity-50" />
+              <p>Select an agent to view details</p>
+              <p className="text-sm mt-2">or click Refresh to discover agents</p>
             </div>
           </div>
         )}
@@ -925,735 +1029,825 @@ const AgentConfigTab: React.FC = () => {
     </div>
   );
 
+  // =============================================================================
+  // Render: Teams View
+  // =============================================================================
+
   const renderTeamsView = () => (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-      {/* Left - Team Builder */}
-      <div style={{
-        width: '300px',
-        borderRight: `1px solid ${FINCEPT.BORDER}`,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: FINCEPT.PANEL_BG
-      }}>
-        <div style={{
-          padding: '12px',
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.HEADER_BG,
-        }}>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.CYAN, marginBottom: '8px' }}>
-            TEAM MEMBERS ({teamMembers.length})
-          </div>
-          <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>
-            Add agents from the Agents view to build a team
-          </div>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {(['coordinate', 'route', 'collaborate'] as const).map(mode => (
-              <button
-                key={mode}
-                onClick={() => setTeamMode(mode)}
-                style={{
-                  padding: '4px 8px',
-                  backgroundColor: teamMode === mode ? FINCEPT.PURPLE : FINCEPT.DARK_BG,
-                  border: `1px solid ${teamMode === mode ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
-                  color: teamMode === mode ? FINCEPT.WHITE : FINCEPT.GRAY,
-                  cursor: 'pointer',
-                  fontSize: '8px',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {mode}
-              </button>
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold" style={{ color: COLORS.WHITE }}>Team Builder</h2>
+        <select
+          value={teamMode}
+          onChange={e => setTeamMode(e.target.value as any)}
+          className="px-3 py-1.5 rounded text-sm"
+          style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+        >
+          <option value="coordinate">Coordinate (Sequential)</option>
+          <option value="route">Route (Best Match)</option>
+          <option value="collaborate">Collaborate (Parallel)</option>
+        </select>
+      </div>
+
+      {/* Team Members */}
+      <div className="p-3 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+        <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>TEAM MEMBERS ({teamMembers.length})</div>
+        {teamMembers.length === 0 ? (
+          <p className="text-sm" style={{ color: COLORS.GRAY }}>Add agents from the AGENTS tab</p>
+        ) : (
+          <div className="space-y-2">
+            {teamMembers.map((agent, idx) => (
+              <div key={agent.id} className="flex items-center justify-between p-2 rounded" style={{ backgroundColor: COLORS.BORDER }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE }}>
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <div className="text-sm font-medium" style={{ color: COLORS.WHITE }}>{agent.name}</div>
+                    <div className="text-xs" style={{ color: COLORS.GRAY }}>{agent.category}</div>
+                  </div>
+                </div>
+                <button onClick={() => removeFromTeam(agent.id)} style={{ color: COLORS.RED }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
             ))}
           </div>
-        </div>
+        )}
+      </div>
 
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-          {teamMembers.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px', color: FINCEPT.GRAY }}>
-              <Users size={24} style={{ margin: '0 auto 8px', opacity: 0.3 }} />
-              <div style={{ fontSize: '10px' }}>No team members yet</div>
-              <div style={{ fontSize: '9px', marginTop: '4px' }}>Go to Agents view to add members</div>
-            </div>
-          ) : (
-            teamMembers.map((member, idx) => (
-              <div
-                key={member.id}
-                style={{
-                  padding: '10px',
-                  marginBottom: '6px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                }}
+      {/* Available Agents to Add */}
+      <div className="p-3 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+        <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>AVAILABLE AGENTS</div>
+        <div className="max-h-48 overflow-y-auto space-y-1">
+          {discoveredAgents
+            .filter(a => !teamMembers.find(m => m.id === a.id))
+            .map(agent => (
+              <button
+                key={agent.id}
+                onClick={() => addToTeam(agent)}
+                className="w-full flex items-center justify-between p-2 rounded text-sm hover:bg-[#1F1F1F]"
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.CYAN }}>
-                      {idx + 1}. {member.name}
-                    </div>
-                    <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginTop: '2px' }}>
-                      {member.role?.substring(0, 50)}...
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => removeFromTeam(member.id)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: FINCEPT.RED,
-                      cursor: 'pointer',
-                      padding: '2px',
-                    }}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+                <span style={{ color: COLORS.WHITE }}>{agent.name}</span>
+                <Plus size={14} style={{ color: COLORS.ORANGE }} />
+              </button>
+            ))}
         </div>
       </div>
 
-      {/* Right - Team Execution */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{
-          padding: '12px',
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.HEADER_BG,
-        }}>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px' }}>
-            Run Multi-Agent Team
+      {/* Query */}
+      <div>
+        <div className="text-xs font-medium mb-1" style={{ color: COLORS.GRAY }}>TEAM QUERY</div>
+        <textarea
+          value={testQuery}
+          onChange={e => setTestQuery(e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 rounded text-sm"
+          style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+        />
+      </div>
+
+      <button
+        onClick={runTeam}
+        disabled={loading || teamMembers.length === 0}
+        className="w-full py-2 rounded font-medium flex items-center justify-center gap-2"
+        style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE, opacity: (loading || teamMembers.length === 0) ? 0.5 : 1 }}
+      >
+        {loading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+        Run Team
+      </button>
+
+      {testResult && (
+        <div className="p-3 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+          <pre className="text-sm whitespace-pre-wrap" style={{ color: COLORS.WHITE }}>
+            {JSON.stringify(testResult, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+
+  // =============================================================================
+  // Render: Workflows View
+  // =============================================================================
+
+  const renderWorkflowsView = () => (
+    <div className="p-4 space-y-4">
+      <h2 className="text-lg font-semibold" style={{ color: COLORS.WHITE }}>Financial Workflows</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Stock Analysis */}
+        <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={20} style={{ color: COLORS.ORANGE }} />
+            <h3 className="font-medium" style={{ color: COLORS.WHITE }}>Stock Analysis</h3>
           </div>
-          <form onSubmit={(e) => { e.preventDefault(); runTeam(testQuery); }} style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              value={testQuery}
-              onChange={(e) => setTestQuery(e.target.value)}
-              placeholder="Enter query for the team..."
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                backgroundColor: FINCEPT.DARK_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                color: FINCEPT.WHITE,
-                fontSize: '11px',
-                outline: 'none',
-              }}
-            />
-            <button
-              type="submit"
-              disabled={loading || teamMembers.length === 0 || !testQuery.trim()}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: FINCEPT.PURPLE,
-                border: 'none',
-                color: FINCEPT.WHITE,
-                cursor: loading || teamMembers.length === 0 ? 'not-allowed' : 'pointer',
-                fontSize: '11px',
-                fontWeight: 600,
-                opacity: loading || teamMembers.length === 0 ? 0.5 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <Users size={14} />
-              {loading ? 'Running...' : 'Run Team'}
-            </button>
-          </form>
+          <input
+            type="text"
+            value={workflowSymbol}
+            onChange={e => setWorkflowSymbol(e.target.value.toUpperCase())}
+            placeholder="Symbol (e.g., AAPL)"
+            className="w-full px-3 py-2 rounded text-sm mb-3"
+            style={{ backgroundColor: COLORS.DARK_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+          />
+          <button
+            onClick={() => runWorkflow('stock_analysis')}
+            disabled={loading}
+            className="w-full py-2 rounded text-sm font-medium"
+            style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE }}
+          >
+            Analyze
+          </button>
         </div>
 
-        <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-          {testResult && (
-            <div style={{
-              padding: '12px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${testResult.success ? FINCEPT.GREEN : FINCEPT.RED}`,
-            }}>
-              <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.GRAY, marginBottom: '8px' }}>
-                TEAM RESULT
+        {/* Portfolio Rebalancing */}
+        <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Brain size={20} style={{ color: COLORS.ORANGE }} />
+            <h3 className="font-medium" style={{ color: COLORS.WHITE }}>Portfolio Rebalancing</h3>
+          </div>
+          <p className="text-xs mb-3" style={{ color: COLORS.GRAY }}>
+            Optimize your portfolio allocation based on risk/return targets.
+          </p>
+          <button
+            onClick={() => runWorkflow('portfolio_rebal')}
+            disabled={loading}
+            className="w-full py-2 rounded text-sm font-medium"
+            style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE }}
+          >
+            Rebalance
+          </button>
+        </div>
+
+        {/* Risk Assessment */}
+        <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle size={20} style={{ color: COLORS.ORANGE }} />
+            <h3 className="font-medium" style={{ color: COLORS.WHITE }}>Risk Assessment</h3>
+          </div>
+          <p className="text-xs mb-3" style={{ color: COLORS.GRAY }}>
+            Analyze portfolio risk metrics and potential vulnerabilities.
+          </p>
+          <button
+            onClick={() => runWorkflow('risk_assessment')}
+            disabled={loading}
+            className="w-full py-2 rounded text-sm font-medium"
+            style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE }}
+          >
+            Assess Risk
+          </button>
+        </div>
+      </div>
+
+      {testResult && (
+        <div className="p-3 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+          <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>WORKFLOW RESULT</div>
+          <pre className="text-sm whitespace-pre-wrap" style={{ color: COLORS.WHITE }}>
+            {JSON.stringify(testResult, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+
+  // =============================================================================
+  // Render: Planner View (NEW)
+  // =============================================================================
+
+  const renderPlannerView = () => (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold flex items-center gap-2" style={{ color: COLORS.WHITE }}>
+          <ListTree size={20} style={{ color: COLORS.ORANGE }} />
+          Execution Planner
+        </h2>
+        {currentPlan && (
+          <span
+            className="px-2 py-1 rounded text-xs"
+            style={{
+              backgroundColor: currentPlan.is_complete ? COLORS.GREEN + '20' : currentPlan.has_failed ? COLORS.RED + '20' : COLORS.ORANGE + '20',
+              color: currentPlan.is_complete ? COLORS.GREEN : currentPlan.has_failed ? COLORS.RED : COLORS.ORANGE,
+            }}
+          >
+            {currentPlan.status}
+          </span>
+        )}
+      </div>
+
+      {/* Create Plan */}
+      <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+        <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>CREATE EXECUTION PLAN</div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={workflowSymbol}
+            onChange={e => setWorkflowSymbol(e.target.value.toUpperCase())}
+            placeholder="Symbol (e.g., AAPL)"
+            className="flex-1 px-3 py-2 rounded text-sm"
+            style={{ backgroundColor: COLORS.DARK_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+          />
+          <button
+            onClick={createPlan}
+            disabled={loading}
+            className="px-4 py-2 rounded text-sm font-medium flex items-center gap-2"
+            style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE }}
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Target size={14} />}
+            Create Plan
+          </button>
+        </div>
+      </div>
+
+      {/* Plan Visualization */}
+      {currentPlan && (
+        <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-sm font-medium" style={{ color: COLORS.WHITE }}>{currentPlan.name}</div>
+              <div className="text-xs" style={{ color: COLORS.GRAY }}>{currentPlan.description}</div>
+            </div>
+            <button
+              onClick={executePlan}
+              disabled={planExecuting || currentPlan.is_complete}
+              className="px-4 py-2 rounded text-sm font-medium flex items-center gap-2"
+              style={{
+                backgroundColor: currentPlan.is_complete ? COLORS.GREEN : COLORS.ORANGE,
+                color: COLORS.WHITE,
+                opacity: planExecuting ? 0.5 : 1,
+              }}
+            >
+              {planExecuting ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+              {currentPlan.is_complete ? 'Completed' : 'Execute Plan'}
+            </button>
+          </div>
+
+          {/* Steps */}
+          <div className="space-y-2">
+            {currentPlan.steps.map((step, idx) => (
+              <div
+                key={step.id}
+                className="flex items-center gap-3 p-3 rounded"
+                style={{
+                  backgroundColor: COLORS.BORDER,
+                  borderLeft: `3px solid ${
+                    step.status === 'completed' ? COLORS.GREEN :
+                    step.status === 'failed' ? COLORS.RED :
+                    step.status === 'running' ? COLORS.ORANGE :
+                    COLORS.GRAY
+                  }`,
+                }}
+              >
+                <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: COLORS.DARK_BG, color: COLORS.GRAY }}>
+                  {idx + 1}
+                </span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium" style={{ color: COLORS.WHITE }}>{step.name}</div>
+                  <div className="text-xs" style={{ color: COLORS.GRAY }}>
+                    Type: {step.step_type}
+                    {step.dependencies.length > 0 && ` • Depends on: ${step.dependencies.join(', ')}`}
+                  </div>
+                </div>
+                <span
+                  className="text-xs px-2 py-0.5 rounded"
+                  style={{
+                    backgroundColor: step.status === 'completed' ? COLORS.GREEN + '20' :
+                      step.status === 'failed' ? COLORS.RED + '20' :
+                      step.status === 'running' ? COLORS.ORANGE + '20' :
+                      COLORS.BORDER,
+                    color: step.status === 'completed' ? COLORS.GREEN :
+                      step.status === 'failed' ? COLORS.RED :
+                      step.status === 'running' ? COLORS.ORANGE :
+                      COLORS.GRAY,
+                  }}
+                >
+                  {step.status}
+                </span>
               </div>
-              <pre style={{
-                margin: 0,
-                fontSize: '11px',
-                color: testResult.success ? FINCEPT.GREEN : FINCEPT.RED,
-                whiteSpace: 'pre-wrap',
-                fontFamily: 'monospace',
-              }}>
-                {testResult.response || testResult.error || JSON.stringify(testResult, null, 2)}
+            ))}
+          </div>
+
+          {/* Results */}
+          {currentPlan.is_complete && currentPlan.context && (
+            <div className="mt-4 p-3 rounded" style={{ backgroundColor: COLORS.DARK_BG }}>
+              <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>PLAN RESULTS</div>
+              <pre className="text-xs whitespace-pre-wrap" style={{ color: COLORS.WHITE }}>
+                {JSON.stringify(currentPlan.context, null, 2)}
               </pre>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Plan Templates */}
+      <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+        <div className="text-xs font-medium mb-3" style={{ color: COLORS.GRAY }}>PLAN TEMPLATES</div>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { id: 'stock_analysis', name: 'Stock Analysis', desc: 'Full fundamental + technical analysis' },
+            { id: 'portfolio_rebalance', name: 'Portfolio Rebalance', desc: 'Analyze and rebalance portfolio' },
+            { id: 'sector_rotation', name: 'Sector Rotation', desc: 'Identify sector opportunities' },
+            { id: 'risk_audit', name: 'Risk Audit', desc: 'Comprehensive risk assessment' },
+          ].map(template => (
+            <button
+              key={template.id}
+              onClick={() => {
+                setWorkflowSymbol('AAPL');
+                createPlan();
+              }}
+              className="p-3 rounded text-left hover:bg-[#1F1F1F] transition-colors"
+              style={{ backgroundColor: COLORS.BORDER }}
+            >
+              <div className="text-sm font-medium" style={{ color: COLORS.WHITE }}>{template.name}</div>
+              <div className="text-xs" style={{ color: COLORS.GRAY }}>{template.desc}</div>
+            </button>
+          ))}
         </div>
       </div>
     </div>
   );
 
-  const renderWorkflowsView = () => (
-    <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
-      <div style={{ fontSize: '14px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '16px' }}>
-        Financial Workflows
+  // =============================================================================
+  // Render: Tools View
+  // =============================================================================
+
+  const renderToolsView = () => (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-semibold" style={{ color: COLORS.WHITE }}>Available Tools</h2>
+        {toolsInfo && (
+          <span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: COLORS.ORANGE + '20', color: COLORS.ORANGE }}>
+            {toolsInfo.total_count} tools
+          </span>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-        {[
-          { id: 'stock_analysis', name: 'Stock Analysis', icon: TrendingUp, description: 'Comprehensive stock analysis pipeline', color: FINCEPT.GREEN },
-          { id: 'portfolio_rebal', name: 'Portfolio Rebalancing', icon: Database, description: 'Optimize portfolio allocation', color: FINCEPT.BLUE },
-          { id: 'risk_assessment', name: 'Risk Assessment', icon: Shield, description: 'Evaluate portfolio risks', color: FINCEPT.RED },
-        ].map(workflow => {
-          const Icon = workflow.icon;
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: COLORS.GRAY }} />
+        <input
+          type="text"
+          value={toolSearch}
+          onChange={e => setToolSearch(e.target.value)}
+          placeholder="Search tools..."
+          className="w-full pl-10 pr-3 py-2 rounded text-sm"
+          style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
+        />
+      </div>
+
+      {/* Selected Tools */}
+      {selectedTools.length > 0 && (
+        <div className="p-3 rounded" style={{ backgroundColor: COLORS.ORANGE + '10', border: `1px solid ${COLORS.ORANGE}40` }}>
+          <div className="text-xs font-medium mb-2" style={{ color: COLORS.ORANGE }}>SELECTED ({selectedTools.length})</div>
+          <div className="flex flex-wrap gap-1">
+            {selectedTools.map(tool => (
+              <span
+                key={tool}
+                onClick={() => toggleToolSelection(tool)}
+                className="px-2 py-0.5 rounded text-xs cursor-pointer"
+                style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE }}
+              >
+                {tool} ×
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tool Categories */}
+      <div className="space-y-2">
+        {toolsInfo?.categories?.map(category => {
+          const tools = toolsInfo.tools[category] || [];
+          const filteredTools = toolSearch
+            ? tools.filter(t => t.toLowerCase().includes(toolSearch.toLowerCase()))
+            : tools;
+
+          if (filteredTools.length === 0) return null;
+
           return (
-            <div
-              key={workflow.id}
-              style={{
-                padding: '16px',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <Icon size={20} color={workflow.color} />
-                <span style={{ fontSize: '12px', fontWeight: 600, color: FINCEPT.WHITE }}>{workflow.name}</span>
-              </div>
-              <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '12px' }}>
-                {workflow.description}
-              </div>
-              {workflow.id === 'stock_analysis' && (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    placeholder="Symbol (e.g., AAPL)"
-                    style={{
-                      flex: 1,
-                      padding: '6px 10px',
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      color: FINCEPT.WHITE,
-                      fontSize: '10px',
-                      outline: 'none',
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        runWorkflow('stock_analysis', { symbol: (e.target as HTMLInputElement).value });
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.querySelector(`input[placeholder="Symbol (e.g., AAPL)"]`) as HTMLInputElement;
-                      if (input?.value) runWorkflow('stock_analysis', { symbol: input.value });
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: workflow.color,
-                      border: 'none',
-                      color: FINCEPT.WHITE,
-                      cursor: 'pointer',
-                      fontSize: '10px',
-                    }}
-                  >
-                    Run
-                  </button>
+            <div key={category} className="rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+              <button
+                onClick={() => toggleToolCategory(category)}
+                className="w-full flex items-center justify-between p-3"
+              >
+                <span className="font-medium text-sm" style={{ color: COLORS.WHITE }}>{category}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: COLORS.GRAY }}>{filteredTools.length}</span>
+                  {expandedCategories.has(category) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </div>
+              </button>
+              {expandedCategories.has(category) && (
+                <div className="px-3 pb-3 flex flex-wrap gap-1">
+                  {filteredTools.map(tool => (
+                    <span
+                      key={tool}
+                      onClick={() => toggleToolSelection(tool)}
+                      className="px-2 py-1 rounded text-xs cursor-pointer flex items-center gap-1"
+                      style={{
+                        backgroundColor: selectedTools.includes(tool) ? COLORS.ORANGE : COLORS.BORDER,
+                        color: COLORS.WHITE,
+                      }}
+                    >
+                      {tool}
+                      <button onClick={e => { e.stopPropagation(); copyTool(tool); }}>
+                        {copiedTool === tool ? <Check size={10} /> : <Copy size={10} />}
+                      </button>
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
           );
         })}
       </div>
-
-      {testResult && (
-        <div style={{ marginTop: '16px' }}>
-          <div style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.GRAY, marginBottom: '8px' }}>
-            WORKFLOW RESULT
-          </div>
-          <div style={{
-            padding: '12px',
-            backgroundColor: FINCEPT.DARK_BG,
-            border: `1px solid ${testResult.success ? FINCEPT.GREEN : FINCEPT.RED}`,
-            maxHeight: '300px',
-            overflow: 'auto',
-          }}>
-            <pre style={{
-              margin: 0,
-              fontSize: '11px',
-              color: testResult.success ? FINCEPT.GREEN : FINCEPT.RED,
-              whiteSpace: 'pre-wrap',
-            }}>
-              {JSON.stringify(testResult, null, 2)}
-            </pre>
-          </div>
-        </div>
-      )}
     </div>
   );
 
-  const renderToolsView = () => (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Search */}
-      <div style={{
-        padding: '12px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.HEADER_BG,
-      }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <Search size={14} color={FINCEPT.GRAY} />
-          <input
-            type="text"
-            value={toolSearch}
-            onChange={(e) => setToolSearch(e.target.value)}
-            placeholder="Search tools..."
-            style={{
-              flex: 1,
-              padding: '6px 10px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.WHITE,
-              fontSize: '11px',
-              outline: 'none',
-            }}
-          />
-          <span style={{ fontSize: '10px', color: FINCEPT.GRAY }}>
-            {toolsInfo?.total_count || 0} tools available
-          </span>
-        </div>
-        {selectedTools.length > 0 && (
-          <div style={{ marginTop: '8px', display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Selected:</span>
-            {selectedTools.map(tool => (
-              <span
-                key={tool}
-                style={{
-                  padding: '2px 6px',
-                  backgroundColor: FINCEPT.PURPLE + '30',
-                  border: `1px solid ${FINCEPT.PURPLE}`,
-                  color: FINCEPT.PURPLE,
-                  fontSize: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                {tool}
-                <button
-                  onClick={() => toggleTool(tool)}
-                  style={{ background: 'none', border: 'none', color: FINCEPT.PURPLE, cursor: 'pointer', padding: 0 }}
-                >
-                  x
-                </button>
-              </span>
-            ))}
-            <button
-              onClick={() => setSelectedTools([])}
-              style={{
-                padding: '2px 6px',
-                backgroundColor: 'transparent',
-                border: `1px solid ${FINCEPT.RED}`,
-                color: FINCEPT.RED,
-                cursor: 'pointer',
-                fontSize: '8px',
-              }}
-            >
-              Clear All
-            </button>
-          </div>
-        )}
-      </div>
+  // =============================================================================
+  // Render: Chat View
+  // =============================================================================
 
-      {/* Tools List */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-        {Object.entries(filteredTools).map(([category, tools]) => (
-          <div key={category} style={{ marginBottom: '8px' }}>
-            <button
-              onClick={() => toggleCategory(category)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                color: FINCEPT.CYAN,
-                cursor: 'pointer',
-                fontSize: '11px',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                textAlign: 'left',
-              }}
-            >
-              {expandedCategories.has(category) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              {category.toUpperCase()}
-              <span style={{ color: FINCEPT.GRAY, fontWeight: 400 }}>({tools.length})</span>
-            </button>
-            {expandedCategories.has(category) && (
-              <div style={{
-                padding: '8px',
-                backgroundColor: FINCEPT.DARK_BG,
-                borderLeft: `1px solid ${FINCEPT.BORDER}`,
-                borderRight: `1px solid ${FINCEPT.BORDER}`,
-                borderBottom: `1px solid ${FINCEPT.BORDER}`,
-                display: 'flex',
-                gap: '6px',
-                flexWrap: 'wrap',
-              }}>
-                {tools.map(tool => (
-                  <button
-                    key={tool}
-                    onClick={() => toggleTool(tool)}
-                    style={{
-                      padding: '4px 8px',
-                      backgroundColor: selectedTools.includes(tool) ? FINCEPT.PURPLE + '40' : FINCEPT.PANEL_BG,
-                      border: `1px solid ${selectedTools.includes(tool) ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
-                      color: selectedTools.includes(tool) ? FINCEPT.PURPLE : FINCEPT.GREEN,
-                      cursor: 'pointer',
-                      fontSize: '9px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}
-                  >
-                    {selectedTools.includes(tool) && <Check size={10} />}
-                    {tool}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); copyTool(tool); }}
-                      style={{ background: 'none', border: 'none', color: FINCEPT.GRAY, cursor: 'pointer', padding: 0 }}
-                    >
-                      {copiedTool === tool ? <Check size={10} color={FINCEPT.GREEN} /> : <Copy size={10} />}
-                    </button>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  const handleChatSubmit = async () => {
+    if (!chatInput.trim() || loading) return;
+
+    const query = chatInput;
+    setChatInput('');
+    setTestQuery(query);
+
+    // Add user message
+    setChatMessages(prev => [...prev, { role: 'user', content: query, timestamp: new Date() }]);
+
+    setLoading(true);
+    try {
+      const apiKeys = await getApiKeys();
+
+      if (useAutoRouting) {
+        // Route and execute
+        const routingResult = await agentService.routeQuery(query, apiKeys);
+        setLastRoutingResult(routingResult);
+
+        setChatMessages(prev => [
+          ...prev,
+          {
+            role: 'system',
+            content: `🎯 Routed to: ${routingResult.agent_id} (${routingResult.intent})`,
+            timestamp: new Date(),
+            routingInfo: routingResult,
+          },
+        ]);
+
+        const result = await agentService.executeRoutedQuery(query, apiKeys);
+        setChatMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: result.response || result.error || 'No response',
+            timestamp: new Date(),
+            agentName: routingResult.agent_id,
+          },
+        ]);
+      } else {
+        // Direct agent execution
+        const config = agentService.buildAgentConfig(
+          editedConfig.provider,
+          editedConfig.model_id,
+          editedConfig.instructions,
+          {
+            tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
+            temperature: editedConfig.temperature,
+            maxTokens: editedConfig.max_tokens,
+            memory: editedConfig.enable_memory,
+          }
+        );
+
+        const result = await agentService.runAgent(query, config, apiKeys);
+        setChatMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: result.response || result.error || 'No response',
+            timestamp: new Date(),
+            agentName: selectedAgent?.name || 'Agent',
+          },
+        ]);
+      }
+    } catch (err: any) {
+      setChatMessages(prev => [
+        ...prev,
+        { role: 'system', content: `Error: ${err.message}`, timestamp: new Date() },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const renderChatView = () => (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Chat Messages */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
+    <div className="flex flex-col h-full">
+      {/* Chat Header */}
+      <div className="p-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
+        <div className="flex items-center gap-2">
+          <MessageSquare size={16} style={{ color: COLORS.ORANGE }} />
+          <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>Agent Chat</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: COLORS.GRAY }}>Auto-Route</span>
+          <button
+            onClick={() => setUseAutoRouting(!useAutoRouting)}
+            style={{ color: useAutoRouting ? COLORS.GREEN : COLORS.GRAY }}
+          >
+            {useAutoRouting ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {chatMessages.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: FINCEPT.GRAY }}>
-            <MessageSquare size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-            <div style={{ fontSize: '11px' }}>No messages yet</div>
-            <div style={{ fontSize: '10px', marginTop: '4px' }}>Select an agent and start chatting</div>
+          <div className="text-center py-8" style={{ color: COLORS.GRAY }}>
+            <Sparkles size={32} className="mx-auto mb-2" />
+            <p>Start a conversation</p>
+            <p className="text-xs mt-1">
+              {useAutoRouting ? 'Queries will be auto-routed to the best agent' : `Using: ${selectedAgent?.name || 'No agent selected'}`}
+            </p>
           </div>
         ) : (
-          chatMessages.map((msg, idx) => (
-            <div
-              key={idx}
-              style={{
-                marginBottom: '12px',
-                padding: '10px',
-                backgroundColor: msg.role === 'user' ? FINCEPT.BLUE + '20' : FINCEPT.PANEL_BG,
-                borderLeft: `3px solid ${msg.role === 'user' ? FINCEPT.BLUE : FINCEPT.GREEN}`,
-              }}
-            >
-              <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px' }}>
-                {msg.role === 'user' ? 'You' : msg.agentName || 'Agent'}
-                {msg.outputModel && <span style={{ color: FINCEPT.PURPLE }}> ({msg.outputModel})</span>}
-                <span style={{ marginLeft: '8px' }}>{msg.timestamp.toLocaleTimeString()}</span>
-              </div>
-              <div style={{ fontSize: '11px', color: FINCEPT.WHITE, whiteSpace: 'pre-wrap' }}>
-                {msg.content}
+          chatMessages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className="max-w-[85%] p-3 rounded-lg"
+                style={{
+                  backgroundColor: msg.role === 'user' ? COLORS.ORANGE :
+                    msg.role === 'system' ? COLORS.PURPLE + '20' : COLORS.PANEL_BG,
+                  color: COLORS.WHITE,
+                  border: msg.role === 'system' ? `1px solid ${COLORS.PURPLE}40` : 'none',
+                }}
+              >
+                {msg.agentName && (
+                  <div className="text-xs mb-1 flex items-center gap-1" style={{ color: COLORS.ORANGE }}>
+                    <Bot size={12} />
+                    {msg.agentName}
+                  </div>
+                )}
+                <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                <div className="text-xs mt-1 opacity-60">
+                  {msg.timestamp.toLocaleTimeString()}
+                </div>
               </div>
             </div>
           ))
         )}
+        <div ref={chatEndRef} />
       </div>
 
-      {/* Chat Input */}
-      <div style={{
-        padding: '12px',
-        borderTop: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.HEADER_BG,
-      }}>
-        <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>
-          Agent: {selectedAgent?.name || 'None selected'} | Team: {teamMembers.length} members
-        </div>
-        <form onSubmit={handleChatSubmit} style={{ display: 'flex', gap: '8px' }}>
+      {/* Input */}
+      <div className="p-4 border-t" style={{ borderColor: COLORS.BORDER }}>
+        <div className="flex gap-2">
           <input
             type="text"
             value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            placeholder="Type a message..."
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.WHITE,
-              fontSize: '11px',
-              outline: 'none',
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleChatSubmit();
+              }
             }}
+            placeholder={useAutoRouting ? 'Ask anything - auto-routed to best agent...' : 'Type a message...'}
+            className="flex-1 px-3 py-2 rounded text-sm"
+            style={{ backgroundColor: COLORS.PANEL_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
           />
           <button
-            type="submit"
-            disabled={loading || (!selectedAgent && teamMembers.length === 0)}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: FINCEPT.BLUE,
-              border: 'none',
-              color: FINCEPT.WHITE,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '11px',
-              fontWeight: 600,
-              opacity: loading ? 0.5 : 1,
-            }}
+            onClick={handleChatSubmit}
+            disabled={loading || !chatInput.trim()}
+            className="px-4 py-2 rounded flex items-center gap-2"
+            style={{ backgroundColor: COLORS.ORANGE, color: COLORS.WHITE, opacity: loading ? 0.5 : 1 }}
           >
-            {loading ? 'Sending...' : 'Send'}
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
+            Send
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );
 
+  // =============================================================================
+  // Render: System View
+  // =============================================================================
+
   const renderSystemView = () => (
-    <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold" style={{ color: COLORS.WHITE }}>System Capabilities</h2>
+        <button
+          onClick={() => loadSystemData()}
+          className="p-2 rounded"
+          style={{ backgroundColor: COLORS.BORDER }}
+        >
+          <RefreshCw size={14} style={{ color: COLORS.WHITE }} />
+        </button>
+      </div>
+
       {systemInfo ? (
-        <div style={{ display: 'grid', gap: '16px' }}>
-          {/* Header */}
-          <div style={{
-            padding: '16px',
-            backgroundColor: FINCEPT.PANEL_BG,
-            border: `1px solid ${FINCEPT.ORANGE}`,
-          }}>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.ORANGE, marginBottom: '8px' }}>
-              FinAgent Core v{systemInfo.version}
-            </div>
-            <div style={{ fontSize: '11px', color: FINCEPT.GRAY }}>
-              Powered by {systemInfo.framework} framework
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 rounded text-center" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <div className="text-2xl font-bold" style={{ color: COLORS.ORANGE }}>{systemInfo.capabilities.model_providers}</div>
+            <div className="text-xs" style={{ color: COLORS.GRAY }}>Model Providers</div>
           </div>
-
-          {/* Capabilities */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-            <div style={{ padding: '12px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.CYAN }}>{systemInfo.capabilities.model_providers}</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Model Providers</div>
-            </div>
-            <div style={{ padding: '12px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.GREEN }}>{systemInfo.capabilities.tools}</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Tools Available</div>
-            </div>
-            <div style={{ padding: '12px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.PURPLE }}>{systemInfo.capabilities.vectordbs.length}</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Vector DBs</div>
-            </div>
-            <div style={{ padding: '12px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.YELLOW }}>{systemInfo.capabilities.embedders.length}</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Embedders</div>
-            </div>
+          <div className="p-4 rounded text-center" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <div className="text-2xl font-bold" style={{ color: COLORS.ORANGE }}>{systemInfo.capabilities.tools}</div>
+            <div className="text-xs" style={{ color: COLORS.GRAY }}>Tools</div>
           </div>
-
-          {/* Features */}
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px' }}>Features</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {systemInfo.features.map(feature => (
-                <span
-                  key={feature}
-                  style={{
-                    padding: '4px 8px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.GREEN,
-                    fontSize: '9px',
-                  }}
-                >
-                  {feature.replace(/_/g, ' ')}
-                </span>
-              ))}
-            </div>
+          <div className="p-4 rounded text-center" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <div className="text-2xl font-bold" style={{ color: COLORS.ORANGE }}>{discoveredAgents.length}</div>
+            <div className="text-xs" style={{ color: COLORS.GRAY }}>Discovered Agents</div>
           </div>
-
-          {/* Output Models */}
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px' }}>Structured Output Models</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {systemInfo.capabilities.output_models.map(model => (
-                <span
-                  key={model}
-                  style={{
-                    padding: '4px 8px',
-                    backgroundColor: FINCEPT.PURPLE + '30',
-                    border: `1px solid ${FINCEPT.PURPLE}`,
-                    color: FINCEPT.PURPLE,
-                    fontSize: '9px',
-                  }}
-                >
-                  {model.replace(/_/g, ' ')}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Tool Categories */}
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px' }}>Tool Categories</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {systemInfo.capabilities.tool_categories.map(cat => (
-                <span
-                  key={cat}
-                  style={{
-                    padding: '4px 8px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.CYAN,
-                    fontSize: '9px',
-                  }}
-                >
-                  {cat}
-                </span>
-              ))}
-            </div>
+          <div className="p-4 rounded text-center" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <div className="text-2xl font-bold" style={{ color: COLORS.ORANGE }}>{configuredLLMs.length}</div>
+            <div className="text-xs" style={{ color: COLORS.GRAY }}>Configured LLMs</div>
           </div>
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '40px', color: FINCEPT.GRAY }}>
-          <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
-          <div>Loading system info...</div>
-        </div>
+        <div className="text-center py-8" style={{ color: COLORS.GRAY }}>Loading system info...</div>
       )}
-    </div>
-  );
 
-  return (
-    <div style={{
-      height: '100%',
-      backgroundColor: FINCEPT.DARK_BG,
-      color: FINCEPT.WHITE,
-      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <style>{`
-        *::-webkit-scrollbar { width: 6px; height: 6px; }
-        *::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
-        *::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; border-radius: 3px; }
-        *::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .animate-spin { animation: spin 1s linear infinite; }
-      `}</style>
-
-      {/* TOP NAVIGATION BAR */}
-      <div style={{
-        backgroundColor: FINCEPT.HEADER_BG,
-        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
-        padding: '6px 12px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Bot size={18} color={FINCEPT.ORANGE} />
-            <span style={{ color: FINCEPT.ORANGE, fontWeight: 700, fontSize: '14px', letterSpacing: '0.5px' }}>
-              AGENT STUDIO
-            </span>
-          </div>
-
-          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
-
-          {/* View Mode Selector */}
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {viewModes.map((mode) => {
-              const Icon = mode.icon;
-              return (
-                <button
-                  key={mode.id}
-                  onClick={() => setViewMode(mode.id)}
-                  style={{
-                    padding: '4px 10px',
-                    backgroundColor: viewMode === mode.id ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
-                    border: `1px solid ${viewMode === mode.id ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
-                    color: viewMode === mode.id ? FINCEPT.DARK_BG : FINCEPT.CYAN,
-                    cursor: 'pointer',
-                    fontSize: '9px',
-                    fontWeight: 600,
-                    letterSpacing: '0.5px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <Icon size={10} />
-                  {mode.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      {/* Configured LLMs from Settings */}
+      <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-medium" style={{ color: COLORS.GRAY }}>CONFIGURED LLM PROVIDERS (from Settings)</div>
           <button
-            onClick={() => { loadAgents(); loadSystemInfo(); loadToolsInfo(); }}
-            disabled={loading}
-            style={{
-              padding: '4px 10px',
-              backgroundColor: FINCEPT.PANEL_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.CYAN,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '10px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
+            onClick={() => loadLLMConfigs()}
+            className="px-2 py-1 rounded text-xs"
+            style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
           >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
         </div>
+        {configuredLLMs.length > 0 ? (
+          <div className="space-y-2">
+            {configuredLLMs.map((llm, idx) => {
+              const hasKey = !!llm.api_key && llm.api_key.length > 0;
+              return (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-2 rounded"
+                  style={{ backgroundColor: COLORS.BORDER }}
+                >
+                  <div className="flex items-center gap-2">
+                    {llm.is_active && (
+                      <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: COLORS.GREEN + '30', color: COLORS.GREEN }}>
+                        Active
+                      </span>
+                    )}
+                    <span className="text-sm font-medium" style={{ color: COLORS.WHITE }}>
+                      {llm.provider.charAt(0).toUpperCase() + llm.provider.slice(1)}
+                    </span>
+                    <span className="text-xs" style={{ color: COLORS.GRAY }}>
+                      {llm.model}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasKey ? (
+                      <span className="flex items-center gap-1 text-xs" style={{ color: COLORS.GREEN }}>
+                        <CheckCircle size={12} /> API Key Set
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs" style={{ color: COLORS.RED }}>
+                        <AlertCircle size={12} /> No API Key
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-4" style={{ color: COLORS.GRAY }}>
+            <AlertCircle size={24} className="mx-auto mb-2" />
+            <p className="text-sm">No LLM providers configured</p>
+            <p className="text-xs mt-1">Go to Settings → LLM Configuration to add providers</p>
+          </div>
+        )}
+        {configuredLLMs.filter(l => !l.api_key || l.api_key.length === 0).length > 0 && (
+          <div className="mt-3 p-2 rounded text-xs" style={{ backgroundColor: COLORS.RED + '10', color: COLORS.RED }}>
+            {configuredLLMs.filter(l => !l.api_key || l.api_key.length === 0).length} provider(s) missing API keys. Go to Settings → LLM Configuration to add them.
+          </div>
+        )}
       </div>
 
-      {/* Status Messages */}
-      {(error || success) && (
-        <div style={{
-          padding: '8px 12px',
-          backgroundColor: error ? FINCEPT.RED + '20' : FINCEPT.GREEN + '20',
-          borderBottom: `1px solid ${error ? FINCEPT.RED : FINCEPT.GREEN}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontSize: '10px'
-        }}>
-          {error ? <AlertCircle size={14} color={FINCEPT.RED} /> : <CheckCircle size={14} color={FINCEPT.GREEN} />}
-          <span style={{ color: error ? FINCEPT.RED : FINCEPT.GREEN, flex: 1 }}>
-            {error || success}
-          </span>
+      {/* Cache Stats */}
+      <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-medium" style={{ color: COLORS.GRAY }}>CACHE STATISTICS</div>
           <button
-            onClick={() => { setError(null); setSuccess(null); }}
-            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '14px' }}
+            onClick={() => agentService.clearCache()}
+            className="px-2 py-1 rounded text-xs"
+            style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}
           >
-            x
+            Clear Cache
           </button>
+        </div>
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div>
+            <div style={{ color: COLORS.GRAY }}>Static Cache:</div>
+            <div style={{ color: COLORS.WHITE }}>{agentService.getCacheStats().cacheSize} items</div>
+          </div>
+          <div>
+            <div style={{ color: COLORS.GRAY }}>Response Cache:</div>
+            <div style={{ color: COLORS.WHITE }}>{agentService.getCacheStats().responseCacheSize} items</div>
+          </div>
+          <div>
+            <div style={{ color: COLORS.GRAY }}>Max Size:</div>
+            <div style={{ color: COLORS.WHITE }}>{agentService.getCacheStats().maxSize} items</div>
+          </div>
+        </div>
+      </div>
+
+      {systemInfo?.features && (
+        <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+          <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>FEATURES</div>
+          <div className="flex flex-wrap gap-2">
+            {systemInfo.features.map(feature => (
+              <span key={feature} className="px-2 py-1 rounded text-xs" style={{ backgroundColor: COLORS.BORDER, color: COLORS.WHITE }}>
+                {feature.replace(/_/g, ' ')}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* MAIN CONTENT */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="p-4 rounded" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+        <div className="text-xs font-medium mb-2" style={{ color: COLORS.GRAY }}>VERSION INFO</div>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div style={{ color: COLORS.GRAY }}>Version:</div>
+          <div style={{ color: COLORS.WHITE }}>{systemInfo?.version || 'N/A'}</div>
+          <div style={{ color: COLORS.GRAY }}>Framework:</div>
+          <div style={{ color: COLORS.WHITE }}>{systemInfo?.framework || 'N/A'}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // =============================================================================
+  // Main Render
+  // =============================================================================
+
+  return (
+    <div className="flex flex-col h-full" style={{ backgroundColor: COLORS.DARK_BG }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: COLORS.BORDER }}>
+        <div className="flex items-center gap-3">
+          <Bot size={20} style={{ color: COLORS.ORANGE }} />
+          <h1 className="text-lg font-semibold" style={{ color: COLORS.WHITE }}>Agent Studio</h1>
+          <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: COLORS.PURPLE + '20', color: COLORS.PURPLE }}>
+            v2.1
+          </span>
+        </div>
+
+        {/* View Mode Tabs */}
+        <div className="flex gap-1">
+          {VIEW_MODES.map(mode => (
+            <button
+              key={mode.id}
+              onClick={() => setViewMode(mode.id)}
+              className="px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-colors"
+              style={{
+                backgroundColor: viewMode === mode.id ? COLORS.ORANGE : 'transparent',
+                color: viewMode === mode.id ? COLORS.WHITE : COLORS.GRAY,
+              }}
+            >
+              <mode.icon size={14} />
+              {mode.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Notifications */}
+      {error && (
+        <div className="mx-4 mt-2 p-3 rounded flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '20', color: COLORS.RED }}>
+          <AlertCircle size={16} />
+          <span className="text-sm flex-1">{error}</span>
+          <button onClick={() => setError(null)}>×</button>
+        </div>
+      )}
+      {success && (
+        <div className="mx-4 mt-2 p-3 rounded flex items-center gap-2" style={{ backgroundColor: COLORS.GREEN + '20', color: COLORS.GREEN }}>
+          <CheckCircle size={16} />
+          <span className="text-sm">{success}</span>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="flex-1 overflow-hidden">
         {viewMode === 'agents' && renderAgentsView()}
         {viewMode === 'teams' && renderTeamsView()}
         {viewMode === 'workflows' && renderWorkflowsView()}
+        {viewMode === 'planner' && renderPlannerView()}
         {viewMode === 'tools' && renderToolsView()}
         {viewMode === 'chat' && renderChatView()}
         {viewMode === 'system' && renderSystemView()}
       </div>
 
-      {/* Footer */}
-      <TabFooter
-        tabName="AGENT STUDIO"
-        leftInfo={[
-          { label: `${agents.length} agents`, color: FINCEPT.CYAN },
-          { label: `${teamMembers.length} in team`, color: FINCEPT.PURPLE },
-          { label: `${selectedTools.length} tools`, color: FINCEPT.GREEN },
-        ]}
-        statusInfo={systemInfo ? `v${systemInfo.version} | ${systemInfo.capabilities.tools} tools | ${systemInfo.capabilities.model_providers} providers` : 'Loading...'}
-      />
+      <TabFooter tabName="Agent Studio v2.1" />
     </div>
   );
 };

@@ -3,17 +3,43 @@
 use super::types::*;
 use async_trait::async_trait;
 
+// Crypto exchange adapters
 pub mod kraken;
 pub mod hyperliquid;
 pub mod binance;
+
+// Indian stock broker adapters
 pub mod fyers;
 pub mod zerodha;
+pub mod upstox;
+pub mod dhan;
+pub mod angelone;
+pub mod kotak;
+pub mod groww;
+pub mod aliceblue;
+pub mod fivepaisa;
+pub mod iifl;
+pub mod motilal;
+pub mod shoonya;
 
+// Crypto exports
 pub use kraken::KrakenAdapter;
 pub use hyperliquid::HyperLiquidAdapter;
 pub use binance::BinanceAdapter;
+
+// Indian broker exports
 pub use fyers::FyersAdapter;
 pub use zerodha::ZerodhaAdapter;
+pub use upstox::UpstoxAdapter;
+pub use dhan::DhanAdapter;
+pub use angelone::AngelOneAdapter;
+pub use kotak::KotakAdapter;
+pub use groww::GrowwAdapter;
+pub use aliceblue::AliceBlueAdapter;
+pub use fivepaisa::FivePaisaAdapter;
+pub use iifl::IiflAdapter;
+pub use motilal::MotilalAdapter;
+pub use shoonya::ShoonyaAdapter;
 
 // ============================================================================
 // ADAPTER TRAIT
@@ -59,11 +85,23 @@ pub fn create_adapter(
     config: ProviderConfig,
 ) -> anyhow::Result<Box<dyn WebSocketAdapter>> {
     match provider.to_lowercase().as_str() {
+        // Crypto exchanges
         "kraken" => Ok(Box::new(KrakenAdapter::new(config))),
         "hyperliquid" => Ok(Box::new(HyperLiquidAdapter::new(config))),
         "binance" => Ok(Box::new(BinanceAdapter::new(config))),
+        // Indian stock brokers
         "fyers" => Ok(Box::new(FyersAdapter::new(config))),
         "zerodha" | "kite" => Ok(Box::new(ZerodhaAdapter::new(config))),
+        "upstox" => Ok(Box::new(UpstoxAdapter::new(config))),
+        "dhan" => Ok(Box::new(DhanAdapter::new(config))),
+        "angelone" | "angel" | "smartapi" => Ok(Box::new(AngelOneAdapter::new(config))),
+        "kotak" | "kotak_neo" => Ok(Box::new(KotakAdapter::new(config))),
+        "groww" => Ok(Box::new(GrowwAdapter::new(config))),
+        "aliceblue" | "alice" | "ant" => Ok(Box::new(AliceBlueAdapter::new(config))),
+        "fivepaisa" | "5paisa" => Ok(Box::new(FivePaisaAdapter::new(config))),
+        "iifl" | "iifl_securities" => Ok(Box::new(IiflAdapter::new(config))),
+        "motilal" | "motilaloswal" => Ok(Box::new(MotilalAdapter::new(config))),
+        "shoonya" | "finvasia" => Ok(Box::new(ShoonyaAdapter::new(config))),
         _ => Err(anyhow::anyhow!("Unknown provider: {}", provider)),
     }
 }

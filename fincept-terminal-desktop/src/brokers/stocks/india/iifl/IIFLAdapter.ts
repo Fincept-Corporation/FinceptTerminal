@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BaseStockBrokerAdapter } from '../../BaseStockBrokerAdapter';
 import type {
   StockBrokerMetadata,
@@ -73,9 +74,15 @@ export class IIFLAdapter extends BaseStockBrokerAdapter {
   // Symbol to Token mapping (instrument ID)
   private tokenCache: Map<string, number> = new Map();
 
-  // REST API polling for quotes
+  // Tauri event unlisteners for WebSocket events
+  private tickerUnlisten: UnlistenFn | null = null;
+  private orderbookUnlisten: UnlistenFn | null = null;
+  private statusUnlisten: UnlistenFn | null = null;
+
+  // REST API polling for quotes (fallback)
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange; token: number }> = new Map();
+  private usePollingFallback: boolean = false;
 
   // ============================================================================
   // Authentication
@@ -689,104 +696,141 @@ export class IIFLAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
-  // REST API Polling (replaces WebSocket)
+  // WebSocket - Real WebSocket via Rust Backend with Polling Fallback
   // ============================================================================
 
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
     try {
-      // Start REST API polling
-      this.startQuotePolling();
-      this.wsConnected = true;
-      console.log('IIFL: REST API polling started (2 min interval)');
+      await this.connectRealWebSocket();
+      console.log('[IIFL] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.error('Failed to start IIFL polling:', error);
-      throw error;
+      console.warn('[IIFL] WebSocket connection failed, falling back to REST polling:', error);
+      this.usePollingFallback = true;
+      this.startQuotePolling();
     }
   }
 
-  /**
-   * Start REST API polling for quotes
-   */
+  private async connectRealWebSocket(): Promise<void> {
+    if (!this.accessToken) {
+      throw new Error('Access token required');
+    }
+
+    const result = await invoke<{ success: boolean; data?: boolean; error?: string }>('iifl_ws_connect', {
+      accessToken: this.accessToken,
+      feedToken: this.feedToken || this.accessToken,
+    });
+
+    if (!result.success) throw new Error(result.error || 'WebSocket connection failed');
+
+    this.tickerUnlisten = await listen<{
+      provider: string; symbol: string; price: number; bid?: number; ask?: number;
+      volume?: number; change_percent?: number; timestamp: number;
+    }>('iifl_ticker', (event) => {
+      const tick = event.payload;
+      this.emitTick({
+        symbol: tick.symbol, exchange: 'NSE' as StockExchange, mode: 'quote',
+        lastPrice: tick.price, bid: tick.bid, ask: tick.ask,
+        volume: tick.volume || 0, changePercent: tick.change_percent || 0, timestamp: tick.timestamp,
+      });
+    });
+
+    this.orderbookUnlisten = await listen<{
+      provider: string; symbol: string;
+      bids: Array<{ price: number; quantity: number; orders?: number }>; asks: Array<{ price: number; quantity: number; orders?: number }>;
+      timestamp: number;
+    }>('iifl_orderbook', (event) => {
+      const data = event.payload;
+      const [exchangePart, symbolPart] = data.symbol.includes(':') ? data.symbol.split(':') : ['NSE', data.symbol];
+      const symbol = symbolPart || data.symbol;
+      const exchange = (exchangePart as StockExchange) || 'NSE';
+
+      console.log(`[IIFL WebSocket] Depth update for ${symbol}`);
+
+      const bestBid = data.bids?.[0];
+      const bestAsk = data.asks?.[0];
+
+      const tick: TickData = {
+        symbol, exchange, mode: 'full',
+        lastPrice: bestBid?.price || 0,
+        bid: bestBid?.price, ask: bestAsk?.price,
+        bidQty: bestBid?.quantity, askQty: bestAsk?.quantity,
+        timestamp: data.timestamp,
+        depth: {
+          bids: data.bids?.map((b) => ({ price: b.price, quantity: b.quantity, orders: b.orders || 0 })) || [],
+          asks: data.asks?.map((a) => ({ price: a.price, quantity: a.quantity, orders: a.orders || 0 })) || [],
+        },
+      };
+
+      this.emitTick(tick);
+      if (tick.depth) {
+        this.emitDepth({ symbol, exchange, bids: tick.depth.bids, asks: tick.depth.asks });
+      }
+    });
+
+    this.statusUnlisten = await listen<{
+      provider: string; status: string; message?: string; timestamp: number;
+    }>('iifl_status', (event) => {
+      const status = event.payload;
+      if (status.status === 'disconnected' || status.status === 'error') {
+        this.wsConnected = false;
+        if (!this.usePollingFallback) { this.usePollingFallback = true; this.startQuotePolling(); }
+      } else if (status.status === 'connected') {
+        this.wsConnected = true;
+        if (this.usePollingFallback) { this.usePollingFallback = false; this.stopQuotePolling(); }
+      }
+    });
+
+    this.wsConnected = true;
+  }
+
+  private async disconnectRealWebSocket(): Promise<void> {
+    if (this.tickerUnlisten) { this.tickerUnlisten(); this.tickerUnlisten = null; }
+    if (this.orderbookUnlisten) { this.orderbookUnlisten(); this.orderbookUnlisten = null; }
+    if (this.statusUnlisten) { this.statusUnlisten(); this.statusUnlisten = null; }
+    try { await invoke('iifl_ws_disconnect'); } catch (err) { console.warn('[IIFL] WS disconnect error:', err); }
+    this.wsConnected = false;
+  }
+
   private startQuotePolling(): void {
     this.stopQuotePolling();
-
-    // Poll every 2 minutes (120000ms)
-    this.quotePollingInterval = setInterval(async () => {
-      await this.pollQuotesSequentially();
-    }, 120000);
-
-    // Initial poll
+    console.log('[IIFL] Starting REST API polling (fallback mode, 2 min interval)');
+    this.quotePollingInterval = setInterval(async () => { await this.pollQuotesSequentially(); }, 120000);
     this.pollQuotesSequentially();
   }
 
-  /**
-   * Stop REST API polling
-   */
   private stopQuotePolling(): void {
-    if (this.quotePollingInterval) {
-      clearInterval(this.quotePollingInterval);
-      this.quotePollingInterval = null;
-    }
+    if (this.quotePollingInterval) { clearInterval(this.quotePollingInterval); this.quotePollingInterval = null; }
   }
 
-  /**
-   * Poll quotes sequentially for all subscribed symbols
-   */
   private async pollQuotesSequentially(): Promise<void> {
-    if (this.pollingSymbols.size === 0) {
-      return;
-    }
-
-    console.log(`[IIFL] Polling ${this.pollingSymbols.size} symbols sequentially...`);
+    if (this.pollingSymbols.size === 0) return;
 
     for (const [key, { symbol, exchange, token }] of this.pollingSymbols) {
       try {
-        // Ensure token is cached
         this.setToken(symbol, exchange, token);
-
         const quote = await this.getQuoteInternal(symbol, exchange);
-
-        const tick: TickData = {
-          symbol,
-          exchange,
-          mode: 'full',
-          lastPrice: quote.lastPrice,
-          open: quote.open,
-          high: quote.high,
-          low: quote.low,
-          close: quote.close,
-          volume: quote.volume,
-          change: quote.change,
-          changePercent: quote.changePercent,
-          timestamp: quote.timestamp,
-          bid: quote.bid,
-          bidQty: quote.bidQty,
-          ask: quote.ask,
-          askQty: quote.askQty,
-        };
-
-        this.emitTick(tick);
-      } catch (error) {
-        console.error(`[IIFL] Failed to poll ${symbol}:`, error);
-      }
-
-      // Small delay between requests to avoid rate limiting
+        this.emitTick({
+          symbol, exchange, mode: 'full',
+          lastPrice: quote.lastPrice, open: quote.open, high: quote.high, low: quote.low,
+          close: quote.close, volume: quote.volume, change: quote.change,
+          changePercent: quote.changePercent, timestamp: quote.timestamp,
+          bid: quote.bid, bidQty: quote.bidQty, ask: quote.ask, askQty: quote.askQty,
+        });
+      } catch (error) { console.error(`[IIFL] Failed to poll ${symbol}:`, error); }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     console.log(`[IIFL] Polling complete for ${this.pollingSymbols.size} symbols`);
   }
 
-  /**
-   * Disconnect from WebSocket (stop polling)
-   */
   async disconnectWebSocket(): Promise<void> {
+    await this.disconnectRealWebSocket();
     this.stopQuotePolling();
     this.pollingSymbols.clear();
-    this.wsConnected = false;
-    console.log('[IIFL] REST API polling stopped');
+    this.usePollingFallback = false;
+    console.log('[IIFL] WebSocket disconnected');
   }
 
   protected async subscribeInternal(
@@ -804,10 +848,22 @@ export class IIFLAdapter extends BaseStockBrokerAdapter {
       const key = `${exchange}:${symbol}`;
       this.pollingSymbols.set(key, { symbol, exchange, token });
 
-      console.log(`IIFL: Added ${key} to polling list (${this.pollingSymbols.size} symbols total)`);
-
-      // Trigger immediate poll for this symbol
-      this.pollQuotesSequentially();
+      // If real WebSocket is connected, subscribe via Tauri command
+      if (this.wsConnected && !this.usePollingFallback) {
+        try {
+          await invoke('iifl_ws_subscribe', {
+            symbol: `${exchange}:${symbol}`,
+            mode: mode === 'full' ? 'depth' : mode === 'quote' ? 'quotes' : 'ltp',
+          });
+          console.log(`[IIFL] WebSocket subscribed to ${key}`);
+        } catch (err) {
+          console.warn(`[IIFL] WebSocket subscribe failed for ${key}, using polling:`, err);
+          this.pollQuotesSequentially();
+        }
+      } else {
+        console.log(`IIFL: Added ${key} to polling list (${this.pollingSymbols.size} symbols total)`);
+        this.pollQuotesSequentially();
+      }
     } catch (error) {
       console.error('Failed to subscribe:', error);
       throw error;
@@ -831,7 +887,17 @@ export class IIFLAdapter extends BaseStockBrokerAdapter {
     const key = `${exchange}:${symbol}`;
     this.pollingSymbols.delete(key);
 
-    console.log(`IIFL: Removed ${key} from polling list (${this.pollingSymbols.size} symbols remaining)`);
+    // If real WebSocket is connected, unsubscribe via Tauri command
+    if (this.wsConnected && !this.usePollingFallback) {
+      try {
+        await invoke('iifl_ws_unsubscribe', { symbol: `${exchange}:${symbol}` });
+        console.log(`[IIFL] WebSocket unsubscribed from ${key}`);
+      } catch (err) {
+        console.warn(`[IIFL] WebSocket unsubscribe failed for ${key}:`, err);
+      }
+    } else {
+      console.log(`IIFL: Removed ${key} from polling list (${this.pollingSymbols.size} symbols remaining)`);
+    }
   }
 
   // ============================================================================

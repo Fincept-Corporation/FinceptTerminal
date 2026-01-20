@@ -229,6 +229,100 @@ export function useMarginInfo(autoRefresh: boolean = true) {
 }
 
 // ============================================================================
+// LEVERAGE HOOK
+// ============================================================================
+
+export interface LeverageInfo {
+  symbol: string;
+  leverage: number;
+  maxLeverage?: number;
+  marginMode?: 'cross' | 'isolated';
+}
+
+export function useLeverage(symbol?: string) {
+  const { activeAdapter, activeBroker } = useBrokerContext();
+  const [leverageInfo, setLeverageInfo] = useState<LeverageInfo | null>(null);
+  const [leverageTiers, setLeverageTiers] = useState<any[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [isSupported, setIsSupported] = useState(true);
+
+  const fetchLeverage = useCallback(async () => {
+    if (!activeAdapter || !activeAdapter.isConnected() || !symbol) {
+      setLeverageInfo(null);
+      return;
+    }
+
+    // Check if adapter supports fetchLeverage
+    if (typeof (activeAdapter as any).fetchLeverage !== 'function') {
+      setIsSupported(false);
+      setLeverageInfo(null);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const rawLeverage = await (activeAdapter as any).fetchLeverage(symbol);
+
+      setLeverageInfo({
+        symbol,
+        leverage: rawLeverage?.leverage || rawLeverage?.longLeverage || 1,
+        maxLeverage: rawLeverage?.maxLeverage,
+        marginMode: rawLeverage?.marginMode,
+      });
+      setIsSupported(true);
+    } catch (err) {
+      const error = err as Error;
+      console.error('[useLeverage] Failed to fetch leverage:', error);
+
+      if (error.message?.includes('not supported')) {
+        setIsSupported(false);
+      }
+      setError(error);
+      setLeverageInfo(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeAdapter, symbol]);
+
+  const fetchTiers = useCallback(async () => {
+    if (!activeAdapter || !activeAdapter.isConnected() || !symbol) {
+      setLeverageTiers(null);
+      return;
+    }
+
+    if (typeof (activeAdapter as any).fetchLeverageTiers !== 'function') {
+      setLeverageTiers(null);
+      return;
+    }
+
+    try {
+      const tiers = await (activeAdapter as any).fetchLeverageTiers([symbol]);
+      setLeverageTiers(tiers?.[symbol] || null);
+    } catch (err) {
+      console.error('[useLeverage] Failed to fetch leverage tiers:', err);
+      setLeverageTiers(null);
+    }
+  }, [activeAdapter, symbol]);
+
+  useEffect(() => {
+    fetchLeverage();
+    fetchTiers();
+  }, [fetchLeverage, fetchTiers, activeBroker]);
+
+  return {
+    leverageInfo,
+    leverageTiers,
+    isLoading,
+    error,
+    isSupported,
+    refresh: fetchLeverage,
+  };
+}
+
+// ============================================================================
 // TRADING STATISTICS HOOK
 // ============================================================================
 

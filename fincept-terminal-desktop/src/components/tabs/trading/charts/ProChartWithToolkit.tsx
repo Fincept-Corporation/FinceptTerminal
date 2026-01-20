@@ -32,6 +32,7 @@ interface ProChartProps {
   showToolbar?: boolean;
   showHeader?: boolean; // Option to hide the symbol/OHLC header
   onToolChange?: (tool: DrawingTool | null) => void;
+  timezone?: string; // e.g., 'Asia/Kolkata' for IST, 'America/New_York' for EST
 }
 
 export function ProChartWithToolkit({
@@ -42,6 +43,7 @@ export function ProChartWithToolkit({
   showToolbar = true,
   showHeader = true,
   onToolChange,
+  timezone,
 }: ProChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -61,6 +63,29 @@ export function ProChartWithToolkit({
     if (!chartContainerRef.current) return;
 
     const containerHeight = chartContainerRef.current.clientHeight || height;
+    // Build localization options for timezone
+    const localizationOptions = timezone ? {
+      locale: 'en-IN', // Use Indian locale for IST, can be customized per timezone
+      timeFormatter: (time: number) => {
+        const date = new Date(time * 1000);
+        return date.toLocaleTimeString('en-IN', {
+          timeZone: timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+      },
+      dateFormatter: (time: number) => {
+        const date = new Date(time * 1000);
+        return date.toLocaleDateString('en-IN', {
+          timeZone: timezone,
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        });
+      },
+    } : {};
+
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: containerHeight,
@@ -69,6 +94,7 @@ export function ProChartWithToolkit({
         textColor: '#d1d5db',
         fontSize: 11,
       },
+      localization: localizationOptions,
       handleScroll: {
         vertTouchDrag: true,
       },
@@ -245,7 +271,7 @@ export function ProChartWithToolkit({
       pluginManager.destroy();
       chart.remove();
     };
-  }, [height, showVolume]);
+  }, [height, showVolume, timezone]);
 
   // Update chart data
   useEffect(() => {
