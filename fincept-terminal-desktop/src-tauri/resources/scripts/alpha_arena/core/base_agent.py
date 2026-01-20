@@ -2,9 +2,14 @@
 Base Agent Abstract Class
 
 Defines the interface for all trading agents in Alpha Arena.
-Inspired by ValueCell's BaseAgent architecture with stream/notify methods.
+Supports:
+- stream/notify pattern for user/agent-initiated actions
+- Features pipeline for technical analysis
+- Portfolio metrics tracking
+- Integration with finagent_core
 """
 
+import asyncio
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Dict, List, Optional, Any
 from datetime import datetime
@@ -20,6 +25,31 @@ from alpha_arena.types.responses import StreamResponse, NotifyResponse
 from alpha_arena.utils.logging import get_logger
 
 logger = get_logger("base_agent")
+
+
+# Import features pipeline (optional)
+try:
+    from alpha_arena.core.features_pipeline import (
+        DefaultFeaturesPipeline,
+        MarketFeatures,
+        get_features_pipeline,
+    )
+    FEATURES_AVAILABLE = True
+except ImportError:
+    FEATURES_AVAILABLE = False
+    logger.debug("Features pipeline not available")
+
+# Import portfolio metrics (optional)
+try:
+    from alpha_arena.core.portfolio_metrics import (
+        PortfolioAnalyzer,
+        PortfolioMetrics,
+        get_analyzer,
+    )
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+    logger.debug("Portfolio metrics not available")
 
 
 class BaseAgent(ABC):
@@ -101,6 +131,8 @@ class BaseTradingAgent(BaseAgent):
     - Processing market data
     - Making trading decisions
     - Managing portfolio state
+    - Features pipeline integration
+    - Portfolio metrics tracking
     """
 
     def __init__(
@@ -111,6 +143,8 @@ class BaseTradingAgent(BaseAgent):
         api_key: Optional[str] = None,
         temperature: float = 0.7,
         instructions: Optional[List[str]] = None,
+        enable_features: bool = True,
+        enable_metrics: bool = True,
     ):
         super().__init__(name)
         self.provider = provider
@@ -121,6 +155,14 @@ class BaseTradingAgent(BaseAgent):
         self._agent = None
         self._decisions: List[ModelDecision] = []
 
+        # Features pipeline
+        self.enable_features = enable_features and FEATURES_AVAILABLE
+        self._features_pipeline = get_features_pipeline() if self.enable_features else None
+
+        # Portfolio metrics
+        self.enable_metrics = enable_metrics and METRICS_AVAILABLE
+        self._portfolio_analyzer: Optional[PortfolioAnalyzer] = None
+
     def _default_instructions(self) -> List[str]:
         """Default trading instructions."""
         return [
@@ -129,6 +171,50 @@ class BaseTradingAgent(BaseAgent):
             "Always respond with valid JSON only - no markdown, no explanations.",
             "Consider risk management and position sizing carefully.",
         ]
+
+    def initialize_metrics(self, initial_capital: float = 10000.0):
+        """Initialize portfolio metrics tracking"""
+        if self.enable_metrics:
+            self._portfolio_analyzer = get_analyzer(self.name, initial_capital)
+            logger.info(f"Portfolio metrics initialized for {self.name}")
+
+    def record_portfolio_value(self, value: float):
+        """Record portfolio value for metrics calculation"""
+        if self._portfolio_analyzer:
+            self._portfolio_analyzer.record_value(value)
+
+    def record_trade(self, pnl: float, entry_price: float, exit_price: float, quantity: float, side: str):
+        """Record a completed trade for metrics"""
+        if self._portfolio_analyzer:
+            self._portfolio_analyzer.record_trade(pnl, entry_price, exit_price, quantity, side)
+
+    def get_metrics(self) -> Optional[Dict[str, Any]]:
+        """Get current portfolio metrics"""
+        if self._portfolio_analyzer:
+            metrics = self._portfolio_analyzer.calculate_metrics()
+            return metrics.to_dict()
+        return None
+
+    def get_metrics_context(self) -> str:
+        """Get metrics as text for LLM context"""
+        if self._portfolio_analyzer:
+            metrics = self._portfolio_analyzer.calculate_metrics()
+            return metrics.to_prompt_context()
+        return ""
+
+    async def compute_features(self, market_data: MarketData) -> Optional[Dict[str, Any]]:
+        """Compute market features for decision making"""
+        if self._features_pipeline:
+            features = await self._features_pipeline.compute(market_data)
+            return features.to_dict()
+        return None
+
+    async def get_features_context(self, market_data: MarketData) -> str:
+        """Get features as text for LLM context"""
+        if self._features_pipeline:
+            features = await self._features_pipeline.compute(market_data)
+            return features.to_prompt_context()
+        return ""
 
     @abstractmethod
     async def make_decision(
@@ -225,6 +311,7 @@ class LLMTradingAgent(BaseTradingAgent):
     Trading agent powered by an LLM (OpenAI, Anthropic, etc.).
 
     Uses the Agno library for LLM interactions when available.
+    Supports trading styles for behavioral customization.
     """
 
     def __init__(
@@ -236,10 +323,42 @@ class LLMTradingAgent(BaseTradingAgent):
         temperature: float = 0.7,
         instructions: Optional[List[str]] = None,
         mode: str = "baseline",
+        trading_style: Optional[str] = None,  # Style ID (e.g., "aggressive", "conservative")
+        style_config: Optional[Dict[str, Any]] = None,  # Full style configuration
     ):
         super().__init__(name, provider, model_id, api_key, temperature, instructions)
         self.mode = mode
         self._llm = None
+
+        # Trading style support
+        self.trading_style_id = trading_style
+        self._style = None
+
+        # Load trading style if specified
+        if trading_style:
+            try:
+                from alpha_arena.config.trading_styles import get_trading_style
+                self._style = get_trading_style(trading_style)
+                if self._style:
+                    # Apply style's temperature modifier
+                    self.temperature = temperature + self._style.temperature_modifier
+                    logger.info(f"Agent '{name}' using trading style: {self._style.name}")
+            except ImportError:
+                logger.warning("Trading styles module not available")
+        elif style_config:
+            # Use provided style config directly
+            from alpha_arena.config.trading_styles import TradingStyle, TradingStyleType
+            self._style = TradingStyle(
+                id=style_config.get("id", "custom"),
+                name=style_config.get("name", "Custom Style"),
+                description=style_config.get("description", ""),
+                style_type=TradingStyleType(style_config.get("style_type", "neutral")),
+                system_prompt=style_config.get("system_prompt", ""),
+                instructions=style_config.get("instructions", []),
+                risk_tolerance=style_config.get("risk_tolerance", 0.5),
+                position_size_pct=style_config.get("position_size_pct", 0.25),
+                confidence_threshold=style_config.get("confidence_threshold", 0.5),
+            )
 
     async def initialize(self) -> bool:
         """Initialize the LLM agent."""
@@ -280,9 +399,13 @@ class LLMTradingAgent(BaseTradingAgent):
             elif self.provider == "google" or self.provider == "gemini":
                 # Google Gemini - use OpenAI-compatible endpoint directly (more reliable)
                 # Model IDs: gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro, etc.
-                logger.info(f"Using Google Gemini OpenAI-compatible endpoint for {self.model_id}")
+                # Strip "gemini/" prefix if present (LiteLLM format vs Google API format)
+                model_id = self.model_id
+                if model_id.startswith("gemini/"):
+                    model_id = model_id[7:]  # Remove "gemini/" prefix
+                logger.info(f"Using Google Gemini OpenAI-compatible endpoint for {model_id}")
                 model = OpenAIChat(
-                    id=self.model_id,
+                    id=model_id,
                     api_key=self.api_key,
                     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
                 )
@@ -338,9 +461,24 @@ class LLMTradingAgent(BaseTradingAgent):
             return None
 
     def _get_mode_instructions(self) -> List[str]:
-        """Get instructions based on competition mode."""
+        """Get instructions based on competition mode and trading style."""
         base = self.instructions.copy()
 
+        # Add style-specific system prompt and instructions first (higher priority)
+        if self._style:
+            if self._style.system_prompt:
+                base.insert(0, self._style.system_prompt)
+            if self._style.instructions:
+                base.extend(self._style.instructions)
+
+            # Add style-specific trading parameters
+            base.extend([
+                f"Risk tolerance: {self._style.risk_tolerance:.0%} (0%=very conservative, 100%=very aggressive)",
+                f"Target position size: {self._style.position_size_pct:.0%} of available capital",
+                f"Minimum confidence threshold: {self._style.confidence_threshold:.0%}",
+            ])
+
+        # Add mode-specific instructions (lower priority than style)
         if self.mode == "baseline":
             base.extend([
                 "Use comprehensive analysis considering all market data.",
@@ -390,7 +528,10 @@ class LLMTradingAgent(BaseTradingAgent):
             logger.info(f"Agent '{self.name}' requesting decision from {self.provider}:{self.model_id}...")
 
             # Get response from LLM
-            response = self._llm.run(prompt)
+            # Note: Agno's agent.run() is synchronous, so we run it in a thread pool
+            # to avoid blocking the async event loop
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, self._llm.run, prompt)
 
             # Detailed response logging for debugging
             resp_type = type(response).__name__
@@ -460,13 +601,44 @@ class LLMTradingAgent(BaseTradingAgent):
                 price_at_decision=market_data.price,
             )
 
+    async def _build_prompt_async(
+        self,
+        market_data: MarketData,
+        portfolio: PortfolioState,
+        cycle_number: int,
+    ) -> str:
+        """Build the trading prompt with features and metrics (async version)."""
+        # Get features context if available
+        features_context = ""
+        if self.enable_features and self._features_pipeline:
+            try:
+                features_context = await self.get_features_context(market_data)
+            except Exception as e:
+                logger.warning(f"Failed to compute features: {e}")
+
+        # Get metrics context if available
+        metrics_context = self.get_metrics_context()
+
+        return self._build_prompt_internal(market_data, portfolio, cycle_number, features_context, metrics_context)
+
     def _build_prompt(
         self,
         market_data: MarketData,
         portfolio: PortfolioState,
         cycle_number: int,
     ) -> str:
-        """Build the trading prompt."""
+        """Build the trading prompt (sync version, no features)."""
+        return self._build_prompt_internal(market_data, portfolio, cycle_number, "", "")
+
+    def _build_prompt_internal(
+        self,
+        market_data: MarketData,
+        portfolio: PortfolioState,
+        cycle_number: int,
+        features_context: str,
+        metrics_context: str,
+    ) -> str:
+        """Build the trading prompt with optional features and metrics."""
         has_positions = len(portfolio.positions) > 0
         num_trades = portfolio.trades_count
         pnl = portfolio.portfolio_value - 10000  # Assuming 10k initial
@@ -492,6 +664,13 @@ You have open positions. Decide whether to:
 - HOLD: Maintain current position
 """
 
+        # Build optional sections
+        optional_sections = ""
+        if features_context:
+            optional_sections += f"\n{features_context}\n"
+        if metrics_context:
+            optional_sections += f"\n{metrics_context}\n"
+
         return f"""ALPHA ARENA TRADING DECISION - Cycle #{cycle_number}
 
 MARKET DATA:
@@ -509,7 +688,7 @@ Portfolio Value: ${portfolio.portfolio_value:,.2f}
 P&L: ${pnl:+,.2f} ({pnl_pct:+.2f}%)
 Open Positions: {len(portfolio.positions)}
 Total Trades Made: {num_trades}
-{action_guidance}
+{optional_sections}{action_guidance}
 RESPONSE FORMAT (JSON ONLY - NO MARKDOWN, NO CODE BLOCKS):
 {{
   "action": "buy" or "sell" or "hold",

@@ -283,6 +283,7 @@ def create_agent_from_card(
     card: AgentCard,
     api_key: Optional[str] = None,
     mode: str = "baseline",
+    trading_style: Optional[str] = None,
 ):
     """
     Create an agent instance from an AgentCard.
@@ -291,6 +292,7 @@ def create_agent_from_card(
         card: AgentCard configuration
         api_key: Optional API key override
         mode: Competition mode
+        trading_style: Optional trading style ID (e.g., "aggressive", "conservative")
 
     Returns:
         BaseTradingAgent instance
@@ -305,4 +307,82 @@ def create_agent_from_card(
         temperature=card.temperature,
         instructions=card.instructions if card.instructions else None,
         mode=mode,
+        trading_style=trading_style,
     )
+
+
+def create_styled_agents_from_provider(
+    provider: str,
+    model_id: str,
+    api_key: Optional[str] = None,
+    styles: Optional[List[str]] = None,
+    mode: str = "baseline",
+    base_capital: float = 10000.0,
+) -> List[Dict[str, Any]]:
+    """
+    Create multiple agents with different trading styles using the same provider.
+
+    This is useful for running competitions that test different strategies
+    using the same underlying LLM model.
+
+    Args:
+        provider: LLM provider (e.g., "openai", "anthropic")
+        model_id: Model identifier (e.g., "gpt-4o-mini")
+        api_key: API key for the provider
+        styles: List of style IDs to use (defaults to all styles)
+        mode: Competition mode
+        base_capital: Initial capital for each agent
+
+    Returns:
+        List of agent configurations ready for competition
+
+    Example:
+        >>> agents = create_styled_agents_from_provider(
+        ...     provider="openai",
+        ...     model_id="gpt-4o-mini",
+        ...     api_key="sk-...",
+        ...     styles=["aggressive", "conservative", "momentum"],
+        ... )
+    """
+    from alpha_arena.config.trading_styles import (
+        list_trading_styles,
+        get_trading_style,
+        TradingStyle,
+    )
+
+    # Get styles to use
+    if styles is None:
+        # Use a default set of contrasting styles
+        styles = ["aggressive", "conservative", "momentum", "contrarian", "neutral"]
+
+    agents = []
+    for style_id in styles:
+        style = get_trading_style(style_id)
+        if style is None:
+            logger.warning(f"Unknown trading style: {style_id}, skipping")
+            continue
+
+        # Create a descriptive name
+        model_short = model_id.split("/")[-1].split("-")[0].title()
+        agent_name = f"{model_short} ({style.name})"
+
+        agents.append({
+            "name": agent_name,
+            "provider": provider,
+            "model_id": model_id,
+            "api_key": api_key,
+            "initial_capital": base_capital,
+            "trading_style": style_id,
+            "mode": mode,
+        })
+
+    return agents
+
+
+def get_available_styles() -> List[Dict[str, Any]]:
+    """Get list of available trading styles for UI display."""
+    try:
+        from alpha_arena.config.trading_styles import list_trading_styles
+        return [style.to_dict() for style in list_trading_styles()]
+    except ImportError:
+        return []

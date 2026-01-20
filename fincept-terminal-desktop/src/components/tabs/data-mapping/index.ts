@@ -1,5 +1,8 @@
 // Data Mapping System - Main exports
 
+// Default export for lazy loading
+export { default } from './DataMappingTab';
+
 // Main component
 export { default as DataMappingTab } from './DataMappingTab';
 

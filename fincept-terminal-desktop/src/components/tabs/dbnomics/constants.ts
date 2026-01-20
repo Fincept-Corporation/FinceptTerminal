@@ -1,0 +1,29 @@
+import type { ChartType } from './types';
+
+export const DBNOMICS_API_BASE = 'https://api.db.nomics.world/v22';
+
+// Cache duration in milliseconds (10 minutes for providers, 5 minutes for datasets/series)
+export const PROVIDERS_CACHE_DURATION = 10 * 60 * 1000;
+export const DATASETS_CACHE_DURATION = 5 * 60 * 1000;
+export const SERIES_CACHE_DURATION = 5 * 60 * 1000;
+
+// State persistence duration (24 hours)
+export const STATE_CACHE_DURATION = 24 * 60 * 60 * 1000;
+
+// Debounce delay for state saving
+export const STATE_SAVE_DEBOUNCE_MS = 1000;
+
+// Chart types
+export const CHART_TYPES: ChartType[] = ['line', 'bar', 'area', 'scatter', 'candlestick'];
+
+// Default chart colors (will be overridden by theme)
+export const DEFAULT_CHART_COLORS = [
+  '#ea580c', // primary/orange
+  '#3b82f6', // info/blue
+  '#22c55e', // secondary/green
+  '#eab308', // warning/yellow
+  '#a855f7', // purple
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#f97316', // orange variant
+];

@@ -683,7 +683,110 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             enabled INTEGER DEFAULT 1,
             deleted INTEGER DEFAULT 0,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+
+        -- =============================================================================
+        -- Alpha Arena Tables (Competition Paper Trading)
+        -- =============================================================================
+
+        -- Alpha Arena competitions table
+        CREATE TABLE IF NOT EXISTS alpha_arena_competitions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            exchange_id TEXT DEFAULT 'kraken',
+            symbols TEXT NOT NULL,
+            initial_capital REAL NOT NULL DEFAULT 10000,
+            mode TEXT NOT NULL DEFAULT 'baseline',
+            cycle_interval_seconds INTEGER DEFAULT 150,
+            max_cycles INTEGER,
+            status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'running', 'paused', 'completed', 'failed')),
+            cycle_count INTEGER DEFAULT 0,
+            config_json TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            started_at TEXT,
+            completed_at TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alpha_competitions_status ON alpha_arena_competitions(status);
+        CREATE INDEX IF NOT EXISTS idx_alpha_competitions_created ON alpha_arena_competitions(created_at DESC);
+
+        -- Alpha Arena model portfolios (links models to paper trading portfolios)
+        CREATE TABLE IF NOT EXISTS alpha_arena_model_portfolios (
+            id TEXT PRIMARY KEY,
+            competition_id TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            portfolio_id TEXT NOT NULL,
+            provider TEXT,
+            model_id TEXT,
+            initial_capital REAL NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (competition_id) REFERENCES alpha_arena_competitions(id) ON DELETE CASCADE,
+            FOREIGN KEY (portfolio_id) REFERENCES pt_portfolios(id) ON DELETE CASCADE,
+            UNIQUE(competition_id, model_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alpha_model_portfolios_competition ON alpha_arena_model_portfolios(competition_id);
+        CREATE INDEX IF NOT EXISTS idx_alpha_model_portfolios_model ON alpha_arena_model_portfolios(model_name);
+
+        -- Alpha Arena decision logs (AI trading decisions)
+        CREATE TABLE IF NOT EXISTS alpha_arena_decisions (
+            id TEXT PRIMARY KEY,
+            competition_id TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            cycle_number INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            action TEXT NOT NULL CHECK (action IN ('buy', 'sell', 'hold', 'BUY', 'SELL', 'HOLD')),
+            quantity REAL,
+            confidence REAL,
+            reasoning TEXT,
+            trade_executed INTEGER DEFAULT 0,
+            price_at_decision REAL,
+            portfolio_value_before REAL,
+            portfolio_value_after REAL,
+            order_id TEXT,
+            pnl REAL DEFAULT 0,
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (competition_id) REFERENCES alpha_arena_competitions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alpha_decisions_competition ON alpha_arena_decisions(competition_id);
+        CREATE INDEX IF NOT EXISTS idx_alpha_decisions_model ON alpha_arena_decisions(model_name);
+        CREATE INDEX IF NOT EXISTS idx_alpha_decisions_cycle ON alpha_arena_decisions(cycle_number);
+        CREATE INDEX IF NOT EXISTS idx_alpha_decisions_timestamp ON alpha_arena_decisions(timestamp DESC);
+
+        -- Alpha Arena performance snapshots (for charting)
+        CREATE TABLE IF NOT EXISTS alpha_arena_snapshots (
+            id TEXT PRIMARY KEY,
+            competition_id TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            cycle_number INTEGER NOT NULL,
+            portfolio_value REAL NOT NULL,
+            cash REAL NOT NULL,
+            pnl REAL DEFAULT 0,
+            return_pct REAL DEFAULT 0,
+            positions_count INTEGER DEFAULT 0,
+            trades_count INTEGER DEFAULT 0,
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (competition_id) REFERENCES alpha_arena_competitions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alpha_snapshots_competition ON alpha_arena_snapshots(competition_id);
+        CREATE INDEX IF NOT EXISTS idx_alpha_snapshots_model ON alpha_arena_snapshots(model_name);
+        CREATE INDEX IF NOT EXISTS idx_alpha_snapshots_cycle ON alpha_arena_snapshots(cycle_number);
+
+        -- Alpha Arena leaderboard snapshots
+        CREATE TABLE IF NOT EXISTS alpha_arena_leaderboard (
+            id TEXT PRIMARY KEY,
+            competition_id TEXT NOT NULL,
+            cycle_number INTEGER NOT NULL,
+            leaderboard_json TEXT NOT NULL,
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (competition_id) REFERENCES alpha_arena_competitions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alpha_leaderboard_competition ON alpha_arena_leaderboard(competition_id);
+        CREATE INDEX IF NOT EXISTS idx_alpha_leaderboard_cycle ON alpha_arena_leaderboard(cycle_number DESC)
         ",
     )?;
 

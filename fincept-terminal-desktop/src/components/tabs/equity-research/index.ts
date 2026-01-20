@@ -1,5 +1,9 @@
 // Main exports for Equity Research module
 
+// Default export
+export { default } from './EquityResearchTab';
+export { default as EquityResearchTab } from './EquityResearchTab';
+
 // Types
 export * from './types';
 

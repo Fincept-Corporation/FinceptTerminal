@@ -15,51 +15,52 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CommandBar } from '@/components/command-bar';
 
 // Eagerly loaded tabs (needed immediately)
-import ForumTab from '@/components/tabs/ForumTab';
-import DashboardTab from '@/components/tabs/DashboardTab';
-import MarketsTab from '@/components/tabs/MarketsTab';
-import NewsTab from '@/components/tabs/NewsTab';
-import WatchlistTab from '@/components/tabs/WatchlistTab';
-import ChatTab from '@/components/tabs/ChatTab';
-import ProfileTab from '@/components/tabs/ProfileTab';
-import AboutTab from '@/components/tabs/AboutTab';
-import MarketplaceTab from '@/components/tabs/MarketplaceTab';
-import PortfolioTab from '@/components/tabs/portfolio-tab/PortfolioTab';
-import DocsTab from '@/components/tabs/docs/DocsTab';
+import ForumTab from '@/components/tabs/forum';
+import DashboardTab from '@/components/tabs/dashboard';
+import MarketsTab from '@/components/tabs/markets';
+import NewsTab from '@/components/tabs/news';
+import WatchlistTab from '@/components/tabs/watchlist';
+import ChatTab from '@/components/tabs/chat';
+import ProfileTab from '@/components/tabs/profile';
+import AboutTab from '@/components/tabs/about';
+import MarketplaceTab from '@/components/tabs/marketplace';
+import PortfolioTab from '@/components/tabs/portfolio-tab';
+import DocsTab from '@/components/tabs/docs';
 import SettingsTab from '@/components/tabs/settings-tab';
-import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
+import DataSourcesTab from '@/components/tabs/data-sources';
 import MCPTab from '@/components/tabs/mcp';
-import SupportTicketTab from '@/components/tabs/SupportTicketTab';
+import SupportTicketTab from '@/components/tabs/support-ticket';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
-import AgentConfigTab from '@/components/tabs/AgentConfigTab';
-import RelationshipMapTab from '@/components/tabs/RelationshipMapTab';
-import MonitoringTab from '@/components/tabs/MonitoringTab';
+import { HeaderSupportButtons } from '@/components/common/HeaderSupportButtons';
+import AgentConfigTab from '@/components/tabs/agent-config';
+import RelationshipMapTab from '@/components/tabs/relationship-map';
+import MonitoringTab from '@/components/tabs/monitoring';
 import { useTranslation } from 'react-i18next';
 
 // Lazy loaded tabs (heavy/Python-dependent)
-const EquityResearchTab = React.lazy(() => import('@/components/tabs/EquityResearchTab'));
-const AsiaMarketsTab = React.lazy(() => import('@/components/tabs/AsiaMarketsTab'));
-const ScreenerTab = React.lazy(() => import('@/components/tabs/ScreenerTab'));
-const BacktestingTab = React.lazy(() => import('@/components/tabs/BacktestingTabNew'));
-const GeopoliticsTab = React.lazy(() => import('@/components/tabs/GeopoliticsTab'));
-const AIQuantLabTab = React.lazy(() => import('@/components/tabs/ai-quant-lab/AIQuantLabTab'));
-const CodeEditorTab = React.lazy(() => import('@/components/tabs/CodeEditorTab'));
-const NodeEditorTab = React.lazy(() => import('@/components/tabs/NodeEditorTab'));
-const PolygonEqTab = React.lazy(() => import('@/components/tabs/PolygonEqTab'));
-const DerivativesTab = React.lazy(() => import('@/components/tabs/DerivativesTab').then(m => ({ default: m.DerivativesTab })));
-const TradingTab = React.lazy(() => import('@/components/tabs/TradingTab').then(m => ({ default: m.TradingTab })));
-const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading/EquityTradingTab'));
-const DBnomicsTab = React.lazy(() => import('@/components/tabs/DBnomicsTab'));
-const AkShareDataTab = React.lazy(() => import('@/components/tabs/AkShareDataTab'));
-const EconomicsTab = React.lazy(() => import('@/components/tabs/EconomicsTab'));
-const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTabDeck'));
-const ReportBuilderTab = React.lazy(() => import('@/components/tabs/ReportBuilderTab'));
-const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping/DataMappingTab'));
-const ExcelTab = React.lazy(() => import('@/components/tabs/ExcelTab'));
-const Visualization3DTab = React.lazy(() => import('@/components/tabs/Visualization3DTab'));
-const PolymarketTab = React.lazy(() => import('@/components/tabs/PolymarketTabEnhanced'));
-const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/TradeVisualizationTab'));
-const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena/AlphaArenaTab'));
+const EquityResearchTab = React.lazy(() => import('@/components/tabs/equity-research'));
+const AsiaMarketsTab = React.lazy(() => import('@/components/tabs/asia-markets'));
+const ScreenerTab = React.lazy(() => import('@/components/tabs/screener'));
+const BacktestingTab = React.lazy(() => import('@/components/tabs/backtesting'));
+const GeopoliticsTab = React.lazy(() => import('@/components/tabs/geopolitics'));
+const AIQuantLabTab = React.lazy(() => import('@/components/tabs/ai-quant-lab'));
+const CodeEditorTab = React.lazy(() => import('@/components/tabs/code-editor'));
+const NodeEditorTab = React.lazy(() => import('@/components/tabs/node-editor'));
+const PolygonEqTab = React.lazy(() => import('@/components/tabs/polygon-eq'));
+const DerivativesTab = React.lazy(() => import('@/components/tabs/derivatives').then(m => ({ default: m.DerivativesTab })));
+const CryptoTradingTab = React.lazy(() => import('@/components/tabs/crypto-trading').then(m => ({ default: m.CryptoTradingTab })));
+const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading'));
+const DBnomicsTab = React.lazy(() => import('@/components/tabs/dbnomics'));
+const AkShareDataTab = React.lazy(() => import('@/components/tabs/akshare-data'));
+const EconomicsTab = React.lazy(() => import('@/components/tabs/economics'));
+const MaritimeTab = React.lazy(() => import('@/components/tabs/maritime'));
+const ReportBuilderTab = React.lazy(() => import('@/components/tabs/report-builder'));
+const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping'));
+const ExcelTab = React.lazy(() => import('@/components/tabs/excel'));
+const Visualization3DTab = React.lazy(() => import('@/components/tabs/visualization-3d'));
+const PolymarketTab = React.lazy(() => import('@/components/tabs/polymarket'));
+const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/trade-visualization'));
+const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -751,6 +752,7 @@ function FinxeptTerminalContent() {
             )}
           </button>
           {getClickableSessionDisplay()}
+          <HeaderSupportButtons />
           <button
             onClick={async () => {
               setStatusMessage("Logging out...");
@@ -1120,7 +1122,7 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="trading" className="h-full m-0 p-0" forceMount>
               <React.Suspense fallback={<TabLoadingFallback />}>
-                <TradingTab />
+                <CryptoTradingTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="equity-trading" className="h-full m-0 p-0" forceMount>

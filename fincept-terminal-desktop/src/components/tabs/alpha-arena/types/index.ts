@@ -52,6 +52,8 @@ export interface CompetitionModel {
   model_id: string;
   api_key?: string;
   initial_capital: number;
+  trading_style?: string;  // Trading style ID (e.g., 'aggressive', 'conservative')
+  metadata?: Record<string, unknown>;  // Additional metadata including style config
   capital?: number;
   total_pnl?: number;
 }
@@ -216,6 +218,8 @@ export interface CreateCompetitionRequest {
     provider?: string;
     model_id?: string;
     initial_capital?: number;
+    trading_style?: string;  // Trading style ID (e.g., 'aggressive', 'conservative')
+    metadata?: Record<string, unknown>;  // Additional metadata including style config
   }>;
   symbols?: string[];
   initial_capital?: number;

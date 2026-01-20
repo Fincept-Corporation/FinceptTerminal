@@ -574,3 +574,347 @@ pub async fn delete_alpha_competition(competition_id: String) -> Result<Value, S
 
     execute_alpha_arena_action("delete_competition", params, None).await
 }
+
+// ============================================================================
+// HITL (Human-in-the-Loop) Commands
+// ============================================================================
+
+/// Check if a decision requires approval
+#[command]
+pub async fn check_alpha_approval(
+    decision: Value,
+    context: Value
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena HITL] check_alpha_approval called");
+
+    let params = json!({
+        "decision": decision,
+        "context": context
+    });
+
+    execute_alpha_arena_action("check_approval", params, None).await
+}
+
+/// Approve a pending decision
+#[command]
+pub async fn approve_alpha_decision(
+    request_id: String,
+    approved_by: Option<String>,
+    notes: Option<String>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena HITL] approve_alpha_decision called for: {}", request_id);
+
+    let params = json!({
+        "request_id": request_id,
+        "approved_by": approved_by.unwrap_or_else(|| "user".to_string()),
+        "notes": notes.unwrap_or_default()
+    });
+
+    execute_alpha_arena_action("approve_decision", params, None).await
+}
+
+/// Reject a pending decision
+#[command]
+pub async fn reject_alpha_decision(
+    request_id: String,
+    rejected_by: Option<String>,
+    notes: Option<String>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena HITL] reject_alpha_decision called for: {}", request_id);
+
+    let params = json!({
+        "request_id": request_id,
+        "rejected_by": rejected_by.unwrap_or_else(|| "user".to_string()),
+        "notes": notes.unwrap_or_default()
+    });
+
+    execute_alpha_arena_action("reject_decision", params, None).await
+}
+
+/// Get all pending approval requests
+#[command]
+pub async fn get_alpha_pending_approvals() -> Result<Value, String> {
+    eprintln!("[Alpha Arena HITL] get_alpha_pending_approvals called");
+
+    execute_alpha_arena_action("get_pending_approvals", json!({}), None).await
+}
+
+/// Get HITL manager status and rules
+#[command]
+pub async fn get_alpha_hitl_status() -> Result<Value, String> {
+    eprintln!("[Alpha Arena HITL] get_alpha_hitl_status called");
+
+    execute_alpha_arena_action("get_hitl_status", json!({}), None).await
+}
+
+/// Update HITL rule settings
+#[command]
+pub async fn update_alpha_hitl_rule(
+    rule_name: String,
+    enabled: bool
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena HITL] update_alpha_hitl_rule called: {} = {}", rule_name, enabled);
+
+    let params = json!({
+        "rule_name": rule_name,
+        "enabled": enabled
+    });
+
+    execute_alpha_arena_action("update_hitl_rule", params, None).await
+}
+
+// ============================================================================
+// Portfolio Metrics Commands
+// ============================================================================
+
+/// Get portfolio metrics (Sharpe ratio, drawdown, etc.)
+#[command]
+pub async fn get_alpha_portfolio_metrics(
+    competition_id: String,
+    model_name: String
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena] get_alpha_portfolio_metrics called");
+
+    let params = json!({
+        "competition_id": competition_id,
+        "model_name": model_name
+    });
+
+    execute_alpha_arena_action("get_portfolio_metrics", params, None).await
+}
+
+/// Get equity curve data for charting
+#[command]
+pub async fn get_alpha_equity_curve(
+    competition_id: String,
+    model_name: String
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena] get_alpha_equity_curve called");
+
+    let params = json!({
+        "competition_id": competition_id,
+        "model_name": model_name
+    });
+
+    execute_alpha_arena_action("get_equity_curve", params, None).await
+}
+
+// ============================================================================
+// Grid Strategy Commands
+// ============================================================================
+
+/// Create a grid strategy agent
+#[command]
+pub async fn create_alpha_grid_agent(
+    name: String,
+    upper_price: f64,
+    lower_price: f64,
+    grid_levels: u32,
+    grid_type: Option<String>,
+    total_investment: Option<f64>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Grid] create_alpha_grid_agent called: {}", name);
+
+    let params = json!({
+        "name": name,
+        "upper_price": upper_price,
+        "lower_price": lower_price,
+        "grid_levels": grid_levels,
+        "grid_type": grid_type.unwrap_or_else(|| "arithmetic".to_string()),
+        "total_investment": total_investment.unwrap_or(10000.0)
+    });
+
+    execute_alpha_arena_action("create_grid_agent", params, None).await
+}
+
+/// Get grid agent status
+#[command]
+pub async fn get_alpha_grid_status(agent_name: String) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Grid] get_alpha_grid_status called: {}", agent_name);
+
+    let params = json!({
+        "agent_name": agent_name
+    });
+
+    execute_alpha_arena_action("get_grid_status", params, None).await
+}
+
+// ============================================================================
+// Research Commands
+// ============================================================================
+
+/// Get research report for a ticker
+#[command]
+pub async fn get_alpha_research(ticker: String) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Research] get_alpha_research called: {}", ticker);
+
+    let params = json!({
+        "ticker": ticker
+    });
+
+    execute_alpha_arena_action("get_research", params, None).await
+}
+
+/// Get SEC filings for a ticker
+#[command]
+pub async fn get_alpha_sec_filings(
+    ticker: String,
+    form_types: Option<Vec<String>>,
+    limit: Option<u32>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Research] get_alpha_sec_filings called: {}", ticker);
+
+    let params = json!({
+        "ticker": ticker,
+        "form_types": form_types,
+        "limit": limit.unwrap_or(10)
+    });
+
+    execute_alpha_arena_action("get_sec_filings", params, None).await
+}
+
+// ============================================================================
+// Features Pipeline Commands
+// ============================================================================
+
+/// Get technical features for a symbol
+#[command]
+pub async fn get_alpha_features(
+    symbol: String,
+    price: f64
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Features] get_alpha_features called: {}", symbol);
+
+    let params = json!({
+        "symbol": symbol,
+        "price": price
+    });
+
+    execute_alpha_arena_action("get_features", params, None).await
+}
+
+// ============================================================================
+// Broker Commands
+// ============================================================================
+
+/// List all supported brokers
+#[command]
+pub async fn list_alpha_brokers(
+    broker_type: Option<String>,
+    region: Option<String>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Brokers] list_alpha_brokers called");
+
+    let params = json!({
+        "type": broker_type,
+        "region": region
+    });
+
+    execute_alpha_arena_action("list_brokers", params, None).await
+}
+
+/// Get broker details by ID
+#[command]
+pub async fn get_alpha_broker(broker_id: String) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Brokers] get_alpha_broker called: {}", broker_id);
+
+    let params = json!({
+        "broker_id": broker_id
+    });
+
+    execute_alpha_arena_action("get_broker", params, None).await
+}
+
+/// Get ticker data from specific broker
+#[command]
+pub async fn get_alpha_broker_ticker(
+    symbol: String,
+    broker_id: Option<String>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Brokers] get_alpha_broker_ticker called: {} from {:?}", symbol, broker_id);
+
+    let params = json!({
+        "symbol": symbol,
+        "broker_id": broker_id.unwrap_or_else(|| "kraken".to_string())
+    });
+
+    execute_alpha_arena_action("get_broker_ticker", params, None).await
+}
+
+// ============================================================================
+// Sentiment Commands
+// ============================================================================
+
+/// Get sentiment analysis for a symbol
+#[command]
+pub async fn get_alpha_sentiment(
+    symbol: String,
+    max_articles: Option<u32>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Sentiment] get_alpha_sentiment called: {}", symbol);
+
+    let params = json!({
+        "symbol": symbol,
+        "max_articles": max_articles.unwrap_or(15)
+    });
+
+    execute_alpha_arena_action("get_sentiment", params, None).await
+}
+
+/// Get overall market mood from multiple symbols
+#[command]
+pub async fn get_alpha_market_mood(
+    symbols: Option<Vec<String>>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Sentiment] get_alpha_market_mood called");
+
+    let params = json!({
+        "symbols": symbols.unwrap_or_else(|| vec!["SPY".to_string(), "QQQ".to_string(), "BTC".to_string()])
+    });
+
+    execute_alpha_arena_action("get_market_mood", params, None).await
+}
+
+// ============================================================================
+// Trading Styles Commands (v2.2)
+// ============================================================================
+
+/// List all available trading styles
+#[command]
+pub async fn list_alpha_trading_styles() -> Result<Value, String> {
+    eprintln!("[Alpha Arena Styles] list_alpha_trading_styles called");
+
+    execute_alpha_arena_action("list_trading_styles", json!({}), None).await
+}
+
+/// Create multiple agents with different trading styles using the same provider
+#[command]
+pub async fn create_alpha_styled_agents(
+    provider: String,
+    model_id: String,
+    styles: Option<Vec<String>>,
+    initial_capital: Option<f64>
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Styles] create_alpha_styled_agents called: {}:{}", provider, model_id);
+
+    let params = json!({
+        "provider": provider,
+        "model_id": model_id,
+        "styles": styles,
+        "initial_capital": initial_capital.unwrap_or(10000.0)
+    });
+
+    execute_alpha_arena_action("create_styled_agents", params, None).await
+}
+
+/// Generic action executor - allows calling any Alpha Arena action dynamically
+/// This is useful for new features that don't have dedicated commands yet
+#[command]
+pub async fn run_alpha_action(
+    action: String,
+    params: Value
+) -> Result<Value, String> {
+    eprintln!("[Alpha Arena Generic] run_alpha_action called: {}", action);
+
+    execute_alpha_arena_action(&action, params, None).await
+}

@@ -27,6 +27,7 @@ from alpha_arena.types.responses import (
     decision_started,
     decision_completed,
     trade_executed,
+    portfolio_update,
     reasoning,
     market_data as market_data_response,
     leaderboard_update,
@@ -36,7 +37,7 @@ from alpha_arena.types.responses import (
     SystemResponseEvent,
 )
 from alpha_arena.core.base_agent import BaseTradingAgent, LLMTradingAgent
-from alpha_arena.core.paper_trading import PaperTradingEngine
+from alpha_arena.core.paper_trading_bridge import PaperTradingBridge, create_paper_trading_bridge
 from alpha_arena.core.market_data import MarketDataProvider, get_market_data_provider
 from alpha_arena.core.agent_manager import AgentManager, get_agent_manager
 from alpha_arena.config.agent_cards import get_agent_card
@@ -66,9 +67,9 @@ class AlphaArenaCompetition:
         self.start_time: Optional[datetime] = None
         self.end_time: Optional[datetime] = None
 
-        # Agents and trading engines
+        # Agents and trading engines (now using database-backed bridge)
         self._agents: Dict[str, BaseTradingAgent] = {}
-        self._engines: Dict[str, PaperTradingEngine] = {}
+        self._engines: Dict[str, PaperTradingBridge] = {}
         self._market_provider: Optional[MarketDataProvider] = None
 
         # Tracking
@@ -88,6 +89,11 @@ class AlphaArenaCompetition:
         Returns:
             True if initialization successful
         """
+        # Check if already initialized
+        if self._agents and self._engines:
+            logger.info(f"Competition {self.competition_id} already initialized with {len(self._agents)} agents")
+            return True
+
         try:
             logger.info(f"Initializing competition {self.competition_id}")
             logger.info(f"API keys available for providers: {list(api_keys.keys())}")
@@ -125,7 +131,14 @@ class AlphaArenaCompetition:
                 if not api_key:
                     logger.warning(f"No API key found for provider '{provider}' - agent will use mock mode")
 
-                # Create agent
+                # Get trading style if specified in model config
+                trading_style = None
+                if hasattr(model, 'trading_style'):
+                    trading_style = model.trading_style
+                elif hasattr(model, 'metadata') and model.metadata:
+                    trading_style = model.metadata.get('trading_style')
+
+                # Create agent with optional trading style
                 agent = LLMTradingAgent(
                     name=model.name,
                     provider=provider,
@@ -133,6 +146,7 @@ class AlphaArenaCompetition:
                     api_key=api_key,
                     temperature=0.7,
                     mode=self.config.mode.value if hasattr(self.config.mode, 'value') else self.config.mode,
+                    trading_style=trading_style,
                 )
 
                 # Initialize with timeout
@@ -150,13 +164,15 @@ class AlphaArenaCompetition:
 
                 self._agents[model.name] = agent
 
-                # Create trading engine
-                engine = PaperTradingEngine(
+                # Create trading engine (database-backed bridge to main paper trading)
+                engine = create_paper_trading_bridge(
+                    competition_id=self.competition_id,
                     model_name=model.name,
                     initial_capital=model.initial_capital or self.config.initial_capital,
+                    fee_rate=0.001,
                 )
                 self._engines[model.name] = engine
-                logger.info(f"Trading engine created for {model.name} with capital ${model.initial_capital or self.config.initial_capital}")
+                logger.info(f"Trading engine (DB-backed) created for {model.name} with capital ${model.initial_capital or self.config.initial_capital}")
 
             self.status = CompetitionStatus.CREATED
             logger.info(f"Competition {self.competition_id} initialized with {len(self._agents)} agents")
@@ -181,6 +197,14 @@ class AlphaArenaCompetition:
             yield error("Competition is in failed state")
             return
 
+        # Auto-transition to RUNNING if not already
+        if self.status in [CompetitionStatus.CREATED, CompetitionStatus.PAUSED]:
+            self.status = CompetitionStatus.RUNNING
+            self._is_running = True
+            if self.start_time is None:
+                self.start_time = datetime.now()
+            logger.info(f"Competition {self.competition_id} auto-transitioned to RUNNING state")
+
         self.cycle_count += 1
         cycle_number = self.cycle_count
         cycle_start = time.time()
@@ -197,6 +221,12 @@ class AlphaArenaCompetition:
         try:
             # Fetch market data
             symbol = self.config.symbols[0] if self.config.symbols else "BTC/USD"
+
+            # Ensure market provider is initialized
+            if self._market_provider is None:
+                logger.warning("Market provider not initialized, initializing now...")
+                self._market_provider = await get_market_data_provider(self.config.exchange_id)
+
             market = await self._market_provider.get_ticker(symbol)
 
             yield market_data_response(
@@ -262,6 +292,27 @@ class AlphaArenaCompetition:
                             price=trade_result.price,
                             pnl=trade_result.pnl,
                         )
+
+                    # Emit real-time portfolio update after trade
+                    yield portfolio_update(
+                        model_name=model_name,
+                        portfolio_value=new_portfolio.portfolio_value,
+                        cash=new_portfolio.cash,
+                        total_pnl=new_portfolio.total_pnl,
+                        positions=[
+                            {
+                                "symbol": p.get("symbol", ""),
+                                "side": p.get("side", ""),
+                                "quantity": p.get("quantity", 0),
+                                "entry_price": p.get("entry_price", 0),
+                                "current_price": p.get("current_price", 0),
+                                "unrealized_pnl": p.get("unrealized_pnl", 0),
+                            }
+                            for p in new_portfolio.positions
+                        ] if isinstance(new_portfolio.positions, list) else [],
+                        trades_count=new_portfolio.trades_count,
+                        cycle_number=cycle_number,
+                    )
 
                 except Exception as e:
                     error_msg = f"Error processing {model_name}: {str(e)}"
@@ -349,7 +400,8 @@ class AlphaArenaCompetition:
 
     async def start(self, api_keys: Dict[str, str]) -> bool:
         """Start the competition."""
-        if self.status not in [CompetitionStatus.CREATED, CompetitionStatus.PAUSED]:
+        # Allow restarting from RUNNING state (e.g., after browser refresh)
+        if self.status not in [CompetitionStatus.CREATED, CompetitionStatus.PAUSED, CompetitionStatus.RUNNING]:
             logger.warning(f"Cannot start competition in state: {self.status}")
             return False
 
@@ -357,11 +409,12 @@ class AlphaArenaCompetition:
             return False
 
         self.status = CompetitionStatus.RUNNING
-        self.start_time = datetime.now()
+        if self.start_time is None:
+            self.start_time = datetime.now()
         self._is_running = True
         self._stop_requested = False
 
-        logger.info(f"Competition {self.competition_id} started")
+        logger.info(f"Competition {self.competition_id} started (status: {self.status})")
         return True
 
     async def stop(self):
@@ -387,6 +440,10 @@ class AlphaArenaCompetition:
         if self._cycle_results:
             last_cycle = self._cycle_results[-1]
             prices = {symbol: last_cycle.market_data.price}
+        else:
+            # No cycles run yet - use initial capital as portfolio value
+            # This allows showing a leaderboard even before the first cycle
+            prices = {symbol: 0.0}  # Price doesn't matter for initial state
         return self._calculate_leaderboard(prices)
 
     def get_decisions(self, model_name: Optional[str] = None, limit: int = 50) -> List[ModelDecision]:

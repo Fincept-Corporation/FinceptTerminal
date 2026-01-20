@@ -116,12 +116,51 @@ export interface RelationshipMapData {
 // SERVICE CLASS
 // ============================================================================
 
+// Cache configuration
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
 class RelationshipMapService {
+  // In-memory cache for relationship data
+  private cache: Map<string, CacheEntry<RelationshipMapData>> = new Map();
+
+  /**
+   * Check if cache entry is still valid
+   */
+  private isCacheValid<T>(entry: CacheEntry<T> | undefined): boolean {
+    if (!entry) return false;
+    return Date.now() - entry.timestamp < CACHE_DURATION;
+  }
+
+  /**
+   * Clear cache for a specific ticker or all
+   */
+  clearCache(ticker?: string): void {
+    if (ticker) {
+      this.cache.delete(ticker.toUpperCase());
+    } else {
+      this.cache.clear();
+    }
+  }
 
   /**
    * Get comprehensive relationship map data for a ticker
    */
   async getRelationshipMap(ticker: string): Promise<RelationshipMapData> {
+    const upperTicker = ticker.toUpperCase();
+
+    // Check cache first
+    const cached = this.cache.get(upperTicker);
+    if (this.isCacheValid(cached)) {
+      console.log(`[RelationshipMapService] Cache hit for ${upperTicker}`);
+      return cached!.data;
+    }
+
+    console.log(`[RelationshipMapService] Cache miss for ${upperTicker}, fetching...`);
     try {
       const [edgarCompany, edgarProxy, edgarFilings, edgarEvents, yfinanceInfo] = await Promise.allSettled([
         this.getEdgarCompany(ticker),
@@ -137,7 +176,15 @@ class RelationshipMapService {
       const eventsData = edgarEvents.status === 'fulfilled' ? edgarEvents.value : null;
       const yfinanceData = yfinanceInfo.status === 'fulfilled' ? yfinanceInfo.value : null;
 
-      return this.combineData(ticker, companyData, proxyData, filingsData, eventsData, yfinanceData);
+      const result = this.combineData(ticker, companyData, proxyData, filingsData, eventsData, yfinanceData);
+
+      // Store in cache
+      this.cache.set(upperTicker, {
+        data: result,
+        timestamp: Date.now(),
+      });
+
+      return result;
     } catch (error) {
       console.error('[RelationshipMapService] Error:', error);
       throw error;

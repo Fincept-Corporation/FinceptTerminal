@@ -6,6 +6,7 @@ SQLite-based persistence for competition state.
 
 import json
 import sqlite3
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -22,6 +23,24 @@ from alpha_arena.types.models import (
 from alpha_arena.utils.logging import get_logger
 
 logger = get_logger("database")
+
+
+def get_main_db_path() -> Optional[Path]:
+    """Get the path to the main Fincept Terminal database for paper trading integration."""
+    possible_paths = [
+        # Windows AppData
+        Path(os.environ.get("APPDATA", "")) / "fincept-terminal" / "fincept_terminal.db",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "fincept-terminal" / "fincept_terminal.db",
+        # Linux/Mac
+        Path.home() / ".config" / "fincept-terminal" / "fincept_terminal.db",
+        Path.home() / ".local" / "share" / "fincept-terminal" / "fincept_terminal.db",
+    ]
+
+    for path in possible_paths:
+        if path.exists():
+            return path
+
+    return None
 
 
 class AlphaArenaDatabase:
@@ -260,7 +279,7 @@ class AlphaArenaDatabase:
     # ==================== Decision Methods ====================
 
     def save_decision(self, decision: ModelDecision) -> int:
-        """Save a trading decision."""
+        """Save a trading decision to both local and main database."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
@@ -290,7 +309,60 @@ class AlphaArenaDatabase:
                 decision.timestamp.isoformat(),
             ))
 
-            return cursor.lastrowid
+            local_id = cursor.lastrowid
+
+        # Also save to main Fincept database for UI integration
+        self._save_decision_to_main_db(decision, trade_status, trade_pnl)
+
+        return local_id
+
+    def _save_decision_to_main_db(self, decision: ModelDecision, trade_status: Optional[str], trade_pnl: Optional[float]):
+        """Save decision to main Fincept Terminal database."""
+        main_db_path = get_main_db_path()
+        if not main_db_path:
+            logger.warning("Main database not found, skipping decision sync")
+            return
+
+        conn = None
+        try:
+            import uuid
+            conn = sqlite3.connect(str(main_db_path), timeout=10.0)
+            cursor = conn.cursor()
+
+            decision_id = str(uuid.uuid4())
+            action_value = decision.action.value if hasattr(decision.action, 'value') else str(decision.action)
+
+            cursor.execute("""
+                INSERT INTO alpha_arena_decisions
+                (id, competition_id, model_name, cycle_number, symbol, action, quantity,
+                 confidence, reasoning, trade_executed, price_at_decision,
+                 portfolio_value_before, portfolio_value_after, pnl, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                decision_id,
+                decision.competition_id,
+                decision.model_name,
+                decision.cycle_number,
+                decision.symbol,
+                action_value,
+                decision.quantity,
+                decision.confidence,
+                decision.reasoning,
+                1 if trade_status == "executed" else 0,
+                decision.price_at_decision,
+                decision.portfolio_value_before,
+                decision.portfolio_value_after,
+                trade_pnl or 0,
+                decision.timestamp.isoformat(),
+            ))
+
+            conn.commit()
+            logger.debug(f"Decision synced to main database: {decision_id}")
+        except Exception as e:
+            logger.warning(f"Failed to sync decision to main database: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     def get_decisions(
         self,
@@ -322,7 +394,7 @@ class AlphaArenaDatabase:
     # ==================== Snapshot Methods ====================
 
     def save_snapshot(self, snapshot: PerformanceSnapshot) -> bool:
-        """Save a performance snapshot."""
+        """Save a performance snapshot to both local and main database."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
@@ -345,7 +417,47 @@ class AlphaArenaDatabase:
                 snapshot.timestamp.isoformat(),
             ))
 
+        # Also save to main database
+        self._save_snapshot_to_main_db(snapshot)
+
         return True
+
+    def _save_snapshot_to_main_db(self, snapshot: PerformanceSnapshot):
+        """Save snapshot to main Fincept Terminal database."""
+        main_db_path = get_main_db_path()
+        if not main_db_path:
+            return
+
+        conn = None
+        try:
+            conn = sqlite3.connect(str(main_db_path), timeout=10.0)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                INSERT OR REPLACE INTO alpha_arena_snapshots
+                (id, competition_id, model_name, cycle_number, portfolio_value,
+                 cash, pnl, return_pct, positions_count, trades_count, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                snapshot.id,
+                snapshot.competition_id,
+                snapshot.model_name,
+                snapshot.cycle_number,
+                snapshot.portfolio_value,
+                snapshot.cash,
+                snapshot.pnl,
+                snapshot.return_pct,
+                snapshot.positions_count,
+                snapshot.trades_count,
+                snapshot.timestamp.isoformat(),
+            ))
+
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Failed to sync snapshot to main database: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     def get_snapshots(
         self,
@@ -379,7 +491,11 @@ class AlphaArenaDatabase:
         cycle_number: int,
         leaderboard: List[LeaderboardEntry],
     ) -> bool:
-        """Save leaderboard snapshot."""
+        """Save leaderboard snapshot to both local and main database."""
+        import uuid
+        leaderboard_json = json.dumps([e.model_dump() for e in leaderboard])
+        now = datetime.now().isoformat()
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
@@ -390,11 +506,46 @@ class AlphaArenaDatabase:
             """, (
                 competition_id,
                 cycle_number,
-                json.dumps([e.model_dump() for e in leaderboard]),
-                datetime.now().isoformat(),
+                leaderboard_json,
+                now,
             ))
 
+        # Also save to main database
+        self._save_leaderboard_to_main_db(competition_id, cycle_number, leaderboard_json, now)
+
         return True
+
+    def _save_leaderboard_to_main_db(self, competition_id: str, cycle_number: int, leaderboard_json: str, timestamp: str):
+        """Save leaderboard to main Fincept Terminal database."""
+        main_db_path = get_main_db_path()
+        if not main_db_path:
+            return
+
+        conn = None
+        try:
+            import uuid
+            conn = sqlite3.connect(str(main_db_path), timeout=10.0)
+            cursor = conn.cursor()
+
+            leaderboard_id = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO alpha_arena_leaderboard
+                (id, competition_id, cycle_number, leaderboard_json, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                leaderboard_id,
+                competition_id,
+                cycle_number,
+                leaderboard_json,
+                timestamp,
+            ))
+
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Failed to sync leaderboard to main database: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     def get_latest_leaderboard(self, competition_id: str) -> Optional[List[Dict]]:
         """Get the latest leaderboard for a competition."""

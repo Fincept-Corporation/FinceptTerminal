@@ -70,6 +70,16 @@ class CompetitionModel(BaseModel):
     api_key: Optional[str] = Field(None, description="API key for this model")
     initial_capital: float = Field(10000.0, gt=0, description="Starting capital")
 
+    # Trading style (allows using same provider with different behaviors)
+    trading_style: Optional[str] = Field(
+        None,
+        description="Trading style ID (e.g., 'aggressive', 'conservative', 'momentum')"
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Additional metadata including style configuration"
+    )
+
     # Runtime state (populated during competition)
     capital: Optional[float] = Field(None, description="Current cash balance")
     total_pnl: float = Field(0.0, description="Total profit/loss")

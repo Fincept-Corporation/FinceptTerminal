@@ -139,9 +139,12 @@ class EvaluationModule:
                 continue
 
             pred.price_after = current_price
-            price_change = (current_price - pred.price_at_decision) / pred.price_at_decision
+            if pred.price_at_decision == 0:
+                price_change = 0.0
+            else:
+                price_change = (current_price - pred.price_at_decision) / pred.price_at_decision
 
-            pred.actual_return = price_change
+            pred.actual_return = price_change if pred.price_at_decision != 0 else 0
 
             # Determine if prediction was correct
             if pred.action == "hold":

@@ -378,22 +378,23 @@ pub fn fix_google_model_ids() -> Result<OperationResult> {
     let pool = get_pool()?;
     let conn = pool.get()?;
 
-    // Fix model_ids that have incorrect prefixes like "google/" or "models/"
+    // Fix model_ids that have prefixes like "gemini/", "google/", or "models/"
+    // These come from LiteLLM format but Google's API needs just "gemini-xxx"
     let rows_affected = conn.execute(
         "UPDATE llm_model_configs
-         SET model_id = REPLACE(REPLACE(model_id, 'google/', ''), 'models/', ''),
+         SET model_id = REPLACE(REPLACE(REPLACE(model_id, 'gemini/', ''), 'google/', ''), 'models/', ''),
              updated_at = CURRENT_TIMESTAMP
-         WHERE provider = 'google'
-         AND (model_id LIKE 'google/%' OR model_id LIKE 'models/%')",
+         WHERE (provider = 'google' OR provider = 'gemini')
+         AND (model_id LIKE 'gemini/%' OR model_id LIKE 'google/%' OR model_id LIKE 'models/%')",
         [],
     )?;
 
-    // Also ensure common model names are correct
+    // Also ensure common model names are correct - set default if model_id is invalid
     conn.execute(
         "UPDATE llm_model_configs
          SET model_id = 'gemini-1.5-flash',
              updated_at = CURRENT_TIMESTAMP
-         WHERE provider = 'google'
+         WHERE (provider = 'google' OR provider = 'gemini')
          AND model_id NOT LIKE 'gemini-%'
          AND model_id != ''",
         [],

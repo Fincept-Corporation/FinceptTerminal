@@ -254,8 +254,23 @@ async def get_market_data_provider(exchange_id: str = "kraken") -> MarketDataPro
 
     if _provider is None or _provider.exchange_id != exchange_id:
         if _provider:
-            await _provider.close()
+            try:
+                await _provider.close()
+            except Exception as e:
+                logger.warning(f"Error closing previous market data provider: {e}")
         _provider = CachedMarketDataProvider(exchange_id)
         await _provider.initialize()
 
     return _provider
+
+
+async def reset_market_data_provider():
+    """Reset the market data provider singleton (useful between competitions)."""
+    global _provider
+    if _provider:
+        try:
+            await _provider.close()
+        except Exception as e:
+            logger.warning(f"Error closing market data provider: {e}")
+        _provider = None
+        logger.info("Market data provider reset")

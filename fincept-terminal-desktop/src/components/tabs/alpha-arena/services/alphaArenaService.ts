@@ -130,9 +130,42 @@ export async function startCompetition(
   }
 }
 
+// Portfolio update callback type
+export type PortfolioUpdateCallback = (update: {
+  modelName: string;
+  portfolioValue: number;
+  cash: number;
+  totalPnl: number;
+  positions: Array<{
+    symbol: string;
+    side: string;
+    quantity: number;
+    entry_price: number;
+    current_price: number;
+    unrealized_pnl: number;
+  }>;
+  tradesCount: number;
+  cycleNumber: number;
+  timestamp: string;
+}) => void;
+
+// Store for real-time portfolio update callbacks
+let portfolioUpdateCallbacks: PortfolioUpdateCallback[] = [];
+
+/**
+ * Subscribe to real-time portfolio updates during cycle execution
+ */
+export function onPortfolioUpdate(callback: PortfolioUpdateCallback): () => void {
+  portfolioUpdateCallbacks.push(callback);
+  return () => {
+    portfolioUpdateCallbacks = portfolioUpdateCallbacks.filter(cb => cb !== callback);
+  };
+}
+
 /**
  * Run a single competition cycle
  * Now also saves decisions to the repository for persistence
+ * AND emits real-time portfolio updates
  */
 export async function runCycle(competitionId: string): Promise<RunCycleResponse> {
   try {
@@ -140,8 +173,46 @@ export async function runCycle(competitionId: string): Promise<RunCycleResponse>
       competitionId,
     });
 
-    // If cycle was successful, save decisions to repository for persistence
+    // If cycle was successful, process events
     if (result.success && result.events) {
+      // Process portfolio update events for real-time updates
+      const portfolioEvents = result.events.filter(
+        e => e.event === 'portfolio_update' && e.metadata
+      );
+
+      for (const event of portfolioEvents) {
+        const meta = event.metadata as Record<string, unknown>;
+        if (meta?.model_name) {
+          const update = {
+            modelName: meta.model_name as string,
+            portfolioValue: (meta.portfolio_value as number) || 0,
+            cash: (meta.cash as number) || 0,
+            totalPnl: (meta.total_pnl as number) || 0,
+            positions: (meta.positions as Array<{
+              symbol: string;
+              side: string;
+              quantity: number;
+              entry_price: number;
+              current_price: number;
+              unrealized_pnl: number;
+            }>) || [],
+            tradesCount: (meta.trades_count as number) || 0,
+            cycleNumber: (meta.cycle_number as number) || 0,
+            timestamp: (meta.timestamp as string) || new Date().toISOString(),
+          };
+
+          // Notify all subscribers immediately
+          for (const callback of portfolioUpdateCallbacks) {
+            try {
+              callback(update);
+            } catch (err) {
+              console.warn('Portfolio update callback error:', err);
+            }
+          }
+        }
+      }
+
+      // Save decisions to repository for persistence
       const decisionEvents = result.events.filter(
         e => e.event === 'decision_completed' && e.metadata
       );
@@ -597,6 +668,165 @@ export async function resumeCompetition(competitionId: string): Promise<{
 }
 
 // =============================================================================
+// Trading Styles (v2.2)
+// =============================================================================
+
+export interface TradingStyle {
+  id: string;
+  name: string;
+  description: string;
+  style_type: string;
+  risk_tolerance: number;
+  position_size_pct: number;
+  hold_bias: number;
+  confidence_threshold: number;
+  temperature_modifier: number;
+  system_prompt: string;
+  instructions: string[];
+  max_trades_per_cycle: number;
+  stop_loss_pct: number | null;
+  take_profit_pct: number | null;
+  color: string;
+  icon: string;
+}
+
+export interface ListTradingStylesResponse {
+  success: boolean;
+  styles?: TradingStyle[];
+  count?: number;
+  error?: string;
+}
+
+export interface StyledAgent {
+  name: string;
+  provider: string;
+  model_id: string;
+  api_key?: string;
+  initial_capital: number;
+  trading_style: string;
+  metadata?: {
+    style_config?: TradingStyle;
+  };
+}
+
+export interface CreateStyledAgentsResponse {
+  success: boolean;
+  agents?: StyledAgent[];
+  count?: number;
+  provider?: string;
+  model_id?: string;
+  styles_used?: string[];
+  error?: string;
+}
+
+/**
+ * List all available trading styles
+ * Trading styles allow running the same LLM provider with different behavioral personalities
+ */
+export async function listTradingStyles(): Promise<ListTradingStylesResponse> {
+  try {
+    const result = await invoke<ListTradingStylesResponse>('list_alpha_trading_styles');
+    return result;
+  } catch (error) {
+    console.error('Error listing trading styles:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Create multiple agents with different trading styles using a single provider
+ * This is useful for testing how the same model behaves with different strategies
+ *
+ * @param provider - LLM provider (openai, anthropic, google, deepseek, groq, etc.)
+ * @param modelId - Model identifier (gpt-4o-mini, claude-3-5-sonnet, etc.)
+ * @param styles - Optional list of style IDs to use (defaults to diverse set)
+ * @param initialCapital - Starting capital per agent (default: 10000)
+ */
+export async function createStyledAgents(
+  provider: string,
+  modelId: string,
+  styles?: string[],
+  initialCapital: number = 10000
+): Promise<CreateStyledAgentsResponse> {
+  try {
+    const result = await invoke<CreateStyledAgentsResponse>('create_alpha_styled_agents', {
+      provider,
+      modelId,
+      styles,
+      initialCapital,
+    });
+    return result;
+  } catch (error) {
+    console.error('Error creating styled agents:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Create a competition with styled agents using a single provider
+ * Convenience function that combines createStyledAgents and createCompetition
+ */
+export async function createStyledCompetition(params: {
+  name: string;
+  provider: string;
+  modelId: string;
+  styles?: string[];
+  symbol?: string;
+  initialCapital?: number;
+  cycleInterval?: number;
+  exchangeId?: string;
+}): Promise<CreateCompetitionResponse> {
+  try {
+    // First, create the styled agents
+    const agentsResult = await createStyledAgents(
+      params.provider,
+      params.modelId,
+      params.styles,
+      params.initialCapital || 10000
+    );
+
+    if (!agentsResult.success || !agentsResult.agents) {
+      return {
+        success: false,
+        error: agentsResult.error || 'Failed to create styled agents',
+      };
+    }
+
+    // Now create the competition with these agents
+    const competitionRequest: CreateCompetitionRequest = {
+      competition_name: params.name,
+      models: agentsResult.agents.map(agent => ({
+        name: agent.name,
+        provider: agent.provider,
+        model_id: agent.model_id,
+        initial_capital: agent.initial_capital,
+        trading_style: agent.trading_style,
+        metadata: agent.metadata,
+      })),
+      symbols: [params.symbol || 'BTC/USD'],
+      initial_capital: params.initialCapital || 10000,
+      mode: 'baseline',
+      cycle_interval_seconds: params.cycleInterval || 150,
+      exchange_id: params.exchangeId || 'kraken',
+    };
+
+    return await createCompetition(competitionRequest);
+  } catch (error) {
+    console.error('Error creating styled competition:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// =============================================================================
 // Auto-Run Management
 // =============================================================================
 
@@ -659,6 +889,14 @@ export const alphaArenaService = {
   getHistoricalDecisions,
   getCycleDecisions,
   getModelPerformanceSummary,
+
+  // Real-time Portfolio Updates
+  onPortfolioUpdate,
+
+  // Trading Styles (v2.2) - Single provider with multiple agent personalities
+  listTradingStyles,
+  createStyledAgents,
+  createStyledCompetition,
 
   // Auto-Run
   startAutoRun,

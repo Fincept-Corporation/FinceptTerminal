@@ -15,12 +15,22 @@ import {
   TrendingUp, TrendingDown, Activity, Zap, AlertCircle, CheckCircle,
   ChevronRight, Loader2, BarChart3, Clock, Target, Brain,
   RefreshCw, Eye, Users, Sparkles, Check, Circle, History, Trash2, PlayCircle,
-  StopCircle, XCircle,
+  StopCircle, XCircle, Shield, Newspaper, Grid3X3, FileSearch, Building,
 } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';
 import { sqliteService, type LLMModelConfig, type LLMConfig } from '@/services/core/sqliteService';
 import alphaArenaService, { type StoredCompetition } from './services/alphaArenaService';
 import { useAuth } from '@/contexts/AuthContext';
+
+// Enhanced Components
+import {
+  HITLApprovalPanel,
+  SentimentPanel,
+  PortfolioMetricsPanel,
+  GridStrategyPanel,
+  ResearchPanel,
+  BrokerSelector,
+} from './components';
 
 // Extended model type for Alpha Arena with API key
 interface AlphaArenaModel {
@@ -118,6 +128,11 @@ const AlphaArenaTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Enhanced features state
+  type RightPanelTab = 'decisions' | 'hitl' | 'sentiment' | 'metrics' | 'grid' | 'research' | 'broker';
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>('decisions');
+  const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
+
   // Abort controller for cancelling operations
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -139,6 +154,9 @@ const AlphaArenaTab: React.FC = () => {
 
   // Auto-run ref
   const autoRunIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track if a cycle is currently running (to prevent overlapping cycles)
+  const cycleInProgressRef = useRef(false);
 
   // =============================================================================
   // Load LLM Models from Settings (llm_model_configs table)
@@ -454,8 +472,15 @@ const AlphaArenaTab: React.FC = () => {
   };
 
   const handleRunCycle = useCallback(async () => {
-    if (!competitionId || isLoading) return;
+    if (!competitionId) return;
 
+    // Prevent overlapping cycles - use ref to allow auto-run to continue
+    if (cycleInProgressRef.current) {
+      console.log('[AlphaArena] Cycle already in progress, skipping...');
+      return;
+    }
+
+    cycleInProgressRef.current = true;
     setIsLoading(true);
     setError(null);
     setProgressSteps([]); // Reset progress
@@ -463,25 +488,32 @@ const AlphaArenaTab: React.FC = () => {
 
     try {
       const currentCompetitionId = competitionId; // Capture before async
+      console.log('[AlphaArena] Running cycle for competition:', currentCompetitionId);
       const result = await alphaArenaService.runCycle(currentCompetitionId);
 
       if (result.success) {
+        console.log('[AlphaArena] Cycle completed successfully, cycle_number:', result.cycle_number);
         setCycleCount(result.cycle_number || cycleCount + 1);
         setStatus('running');
         // Pass ID explicitly to avoid stale closure issues
         await fetchCompetitionData(currentCompetitionId);
       } else {
+        console.error('[AlphaArena] Cycle failed:', result.error);
         setError(result.error || 'Cycle failed');
       }
     } catch (err) {
+      console.error('[AlphaArena] Cycle error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
+      cycleInProgressRef.current = false;
       setIsLoading(false);
     }
-  }, [competitionId, isLoading, cycleCount, fetchCompetitionData]);
+  }, [competitionId, cycleCount, fetchCompetitionData]);
 
   const handleToggleAutoRun = useCallback(() => {
     if (isAutoRunning) {
+      // Stop auto-run
+      console.log('[AlphaArena] Stopping auto-run');
       if (autoRunIntervalRef.current) {
         clearInterval(autoRunIntervalRef.current);
         autoRunIntervalRef.current = null;
@@ -489,10 +521,19 @@ const AlphaArenaTab: React.FC = () => {
       setIsAutoRunning(false);
       setStatus('paused');
     } else {
+      // Start auto-run
+      console.log('[AlphaArena] Starting auto-run with interval:', cycleInterval, 'seconds');
       setIsAutoRunning(true);
       setStatus('running');
+
+      // Run first cycle immediately
       handleRunCycle();
+
+      // Then schedule subsequent cycles
+      // The interval will call handleRunCycle which checks cycleInProgressRef
+      // to prevent overlapping cycles
       autoRunIntervalRef.current = setInterval(() => {
+        console.log('[AlphaArena] Auto-run interval triggered');
         handleRunCycle();
       }, cycleInterval * 1000);
     }
@@ -508,6 +549,8 @@ const AlphaArenaTab: React.FC = () => {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    // Reset cycle in progress flag
+    cycleInProgressRef.current = false;
     setCompetitionId(null);
     setStatus(null);
     setCycleCount(0);
@@ -538,6 +581,9 @@ const AlphaArenaTab: React.FC = () => {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+
+    // Reset cycle in progress flag
+    cycleInProgressRef.current = false;
 
     // Reset loading states
     setIsLoading(false);
@@ -1389,9 +1435,89 @@ const AlphaArenaTab: React.FC = () => {
           )}
         </div>
 
-        {/* Right Panel - Decisions */}
-        <div className="w-[380px] border-l" style={{ borderColor: COLORS.BORDER }}>
-          {renderDecisions()}
+        {/* Right Panel - Enhanced Features */}
+        <div className="w-[400px] border-l flex flex-col" style={{ borderColor: COLORS.BORDER }}>
+          {/* Right Panel Tabs */}
+          <div className="flex border-b overflow-x-auto" style={{ borderColor: COLORS.BORDER }}>
+            {[
+              { key: 'decisions', icon: Brain, label: 'Decisions' },
+              { key: 'hitl', icon: Shield, label: 'HITL' },
+              { key: 'sentiment', icon: Newspaper, label: 'Sentiment' },
+              { key: 'metrics', icon: BarChart3, label: 'Metrics' },
+              { key: 'grid', icon: Grid3X3, label: 'Grid' },
+              { key: 'research', icon: FileSearch, label: 'Research' },
+              { key: 'broker', icon: Building, label: 'Broker' },
+            ].map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                onClick={() => setRightPanelTab(key as RightPanelTab)}
+                className="px-3 py-2 text-xs font-medium whitespace-nowrap flex items-center gap-1 transition-colors"
+                style={{
+                  backgroundColor: rightPanelTab === key ? COLORS.CARD_BG : 'transparent',
+                  color: rightPanelTab === key ? COLORS.ORANGE : COLORS.GRAY,
+                  borderBottom: rightPanelTab === key ? `2px solid ${COLORS.ORANGE}` : '2px solid transparent',
+                }}
+              >
+                <Icon size={12} />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right Panel Content */}
+          <div className="flex-1 overflow-y-auto">
+            {rightPanelTab === 'decisions' && renderDecisions()}
+            {rightPanelTab === 'hitl' && (
+              <div className="p-3">
+                <HITLApprovalPanel
+                  competitionId={competitionId || undefined}
+                  onApprovalChange={() => fetchCompetitionData()}
+                />
+              </div>
+            )}
+            {rightPanelTab === 'sentiment' && (
+              <div className="p-3">
+                <SentimentPanel
+                  symbol={symbol.split('/')[0]}
+                  showMarketMood={true}
+                />
+              </div>
+            )}
+            {rightPanelTab === 'metrics' && competitionId && (
+              <div className="p-3">
+                <PortfolioMetricsPanel
+                  competitionId={competitionId}
+                />
+              </div>
+            )}
+            {rightPanelTab === 'metrics' && !competitionId && (
+              <div className="p-8 text-center" style={{ color: COLORS.GRAY }}>
+                <BarChart3 size={32} className="mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Start a competition to view metrics</p>
+              </div>
+            )}
+            {rightPanelTab === 'grid' && (
+              <div className="p-3">
+                <GridStrategyPanel
+                  symbol={symbol.split('/')[0]}
+                  currentPrice={50000} // This would come from real price data
+                />
+              </div>
+            )}
+            {rightPanelTab === 'research' && (
+              <div className="p-3">
+                <ResearchPanel />
+              </div>
+            )}
+            {rightPanelTab === 'broker' && (
+              <div className="p-3">
+                <BrokerSelector
+                  selectedBrokerId={selectedBroker || undefined}
+                  onBrokerSelect={(broker) => setSelectedBroker(broker.id)}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1411,8 +1537,12 @@ const AlphaArenaTab: React.FC = () => {
             label: `AI Models: ${configuredLLMs.length} available`,
             color: COLORS.GRAY,
           },
+          ...(selectedBroker ? [{
+            label: `Broker: ${selectedBroker}`,
+            color: COLORS.ORANGE,
+          }] : []),
         ]}
-        statusInfo={`Cycle: ${cycleCount} | Decisions: ${decisions.length}`}
+        statusInfo={`Cycle: ${cycleCount} | Decisions: ${decisions.length} | Panel: ${rightPanelTab.toUpperCase()}`}
         backgroundColor={COLORS.PANEL_BG}
         borderColor={COLORS.BORDER}
       />

@@ -4,6 +4,9 @@
  * AI Trading Competition where multiple LLM models compete in real-time trading.
  */
 
+// Default export for lazy loading
+export { default } from './AlphaArenaTab';
+
 // Main Tab Component
 export { default as AlphaArenaTab } from './AlphaArenaTab';
 

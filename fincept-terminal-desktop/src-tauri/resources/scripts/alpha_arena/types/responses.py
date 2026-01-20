@@ -318,3 +318,29 @@ def done() -> StreamResponse:
         content="",
         event=SystemResponseEvent.DONE,
     )
+
+
+def portfolio_update(
+    model_name: str,
+    portfolio_value: float,
+    cash: float,
+    total_pnl: float,
+    positions: list,
+    trades_count: int,
+    cycle_number: int,
+) -> StreamResponse:
+    """Create a real-time portfolio update response after trade execution."""
+    return StreamResponse(
+        content=f"{model_name}: Portfolio ${portfolio_value:,.2f} (P&L: ${total_pnl:+,.2f})",
+        event=CommonResponseEvent.PORTFOLIO_UPDATE,
+        metadata={
+            "model_name": model_name,
+            "portfolio_value": portfolio_value,
+            "cash": cash,
+            "total_pnl": total_pnl,
+            "positions": positions,
+            "trades_count": trades_count,
+            "cycle_number": cycle_number,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )

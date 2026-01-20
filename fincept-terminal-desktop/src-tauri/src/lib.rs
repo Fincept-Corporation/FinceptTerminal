@@ -1648,6 +1648,10 @@ pub fn run() {
             commands::alpha_arena::list_alpha_competitions,
             commands::alpha_arena::get_alpha_competition,
             commands::alpha_arena::delete_alpha_competition,
+            // Alpha Arena - Trading Styles (v2.2)
+            commands::alpha_arena::list_alpha_trading_styles,
+            commands::alpha_arena::create_alpha_styled_agents,
+            commands::alpha_arena::run_alpha_action,
             // AI Quant Lab - Qlib
             commands::ai_quant_lab::qlib_initialize,
             commands::ai_quant_lab::qlib_check_status,

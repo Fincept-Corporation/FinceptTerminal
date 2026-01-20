@@ -25,7 +25,12 @@ class AgentContext:
     is_running: bool = False
     api_key: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _lock: Optional[asyncio.Lock] = field(default=None, repr=False)
+
+    def __post_init__(self):
+        """Initialize the lock after instance creation."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
 
 
 class AgentManager:
