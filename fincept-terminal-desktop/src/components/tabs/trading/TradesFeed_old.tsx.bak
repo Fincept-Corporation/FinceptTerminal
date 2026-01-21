@@ -1,2 +1,0 @@
-// Temporarily stubbed - migration to Rust WebSocket in progress
-export function OrderBook() { return <div>Migrating to Rust WebSocket...</div>; }

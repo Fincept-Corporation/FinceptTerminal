@@ -150,15 +150,17 @@ export const createEquityResearchTabTour = (setActiveTab?: (tab: string) => void
     showProgress: true,
     steps: equityResearchTabTourSteps,
     popoverClass: 'fincept-tour-popover',
-    overlayColor: 'rgba(0, 0, 0, 0.85)',
     animate: true,
     smoothScroll: true,
     allowClose: true,
     doneBtnText: 'FINISH',
     nextBtnText: 'NEXT',
     prevBtnText: 'BACK',
-    stagePadding: 10,
-    stageRadius: 5,
+    showButtons: ['next', 'previous', 'close'],
+    stagePadding: 6,
+    stageRadius: 4,
+    popoverOffset: 12,
+
     onHighlightStarted: (element, step, options) => {
       // Navigate to appropriate sub-tab based on step
       if (setActiveTab) {
@@ -189,6 +191,7 @@ export const createEquityResearchTabTour = (setActiveTab?: (tab: string) => void
         }
       }
     },
+
     onDestroyed: () => {
       console.log('Equity Research tab tour completed');
     }

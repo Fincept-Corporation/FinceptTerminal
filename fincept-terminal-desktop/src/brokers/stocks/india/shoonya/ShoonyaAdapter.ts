@@ -1159,7 +1159,7 @@ export class ShoonyaAdapter extends BaseStockBrokerAdapter {
   // Helper Methods
   // ============================================================================
 
-  private ensureAuthenticated(): void {
+  protected ensureAuthenticated(): void {
     if (!this.accessToken || !this.userId) {
       throw new Error('Not authenticated. Please login first.');
     }

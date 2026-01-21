@@ -11,6 +11,7 @@
 //! - **Kotak**: Full-featured broker with TOTP+MPIN auth
 //! - **Groww**: Groww trading platform integration
 //! - **AliceBlue**: AliceBlue ANT API integration
+//! - **AngelOne**: Angel Broking API with TOTP auth
 //! - **5Paisa**: 5Paisa trading platform integration
 //! - **IIFL**: IIFL Securities trading integration
 //! - **Motilal**: Motilal Oswal trading integration
@@ -56,6 +57,7 @@ pub mod dhan;
 pub mod kotak;
 pub mod groww;
 pub mod aliceblue;
+pub mod angelone;
 pub mod fivepaisa;
 pub mod iifl;
 pub mod motilal;
@@ -92,6 +94,9 @@ pub use groww::*;
 
 // Re-export everything from aliceblue (includes tauri command wrappers)
 pub use aliceblue::*;
+
+// Re-export everything from angelone (includes tauri command wrappers)
+pub use angelone::*;
 
 // Re-export everything from fivepaisa (includes tauri command wrappers)
 pub use fivepaisa::*;

@@ -142,6 +142,8 @@ export default defineConfig({
       'buffer',
       'process',
       'ccxt',  // Include main CCXT package
+      'plotly.js',  // Pre-bundle plotly for production
+      'react-plotly.js',
       'readable-stream',
       'stream-browserify',
       'events',
@@ -189,6 +191,7 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'chart-vendor': ['recharts', 'lightweight-charts'],
+          'plotly-vendor': ['plotly.js', 'react-plotly.js'],  // Separate chunk for Plotly (heavy 3D lib)
           'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-popover', '@radix-ui/react-tabs'],
           'flow-vendor': ['reactflow'],
           'tauri-vendor': ['@tauri-apps/api', '@tauri-apps/plugin-dialog'],

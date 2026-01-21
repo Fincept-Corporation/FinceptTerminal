@@ -90,15 +90,17 @@ export const createNewsTabTour = () => {
     showProgress: true,
     steps: newsTabTourSteps,
     popoverClass: 'fincept-tour-popover',
-    overlayColor: 'rgba(0, 0, 0, 0.85)',
     animate: true,
     smoothScroll: true,
     allowClose: true,
     doneBtnText: 'FINISH',
     nextBtnText: 'NEXT',
     prevBtnText: 'BACK',
-    stagePadding: 10,
-    stageRadius: 5,
+    showButtons: ['next', 'previous', 'close'],
+    stagePadding: 6,
+    stageRadius: 4,
+    popoverOffset: 12,
+
     onDestroyed: () => {
       console.log('News tab tour completed');
     }

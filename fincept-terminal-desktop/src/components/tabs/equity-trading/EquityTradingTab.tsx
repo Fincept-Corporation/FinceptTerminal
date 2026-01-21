@@ -196,7 +196,11 @@ function EquityTradingContent() {
 
   // Subscribe to WebSocket for live prices and fetch initial data
   useEffect(() => {
-    if (!adapter || !isAuthenticated || !selectedSymbol) return;
+    // CRITICAL: Don't make any API calls if broker is not authenticated
+    if (!adapter || !isAuthenticated || !selectedSymbol) {
+      console.log('[EquityTrading] Skipping subscription - broker not authenticated or no symbol selected');
+      return;
+    }
 
     let isCancelled = false;
 
@@ -319,7 +323,11 @@ function EquityTradingContent() {
 
   // Subscribe to watchlist via WebSocket for real-time updates
   useEffect(() => {
-    if (!adapter || !isAuthenticated || !useWebSocketForWatchlist) return;
+    // CRITICAL: Don't make any API calls if broker is not authenticated
+    if (!adapter || !isAuthenticated || !useWebSocketForWatchlist) {
+      console.log('[EquityTrading] Skipping watchlist subscription - broker not authenticated or WS disabled');
+      return;
+    }
 
     let isCancelled = false;
     const subscribedSymbols: string[] = [];
@@ -414,7 +422,11 @@ function EquityTradingContent() {
   // Fallback: Fetch watchlist quotes via REST if WebSocket is disabled
   // Uses smart polling based on market hours - polls frequently when open, uses cache when closed
   useEffect(() => {
-    if (!adapter || !isAuthenticated || useWebSocketForWatchlist) return;
+    // CRITICAL: Don't make any API calls if broker is not authenticated
+    if (!adapter || !isAuthenticated || useWebSocketForWatchlist) {
+      console.log('[EquityTrading] Skipping watchlist polling - broker not authenticated or WS enabled');
+      return;
+    }
 
     let isCancelled = false;
     let isPolling = false;
@@ -502,7 +514,11 @@ function EquityTradingContent() {
   // Smart polling for selected symbol's quote and depth data
   // Polls based on market hours - more frequently when open, uses cache when closed
   useEffect(() => {
-    if (!adapter || !isAuthenticated || !selectedSymbol) return;
+    // CRITICAL: Don't make any API calls if broker is not authenticated
+    if (!adapter || !isAuthenticated || !selectedSymbol) {
+      console.log('[EquityTrading] Skipping symbol polling - broker not authenticated or no symbol');
+      return;
+    }
 
     let isCancelled = false;
     let isPolling = false;

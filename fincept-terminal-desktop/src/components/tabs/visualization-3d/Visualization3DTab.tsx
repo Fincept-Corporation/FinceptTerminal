@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Suspense, lazy } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
-// @ts-ignore - react-plotly.js types are incomplete
-import Plot from 'react-plotly.js';
 import { RefreshCw, TrendingUp, BarChart3, Activity, Network } from 'lucide-react';
+
+// Lazy load Plotly to avoid production build issues
+// @ts-ignore - react-plotly.js types are incomplete
+const Plot = lazy(() => import('react-plotly.js'));
 
 type ChartType = 'volatility' | 'correlation' | 'yield-curve' | 'pca';
 
@@ -184,6 +186,7 @@ const Visualization3DTab: React.FC = () => {
     switch (activeChart) {
       case 'volatility':
         return (
+          <Suspense fallback={<div className="flex items-center justify-center h-full"><RefreshCw className="animate-spin" /></div>}>
           <Plot
             data={[{
               type: 'surface',
@@ -224,10 +227,12 @@ const Visualization3DTab: React.FC = () => {
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />
+          </Suspense>
         );
 
       case 'correlation':
         return (
+          <Suspense fallback={<div className="flex items-center justify-center h-full"><RefreshCw className="animate-spin" /></div>}>
           <Plot
             data={[{
               type: 'surface',
@@ -264,10 +269,12 @@ const Visualization3DTab: React.FC = () => {
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />
+          </Suspense>
         );
 
       case 'yield-curve':
         return (
+          <Suspense fallback={<div className="flex items-center justify-center h-full"><RefreshCw className="animate-spin" /></div>}>
           <Plot
             data={[{
               type: 'surface',
@@ -306,10 +313,12 @@ const Visualization3DTab: React.FC = () => {
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />
+          </Suspense>
         );
 
       case 'pca':
         return (
+          <Suspense fallback={<div className="flex items-center justify-center h-full"><RefreshCw className="animate-spin" /></div>}>
           <Plot
             data={[{
               type: 'surface',
@@ -346,7 +355,11 @@ const Visualization3DTab: React.FC = () => {
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />
+          </Suspense>
         );
+
+      default:
+        return null;
     }
   };
 

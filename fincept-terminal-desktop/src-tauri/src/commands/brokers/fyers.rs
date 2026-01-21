@@ -37,6 +37,22 @@ fn create_fyers_headers(api_key: &str, access_token: &str) -> HeaderMap {
     headers
 }
 
+/// Validate that credentials are present and non-empty
+/// Returns Err if credentials are missing or appear invalid
+fn validate_credentials(api_key: &str, access_token: &str) -> Result<(), String> {
+    if api_key.is_empty() {
+        return Err("API key is empty. Please authenticate first.".to_string());
+    }
+    if access_token.is_empty() {
+        return Err("Access token is empty. Please authenticate first.".to_string());
+    }
+    // Fyers access tokens should be at least 40 characters
+    if access_token.len() < 40 {
+        return Err("Access token appears invalid or expired. Please re-authenticate.".to_string());
+    }
+    Ok(())
+}
+
 // ============================================================================
 // Fyers Authentication Commands
 // ============================================================================
@@ -503,6 +519,17 @@ pub async fn fyers_get_quotes(
     access_token: String,
     symbols: Vec<String>,
 ) -> Result<ApiResponse<Value>, String> {
+    // Validate credentials early to avoid unnecessary API calls
+    if let Err(e) = validate_credentials(&api_key, &access_token) {
+        eprintln!("[fyers_get_quotes] Credential validation failed: {}", e);
+        return Ok(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(e),
+            timestamp: chrono::Utc::now().timestamp(),
+        });
+    }
+
     let timestamp = chrono::Utc::now().timestamp();
     let headers = create_fyers_headers(&api_key, &access_token);
     let client = reqwest::Client::new();
@@ -587,6 +614,17 @@ pub async fn fyers_get_history(
     from_date: String,
     to_date: String,
 ) -> Result<ApiResponse<Value>, String> {
+    // Validate credentials early to avoid unnecessary API calls
+    if let Err(e) = validate_credentials(&api_key, &access_token) {
+        eprintln!("[fyers_get_history] Credential validation failed: {}", e);
+        return Ok(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(e),
+            timestamp: chrono::Utc::now().timestamp(),
+        });
+    }
+
     let timestamp = chrono::Utc::now().timestamp();
     let headers = create_fyers_headers(&api_key, &access_token);
     let client = reqwest::Client::new();
@@ -701,6 +739,17 @@ pub async fn fyers_get_depth(
     access_token: String,
     symbol: String,
 ) -> Result<ApiResponse<Value>, String> {
+    // Validate credentials early to avoid unnecessary API calls
+    if let Err(e) = validate_credentials(&api_key, &access_token) {
+        eprintln!("[fyers_get_depth] Credential validation failed: {}", e);
+        return Ok(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(e),
+            timestamp: chrono::Utc::now().timestamp(),
+        });
+    }
+
     let timestamp = chrono::Utc::now().timestamp();
     let headers = create_fyers_headers(&api_key, &access_token);
     let client = reqwest::Client::new();

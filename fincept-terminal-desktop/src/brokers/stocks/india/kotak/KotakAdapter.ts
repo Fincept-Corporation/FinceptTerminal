@@ -67,10 +67,11 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
   readonly region: Region = 'india';
   readonly metadata: StockBrokerMetadata = KOTAK_METADATA;
 
-  private apiKey: string | null = null; // neo-fin-key (consumer key)
+  private ucc: string | null = null; // User Client Code (stored as apiKey)
+  protected accessToken: string | null = null; // neo-fin-key access token (stored as apiSecret)
   private mobileNumber: string | null = null;
-  private ucc: string | null = null; // User Client Code
-  private mpin: string | null = null;
+  private mpin: string | null = null; // 6-digit MPIN (stored as userId)
+  protected apiKey: string | null = null; // Alias for UCC (for base class compatibility)
 
   // Intermediate auth state (between TOTP and MPIN)
   private viewToken: string | null = null;
@@ -93,16 +94,21 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
   /**
    * Set API credentials before authentication
    *
-   * For Kotak:
-   * - apiKey = neo-fin-key (consumer key)
-   * - apiSecret = mpin
-   * - userId = UCC (User Client Code)
-   * - Additional: mobileNumber required
+   * For Kotak (OpenAlgo mapping):
+   * - apiKey = UCC (User Client Code)
+   * - apiSecret = Access Token (neo-fin-key consumer token)
    */
-  setCredentials(apiKey: string, apiSecret: string, userId?: string): void {
-    this.apiKey = apiKey;
-    this.mpin = apiSecret;
-    this.ucc = userId || null;
+  setCredentials(apiKey: string, apiSecret: string): void {
+    this.ucc = apiKey; // UCC is primary identifier
+    this.apiKey = apiKey; // Set apiKey for base class compatibility
+    this.accessToken = apiSecret; // Access token for authorization
+  }
+
+  /**
+   * Set MPIN separately (Kotak-specific)
+   */
+  setMpin(mpin: string): void {
+    this.mpin = mpin;
   }
 
   /**
@@ -128,11 +134,21 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
    * Returns view_token and view_sid for step 2
    */
   async loginWithTotp(totp: string): Promise<{ success: boolean; message: string }> {
-    if (!this.apiKey || !this.mobileNumber || !this.ucc) {
+    if (!this.ucc || !this.accessToken || !this.mobileNumber) {
       return {
         success: false,
-        message: 'Missing credentials. Call setCredentials() and setMobileNumber() first.',
+        message: 'Missing credentials. UCC, Access Token, and Mobile Number required.',
       };
+    }
+
+    // Ensure mobile number has +91 prefix
+    let mobile = this.mobileNumber.trim().replace(/\s/g, '');
+    if (mobile.startsWith('+91')) {
+      // Already has prefix
+    } else if (mobile.startsWith('91') && mobile.length === 12) {
+      mobile = `+${mobile}`;
+    } else {
+      mobile = `+91${mobile}`;
     }
 
     try {
@@ -144,9 +160,9 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
         };
         error?: string;
       }>('kotak_totp_login', {
-        consumerKey: this.apiKey,
-        mobileNumber: this.mobileNumber,
         ucc: this.ucc,
+        accessToken: this.accessToken,
+        mobileNumber: mobile,
         totp,
       });
 
@@ -262,9 +278,10 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
    */
   async authenticate(credentials: BrokerCredentials): Promise<AuthResponse> {
     try {
-      this.apiKey = credentials.apiKey;
-      this.mpin = credentials.apiSecret || null;
-      this.ucc = credentials.userId || null;
+      this.ucc = credentials.apiKey; // UCC stored as apiKey
+      this.apiKey = credentials.apiKey; // Set for base class compatibility
+      this.accessToken = credentials.apiSecret || null; // Access token as apiSecret
+      this.mpin = credentials.userId || null; // MPIN as userId
 
       // If access token provided, validate it
       if (credentials.accessToken) {
@@ -341,11 +358,22 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
       const credentials = await this.loadCredentials();
       if (!credentials) return false;
 
-      this.apiKey = credentials.apiKey;
-      this.mpin = credentials.apiSecret || null;
-      this.accessToken = credentials.accessToken || null;
-      this.ucc = credentials.userId || null;
-      this.userId = credentials.userId || null;
+      this.ucc = credentials.apiKey; // UCC stored as apiKey
+      this.apiKey = credentials.apiKey; // Set for base class compatibility
+      this.accessToken = credentials.apiSecret || credentials.accessToken || null; // Access token
+      this.mpin = credentials.userId || null; // MPIN stored as userId
+      this.userId = this.ucc; // Set userId to UCC for identification
+
+      // Load mobile number from additionalData
+      const additionalData = (credentials as any).additionalData;
+      if (additionalData) {
+        try {
+          const parsed = JSON.parse(additionalData);
+          this.mobileNumber = parsed.mobileNumber || null;
+        } catch (e) {
+          console.warn('[Kotak] Failed to parse additionalData:', e);
+        }
+      }
 
       if (this.accessToken) {
         console.log('[Kotak] Validating stored access token...');

@@ -103,7 +103,8 @@ export function BrokersManagementPanel() {
 
   // Config State
   const [showSecret, setShowSecret] = useState(false);
-  const [config, setConfig] = useState<BrokerCredentials>({ apiKey: '', apiSecret: '' });
+  const [config, setConfig] = useState<BrokerCredentials>({ apiKey: '', apiSecret: '', userId: '' });
+  const [mobileNumber, setMobileNumber] = useState(''); // Kotak-specific
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -287,15 +288,219 @@ export function BrokersManagementPanel() {
     try {
       const tempAdapter = createStockBrokerAdapter(selectedBrokerId!);
 
-      // Store credentials
-      await (tempAdapter as any).storeCredentials({
+      // Prepare credentials
+      const credentials: any = {
         apiKey: config.apiKey,
         apiSecret: config.apiSecret || '',
-      });
+        userId: config.userId || '',
+      };
+
+      // Store broker-specific additional data
+      const additionalData: any = {};
+
+      if (selectedBroker.id === 'kotak' && mobileNumber) {
+        additionalData.mobileNumber = mobileNumber;
+      }
+
+      if (selectedBroker.id === 'aliceblue' && (config as any).encryptionKey) {
+        additionalData.encryptionKey = (config as any).encryptionKey;
+      }
+
+      if (selectedBroker.id === 'fivepaisa') {
+        if ((config as any).email) additionalData.email = (config as any).email;
+        if ((config as any).pin) additionalData.pin = (config as any).pin;
+      }
+
+      if (selectedBroker.id === 'motilal') {
+        if ((config as any).password) additionalData.password = (config as any).password;
+        if ((config as any).dob) additionalData.dob = (config as any).dob;
+      }
+
+      if (selectedBroker.id === 'angelone' && (config as any).pin) {
+        additionalData.pin = (config as any).pin;
+      }
+
+      if (selectedBroker.id === 'shoonya' && (config as any).password) {
+        additionalData.password = (config as any).password;
+      }
+
+      // Add additionalData to credentials if it has any fields
+      if (Object.keys(additionalData).length > 0) {
+        credentials.additionalData = JSON.stringify(additionalData);
+      }
+
+      // Store credentials
+      await (tempAdapter as any).storeCredentials(credentials);
 
       // Set on adapter
       if (tempAdapter.setCredentials) {
         tempAdapter.setCredentials(config.apiKey, config.apiSecret || '');
+      }
+
+      // Kotak-specific: Set MPIN and mobile number
+      if (selectedBroker.id === 'kotak') {
+        if (config.userId && (tempAdapter as any).setMpin) {
+          (tempAdapter as any).setMpin(config.userId);
+        }
+        if (mobileNumber && (tempAdapter as any).setMobileNumber) {
+          (tempAdapter as any).setMobileNumber(mobileNumber);
+        }
+      }
+
+      // Shoonya-specific: Authenticate immediately with TOTP
+      if (selectedBroker.id === 'shoonya') {
+        const shoonyaCredentials: any = {
+          apiKey: config.apiKey,
+          apiSecret: config.apiSecret || '',
+          userId: config.userId || '',
+          password: (config as any).password || '',
+          totpCode: (config as any).totpCode || '',
+        };
+
+        const authResult = await tempAdapter.authenticate(shoonyaCredentials);
+
+        if (!authResult.success) {
+          setConfigError(authResult.message || 'Shoonya authentication failed');
+          return;
+        }
+
+        // Update broker statuses with connected state
+        setBrokerStatuses(prev => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(selectedBrokerId!);
+          if (existing) {
+            newMap.set(selectedBrokerId!, { ...existing, status: 'connected', hasCredentials: true });
+          }
+          return newMap;
+        });
+
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        return;
+      }
+
+      // AngelOne-specific: Authenticate immediately with Client ID, PIN, TOTP
+      if (selectedBroker.id === 'angelone') {
+        const angeloneCredentials: any = {
+          apiKey: config.apiKey,
+          userId: config.userId || '',
+          password: (config as any).pin || '', // Adapter expects 'password' field
+          pin: (config as any).totpCode || '', // Adapter expects TOTP in 'pin' field
+        };
+
+        const authResult = await tempAdapter.authenticate(angeloneCredentials);
+
+        if (!authResult.success) {
+          setConfigError(authResult.message || 'Angel One authentication failed');
+          return;
+        }
+
+        // Update broker statuses with connected state
+        setBrokerStatuses(prev => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(selectedBrokerId!);
+          if (existing) {
+            newMap.set(selectedBrokerId!, { ...existing, status: 'connected', hasCredentials: true });
+          }
+          return newMap;
+        });
+
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        return;
+      }
+
+      // AliceBlue-specific: Authenticate with User ID + Encryption Key
+      if (selectedBroker.id === 'aliceblue') {
+        const aliceblueCredentials: any = {
+          apiKey: config.apiKey,
+          apiSecret: config.apiSecret || '',
+          userId: config.userId || '',
+          encKey: (config as any).encryptionKey || '', // Adapter expects 'encKey' field
+        };
+
+        const authResult = await tempAdapter.authenticate(aliceblueCredentials);
+
+        if (!authResult.success) {
+          setConfigError(authResult.message || 'AliceBlue authentication failed');
+          return;
+        }
+
+        setBrokerStatuses(prev => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(selectedBrokerId!);
+          if (existing) {
+            newMap.set(selectedBrokerId!, { ...existing, status: 'connected', hasCredentials: true });
+          }
+          return newMap;
+        });
+
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        return;
+      }
+
+      // 5Paisa-specific: Authenticate with Email, PIN, TOTP
+      if (selectedBroker.id === 'fivepaisa') {
+        const fivepaisaCredentials: any = {
+          apiKey: config.apiKey,
+          apiSecret: config.apiSecret || '',
+          email: (config as any).email || '',
+          pin: (config as any).pin || '',
+          totp: (config as any).totpCode || '', // Adapter expects 'totp' field
+        };
+
+        const authResult = await tempAdapter.authenticate(fivepaisaCredentials);
+
+        if (!authResult.success) {
+          setConfigError(authResult.message || '5Paisa authentication failed');
+          return;
+        }
+
+        setBrokerStatuses(prev => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(selectedBrokerId!);
+          if (existing) {
+            newMap.set(selectedBrokerId!, { ...existing, status: 'connected', hasCredentials: true });
+          }
+          return newMap;
+        });
+
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        return;
+      }
+
+      // Motilal Oswal-specific: Authenticate with User ID, Password, DOB, TOTP
+      if (selectedBroker.id === 'motilal') {
+        const motilalCredentials: any = {
+          apiKey: config.apiKey,
+          apiSecret: (config as any).password || '', // Adapter reads password from apiSecret
+          userId: config.userId || '',
+          password: (config as any).password || '', // Also provide as password field
+          pin: (config as any).dob || '', // Adapter expects DOB in 'pin' field
+          totpSecret: (config as any).totpCode || '', // Adapter expects 'totpSecret' field
+        };
+
+        const authResult = await tempAdapter.authenticate(motilalCredentials);
+
+        if (!authResult.success) {
+          setConfigError(authResult.message || 'Motilal Oswal authentication failed');
+          return;
+        }
+
+        setBrokerStatuses(prev => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(selectedBrokerId!);
+          if (existing) {
+            newMap.set(selectedBrokerId!, { ...existing, status: 'connected', hasCredentials: true });
+          }
+          return newMap;
+        });
+
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        return;
       }
 
       // Update broker statuses
@@ -760,16 +965,20 @@ export function BrokersManagementPanel() {
                       </h3>
                     </div>
 
-                    {/* API Key */}
+                    {/* API Key / UCC / Vendor Code */}
                     <div style={{ marginBottom: '12px' }}>
                       <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
-                        API KEY / APP ID <span style={{ color: COLORS.RED }}>*</span>
+                        {selectedBroker.id === 'kotak' ? 'UCC (USER CLIENT CODE)' : selectedBroker.id === 'shoonya' ? 'VENDOR CODE' : 'API KEY / APP ID'} <span style={{ color: COLORS.RED }}>*</span>
                       </label>
                       <input
                         type="text"
                         value={config.apiKey}
                         onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
-                        placeholder={`Enter your ${selectedBroker.displayName} API Key`}
+                        placeholder={
+                          selectedBroker.id === 'kotak' ? 'Enter your UCC (e.g., KS12345)' :
+                          selectedBroker.id === 'shoonya' ? 'Enter your Vendor Code' :
+                          `Enter your ${selectedBroker.displayName} API Key`
+                        }
                         style={{
                           width: '100%',
                           padding: '10px 12px',
@@ -782,13 +991,86 @@ export function BrokersManagementPanel() {
                           boxSizing: 'border-box',
                         }}
                       />
+                      {selectedBroker.id === 'kotak' && (
+                        <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                          Your UCC (User Client Code) - Primary identifier
+                        </p>
+                      )}
+                      {selectedBroker.id === 'shoonya' && (
+                        <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                          Vendor Code from Shoonya API settings
+                        </p>
+                      )}
                     </div>
 
-                    {/* API Secret (for OAuth) */}
-                    {selectedBroker.authType === 'oauth' && (
+                    {/* Mobile Number (Kotak only) */}
+                    {selectedBroker.id === 'kotak' && (
                       <div style={{ marginBottom: '12px' }}>
                         <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
-                          API SECRET <span style={{ color: COLORS.RED }}>*</span>
+                          MOBILE NUMBER <span style={{ color: COLORS.RED }}>*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={mobileNumber}
+                          onChange={(e) => setMobileNumber(e.target.value)}
+                          placeholder="10-digit mobile number"
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            backgroundColor: COLORS.PANEL_BG,
+                            border: `1px solid ${COLORS.BORDER}`,
+                            color: COLORS.WHITE,
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                          Will be prefixed with +91 automatically
+                        </p>
+                      </div>
+                    )}
+
+                    {/* MPIN (Kotak only) */}
+                    {selectedBroker.id === 'kotak' && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                          MPIN (6-DIGIT TRADING PIN) <span style={{ color: COLORS.RED }}>*</span>
+                        </label>
+                        <input
+                          type={showSecret ? 'text' : 'password'}
+                          value={config.userId || ''}
+                          onChange={(e) => setConfig({ ...config, userId: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                          placeholder="Enter your 6-digit MPIN"
+                          maxLength={6}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            backgroundColor: COLORS.PANEL_BG,
+                            border: `1px solid ${COLORS.BORDER}`,
+                            color: COLORS.WHITE,
+                            fontSize: '16px',
+                            fontFamily: 'monospace',
+                            textAlign: 'center',
+                            letterSpacing: '4px',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                          Your 6-digit trading MPIN
+                        </p>
+                      </div>
+                    )}
+
+                    {/* API Secret (for OAuth) or Access Token (for Kotak) or API Secret Key (for Shoonya) */}
+                    {(selectedBroker.authType === 'oauth' || selectedBroker.id === 'kotak' || selectedBroker.id === 'shoonya') && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                          {selectedBroker.id === 'kotak' ? 'ACCESS TOKEN (NEO-FIN-KEY)' :
+                           selectedBroker.id === 'shoonya' ? 'API SECRET KEY' :
+                           'API SECRET'} <span style={{ color: COLORS.RED }}>*</span>
                         </label>
                         <div style={{ position: 'relative' }}>
                           <input
@@ -828,6 +1110,539 @@ export function BrokersManagementPanel() {
                       </div>
                     )}
 
+                    {/* Shoonya-specific fields: User ID, Password, TOTP */}
+                    {selectedBroker.id === 'shoonya' && (
+                      <>
+                        {/* User ID */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            USER ID <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={config.userId || ''}
+                            onChange={(e) => setConfig({ ...config, userId: e.target.value })}
+                            placeholder="Enter your Shoonya User ID"
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '12px',
+                              fontFamily: 'monospace',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your Shoonya trading account User ID
+                          </p>
+                        </div>
+
+                        {/* Password */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            PASSWORD <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type={showSecret ? 'text' : 'password'}
+                              value={(config as any).password || ''}
+                              onChange={(e) => setConfig({ ...config, password: e.target.value } as any)}
+                              placeholder="Enter your password"
+                              style={{
+                                width: '100%',
+                                padding: '10px 40px 10px 12px',
+                                backgroundColor: COLORS.PANEL_BG,
+                                border: `1px solid ${COLORS.BORDER}`,
+                                color: COLORS.WHITE,
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecret(!showSecret)}
+                              style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: COLORS.GRAY,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your Shoonya trading password (will be SHA256 hashed)
+                          </p>
+                        </div>
+
+                        {/* TOTP */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            TOTP CODE <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={(config as any).totpCode || ''}
+                            onChange={(e) => setConfig({ ...config, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) } as any)}
+                            placeholder="Enter 6-digit TOTP"
+                            maxLength={6}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '16px',
+                              fontFamily: 'monospace',
+                              textAlign: 'center',
+                              letterSpacing: '4px',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            TOTP code from your authenticator app
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {/* AngelOne-specific fields: Client ID, PIN, TOTP */}
+                    {selectedBroker.id === 'angelone' && (
+                      <>
+                        {/* Client ID */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            CLIENT ID <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={config.userId || ''}
+                            onChange={(e) => setConfig({ ...config, userId: e.target.value })}
+                            placeholder="Enter your Angel One Client ID"
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '12px',
+                              fontFamily: 'monospace',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your Angel One trading account Client ID
+                          </p>
+                        </div>
+
+                        {/* PIN */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            PIN <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type={showSecret ? 'text' : 'password'}
+                              value={(config as any).pin || ''}
+                              onChange={(e) => setConfig({ ...config, pin: e.target.value } as any)}
+                              placeholder="Enter your PIN"
+                              minLength={4}
+                              style={{
+                                width: '100%',
+                                padding: '10px 40px 10px 12px',
+                                backgroundColor: COLORS.PANEL_BG,
+                                border: `1px solid ${COLORS.BORDER}`,
+                                color: COLORS.WHITE,
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecret(!showSecret)}
+                              style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: COLORS.GRAY,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your Angel One trading account PIN
+                          </p>
+                        </div>
+
+                        {/* TOTP */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            TOTP CODE <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={(config as any).totpCode || ''}
+                            onChange={(e) => setConfig({ ...config, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) } as any)}
+                            placeholder="Enter 6-digit TOTP"
+                            maxLength={6}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '16px',
+                              fontFamily: 'monospace',
+                              textAlign: 'center',
+                              letterSpacing: '4px',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            6-digit code from your authenticator app
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {/* AliceBlue-specific fields: User ID, Encryption Key */}
+                    {selectedBroker.id === 'aliceblue' && (
+                      <>
+                        {/* User ID */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            USER ID <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={config.userId || ''}
+                            onChange={(e) => setConfig({ ...config, userId: e.target.value })}
+                            placeholder="Enter your AliceBlue User ID"
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '12px',
+                              fontFamily: 'monospace',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your AliceBlue trading account User ID
+                          </p>
+                        </div>
+
+                        {/* Encryption Key */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            ENCRYPTION KEY <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type={showSecret ? 'text' : 'password'}
+                              value={(config as any).encryptionKey || ''}
+                              onChange={(e) => setConfig({ ...config, encryptionKey: e.target.value } as any)}
+                              placeholder="Enter your Encryption Key"
+                              style={{
+                                width: '100%',
+                                padding: '10px 40px 10px 12px',
+                                backgroundColor: COLORS.PANEL_BG,
+                                border: `1px solid ${COLORS.BORDER}`,
+                                color: COLORS.WHITE,
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecret(!showSecret)}
+                              style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: COLORS.GRAY,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your AliceBlue Encryption Key (encKey)
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {/* 5Paisa-specific fields: Email, PIN, TOTP */}
+                    {selectedBroker.id === 'fivepaisa' && (
+                      <>
+                        {/* Email ID */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            EMAIL ID <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="email"
+                            value={(config as any).email || ''}
+                            onChange={(e) => setConfig({ ...config, email: e.target.value } as any)}
+                            placeholder="Enter your 5Paisa Email ID"
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '12px',
+                              fontFamily: 'monospace',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your 5Paisa registered Email ID
+                          </p>
+                        </div>
+
+                        {/* PIN */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            PIN <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type={showSecret ? 'text' : 'password'}
+                              value={(config as any).pin || ''}
+                              onChange={(e) => setConfig({ ...config, pin: e.target.value } as any)}
+                              placeholder="Enter your PIN"
+                              style={{
+                                width: '100%',
+                                padding: '10px 40px 10px 12px',
+                                backgroundColor: COLORS.PANEL_BG,
+                                border: `1px solid ${COLORS.BORDER}`,
+                                color: COLORS.WHITE,
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecret(!showSecret)}
+                              style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: COLORS.GRAY,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your 5Paisa trading PIN
+                          </p>
+                        </div>
+
+                        {/* TOTP */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            TOTP CODE <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={(config as any).totpCode || ''}
+                            onChange={(e) => setConfig({ ...config, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) } as any)}
+                            placeholder="Enter 6-digit TOTP"
+                            maxLength={6}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '16px',
+                              fontFamily: 'monospace',
+                              textAlign: 'center',
+                              letterSpacing: '4px',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            6-digit TOTP from your authenticator app
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Motilal Oswal-specific fields: User ID, Password, 2FA (DOB), TOTP */}
+                    {selectedBroker.id === 'motilal' && (
+                      <>
+                        {/* User ID */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            USER ID <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={config.userId || ''}
+                            onChange={(e) => setConfig({ ...config, userId: e.target.value })}
+                            placeholder="Enter your Motilal Oswal User ID"
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '12px',
+                              fontFamily: 'monospace',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your Motilal Oswal Client ID
+                          </p>
+                        </div>
+
+                        {/* Password */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            PASSWORD <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type={showSecret ? 'text' : 'password'}
+                              value={(config as any).password || ''}
+                              onChange={(e) => setConfig({ ...config, password: e.target.value } as any)}
+                              placeholder="Enter your password"
+                              style={{
+                                width: '100%',
+                                padding: '10px 40px 10px 12px',
+                                backgroundColor: COLORS.PANEL_BG,
+                                border: `1px solid ${COLORS.BORDER}`,
+                                color: COLORS.WHITE,
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecret(!showSecret)}
+                              style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: COLORS.GRAY,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Your Motilal Oswal trading password
+                          </p>
+                        </div>
+
+                        {/* 2FA - Date of Birth */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            2FA - DATE OF BIRTH <span style={{ color: COLORS.RED }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={(config as any).dob || ''}
+                            onChange={(e) => setConfig({ ...config, dob: e.target.value } as any)}
+                            placeholder="DD/MM/YYYY (e.g., 18/10/1988)"
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '12px',
+                              fontFamily: 'monospace',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Format: DD/MM/YYYY (required for 2FA)
+                          </p>
+                        </div>
+
+                        {/* TOTP (Optional) */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
+                            TOTP CODE (OPTIONAL)
+                          </label>
+                          <input
+                            type="text"
+                            value={(config as any).totpCode || ''}
+                            onChange={(e) => setConfig({ ...config, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) } as any)}
+                            placeholder="Enter 6-digit TOTP (if enabled)"
+                            maxLength={6}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              backgroundColor: COLORS.PANEL_BG,
+                              border: `1px solid ${COLORS.BORDER}`,
+                              color: COLORS.WHITE,
+                              fontSize: '16px',
+                              fontFamily: 'monospace',
+                              textAlign: 'center',
+                              letterSpacing: '4px',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
+                            Optional TOTP if enabled on your account
+                          </p>
+                        </div>
+                      </>
+                    )}
+
                     <button
                       onClick={handleSaveConfig}
                       disabled={isSaving || !config.apiKey}
@@ -847,7 +1662,7 @@ export function BrokersManagementPanel() {
                       }}
                     >
                       {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                      SAVE CONFIGURATION
+                      {['shoonya', 'angelone', 'aliceblue', 'fivepaisa', 'motilal'].includes(selectedBroker.id) ? 'SAVE & AUTHENTICATE' : 'SAVE CONFIGURATION'}
                     </button>
                   </div>
 

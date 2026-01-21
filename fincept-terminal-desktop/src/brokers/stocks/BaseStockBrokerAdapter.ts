@@ -280,6 +280,24 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
   }
 
   // ============================================================================
+  // Authentication Guard
+  // ============================================================================
+
+  /**
+   * Ensure user is authenticated before making API calls
+   * Checks both credentials AND connection status (token validity)
+   * Throws error if not authenticated - prevents unnecessary API calls with invalid tokens
+   */
+  protected ensureAuthenticated(): void {
+    if (!this.accessToken) {
+      throw new Error('Not authenticated. Please login first.');
+    }
+    if (!this._isConnected) {
+      throw new Error('Session expired or invalid. Please re-authenticate.');
+    }
+  }
+
+  // ============================================================================
   // Rate Limiting
   // ============================================================================
 

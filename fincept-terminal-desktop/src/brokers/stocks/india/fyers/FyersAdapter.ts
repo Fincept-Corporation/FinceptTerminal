@@ -1929,14 +1929,7 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
   // Helper Methods
   // ============================================================================
 
-  /**
-   * Ensure user is authenticated before making API calls
-   */
-  private ensureAuthenticated(): void {
-    if (!this.accessToken || !this.apiKey) {
-      throw new Error('Not authenticated. Please login first.');
-    }
-  }
+  // ensureAuthenticated() inherited from BaseStockBrokerAdapter
 
   /**
    * Store credentials securely
