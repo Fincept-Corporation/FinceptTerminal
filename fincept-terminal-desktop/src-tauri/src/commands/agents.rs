@@ -246,7 +246,7 @@ pub async fn execute_python_agent(
     } else {
         let resource_dir = app.path().resource_dir()
             .map_err(|e| format!("Failed to get resource directory: {}", e))?;
-        resource_dir.join("resources").join("scripts").join(script_path)
+        resource_dir.join("scripts").join(script_path)
     };
 
     if !full_script_path.exists() {
@@ -324,7 +324,7 @@ pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMet
     ];
 
     for (folder, config_file, category_id, icon, color) in categories {
-        let config_path = format!("resources/scripts/agents/{}/configs/{}", folder, config_file);
+        let relative_path = format!("scripts/agents/{}/configs/{}", folder, config_file);
 
         let full_path = if cfg!(debug_assertions) {
             let current_dir = std::env::current_dir()
@@ -334,11 +334,11 @@ pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMet
             } else {
                 current_dir.join("src-tauri")
             };
-            base_dir.join(&config_path)
+            base_dir.join("resources").join(&relative_path)
         } else {
             let resource_dir = app.path().resource_dir()
                 .map_err(|e| format!("Failed to get resource directory: {}", e))?;
-            resource_dir.join(&config_path)
+            resource_dir.join(&relative_path)
         };
 
         if let Ok(content) = std::fs::read_to_string(&full_path) {
@@ -386,7 +386,7 @@ pub async fn read_agent_config(
     category: String,
     config_file: String,
 ) -> Result<String, String> {
-    let config_path = format!("resources/scripts/agents/{}/configs/{}", category, config_file);
+    let relative_path = format!("scripts/agents/{}/configs/{}", category, config_file);
 
     let full_path = if cfg!(debug_assertions) {
         let current_dir = std::env::current_dir()
@@ -396,11 +396,11 @@ pub async fn read_agent_config(
         } else {
             current_dir.join("src-tauri")
         };
-        base_dir.join(&config_path)
+        base_dir.join("resources").join(&relative_path)
     } else {
         let resource_dir = app.path().resource_dir()
             .map_err(|e| format!("Failed to get resource directory: {}", e))?;
-        resource_dir.join(&config_path)
+        resource_dir.join(&relative_path)
     };
 
     std::fs::read_to_string(&full_path)

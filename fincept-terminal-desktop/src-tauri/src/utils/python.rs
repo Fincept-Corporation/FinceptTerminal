@@ -222,8 +222,11 @@ pub fn get_script_path(app: &tauri::AppHandle, script_name: &str) -> Result<Path
     }
 
     // Try each candidate path
-    for path in candidate_paths.iter() {
+    eprintln!("[SCRIPT_PATH_DEBUG] Searching for: {}", script_name);
+    for (i, path) in candidate_paths.iter().enumerate() {
+        eprintln!("[SCRIPT_PATH_DEBUG] Candidate {}: {:?}", i+1, path);
         if path.exists() {
+            eprintln!("[SCRIPT_PATH_DEBUG] Found at candidate {}", i+1);
             // Strip the \\?\ prefix that Python can't handle on Windows
             let path_str = path.to_string_lossy().to_string();
             let clean_path = if path_str.starts_with(r"\\?\") {

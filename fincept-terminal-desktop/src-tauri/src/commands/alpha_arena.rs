@@ -74,7 +74,7 @@ async fn execute_alpha_arena_action(action: &str, params: Value, api_keys: Optio
         std::env::current_dir()
             .ok()
             .map(|d| d.join("resources").join("scripts").join(python_script_parts[0]).join(python_script_parts[1])),
-        // Also check for bundled resources in release builds
+        // Check for bundled resources in release builds
         std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.to_path_buf()))
