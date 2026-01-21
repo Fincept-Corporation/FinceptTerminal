@@ -30,7 +30,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ## 📥 Download Latest Release
 
-**Version:** `v3.2.0` | **Released:** 2026-01-20
+**Version:** `v3.2.0` | **Released:** 2026-01-21
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
