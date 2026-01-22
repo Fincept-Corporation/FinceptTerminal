@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { FINCEPT } from '../../portfolio-tab/finceptStyles';
+import React, { useState, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from 'recharts';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS } from '../../portfolio-tab/finceptStyles';
 import { formatIndicatorValue } from '../utils/formatters';
+import { TrendingUp, TrendingDown, Minus, Settings2, Activity, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown } from 'lucide-react';
 
 const COLORS = {
   ORANGE: FINCEPT.ORANGE,
@@ -10,10 +11,13 @@ const COLORS = {
   GREEN: FINCEPT.GREEN,
   YELLOW: FINCEPT.YELLOW,
   GRAY: FINCEPT.GRAY,
+  MUTED: FINCEPT.MUTED,
   CYAN: FINCEPT.CYAN,
   DARK_BG: FINCEPT.DARK_BG,
   PANEL_BG: FINCEPT.PANEL_BG,
+  HEADER_BG: FINCEPT.HEADER_BG,
   BORDER: FINCEPT.BORDER,
+  PURPLE: FINCEPT.PURPLE,
 };
 
 interface IndicatorBoxProps {
@@ -30,89 +34,48 @@ interface IndicatorBoxProps {
 }
 
 /**
- * Get default parameters for a given indicator
+ * Get indicator zone info (overbought/oversold thresholds)
  */
-const getDefaultParams = (name: string): any => {
+const getIndicatorZones = (name: string): {
+  hasZones: boolean;
+  overbought: number;
+  oversold: number;
+  neutral: { min: number; max: number };
+  rangeMin: number;
+  rangeMax: number;
+  inverted?: boolean;
+} => {
   const nameUpper = name.toUpperCase();
 
-  // Moving Averages
-  if (nameUpper.includes('SMA_5')) return { period: 5 };
-  if (nameUpper.includes('SMA_10')) return { period: 10 };
-  if (nameUpper.includes('SMA_20')) return { period: 20 };
-  if (nameUpper.includes('SMA_50')) return { period: 50 };
-  if (nameUpper.includes('SMA_200')) return { period: 200 };
-  if (nameUpper.includes('EMA_9')) return { period: 9 };
-  if (nameUpper.includes('EMA_12')) return { period: 12 };
-  if (nameUpper.includes('EMA_21')) return { period: 21 };
-  if (nameUpper.includes('EMA_26')) return { period: 26 };
-  if (nameUpper.includes('EMA_50')) return { period: 50 };
-  if (nameUpper.includes('WMA')) return { period: 9 };
+  if (nameUpper.includes('RSI')) {
+    return { hasZones: true, overbought: 70, oversold: 30, neutral: { min: 30, max: 70 }, rangeMin: 0, rangeMax: 100 };
+  }
+  if (nameUpper.includes('STOCH') && !nameUpper.includes('RSI')) {
+    return { hasZones: true, overbought: 80, oversold: 20, neutral: { min: 20, max: 80 }, rangeMin: 0, rangeMax: 100 };
+  }
+  if (nameUpper.includes('WILLIAMS')) {
+    return { hasZones: true, overbought: -20, oversold: -80, neutral: { min: -80, max: -20 }, rangeMin: -100, rangeMax: 0, inverted: true };
+  }
+  if (nameUpper.includes('CCI')) {
+    return { hasZones: true, overbought: 100, oversold: -100, neutral: { min: -100, max: 100 }, rangeMin: -200, rangeMax: 200 };
+  }
+  if (nameUpper === 'MFI') {
+    return { hasZones: true, overbought: 80, oversold: 20, neutral: { min: 20, max: 80 }, rangeMin: 0, rangeMax: 100 };
+  }
+  if (nameUpper === 'TSI') {
+    return { hasZones: true, overbought: 25, oversold: -25, neutral: { min: -25, max: 25 }, rangeMin: -50, rangeMax: 50 };
+  }
+  if (nameUpper === 'UO' || nameUpper.includes('ULTIMATE')) {
+    return { hasZones: true, overbought: 70, oversold: 30, neutral: { min: 30, max: 70 }, rangeMin: 0, rangeMax: 100 };
+  }
+  if (nameUpper.includes('BB_PBAND') || nameUpper.includes('KC_PBAND') || nameUpper.includes('DC_PBAND')) {
+    return { hasZones: true, overbought: 0.8, oversold: 0.2, neutral: { min: 0.2, max: 0.8 }, rangeMin: 0, rangeMax: 1 };
+  }
+  if (nameUpper.includes('ADX') && !nameUpper.includes('POS') && !nameUpper.includes('NEG')) {
+    return { hasZones: true, overbought: 50, oversold: 20, neutral: { min: 20, max: 50 }, rangeMin: 0, rangeMax: 100 };
+  }
 
-  // RSI
-  if (nameUpper.includes('RSI')) return { period: 14 };
-
-  // MACD
-  if (nameUpper.includes('MACD')) return { fast: 12, slow: 26, signal: 9 };
-
-  // Stochastic
-  if (nameUpper.includes('STOCH')) return { k_period: 14, d_period: 3 };
-
-  // Bollinger Bands
-  if (nameUpper.includes('BB_')) return { period: 20, std: 2 };
-
-  // ATR
-  if (nameUpper.includes('ATR')) return { period: 14 };
-
-  // ADX
-  if (nameUpper.includes('ADX')) return { period: 14 };
-
-  // CCI
-  if (nameUpper.includes('CCI')) return { period: 20 };
-
-  // Williams %R
-  if (nameUpper.includes('WILLIAMS')) return { period: 14 };
-
-  // ROC
-  if (nameUpper.includes('ROC')) return { period: 12 };
-
-  // MFI
-  if (nameUpper === 'MFI') return { period: 14 };
-
-  // Aroon
-  if (nameUpper.includes('AROON')) return { period: 25 };
-
-  // Awesome Oscillator
-  if (nameUpper.includes('AWESOME') || nameUpper === 'AO') return { fast: 5, slow: 34 };
-
-  // TSI
-  if (nameUpper === 'TSI') return { long: 25, short: 13 };
-
-  // Ultimate Oscillator
-  if (nameUpper === 'UO' || nameUpper.includes('ULTIMATE')) return { period1: 7, period2: 14, period3: 28 };
-
-  return null;
-};
-
-/**
- * Get default thresholds for a given indicator
- */
-const getDefaultThresholds = (name: string): { upper: number; lower: number; label: string } => {
-  const nameUpper = name.toUpperCase();
-
-  if (nameUpper.includes('RSI')) return { upper: 70, lower: 30, label: 'Overbought/Oversold' };
-  if (nameUpper.includes('STOCH')) return { upper: 80, lower: 20, label: 'Overbought/Oversold' };
-  if (nameUpper.includes('WILLIAMS')) return { upper: -20, lower: -80, label: 'Overbought/Oversold' };
-  if (nameUpper.includes('CCI')) return { upper: 100, lower: -100, label: 'Overbought/Oversold' };
-  if (nameUpper === 'TSI') return { upper: 25, lower: -25, label: 'Overbought/Oversold' };
-  if (nameUpper === 'UO' || nameUpper.includes('ULTIMATE')) return { upper: 70, lower: 30, label: 'Overbought/Oversold' };
-  if (nameUpper === 'MFI') return { upper: 80, lower: 20, label: 'Overbought/Oversold' };
-  if (nameUpper.includes('ROC')) return { upper: 5, lower: -5, label: 'Strength %' };
-  if (nameUpper.includes('ADX') && !nameUpper.includes('POS') && !nameUpper.includes('NEG')) return { upper: 25, lower: 20, label: 'Trend Strength' };
-  if (nameUpper.includes('AROON')) return { upper: 70, lower: 30, label: 'Trend Strength' };
-  if (nameUpper.includes('BB_PBAND') || nameUpper.includes('KC_PBAND') || nameUpper.includes('DC_PBAND')) return { upper: 0.8, lower: 0.2, label: 'Band Position' };
-  if (nameUpper.includes('CMF')) return { upper: 0.1, lower: -0.1, label: 'Money Flow' };
-
-  return { upper: 0, lower: 0, label: 'Custom' };
+  return { hasZones: false, overbought: 0, oversold: 0, neutral: { min: 0, max: 0 }, rangeMin: 0, rangeMax: 100 };
 };
 
 /**
@@ -122,199 +85,119 @@ const getSignal = (
   name: string,
   latestValue: number,
   prevValue: number,
-  avg: number,
-  activeThresholds: { upper: number; lower: number }
-): { signal: 'BUY' | 'SELL' | 'NEUTRAL'; reason: string } => {
+  avg: number
+): { signal: 'BUY' | 'SELL' | 'NEUTRAL'; reason: string; strength: number; zone: 'OVERBOUGHT' | 'OVERSOLD' | 'NEUTRAL' | 'STRONG_TREND' | 'WEAK_TREND' } => {
   const nameUpper = name.toUpperCase();
+  const zones = getIndicatorZones(name);
 
   // === MOMENTUM INDICATORS ===
   if (nameUpper.includes('RSI')) {
-    if (latestValue <= activeThresholds.lower) return { signal: 'BUY', reason: `Oversold <${activeThresholds.lower}` };
-    if (latestValue >= activeThresholds.upper) return { signal: 'SELL', reason: `Overbought >${activeThresholds.upper}` };
-    return { signal: 'NEUTRAL', reason: `${activeThresholds.lower}-${activeThresholds.upper} range` };
+    if (latestValue <= 30) return { signal: 'BUY', reason: 'Oversold territory', strength: Math.min(100, (30 - latestValue) * 3), zone: 'OVERSOLD' };
+    if (latestValue >= 70) return { signal: 'SELL', reason: 'Overbought territory', strength: Math.min(100, (latestValue - 70) * 3), zone: 'OVERBOUGHT' };
+    if (latestValue > 50) return { signal: 'NEUTRAL', reason: 'Bullish momentum', strength: 50, zone: 'NEUTRAL' };
+    return { signal: 'NEUTRAL', reason: 'Bearish momentum', strength: 50, zone: 'NEUTRAL' };
   }
 
   if (nameUpper.includes('STOCH') && !nameUpper.includes('RSI')) {
-    if (latestValue <= activeThresholds.lower) return { signal: 'BUY', reason: `Oversold <${activeThresholds.lower}` };
-    if (latestValue >= activeThresholds.upper) return { signal: 'SELL', reason: `Overbought >${activeThresholds.upper}` };
-    return { signal: 'NEUTRAL', reason: `${activeThresholds.lower}-${activeThresholds.upper} range` };
+    if (latestValue <= 20) return { signal: 'BUY', reason: 'Oversold zone', strength: Math.min(100, (20 - latestValue) * 5), zone: 'OVERSOLD' };
+    if (latestValue >= 80) return { signal: 'SELL', reason: 'Overbought zone', strength: Math.min(100, (latestValue - 80) * 5), zone: 'OVERBOUGHT' };
+    return { signal: 'NEUTRAL', reason: 'Neutral zone', strength: 40, zone: 'NEUTRAL' };
   }
 
   if (nameUpper.includes('WILLIAMS')) {
-    if (latestValue <= -80) return { signal: 'BUY', reason: 'Oversold' };
-    if (latestValue >= -20) return { signal: 'SELL', reason: 'Overbought' };
-    return { signal: 'NEUTRAL', reason: '-20 to -80' };
+    if (latestValue <= -80) return { signal: 'BUY', reason: 'Oversold', strength: Math.min(100, Math.abs(-100 - latestValue) * 5), zone: 'OVERSOLD' };
+    if (latestValue >= -20) return { signal: 'SELL', reason: 'Overbought', strength: Math.min(100, Math.abs(latestValue) * 5), zone: 'OVERBOUGHT' };
+    return { signal: 'NEUTRAL', reason: 'Mid range', strength: 40, zone: 'NEUTRAL' };
   }
 
-  if (nameUpper === 'AO' || nameUpper.includes('AWESOME')) {
-    if (prevValue < 0 && latestValue > 0) return { signal: 'BUY', reason: 'Zero cross up' };
-    if (prevValue > 0 && latestValue < 0) return { signal: 'SELL', reason: 'Zero cross down' };
-    return { signal: 'NEUTRAL', reason: 'No crossover' };
-  }
-
-  if (nameUpper.includes('ROC')) {
-    if (latestValue > 5) return { signal: 'BUY', reason: 'Strong >5%' };
-    if (latestValue < -5) return { signal: 'SELL', reason: 'Weak <-5%' };
-    return { signal: 'NEUTRAL', reason: '-5% to 5%' };
-  }
-
-  if (nameUpper === 'TSI') {
-    if (latestValue < -25) return { signal: 'BUY', reason: 'Oversold' };
-    if (latestValue > 25) return { signal: 'SELL', reason: 'Overbought' };
-    return { signal: 'NEUTRAL', reason: '-25 to 25' };
-  }
-
-  if (nameUpper === 'UO' || nameUpper.includes('ULTIMATE')) {
-    if (latestValue < 30) return { signal: 'BUY', reason: 'Oversold <30' };
-    if (latestValue > 70) return { signal: 'SELL', reason: 'Overbought >70' };
-    return { signal: 'NEUTRAL', reason: '30-70 range' };
-  }
-
-  if (nameUpper.includes('PPO') && !nameUpper.includes('SIGNAL') && !nameUpper.includes('HIST')) {
-    if (prevValue < 0 && latestValue > 0) return { signal: 'BUY', reason: 'Zero cross up' };
-    if (prevValue > 0 && latestValue < 0) return { signal: 'SELL', reason: 'Zero cross down' };
-    return { signal: 'NEUTRAL', reason: 'No crossover' };
-  }
-
-  // === TREND INDICATORS ===
   if (nameUpper.includes('MACD') && !nameUpper.includes('SIGNAL') && !nameUpper.includes('DIFF')) {
-    if (prevValue < 0 && latestValue > 0) return { signal: 'BUY', reason: 'Bullish crossover' };
-    if (prevValue > 0 && latestValue < 0) return { signal: 'SELL', reason: 'Bearish crossover' };
-    return { signal: 'NEUTRAL', reason: 'No crossover' };
+    if (prevValue < 0 && latestValue > 0) return { signal: 'BUY', reason: 'Bullish crossover', strength: 85, zone: 'NEUTRAL' };
+    if (prevValue > 0 && latestValue < 0) return { signal: 'SELL', reason: 'Bearish crossover', strength: 85, zone: 'NEUTRAL' };
+    if (latestValue > 0 && latestValue > prevValue) return { signal: 'BUY', reason: 'Bullish momentum', strength: 60, zone: 'NEUTRAL' };
+    if (latestValue < 0 && latestValue < prevValue) return { signal: 'SELL', reason: 'Bearish momentum', strength: 60, zone: 'NEUTRAL' };
+    return { signal: 'NEUTRAL', reason: 'Sideways', strength: 30, zone: 'NEUTRAL' };
   }
 
   if (nameUpper.includes('CCI')) {
-    if (latestValue <= -100) return { signal: 'BUY', reason: 'Oversold <-100' };
-    if (latestValue >= 100) return { signal: 'SELL', reason: 'Overbought >100' };
-    return { signal: 'NEUTRAL', reason: '-100 to 100' };
+    if (latestValue <= -100) return { signal: 'BUY', reason: 'Oversold', strength: Math.min(100, Math.abs(latestValue + 100) / 2), zone: 'OVERSOLD' };
+    if (latestValue >= 100) return { signal: 'SELL', reason: 'Overbought', strength: Math.min(100, (latestValue - 100) / 2), zone: 'OVERBOUGHT' };
+    return { signal: 'NEUTRAL', reason: 'Normal range', strength: 40, zone: 'NEUTRAL' };
   }
 
   if (nameUpper.includes('ADX') && !nameUpper.includes('POS') && !nameUpper.includes('NEG')) {
-    if (latestValue > 25) return { signal: 'BUY', reason: 'Strong trend >25' };
-    if (latestValue < 20) return { signal: 'NEUTRAL', reason: 'Weak trend <20' };
-    return { signal: 'NEUTRAL', reason: 'Moderate 20-25' };
+    if (latestValue > 50) return { signal: 'BUY', reason: 'Very strong trend', strength: 90, zone: 'STRONG_TREND' };
+    if (latestValue > 25) return { signal: 'BUY', reason: 'Strong trend', strength: 70, zone: 'STRONG_TREND' };
+    if (latestValue < 20) return { signal: 'NEUTRAL', reason: 'Weak/no trend', strength: 30, zone: 'WEAK_TREND' };
+    return { signal: 'NEUTRAL', reason: 'Moderate trend', strength: 50, zone: 'NEUTRAL' };
   }
 
-  if (nameUpper.includes('AROON_UP')) {
-    if (latestValue > 70) return { signal: 'BUY', reason: 'Strong uptrend' };
-    return { signal: 'NEUTRAL', reason: 'Weak uptrend' };
-  }
-
-  if (nameUpper.includes('AROON_DOWN')) {
-    if (latestValue > 70) return { signal: 'SELL', reason: 'Strong downtrend' };
-    return { signal: 'NEUTRAL', reason: 'Weak downtrend' };
-  }
-
-  if (nameUpper.includes('AROON_INDICATOR')) {
-    if (latestValue > 50) return { signal: 'BUY', reason: 'Bullish' };
-    if (latestValue < -50) return { signal: 'SELL', reason: 'Bearish' };
-    return { signal: 'NEUTRAL', reason: '-50 to 50' };
-  }
-
-  if (nameUpper.includes('PSAR_UP_INDICATOR')) {
-    if (latestValue === 1) return { signal: 'BUY', reason: 'Uptrend active' };
-    return { signal: 'NEUTRAL', reason: 'No uptrend' };
-  }
-
-  if (nameUpper.includes('PSAR_DOWN_INDICATOR')) {
-    if (latestValue === 1) return { signal: 'SELL', reason: 'Downtrend active' };
-    return { signal: 'NEUTRAL', reason: 'No downtrend' };
-  }
-
-  if (nameUpper.includes('TRIX')) {
-    if (prevValue < 0 && latestValue > 0) return { signal: 'BUY', reason: 'Zero cross up' };
-    if (prevValue > 0 && latestValue < 0) return { signal: 'SELL', reason: 'Zero cross down' };
-    return { signal: 'NEUTRAL', reason: 'No crossover' };
-  }
-
-  if (nameUpper.includes('KST') && !nameUpper.includes('SIGNAL')) {
-    if (prevValue < 0 && latestValue > 0) return { signal: 'BUY', reason: 'Zero cross up' };
-    if (prevValue > 0 && latestValue < 0) return { signal: 'SELL', reason: 'Zero cross down' };
-    return { signal: 'NEUTRAL', reason: 'No crossover' };
-  }
-
-  if (nameUpper.includes('VORTEX_POS')) {
-    if (latestValue > 1) return { signal: 'BUY', reason: 'Positive >1' };
-    return { signal: 'NEUTRAL', reason: 'Weak' };
-  }
-
-  if (nameUpper.includes('VORTEX_NEG')) {
-    if (latestValue > 1) return { signal: 'SELL', reason: 'Negative >1' };
-    return { signal: 'NEUTRAL', reason: 'Weak' };
-  }
-
-  // === VOLATILITY INDICATORS ===
-  if (nameUpper.includes('BB_PBAND') || nameUpper.includes('KC_PBAND') || nameUpper.includes('DC_PBAND')) {
-    if (latestValue < 0.2) return { signal: 'BUY', reason: 'Near lower band' };
-    if (latestValue > 0.8) return { signal: 'SELL', reason: 'Near upper band' };
-    return { signal: 'NEUTRAL', reason: 'Middle band' };
-  }
-
-  if (nameUpper.includes('BB_HBAND_INDICATOR')) {
-    if (latestValue === 1) return { signal: 'SELL', reason: 'Above upper BB' };
-    return { signal: 'NEUTRAL', reason: 'Below upper BB' };
-  }
-
-  if (nameUpper.includes('BB_LBAND_INDICATOR')) {
-    if (latestValue === 1) return { signal: 'BUY', reason: 'Below lower BB' };
-    return { signal: 'NEUTRAL', reason: 'Above lower BB' };
-  }
-
-  if (nameUpper.includes('ATR')) {
-    if (latestValue > avg * 1.5) return { signal: 'NEUTRAL', reason: 'High volatility' };
-    if (latestValue < avg * 0.5) return { signal: 'NEUTRAL', reason: 'Low volatility' };
-    return { signal: 'NEUTRAL', reason: 'Normal volatility' };
-  }
-
-  if (nameUpper.includes('UI') || nameUpper.includes('ULCER')) {
-    if (latestValue > avg * 1.5) return { signal: 'SELL', reason: 'High risk' };
-    return { signal: 'NEUTRAL', reason: 'Normal risk' };
-  }
-
-  // === VOLUME INDICATORS ===
   if (nameUpper === 'MFI') {
-    if (latestValue <= 20) return { signal: 'BUY', reason: 'Oversold <20' };
-    if (latestValue >= 80) return { signal: 'SELL', reason: 'Overbought >80' };
-    return { signal: 'NEUTRAL', reason: '20-80 range' };
+    if (latestValue <= 20) return { signal: 'BUY', reason: 'Oversold', strength: Math.min(100, (20 - latestValue) * 5), zone: 'OVERSOLD' };
+    if (latestValue >= 80) return { signal: 'SELL', reason: 'Overbought', strength: Math.min(100, (latestValue - 80) * 5), zone: 'OVERBOUGHT' };
+    return { signal: 'NEUTRAL', reason: 'Normal flow', strength: 40, zone: 'NEUTRAL' };
+  }
+
+  if (nameUpper.includes('ROC')) {
+    if (latestValue > 5) return { signal: 'BUY', reason: 'Strong momentum', strength: Math.min(100, latestValue * 10), zone: 'NEUTRAL' };
+    if (latestValue < -5) return { signal: 'SELL', reason: 'Weak momentum', strength: Math.min(100, Math.abs(latestValue) * 10), zone: 'NEUTRAL' };
+    return { signal: 'NEUTRAL', reason: 'Flat', strength: 30, zone: 'NEUTRAL' };
+  }
+
+  if (nameUpper.includes('BB_PBAND') || nameUpper.includes('KC_PBAND') || nameUpper.includes('DC_PBAND')) {
+    if (latestValue < 0.2) return { signal: 'BUY', reason: 'Near lower band', strength: Math.min(100, (0.2 - latestValue) * 500), zone: 'OVERSOLD' };
+    if (latestValue > 0.8) return { signal: 'SELL', reason: 'Near upper band', strength: Math.min(100, (latestValue - 0.8) * 500), zone: 'OVERBOUGHT' };
+    return { signal: 'NEUTRAL', reason: 'Mid band', strength: 40, zone: 'NEUTRAL' };
   }
 
   if (nameUpper.includes('CMF')) {
-    if (latestValue > 0.1) return { signal: 'BUY', reason: 'Positive flow' };
-    if (latestValue < -0.1) return { signal: 'SELL', reason: 'Negative flow' };
-    return { signal: 'NEUTRAL', reason: 'Neutral flow' };
+    if (latestValue > 0.1) return { signal: 'BUY', reason: 'Buying pressure', strength: Math.min(100, latestValue * 500), zone: 'NEUTRAL' };
+    if (latestValue < -0.1) return { signal: 'SELL', reason: 'Selling pressure', strength: Math.min(100, Math.abs(latestValue) * 500), zone: 'NEUTRAL' };
+    return { signal: 'NEUTRAL', reason: 'Balanced flow', strength: 30, zone: 'NEUTRAL' };
   }
 
-  if (nameUpper === 'OBV' || nameUpper.includes('ADI') || nameUpper.includes('VPT')) {
-    if (latestValue > prevValue) return { signal: 'BUY', reason: 'Volume rising' };
-    if (latestValue < prevValue) return { signal: 'SELL', reason: 'Volume falling' };
-    return { signal: 'NEUTRAL', reason: 'Volume stable' };
+  if (nameUpper.includes('ATR')) {
+    if (latestValue > avg * 1.5) return { signal: 'NEUTRAL', reason: 'High volatility', strength: 70, zone: 'NEUTRAL' };
+    if (latestValue < avg * 0.5) return { signal: 'NEUTRAL', reason: 'Low volatility', strength: 30, zone: 'NEUTRAL' };
+    return { signal: 'NEUTRAL', reason: 'Normal volatility', strength: 50, zone: 'NEUTRAL' };
   }
 
-  if (nameUpper.includes('EOM')) {
-    if (latestValue > 0) return { signal: 'BUY', reason: 'Ease of movement +' };
-    if (latestValue < 0) return { signal: 'SELL', reason: 'Ease of movement -' };
-    return { signal: 'NEUTRAL', reason: 'No movement' };
-  }
-
-  if (nameUpper.includes('FI') && !nameUpper.includes('MFI')) {
-    if (latestValue > 0) return { signal: 'BUY', reason: 'Force positive' };
-    if (latestValue < 0) return { signal: 'SELL', reason: 'Force negative' };
-    return { signal: 'NEUTRAL', reason: 'No force' };
-  }
-
-  // === OTHERS (RETURNS) ===
-  if (nameUpper.includes('RETURN')) {
-    if (latestValue > 2) return { signal: 'BUY', reason: 'Positive return' };
-    if (latestValue < -2) return { signal: 'SELL', reason: 'Negative return' };
-    return { signal: 'NEUTRAL', reason: 'Flat return' };
-  }
-
-  // Default for moving averages and others
+  // Moving averages - compare trend direction
   if (nameUpper.includes('SMA') || nameUpper.includes('EMA') || nameUpper.includes('WMA')) {
-    return { signal: 'NEUTRAL', reason: 'Compare to price' };
+    const change = ((latestValue - prevValue) / prevValue) * 100;
+    if (change > 0.5) return { signal: 'BUY', reason: 'Upward slope', strength: Math.min(100, change * 20), zone: 'NEUTRAL' };
+    if (change < -0.5) return { signal: 'SELL', reason: 'Downward slope', strength: Math.min(100, Math.abs(change) * 20), zone: 'NEUTRAL' };
+    return { signal: 'NEUTRAL', reason: 'Flat', strength: 30, zone: 'NEUTRAL' };
   }
 
-  return { signal: 'NEUTRAL', reason: 'Monitor indicator' };
+  return { signal: 'NEUTRAL', reason: 'Monitor', strength: 30, zone: 'NEUTRAL' };
+};
+
+/**
+ * Calculate momentum direction and strength
+ */
+const calculateMomentum = (values: number[]): { direction: 'UP' | 'DOWN' | 'FLAT'; change: number; shortTermTrend: 'BULLISH' | 'BEARISH' | 'NEUTRAL' } => {
+  if (values.length < 5) return { direction: 'FLAT', change: 0, shortTermTrend: 'NEUTRAL' };
+
+  const recent = values.slice(-5);
+  const older = values.slice(-10, -5);
+
+  const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+  const olderAvg = older.length > 0 ? older.reduce((a, b) => a + b, 0) / older.length : recentAvg;
+
+  const change = olderAvg !== 0 ? ((recentAvg - olderAvg) / Math.abs(olderAvg)) * 100 : 0;
+
+  let direction: 'UP' | 'DOWN' | 'FLAT' = 'FLAT';
+  let shortTermTrend: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+
+  if (change > 2) {
+    direction = 'UP';
+    shortTermTrend = 'BULLISH';
+  } else if (change < -2) {
+    direction = 'DOWN';
+    shortTermTrend = 'BEARISH';
+  }
+
+  return { direction, change, shortTermTrend };
 };
 
 export const IndicatorBox: React.FC<IndicatorBoxProps> = ({
@@ -330,325 +213,449 @@ export const IndicatorBox: React.FC<IndicatorBoxProps> = ({
   onRecompute,
 }) => {
   const [showSettings, setShowSettings] = useState(false);
-  const [customThresholds, setCustomThresholds] = useState<{ upper: number; lower: number } | null>(null);
-  const [customParams, setCustomParams] = useState<any>(null);
 
-  // Only create indicator chart data (no price data for performance)
-  const chartData = values.map((value, i) => ({
-    index: i,
-    value: value || null,
-  }));
-
-  const defaultThresholds = getDefaultThresholds(name);
-  const activeThresholds = customThresholds || defaultThresholds;
-  const defaultParams = getDefaultParams(name);
-  const activeParams = customParams || defaultParams;
-
-  const prevValue = values[values.length - 2] || 0;
-  const { signal, reason } = getSignal(name, latestValue, prevValue, avg, activeThresholds);
+  const prevValue = values[values.length - 2] || latestValue;
+  const { signal, reason, strength, zone } = getSignal(name, latestValue, prevValue, avg);
   const signalColor = signal === 'BUY' ? COLORS.GREEN : signal === 'SELL' ? COLORS.RED : COLORS.GRAY;
+  const SignalIcon = signal === 'BUY' ? TrendingUp : signal === 'SELL' ? TrendingDown : Minus;
+
+  const zones = getIndicatorZones(name);
+  const momentum = calculateMomentum(values);
+
+  // Calculate position in range (0-100%)
+  const range = max - min;
+  const position = range > 0 ? ((latestValue - min) / range) * 100 : 50;
+
+  // Change from previous
+  const change = prevValue !== 0 ? ((latestValue - prevValue) / Math.abs(prevValue)) * 100 : 0;
+
+  // Chart data with zones
+  const chartData = useMemo(() => {
+    return values.map((value, i) => ({
+      index: i,
+      value: value || null,
+      upper: zones.hasZones ? zones.overbought : null,
+      lower: zones.hasZones ? zones.oversold : null,
+    }));
+  }, [values, zones]);
+
+  // Zone color
+  const getZoneColor = () => {
+    if (zone === 'OVERBOUGHT') return COLORS.RED;
+    if (zone === 'OVERSOLD') return COLORS.GREEN;
+    if (zone === 'STRONG_TREND') return COLORS.CYAN;
+    if (zone === 'WEAK_TREND') return COLORS.YELLOW;
+    return COLORS.GRAY;
+  };
+
+  const getZoneLabel = () => {
+    if (zone === 'OVERBOUGHT') return 'OVERBOUGHT';
+    if (zone === 'OVERSOLD') return 'OVERSOLD';
+    if (zone === 'STRONG_TREND') return 'STRONG TREND';
+    if (zone === 'WEAK_TREND') return 'WEAK TREND';
+    return 'NEUTRAL';
+  };
 
   return (
     <div style={{
       backgroundColor: COLORS.PANEL_BG,
-      border: `1px solid ${COLORS.BORDER}`,
-      borderLeft: `3px solid ${color}`,
-      borderRadius: '6px',
-      padding: '12px',
+      border: BORDERS.STANDARD,
+      borderTop: `2px solid ${signalColor}`,
       display: 'flex',
       flexDirection: 'column',
-      gap: '8px',
-      minHeight: showSettings ? '480px' : '320px',
-      height: 'auto',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
-      transition: 'all 0.2s ease',
-    }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = color;
-        e.currentTarget.style.boxShadow = `0 4px 12px rgba(0, 0, 0, 0.5)`;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = COLORS.BORDER;
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.3)';
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ color: color, fontSize: '10px', fontWeight: 'bold', marginBottom: '2px' }}>
+      fontFamily: TYPOGRAPHY.MONO,
+      transition: EFFECTS.TRANSITION_STANDARD,
+    }}>
+      {/* Header with Signal */}
+      <div style={{
+        backgroundColor: COLORS.HEADER_BG,
+        padding: `${SPACING.SMALL} ${SPACING.MEDIUM}`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderBottom: BORDERS.STANDARD,
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{
+            color: COLORS.GRAY,
+            fontSize: TYPOGRAPHY.TINY,
+            textTransform: 'uppercase',
+            letterSpacing: TYPOGRAPHY.WIDE,
+            marginBottom: '2px',
+          }}>
             {category}
           </div>
-          <div style={{ color: COLORS.WHITE, fontSize: '11px', fontWeight: 'bold' }}>
+          <div style={{
+            color: COLORS.WHITE,
+            fontSize: TYPOGRAPHY.DEFAULT,
+            fontWeight: TYPOGRAPHY.BOLD,
+          }}>
             {name.toUpperCase().replace(/_/g, ' ')}
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ color: COLORS.WHITE, fontSize: '16px', fontWeight: 'bold' }}>
+
+        {/* Signal Badge */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.SMALL,
+          padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+          backgroundColor: `${signalColor}20`,
+          borderLeft: `2px solid ${signalColor}`,
+        }}>
+          <SignalIcon size={12} color={signalColor} />
+          <span style={{
+            color: signalColor,
+            fontSize: TYPOGRAPHY.SMALL,
+            fontWeight: TYPOGRAPHY.BOLD,
+          }}>
+            {signal}
+          </span>
+        </div>
+      </div>
+
+      {/* Main Value Display with Gauge */}
+      <div style={{
+        padding: SPACING.MEDIUM,
+        display: 'flex',
+        gap: SPACING.MEDIUM,
+        borderBottom: BORDERS.STANDARD,
+      }}>
+        {/* Current Value */}
+        <div style={{ flex: 1 }}>
+          <div style={{
+            color: COLORS.WHITE,
+            fontSize: '24px',
+            fontWeight: TYPOGRAPHY.BOLD,
+            fontFamily: TYPOGRAPHY.MONO,
+            lineHeight: 1,
+          }}>
             {formatIndicatorValue(latestValue)}
           </div>
-          <div style={{ color: COLORS.GRAY, fontSize: '9px' }}>
-            Current
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.TINY,
+            marginTop: SPACING.TINY,
+          }}>
+            {change >= 0 ? (
+              <ArrowUp size={10} color={COLORS.GREEN} />
+            ) : (
+              <ArrowDown size={10} color={COLORS.RED} />
+            )}
+            <span style={{
+              color: change >= 0 ? COLORS.GREEN : COLORS.RED,
+              fontSize: TYPOGRAPHY.TINY,
+              fontWeight: TYPOGRAPHY.SEMIBOLD,
+            }}>
+              {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+
+        {/* Zone Indicator */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            color: getZoneColor(),
+            fontSize: TYPOGRAPHY.TINY,
+            fontWeight: TYPOGRAPHY.BOLD,
+            textTransform: 'uppercase',
+            padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+            backgroundColor: `${getZoneColor()}15`,
+            border: `1px solid ${getZoneColor()}40`,
+          }}>
+            {getZoneLabel()}
+          </div>
+          <div style={{
+            color: COLORS.MUTED,
+            fontSize: TYPOGRAPHY.TINY,
+            marginTop: SPACING.TINY,
+          }}>
+            {reason}
           </div>
         </div>
       </div>
 
-      {/* Lightweight Chart - ONLY indicator line */}
-      <div style={{ width: '100%', height: '80px', flex: '0 0 auto' }}>
+      {/* Visual Gauge Bar */}
+      {zones.hasZones && (
+        <div style={{
+          padding: `${SPACING.SMALL} ${SPACING.MEDIUM}`,
+          backgroundColor: COLORS.DARK_BG,
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.TINY,
+            marginBottom: SPACING.TINY,
+          }}>
+            <span style={{ color: COLORS.GREEN, fontSize: TYPOGRAPHY.TINY }}>
+              {zones.inverted ? zones.overbought : zones.oversold}
+            </span>
+            <div style={{
+              flex: 1,
+              height: '8px',
+              backgroundColor: COLORS.PANEL_BG,
+              border: BORDERS.STANDARD,
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              {/* Oversold Zone */}
+              <div style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: `${((zones.oversold - zones.rangeMin) / (zones.rangeMax - zones.rangeMin)) * 100}%`,
+                backgroundColor: `${COLORS.GREEN}30`,
+              }} />
+              {/* Overbought Zone */}
+              <div style={{
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: `${((zones.rangeMax - zones.overbought) / (zones.rangeMax - zones.rangeMin)) * 100}%`,
+                backgroundColor: `${COLORS.RED}30`,
+              }} />
+              {/* Current Position Marker */}
+              <div style={{
+                position: 'absolute',
+                left: `${Math.max(0, Math.min(100, ((latestValue - zones.rangeMin) / (zones.rangeMax - zones.rangeMin)) * 100))}%`,
+                top: '-2px',
+                bottom: '-2px',
+                width: '3px',
+                backgroundColor: signalColor,
+                transform: 'translateX(-50%)',
+                boxShadow: `0 0 6px ${signalColor}`,
+              }} />
+            </div>
+            <span style={{ color: COLORS.RED, fontSize: TYPOGRAPHY.TINY }}>
+              {zones.inverted ? zones.oversold : zones.overbought}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Chart with Reference Lines */}
+      <div style={{ padding: SPACING.SMALL, height: '80px' }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.BORDER} opacity={0.3} />
+          <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.BORDER} opacity={0.2} />
             <XAxis dataKey="index" hide />
             <YAxis domain={['auto', 'auto']} hide />
+            {zones.hasZones && (
+              <>
+                <ReferenceLine y={zones.overbought} stroke={COLORS.RED} strokeDasharray="3 3" strokeOpacity={0.5} />
+                <ReferenceLine y={zones.oversold} stroke={COLORS.GREEN} strokeDasharray="3 3" strokeOpacity={0.5} />
+              </>
+            )}
             <Tooltip
               contentStyle={{
                 backgroundColor: COLORS.DARK_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                borderRadius: '4px',
-                fontSize: '10px',
+                border: BORDERS.STANDARD,
+                fontSize: TYPOGRAPHY.SMALL,
+                fontFamily: TYPOGRAPHY.MONO,
               }}
-              formatter={(value: any) => formatIndicatorValue(value)}
+              formatter={(value: any) => [formatIndicatorValue(value), name]}
             />
             <Line
               type="monotone"
               dataKey="value"
               stroke={color}
-              strokeWidth={2}
+              strokeWidth={1.5}
               dot={false}
               connectNulls
               isAnimationActive={false}
             />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Signal Badge */}
+      {/* Signal Strength + Momentum */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '4px',
-        backgroundColor: `${signalColor}15`,
-        border: `1px solid ${signalColor}`,
-        borderRadius: '4px',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: SPACING.TINY,
+        padding: `0 ${SPACING.MEDIUM} ${SPACING.SMALL}`,
       }}>
-        <span style={{ color: signalColor, fontSize: '11px', fontWeight: 'bold' }}>
-          {signal}
-        </span>
-        <span style={{ color: COLORS.GRAY, fontSize: '9px' }}>
-          {reason}
-        </span>
-      </div>
-
-      {/* Settings Toggle & Parameters */}
-      <div style={{ flex: '0 0 auto' }}>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          style={{
-            fontSize: '9px',
-            fontWeight: '500',
-            textAlign: 'center',
-            padding: '4px 8px',
-            cursor: 'pointer',
+        {/* Signal Strength */}
+        <div style={{
+          backgroundColor: COLORS.DARK_BG,
+          padding: SPACING.SMALL,
+          border: BORDERS.STANDARD,
+        }}>
+          <div style={{
+            color: COLORS.GRAY,
+            fontSize: TYPOGRAPHY.TINY,
+            textTransform: 'uppercase',
+            marginBottom: SPACING.TINY,
+          }}>
+            SIGNAL STRENGTH
+          </div>
+          <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            width: '100%',
-            userSelect: 'none',
-            backgroundColor: showSettings ? COLORS.DARK_BG : COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            borderRadius: '3px',
-            color: COLORS.GRAY,
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = COLORS.ORANGE;
-            e.currentTarget.style.color = COLORS.ORANGE;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = COLORS.BORDER;
-            e.currentTarget.style.color = COLORS.GRAY;
-          }}
-        >
-          <span style={{ fontSize: '10px' }}></span>
-          <span>{showSettings ? 'Hide' : 'Adjust'}</span>
-        </button>
-
-        {showSettings && (
-          <div style={{
-            backgroundColor: COLORS.DARK_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            borderRadius: '4px',
-            padding: '10px',
-            marginTop: '8px',
-            fontSize: '10px',
+            gap: SPACING.SMALL,
           }}>
-            {/* Indicator Parameters Section */}
-            {defaultParams && (
-              <div style={{ marginBottom: defaultThresholds.upper !== 0 ? '12px' : '0' }}>
-                <div style={{ color: COLORS.CYAN, fontWeight: 'bold', marginBottom: '8px', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span>Indicator Parameters</span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px', marginBottom: '8px' }}>
-                  {Object.keys(defaultParams).map((key) => (
-                    <div key={key}>
-                      <label style={{ color: COLORS.GRAY, display: 'block', marginBottom: '3px', fontSize: '9px', textTransform: 'capitalize' }}>
-                        {key.replace(/_/g, ' ')}
-                      </label>
-                      <input
-                        type="number"
-                        step="1"
-                        value={customParams?.[key] ?? defaultParams[key]}
-                        onChange={(e) => setCustomParams({
-                          ...defaultParams,
-                          ...customParams,
-                          [key]: parseInt(e.target.value) || 1
-                        })}
-                        style={{
-                          width: '100%',
-                          backgroundColor: COLORS.PANEL_BG,
-                          border: `1px solid ${COLORS.BORDER}`,
-                          borderRadius: '3px',
-                          color: COLORS.WHITE,
-                          padding: '4px 6px',
-                          fontSize: '10px',
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {customParams && (
-                  <button
-                    onClick={() => {
-                      if (onRecompute) {
-                        onRecompute({ indicator: name, params: customParams });
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      backgroundColor: COLORS.CYAN,
-                      border: 'none',
-                      borderRadius: '3px',
-                      color: COLORS.DARK_BG,
-                      padding: '6px',
-                      fontSize: '10px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                      marginBottom: '6px',
-                    }}
-                  >
-                    Recompute with New Parameters
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Signal Thresholds Section */}
-            {defaultThresholds.upper !== 0 && (
-              <div>
-                <div style={{ color: COLORS.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span>{defaultThresholds.label}</span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                  <div>
-                    <label style={{ color: COLORS.GRAY, display: 'block', marginBottom: '3px', fontSize: '9px' }}>
-                      Upper Threshold
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={customThresholds?.upper ?? defaultThresholds.upper}
-                      onChange={(e) => setCustomThresholds({
-                        upper: parseFloat(e.target.value),
-                        lower: customThresholds?.lower ?? defaultThresholds.lower
-                      })}
-                      style={{
-                        width: '100%',
-                        backgroundColor: COLORS.PANEL_BG,
-                        border: `1px solid ${COLORS.BORDER}`,
-                        borderRadius: '3px',
-                        color: COLORS.WHITE,
-                        padding: '4px 6px',
-                        fontSize: '10px',
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ color: COLORS.GRAY, display: 'block', marginBottom: '3px', fontSize: '9px' }}>
-                      Lower Threshold
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={customThresholds?.lower ?? defaultThresholds.lower}
-                      onChange={(e) => setCustomThresholds({
-                        upper: customThresholds?.upper ?? defaultThresholds.upper,
-                        lower: parseFloat(e.target.value)
-                      })}
-                      style={{
-                        width: '100%',
-                        backgroundColor: COLORS.PANEL_BG,
-                        border: `1px solid ${COLORS.BORDER}`,
-                        borderRadius: '3px',
-                        color: COLORS.WHITE,
-                        padding: '4px 6px',
-                        fontSize: '10px',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Reset Button */}
-            <button
-              onClick={() => {
-                setCustomThresholds(null);
-                setCustomParams(null);
-              }}
-              style={{
-                width: '100%',
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                borderRadius: '3px',
-                color: COLORS.GRAY,
-                padding: '5px',
-                fontSize: '9px',
-                cursor: 'pointer',
-                fontWeight: '600',
-              }}
-            >
-              Reset All to Defaults
-            </button>
+            <div style={{
+              flex: 1,
+              height: '4px',
+              backgroundColor: COLORS.PANEL_BG,
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                width: `${strength}%`,
+                height: '100%',
+                backgroundColor: signalColor,
+              }} />
+            </div>
+            <span style={{
+              color: signalColor,
+              fontSize: TYPOGRAPHY.SMALL,
+              fontWeight: TYPOGRAPHY.BOLD,
+            }}>
+              {strength}%
+            </span>
           </div>
-        )}
+        </div>
+
+        {/* Momentum */}
+        <div style={{
+          backgroundColor: COLORS.DARK_BG,
+          padding: SPACING.SMALL,
+          border: BORDERS.STANDARD,
+        }}>
+          <div style={{
+            color: COLORS.GRAY,
+            fontSize: TYPOGRAPHY.TINY,
+            textTransform: 'uppercase',
+            marginBottom: SPACING.TINY,
+          }}>
+            MOMENTUM
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.TINY,
+          }}>
+            {momentum.direction === 'UP' && <ArrowUp size={12} color={COLORS.GREEN} />}
+            {momentum.direction === 'DOWN' && <ArrowDown size={12} color={COLORS.RED} />}
+            {momentum.direction === 'FLAT' && <Minus size={12} color={COLORS.GRAY} />}
+            <span style={{
+              color: momentum.shortTermTrend === 'BULLISH' ? COLORS.GREEN :
+                     momentum.shortTermTrend === 'BEARISH' ? COLORS.RED : COLORS.GRAY,
+              fontSize: TYPOGRAPHY.SMALL,
+              fontWeight: TYPOGRAPHY.BOLD,
+            }}>
+              {momentum.shortTermTrend}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', fontSize: '9px' }}>
-        <div>
-          <div style={{ color: COLORS.GRAY }}>MIN</div>
-          <div style={{ color: COLORS.RED, fontWeight: 'bold' }}>{formatIndicatorValue(min)}</div>
+      {/* Stats Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr 1fr',
+        gap: '1px',
+        backgroundColor: COLORS.BORDER,
+        borderTop: BORDERS.STANDARD,
+      }}>
+        <div style={{
+          backgroundColor: COLORS.DARK_BG,
+          padding: SPACING.SMALL,
+          textAlign: 'center',
+        }}>
+          <div style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.TINY, textTransform: 'uppercase' }}>MIN</div>
+          <div style={{ color: COLORS.RED, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD }}>
+            {formatIndicatorValue(min)}
+          </div>
         </div>
-        <div>
-          <div style={{ color: COLORS.GRAY }}>AVG</div>
-          <div style={{ color: COLORS.YELLOW, fontWeight: 'bold' }}>{formatIndicatorValue(avg)}</div>
+        <div style={{
+          backgroundColor: COLORS.DARK_BG,
+          padding: SPACING.SMALL,
+          textAlign: 'center',
+        }}>
+          <div style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.TINY, textTransform: 'uppercase' }}>AVG</div>
+          <div style={{ color: COLORS.YELLOW, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD }}>
+            {formatIndicatorValue(avg)}
+          </div>
         </div>
-        <div>
-          <div style={{ color: COLORS.GRAY }}>MAX</div>
-          <div style={{ color: COLORS.GREEN, fontWeight: 'bold' }}>{formatIndicatorValue(max)}</div>
+        <div style={{
+          backgroundColor: COLORS.DARK_BG,
+          padding: SPACING.SMALL,
+          textAlign: 'center',
+        }}>
+          <div style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.TINY, textTransform: 'uppercase' }}>MAX</div>
+          <div style={{ color: COLORS.GREEN, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD }}>
+            {formatIndicatorValue(max)}
+          </div>
+        </div>
+        <div style={{
+          backgroundColor: COLORS.DARK_BG,
+          padding: SPACING.SMALL,
+          textAlign: 'center',
+        }}>
+          <div style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.TINY, textTransform: 'uppercase' }}>PTS</div>
+          <div style={{ color: COLORS.CYAN, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD }}>
+            {values.length}
+          </div>
         </div>
       </div>
 
-      {/* Data Points Count */}
-      <div style={{ color: COLORS.GRAY, fontSize: '9px', textAlign: 'center', borderTop: `1px solid ${COLORS.BORDER}`, paddingTop: '4px' }}>
-        {values.length} data points
-      </div>
+      {/* Settings Toggle */}
+      <button
+        onClick={() => setShowSettings(!showSettings)}
+        style={{
+          fontSize: TYPOGRAPHY.TINY,
+          fontWeight: TYPOGRAPHY.SEMIBOLD,
+          textAlign: 'center',
+          padding: SPACING.SMALL,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: SPACING.TINY,
+          width: '100%',
+          backgroundColor: showSettings ? COLORS.DARK_BG : 'transparent',
+          border: 'none',
+          borderTop: BORDERS.STANDARD,
+          color: COLORS.MUTED,
+          fontFamily: TYPOGRAPHY.MONO,
+          textTransform: 'uppercase',
+          letterSpacing: TYPOGRAPHY.WIDE,
+          transition: EFFECTS.TRANSITION_FAST,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = COLORS.ORANGE;
+          e.currentTarget.style.backgroundColor = COLORS.HEADER_BG;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = COLORS.MUTED;
+          e.currentTarget.style.backgroundColor = showSettings ? COLORS.DARK_BG : 'transparent';
+        }}
+      >
+        <Settings2 size={10} />
+        <span>{showSettings ? 'HIDE' : 'SETTINGS'}</span>
+      </button>
+
+      {showSettings && (
+        <div style={{
+          padding: SPACING.SMALL,
+          backgroundColor: COLORS.DARK_BG,
+          borderTop: BORDERS.STANDARD,
+          fontSize: TYPOGRAPHY.TINY,
+          color: COLORS.GRAY,
+          textAlign: 'center',
+        }}>
+          Parameter customization coming soon
+        </div>
+      )}
     </div>
   );
 };

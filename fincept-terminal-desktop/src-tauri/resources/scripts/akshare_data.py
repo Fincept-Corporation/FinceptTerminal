@@ -343,21 +343,34 @@ class AKShareDataWrapper:
 
     def get_all_available_endpoints(self) -> Dict[str, Any]:
         """Get list of all available endpoints in this wrapper"""
-        methods = [method for method in dir(self) if method.startswith('get_') and callable(getattr(self, method))]
+        # Return the actual endpoint names used in endpoint_map, not method names
+        endpoints = [
+            "stock_zh_spot", "stock_us_spot", "stock_hk_spot", "stock_symbols", "us_stock_symbols",
+            "fund_etf_spot", "fund_rank",
+            "china_gdp", "china_cpi", "china_pmi",
+            "bond_spot", "bond_yield",
+            "currency_rates", "forex_spot",
+            "futures_spot",
+            "air_quality", "carbon_trading",
+            "industry_pe", "hot_rank", "north_south_flow"
+        ]
         return {
-            "available_endpoints": methods,
-            "total_count": len(methods),
-            "categories": {
-                "Stock Market": [m for m in methods if "stock" in m],
-                "Fund Data": [m for m in methods if "fund" in m],
-                "Economic": [m for m in methods if "macro" in m],
-                "Bond Market": [m for m in methods if "bond" in m],
-                "Currency": [m for m in methods if "currency" in m or "forex" in m],
-                "Futures": [m for m in methods if "futures" in m],
-                "Alternative": [m for m in methods if any(x in m for x in ["air", "energy"])],
-                "Market Analytics": [m for m in methods if any(x in m for x in ["industry", "board", "hot", "hsgt"])]
-            },
-            "timestamp": int(datetime.now().timestamp())
+            "success": True,
+            "data": {
+                "available_endpoints": endpoints,
+                "total_count": len(endpoints),
+                "categories": {
+                    "Stock Market": ["stock_zh_spot", "stock_us_spot", "stock_hk_spot", "stock_symbols", "us_stock_symbols"],
+                    "Funds": ["fund_etf_spot", "fund_rank"],
+                    "Economic": ["china_gdp", "china_cpi", "china_pmi"],
+                    "Bonds": ["bond_spot", "bond_yield"],
+                    "Currency & Forex": ["currency_rates", "forex_spot"],
+                    "Futures": ["futures_spot"],
+                    "Alternative Data": ["air_quality", "carbon_trading"],
+                    "Market Analytics": ["industry_pe", "hot_rank", "north_south_flow"]
+                },
+                "timestamp": int(datetime.now().timestamp())
+            }
         }
 
   

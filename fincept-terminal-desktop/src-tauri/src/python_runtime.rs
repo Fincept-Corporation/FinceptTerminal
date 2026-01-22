@@ -1,5 +1,7 @@
 // Python Runtime Module - Worker Pool Integration
-// Provides backward-compatible API using worker pool instead of PyO3
+// Provides async/sync execution of Python scripts via persistent worker processes
+// Primary method: Worker pool with Unix Domain Sockets (fast, persistent workers)
+// Fallback method: Direct subprocess execution (slower but reliable)
 
 use std::path::PathBuf;
 
@@ -101,35 +103,26 @@ if __name__ == '__main__':
 }
 
 /// Determine which venv to use based on script path
+///
+/// venv-numpy1 (NumPy <2.0): vectorbt, backtesting, gluonts, functime, PyPortfolioOpt, financepy
+/// venv-numpy2 (NumPy 2.x): Everything else including ta, vnpy, edgartools, pyqlib, rdagent, etc.
 fn determine_venv_for_script(script_path: &PathBuf) -> &'static str {
     let path_str = script_path.to_string_lossy().to_lowercase();
 
     // NumPy 1.x libraries (from requirements-numpy1.txt)
-    // Includes backtesting, time series, portfolio optimization, and quant libraries
+    // ONLY libraries that are INCOMPATIBLE with NumPy 2.x go here
     if path_str.contains("vectorbt")
         || path_str.contains("backtesting")
         || path_str.contains("gluonts")
         || path_str.contains("functime")
         || path_str.contains("pyportfolioopt")
-        // Qlib and RD-Agent (match both script paths and library names)
-        || path_str.contains("qlib")      // matches qlib_service.py, pyqlib
-        || path_str.contains("rd_agent")  // matches rd_agent_service.py
-        || path_str.contains("rdagent")   // matches library name
-        || path_str.contains("gs-quant")
-        || path_str.contains("gs_quant")
-        // Financial modeling libraries (NumPy 1.x dependent)
-        || path_str.contains("ffn")           // matches ffn_wrapper, ffn_service.py
-        || path_str.contains("fortitudo")     // matches fortitudo_tech_wrapper, fortitudo_service.py
         || path_str.contains("financepy")
-        || path_str.contains("finquant")
-        // AI Quant Lab uses Qlib/RD-Agent which need NumPy 1.x
-        || path_str.contains("ai_quant_lab")
     {
         return "venv-numpy1";
     }
 
-    // NumPy 2.x libraries (vnpy, edgartools, modern ML)
-    // Default for everything else
+    // NumPy 2.x libraries (DEFAULT - most libraries including modern quant tools)
+    // Includes: ta, vnpy, edgartools, pyqlib, rdagent, gs-quant, ffn, fortitudo, finquant, etc.
     "venv-numpy2"
 }
 

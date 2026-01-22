@@ -975,8 +975,78 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
       'AZN:XLON', 'MC:XPAR', 'ROG:XSWX', 'NOVN:XSWX', 'ULVR:XLON',
     ],
   },
+
+  // ============================================================================
+  // PAPER TRADING (YFinance Data)
+  // ============================================================================
+
+  yfinance: {
+    id: 'yfinance',
+    name: 'yfinance',
+    displayName: 'YFinance (Paper Trading)',
+    logo: 'https://fincept.in/brokers/yfinance.png',
+    website: 'https://finance.yahoo.com',
+
+    region: 'us',
+    country: 'US',
+    currency: 'USD',
+    exchanges: ['NYSE', 'NASDAQ', 'AMEX', 'NSE', 'BSE', 'LSE', 'XETRA', 'TSX', 'ASX', 'HKEX'],
+    marketHours: {
+      open: '09:30',
+      close: '16:00',
+      timezone: 'America/New_York',
+      preMarketOpen: '04:00',
+      preMarketClose: '09:30',
+      postMarketOpen: '16:00',
+      postMarketClose: '20:00',
+    },
+
+    features: {
+      webSocket: false,
+      amo: false,
+      gtt: false,
+      bracketOrder: false,
+      coverOrder: false,
+      marginCalculator: false,
+      optionsChain: false,
+      paperTrading: true,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: false,
+    },
+
+    productTypes: ['CASH'],
+
+    authType: 'api_key',
+
+    rateLimit: {
+      ordersPerSecond: 10,
+      quotesPerSecond: 1,
+    },
+
+    fees: {
+      equity: { brokerage: 0, stt: 0 },
+      intraday: { brokerage: 0 },
+      fno: { brokerage: 0 },
+    },
+
+    defaultSymbols: [
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
+      'META', 'TSLA', 'BRK-B', 'JPM', 'V',
+      'UNH', 'JNJ', 'XOM', 'PG', 'MA',
+      'NFLX', 'ADBE', 'CRM', 'INTC', 'AMD',
+      'RELIANCE.NS', 'TCS.NS', 'INFY.NS', 'HDFCBANK.NS', 'ICICIBANK.NS',
+    ],
+  },
 };
 
+// ============================================================================
+// ADAPTER REGISTRY (Runtime instances)
 // ============================================================================
 // ADAPTER REGISTRY (Runtime instances)
 // ============================================================================

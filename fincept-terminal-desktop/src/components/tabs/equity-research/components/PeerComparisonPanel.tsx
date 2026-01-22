@@ -297,34 +297,25 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                 }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
-                    <span style={{
-                      fontWeight: TYPOGRAPHY.BOLD,
-                      color: FINCEPT.WHITE,
-                      fontSize: TYPOGRAPHY.DEFAULT,
-                    }}>
-                      {peer.symbol}
-                    </span>
-                    <span style={{
-                      fontSize: TYPOGRAPHY.TINY,
-                      padding: `${SPACING.TINY} ${SPACING.SMALL}`,
-                      backgroundColor: `${FINCEPT.CYAN}20`,
-                      color: FINCEPT.CYAN,
-                      border: `1px solid ${FINCEPT.CYAN}`,
-                    }}>
-                      {(peer.similarityScore * 100).toFixed(0)}% MATCH
-                    </span>
-                  </div>
-                  <p style={{
-                    fontSize: TYPOGRAPHY.SMALL,
-                    color: FINCEPT.GRAY,
-                    marginTop: SPACING.TINY,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                  <span style={{
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.WHITE,
+                    fontSize: TYPOGRAPHY.DEFAULT,
                   }}>
-                    {peer.name}
-                  </p>
+                    {peer.symbol}
+                  </span>
+                  {peer.name && peer.name !== peer.symbol && (
+                    <p style={{
+                      fontSize: TYPOGRAPHY.SMALL,
+                      color: FINCEPT.GRAY,
+                      marginTop: SPACING.TINY,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {peer.name}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => removePeer(peer.symbol)}
@@ -730,57 +721,89 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
           )}
 
           {viewMode === 'chart' && (
-            <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Metric Comparison - Bar Charts</h3>
-                <p className="text-xs text-gray-400">
+            <div style={{
+              ...COMMON_STYLES.panel,
+              padding: SPACING.XLARGE,
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: SPACING.LARGE,
+              }}>
+                <h3 style={{
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: FINCEPT.WHITE,
+                  letterSpacing: TYPOGRAPHY.WIDE,
+                  textTransform: 'uppercase',
+                }}>
+                  METRIC COMPARISON - BAR CHARTS
+                </h3>
+                <p style={{
+                  fontSize: TYPOGRAPHY.SMALL,
+                  color: FINCEPT.GRAY,
+                }}>
                   Compare key financial metrics across all companies
                 </p>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+                gap: SPACING.LARGE,
+              }}>
                 {selectedMetrics.map((metric) => {
                   const targetValue = getMetricValue(comparisonData.target, metric);
                   const chartData = [
                     {
                       name: comparisonData.target.symbol,
                       value: targetValue || 0,
-                      fill: '#3b82f6', // Blue for target
+                      fill: FINCEPT.ORANGE,
                     },
                     ...comparisonData.peers.map((peer, index) => ({
                       name: peer.symbol,
                       value: getMetricValue(peer, metric) || 0,
-                      fill: `hsl(${(index * 360) / comparisonData.peers.length}, 70%, 50%)`,
+                      fill: [FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.YELLOW, FINCEPT.PURPLE, FINCEPT.BLUE][index % 5],
                     })),
                   ];
 
                   return (
-                    <div key={metric} className="bg-gray-800 rounded-lg p-4">
-                      <h4 className="text-sm font-semibold text-white mb-3">{metric}</h4>
+                    <div key={metric} style={{
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: BORDERS.STANDARD,
+                      padding: SPACING.LARGE,
+                    }}>
+                      <h4 style={{
+                        fontSize: TYPOGRAPHY.DEFAULT,
+                        fontWeight: TYPOGRAPHY.BOLD,
+                        color: FINCEPT.WHITE,
+                        marginBottom: SPACING.MEDIUM,
+                      }}>{metric}</h4>
                       <ResponsiveContainer width="100%" height={200}>
                         <ComposedChart data={chartData} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <CartesianGrid strokeDasharray="3 3" stroke={FINCEPT.BORDER} />
                           <XAxis
                             type="number"
-                            stroke="#9ca3af"
-                            tick={{ fill: '#9ca3af', fontSize: 11 }}
+                            stroke={FINCEPT.GRAY}
+                            tick={{ fill: FINCEPT.GRAY, fontSize: 11 }}
                           />
                           <YAxis
                             type="category"
                             dataKey="name"
-                            stroke="#9ca3af"
-                            tick={{ fill: '#9ca3af', fontSize: 11 }}
+                            stroke={FINCEPT.GRAY}
+                            tick={{ fill: FINCEPT.GRAY, fontSize: 11 }}
                             width={80}
                           />
                           <Tooltip
                             contentStyle={{
-                              backgroundColor: '#1f2937',
-                              border: '1px solid #374151',
-                              borderRadius: '8px',
-                              color: '#fff',
+                              backgroundColor: FINCEPT.PANEL_BG,
+                              border: `1px solid ${FINCEPT.BORDER}`,
+                              borderRadius: '2px',
+                              color: FINCEPT.WHITE,
                             }}
                             formatter={(value: any) => [value.toFixed(2), metric]}
                           />
-                          <Bar dataKey="value" radius={[0, 4, 4, 0]} />
+                          <Bar dataKey="value" radius={[0, 2, 2, 0]} />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </div>
@@ -791,31 +814,50 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
           )}
 
           {viewMode === 'radar' && (
-            <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Metric Comparison</h3>
-                <p className="text-xs text-gray-400">
+            <div style={{
+              ...COMMON_STYLES.panel,
+              padding: SPACING.XLARGE,
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: SPACING.LARGE,
+              }}>
+                <h3 style={{
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: FINCEPT.WHITE,
+                  letterSpacing: TYPOGRAPHY.WIDE,
+                  textTransform: 'uppercase',
+                }}>
+                  METRIC COMPARISON
+                </h3>
+                <p style={{
+                  fontSize: TYPOGRAPHY.SMALL,
+                  color: FINCEPT.GRAY,
+                }}>
                   Values normalized 0-100 for visualization
                 </p>
               </div>
               <ResponsiveContainer width="100%" height={400}>
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="#374151" />
+                  <PolarGrid stroke={FINCEPT.BORDER} />
                   <PolarAngleAxis
                     dataKey="metric"
-                    stroke="#9ca3af"
-                    tick={{ fill: '#9ca3af', fontSize: 12 }}
+                    stroke={FINCEPT.GRAY}
+                    tick={{ fill: FINCEPT.GRAY, fontSize: 12 }}
                   />
                   <PolarRadiusAxis
-                    stroke="#9ca3af"
-                    tick={{ fill: '#6b7280', fontSize: 10 }}
+                    stroke={FINCEPT.GRAY}
+                    tick={{ fill: FINCEPT.MUTED, fontSize: 10 }}
                     domain={[0, 100]}
                   />
                   <Radar
                     name={comparisonData.target.symbol}
                     dataKey="target"
-                    stroke="#3b82f6"
-                    fill="#3b82f6"
+                    stroke={FINCEPT.ORANGE}
+                    fill={FINCEPT.ORANGE}
                     fillOpacity={0.3}
                     strokeWidth={2}
                   />
@@ -824,19 +866,19 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
                       key={peer.symbol}
                       name={peer.symbol}
                       dataKey={`peer${index + 1}`}
-                      stroke={`hsl(${(index * 360) / comparisonData.peers.length}, 70%, 50%)`}
-                      fill={`hsl(${(index * 360) / comparisonData.peers.length}, 70%, 50%)`}
+                      stroke={[FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.YELLOW, FINCEPT.PURPLE, FINCEPT.BLUE][index % 5]}
+                      fill={[FINCEPT.CYAN, FINCEPT.GREEN, FINCEPT.YELLOW, FINCEPT.PURPLE, FINCEPT.BLUE][index % 5]}
                       fillOpacity={0.1}
                       strokeWidth={2}
                     />
                   ))}
-                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                  <Legend wrapperStyle={{ paddingTop: '20px', color: FINCEPT.WHITE }} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#1f2937',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#fff'
+                      backgroundColor: FINCEPT.PANEL_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.WHITE,
                     }}
                     formatter={(value: any, name: string, props: any) => {
                       // Show original value in tooltip
@@ -851,29 +893,55 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
           )}
 
           {/* Percentile Rankings Section */}
-          <div className="mt-6 bg-gray-900 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-start justify-between mb-4">
+          <div style={{
+            ...COMMON_STYLES.panel,
+            padding: SPACING.XLARGE,
+            marginTop: SPACING.LARGE,
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              marginBottom: SPACING.LARGE,
+            }}>
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Percentile Rankings</h3>
-                <p className="text-sm text-gray-400">
+                <h3 style={{
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: FINCEPT.WHITE,
+                  marginBottom: SPACING.SMALL,
+                  letterSpacing: TYPOGRAPHY.WIDE,
+                  textTransform: 'uppercase',
+                }}>
+                  PERCENTILE RANKINGS
+                </h3>
+                <p style={{
+                  fontSize: TYPOGRAPHY.BODY,
+                  color: FINCEPT.GRAY,
+                }}>
                   {comparisonData.target.symbol}'s position within selected peer group
                 </p>
               </div>
               {comparisonData.peers.length < 5 && (
-                <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg px-3 py-2 max-w-md">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div style={{
+                  backgroundColor: `${FINCEPT.YELLOW}15`,
+                  border: `1px solid ${FINCEPT.YELLOW}`,
+                  padding: `${SPACING.SMALL} ${SPACING.MEDIUM}`,
+                  maxWidth: '400px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.SMALL }}>
+                    <svg style={{ width: '16px', height: '16px', color: FINCEPT.YELLOW, flexShrink: 0, marginTop: '2px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    <div className="text-xs text-yellow-400">
-                      <p className="font-semibold mb-1">Limited Peer Sample</p>
+                    <div style={{ fontSize: TYPOGRAPHY.SMALL, color: FINCEPT.YELLOW }}>
+                      <p style={{ fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.TINY }}>LIMITED PEER SAMPLE</p>
                       <p>Add more peers (5-10 recommended) for statistically significant percentile rankings. With only {comparisonData.peers.length} {comparisonData.peers.length === 1 ? 'peer' : 'peers'}, percentiles will only show 0%, 50%, or 100%.</p>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.LARGE }}>
               {selectedMetrics.map((metric) => {
                 const targetValue = getMetricValue(comparisonData.target, metric);
                 const peerValues = comparisonData.peers.map((p) => getMetricValue(p, metric)).filter(v => v !== undefined) as number[];
@@ -935,20 +1003,35 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
   const allMetrics = getAllMetricNames(target);
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+    <div style={{
+      ...COMMON_STYLES.panel,
+      padding: 0,
+      overflow: 'hidden',
+    }}>
       {/* Metric Selector */}
-      <div className="p-4 border-b border-gray-700">
-        <h4 className="text-sm font-medium text-gray-400 mb-2">Select Metrics</h4>
-        <div className="flex flex-wrap gap-2">
+      <div style={{
+        padding: SPACING.LARGE,
+        borderBottom: BORDERS.STANDARD,
+      }}>
+        <h4 style={{
+          ...COMMON_STYLES.dataLabel,
+          marginBottom: SPACING.MEDIUM,
+        }}>SELECT METRICS</h4>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.SMALL }}>
           {allMetrics.map((metric) => (
             <button
               key={metric}
               onClick={() => onToggleMetric(metric)}
-              className={`px-3 py-1 text-sm rounded transition-colors ${
-                selectedMetrics.includes(metric)
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
+              style={{
+                padding: `${SPACING.SMALL} ${SPACING.MEDIUM}`,
+                fontSize: TYPOGRAPHY.BODY,
+                backgroundColor: selectedMetrics.includes(metric) ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
+                border: `1px solid ${selectedMetrics.includes(metric) ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                color: selectedMetrics.includes(metric) ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                fontWeight: selectedMetrics.includes(metric) ? TYPOGRAPHY.BOLD : TYPOGRAPHY.REGULAR,
+              }}
             >
               {metric}
             </button>
@@ -957,28 +1040,40 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-700">
-          <thead className="bg-gray-800">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
-                Metric
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
+              <th style={{
+                ...COMMON_STYLES.tableHeader,
+                padding: SPACING.MEDIUM,
+              }}>
+                METRIC
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-blue-400 uppercase">
-                {target.symbol} (Target)
+              <th style={{
+                ...COMMON_STYLES.tableHeader,
+                padding: SPACING.MEDIUM,
+                textAlign: 'right',
+                color: FINCEPT.ORANGE,
+              }}>
+                {target.symbol} (TARGET)
               </th>
               {peers.map((peer) => (
                 <th
                   key={peer.symbol}
-                  className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase"
+                  style={{
+                    ...COMMON_STYLES.tableHeader,
+                    padding: SPACING.MEDIUM,
+                    textAlign: 'right',
+                  }}
                 >
                   {peer.symbol}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-800">
-            {selectedMetrics.map((metric) => {
+          <tbody>
+            {selectedMetrics.map((metric, idx) => {
               const targetValue = getMetricValue(target, metric);
               const peerValues = peers.map((p) => getMetricValue(p, metric));
               const allValues = [targetValue, ...peerValues].filter((v) => v !== undefined) as number[];
@@ -986,21 +1081,43 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
               const min = Math.min(...allValues);
 
               return (
-                <tr key={metric} className="hover:bg-gray-800 transition-colors">
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
+                <tr
+                  key={metric}
+                  style={{
+                    borderBottom: BORDERS.STANDARD,
+                    backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                    transition: 'background-color 0.2s',
+                  }}
+                >
+                  <td style={{
+                    padding: SPACING.MEDIUM,
+                    whiteSpace: 'nowrap',
+                    fontSize: TYPOGRAPHY.BODY,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    color: FINCEPT.WHITE,
+                  }}>
                     {metric}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                    <span
-                      className={`font-semibold ${
-                        targetValue === max ? 'text-green-400' : targetValue === min ? 'text-red-400' : 'text-blue-400'
-                      }`}
-                    >
-                      {formatMetricValue(targetValue, 'ratio')}
-                    </span>
+                  <td style={{
+                    padding: SPACING.MEDIUM,
+                    whiteSpace: 'nowrap',
+                    fontSize: TYPOGRAPHY.BODY,
+                    textAlign: 'right',
+                    fontWeight: TYPOGRAPHY.SEMIBOLD,
+                    fontFamily: TYPOGRAPHY.MONO,
+                    color: targetValue === max ? FINCEPT.GREEN : targetValue === min ? FINCEPT.RED : FINCEPT.CYAN,
+                  }}>
+                    {formatMetricValue(targetValue, 'ratio')}
                   </td>
                   {peerValues.map((value, index) => (
-                    <td key={index} className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-300">
+                    <td key={index} style={{
+                      padding: SPACING.MEDIUM,
+                      whiteSpace: 'nowrap',
+                      fontSize: TYPOGRAPHY.BODY,
+                      textAlign: 'right',
+                      fontFamily: TYPOGRAPHY.MONO,
+                      color: FINCEPT.GRAY,
+                    }}>
                       {formatMetricValue(value, 'ratio')}
                     </td>
                   ))}

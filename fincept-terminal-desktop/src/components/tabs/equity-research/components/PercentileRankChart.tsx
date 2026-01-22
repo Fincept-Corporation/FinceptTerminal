@@ -5,6 +5,7 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import type { PercentileRanking } from '../../../../types/peer';
 import { getPercentileColor } from '../../../../types/peer';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 
 interface PercentileRankChartProps {
   rankings: PercentileRanking[];
@@ -33,20 +34,24 @@ export const PercentileRankChart: React.FC<PercentileRankChartProps> = ({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-lg">
-          <p className="text-white font-semibold mb-2">{data.metric}</p>
-          <div className="space-y-1 text-sm">
-            <p className="text-blue-400">
-              Percentile: <span className="font-semibold">{data.percentile.toFixed(1)}%</span>
+        <div style={{
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          padding: SPACING.MEDIUM,
+        }}>
+          <p style={{ color: FINCEPT.WHITE, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.SMALL }}>{data.metric}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.TINY, fontSize: TYPOGRAPHY.BODY }}>
+            <p style={{ color: FINCEPT.CYAN }}>
+              Percentile: <span style={{ fontWeight: TYPOGRAPHY.BOLD }}>{data.percentile.toFixed(1)}%</span>
             </p>
-            <p className="text-green-400">
-              Value: <span className="font-semibold">{data.value.toFixed(2)}</span>
+            <p style={{ color: FINCEPT.GREEN }}>
+              Value: <span style={{ fontWeight: TYPOGRAPHY.BOLD }}>{data.value.toFixed(2)}</span>
             </p>
-            <p className="text-yellow-400">
-              Peer Median: <span className="font-semibold">{data.median.toFixed(2)}</span>
+            <p style={{ color: FINCEPT.YELLOW }}>
+              Peer Median: <span style={{ fontWeight: TYPOGRAPHY.BOLD }}>{data.median.toFixed(2)}</span>
             </p>
-            <p className="text-purple-400">
-              Z-Score: <span className="font-semibold">{data.zScore.toFixed(2)}</span>
+            <p style={{ color: FINCEPT.PURPLE }}>
+              Z-Score: <span style={{ fontWeight: TYPOGRAPHY.BOLD }}>{data.zScore.toFixed(2)}</span>
             </p>
           </div>
         </div>
@@ -57,20 +62,27 @@ export const PercentileRankChart: React.FC<PercentileRankChartProps> = ({
 
   if (orientation === 'horizontal') {
     return (
-      <div className="w-full">
-        {title && <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>}
+      <div style={{ width: '100%' }}>
+        {title && <h3 style={{
+          fontSize: TYPOGRAPHY.SUBHEADING,
+          fontWeight: TYPOGRAPHY.BOLD,
+          color: FINCEPT.WHITE,
+          marginBottom: SPACING.LARGE,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase',
+        }}>{title}</h3>}
         <ResponsiveContainer width="100%" height={height}>
           <BarChart
             data={chartData}
             layout="vertical"
             margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis type="number" domain={[0, 100]} stroke="#9ca3af" />
-            <YAxis dataKey="metric" type="category" stroke="#9ca3af" width={90} />
+            <CartesianGrid strokeDasharray="3 3" stroke={FINCEPT.BORDER} />
+            <XAxis type="number" domain={[0, 100]} stroke={FINCEPT.GRAY} />
+            <YAxis dataKey="metric" type="category" stroke={FINCEPT.GRAY} width={90} />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
-            <Bar dataKey="percentile" name="Percentile Rank" radius={[0, 4, 4, 0]}>
+            <Bar dataKey="percentile" name="Percentile Rank" radius={[0, 2, 2, 0]}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={getPercentileColor(entry.percentile)} />
               ))}
@@ -83,25 +95,32 @@ export const PercentileRankChart: React.FC<PercentileRankChartProps> = ({
 
   // Vertical orientation
   return (
-    <div className="w-full">
-      {title && <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>}
+    <div style={{ width: '100%' }}>
+      {title && <h3 style={{
+        fontSize: TYPOGRAPHY.SUBHEADING,
+        fontWeight: TYPOGRAPHY.BOLD,
+        color: FINCEPT.WHITE,
+        marginBottom: SPACING.LARGE,
+        letterSpacing: TYPOGRAPHY.WIDE,
+        textTransform: 'uppercase',
+      }}>{title}</h3>}
       <ResponsiveContainer width="100%" height={height}>
         <BarChart
           data={chartData}
           margin={{ top: 5, right: 30, left: 20, bottom: 100 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="3 3" stroke={FINCEPT.BORDER} />
           <XAxis
             dataKey="metric"
-            stroke="#9ca3af"
+            stroke={FINCEPT.GRAY}
             angle={-45}
             textAnchor="end"
             height={100}
           />
-          <YAxis domain={[0, 100]} stroke="#9ca3af" />
+          <YAxis domain={[0, 100]} stroke={FINCEPT.GRAY} />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
-          <Bar dataKey="percentile" name="Percentile Rank" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="percentile" name="Percentile Rank" radius={[2, 2, 0, 0]}>
             {chartData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getPercentileColor(entry.percentile)} />
             ))}
@@ -138,23 +157,49 @@ export const PercentileRankMini: React.FC<{ ranking: PercentileRanking }> = ({ r
   }
 
   return (
-    <div className="space-y-1">
-      <div className="flex justify-between items-center text-sm">
-        <span className="text-gray-400">{ranking.metricName}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-white font-semibold">{ranking.percentile !== null && ranking.percentile !== undefined ? ranking.percentile.toFixed(1) : 'N/A'}%</span>
-          <span className="text-xs text-gray-500">({interpretation})</span>
+    <div style={{
+      backgroundColor: FINCEPT.DARK_BG,
+      border: BORDERS.STANDARD,
+      padding: SPACING.MEDIUM,
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: TYPOGRAPHY.BODY,
+        marginBottom: SPACING.SMALL,
+      }}>
+        <span style={{ color: FINCEPT.WHITE, fontWeight: TYPOGRAPHY.BOLD }}>{ranking.metricName}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+          <span style={{ color, fontWeight: TYPOGRAPHY.BOLD, fontFamily: TYPOGRAPHY.MONO }}>
+            {ranking.percentile !== null && ranking.percentile !== undefined ? ranking.percentile.toFixed(1) : 'N/A'}%
+          </span>
+          <span style={{ fontSize: TYPOGRAPHY.SMALL, color: FINCEPT.GRAY }}>({interpretation})</span>
         </div>
       </div>
-      <div className="w-full bg-gray-700 rounded-full h-2">
+      <div style={{
+        width: '100%',
+        backgroundColor: FINCEPT.BORDER,
+        height: '6px',
+        marginBottom: SPACING.SMALL,
+      }}>
         <div
-          className="h-2 rounded-full transition-all duration-300"
-          style={{ width, backgroundColor: color }}
+          style={{
+            height: '6px',
+            transition: 'all 0.3s',
+            width,
+            backgroundColor: color,
+          }}
         />
       </div>
-      <div className="flex justify-between text-xs text-gray-500">
-        <span>Value: {ranking.value !== null && ranking.value !== undefined ? ranking.value.toFixed(2) : 'N/A'}</span>
-        <span>Median: {ranking.peerMedian !== null && ranking.peerMedian !== undefined ? ranking.peerMedian.toFixed(2) : 'N/A'}</span>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: TYPOGRAPHY.SMALL,
+        color: FINCEPT.GRAY,
+      }}>
+        <span>Value: <span style={{ color: FINCEPT.CYAN, fontFamily: TYPOGRAPHY.MONO }}>{ranking.value !== null && ranking.value !== undefined ? ranking.value.toFixed(2) : 'N/A'}</span></span>
+        <span>Median: <span style={{ color: FINCEPT.YELLOW, fontFamily: TYPOGRAPHY.MONO }}>{ranking.peerMedian !== null && ranking.peerMedian !== undefined ? ranking.peerMedian.toFixed(2) : 'N/A'}</span></span>
       </div>
     </div>
   );
@@ -167,64 +212,112 @@ interface PercentileTableProps {
 
 export const PercentileTable: React.FC<PercentileTableProps> = ({ rankings }) => {
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-700">
-        <thead className="bg-gray-800">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Metric
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
+            <th style={{ ...COMMON_STYLES.tableHeader, padding: SPACING.MEDIUM }}>
+              METRIC
             </th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Value
+            <th style={{ ...COMMON_STYLES.tableHeader, padding: SPACING.MEDIUM, textAlign: 'right' }}>
+              VALUE
             </th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Percentile
+            <th style={{ ...COMMON_STYLES.tableHeader, padding: SPACING.MEDIUM, textAlign: 'right' }}>
+              PERCENTILE
             </th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Z-Score
+            <th style={{ ...COMMON_STYLES.tableHeader, padding: SPACING.MEDIUM, textAlign: 'right' }}>
+              Z-SCORE
             </th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Peer Median
+            <th style={{ ...COMMON_STYLES.tableHeader, padding: SPACING.MEDIUM, textAlign: 'right' }}>
+              PEER MEDIAN
             </th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Status
+            <th style={{ ...COMMON_STYLES.tableHeader, padding: SPACING.MEDIUM, textAlign: 'right' }}>
+              STATUS
             </th>
           </tr>
         </thead>
-        <tbody className="bg-gray-900 divide-y divide-gray-800">
+        <tbody>
           {rankings.map((ranking, index) => {
             const color = getPercentileColor(ranking.percentile);
             const status =
-              ranking.percentile >= 75 ? 'Excellent' :
-              ranking.percentile >= 50 ? 'Above Average' :
-              ranking.percentile >= 25 ? 'Below Average' :
-              'Poor';
+              ranking.percentile >= 75 ? 'EXCELLENT' :
+              ranking.percentile >= 50 ? 'ABOVE AVG' :
+              ranking.percentile >= 25 ? 'BELOW AVG' :
+              'POOR';
 
             return (
-              <tr key={index} className="hover:bg-gray-800 transition-colors">
-                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
+              <tr
+                key={index}
+                style={{
+                  borderBottom: BORDERS.STANDARD,
+                  backgroundColor: index % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                <td style={{
+                  padding: SPACING.MEDIUM,
+                  whiteSpace: 'nowrap',
+                  fontSize: TYPOGRAPHY.BODY,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: FINCEPT.WHITE,
+                }}>
                   {ranking.metricName}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-300">
+                <td style={{
+                  padding: SPACING.MEDIUM,
+                  whiteSpace: 'nowrap',
+                  fontSize: TYPOGRAPHY.BODY,
+                  textAlign: 'right',
+                  color: FINCEPT.GRAY,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {ranking.value.toFixed(2)}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                  <span className="font-semibold" style={{ color }}>
-                    {ranking.percentile.toFixed(1)}%
-                  </span>
+                <td style={{
+                  padding: SPACING.MEDIUM,
+                  whiteSpace: 'nowrap',
+                  fontSize: TYPOGRAPHY.BODY,
+                  textAlign: 'right',
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  fontFamily: TYPOGRAPHY.MONO,
+                  color,
+                }}>
+                  {ranking.percentile.toFixed(1)}%
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-300">
+                <td style={{
+                  padding: SPACING.MEDIUM,
+                  whiteSpace: 'nowrap',
+                  fontSize: TYPOGRAPHY.BODY,
+                  textAlign: 'right',
+                  color: FINCEPT.GRAY,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {ranking.zScore.toFixed(2)}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-400">
+                <td style={{
+                  padding: SPACING.MEDIUM,
+                  whiteSpace: 'nowrap',
+                  fontSize: TYPOGRAPHY.BODY,
+                  textAlign: 'right',
+                  color: FINCEPT.MUTED,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {ranking.peerMedian.toFixed(2)}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                <td style={{
+                  padding: SPACING.MEDIUM,
+                  whiteSpace: 'nowrap',
+                  fontSize: TYPOGRAPHY.BODY,
+                  textAlign: 'right',
+                }}>
                   <span
-                    className="px-2 py-1 rounded-full text-xs font-medium"
                     style={{
+                      padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+                      fontSize: TYPOGRAPHY.SMALL,
+                      fontWeight: TYPOGRAPHY.BOLD,
                       backgroundColor: `${color}20`,
                       color: color,
+                      border: `1px solid ${color}`,
                     }}
                   >
                     {status}

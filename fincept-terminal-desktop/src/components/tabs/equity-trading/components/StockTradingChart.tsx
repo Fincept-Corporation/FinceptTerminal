@@ -12,12 +12,24 @@ import type { StockExchange, TimeFrame, OHLCV } from '@/brokers/stocks/types';
 import { useStockBrokerContext } from '@/contexts/StockBrokerContext';
 import { ProChartWithToolkit } from '../../trading/charts/ProChartWithToolkit';
 
+interface LiveQuote {
+  lastPrice: number;
+  change: number;
+  changePercent: number;
+  previousClose?: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  volume?: number;
+}
+
 interface StockTradingChartProps {
   symbol: string;
   exchange: StockExchange;
   interval?: TimeFrame;
   height?: number;
   timezone?: string; // e.g., 'Asia/Kolkata' for IST
+  liveQuote?: LiveQuote; // Live quote data from parent for consistent display
 }
 
 // Available timeframes
@@ -35,22 +47,21 @@ const TIMEFRAMES: { value: TimeFrame; label: string }[] = [
 ];
 
 // Helper to convert TimeFrame to days for historical data range
-// For timeframes < 1d, show only past 7 days
 const timeframeToDays = (tf: TimeFrame): number => {
   switch (tf) {
     case '1m': return 7;      // 1 min -> 7 days
     case '3m': return 7;      // 3 min -> 7 days
-    case '5m': return 7;      // 5 min -> 7 days
-    case '10m': return 7;     // 10 min -> 7 days
-    case '15m': return 7;     // 15 min -> 7 days
-    case '30m': return 7;     // 30 min -> 7 days
-    case '1h': return 7;      // 1 hour -> 7 days
-    case '2h': return 7;      // 2 hours -> 7 days
-    case '4h': return 7;      // 4 hours -> 7 days
-    case '1d': return 365;    // 1 day -> 1 year
-    case '1w': return 730;    // 1 week -> 2 years
+    case '5m': return 14;     // 5 min -> 14 days
+    case '10m': return 14;    // 10 min -> 14 days
+    case '15m': return 30;    // 15 min -> 30 days
+    case '30m': return 30;    // 30 min -> 30 days
+    case '1h': return 60;     // 1 hour -> 60 days
+    case '2h': return 90;     // 2 hours -> 90 days (3 months)
+    case '4h': return 90;     // 4 hours -> 90 days (3 months)
+    case '1d': return 90;     // 1 day -> 90 days (3 months) - default for paper trading
+    case '1w': return 365;    // 1 week -> 1 year
     case '1M': return 1825;   // 1 month -> 5 years
-    default: return 7;
+    default: return 90;       // Default to 3 months
   }
 };
 
@@ -78,9 +89,10 @@ const EXCHANGE_TIMEZONES: Record<string, string> = {
 export function StockTradingChart({
   symbol,
   exchange,
-  interval: initialInterval = '5m',
+  interval: initialInterval = '1d',
   height,
-  timezone: propTimezone
+  timezone: propTimezone,
+  liveQuote
 }: StockTradingChartProps) {
   // Auto-detect timezone based on exchange if not provided
   const timezone = propTimezone || EXCHANGE_TIMEZONES[exchange] || EXCHANGE_TIMEZONES.DEFAULT;
@@ -97,6 +109,11 @@ export function StockTradingChart({
   }>>([]);
 
   const { adapter, isAuthenticated } = useStockBrokerContext();
+
+  // Sync selectedInterval when initialInterval prop changes (e.g., broker switch)
+  useEffect(() => {
+    setSelectedInterval(initialInterval);
+  }, [initialInterval]);
 
   // Fetch historical data
   const fetchHistoricalData = useCallback(async () => {
@@ -239,11 +256,17 @@ export function StockTradingChart({
     );
   }
 
-  // Calculate price change for display
+  // Calculate price change for display - prefer live quote data if available
   const latestCandle = chartData[chartData.length - 1];
-  const firstCandle = chartData[0];
-  const priceChange = latestCandle && firstCandle ? latestCandle.close - firstCandle.open : 0;
-  const priceChangePercent = latestCandle && firstCandle ? ((priceChange / firstCandle.open) * 100) : 0;
+
+  // Use live quote for price change (compares to previous close), fallback to chart data
+  const displayPrice = liveQuote?.lastPrice ?? latestCandle?.close ?? 0;
+  const priceChange = liveQuote?.change ?? (latestCandle && liveQuote?.previousClose
+    ? latestCandle.close - liveQuote.previousClose
+    : 0);
+  const priceChangePercent = liveQuote?.changePercent ?? (liveQuote?.previousClose && liveQuote.previousClose > 0
+    ? ((priceChange / liveQuote.previousClose) * 100)
+    : 0);
 
   return (
     <div className="flex-1 flex flex-col bg-[#0A0A0A]" style={{ height: height || '100%', minHeight: 0, overflow: 'hidden' }}>
@@ -256,43 +279,46 @@ export function StockTradingChart({
             {exchange}:{symbol}
           </span>
 
-          {/* OHLC Data */}
-          {latestCandle && (
+          {/* OHLC Data - Use live quote if available, fallback to chart candle */}
+          {(liveQuote || latestCandle) && (
             <div className="flex items-center gap-3 text-[10px] font-mono">
               <div className="flex items-center gap-1">
                 <span className="text-gray-500">O</span>
-                <span className="text-white">{latestCandle.open.toFixed(2)}</span>
+                <span className="text-white">{(liveQuote?.open ?? latestCandle?.open ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-gray-500">H</span>
-                <span className="text-white">{latestCandle.high.toFixed(2)}</span>
+                <span className="text-white">{(liveQuote?.high ?? latestCandle?.high ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-gray-500">L</span>
-                <span className="text-white">{latestCandle.low.toFixed(2)}</span>
+                <span className="text-white">{(liveQuote?.low ?? latestCandle?.low ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-gray-500">C</span>
-                <span className={`font-semibold ${latestCandle.close >= latestCandle.open ? 'text-[#00D66F]' : 'text-[#FF3B3B]'}`}>
-                  {latestCandle.close.toFixed(2)}
+                <span className={`font-semibold ${priceChange >= 0 ? 'text-[#00D66F]' : 'text-[#FF3B3B]'}`}>
+                  {displayPrice.toFixed(2)}
                 </span>
               </div>
 
-              {/* Price Change & Percentage */}
+              {/* Price Change & Percentage - from live quote */}
               <div className={`flex items-center gap-1 ${priceChange >= 0 ? 'text-[#00D66F]' : 'text-[#FF3B3B]'}`}>
                 <span>{priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}</span>
-                <span>({priceChange >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%)</span>
+                <span>({priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%)</span>
               </div>
 
-              {/* Volume */}
+              {/* Volume - prefer live quote */}
               <div className="flex items-center gap-1">
                 <span className="text-gray-500">Vol</span>
                 <span className="text-white">
-                  {latestCandle.volume >= 1000000
-                    ? `${(latestCandle.volume / 1000000).toFixed(2)}M`
-                    : latestCandle.volume >= 1000
-                    ? `${(latestCandle.volume / 1000).toFixed(2)}K`
-                    : latestCandle.volume.toFixed(0)}
+                  {(() => {
+                    const vol = liveQuote?.volume ?? latestCandle?.volume ?? 0;
+                    return vol >= 1000000
+                      ? `${(vol / 1000000).toFixed(2)}M`
+                      : vol >= 1000
+                      ? `${(vol / 1000).toFixed(2)}K`
+                      : vol.toFixed(0);
+                  })()}
                 </span>
               </div>
             </div>

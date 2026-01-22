@@ -55,6 +55,71 @@ const FINCEPT = {
   MUTED: '#4A4A4A'
 };
 
+// Currency configuration based on exchange/symbol
+const CURRENCY_CONFIG: Record<string, { symbol: string; code: string; locale: string }> = {
+  // Indian
+  INR: { symbol: '₹', code: 'INR', locale: 'en-IN' },
+  // US
+  USD: { symbol: '$', code: 'USD', locale: 'en-US' },
+  // European
+  EUR: { symbol: '€', code: 'EUR', locale: 'de-DE' },
+  GBP: { symbol: '£', code: 'GBP', locale: 'en-GB' },
+  // Asian
+  JPY: { symbol: '¥', code: 'JPY', locale: 'ja-JP' },
+  HKD: { symbol: 'HK$', code: 'HKD', locale: 'zh-HK' },
+  SGD: { symbol: 'S$', code: 'SGD', locale: 'en-SG' },
+  // Others
+  AUD: { symbol: 'A$', code: 'AUD', locale: 'en-AU' },
+  CAD: { symbol: 'C$', code: 'CAD', locale: 'en-CA' },
+};
+
+// Map exchange to default currency
+const EXCHANGE_CURRENCY: Record<string, string> = {
+  NSE: 'INR', BSE: 'INR', NFO: 'INR', BFO: 'INR', MCX: 'INR', CDS: 'INR',
+  NYSE: 'USD', NASDAQ: 'USD', AMEX: 'USD',
+  LSE: 'GBP',
+  XETRA: 'EUR', EURONEXT: 'EUR',
+  TSX: 'CAD',
+  ASX: 'AUD',
+  HKEX: 'HKD',
+  SGX: 'SGD',
+  TSE: 'JPY',
+};
+
+// Detect currency from symbol suffix (for YFinance symbols like RELIANCE.NS)
+const getCurrencyFromSymbol = (symbol: string, exchange?: string): string => {
+  if (symbol.endsWith('.NS') || symbol.endsWith('.BO')) return 'INR';
+  if (symbol.endsWith('.L')) return 'GBP';
+  if (symbol.endsWith('.DE')) return 'EUR';
+  if (symbol.endsWith('.TO')) return 'CAD';
+  if (symbol.endsWith('.AX')) return 'AUD';
+  if (symbol.endsWith('.HK')) return 'HKD';
+  if (symbol.endsWith('.T')) return 'JPY';
+  if (exchange) return EXCHANGE_CURRENCY[exchange] || 'USD';
+  return 'USD'; // Default for US stocks without suffix
+};
+
+// Format currency value
+const formatCurrency = (value: number, currencyCode: string = 'INR', compact: boolean = false): string => {
+  const config = CURRENCY_CONFIG[currencyCode] || CURRENCY_CONFIG.USD;
+
+  if (compact && Math.abs(value) >= 1000) {
+    // Compact format for large numbers
+    if (Math.abs(value) >= 10000000) { // 1 Crore
+      return `${config.symbol}${(value / 10000000).toFixed(2)}Cr`;
+    } else if (Math.abs(value) >= 100000) { // 1 Lakh
+      return `${config.symbol}${(value / 100000).toFixed(2)}L`;
+    } else if (Math.abs(value) >= 1000) {
+      return `${config.symbol}${(value / 1000).toFixed(1)}K`;
+    }
+  }
+
+  return `${config.symbol}${value.toLocaleString(config.locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 // NIFTY 50 Components - Full watchlist (current constituents as of Jan 2025)
 const DEFAULT_WATCHLIST = [
   // Financials (Weight: ~35%)
@@ -129,10 +194,9 @@ function EquityTradingContent() {
   // Watchlist
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, Quote>>({});
-  // Auto-set WebSocket based on market hours - ON during market hours, OFF when closed
-  const [useWebSocketForWatchlist, setUseWebSocketForWatchlist] = useState<boolean>(() => {
-    return isMarketOpen(selectedExchange || 'NSE');
-  });
+  // Auto-set WebSocket based on market hours AND broker support
+  // OFF by default - will be enabled by useEffect if broker supports WS and market is open
+  const [useWebSocketForWatchlist, setUseWebSocketForWatchlist] = useState<boolean>(false);
 
   // UI State
   const [leftSidebarView, setLeftSidebarView] = useState<LeftSidebarView>('watchlist');
@@ -152,22 +216,42 @@ function EquityTradingContent() {
       .slice(0, 50); // Keep last 50 trades
   }, [trades, selectedSymbol]);
 
+  // Get currency based on selected symbol and exchange
+  const currentCurrency = useMemo(() => {
+    return getCurrencyFromSymbol(selectedSymbol, selectedExchange);
+  }, [selectedSymbol, selectedExchange]);
+
+  // Currency formatter for current symbol
+  const fmtPrice = useCallback((value: number, compact = false) => {
+    return formatCurrency(value, currentCurrency, compact);
+  }, [currentCurrency]);
+
   // Update clock
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-toggle WebSocket based on market hours
+  // Auto-toggle WebSocket based on market hours AND broker support
   // Check every minute and switch WS on when market opens, off when it closes
+  // Brokers without WebSocket support (like YFinance) always use REST polling
   useEffect(() => {
     const checkMarketStatus = () => {
+      const brokerSupportsWs = activeBrokerMetadata?.features?.webSocket ?? false;
       const marketOpen = isMarketOpen(selectedExchange);
+
+      // Only enable WebSocket if broker supports it AND market is open
+      const shouldUseWs = brokerSupportsWs && marketOpen;
+
       setUseWebSocketForWatchlist(prev => {
-        if (prev !== marketOpen) {
-          console.log(`[EquityTrading] Market ${marketOpen ? 'OPEN' : 'CLOSED'} - WebSocket ${marketOpen ? 'enabled' : 'disabled'}`);
+        if (prev !== shouldUseWs) {
+          if (!brokerSupportsWs) {
+            console.log(`[EquityTrading] Broker doesn't support WebSocket - using REST polling`);
+          } else {
+            console.log(`[EquityTrading] Market ${marketOpen ? 'OPEN' : 'CLOSED'} - WebSocket ${shouldUseWs ? 'enabled' : 'disabled'}`);
+          }
         }
-        return marketOpen;
+        return shouldUseWs;
       });
     };
 
@@ -177,22 +261,60 @@ function EquityTradingContent() {
     // Check every minute
     const interval = setInterval(checkMarketStatus, 60 * 1000);
     return () => clearInterval(interval);
-  }, [selectedExchange]);
+  }, [selectedExchange, activeBrokerMetadata]);
 
-  // Set default symbol when broker changes
+  // Track previous broker to detect broker changes
+  const prevBrokerRef = React.useRef<string | null>(null);
+
+  // Set default symbol and exchange when broker changes
   useEffect(() => {
-    if (defaultSymbols.length > 0 && !selectedSymbol) {
-      setSelectedSymbol(defaultSymbols[0]);
-    }
-    // Update watchlist - use broker defaults if available, otherwise use full Nifty 50
+    const brokerChanged = prevBrokerRef.current !== null && prevBrokerRef.current !== activeBroker;
+    prevBrokerRef.current = activeBroker;
+
     if (defaultSymbols.length > 0) {
-      // Use broker's default symbols (but not sliced - show all 50)
+      // Always reset symbol when broker changes, or set if no symbol selected
+      if (brokerChanged || !selectedSymbol) {
+        setSelectedSymbol(defaultSymbols[0]);
+        // Clear quote data when broker changes
+        if (brokerChanged) {
+          setQuote(null);
+          setMarketDepth(null);
+        }
+      }
+
+      // Update exchange based on broker region - on broker change OR initial load
+      if (activeBrokerMetadata && (brokerChanged || selectedExchange === 'NSE')) {
+        const brokerRegion = activeBrokerMetadata.region;
+        const brokerExchanges = activeBrokerMetadata.exchanges || [];
+
+        // Set exchange based on broker's home region
+        if (brokerRegion === 'india') {
+          setSelectedExchange('NSE');
+        } else if (brokerRegion === 'us') {
+          // NASDAQ is primary US exchange for tech stocks
+          if (brokerExchanges.includes('NASDAQ')) {
+            setSelectedExchange('NASDAQ');
+          } else if (brokerExchanges.includes('NYSE')) {
+            setSelectedExchange('NYSE');
+          }
+        } else if (brokerExchanges.includes('NASDAQ')) {
+          setSelectedExchange('NASDAQ');
+        } else if (brokerExchanges.includes('NYSE')) {
+          setSelectedExchange('NYSE');
+        } else if (brokerExchanges.includes('NSE')) {
+          setSelectedExchange('NSE');
+        } else if (brokerExchanges.length > 0) {
+          setSelectedExchange(brokerExchanges[0] as StockExchange);
+        }
+      }
+
+      // Update watchlist - use broker defaults
       setWatchlist(defaultSymbols.slice(0, 50));
     } else {
       // Fallback to our DEFAULT_WATCHLIST (full Nifty 50)
       setWatchlist(DEFAULT_WATCHLIST);
     }
-  }, [defaultSymbols, selectedSymbol]);
+  }, [defaultSymbols, activeBroker, activeBrokerMetadata]);
 
   // Subscribe to WebSocket for live prices and fetch initial data
   useEffect(() => {
@@ -726,86 +848,103 @@ function EquityTradingContent() {
 
           <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
-          {/* Trading Mode Toggle */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            backgroundColor: FINCEPT.PANEL_BG,
-            border: `1px solid ${FINCEPT.BORDER}`,
-            padding: '2px',
-          }}>
-            <button
-              onClick={() => setTradingMode('paper')}
-              style={{
-                padding: '6px 14px',
-                backgroundColor: isPaper ? FINCEPT.GREEN : 'transparent',
-                border: 'none',
-                color: isPaper ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                cursor: 'pointer',
-                fontSize: '10px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              {isPaper && (
-                <div style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: FINCEPT.DARK_BG,
-                }} />
-              )}
-              PAPER
-            </button>
-            <button
-              onClick={() => {
-                if (!isLive) {
-                  const confirmed = window.confirm(
-                    'WARNING: SWITCHING TO LIVE TRADING\n\n' +
-                    'You are about to enable LIVE trading mode.\n\n' +
-                    '- All orders will be placed with REAL funds\n' +
-                    '- Trades will be executed on the actual exchange\n' +
-                    '- You may lose money\n\n' +
-                    'Are you sure you want to continue?'
-                  );
-                  if (confirmed) {
-                    setTradingMode('live');
+          {/* Trading Mode Toggle - Hidden for paper-only brokers like YFinance */}
+          {activeBroker === 'yfinance' ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: FINCEPT.GREEN,
+              padding: '6px 14px',
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              color: FINCEPT.DARK_BG,
+            }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: FINCEPT.DARK_BG }} />
+              PAPER ONLY
+            </div>
+          ) : (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '2px',
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              padding: '2px',
+            }}>
+              <button
+                onClick={() => setTradingMode('paper')}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: isPaper ? FINCEPT.GREEN : 'transparent',
+                  border: 'none',
+                  color: isPaper ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {isPaper && (
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: FINCEPT.DARK_BG,
+                  }} />
+                )}
+                PAPER
+              </button>
+              <button
+                onClick={() => {
+                  if (!isLive) {
+                    const confirmed = window.confirm(
+                      'WARNING: SWITCHING TO LIVE TRADING\n\n' +
+                      'You are about to enable LIVE trading mode.\n\n' +
+                      '- All orders will be placed with REAL funds\n' +
+                      '- Trades will be executed on the actual exchange\n' +
+                      '- You may lose money\n\n' +
+                      'Are you sure you want to continue?'
+                    );
+                    if (confirmed) {
+                      setTradingMode('live');
+                    }
                   }
-                }
-              }}
-              style={{
-                padding: '6px 14px',
-                backgroundColor: isLive ? FINCEPT.RED : 'transparent',
-                border: 'none',
-                color: isLive ? FINCEPT.WHITE : FINCEPT.GRAY,
-                cursor: 'pointer',
-                fontSize: '10px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              {isLive && (
-                <div style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: FINCEPT.WHITE,
-                  boxShadow: `0 0 6px ${FINCEPT.WHITE}`,
-                  animation: 'pulse 1s infinite',
-                }} />
-              )}
-              LIVE
-            </button>
-          </div>
+                }}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: isLive ? FINCEPT.RED : 'transparent',
+                  border: 'none',
+                  color: isLive ? FINCEPT.WHITE : FINCEPT.GRAY,
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {isLive && (
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: FINCEPT.WHITE,
+                    boxShadow: `0 0 6px ${FINCEPT.WHITE}`,
+                    animation: 'pulse 1s infinite',
+                  }} />
+                )}
+                LIVE
+              </button>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -894,7 +1033,7 @@ function EquityTradingContent() {
             willChange: 'contents',
             transition: 'none'
           }}>
-            {currentPrice > 0 ? `₹${currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}
+            {currentPrice > 0 ? fmtPrice(currentPrice) : '--'}
           </span>
           {quote && (priceChange !== 0 || priceChangePercent !== 0) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -921,31 +1060,31 @@ function EquityTradingContent() {
           <div style={{ minWidth: '60px' }}>
             <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
             <div style={{ color: FINCEPT.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-              {quote?.bid ? `₹${quote.bid.toFixed(2)}` : '--'}
+              {quote?.bid ? fmtPrice(quote.bid) : '--'}
             </div>
           </div>
           <div style={{ minWidth: '60px' }}>
             <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
             <div style={{ color: FINCEPT.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-              {quote?.ask ? `₹${quote.ask.toFixed(2)}` : '--'}
+              {quote?.ask ? fmtPrice(quote.ask) : '--'}
             </div>
           </div>
           <div style={{ minWidth: '100px' }}>
             <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>DAY RANGE</div>
             <div style={{ color: FINCEPT.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-              {dayRange > 0 ? `₹${dayRange.toFixed(2)} (${dayRangePercent.toFixed(2)}%)` : '--'}
+              {dayRange > 0 ? `${fmtPrice(dayRange)} (${dayRangePercent.toFixed(2)}%)` : '--'}
             </div>
           </div>
           <div style={{ minWidth: '80px' }}>
             <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>HIGH</div>
             <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-              {quote?.high ? `₹${quote.high.toFixed(2)}` : '--'}
+              {quote?.high ? fmtPrice(quote.high) : '--'}
             </div>
           </div>
           <div style={{ minWidth: '80px' }}>
             <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>LOW</div>
             <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-              {quote?.low ? `₹${quote.low.toFixed(2)}` : '--'}
+              {quote?.low ? fmtPrice(quote.low) : '--'}
             </div>
           </div>
           <div style={{ minWidth: '100px' }}>
@@ -964,13 +1103,13 @@ function EquityTradingContent() {
               <div>
                 <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>MARGIN</div>
                 <div style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>
-                  ₹{(funds?.availableMargin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {fmtPrice(funds?.availableMargin || 0)}
                 </div>
               </div>
               <div>
                 <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>P&L</div>
                 <div style={{ color: totalPositionPnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED, fontWeight: 600 }}>
-                  {totalPositionPnl >= 0 ? '+' : ''}₹{totalPositionPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {totalPositionPnl >= 0 ? '+' : ''}{fmtPrice(Math.abs(totalPositionPnl))}
                 </div>
               </div>
             </div>
@@ -1125,10 +1264,7 @@ function EquityTradingContent() {
                               fontFamily: 'monospace',
                               fontWeight: 600
                             }}>
-                              ₹{q.lastPrice >= 1000
-                                ? q.lastPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                : q.lastPrice.toFixed(2)
-                              }
+                              {formatCurrency(q.lastPrice, getCurrencyFromSymbol(symbol, selectedExchange))}
                             </div>
                             <div style={{
                               fontSize: '9px',
@@ -1330,7 +1466,17 @@ function EquityTradingContent() {
                   <StockTradingChart
                     symbol={selectedSymbol}
                     exchange={selectedExchange}
-                    interval="5m"
+                    interval={activeBroker === 'yfinance' ? '1d' : '5m'}
+                    liveQuote={quote ? {
+                      lastPrice: quote.lastPrice,
+                      change: quote.change || 0,
+                      changePercent: quote.changePercent || 0,
+                      previousClose: quote.previousClose,
+                      open: quote.open,
+                      high: quote.high,
+                      low: quote.low,
+                      volume: quote.volume
+                    } : undefined}
                   />
                 </div>
               )}
@@ -1390,7 +1536,7 @@ function EquityTradingContent() {
                               textAlign: 'right',
                               color: trade.side === 'BUY' ? FINCEPT.GREEN : FINCEPT.RED
                             }}>
-                              ₹{trade.price?.toFixed(2)}
+                              {formatCurrency(trade.price || 0, getCurrencyFromSymbol(trade.symbol, selectedExchange))}
                             </td>
                             <td style={{ padding: '4px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>
                               {trade.quantity}
@@ -1515,7 +1661,7 @@ function EquityTradingContent() {
                     }}>
                       <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>TOTAL POSITIONS VALUE</div>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.CYAN }}>
-                        ₹{totalPositionValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {fmtPrice(totalPositionValue)}
                       </div>
                     </div>
                     <div style={{
@@ -1529,7 +1675,7 @@ function EquityTradingContent() {
                         fontWeight: 700,
                         color: totalPositionPnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED
                       }}>
-                        {totalPositionPnl >= 0 ? '+' : ''}₹{totalPositionPnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {totalPositionPnl >= 0 ? '+' : '-'}{fmtPrice(Math.abs(totalPositionPnl))}
                       </div>
                     </div>
                     <div style={{
@@ -1539,7 +1685,7 @@ function EquityTradingContent() {
                     }}>
                       <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>PORTFOLIO VALUE</div>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.YELLOW }}>
-                        ₹{totalHoldingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {fmtPrice(totalHoldingsValue)}
                       </div>
                     </div>
                     <div style={{
@@ -1549,7 +1695,7 @@ function EquityTradingContent() {
                     }}>
                       <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '8px' }}>AVAILABLE MARGIN</div>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.PURPLE }}>
-                        ₹{(funds?.availableMargin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {fmtPrice(funds?.availableMargin || 0)}
                       </div>
                     </div>
                   </div>
@@ -1723,7 +1869,7 @@ function EquityTradingContent() {
                               {bid?.quantity ? bid.quantity.toLocaleString('en-IN') : '--'}
                             </td>
                             <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GREEN }}>
-                              {bid?.price ? `₹${bid.price.toFixed(2)}` : '--'}
+                              {bid?.price ? fmtPrice(bid.price) : '--'}
                             </td>
                             <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>
                               {bid?.orders || '--'}
@@ -1744,7 +1890,7 @@ function EquityTradingContent() {
                   }}>
                     <span style={{ color: FINCEPT.GRAY }}>Spread: </span>
                     <span style={{ color: FINCEPT.YELLOW, fontWeight: 600 }}>
-                      {spread > 0 ? `₹${spread.toFixed(2)} (${spreadPercent.toFixed(3)}%)` : '--'}
+                      {spread > 0 ? `${fmtPrice(spread)} (${spreadPercent.toFixed(3)}%)` : '--'}
                     </span>
                   </div>
 
@@ -1768,7 +1914,7 @@ function EquityTradingContent() {
                         ).map((ask, i) => (
                           <tr key={i} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
                             <td style={{ padding: '4px', color: FINCEPT.RED }}>
-                              {ask?.price ? `₹${ask.price.toFixed(2)}` : '--'}
+                              {ask?.price ? fmtPrice(ask.price) : '--'}
                             </td>
                             <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.WHITE }}>
                               {ask?.quantity ? ask.quantity.toLocaleString('en-IN') : '--'}
@@ -1806,7 +1952,7 @@ function EquityTradingContent() {
                             return (
                               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '20px' }}>
                                 <span style={{ fontSize: '9px', color: FINCEPT.GREEN, width: '60px', textAlign: 'right' }}>
-                                  ₹{bid.price.toFixed(2)}
+                                  {fmtPrice(bid.price)}
                                 </span>
                                 <div style={{ flex: 1, height: '16px', backgroundColor: FINCEPT.PANEL_BG, position: 'relative' }}>
                                   <div style={{
@@ -1836,7 +1982,7 @@ function EquityTradingContent() {
                           borderTop: `1px solid ${FINCEPT.BORDER}`,
                           borderBottom: `1px solid ${FINCEPT.BORDER}`,
                         }}>
-                          Spread: {spread > 0 ? `₹${spread.toFixed(2)}` : '--'}
+                          Spread: {spread > 0 ? fmtPrice(spread) : '--'}
                         </div>
 
                         {/* Ask depth bars */}
@@ -1850,7 +1996,7 @@ function EquityTradingContent() {
                             return (
                               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '20px' }}>
                                 <span style={{ fontSize: '9px', color: FINCEPT.RED, width: '60px', textAlign: 'right' }}>
-                                  ₹{ask.price.toFixed(2)}
+                                  {fmtPrice(ask.price)}
                                 </span>
                                 <div style={{ flex: 1, height: '16px', backgroundColor: FINCEPT.PANEL_BG, position: 'relative' }}>
                                   <div style={{
@@ -1905,10 +2051,10 @@ function EquityTradingContent() {
                     {[
                       { label: 'Symbol', value: selectedSymbol || '--' },
                       { label: 'Exchange', value: selectedExchange },
-                      { label: 'Open', value: quote?.open ? `₹${quote.open.toFixed(2)}` : '--' },
-                      { label: 'Prev Close', value: quote?.previousClose ? `₹${quote.previousClose.toFixed(2)}` : '--' },
-                      { label: 'Day High', value: quote?.high ? `₹${quote.high.toFixed(2)}` : '--' },
-                      { label: 'Day Low', value: quote?.low ? `₹${quote.low.toFixed(2)}` : '--' },
+                      { label: 'Open', value: quote?.open ? fmtPrice(quote.open) : '--' },
+                      { label: 'Prev Close', value: quote?.previousClose ? fmtPrice(quote.previousClose) : '--' },
+                      { label: 'Day High', value: quote?.high ? fmtPrice(quote.high) : '--' },
+                      { label: 'Day Low', value: quote?.low ? fmtPrice(quote.low) : '--' },
                       { label: 'Volume', value: quote?.volume ? quote.volume.toLocaleString('en-IN') : '--' },
                     ].map((item) => (
                       <div

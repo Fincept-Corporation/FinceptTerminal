@@ -348,19 +348,14 @@ function FinxeptTerminalContent() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => {
         setIsFullscreen(true);
-        setStatusMessage("Entered fullscreen mode");
       }).catch(() => {
-        setStatusMessage("Failed to enter fullscreen mode");
+        // Silently fail
       });
     } else {
       document.exitFullscreen().then(() => {
         setIsFullscreen(false);
-        setStatusMessage("Exited fullscreen mode");
       });
     }
-
-    // Clear status message after 3 seconds
-    setTimeout(() => setStatusMessage(""), 3000);
   };
 
   const handleMenuAction = async (item: any) => {

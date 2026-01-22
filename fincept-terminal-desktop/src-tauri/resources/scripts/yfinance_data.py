@@ -35,18 +35,27 @@ def get_quote(symbol):
             "low": round(float(hist['Low'].iloc[-1]), 2) if not hist['Low'].empty else None,
             "open": round(float(hist['Open'].iloc[-1]), 2) if not hist['Open'].empty else None,
             "previous_close": round(float(previous_close), 2),
-            "timestamp": int(datetime.now().timestamp())
+            "timestamp": int(datetime.now().timestamp()),
+            "exchange": info.get('exchange', '')
         }
 
         return quote_data
     except Exception as e:
         return {"error": str(e), "symbol": symbol}
 
-def get_historical(symbol, start_date, end_date):
-    """Fetch historical data for a symbol"""
+def get_historical(symbol, start_date, end_date, interval='1d'):
+    """Fetch historical data for a symbol with specified interval
+
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL')
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        interval: Data interval - valid values: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+                  Note: Intraday data (< 1d) is only available for last 60 days
+    """
     try:
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(start=start_date, end=end_date)
+        hist = ticker.history(start=start_date, end=end_date, interval=interval)
 
         if hist.empty:
             return None
@@ -271,8 +280,80 @@ def get_multiple_ratios(symbols):
             results.append(ratios)
     return results
 
+def search_symbols(query, limit=50):
+    """
+    Search for stock symbols using yfinance
+    Returns a list of matching symbols with company info
+    """
+    try:
+        import yfinance as yf
+
+        # Common exchanges and suffixes to try
+        exchanges = ['', '.NS', '.BO', '.L', '.TO', '.AX', '.HK', '.SS', '.SZ']
+        results = []
+        query_upper = query.upper()
+
+        # Try exact match first
+        for exchange in exchanges:
+            symbol_with_exchange = query_upper + exchange
+            try:
+                ticker = yf.Ticker(symbol_with_exchange)
+                info = ticker.info
+
+                # Check if ticker is valid by verifying it has a name
+                if info.get('longName') or info.get('shortName'):
+                    results.append({
+                        'symbol': symbol_with_exchange,
+                        'name': info.get('longName', info.get('shortName', 'N/A')),
+                        'exchange': info.get('exchange', 'N/A'),
+                        'type': info.get('quoteType', 'EQUITY'),
+                        'currency': info.get('currency', 'USD'),
+                        'sector': info.get('sector', 'N/A'),
+                        'industry': info.get('industry', 'N/A')
+                    })
+                    if len(results) >= limit:
+                        break
+            except:
+                continue
+
+        # If no exact matches, try common US tickers that start with the query
+        if len(results) == 0:
+            # List of popular tickers for quick matching (you can expand this)
+            popular_tickers = [
+                'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'TSLA', 'META', 'NVDA',
+                'BRK-B', 'BRK-A', 'V', 'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'UNH',
+                'DIS', 'HD', 'PYPL', 'BAC', 'NFLX', 'ADBE', 'CRM', 'CMCSA',
+                'XOM', 'VZ', 'INTC', 'ABT', 'KO', 'NKE', 'PFE', 'MRK', 'PEP',
+                'TMO', 'CSCO', 'COST', 'AVGO', 'TXN', 'ACN', 'DHR', 'NEE', 'CVX'
+            ]
+
+            matching_tickers = [t for t in popular_tickers if t.startswith(query_upper)]
+
+            for symbol in matching_tickers[:limit]:
+                try:
+                    ticker = yf.Ticker(symbol)
+                    info = ticker.info
+
+                    if info.get('longName') or info.get('shortName'):
+                        results.append({
+                            'symbol': symbol,
+                            'name': info.get('longName', info.get('shortName', 'N/A')),
+                            'exchange': info.get('exchange', 'N/A'),
+                            'type': info.get('quoteType', 'EQUITY'),
+                            'currency': info.get('currency', 'USD'),
+                            'sector': info.get('sector', 'N/A'),
+                            'industry': info.get('industry', 'N/A')
+                        })
+                except:
+                    continue
+
+        return {"results": results, "query": query, "count": len(results)}
+
+    except Exception as e:
+        return {"error": str(e), "query": query, "results": []}
+
 def main(args=None):
-    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    # Support both worker pool (args parameter) and subprocess/CLI (sys.argv)
     if args is None:
         args = sys.argv[1:]
 
@@ -297,12 +378,13 @@ def main(args=None):
 
     elif command == "historical":
         if len(args) < 4:
-            result = {"error": "Usage: python yfinance_data.py historical <symbol> <start_date> <end_date>"}
+            result = {"error": "Usage: python yfinance_data.py historical <symbol> <start_date> <end_date> [interval]"}
         else:
             symbol = args[1]
             start_date = args[2]
             end_date = args[3]
-            result = get_historical(symbol, start_date, end_date)
+            interval = args[4] if len(args) > 4 else '1d'
+            result = get_historical(symbol, start_date, end_date, interval)
 
     elif command == "info":
         if len(args) < 2:
@@ -346,10 +428,18 @@ def main(args=None):
             symbols = args[1].split(",")
             result = get_multiple_ratios(symbols)
 
+    elif command == "search":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py search <query> [limit]"}
+        else:
+            query = args[1]
+            limit = int(args[2]) if len(args) > 2 else 50
+            result = search_symbols(query, limit)
+
     else:
         result = {"error": f"Unknown command: {command}"}
 
-    # Return JSON for PyO3, print for subprocess
+    # Return JSON for worker pool, print for subprocess/CLI
     output = json.dumps(result, indent=2)
     print(output)
     return output

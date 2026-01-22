@@ -435,14 +435,34 @@ class DataProcessor:
         warnings = []
 
         # Balance Sheet Equation: Assets = Liabilities + Equity
+        # Only validate if we have complete balance sheet data (all three components present and non-zero)
         if statements.balance_sheet:
             assets = statements.balance_sheet.get('total_assets', 0)
             liabilities = statements.balance_sheet.get('total_liabilities', 0)
             equity = statements.balance_sheet.get('total_equity', 0)
 
-            if abs(assets - (liabilities + equity)) > 0.01:  # Allow for rounding
-                errors.append(
-                    f"Balance sheet doesn't balance: Assets({assets}) != Liabilities({liabilities}) + Equity({equity})")
+            # Only enforce balance sheet equation if we have all three values
+            has_assets = assets != 0 or 'total_assets' in statements.balance_sheet
+            has_liabilities = liabilities != 0 or 'total_liabilities' in statements.balance_sheet
+            has_equity = equity != 0 or 'total_equity' in statements.balance_sheet
+
+            if has_assets and has_liabilities and has_equity:
+                if abs(assets - (liabilities + equity)) > 0.01:  # Allow for rounding
+                    errors.append(
+                        f"Balance sheet doesn't balance: Assets({assets}) != Liabilities({liabilities}) + Equity({equity})")
+            elif has_equity and (not has_assets or not has_liabilities):
+                # Partial data - derive missing values if possible
+                if not has_assets and has_liabilities:
+                    statements.balance_sheet['total_assets'] = liabilities + equity
+                    warnings.append(f"Derived total_assets from liabilities + equity: {liabilities + equity}")
+                elif not has_liabilities and has_assets:
+                    statements.balance_sheet['total_liabilities'] = assets - equity
+                    warnings.append(f"Derived total_liabilities from assets - equity: {assets - equity}")
+                elif not has_assets and not has_liabilities:
+                    # Only have equity - estimate assets as equity (conservative, no debt assumption)
+                    statements.balance_sheet['total_assets'] = equity
+                    statements.balance_sheet['total_liabilities'] = 0
+                    warnings.append(f"Incomplete balance sheet data - estimated assets={equity}, liabilities=0")
 
         # Cash Flow Statement: Net change should equal ending - beginning cash
         if statements.cash_flow:

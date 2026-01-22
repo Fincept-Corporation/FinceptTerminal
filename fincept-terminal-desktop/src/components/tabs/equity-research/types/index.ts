@@ -91,6 +91,10 @@ export interface SearchResult {
   symbol: string;
   name: string;
   type: string;
+  exchange?: string;
+  currency?: string;
+  sector?: string;
+  industry?: string;
 }
 
 export interface NewsArticle {

@@ -536,6 +536,12 @@ export default function NodeEditorTab() {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
       if (event.key === 'Delete' || event.key === 'Backspace') {
         deleteSelectedNodes();
         deleteSelectedEdges();

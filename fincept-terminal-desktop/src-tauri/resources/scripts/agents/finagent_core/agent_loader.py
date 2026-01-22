@@ -3,17 +3,42 @@ Dynamic Agent Loader - Load agents from configuration at runtime
 
 Similar to ValueCell's _resolve_local_agent_class_sync pattern.
 Enables runtime agent discovery and instantiation from JSON configs.
+
+Performance optimizations:
+- Uses targeted directory scanning instead of recursive rglob()
+- Caches discovered agents to avoid repeated file I/O
+- Limits discovery to known agent directories only
+- Timeout protection for file operations
 """
 
 import json
 import importlib
 import importlib.util
+import os
+import re
+import time
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Type
-from dataclasses import dataclass
+from typing import Dict, Any, Optional, List, Type, Set
+from dataclasses import dataclass, field
 import logging
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
+
+# Known agent directories to scan (avoids expensive rglob)
+KNOWN_AGENT_DIRS = [
+    "TraderInvestorsAgent",
+    "hedgeFundAgents",
+    "EconomicAgents",
+    "GeopoliticsAgents",
+    "finagent_core",
+]
+
+# Maximum time allowed for discovery (seconds)
+DISCOVERY_TIMEOUT = 5.0
+
+# Cache TTL for discovered agents (seconds)
+CACHE_TTL = 300  # 5 minutes
 
 
 @dataclass
@@ -28,16 +53,10 @@ class AgentCard:
     category: str
     version: str = "1.0.0"
     provider: str = "local"
-    capabilities: List[str] = None
-    config: Dict[str, Any] = None
+    capabilities: List[str] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
     module_path: Optional[str] = None
     class_name: Optional[str] = None
-
-    def __post_init__(self):
-        if self.capabilities is None:
-            self.capabilities = []
-        if self.config is None:
-            self.config = {}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AgentCard":
@@ -134,69 +153,209 @@ class AgentLoader:
 
     Features:
     - Load agents from JSON config files
-    - Discover agents from directory structure
+    - Discover agents from directory structure (optimized - no rglob)
     - Dynamic module loading
     - Agent instantiation with config injection
+    - Caching for performance
     """
 
     def __init__(self, config_dir: Optional[Path] = None, agents_dir: Optional[Path] = None):
         self.config_dir = config_dir or Path(__file__).parent / "configs"
         self.agents_dir = agents_dir or Path(__file__).parent.parent
         self.registry = AgentRegistry()
+        self._discovery_cache: Optional[List[AgentCard]] = None
+        self._cache_timestamp: float = 0
 
         # Ensure directories exist
-        self.config_dir.mkdir(exist_ok=True)
+        if self.config_dir.exists():
+            pass  # Don't create if not exists - avoid permission errors
+        else:
+            try:
+                self.config_dir.mkdir(exist_ok=True)
+            except Exception:
+                pass  # Ignore if can't create
 
     def discover_agents(self) -> List[AgentCard]:
         """
         Discover all available agents from config files and directory structure.
         Returns list of discovered agent cards.
+
+        Optimizations:
+        - Uses caching to avoid repeated discovery
+        - Scans only known agent directories (not recursive rglob)
+        - Has timeout protection
+        - Skips __pycache__ and other non-agent directories
         """
+        # Check cache first
+        if self._discovery_cache is not None:
+            if time.time() - self._cache_timestamp < CACHE_TTL:
+                logger.debug(f"Returning {len(self._discovery_cache)} cached agents")
+                return self._discovery_cache
+
+        start_time = time.time()
         discovered = []
+        discovered_ids: Set[str] = set()
 
-        # 1. Load from JSON config files
-        for config_file in self.config_dir.glob("*_agent.json"):
-            try:
-                card = self._load_agent_config(config_file)
-                if card:
-                    self.registry.register(card)
-                    discovered.append(card)
-            except Exception as e:
-                logger.error(f"Failed to load config {config_file}: {e}")
+        try:
+            # 1. Load from JSON config files in config directory (fast)
+            discovered.extend(self._load_config_files(discovered_ids))
 
-        # 2. Auto-discover from directory structure
-        for agent_file in self.agents_dir.rglob("*_agent.py"):
-            if "__pycache__" in str(agent_file):
-                continue
-            try:
-                card = self._discover_from_file(agent_file)
-                if card and card.id not in [a.id for a in discovered]:
-                    self.registry.register(card)
-                    discovered.append(card)
-            except Exception as e:
-                logger.debug(f"Could not auto-discover {agent_file}: {e}")
+            # Check timeout
+            if time.time() - start_time > DISCOVERY_TIMEOUT:
+                logger.warning("Discovery timeout after loading config files")
+                return self._finalize_discovery(discovered)
+
+            # 2. Load from known agent directories (targeted, not recursive)
+            discovered.extend(self._load_from_known_dirs(discovered_ids, start_time))
+
+        except Exception as e:
+            logger.error(f"Discovery error: {e}")
+
+        return self._finalize_discovery(discovered)
+
+    def _finalize_discovery(self, discovered: List[AgentCard]) -> List[AgentCard]:
+        """Finalize discovery and update cache"""
+        # Register all discovered agents
+        for card in discovered:
+            self.registry.register(card)
+
+        # Update cache
+        self._discovery_cache = discovered
+        self._cache_timestamp = time.time()
 
         logger.info(f"Discovered {len(discovered)} agents")
         return discovered
 
+    def _load_config_files(self, discovered_ids: Set[str]) -> List[AgentCard]:
+        """Load agents from JSON config files"""
+        discovered = []
+
+        if not self.config_dir.exists():
+            return discovered
+
+        try:
+            # Use os.listdir for faster directory listing
+            for filename in os.listdir(self.config_dir):
+                if not filename.endswith('_agent.json'):
+                    continue
+
+                config_file = self.config_dir / filename
+                try:
+                    card = self._load_agent_config(config_file)
+                    if card and card.id not in discovered_ids:
+                        discovered.append(card)
+                        discovered_ids.add(card.id)
+                except Exception as e:
+                    logger.debug(f"Failed to load config {filename}: {e}")
+        except Exception as e:
+            logger.debug(f"Error listing config dir: {e}")
+
+        return discovered
+
+    def _load_from_known_dirs(self, discovered_ids: Set[str], start_time: float) -> List[AgentCard]:
+        """Load agents from known agent directories (targeted scanning)"""
+        discovered = []
+
+        for dir_name in KNOWN_AGENT_DIRS:
+            # Check timeout
+            if time.time() - start_time > DISCOVERY_TIMEOUT:
+                logger.warning(f"Discovery timeout at directory: {dir_name}")
+                break
+
+            agent_dir = self.agents_dir / dir_name
+            if not agent_dir.exists() or not agent_dir.is_dir():
+                continue
+
+            # Load from configs subdirectory if exists (JSON configs)
+            configs_dir = agent_dir / "configs"
+            if configs_dir.exists():
+                discovered.extend(self._load_json_configs_from_dir(configs_dir, dir_name, discovered_ids))
+
+            # Scan only top-level Python files (no recursion)
+            discovered.extend(self._scan_directory_shallow(agent_dir, dir_name, discovered_ids))
+
+        return discovered
+
+    def _load_json_configs_from_dir(self, configs_dir: Path, category: str, discovered_ids: Set[str]) -> List[AgentCard]:
+        """Load agent definitions from JSON config files in a directory"""
+        discovered = []
+
+        try:
+            for filename in os.listdir(configs_dir):
+                if not filename.endswith('.json'):
+                    continue
+
+                config_file = configs_dir / filename
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+
+                    # Handle both single agent and multi-agent config files
+                    agents_data = data.get('agents', [data] if 'id' in data or 'name' in data else [])
+
+                    for agent_data in agents_data:
+                        if not agent_data:
+                            continue
+                        agent_data['category'] = agent_data.get('category', category)
+                        card = AgentCard.from_dict(agent_data)
+                        if card.id not in discovered_ids:
+                            discovered.append(card)
+                            discovered_ids.add(card.id)
+                except Exception as e:
+                    logger.debug(f"Failed to load {filename}: {e}")
+        except Exception as e:
+            logger.debug(f"Error reading configs dir {configs_dir}: {e}")
+
+        return discovered
+
+    def _scan_directory_shallow(self, agent_dir: Path, category: str, discovered_ids: Set[str]) -> List[AgentCard]:
+        """Scan directory for agent Python files (shallow, no recursion)"""
+        discovered = []
+
+        try:
+            for filename in os.listdir(agent_dir):
+                # Only look for *_agent.py files
+                if not filename.endswith('_agent.py'):
+                    continue
+
+                # Skip CLI scripts
+                if '_cli' in filename:
+                    continue
+
+                agent_file = agent_dir / filename
+                if not agent_file.is_file():
+                    continue
+
+                try:
+                    card = self._discover_from_file(agent_file, category)
+                    if card and card.id not in discovered_ids:
+                        discovered.append(card)
+                        discovered_ids.add(card.id)
+                except Exception as e:
+                    logger.debug(f"Could not discover {filename}: {e}")
+        except Exception as e:
+            logger.debug(f"Error scanning {agent_dir}: {e}")
+
+        return discovered
+
     def _load_agent_config(self, config_file: Path) -> Optional[AgentCard]:
         """Load agent card from JSON config file"""
-        with open(config_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return AgentCard.from_dict(data)
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return AgentCard.from_dict(data)
+        except Exception as e:
+            logger.debug(f"Error loading config {config_file}: {e}")
+            return None
 
-    def _discover_from_file(self, agent_file: Path) -> Optional[AgentCard]:
+    def _discover_from_file(self, agent_file: Path, category: str = "general") -> Optional[AgentCard]:
         """Auto-discover agent from Python file structure"""
         # Extract agent name from filename
         name = agent_file.stem.replace("_agent", "").replace("_", " ").title()
         agent_id = agent_file.stem
 
-        # Determine category from path
-        parts = agent_file.relative_to(self.agents_dir).parts
-        category = parts[0] if len(parts) > 1 else "general"
-
-        # Find class name in file
-        class_name = self._find_agent_class(agent_file)
+        # Find class name in file (with size limit to avoid reading huge files)
+        class_name = self._find_agent_class_fast(agent_file)
         if not class_name:
             return None
 
@@ -209,12 +368,17 @@ class AgentLoader:
             class_name=class_name
         )
 
-    def _find_agent_class(self, agent_file: Path) -> Optional[str]:
-        """Find the main agent class in a Python file"""
+    def _find_agent_class_fast(self, agent_file: Path, max_bytes: int = 8192) -> Optional[str]:
+        """
+        Find the main agent class in a Python file.
+        Only reads first max_bytes to avoid slow I/O on large files.
+        """
         try:
-            content = agent_file.read_text(encoding='utf-8')
+            # Read only the beginning of the file (class definitions are usually at top)
+            with open(agent_file, 'r', encoding='utf-8') as f:
+                content = f.read(max_bytes)
+
             # Look for class definitions that end with Agent
-            import re
             matches = re.findall(r'class\s+(\w+Agent)\s*[:\(]', content)
             if matches:
                 return matches[0]

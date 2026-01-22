@@ -313,3 +313,41 @@ pub async fn build_akshare_database() -> Result<String, String> {
         Err(format!("Database build failed: {}", error_msg))
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TranslateResponse {
+    pub success: bool,
+    pub translations: Option<Vec<Translation>>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Translation {
+    pub original: String,
+    pub translated: String,
+    pub detected_lang: String,
+}
+
+#[command]
+pub async fn translate_batch(texts: Vec<String>, target_lang: String) -> Result<TranslateResponse, String> {
+    let texts_json = serde_json::to_string(&texts)
+        .map_err(|e| format!("Failed to serialize texts: {}", e))?;
+
+    let output = Command::new("python")
+        .arg("resources/scripts/translate_text.py")
+        .arg("batch")
+        .arg(&texts_json)
+        .arg("auto")
+        .arg(&target_lang)
+        .output()
+        .map_err(|e| format!("Failed to execute translation script: {}", e))?;
+
+    if output.status.success() {
+        let result: TranslateResponse = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Failed to parse translation response: {}", e))?;
+        Ok(result)
+    } else {
+        let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
+        Err(format!("Translation failed: {}", error_msg))
+    }
+}

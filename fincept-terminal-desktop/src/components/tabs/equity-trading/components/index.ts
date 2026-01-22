@@ -14,3 +14,4 @@ export { FundsPanel } from './FundsPanel';
 export { StockTradingChart } from './StockTradingChart';
 export { SymbolSearch } from './SymbolSearch';
 export { MasterContractManager } from './MasterContractManager';
+export { YFinanceSettings } from './YFinanceSettings';

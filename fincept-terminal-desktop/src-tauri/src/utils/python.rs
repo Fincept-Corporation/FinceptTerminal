@@ -1,4 +1,8 @@
-// Utility module for Python execution with PyO3
+// Utility module for Python script execution and path resolution
+// Handles dual-venv setup (NumPy 1.x and NumPy 2.x compatibility)
+// Execution methods:
+//   1. Worker pool via python_runtime (fast, persistent workers)
+//   2. Direct subprocess execution (fallback, more reliable on Windows)
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -222,11 +226,24 @@ pub fn get_script_path(app: &tauri::AppHandle, script_name: &str) -> Result<Path
     }
 
     // Try each candidate path
-    eprintln!("[SCRIPT_PATH_DEBUG] Searching for: {}", script_name);
-    for (i, path) in candidate_paths.iter().enumerate() {
-        eprintln!("[SCRIPT_PATH_DEBUG] Candidate {}: {:?}", i+1, path);
+    // Debug logging only in debug builds
+    #[cfg(debug_assertions)]
+    {
+        eprintln!("[SCRIPT_PATH_DEBUG] Searching for: {}", script_name);
+    }
+
+    for (_i, path) in candidate_paths.iter().enumerate() {
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("[SCRIPT_PATH_DEBUG] Candidate {}: {:?}", _i+1, path);
+        }
+
         if path.exists() {
-            eprintln!("[SCRIPT_PATH_DEBUG] Found at candidate {}", i+1);
+            #[cfg(debug_assertions)]
+            {
+                eprintln!("[SCRIPT_PATH_DEBUG] Found at candidate {}", _i+1);
+            }
+
             // Strip the \\?\ prefix that Python can't handle on Windows
             let path_str = path.to_string_lossy().to_string();
             let clean_path = if path_str.starts_with(r"\\?\") {

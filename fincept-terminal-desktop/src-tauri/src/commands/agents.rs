@@ -3,6 +3,13 @@ use crate::utils::python::get_script_path;
 use crate::python_runtime;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
+use std::time::Duration;
+use tokio::time::timeout;
+
+/// Default timeout for agent operations (10 seconds)
+const AGENT_TIMEOUT_SECS: u64 = 10;
+/// Shorter timeout for discovery operations (5 seconds)
+const DISCOVERY_TIMEOUT_SECS: u64 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentParameter {
@@ -64,11 +71,33 @@ pub async fn execute_core_agent(
     app: tauri::AppHandle,
     payload: serde_json::Value,
 ) -> Result<String, String> {
+    execute_core_agent_with_timeout(app, payload, AGENT_TIMEOUT_SECS).await
+}
+
+/// Execute CoreAgent with custom timeout
+async fn execute_core_agent_with_timeout(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+    timeout_secs: u64,
+) -> Result<String, String> {
     // Use main.py as unified entry point for all actions
     let script_path = get_script_path(&app, "agents/finagent_core/main.py")?;
     let payload_str = serde_json::to_string(&payload)
         .map_err(|e| format!("Failed to serialize payload: {}", e))?;
-    python_runtime::execute_python_script(&script_path, vec![payload_str])
+
+    // Execute with timeout protection
+    let result = timeout(
+        Duration::from_secs(timeout_secs),
+        tokio::task::spawn_blocking(move || {
+            python_runtime::execute_python_script(&script_path, vec![payload_str])
+        })
+    ).await;
+
+    match result {
+        Ok(Ok(inner_result)) => inner_result,
+        Ok(Err(e)) => Err(format!("Task execution error: {}", e)),
+        Err(_) => Err(format!("Operation timed out after {} seconds", timeout_secs)),
+    }
 }
 
 /// Route a query to the appropriate agent using SuperAgent
@@ -106,13 +135,15 @@ pub async fn execute_routed_query(
 }
 
 /// Discover all available agents from config files and directories
+/// Uses shorter timeout since discovery should be fast
 #[tauri::command]
 pub async fn discover_agents(app: tauri::AppHandle) -> Result<String, String> {
     let payload = serde_json::json!({
         "action": "discover_agents",
         "params": {}
     });
-    execute_core_agent(app, payload).await
+    // Use shorter timeout for discovery - it should be fast
+    execute_core_agent_with_timeout(app, payload, DISCOVERY_TIMEOUT_SECS).await
 }
 
 /// Create a stock analysis execution plan

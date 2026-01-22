@@ -9,14 +9,21 @@ export const formatNumber = (num: number | null | undefined, decimals = 2): stri
 };
 
 /**
- * Format a large number with currency prefix and abbreviations (T, B, M)
+ * Format a large number with currency prefix and abbreviations (T, B, M, K)
+ * Handles negative numbers properly
  */
 export const formatLargeNumber = (num: number | null | undefined): string => {
-  if (num === null || num === undefined) return 'N/A';
-  if (num >= 1e12) return `$${(num / 1e12).toFixed(2)}T`;
-  if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
-  if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
-  return `$${num.toFixed(2)}`;
+  if (num === null || num === undefined || isNaN(num)) return 'N/A';
+
+  const absNum = Math.abs(num);
+  const sign = num < 0 ? '-' : '';
+
+  if (absNum >= 1e12) return `${sign}$${(absNum / 1e12).toFixed(2)}T`;
+  if (absNum >= 1e9) return `${sign}$${(absNum / 1e9).toFixed(2)}B`;
+  if (absNum >= 1e6) return `${sign}$${(absNum / 1e6).toFixed(2)}M`;
+  if (absNum >= 1e3) return `${sign}$${(absNum / 1e3).toFixed(2)}K`;
+  if (absNum === 0) return '$0';
+  return `${sign}$${absNum.toFixed(2)}`;
 };
 
 /**

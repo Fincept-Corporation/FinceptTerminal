@@ -16,8 +16,9 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-const NUM_WORKERS: usize = 2;  // Two Python processes
+const NUM_WORKERS: usize = 3;  // Three Python processes for better concurrency
 const NUM_THREADS: usize = 4;  // Number of concurrent scripts per process
+const TASK_TIMEOUT_SECS: u64 = 30;  // Maximum time for a task before timeout
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerTask {
@@ -313,7 +314,7 @@ impl WorkerPool {
         }
     }
 
-    /// Execute a task using the worker pool
+    /// Execute a task using the worker pool with timeout protection
     pub async fn execute_task(&self, task: WorkerTask) -> Result<WorkerResponse, String> {
         let task_id = task.task_id.clone();
 
@@ -335,11 +336,27 @@ impl WorkerPool {
         self.task_sender.send(prioritized_task)
             .map_err(|e| format!("Failed to queue task: {}", e))?;
 
-        // Wait for response
-        let response = response_rx.await
-            .map_err(|e| format!("Failed to receive response: {}", e))?;
+        // Wait for response with timeout protection
+        let timeout_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(TASK_TIMEOUT_SECS),
+            response_rx
+        ).await;
 
-        Ok(response)
+        match timeout_result {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(e)) => {
+                // Channel closed - clean up the sender
+                let mut senders = self.response_senders.lock().await;
+                senders.remove(&task_id);
+                Err(format!("Failed to receive response: {}", e))
+            }
+            Err(_) => {
+                // Timeout - clean up the sender to avoid memory leak
+                let mut senders = self.response_senders.lock().await;
+                senders.remove(&task_id);
+                Err(format!("Task timed out after {} seconds", TASK_TIMEOUT_SECS))
+            }
+        }
     }
 
     /// Shutdown all workers
@@ -382,30 +399,151 @@ pub async fn execute_python_script(
 }
 
 /// Execute a Python script using the worker pool with custom priority
+/// Falls back to subprocess execution if worker pool is not available
 pub async fn execute_python_script_with_priority(
     script_path: PathBuf,
     args: Vec<String>,
     venv: &str,
     priority: u8,
 ) -> Result<String, String> {
-    let task = WorkerTask {
-        task_id: uuid::Uuid::new_v4().to_string(),
-        script_path: script_path.to_string_lossy().to_string(),
-        args,
-        venv: venv.to_string(),
-        priority,
+    // Try worker pool first
+    match get_worker_pool().await {
+        Ok(pool_mutex) => {
+            let pool_guard = pool_mutex.lock().await;
+            if let Some(pool) = pool_guard.as_ref() {
+                let task = WorkerTask {
+                    task_id: uuid::Uuid::new_v4().to_string(),
+                    script_path: script_path.to_string_lossy().to_string(),
+                    args: args.clone(),
+                    venv: venv.to_string(),
+                    priority,
+                };
+
+                match pool.execute_task(task).await {
+                    Ok(response) => {
+                        if response.status == "success" {
+                            return Ok(response.data);
+                        } else {
+                            return Err(response.data);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[WorkerPool] Task execution failed, falling back to subprocess: {}", e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("[WorkerPool] Pool not available ({}), using subprocess fallback", e);
+        }
+    }
+
+    // Fallback to subprocess execution
+    execute_python_subprocess(&script_path, &args).await
+}
+
+/// Fallback subprocess execution when worker pool is not available
+async fn execute_python_subprocess(
+    script_path: &PathBuf,
+    args: &[String],
+) -> Result<String, String> {
+    use std::process::Stdio;
+
+    // Try to find Python executable
+    let python_exe = find_python_executable()?;
+
+    let mut cmd = Command::new(&python_exe);
+    cmd.arg(script_path)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to execute Python subprocess: {}", e))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        // Try to extract just the JSON part (last line typically)
+        let lines: Vec<&str> = stdout.lines().collect();
+        if let Some(last_line) = lines.last() {
+            if last_line.starts_with('{') || last_line.starts_with('[') {
+                return Ok(last_line.to_string());
+            }
+        }
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Python script failed: {}", stderr))
+    }
+}
+
+/// Find Python executable for subprocess fallback
+fn find_python_executable() -> Result<PathBuf, String> {
+    // First, try our installed venvs (preferred - has all required packages)
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            // Try venv-numpy2 first (default, has most libraries including ta, yfinance, etc.)
+            let venv2_python = PathBuf::from(&local_app_data)
+                .join("fincept-dev")
+                .join("venv-numpy2")
+                .join("Scripts")
+                .join("python.exe");
+            if venv2_python.exists() {
+                return Ok(venv2_python);
+            }
+
+            // Fall back to venv-numpy1 (for vectorbt, backtesting, etc.)
+            let venv1_python = PathBuf::from(&local_app_data)
+                .join("fincept-dev")
+                .join("venv-numpy1")
+                .join("Scripts")
+                .join("python.exe");
+            if venv1_python.exists() {
+                return Ok(venv1_python);
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // macOS/Linux: Check standard app data locations
+        if let Ok(home) = std::env::var("HOME") {
+            let base = if cfg!(target_os = "macos") {
+                PathBuf::from(&home).join("Library/Application Support/fincept-dev")
+            } else {
+                PathBuf::from(&home).join(".local/share/fincept-dev")
+            };
+
+            let venv2_python = base.join("venv-numpy2/bin/python3");
+            if venv2_python.exists() {
+                return Ok(venv2_python);
+            }
+
+            let venv1_python = base.join("venv-numpy1/bin/python3");
+            if venv1_python.exists() {
+                return Ok(venv1_python);
+            }
+        }
+    }
+
+    // Fall back to system Python (may not have required packages)
+    let candidates = if cfg!(target_os = "windows") {
+        vec!["python.exe", "python3.exe", "py.exe"]
+    } else {
+        vec!["python3", "python"]
     };
 
-    let pool_mutex = get_worker_pool().await?;
-    let pool_guard = pool_mutex.lock().await;
-    let pool = pool_guard.as_ref()
-        .ok_or("Worker pool not initialized")?;
-
-    let response = pool.execute_task(task).await?;
-
-    if response.status == "success" {
-        Ok(response.data)
-    } else {
-        Err(response.data)
+    for candidate in candidates {
+        if let Ok(output) = Command::new(candidate).arg("--version").output() {
+            if output.status.success() {
+                return Ok(PathBuf::from(candidate));
+            }
+        }
     }
+
+    Err("No Python executable found".to_string())
 }

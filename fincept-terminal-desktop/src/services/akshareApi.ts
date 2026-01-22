@@ -433,4 +433,10 @@ export class AKShareAPI {
   static async getCarSales(): Promise<AKShareResponse> {
     return this.query('akshare_alternative.py', 'car_sales');
   }
+
+  // ==================== TRANSLATION ====================
+
+  static async translateBatch(texts: string[], targetLang: string): Promise<any> {
+    return await invoke('translate_batch', { texts, targetLang });
+  }
 }

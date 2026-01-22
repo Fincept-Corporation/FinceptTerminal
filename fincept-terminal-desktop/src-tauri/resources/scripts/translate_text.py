@@ -6,6 +6,7 @@ Optimized with connection reuse and error handling
 
 import sys
 import json
+import asyncio
 from googletrans import Translator
 
 # Reusable translator instance for better performance
@@ -18,9 +19,9 @@ def get_translator():
         _translator = Translator()
     return _translator
 
-def translate_text(text, source_lang='auto', target_lang='en'):
+async def translate_text_async(text, source_lang='auto', target_lang='en'):
     """
-    Translate text using googletrans library
+    Translate text using googletrans library (async)
 
     Args:
         text: Text to translate
@@ -32,13 +33,13 @@ def translate_text(text, source_lang='auto', target_lang='en'):
     """
     try:
         translator = get_translator()
-        result = translator.translate(text, src=source_lang, dest=target_lang)
+        result = await translator.translate(text, src=source_lang, dest=target_lang)
 
         return {
             "success": True,
             "translated_text": result.text,
             "detected_lang": result.src,
-            "confidence": getattr(result.extra_data, 'confidence', None)
+            "confidence": getattr(result, 'confidence', None)
         }
     except Exception as e:
         return {
@@ -47,9 +48,9 @@ def translate_text(text, source_lang='auto', target_lang='en'):
             "original_text": text
         }
 
-def translate_batch(texts, source_lang='auto', target_lang='en'):
+async def translate_batch_async(texts, source_lang='auto', target_lang='en'):
     """
-    Translate multiple texts in batch
+    Translate multiple texts in batch (async)
 
     Args:
         texts: List of texts to translate
@@ -66,7 +67,7 @@ def translate_batch(texts, source_lang='auto', target_lang='en'):
         # Translate each text individually for better reliability
         for text in texts:
             try:
-                result = translator.translate(text, src=source_lang, dest=target_lang)
+                result = await translator.translate(text, src=source_lang, dest=target_lang)
                 translations.append({
                     "original": text,
                     "translated": result.text if result else text,
@@ -77,7 +78,8 @@ def translate_batch(texts, source_lang='auto', target_lang='en'):
                 translations.append({
                     "original": text,
                     "translated": text,
-                    "detected_lang": source_lang
+                    "detected_lang": source_lang,
+                    "error": str(e)
                 })
 
         return {
@@ -91,6 +93,14 @@ def translate_batch(texts, source_lang='auto', target_lang='en'):
             "error": str(e),
             "count": 0
         }
+
+def translate_text(text, source_lang='auto', target_lang='en'):
+    """Sync wrapper for async translate_text"""
+    return asyncio.run(translate_text_async(text, source_lang, target_lang))
+
+def translate_batch(texts, source_lang='auto', target_lang='en'):
+    """Sync wrapper for async translate_batch"""
+    return asyncio.run(translate_batch_async(texts, source_lang, target_lang))
 
 def main():
     """Main function to handle command-line translation requests"""

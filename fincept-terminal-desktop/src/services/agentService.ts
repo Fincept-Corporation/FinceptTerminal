@@ -997,13 +997,29 @@ export async function executeRoutedQuery(
 
 /**
  * Discover all available agents
+ * Now with proper error logging and timeout handling
  */
 export async function discoverAgents(): Promise<AgentCard[]> {
   try {
+    console.log('[AgentService] Starting agent discovery...');
+    const startTime = Date.now();
+
     const result = await invoke<string>('discover_agents');
     const parsed = JSON.parse(result);
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[AgentService] Discovered ${parsed.agents?.length || 0} agents in ${elapsed}ms`);
+
+    if (!parsed.success && parsed.error) {
+      console.warn('[AgentService] Discovery returned error:', parsed.error);
+    }
+
     return parsed.agents || [];
-  } catch {
+  } catch (error: any) {
+    // Log the actual error instead of swallowing it
+    console.error('[AgentService] Agent discovery failed:', error?.message || error);
+
+    // Return empty array but the error is now logged for debugging
     return [];
   }
 }

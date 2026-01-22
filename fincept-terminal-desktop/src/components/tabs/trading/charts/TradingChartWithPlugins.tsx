@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { createChart, ColorType, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, CrosshairMode } from 'lightweight-charts';
 import type { IChartApi, CandlestickData, Time, ISeriesApi, SeriesType } from 'lightweight-charts';
 import { useOHLCV } from '../hooks/useMarketData';
 import type { Timeframe, OHLCV } from '../types';
@@ -66,7 +66,7 @@ export function TradingChartWithPlugins({
         horzLines: { color: '#1f1f1f' },
       },
       crosshair: {
-        mode: 1,
+        mode: CrosshairMode.Normal, // Free movement crosshair
       },
       rightPriceScale: {
         borderColor: '#2a2a2a',

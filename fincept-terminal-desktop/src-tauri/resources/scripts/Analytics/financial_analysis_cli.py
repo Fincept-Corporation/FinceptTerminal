@@ -3,7 +3,7 @@
 Financial Analysis CLI Wrapper
 ==============================
 Command-line interface for the financial analysis module.
-Called by Tauri/Rust via PyO3.
+Called by Tauri/Rust via worker pool or subprocess.
 
 Usage:
     python financial_analysis_cli.py <command> [args...]

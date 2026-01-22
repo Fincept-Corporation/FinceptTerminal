@@ -2303,6 +2303,7 @@ pub fn run() {
             // AKShare Commands (Free Chinese & Global market data)
             commands::akshare::akshare_query,
             commands::akshare::akshare_get_endpoints,
+            commands::akshare::translate_batch,
             commands::akshare::get_stock_cn_spot,
             commands::akshare::get_stock_us_spot,
             commands::akshare::get_stock_hk_spot,

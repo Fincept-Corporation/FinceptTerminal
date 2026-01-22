@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { createChart, ColorType, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, CrosshairMode } from 'lightweight-charts';
 import type { IChartApi, CandlestickData, Time, ISeriesApi, MouseEventParams } from 'lightweight-charts';
 import {
   PluginManager,
@@ -109,7 +109,7 @@ export function ProChartWithToolkit({
         horzLines: { color: '#1f1f1f' },
       },
       crosshair: {
-        mode: 0, // Normal mode (0) allows free cursor movement, Magnet mode (1) snaps to candles
+        mode: CrosshairMode.Normal, // Free cursor movement (Magnet mode snaps to candles)
         vertLine: {
           width: 1,
           color: '#758696',
@@ -206,6 +206,12 @@ export function ProChartWithToolkit({
 
     // Handle keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
       // Delete: Remove last drawing or selected drawing
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (toolkitRef.current && !activeTool) {

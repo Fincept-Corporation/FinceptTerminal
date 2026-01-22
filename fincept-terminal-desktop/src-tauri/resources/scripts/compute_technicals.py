@@ -111,15 +111,15 @@ def compute_all_technicals(historical_data_json):
 
 def main(args=None):
     """
-    Main entry point for PyO3 and subprocess execution
+    Main entry point for worker pool and subprocess execution
 
     Args:
-        args: List of arguments (for PyO3) or None (for subprocess)
+        args: List of arguments (for worker pool) or None (for subprocess/CLI)
 
     Returns:
         JSON string with technical indicators or error
     """
-    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    # Support both worker pool (args parameter) and subprocess/CLI (sys.argv)
     if args is None:
         args = sys.argv[1:]
 

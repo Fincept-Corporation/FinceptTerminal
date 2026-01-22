@@ -26,6 +26,8 @@ import { IBKRAdapter } from './us/ibkr/IBKRAdapter';
 import { TradierAdapter } from './us/tradier/TradierAdapter';
 
 // European Brokers
+// Paper Trading
+import { YFinancePaperTradingAdapter } from './yfinance/YFinancePaperTradingAdapter';
 import { SaxoBankAdapter } from './europe/saxobank/SaxoBankAdapter';
 
 /**
@@ -54,4 +56,7 @@ export function initializeStockBrokers(): void {
 
   // Register European brokers
   registerBrokerAdapter('saxobank', SaxoBankAdapter);
+
+  // Register Paper Trading
+  registerBrokerAdapter('yfinance', YFinancePaperTradingAdapter);
 }

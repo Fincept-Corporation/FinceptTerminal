@@ -35,3 +35,6 @@ export { initializeStockBrokers } from './init';
 
 // Indian Brokers
 export * from './india';
+
+// YFinance Paper Trading
+export * from './yfinance';

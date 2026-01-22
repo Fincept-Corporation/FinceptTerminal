@@ -1,6 +1,6 @@
 // TradingChart.tsx - TradingView Lightweight Charts with historical + live data
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, Time } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, Time, CrosshairMode } from 'lightweight-charts';
 import { useRustCandles } from '../../../hooks/useRustWebSocket';
 
 import { useBrokerContext } from '../../../contexts/BrokerContext';
@@ -49,7 +49,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
         horzLines: { color: '#1a1a1a' },
       },
       crosshair: {
-        mode: 1, // Normal crosshair
+        mode: CrosshairMode.Normal, // Free movement crosshair
       },
       rightPriceScale: {
         borderColor: '#2a2a2a',

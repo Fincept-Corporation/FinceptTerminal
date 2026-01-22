@@ -1,5 +1,5 @@
 import React from 'react';
-import { FINCEPT } from '../../portfolio-tab/finceptStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, EFFECTS } from '../../portfolio-tab/finceptStyles';
 import type { NewsData, StockInfo } from '../types';
 
 const COLORS = {
@@ -12,7 +12,9 @@ const COLORS = {
   CYAN: FINCEPT.CYAN,
   DARK_BG: FINCEPT.DARK_BG,
   PANEL_BG: FINCEPT.PANEL_BG,
+  HEADER_BG: FINCEPT.HEADER_BG,
   BORDER: FINCEPT.BORDER,
+  HOVER: FINCEPT.HOVER,
 };
 
 interface NewsTabProps {
@@ -38,20 +40,20 @@ export const NewsTab: React.FC<NewsTabProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         height: '400px',
-        gap: '16px',
+        gap: SPACING.LARGE,
       }}>
         <div style={{
           width: '50px',
           height: '50px',
-          border: '4px solid #404040',
-          borderTop: '4px solid #ea580c',
+          border: `4px solid ${COLORS.BORDER}`,
+          borderTop: `4px solid ${COLORS.ORANGE}`,
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
         }} />
-        <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
+        <div style={{ color: COLORS.YELLOW, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
           FETCHING LATEST NEWS...
         </div>
-        <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
+        <div style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.DEFAULT }}>
           Loading news for {currentSymbol}
         </div>
       </div>
@@ -66,25 +68,19 @@ export const NewsTab: React.FC<NewsTabProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         height: '400px',
-        gap: '16px',
+        gap: SPACING.LARGE,
       }}>
-        <div style={{ color: COLORS.RED, fontSize: '14px', fontWeight: 'bold' }}>
+        <div style={{ color: COLORS.RED, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
           [WARN] NO NEWS AVAILABLE
         </div>
-        <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
+        <div style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.DEFAULT }}>
           {newsData?.error || 'Unable to fetch news at this time'}
         </div>
         <button
           onClick={onRefresh}
           style={{
-            backgroundColor: COLORS.ORANGE,
-            border: 'none',
-            color: COLORS.DARK_BG,
-            padding: '8px 16px',
-            fontSize: '10px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            marginTop: '8px',
+            ...COMMON_STYLES.buttonPrimary,
+            marginTop: SPACING.MEDIUM,
           }}
         >
           RETRY
@@ -101,12 +97,12 @@ export const NewsTab: React.FC<NewsTabProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         height: '400px',
-        gap: '16px',
+        gap: SPACING.LARGE,
       }}>
-        <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
+        <div style={{ color: COLORS.YELLOW, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
           NO NEWS FOUND
         </div>
-        <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
+        <div style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.DEFAULT }}>
           No recent news articles found for {stockInfo?.company_name || currentSymbol}
         </div>
       </div>
@@ -114,39 +110,36 @@ export const NewsTab: React.FC<NewsTabProps> = ({
   }
 
   return (
-    <div style={{ padding: '8px', height: 'calc(100vh - 280px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ padding: SPACING.MEDIUM, height: 'calc(100vh - 280px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {/* News Header */}
       <div style={{
-        backgroundColor: COLORS.PANEL_BG,
-        border: `1px solid ${COLORS.BORDER}`,
-        padding: '8px 12px',
-        marginBottom: '8px',
+        ...COMMON_STYLES.panel,
+        backgroundColor: COLORS.HEADER_BG,
+        padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+        marginBottom: SPACING.MEDIUM,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexShrink: 0,
+        borderBottom: `2px solid ${COLORS.ORANGE}`,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ color: COLORS.ORANGE, fontSize: '11px', fontWeight: 'bold' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.DEFAULT }}>
+          <span style={{ color: COLORS.ORANGE, fontSize: TYPOGRAPHY.DEFAULT, fontWeight: TYPOGRAPHY.BOLD, letterSpacing: TYPOGRAPHY.WIDE }}>
             LATEST NEWS
           </span>
-          <span style={{ color: COLORS.GRAY, fontSize: '9px' }}>
+          <span style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.SMALL }}>
             {newsData.count || 0} articles found
           </span>
-          <span style={{ color: COLORS.CYAN, fontSize: '9px' }}>
+          <span style={{ color: COLORS.CYAN, fontSize: TYPOGRAPHY.SMALL }}>
             {stockInfo?.company_name || currentSymbol}
           </span>
         </div>
         <button
           onClick={onRefresh}
           style={{
-            backgroundColor: COLORS.DARK_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            color: COLORS.WHITE,
-            padding: '4px 12px',
-            fontSize: '9px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
+            ...COMMON_STYLES.buttonSecondary,
+            padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+            fontSize: TYPOGRAPHY.SMALL,
           }}
         >
           REFRESH
@@ -159,20 +152,19 @@ export const NewsTab: React.FC<NewsTabProps> = ({
         overflow: 'auto',
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: SPACING.MEDIUM,
       }} className="custom-scrollbar">
         {newsData.data.map((article, index) => (
           <div
             key={index}
             style={{
-              backgroundColor: COLORS.PANEL_BG,
-              border: `1px solid ${COLORS.BORDER}`,
-              padding: '12px',
+              ...COMMON_STYLES.panel,
+              padding: SPACING.DEFAULT,
               cursor: 'pointer',
-              transition: 'all 0.2s',
+              transition: EFFECTS.TRANSITION_STANDARD,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#252525';
+              e.currentTarget.style.backgroundColor = COLORS.HOVER;
               e.currentTarget.style.borderColor = COLORS.ORANGE;
             }}
             onMouseLeave={(e) => {
@@ -186,29 +178,29 @@ export const NewsTab: React.FC<NewsTabProps> = ({
             }}
           >
             {/* Article Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-              <div style={{ flex: 1, marginRight: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.MEDIUM }}>
+              <div style={{ flex: 1, marginRight: SPACING.DEFAULT }}>
                 <h3 style={{
                   color: COLORS.WHITE,
-                  fontSize: '12px',
-                  fontWeight: 'bold',
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
                   margin: 0,
-                  marginBottom: '6px',
+                  marginBottom: SPACING.GAP_SMALL,
                   lineHeight: '1.4',
                 }}>
                   {article.title}
                 </h3>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: SPACING.DEFAULT, alignItems: 'center' }}>
                   <span style={{
                     color: COLORS.CYAN,
-                    fontSize: '9px',
-                    fontWeight: 'bold',
+                    fontSize: TYPOGRAPHY.SMALL,
+                    fontWeight: TYPOGRAPHY.BOLD,
                   }}>
                     {article.publisher || 'Unknown Source'}
                   </span>
                   <span style={{
                     color: COLORS.GRAY,
-                    fontSize: '9px',
+                    fontSize: TYPOGRAPHY.SMALL,
                   }}>
                     {article.published_date || 'Unknown Date'}
                   </span>
@@ -220,9 +212,9 @@ export const NewsTab: React.FC<NewsTabProps> = ({
             {article.description && article.description !== 'N/A' && (
               <div style={{
                 color: COLORS.GRAY,
-                fontSize: '10px',
+                fontSize: TYPOGRAPHY.BODY,
                 lineHeight: '1.5',
-                marginBottom: '8px',
+                marginBottom: SPACING.MEDIUM,
               }}>
                 {article.description}
               </div>
@@ -232,11 +224,12 @@ export const NewsTab: React.FC<NewsTabProps> = ({
             {article.url && article.url !== '#' && (
               <div style={{
                 color: COLORS.ORANGE,
-                fontSize: '9px',
-                fontWeight: 'bold',
+                fontSize: TYPOGRAPHY.SMALL,
+                fontWeight: TYPOGRAPHY.BOLD,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: SPACING.SMALL,
+                letterSpacing: TYPOGRAPHY.WIDE,
               }}>
                 READ FULL ARTICLE
               </div>

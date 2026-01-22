@@ -1,5 +1,5 @@
 // Financial Analysis Module Commands
-// CFA-compliant statement analysis via PyO3
+// CFA-compliant statement analysis via worker pool or subprocess
 
 use crate::utils::python::get_script_path;
 use crate::python_runtime;

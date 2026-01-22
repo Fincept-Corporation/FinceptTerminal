@@ -139,8 +139,10 @@ jobs:
               fi
             fi
 
-            # Copy macOS updater signature files
-            TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.tar.gz.sig" -type f 2>/dev/null | head -1)
+            # Copy macOS updater .tar.gz and signature files (required for auto-update)
+            TAR_GZ=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app.tar.gz" -type f 2>/dev/null | head -1)
+            TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app.tar.gz.sig" -type f 2>/dev/null | head -1)
+            [ -f "$TAR_GZ" ] && cp "$TAR_GZ" "release-artifacts/" && echo "Found macOS tar.gz: $TAR_GZ" || echo "Warning: macOS tar.gz not found"
             [ -f "$TAR_GZ_SIG" ] && cp "$TAR_GZ_SIG" "release-artifacts/" && echo "Found macOS signature: $TAR_GZ_SIG" || echo "Warning: macOS signature not found"
 
           elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
@@ -150,8 +152,10 @@ jobs:
             [ -f "$APPIMAGE" ] && cp "$APPIMAGE" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage" || { echo "Error: AppImage not found"; exit 1; }
             [ -f "$DEB" ] && cp "$DEB" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb" || echo "Warning: DEB not found"
 
-            # Copy Linux updater signature files
-            APPIMAGE_TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.tar.gz.sig" -type f 2>/dev/null | head -1)
+            # Copy Linux updater .tar.gz and signature files (required for auto-update)
+            APPIMAGE_TAR_GZ=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage.tar.gz" -type f 2>/dev/null | head -1)
+            APPIMAGE_TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage.tar.gz.sig" -type f 2>/dev/null | head -1)
+            [ -f "$APPIMAGE_TAR_GZ" ] && cp "$APPIMAGE_TAR_GZ" "release-artifacts/" && echo "Found Linux tar.gz: $APPIMAGE_TAR_GZ" || echo "Warning: Linux tar.gz not found"
             [ -f "$APPIMAGE_TAR_GZ_SIG" ] && cp "$APPIMAGE_TAR_GZ_SIG" "release-artifacts/" && echo "Found Linux signature: $APPIMAGE_TAR_GZ_SIG" || echo "Warning: Linux signature not found"
 
           elif [[ "${{ matrix.platform }}" == "windows-2022" ]]; then
@@ -159,17 +163,18 @@ jobs:
             MSI=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.msi" -type f 2>/dev/null | head -1)
             [ -f "$MSI" ] && cp "$MSI" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.msi" || { echo "Error: MSI not found"; exit 1; }
 
-            # Copy Windows updater signature files
+            # Copy Windows updater NSIS files and signatures (required for auto-update)
             NSIS_ZIP=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip" -type f 2>/dev/null | head -1)
             NSIS_ZIP_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip.sig" -type f 2>/dev/null | head -1)
             [ -f "$NSIS_ZIP" ] && cp "$NSIS_ZIP" "release-artifacts/" && echo "Found NSIS zip: $NSIS_ZIP" || echo "Warning: NSIS zip not found"
             [ -f "$NSIS_ZIP_SIG" ] && cp "$NSIS_ZIP_SIG" "release-artifacts/" && echo "Found Windows signature: $NSIS_ZIP_SIG" || echo "Warning: Windows signature not found"
           fi
 
-          # Copy latest.json (updater manifest) - only one platform needs to generate this
+          # Copy platform-specific latest.json (will be merged in create-release job)
           LATEST_JSON=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "latest.json" -type f 2>/dev/null | head -1)
           if [ -f "$LATEST_JSON" ]; then
-            cp "$LATEST_JSON" "release-artifacts/latest.json"
+            # Save with platform suffix to merge later
+            cp "$LATEST_JSON" "release-artifacts/latest-${{ matrix.platform }}.json"
             echo "Found latest.json: $LATEST_JSON"
             echo "latest.json content:"
             cat "$LATEST_JSON"
@@ -216,28 +221,170 @@ jobs:
         with:
           path: all-artifacts
 
+      - name: Setup Python for JSON processing
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Organize release files
         id: organize
         run: |
           mkdir -p release-files
 
-          # Copy installer files
-          find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.app.tar.gz" \) -exec cp {} release-files/ \;
+          VERSION="${{ steps.get_version.outputs.version }}"
+          TAG_NAME="${{ github.ref_name }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
 
-          # Copy updater files (signatures and manifest)
-          find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz.sig" -o -name "*.nsis.zip" -o -name "*.nsis.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || echo "No updater files found"
+          echo "=== All downloaded artifacts ==="
+          find all-artifacts -type f | sort
 
-          echo "=== Release Files ==="
+          # Copy installer files (user-facing downloads)
+          find all-artifacts -type f -name "*.dmg" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.msi" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.AppImage" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.deb" -exec cp {} release-files/ \;
+
+          # Copy updater archives (required for auto-update)
+          find all-artifacts -type f -name "*.app.tar.gz" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.app.tar.gz.sig" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.AppImage.tar.gz" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.AppImage.tar.gz.sig" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.nsis.zip" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.nsis.zip.sig" -exec cp {} release-files/ \;
+
+          echo "=== Release files after copying ==="
           ls -lh release-files/
 
-          # Validate latest.json exists
-          if [ -f "release-files/latest.json" ]; then
-            echo "SUCCESS: latest.json found"
-            echo "latest.json content:"
-            cat release-files/latest.json
-          else
-            echo "WARNING: latest.json not found - auto-updater will not work!"
-          fi
+          # Find all platform-specific latest.json files
+          echo "=== Looking for platform-specific latest.json files ==="
+          find all-artifacts -type f -name "latest-*.json" -exec echo "Found: {}" \; -exec cat {} \;
+
+          # Create Python script to generate unified latest.json
+          cat > generate_latest_json.py << 'PYTHON_SCRIPT'
+import json
+import os
+import glob
+import sys
+from datetime import datetime, timezone
+
+def main():
+    version = os.environ.get('VERSION', '0.0.0')
+    tag_name = os.environ.get('TAG_NAME', 'v0.0.0')
+    repo_url = os.environ.get('REPO_URL', '')
+
+    # Initialize the merged JSON structure
+    merged = {
+        "version": version,
+        "notes": f"FinceptTerminal {tag_name} - See release notes at {repo_url}/releases/tag/{tag_name}",
+        "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "platforms": {}
+    }
+
+    # Try to merge from platform-specific latest.json files first
+    platform_files = glob.glob("all-artifacts/**/latest-*.json", recursive=True)
+    print(f"Found {len(platform_files)} platform-specific latest.json files")
+
+    for pf in platform_files:
+        print(f"Processing: {pf}")
+        try:
+            with open(pf, 'r') as f:
+                data = json.load(f)
+                if 'platforms' in data:
+                    # Update URLs to point to GitHub releases
+                    for platform_key, platform_data in data['platforms'].items():
+                        if 'url' in platform_data:
+                            # Extract just the filename and create proper GitHub release URL
+                            filename = os.path.basename(platform_data['url'])
+                            platform_data['url'] = f"{repo_url}/releases/download/{tag_name}/{filename}"
+                    merged['platforms'].update(data['platforms'])
+                    print(f"  Added platforms: {list(data['platforms'].keys())}")
+        except Exception as e:
+            print(f"  Error processing {pf}: {e}")
+
+    # If no platforms found from JSON files, generate from artifacts
+    if not merged['platforms']:
+        print("No platforms found from JSON files, generating from artifacts...")
+
+        # Check for Windows NSIS
+        nsis_zips = glob.glob("release-files/*.nsis.zip")
+        nsis_sigs = glob.glob("release-files/*.nsis.zip.sig")
+        if nsis_zips and nsis_sigs:
+            nsis_filename = os.path.basename(nsis_zips[0])
+            with open(nsis_sigs[0], 'r') as f:
+                signature = f.read().strip()
+            merged['platforms']['windows-x86_64'] = {
+                "signature": signature,
+                "url": f"{repo_url}/releases/download/{tag_name}/{nsis_filename}"
+            }
+            print(f"Added windows-x86_64 from artifacts")
+
+        # Check for macOS ARM (aarch64)
+        macos_arm_tars = [f for f in glob.glob("release-files/*.app.tar.gz") if 'aarch64' in f]
+        macos_arm_sigs = [f for f in glob.glob("release-files/*.app.tar.gz.sig") if 'aarch64' in f]
+        if macos_arm_tars and macos_arm_sigs:
+            tar_filename = os.path.basename(macos_arm_tars[0])
+            with open(macos_arm_sigs[0], 'r') as f:
+                signature = f.read().strip()
+            merged['platforms']['darwin-aarch64'] = {
+                "signature": signature,
+                "url": f"{repo_url}/releases/download/{tag_name}/{tar_filename}"
+            }
+            print(f"Added darwin-aarch64 from artifacts")
+
+        # Check for macOS Intel (x86_64)
+        macos_x64_tars = [f for f in glob.glob("release-files/*.app.tar.gz") if 'x86_64' in f and 'aarch64' not in f]
+        macos_x64_sigs = [f for f in glob.glob("release-files/*.app.tar.gz.sig") if 'x86_64' in f and 'aarch64' not in f]
+        if macos_x64_tars and macos_x64_sigs:
+            tar_filename = os.path.basename(macos_x64_tars[0])
+            with open(macos_x64_sigs[0], 'r') as f:
+                signature = f.read().strip()
+            merged['platforms']['darwin-x86_64'] = {
+                "signature": signature,
+                "url": f"{repo_url}/releases/download/{tag_name}/{tar_filename}"
+            }
+            print(f"Added darwin-x86_64 from artifacts")
+
+        # Check for Linux
+        linux_tars = glob.glob("release-files/*.AppImage.tar.gz")
+        linux_sigs = glob.glob("release-files/*.AppImage.tar.gz.sig")
+        if linux_tars and linux_sigs:
+            tar_filename = os.path.basename(linux_tars[0])
+            with open(linux_sigs[0], 'r') as f:
+                signature = f.read().strip()
+            merged['platforms']['linux-x86_64'] = {
+                "signature": signature,
+                "url": f"{repo_url}/releases/download/{tag_name}/{tar_filename}"
+            }
+            print(f"Added linux-x86_64 from artifacts")
+
+    # Write the merged JSON
+    with open('release-files/latest.json', 'w') as f:
+        json.dump(merged, f, indent=2)
+
+    print(f"\n=== Generated latest.json ===")
+    print(json.dumps(merged, indent=2))
+
+    # Validate we have at least one platform
+    if not merged['platforms']:
+        print("ERROR: No platforms found for latest.json!")
+        sys.exit(1)
+
+    print(f"\nSuccessfully generated latest.json with {len(merged['platforms'])} platform(s)")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+PYTHON_SCRIPT
+
+          # Run the Python script to generate latest.json
+          VERSION="${VERSION}" TAG_NAME="${TAG_NAME}" REPO_URL="${REPO_URL}" python3 generate_latest_json.py
+
+          # Validate the generated JSON
+          echo "=== Validating generated latest.json ==="
+          python3 -c "import json; data = json.load(open('release-files/latest.json')); print(f'Valid JSON with {len(data.get(\"platforms\", {}))} platforms')" || { echo "ERROR: Invalid JSON generated"; exit 1; }
+
+          echo "=== Final Release Files ==="
+          ls -lh release-files/
 
           file_count=$(find release-files -type f | wc -l)
           [ "$file_count" -eq 0 ] && { echo "Error: No release files found"; exit 1; }
@@ -246,6 +393,9 @@ jobs:
           echo "FILES_LIST<<EOF" >> $GITHUB_OUTPUT
           ls -1 release-files/ >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+          # Cleanup
+          rm -f generate_latest_json.py
 
       - name: Check if release exists
         id: check_release

@@ -203,6 +203,12 @@ export const useKeyboardShortcuts = (shortcuts: ShortcutMap, enabled: boolean = 
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
       for (const [shortcutStr, action] of Object.entries(shortcuts)) {
         const { key, ctrl, shift, alt } = parseShortcut(shortcutStr);
         const keyMatch = e.key.toLowerCase() === key.toLowerCase();

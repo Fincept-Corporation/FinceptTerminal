@@ -3,17 +3,27 @@ FinAgent Core Main Entry Point
 
 Unified entry point for all agent operations via Tauri.
 Handles JSON payload dispatch to appropriate modules.
+
+Performance notes:
+- Discovery actions have internal timeout protection
+- Uses optimized agent loader to avoid slow file scanning
 """
 
 import sys
 import json
+import signal
+import time
 from pathlib import Path
 from typing import Dict, Any
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 # Add parent directory to path
 parent_dir = str(Path(__file__).parent.parent)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
+
+# Timeout for discovery operations (seconds)
+DISCOVERY_TIMEOUT = 4.0
 
 
 def main(args=None):
@@ -58,6 +68,12 @@ def main(args=None):
         return json.dumps({"success": False, "error": f"Invalid JSON: {str(e)}"})
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})
+
+
+def _discover_agents_internal():
+    """Internal helper for agent discovery with isolation"""
+    from finagent_core.agent_loader import discover_agents
+    return discover_agents()
 
 
 def dispatch_action(
@@ -113,9 +129,16 @@ def dispatch_action(
     # =========================================================================
 
     if action == "discover_agents":
-        from finagent_core.agent_loader import discover_agents
-        agents = discover_agents()
-        return {"success": True, "agents": agents, "count": len(agents)}
+        # Use timeout protection for discovery to prevent hanging
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_discover_agents_internal)
+                agents = future.result(timeout=DISCOVERY_TIMEOUT)
+                return {"success": True, "agents": agents, "count": len(agents)}
+        except FuturesTimeoutError:
+            return {"success": True, "agents": [], "count": 0, "warning": "Discovery timed out"}
+        except Exception as e:
+            return {"success": False, "error": f"Discovery failed: {str(e)}", "agents": []}
 
     if action == "list_agents":
         from finagent_core.agent_loader import list_agents, list_categories

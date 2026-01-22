@@ -53,9 +53,9 @@ def get_news_cctv(date="20240101"):
     """Get CCTV news"""
     return safe_call(ak.news_cctv, date=date)
 
-def get_news_economic_baidu(symbol="财经"):
+def get_news_economic_baidu():
     """Get Baidu economic news"""
-    return safe_call(ak.news_economic_baidu, symbol=symbol)
+    return safe_call(ak.news_economic_baidu)
 
 def get_news_report_time_baidu():
     """Get Baidu report time news"""

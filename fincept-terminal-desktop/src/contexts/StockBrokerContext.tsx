@@ -330,7 +330,42 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
         const newAdapter = createStockBrokerAdapter(activeBroker);
         console.log(`[StockBrokerContext] Created adapter for: ${activeBroker}`);
 
-        // Load credentials from database
+        // Check if this is a paper-only broker that doesn't need credentials (like yfinance)
+        // YFinance is a special case - it only supports paper trading and needs no authentication
+        const isPaperOnlyBroker = activeBroker === 'yfinance';
+
+        if (isPaperOnlyBroker) {
+          console.log(`[StockBrokerContext] Paper-only broker detected: ${activeBroker}, auto-authenticating...`);
+
+          // Auto-authenticate for paper-only brokers (no real credentials needed)
+          const authResult = await newAdapter.authenticate({ apiKey: 'paper_trading' });
+
+          if (authResult.success) {
+            console.log(`[StockBrokerContext] ✓ Paper trading auto-authenticated for ${activeBroker}`);
+
+            // IMPORTANT: Set adapter BEFORE isAuthenticated to avoid race condition
+            // where EquityTradingTab checks isAuthenticated but adapter is still null
+            setAdapter(newAdapter);
+            setIsAuthenticated(true);
+            setError(null);
+
+            // Initialize unified trading session in paper mode
+            try {
+              await initTradingSession(activeBroker, 'paper');
+              console.log(`[StockBrokerContext] ✓ Paper trading session initialized`);
+            } catch (sessionErr) {
+              console.error('[StockBrokerContext] Failed to init paper trading session:', sessionErr);
+            }
+          } else {
+            console.error(`[StockBrokerContext] Paper trading auto-auth failed:`, authResult.message);
+            setError(authResult.message || 'Failed to initialize paper trading');
+            setAdapter(newAdapter);
+          }
+
+          return;
+        }
+
+        // For other brokers, load credentials from database
         try {
           console.log(`[StockBrokerContext] Loading credentials from database...`);
           const storedCreds = await (newAdapter as any).loadCredentials();
@@ -416,13 +451,20 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     setFunds(null);
     setError(null);
 
+    // For paper-only brokers like yfinance, force paper mode
+    if (brokerId === 'yfinance' && tradingMode !== 'paper') {
+      console.log(`[StockBrokerContext] Paper-only broker ${brokerId} selected, forcing paper mode`);
+      setTradingModeState('paper');
+      await safeStorageSet(STORAGE_KEYS.STOCK_TRADING_MODE, 'paper');
+    }
+
     // Set new broker
     setActiveBrokerState(brokerId);
     await safeStorageSet(STORAGE_KEYS.ACTIVE_STOCK_BROKER, brokerId);
 
     // Adapter will be created by useEffect watching activeBroker
     console.log(`[StockBrokerContext] Active broker set to: ${brokerId}`);
-  }, [adapter]);
+  }, [adapter, tradingMode]);
 
   const setTradingMode = useCallback(async (mode: 'live' | 'paper') => {
     setTradingModeState(mode);

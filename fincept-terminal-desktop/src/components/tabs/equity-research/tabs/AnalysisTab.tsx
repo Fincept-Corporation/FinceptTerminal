@@ -35,6 +35,7 @@ export const AnalysisTab: React.FC<AnalysisTabProps> = ({
         <FinancialAnalysisPanel
           ticker={currentSymbol}
           companyName={stockInfo?.company_name || currentSymbol}
+          stockInfo={stockInfo}
         />
       </div>
 
