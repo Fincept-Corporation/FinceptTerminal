@@ -37,15 +37,15 @@ class FinceptChat(Model):
 
     def _make_request(self, messages: List[Message]) -> Dict[str, Any]:
         """Send request to Fincept endpoint and return raw response dict."""
-        formatted_messages = self._format_messages(messages)
+        # Fincept endpoint expects a single 'prompt' field, not 'messages'
+        prompt = self._messages_to_prompt(messages)
 
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["X-API-Key"] = self.api_key
 
         payload: Dict[str, Any] = {
-            "messages": formatted_messages,
-            "model": self.id,
+            "prompt": prompt,
         }
         if self.temperature is not None:
             payload["temperature"] = self.temperature
@@ -108,17 +108,29 @@ class FinceptChat(Model):
         content = self._extract_content(response) if isinstance(response, dict) else (str(response) if response else "")
         return ModelResponse(content=content, role="assistant")
 
-    def _format_messages(self, messages: List[Message]) -> List[Dict[str, str]]:
-        """Convert agno Messages to simple dicts for the API."""
-        formatted = []
+    def _messages_to_prompt(self, messages: List[Message]) -> str:
+        """Convert agno Messages list into a single prompt string for the Fincept API."""
+        parts = []
         for msg in messages:
-            role = msg.role or "user"
             content = msg.content or ""
             if isinstance(content, list):
                 text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
                 content = "\n".join(text_parts) if text_parts else str(content)
-            formatted.append({"role": role, "content": str(content)})
-        return formatted
+            content = str(content).strip()
+            if not content:
+                continue
+
+            role = msg.role or "user"
+            if role == "system":
+                parts.append(f"[System]: {content}")
+            elif role == "user":
+                parts.append(content)
+            elif role == "assistant":
+                parts.append(f"[Assistant]: {content}")
+            else:
+                parts.append(content)
+
+        return "\n\n".join(parts)
 
     def _extract_content(self, data: Any) -> str:
         """Extract text content from various response formats."""

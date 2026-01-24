@@ -313,22 +313,35 @@ pub fn execute_python_subprocess(
             .map_err(|e| format!("Failed to parse output: {}", e))?;
 
         // Extract JSON from output - handles case where logging/warnings leak to stdout
-        // Look for the last line that starts with '{' or '[' (our JSON result)
-        let json_line = raw_output
-            .lines()
-            .rev()
-            .find(|line| {
-                let trimmed = line.trim();
-                trimmed.starts_with('{') || trimmed.starts_with('[')
-            });
+        // Strategy: Find the last complete JSON object/array in the output.
+        // 1. Try the last line first (compact JSON on one line - most common case)
+        // 2. If that doesn't start with { or [, search backwards for the JSON start
+        // 3. If found on a non-last line, collect from that line to the end (multi-line JSON)
+        let lines: Vec<&str> = raw_output.lines().collect();
 
-        match json_line {
-            Some(json) => Ok(json.to_string()),
-            None => {
-                // If no JSON found, return raw output (might be plain text result)
-                Ok(raw_output.trim().to_string())
+        // First try: check if last line is compact JSON (single-line output)
+        if let Some(last) = lines.last() {
+            let trimmed = last.trim();
+            if trimmed.starts_with('{') || trimmed.starts_with('[') {
+                return Ok(trimmed.to_string());
             }
         }
+
+        // Second try: find the first line from the start that begins JSON, then take everything from there
+        // This handles multi-line (pretty-printed) JSON output
+        if let Some(json_start_idx) = lines.iter().position(|line| {
+            let trimmed = line.trim();
+            trimmed.starts_with('{') || trimmed.starts_with('[')
+        }) {
+            let json_text: String = lines[json_start_idx..].join("\n");
+            let trimmed = json_text.trim();
+            if !trimmed.is_empty() {
+                return Ok(trimmed.to_string());
+            }
+        }
+
+        // Fallback: return raw output
+        Ok(raw_output.trim().to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);

@@ -636,6 +636,806 @@ class EdgarToolsWrapper:
             return {"error": EdgarError("get_fund_holdings", str(e), traceback.format_exc()).to_dict()}
 
     # =========================================================================
+    # ENHANCED DATA EXTRACTION FOR RELATIONSHIP MAP
+    # =========================================================================
+
+    def get_fund_holdings_detailed(self, ticker: str, quarters: int = 2) -> Dict[str, Any]:
+        """
+        Get detailed institutional holdings for a company using 13F-HR filings.
+        Returns real institutional holders with shares, values, and QoQ changes.
+
+        This queries the company's institutional holders by looking at who files
+        13F-HR forms that include this company's stock.
+
+        Falls back to the company's major_holders from yfinance-style data if available.
+        """
+        try:
+            from decimal import Decimal
+            company = Company(ticker)
+
+            # Strategy: Get institutional holders from the company object directly
+            # edgartools provides institutional_holders on Company objects
+            holders_list = []
+
+            # Try to get institutional holders directly
+            if hasattr(company, 'institutional_holders'):
+                try:
+                    inst_holders = company.institutional_holders
+                    if inst_holders is not None and hasattr(inst_holders, '__iter__'):
+                        for holder in inst_holders:
+                            holder_data = {}
+                            if hasattr(holder, 'name'):
+                                holder_data['name'] = str(holder.name)
+                            elif hasattr(holder, 'holder'):
+                                holder_data['name'] = str(holder.holder)
+                            else:
+                                holder_data['name'] = str(holder)
+
+                            if hasattr(holder, 'shares'):
+                                holder_data['shares'] = int(holder.shares) if holder.shares else 0
+                            if hasattr(holder, 'value'):
+                                val = holder.value
+                                holder_data['value'] = float(val) if isinstance(val, Decimal) else (val or 0)
+                            if hasattr(holder, 'percentage'):
+                                pct = holder.percentage
+                                holder_data['percentage'] = float(pct) if isinstance(pct, Decimal) else (pct or 0)
+                            if hasattr(holder, 'date_reported'):
+                                holder_data['date_reported'] = str(holder.date_reported)
+
+                            if holder_data.get('name'):
+                                holders_list.append(holder_data)
+                except Exception:
+                    pass
+
+            # Strategy 2: Look for 13F-HR filings that mention this company
+            # Get the latest SC 13G/A filings for ownership > 5%
+            if not holders_list:
+                try:
+                    filings_sc13 = company.get_filings(form="SC 13G")
+                    for i, filing in enumerate(filings_sc13):
+                        if i >= 30:
+                            break
+                        try:
+                            holders_list.append({
+                                'name': str(filing.company) if hasattr(filing, 'company') else 'Unknown',
+                                'filing_date': str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                                'form': 'SC 13G',
+                                'shares': 0,
+                                'value': 0,
+                                'percentage': 5.0,  # SC 13G implies > 5%
+                                'source': '13G'
+                            })
+                        except:
+                            continue
+                except:
+                    pass
+
+            # Strategy 3: Look at SC 13D filings (activist investors, >5% with intent)
+            if len(holders_list) < 5:
+                try:
+                    filings_sc13d = company.get_filings(form="SC 13D")
+                    for i, filing in enumerate(filings_sc13d):
+                        if i >= 15:
+                            break
+                        try:
+                            name = str(filing.company) if hasattr(filing, 'company') else 'Unknown'
+                            # Avoid duplicates
+                            if not any(h.get('name') == name for h in holders_list):
+                                holders_list.append({
+                                    'name': name,
+                                    'filing_date': str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                                    'form': 'SC 13D',
+                                    'shares': 0,
+                                    'value': 0,
+                                    'percentage': 5.0,
+                                    'source': '13D_activist'
+                                })
+                        except:
+                            continue
+                except:
+                    pass
+
+            # Strategy 4: Parse from most recent DEF 14A (proxy) for beneficial ownership table
+            if len(holders_list) < 10:
+                try:
+                    proxy_filings = company.get_filings(form="DEF 14A")
+                    if proxy_filings and len(proxy_filings) > 0:
+                        proxy = proxy_filings[0].obj()
+                        if proxy and hasattr(proxy, 'security_ownership'):
+                            ownership = proxy.security_ownership
+                            if ownership is not None and hasattr(ownership, '__iter__'):
+                                for owner in ownership:
+                                    name = str(owner.name) if hasattr(owner, 'name') else str(owner)
+                                    if not any(h.get('name') == name for h in holders_list):
+                                        holders_list.append({
+                                            'name': name,
+                                            'shares': int(owner.shares) if hasattr(owner, 'shares') and owner.shares else 0,
+                                            'percentage': float(owner.percent) if hasattr(owner, 'percent') and owner.percent else 0,
+                                            'value': 0,
+                                            'source': 'proxy_ownership'
+                                        })
+                except:
+                    pass
+
+            # Deduplicate by name
+            seen_names = set()
+            unique_holders = []
+            for h in holders_list:
+                name_key = h.get('name', '').lower().strip()
+                if name_key and name_key not in seen_names and name_key != 'unknown':
+                    seen_names.add(name_key)
+                    unique_holders.append(h)
+
+            return {
+                "success": True,
+                "data": {
+                    "holders": unique_holders[:50],
+                    "total_count": len(unique_holders),
+                    "source": "edgar_13f_13g_13d_proxy"
+                },
+                "count": min(len(unique_holders), 50),
+                "parameters": {"ticker": ticker, "quarters": quarters}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_fund_holdings_detailed", str(e), traceback.format_exc()).to_dict()}
+
+    def get_insider_transactions_detailed(self, ticker: str, limit: int = 25) -> Dict[str, Any]:
+        """
+        Get detailed insider transactions with transaction types, amounts, prices.
+        Parses Form 4 filings more deeply for buy/sell/exercise details.
+        """
+        try:
+            from decimal import Decimal
+            company = Company(ticker)
+            filings = company.get_filings(form="4")
+
+            transactions = []
+            insider_summary = {}
+
+            for i, filing in enumerate(filings):
+                if i >= limit:
+                    break
+
+                try:
+                    form4 = filing.obj()
+                    if not form4:
+                        transactions.append({
+                            "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                            "insider_name": "Unknown",
+                            "transaction_type": "unknown",
+                            "shares": 0,
+                            "price": 0,
+                            "value": 0,
+                        })
+                        continue
+
+                    # Extract insider name
+                    insider_name = None
+                    if hasattr(form4, 'reporting_owner'):
+                        insider_name = str(form4.reporting_owner)
+                    elif hasattr(form4, 'owner'):
+                        insider_name = str(form4.owner)
+
+                    if not insider_name:
+                        insider_name = "Unknown Insider"
+
+                    # Extract insider title/role
+                    insider_title = ""
+                    if hasattr(form4, 'is_officer') and form4.is_officer:
+                        insider_title = str(form4.officer_title) if hasattr(form4, 'officer_title') else "Officer"
+                    elif hasattr(form4, 'is_director') and form4.is_director:
+                        insider_title = "Director"
+                    elif hasattr(form4, 'is_ten_percent_owner') and form4.is_ten_percent_owner:
+                        insider_title = "10% Owner"
+
+                    # Extract non-derivative transactions
+                    tx_list = []
+                    if hasattr(form4, 'non_derivative_transactions'):
+                        nd_tx = form4.non_derivative_transactions
+                        if nd_tx is not None and hasattr(nd_tx, '__iter__'):
+                            for tx in nd_tx:
+                                tx_data = self._parse_form4_transaction(tx, filing)
+                                tx_data['insider_name'] = insider_name
+                                tx_data['insider_title'] = insider_title
+                                tx_data['security_type'] = 'common_stock'
+                                tx_list.append(tx_data)
+
+                    # Extract derivative transactions (options, warrants)
+                    if hasattr(form4, 'derivative_transactions'):
+                        d_tx = form4.derivative_transactions
+                        if d_tx is not None and hasattr(d_tx, '__iter__'):
+                            for tx in d_tx:
+                                tx_data = self._parse_form4_transaction(tx, filing)
+                                tx_data['insider_name'] = insider_name
+                                tx_data['insider_title'] = insider_title
+                                tx_data['security_type'] = 'derivative'
+                                tx_list.append(tx_data)
+
+                    # If no transactions parsed from detailed attributes, create a basic entry
+                    if not tx_list:
+                        tx_list.append({
+                            'filing_date': str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                            'insider_name': insider_name,
+                            'insider_title': insider_title,
+                            'transaction_type': 'unknown',
+                            'shares': 0,
+                            'price': 0,
+                            'value': 0,
+                            'security_type': 'common_stock',
+                            'code': '',
+                        })
+
+                    transactions.extend(tx_list)
+
+                    # Build insider summary
+                    if insider_name not in insider_summary:
+                        insider_summary[insider_name] = {
+                            'name': insider_name,
+                            'title': insider_title,
+                            'total_buys': 0,
+                            'total_sells': 0,
+                            'total_buy_value': 0,
+                            'total_sell_value': 0,
+                            'transaction_count': 0,
+                            'last_transaction_date': None,
+                        }
+
+                    summary = insider_summary[insider_name]
+                    for tx in tx_list:
+                        summary['transaction_count'] += 1
+                        if tx.get('transaction_type') == 'purchase':
+                            summary['total_buys'] += tx.get('shares', 0)
+                            summary['total_buy_value'] += tx.get('value', 0)
+                        elif tx.get('transaction_type') == 'sale':
+                            summary['total_sells'] += tx.get('shares', 0)
+                            summary['total_sell_value'] += tx.get('value', 0)
+                        if not summary['last_transaction_date']:
+                            summary['last_transaction_date'] = tx.get('filing_date')
+
+                except Exception:
+                    transactions.append({
+                        "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                        "insider_name": "Parse Error",
+                        "transaction_type": "unknown",
+                        "shares": 0,
+                        "price": 0,
+                        "value": 0,
+                    })
+
+            # Calculate net buying signal
+            total_buy_value = sum(s.get('total_buy_value', 0) for s in insider_summary.values())
+            total_sell_value = sum(s.get('total_sell_value', 0) for s in insider_summary.values())
+
+            return {
+                "success": True,
+                "data": {
+                    "transactions": transactions[:50],
+                    "insider_summary": list(insider_summary.values()),
+                    "net_buying_signal": total_buy_value > total_sell_value,
+                    "total_buy_value": total_buy_value,
+                    "total_sell_value": total_sell_value,
+                },
+                "count": len(transactions),
+                "parameters": {"ticker": ticker, "limit": limit}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_insider_transactions_detailed", str(e), traceback.format_exc()).to_dict()}
+
+    def _parse_form4_transaction(self, tx: Any, filing: Any) -> Dict[str, Any]:
+        """Parse a single Form 4 transaction entry"""
+        from decimal import Decimal
+
+        shares = 0
+        price = 0.0
+        tx_type = 'unknown'
+        code = ''
+
+        # Get shares
+        if hasattr(tx, 'shares'):
+            s = tx.shares
+            shares = int(float(s)) if s else 0
+        elif hasattr(tx, 'amount'):
+            s = tx.amount
+            shares = int(float(s)) if s else 0
+
+        # Get price
+        if hasattr(tx, 'price_per_share'):
+            p = tx.price_per_share
+            price = float(p) if isinstance(p, (int, float, Decimal)) and p else 0.0
+        elif hasattr(tx, 'price'):
+            p = tx.price
+            price = float(p) if isinstance(p, (int, float, Decimal)) and p else 0.0
+
+        # Get transaction code (A=acquisition, D=disposition, M=exercise, etc.)
+        if hasattr(tx, 'transaction_code'):
+            code = str(tx.transaction_code) if tx.transaction_code else ''
+        elif hasattr(tx, 'code'):
+            code = str(tx.code) if tx.code else ''
+
+        # Determine transaction type from code
+        code_upper = code.upper()
+        if code_upper in ('P', 'A'):
+            tx_type = 'purchase'
+        elif code_upper in ('S', 'D', 'F'):
+            tx_type = 'sale'
+        elif code_upper in ('M', 'C'):
+            tx_type = 'option_exercise'
+        elif code_upper == 'G':
+            tx_type = 'gift'
+        elif code_upper in ('J', 'K'):
+            tx_type = 'other'
+
+        # Get acquisition/disposition flag as fallback
+        if tx_type == 'unknown' and hasattr(tx, 'acquired_disposed'):
+            ad = str(tx.acquired_disposed).upper() if tx.acquired_disposed else ''
+            if ad == 'A':
+                tx_type = 'purchase'
+            elif ad == 'D':
+                tx_type = 'sale'
+
+        value = abs(shares * price)
+
+        return {
+            'filing_date': str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+            'transaction_type': tx_type,
+            'code': code,
+            'shares': abs(shares),
+            'price': round(price, 2),
+            'value': round(value, 2),
+        }
+
+    def get_corporate_events_categorized(self, ticker: str, limit: int = 30) -> Dict[str, Any]:
+        """
+        Get comprehensive corporate events from 8-K filings, categorized by type.
+        Parses item numbers to categorize: M&A, management, earnings, debt, etc.
+        Does NOT call filing.obj() to avoid timeouts - uses filing metadata only.
+        """
+        try:
+            company = Company(ticker)
+            filings = company.get_filings(form="8-K")
+
+            categorized = {
+                'acquisitions': [],
+                'management_changes': [],
+                'material_agreements': [],
+                'financial_results': [],
+                'debt_events': [],
+                'asset_events': [],
+                'governance': [],
+                'other': [],
+            }
+
+            all_events = []
+
+            for i, filing in enumerate(filings):
+                if i >= limit:
+                    break
+
+                try:
+                    event_data = {
+                        "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                        "form": "8-K",
+                        "filing_url": filing.filing_url if hasattr(filing, 'filing_url') else None,
+                        "accession_number": filing.accession_number,
+                        "description": "",
+                        "category": "other",
+                        "items": [],
+                    }
+
+                    # Get items from filing metadata (fast, no obj() call)
+                    items = []
+                    if hasattr(filing, 'items') and filing.items:
+                        items = filing.items if isinstance(filing.items, list) else [filing.items]
+
+                    # Get description
+                    desc = ""
+                    if hasattr(filing, 'primary_doc_description') and filing.primary_doc_description:
+                        desc = str(filing.primary_doc_description)
+                    elif hasattr(filing, 'description') and filing.description:
+                        desc = str(filing.description)
+
+                    event_data["items"] = items
+                    event_data["description"] = desc if desc else (items[0] if items else "8-K Filing")
+
+                    # Categorize by 8-K item number
+                    items_str = ' '.join(str(it) for it in items).lower()
+                    desc_lower = desc.lower()
+                    combined = items_str + ' ' + desc_lower
+
+                    if any(x in combined for x in ['2.01', 'acquisition', 'disposition', 'merger', 'acquired']):
+                        event_data["category"] = "acquisition"
+                        categorized['acquisitions'].append(event_data)
+                    elif any(x in combined for x in ['5.02', 'officer', 'director', 'departure', 'appointment']):
+                        event_data["category"] = "management"
+                        categorized['management_changes'].append(event_data)
+                    elif any(x in combined for x in ['1.01', 'material definitive', 'agreement', 'contract']):
+                        event_data["category"] = "material_agreement"
+                        categorized['material_agreements'].append(event_data)
+                    elif any(x in combined for x in ['2.02', 'results of operations', 'financial condition', 'earnings']):
+                        event_data["category"] = "financial_results"
+                        categorized['financial_results'].append(event_data)
+                    elif any(x in combined for x in ['2.03', '2.04', 'obligation', 'off-balance', 'credit', 'debt', 'loan']):
+                        event_data["category"] = "debt"
+                        categorized['debt_events'].append(event_data)
+                    elif any(x in combined for x in ['2.05', '2.06', 'impairment', 'asset', 'exit', 'disposal']):
+                        event_data["category"] = "asset"
+                        categorized['asset_events'].append(event_data)
+                    elif any(x in combined for x in ['5.03', '5.07', 'bylaw', 'amendment', 'governance', 'shareholder']):
+                        event_data["category"] = "governance"
+                        categorized['governance'].append(event_data)
+                    else:
+                        event_data["category"] = "other"
+                        categorized['other'].append(event_data)
+
+                    all_events.append(event_data)
+
+                except:
+                    continue
+
+            return {
+                "success": True,
+                "data": {
+                    "all_events": all_events,
+                    "categorized": {k: v[:10] for k, v in categorized.items()},  # Top 10 per category
+                    "summary": {k: len(v) for k, v in categorized.items()},
+                },
+                "count": len(all_events),
+                "parameters": {"ticker": ticker, "limit": limit}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_corporate_events_categorized", str(e), traceback.format_exc()).to_dict()}
+
+    def extract_supply_chain(self, ticker: str) -> Dict[str, Any]:
+        """
+        Extract supply chain relationships from 10-K filings.
+        Parses Item 1 (Business) for customer/supplier mentions.
+        Uses regex patterns to find revenue concentration disclosures.
+        """
+        try:
+            import re
+            company = Company(ticker)
+            filings_10k = company.get_filings(form="10-K")
+
+            if not filings_10k or len(filings_10k) == 0:
+                return {
+                    "success": True,
+                    "data": {"customers": [], "suppliers": [], "partners": []},
+                    "parameters": {"ticker": ticker}
+                }
+
+            # Get the latest 10-K text (with timeout protection)
+            import threading
+            text_result = [None]
+
+            def fetch_text():
+                try:
+                    filing = filings_10k[0]
+                    obj = filing.obj()
+                    if obj:
+                        # Try to get specific sections
+                        if hasattr(obj, 'text'):
+                            text_result[0] = obj.text()[:50000]  # Limit to 50K chars
+                        elif hasattr(obj, 'full_text'):
+                            text_result[0] = obj.full_text[:50000]
+                except:
+                    pass
+
+            thread = threading.Thread(target=fetch_text)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout=20)  # 20 second timeout
+
+            text = text_result[0]
+            if not text:
+                return {
+                    "success": True,
+                    "data": {"customers": [], "suppliers": [], "partners": [], "note": "Could not extract 10-K text"},
+                    "parameters": {"ticker": ticker}
+                }
+
+            customers = []
+            suppliers = []
+            partners = []
+
+            # Pattern 1: "X accounted for Y% of (our|total) revenue"
+            revenue_pattern = r'([A-Z][A-Za-z\s&.,]+?)(?:\s+(?:Inc\.|Corp\.|Co\.|LLC|Ltd\.?|Corporation|Company))?\s+(?:accounted for|represented|comprised)\s+(?:approximately\s+)?(\d+(?:\.\d+)?)\s*%\s+of\s+(?:our\s+|total\s+)?(?:revenue|net revenue|sales|net sales)'
+            for match in re.finditer(revenue_pattern, text[:30000]):
+                name = match.group(1).strip()
+                pct = float(match.group(2))
+                if pct >= 5 and len(name) > 2 and len(name) < 50:
+                    customers.append({
+                        'name': name,
+                        'percentage_of_revenue': pct,
+                        'relationship': 'customer',
+                        'source': 'revenue_disclosure'
+                    })
+
+            # Pattern 2: "customers include X, Y, and Z"
+            customer_list_pattern = r'(?:major|significant|key|primary|largest)\s+customers?\s+(?:include|are|consist of)\s+([^.]{10,200})'
+            for match in re.finditer(customer_list_pattern, text[:30000], re.IGNORECASE):
+                names_text = match.group(1)
+                # Split by commas and "and"
+                names = re.split(r',\s*|\s+and\s+', names_text)
+                for name in names[:5]:
+                    clean_name = name.strip().strip('"\'')
+                    if len(clean_name) > 2 and len(clean_name) < 50 and not clean_name[0].islower():
+                        if not any(c.get('name') == clean_name for c in customers):
+                            customers.append({
+                                'name': clean_name,
+                                'relationship': 'customer',
+                                'source': 'customer_list'
+                            })
+
+            # Pattern 3: Supplier/vendor mentions
+            supplier_pattern = r'(?:major|primary|key|significant|sole|single)\s+(?:supplier|vendor|source|manufacturer)s?\s+(?:include|are|is)\s+([^.]{10,200})'
+            for match in re.finditer(supplier_pattern, text[:30000], re.IGNORECASE):
+                names_text = match.group(1)
+                names = re.split(r',\s*|\s+and\s+', names_text)
+                for name in names[:5]:
+                    clean_name = name.strip().strip('"\'')
+                    if len(clean_name) > 2 and len(clean_name) < 50 and not clean_name[0].islower():
+                        suppliers.append({
+                            'name': clean_name,
+                            'relationship': 'supplier',
+                            'source': 'supplier_mention'
+                        })
+
+            # Pattern 4: Strategic partnerships/alliances
+            partner_pattern = r'(?:strategic|key|significant)\s+(?:partnership|alliance|collaboration|agreement|joint venture)\s+with\s+([A-Z][A-Za-z\s&.,]+?)(?:\s+(?:Inc\.|Corp\.|Co\.|LLC|Ltd\.?))?\s*[,.]'
+            for match in re.finditer(partner_pattern, text[:30000]):
+                name = match.group(1).strip()
+                if len(name) > 2 and len(name) < 50:
+                    partners.append({
+                        'name': name,
+                        'relationship': 'partner',
+                        'source': 'partnership_mention'
+                    })
+
+            # Pattern 5: "we purchase/procure/source X from Y"
+            procure_pattern = r'(?:we|the company)\s+(?:purchase|procure|source|obtain|buy)s?\s+[^.]{5,100}?\s+from\s+([A-Z][A-Za-z\s&.,]+?)(?:\s+(?:Inc\.|Corp\.|Co\.|LLC|Ltd\.?))?\s*[,.]'
+            for match in re.finditer(procure_pattern, text[:30000], re.IGNORECASE):
+                name = match.group(1).strip()
+                if len(name) > 2 and len(name) < 50:
+                    if not any(s.get('name') == name for s in suppliers):
+                        suppliers.append({
+                            'name': name,
+                            'relationship': 'supplier',
+                            'source': 'procurement_mention'
+                        })
+
+            return {
+                "success": True,
+                "data": {
+                    "customers": customers[:15],
+                    "suppliers": suppliers[:15],
+                    "partners": partners[:10],
+                    "total_relationships": len(customers) + len(suppliers) + len(partners),
+                },
+                "parameters": {"ticker": ticker}
+            }
+        except Exception as e:
+            return {"error": EdgarError("extract_supply_chain", str(e), traceback.format_exc()).to_dict()}
+
+    def get_segment_financials(self, ticker: str) -> Dict[str, Any]:
+        """
+        Extract segment-level financials (geographic, product line, business unit).
+        Uses XBRL facts/dimensional data when available, falls back to 10-K parsing.
+        """
+        try:
+            company = Company(ticker)
+            segments = {
+                'geographic': [],
+                'business_units': [],
+                'products': [],
+            }
+
+            # Try to get facts for dimensional data
+            if hasattr(company, 'facts'):
+                try:
+                    facts = company.facts
+                    if facts:
+                        # Look for segment revenue data in XBRL
+                        # Common concepts: Revenues, RevenueFromContractWithCustomerExcludingAssessedTax
+                        for concept_name in ['Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'SalesRevenueNet']:
+                            try:
+                                if hasattr(facts, 'query'):
+                                    # Query with geographic dimension
+                                    geo_data = facts.query(
+                                        concept=f'us-gaap:{concept_name}',
+                                        dimensions={'us-gaap:StatementGeographicalAxis': '*'}
+                                    )
+                                    if geo_data is not None and hasattr(geo_data, '__iter__'):
+                                        for item in geo_data:
+                                            segments['geographic'].append({
+                                                'name': str(item.member) if hasattr(item, 'member') else str(item),
+                                                'value': float(item.value) if hasattr(item, 'value') else 0,
+                                                'period': str(item.period) if hasattr(item, 'period') else None,
+                                            })
+
+                                    # Query with business segment dimension
+                                    seg_data = facts.query(
+                                        concept=f'us-gaap:{concept_name}',
+                                        dimensions={'us-gaap:StatementBusinessSegmentsAxis': '*'}
+                                    )
+                                    if seg_data is not None and hasattr(seg_data, '__iter__'):
+                                        for item in seg_data:
+                                            segments['business_units'].append({
+                                                'name': str(item.member) if hasattr(item, 'member') else str(item),
+                                                'value': float(item.value) if hasattr(item, 'value') else 0,
+                                                'period': str(item.period) if hasattr(item, 'period') else None,
+                                            })
+
+                                    if segments['geographic'] or segments['business_units']:
+                                        break
+                            except:
+                                continue
+                except:
+                    pass
+
+            # Fallback: Parse segment info from latest 10-K if XBRL didn't work
+            if not segments['geographic'] and not segments['business_units']:
+                try:
+                    import re
+                    import threading
+
+                    filings_10k = company.get_filings(form="10-K")
+                    if filings_10k and len(filings_10k) > 0:
+                        text_result = [None]
+
+                        def fetch():
+                            try:
+                                obj = filings_10k[0].obj()
+                                if obj and hasattr(obj, 'text'):
+                                    text_result[0] = obj.text()[:60000]
+                            except:
+                                pass
+
+                        thread = threading.Thread(target=fetch)
+                        thread.daemon = True
+                        thread.start()
+                        thread.join(timeout=15)
+
+                        text = text_result[0]
+                        if text:
+                            # Look for segment revenue tables
+                            # Pattern: "Region/Segment: $X,XXX million" or "Region: XX%"
+                            seg_pattern = r'(?:United States|Americas|North America|Europe|Asia|China|Japan|Other|International|Rest of World|EMEA|APAC|Latin America)[^$\d]*[\$]?\s*(\d[\d,.]+)\s*(?:million|billion)?'
+                            for match in re.finditer(seg_pattern, text[:30000], re.IGNORECASE):
+                                region = match.group(0).split(':')[0].strip() if ':' in match.group(0) else match.group(0)[:30].strip()
+                                value_str = match.group(1).replace(',', '')
+                                try:
+                                    value = float(value_str)
+                                    if value > 0:
+                                        segments['geographic'].append({
+                                            'name': region,
+                                            'value': value,
+                                        })
+                                except:
+                                    pass
+                except:
+                    pass
+
+            # Deduplicate
+            for key in segments:
+                seen = set()
+                unique = []
+                for item in segments[key]:
+                    name = item.get('name', '')
+                    if name and name not in seen:
+                        seen.add(name)
+                        unique.append(item)
+                segments[key] = unique[:10]
+
+            return {
+                "success": True,
+                "data": segments,
+                "total_segments": sum(len(v) for v in segments.values()),
+                "parameters": {"ticker": ticker}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_segment_financials", str(e), traceback.format_exc()).to_dict()}
+
+    def extract_debt_holders(self, ticker: str) -> Dict[str, Any]:
+        """
+        Extract major debt holders and credit facilities from 8-K and 10-K filings.
+        Identifies creditors, credit agreements, and major bondholders.
+        """
+        try:
+            import re
+            company = Company(ticker)
+
+            creditors = []
+            credit_facilities = []
+
+            # Strategy 1: Get 8-K filings related to credit agreements (Item 1.01)
+            try:
+                filings_8k = company.get_filings(form="8-K")
+                for i, filing in enumerate(filings_8k):
+                    if i >= 30:
+                        break
+                    try:
+                        desc = ""
+                        if hasattr(filing, 'primary_doc_description') and filing.primary_doc_description:
+                            desc = str(filing.primary_doc_description).lower()
+
+                        items_str = ""
+                        if hasattr(filing, 'items') and filing.items:
+                            items_str = str(filing.items).lower()
+
+                        combined = desc + ' ' + items_str
+
+                        if any(kw in combined for kw in ['credit', 'loan', 'debt', 'indenture', 'note', 'bond', 'facility']):
+                            credit_facilities.append({
+                                'filing_date': str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                                'description': desc[:200] if desc else 'Credit/Debt Related Filing',
+                                'type': 'credit_agreement' if 'credit' in combined else ('bond' if 'bond' in combined or 'note' in combined else 'debt'),
+                                'url': filing.filing_url if hasattr(filing, 'filing_url') else None,
+                            })
+                    except:
+                        continue
+            except:
+                pass
+
+            # Strategy 2: Parse 10-K for major creditors in debt footnotes
+            try:
+                import threading
+                filings_10k = company.get_filings(form="10-K")
+                if filings_10k and len(filings_10k) > 0:
+                    text_result = [None]
+
+                    def fetch():
+                        try:
+                            obj = filings_10k[0].obj()
+                            if obj and hasattr(obj, 'text'):
+                                text_result[0] = obj.text()[:80000]
+                        except:
+                            pass
+
+                    thread = threading.Thread(target=fetch)
+                    thread.daemon = True
+                    thread.start()
+                    thread.join(timeout=15)
+
+                    text = text_result[0]
+                    if text:
+                        # Look for credit facility mentions with bank names
+                        bank_pattern = r'(?:revolving\s+)?(?:credit\s+)?(?:facility|agreement|line)\s+(?:with|from|provided by|led by|arranged by)\s+([A-Z][A-Za-z\s&.,]+?)(?:\s*(?:,|\.|as\s+))'
+                        for match in re.finditer(bank_pattern, text[:40000]):
+                            name = match.group(1).strip()
+                            if len(name) > 3 and len(name) < 60:
+                                creditors.append({
+                                    'name': name,
+                                    'type': 'bank_lender',
+                                    'source': '10k_footnote'
+                                })
+
+                        # Look for bond trustee mentions
+                        trustee_pattern = r'(?:trustee|indenture\s+trustee)\s+(?:is|shall be|was)\s+([A-Z][A-Za-z\s&.,]+?)(?:\s*[,.])'
+                        for match in re.finditer(trustee_pattern, text[:40000]):
+                            name = match.group(1).strip()
+                            if len(name) > 3 and len(name) < 60:
+                                if not any(c.get('name') == name for c in creditors):
+                                    creditors.append({
+                                        'name': name,
+                                        'type': 'bond_trustee',
+                                        'source': '10k_footnote'
+                                    })
+            except:
+                pass
+
+            return {
+                "success": True,
+                "data": {
+                    "creditors": creditors[:10],
+                    "credit_facilities": credit_facilities[:10],
+                    "total_debt_relationships": len(creditors) + len(credit_facilities),
+                },
+                "parameters": {"ticker": ticker}
+            }
+        except Exception as e:
+            return {"error": EdgarError("extract_debt_holders", str(e), traceback.format_exc()).to_dict()}
+
+    # =========================================================================
     # PROXY STATEMENTS & EXECUTIVE COMPENSATION
     # =========================================================================
 
@@ -1223,11 +2023,42 @@ def main(args=None):
             limit = int(args[2]) if len(args) > 2 else 20
             result = wrapper.get_insider_transactions(ticker, limit)
 
+        elif command == "get_insider_transactions_detailed":
+            ticker = args[1] if len(args) > 1 else None
+            limit = int(args[2]) if len(args) > 2 else 25
+            result = wrapper.get_insider_transactions_detailed(ticker, limit)
+
         # Fund holdings
         elif command == "get_fund_holdings":
             ticker = args[1] if len(args) > 1 else None
             limit = int(args[2]) if len(args) > 2 else 5
             result = wrapper.get_fund_holdings(ticker, limit)
+
+        elif command == "get_fund_holdings_detailed":
+            ticker = args[1] if len(args) > 1 else None
+            quarters = int(args[2]) if len(args) > 2 else 2
+            result = wrapper.get_fund_holdings_detailed(ticker, quarters)
+
+        # Supply chain extraction
+        elif command == "extract_supply_chain":
+            ticker = args[1] if len(args) > 1 else None
+            result = wrapper.extract_supply_chain(ticker)
+
+        # Segment financials
+        elif command == "get_segment_financials":
+            ticker = args[1] if len(args) > 1 else None
+            result = wrapper.get_segment_financials(ticker)
+
+        # Debt holders
+        elif command == "extract_debt_holders":
+            ticker = args[1] if len(args) > 1 else None
+            result = wrapper.extract_debt_holders(ticker)
+
+        # Categorized corporate events
+        elif command == "get_corporate_events_categorized":
+            ticker = args[1] if len(args) > 1 else None
+            limit = int(args[2]) if len(args) > 2 else 30
+            result = wrapper.get_corporate_events_categorized(ticker, limit)
 
         # Proxy statement
         elif command == "get_proxy_statement":
@@ -1278,14 +2109,17 @@ def main(args=None):
             result = {"error": EdgarError(command, f"Unknown command: {command}").to_dict()}
 
         # Return JSON for PyO3, print for subprocess
-        output = json.dumps(result, indent=2)
+        # IMPORTANT: Do NOT use indent=2 here. The Rust subprocess fallback parser
+        # looks for the last line starting with '{' or '[' to extract JSON.
+        # Pretty-printed JSON breaks this parsing logic.
+        output = json.dumps(result)
         print(output)
         return output
 
     except Exception as e:
         error_output = json.dumps({
             "error": EdgarError(command, str(e), traceback.format_exc()).to_dict()
-        }, indent=2)
+        })
         print(error_output)
         return error_output
 

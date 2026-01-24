@@ -33,7 +33,7 @@ import SupportTicketTab from '@/components/tabs/support-ticket';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import { HeaderSupportButtons } from '@/components/common/HeaderSupportButtons';
 import AgentConfigTab from '@/components/tabs/agent-config';
-import RelationshipMapTab from '@/components/tabs/relationship-map-v2/RelationshipMapTabV2';
+import RelationshipMapTab from '@/components/tabs/relationship-map/RelationshipMapTab';
 import MonitoringTab from '@/components/tabs/monitoring';
 import { useTranslation } from 'react-i18next';
 import { WorkspaceProvider } from '@/contexts/WorkspaceContext';

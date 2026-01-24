@@ -1,7 +1,7 @@
-// Progressive Data Loading Hook for Relationship Map V2
+// Progressive Data Loading Hook for Relationship Map
 
 import { useState, useCallback, useRef } from 'react';
-import { relationshipMapServiceV2 } from '../../../../services/geopolitics/relationshipMapServiceV2';
+import { relationshipMapService } from '../../../../services/geopolitics/relationshipMapService';
 import type { RelationshipMapDataV2, LoadingPhase } from '../types';
 
 interface UseRelationshipDataReturn {
@@ -34,7 +34,7 @@ export function useRelationshipData(): UseRelationshipDataReturn {
     setPhase({ phase: 'company', progress: 0, message: 'Starting...' });
 
     try {
-      const result = await relationshipMapServiceV2.getRelationshipMap(
+      const result = await relationshipMapService.getRelationshipMap(
         ticker,
         (loadingPhase) => {
           if (abortRef.current) return;

@@ -443,7 +443,10 @@ def main(args=None):
         result = {"error": f"Unknown command: {command}"}
 
     # Return JSON for worker pool, print for subprocess/CLI
-    output = json.dumps(result, indent=2)
+    # IMPORTANT: Do NOT use indent=2 here. The Rust subprocess parser
+    # looks for the last line starting with '{' or '[' to extract JSON.
+    # Pretty-printed JSON puts '{' alone on the first line, breaking parsing.
+    output = json.dumps(result)
     print(output)
     return output
 

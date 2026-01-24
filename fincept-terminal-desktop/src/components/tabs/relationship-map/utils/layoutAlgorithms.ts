@@ -106,8 +106,17 @@ function calculateLayeredLayout(
   // Peer companies
   placeInRing(groups.peer, LAYOUT_CONFIG.RINGS.PEERS, cx, cy, positions, 0);
 
-  // Events and supply chain
-  placeInRing([...groups.event, ...groups.supply_chain], LAYOUT_CONFIG.RINGS.EVENTS, cx, cy, positions, Math.PI / 4);
+  // Supply chain nodes (customers and suppliers)
+  placeInRing(groups.supply_chain, LAYOUT_CONFIG.RINGS.SUPPLY_CHAIN, cx, cy, positions, -Math.PI / 3);
+
+  // Segment nodes
+  placeInRing(groups.segment, LAYOUT_CONFIG.RINGS.SEGMENTS, cx, cy, positions, Math.PI * 0.75);
+
+  // Events
+  placeInRing(groups.event, LAYOUT_CONFIG.RINGS.EVENTS, cx, cy, positions, Math.PI / 4);
+
+  // Debt holders
+  placeInRing(groups.debt_holder, LAYOUT_CONFIG.RINGS.DEBT_HOLDERS, cx, cy, positions, Math.PI * 0.6);
 
   return positions;
 }
@@ -277,7 +286,7 @@ function calculateRadialLayout(
   const cy = config.centerY;
 
   const groups = groupByCategory(nodes);
-  const categories: NodeCategory[] = ['insider', 'institutional', 'fund_family', 'peer', 'event', 'metrics', 'supply_chain'];
+  const categories: NodeCategory[] = ['insider', 'institutional', 'fund_family', 'peer', 'event', 'metrics', 'supply_chain', 'segment', 'debt_holder'];
 
   // Company at center
   for (const node of groups.company) {
@@ -322,6 +331,8 @@ function groupByCategory(nodes: Node<GraphNodeData>[]): Record<NodeCategory, Nod
     insider: [],
     event: [],
     supply_chain: [],
+    segment: [],
+    debt_holder: [],
     metrics: [],
   };
 

@@ -466,13 +466,29 @@ async fn execute_python_subprocess(
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        // Try to extract just the JSON part (last line typically)
+        // Extract JSON from output - handles both compact and multi-line JSON
         let lines: Vec<&str> = stdout.lines().collect();
+
+        // Try last line first (compact JSON)
         if let Some(last_line) = lines.last() {
-            if last_line.starts_with('{') || last_line.starts_with('[') {
-                return Ok(last_line.to_string());
+            let trimmed = last_line.trim();
+            if trimmed.starts_with('{') || trimmed.starts_with('[') {
+                return Ok(trimmed.to_string());
             }
         }
+
+        // Try finding JSON start from beginning (multi-line JSON)
+        if let Some(json_start_idx) = lines.iter().position(|line| {
+            let trimmed = line.trim();
+            trimmed.starts_with('{') || trimmed.starts_with('[')
+        }) {
+            let json_text: String = lines[json_start_idx..].join("\n");
+            let trimmed = json_text.trim();
+            if !trimmed.is_empty() {
+                return Ok(trimmed.to_string());
+            }
+        }
+
         Ok(stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
