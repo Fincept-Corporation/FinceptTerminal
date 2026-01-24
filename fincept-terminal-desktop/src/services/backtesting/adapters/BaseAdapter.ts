@@ -49,8 +49,6 @@ export abstract class BaseBacktestingAdapter implements IBacktestingProvider {
   // ============================================================================
 
   protected config: ProviderConfig | null = null;
-  protected initialized: boolean = false;
-  protected connected: boolean = false;
 
   // ============================================================================
   // Constructor
@@ -80,8 +78,7 @@ export abstract class BaseBacktestingAdapter implements IBacktestingProvider {
   // ============================================================================
 
   async disconnect(): Promise<void> {
-    this.connected = false;
-    this.initialized = false;
+    this.config = null;
     console.log(`Disconnected from ${this.name}`);
   }
 
@@ -196,24 +193,11 @@ export abstract class BaseBacktestingAdapter implements IBacktestingProvider {
     message?: string;
     details?: Record<string, any>;
   }> {
-    // Default health check
     try {
-      if (!this.initialized) {
-        return {
-          status: 'unhealthy',
-          message: 'Provider not initialized',
-        };
-      }
-
       const testResult = await this.testConnection();
-
       return {
         status: testResult.success ? 'healthy' : 'unhealthy',
         message: testResult.message,
-        details: {
-          connected: this.connected,
-          initialized: this.initialized,
-        },
       };
     } catch (error) {
       return {
@@ -335,26 +319,6 @@ export abstract class BaseBacktestingAdapter implements IBacktestingProvider {
     console.error(`[${this.name}] ${message}`, error || '');
   }
 
-  /**
-   * Check if provider is initialized
-   */
-  protected ensureInitialized(): void {
-    if (!this.initialized) {
-      throw new Error(`${this.name} is not initialized. Call initialize() first.`);
-    }
-  }
-
-  /**
-   * Check if provider is connected
-   */
-  protected ensureConnected(): void {
-    this.ensureInitialized();
-    if (!this.connected) {
-      throw new Error(
-        `${this.name} is not connected. Call testConnection() first.`
-      );
-    }
-  }
 
   /**
    * Safe async operation with error handling

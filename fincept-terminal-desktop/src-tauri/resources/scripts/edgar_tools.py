@@ -221,7 +221,7 @@ class EdgarToolsWrapper:
                           form: Optional[str] = None,
                           year: Optional[Union[int, List[int]]] = None,
                           quarter: Optional[Union[int, List[int]]] = None,
-                          limit: int = 20) -> Dict[str, Any]:
+                          limit: int = 10) -> Dict[str, Any]:
         """
         Get company filings with filtering
 
@@ -271,65 +271,59 @@ class EdgarToolsWrapper:
         except Exception as e:
             return {"error": EdgarError("get_company_filings", str(e), traceback.format_exc()).to_dict()}
 
-    def get_corporate_events(self, ticker: str, limit: int = 20) -> Dict[str, Any]:
+    def get_corporate_events(self, ticker: str, limit: int = 10) -> Dict[str, Any]:
         """
-        Get corporate events from 8-K filings
+        Get corporate events from 8-K filings.
+        Fetches only the first few filing objects (limited) for items,
+        and falls back to metadata for the rest.
 
         Args:
             ticker: Stock ticker symbol
             limit: Maximum number of 8-K filings to return
 
         Returns:
-            List of corporate events with item descriptions
+            List of corporate events
         """
         try:
             company = Company(ticker)
             filings = company.get_filings(form="8-K")
 
             events = []
+            # Only parse obj() for first 3 filings to get items, rest use metadata
+            PARSE_LIMIT = 3
+
             for i, filing in enumerate(filings):
                 if i >= limit:
                     break
 
-                try:
-                    # Get the 8-K filing object to extract item information
-                    form8k = filing.obj()
+                event_data = {
+                    "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                    "period_of_report": str(filing.period_of_report) if hasattr(filing, 'period_of_report') else None,
+                    "form": "8-K",
+                    "filing_url": filing.filing_url if hasattr(filing, 'filing_url') else None,
+                    "accession_number": filing.accession_number,
+                    "items": [],
+                }
 
-                    event_data = {
-                        "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
-                        "period_of_report": str(filing.period_of_report) if hasattr(filing, 'period_of_report') else None,
-                        "form": "8-K",
-                        "filing_url": filing.filing_url if hasattr(filing, 'filing_url') else None,
-                        "accession_number": filing.accession_number,
-                    }
+                # Only parse first few filings for item details
+                if i < PARSE_LIMIT:
+                    try:
+                        form8k = filing.obj()
+                        if form8k and hasattr(form8k, 'items') and form8k.items:
+                            event_data["items"] = form8k.items
+                        elif form8k and hasattr(form8k, 'item') and form8k.item:
+                            event_data["items"] = [form8k.item]
+                    except:
+                        pass
 
-                    # Try to extract item information
-                    if form8k and hasattr(form8k, 'items'):
-                        event_data["items"] = form8k.items
-                    elif form8k and hasattr(form8k, 'item'):
-                        event_data["items"] = [form8k.item]
+                # Fallback: try filing-level description
+                if not event_data["items"]:
+                    if hasattr(filing, 'primary_doc_description') and filing.primary_doc_description:
+                        event_data["items"] = [filing.primary_doc_description]
+                    else:
+                        event_data["items"] = ["8-K Filing"]
 
-                    # Try to get text excerpt for event description
-                    if form8k and hasattr(form8k, 'text'):
-                        try:
-                            text = form8k.text()
-                            # Get first 500 chars as event description
-                            event_data["description"] = text[:500] if text else None
-                        except:
-                            pass
-
-                    events.append(event_data)
-
-                except Exception as e:
-                    # If obj() fails, add basic filing info
-                    events.append({
-                        "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
-                        "period_of_report": str(filing.period_of_report) if hasattr(filing, 'period_of_report') else None,
-                        "form": "8-K",
-                        "filing_url": filing.filing_url if hasattr(filing, 'filing_url') else None,
-                        "accession_number": filing.accession_number,
-                        "error": str(e)
-                    })
+                events.append(event_data)
 
             return {
                 "success": True,
@@ -647,7 +641,8 @@ class EdgarToolsWrapper:
 
     def get_proxy_statement(self, ticker: str) -> Dict[str, Any]:
         """
-        Get latest proxy statement with executive compensation
+        Get latest proxy statement with executive compensation.
+        Uses a timeout to prevent hanging on large proxy documents.
 
         Args:
             ticker: Stock ticker symbol
@@ -655,18 +650,54 @@ class EdgarToolsWrapper:
         Returns:
             Proxy statement data including executive compensation
         """
+        import signal
+        import threading
+
         try:
             company = Company(ticker)
             filings = company.get_filings(form="DEF 14A")
 
             if not filings or len(filings) == 0:
                 return {
-                    "error": EdgarError("get_proxy_statement",
-                                      f"No proxy statements found for {ticker}").to_dict()
+                    "success": True,
+                    "data": {
+                        "named_executives": [],
+                        "note": f"No proxy statements found for {ticker}"
+                    },
+                    "parameters": {"ticker": ticker}
                 }
 
             latest_proxy_filing = filings[0]
-            proxy = latest_proxy_filing.obj()
+
+            # Use a thread with timeout to prevent hanging on large proxy docs
+            proxy_result = [None]
+            proxy_error = [None]
+
+            def fetch_proxy():
+                try:
+                    proxy_result[0] = latest_proxy_filing.obj()
+                except Exception as e:
+                    proxy_error[0] = str(e)
+
+            thread = threading.Thread(target=fetch_proxy)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout=15)  # 15 second timeout for proxy parsing
+
+            if thread.is_alive() or proxy_error[0]:
+                # Timed out or errored - return basic filing info
+                return {
+                    "success": True,
+                    "data": {
+                        "filing_date": str(latest_proxy_filing.filing_date) if hasattr(latest_proxy_filing, 'filing_date') else None,
+                        "accession_number": latest_proxy_filing.accession_number,
+                        "named_executives": [],
+                        "note": "Proxy parsing timed out or failed"
+                    },
+                    "parameters": {"ticker": ticker}
+                }
+
+            proxy = proxy_result[0]
 
             if not proxy:
                 return {
@@ -674,6 +705,7 @@ class EdgarToolsWrapper:
                     "data": {
                         "filing_date": str(latest_proxy_filing.filing_date) if hasattr(latest_proxy_filing, 'filing_date') else None,
                         "accession_number": latest_proxy_filing.accession_number,
+                        "named_executives": [],
                         "note": "Proxy data not parseable"
                     },
                     "parameters": {"ticker": ticker}
@@ -682,41 +714,17 @@ class EdgarToolsWrapper:
             data = {
                 "filing_date": str(latest_proxy_filing.filing_date) if hasattr(latest_proxy_filing, 'filing_date') else None,
                 "accession_number": latest_proxy_filing.accession_number,
-                "company_name": proxy.company_name if hasattr(proxy, 'company_name') else None,
-                "cik": proxy.cik if hasattr(proxy, 'cik') else None,
-                "has_xbrl": proxy.has_xbrl if hasattr(proxy, 'has_xbrl') else False,
+                "named_executives": [],
             }
-
-            # Executive compensation data (check if not None and not empty DataFrame)
-            if hasattr(proxy, 'executive_compensation'):
-                exec_comp = proxy.executive_compensation
-                # Check if it's a DataFrame and not empty, or if it's another truthy object
-                if exec_comp is not None:
-                    try:
-                        # If it's a DataFrame, check if not empty
-                        if hasattr(exec_comp, 'empty') and not exec_comp.empty:
-                            data["executive_compensation"] = exec_comp.to_dict() if hasattr(exec_comp, 'to_dict') else str(exec_comp)
-                        elif not hasattr(exec_comp, 'empty'):
-                            # Not a DataFrame, handle as object
-                            data["executive_compensation"] = {
-                                "peo_total_comp": exec_comp.peo_total_comp if hasattr(exec_comp, 'peo_total_comp') else None,
-                                "peo_actually_paid_comp": exec_comp.peo_actually_paid_comp if hasattr(exec_comp, 'peo_actually_paid_comp') else None,
-                                "neo_avg_total_comp": exec_comp.neo_avg_total_comp if hasattr(exec_comp, 'neo_avg_total_comp') else None,
-                                "neo_avg_actually_paid_comp": exec_comp.neo_avg_actually_paid_comp if hasattr(exec_comp, 'neo_avg_actually_paid_comp') else None,
-                            }
-                    except:
-                        data["executive_compensation"] = "Unable to parse executive compensation"
 
             # Named executives (check if not None and not empty)
             if hasattr(proxy, 'named_executives'):
                 named_execs = proxy.named_executives
                 if named_execs is not None:
                     try:
-                        # If it's a DataFrame, convert to list
                         if hasattr(named_execs, 'to_dict'):
                             data["named_executives"] = named_execs.to_dict('records')[:10] if hasattr(named_execs, 'empty') and not named_execs.empty else []
                         elif hasattr(named_execs, '__iter__'):
-                            # It's an iterable (list, etc.)
                             data["named_executives"] = [
                                 {
                                     "name": ne.name if hasattr(ne, 'name') else str(ne.get('name')) if isinstance(ne, dict) else None,
@@ -726,7 +734,7 @@ class EdgarToolsWrapper:
                                 for ne in list(named_execs)[:10]
                             ]
                     except:
-                        data["named_executives"] = "Unable to parse named executives"
+                        pass
 
             return {
                 "success": True,
@@ -1155,7 +1163,7 @@ def main(args=None):
                 form = args[2] if len(args) > 2 else None
                 year = int(args[3]) if len(args) > 3 else None
                 quarter = int(args[4]) if len(args) > 4 else None
-                limit = int(args[5]) if len(args) > 5 else 20
+                limit = int(args[5]) if len(args) > 5 else 10
                 result = wrapper.get_company_filings(ticker, form, year, quarter, limit)
 
         elif command == "get_corporate_events":

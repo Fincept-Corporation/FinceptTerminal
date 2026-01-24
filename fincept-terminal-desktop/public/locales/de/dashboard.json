@@ -7,69 +7,75 @@
   "buttons": {
     "addWidget": "WIDGET HINZUFÜGEN",
     "saveLayout": "LAYOUT SPEICHERN",
-    "reset": "ZURÜCKSETZEN"
+    "reset": "ZURÜCKSETZEN",
+    "help": "HELFEN"
   },
   "widgets": {
     "loading": "Laden...",
     "error": "Fehler",
-    "globalIndices": "GLOBALE INDIZES - TOP 12",
-    "forex": "FOREX-PAARE",
+    "globalIndices": "Globale Indizes – Top 12",
+    "forex": "Forex – Hauptpaare",
     "crypto": "KRYPTOWÄHRUNGEN",
-    "commodities": "ROHSTOFFE",
-    "news": "NACHRICHTEN",
+    "commodities": "Rohstoffe",
+    "news": "NACHRICHT",
     "forum": "FORUM",
-    "watchlist": "WATCHLIST",
+    "watchlist": "WATCHLISTE",
+    "maritimeIntelligence": "Maritimer Geheimdienst",
+    "unknown": "Unbekannter Widget-Typ",
     "index": "INDEX",
     "symbol": "SYMBOL",
     "price": "PREIS",
-    "change": "ÄND",
-    "percentChange": "%ÄND",
-    "noIndexData": "Keine Indexdaten",
-    "noForexData": "Keine Forex-Daten",
-    "noCryptoData": "Keine Krypto-Daten",
-    "noCommoditiesData": "Keine Rohstoffdaten",
-    "noForumPosts": "Keine Beiträge",
-    "noStocksInWatchlist": "Keine Aktien in der Liste",
-    "noWatchlistSelected": "Keine Liste ausgewählt",
-    "noData": "Keine Daten",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Keine Indexdaten verfügbar",
+    "noForexData": "Keine Forex-Daten verfügbar",
+    "noCryptoData": "Keine Kryptodaten verfügbar",
+    "noCommoditiesData": "Keine Rohstoffdaten verfügbar",
+    "noForumPosts": "Keine Forumbeiträge verfügbar",
+    "noStocksInWatchlist": "Keine Aktien in der Beobachtungsliste",
+    "noWatchlistSelected": "Keine Beobachtungsliste ausgewählt",
+    "noData": "Keine Daten verfügbar",
     "pair": "PAAR",
-    "rate": "KURS",
-    "commodity": "ROHSTOFF",
-    "maritimeIntelligence": "⚓ MARITIME INTELLIGENCE",
+    "rate": "RATE",
+    "commodity": "WARE",
     "globe3D": "3D-GLOBUS",
     "vessels": "SCHIFFE",
     "routes": "ROUTEN",
     "vol24h": "VOL 24H",
-    "topTradeCorridors": "TOP-HANDELSKORRIDORE",
+    "topTradeCorridors": "Top-Handelskorridore",
     "ships": "Schiffe",
-    "unknown": "[DE] Unknown widget type"
+    "marketNews": "Marktnachrichten",
+    "secPressReleases": "Pressemitteilungen der SEC",
+    "cryptoNews": "Krypto-Neuigkeiten",
+    "trendingForum": "Trendforum",
+    "techStocks": "Tech-Aktien"
   },
   "tips": {
-    "drag": "Ziehen Sie Widgets zum Neuanordnen",
-    "resize": "Größe von unten rechts ändern",
-    "remove": "Widgets mit X-Button entfernen",
-    "responsive": "Responsives Layout - volle Breite"
+    "drag": "Ziehen Sie Widgets, um sie neu anzuordnen",
+    "resize": "Ändern Sie die Größe in der unteren rechten Ecke",
+    "remove": "Entfernen Sie Widgets mit der X-Taste",
+    "responsive": "Responsives Layout – nutzt die volle Breite"
   },
   "loading": {
-    "title": "Dashboard Initialisieren",
-    "description": "Datenbank-Cache für schnelleres Laden einrichten...",
+    "title": "Dashboard wird initialisiert",
+    "description": "Datenbank-Cache für schnelleres Laden von Daten einrichten ...",
     "note": "Dies dauert beim ersten Start nur einen Moment"
   },
   "empty": {
     "noWidgets": "Keine Widgets im Dashboard",
-    "addFirst": "ERSTES WIDGET HINZUFÜGEN"
+    "addFirst": "FÜGEN SIE IHR ERSTES WIDGET HINZU"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Drag & Drop Arbeitsbereich",
+    "version": "Fincept Anpassbares Dashboard v2.0.0 | Arbeitsbereich per Drag & Drop verschieben",
     "layout": "Layout",
-    "custom": "Benutzerdefiniert",
+    "custom": "Brauch",
     "empty": "Leer",
     "active": "AKTIV",
     "cache": "Cache: AKTIVIERT",
-    "label": "[DE] Status"
+    "label": "Status"
   },
   "messages": {
-    "layoutSaved": "[DE] Dashboard layout saved!",
-    "resetConfirm": "[DE] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Dashboard-Layout gespeichert!",
+    "resetConfirm": "Dashboard auf Standardlayout zurücksetzen? Dadurch werden alle benutzerdefinierten Widgets entfernt."
   }
 }

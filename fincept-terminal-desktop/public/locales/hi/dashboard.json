@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "कस्टमाइज़ेबल डैशबोर्ड",
-    "live": "लाइव",
-    "widgets": "विजेट"
+    "title": "अनुकूलन योग्य डैशबोर्ड",
+    "live": "रहना",
+    "widgets": "विजेट्स"
   },
   "buttons": {
     "addWidget": "विजेट जोड़ें",
     "saveLayout": "लेआउट सहेजें",
-    "reset": "रीसेट"
+    "reset": "रीसेट करें",
+    "help": "मदद"
   },
   "widgets": {
     "loading": "लोड हो रहा है...",
-    "error": "त्रुटि",
+    "error": "गलती",
     "globalIndices": "वैश्विक सूचकांक - शीर्ष 12",
-    "forex": "फ़ॉरेक्स जोड़े",
-    "crypto": "क्रिप्टोकरेंसी",
-    "commodities": "कमोडिटीज़",
+    "forex": "विदेशी मुद्रा - प्रमुख जोड़े",
+    "crypto": "क्रिप्टोमुद्राएँ",
+    "commodities": "वस्तुएँ",
     "news": "समाचार",
-    "forum": "फोरम",
-    "watchlist": "वॉचलिस्ट",
-    "index": "सूचकांक",
-    "symbol": "सिम्बल",
-    "price": "मूल्य",
+    "forum": "मंच",
+    "watchlist": "सभी आँकड़े",
+    "maritimeIntelligence": "समुद्री खुफिया",
+    "unknown": "अज्ञात विजेट प्रकार",
+    "index": "अनुक्रमणिका",
+    "symbol": "प्रतीक",
+    "price": "कीमत",
     "change": "बदलाव",
-    "percentChange": "%बदलाव",
-    "noIndexData": "कोई सूचकांक डेटा नहीं",
-    "noForexData": "कोई फ़ॉरेक्स डेटा नहीं",
-    "noCryptoData": "कोई क्रिप्टो डेटा नहीं",
-    "noCommoditiesData": "कोई कमोडिटी डेटा नहीं",
-    "noForumPosts": "कोई पोस्ट नहीं",
-    "noStocksInWatchlist": "वॉचलिस्ट में कोई स्टॉक नहीं",
-    "noWatchlistSelected": "कोई वॉचलिस्ट नहीं चुनी",
-    "noData": "कोई डेटा नहीं",
+    "percentChange": "%सीएचजी",
+    "noIndexData": "कोई सूचकांक डेटा उपलब्ध नहीं है",
+    "noForexData": "कोई विदेशी मुद्रा डेटा उपलब्ध नहीं है",
+    "noCryptoData": "कोई क्रिप्टो डेटा उपलब्ध नहीं है",
+    "noCommoditiesData": "कोई वस्तु डेटा उपलब्ध नहीं है",
+    "noForumPosts": "कोई फ़ोरम पोस्ट उपलब्ध नहीं है",
+    "noStocksInWatchlist": "निगरानी सूची में कोई स्टॉक नहीं",
+    "noWatchlistSelected": "कोई निगरानी सूची चयनित नहीं",
+    "noData": "कोई डेटा मौजूद नहीं",
     "pair": "जोड़ा",
     "rate": "दर",
-    "commodity": "कमोडिटी",
-    "maritimeIntelligence": "⚓ समुद्री खुफिया",
-    "globe3D": "3D ग्लोब",
-    "vessels": "जहाज",
+    "commodity": "माल",
+    "globe3D": "3डी ग्लोब",
+    "vessels": "जहाजों",
     "routes": "मार्ग",
-    "vol24h": "वॉल्यूम 24घ",
+    "vol24h": "वॉल्यूम 24एच",
     "topTradeCorridors": "शीर्ष व्यापार गलियारे",
     "ships": "जहाज",
-    "unknown": "[HI] Unknown widget type"
+    "marketNews": "बाज़ार समाचार",
+    "secPressReleases": "एसईसी प्रेस विज्ञप्तियाँ",
+    "cryptoNews": "क्रिप्टो समाचार",
+    "trendingForum": "ट्रेंडिंग फोरम",
+    "techStocks": "टेक स्टॉक"
   },
   "tips": {
-    "drag": "विजेट को पुनर्व्यवस्थित करने के लिए खींचें",
-    "resize": "निचले-दाएं कोने से आकार बदलें",
-    "remove": "X बटन से विजेट हटाएं",
-    "responsive": "रेस्पॉन्सिव लेआउट - पूर्ण चौड़ाई का उपयोग करता है"
+    "drag": "पुनर्व्यवस्थित करने के लिए विजेट खींचें",
+    "resize": "नीचे-दाएँ कोने से आकार बदलें",
+    "remove": "X बटन से विजेट हटाएँ",
+    "responsive": "उत्तरदायी लेआउट - पूरी चौड़ाई का उपयोग करता है"
   },
   "loading": {
-    "title": "डैशबोर्ड आरंभ हो रहा है",
-    "description": "तेज़ डेटा लोडिंग के लिए कैश सेट अप हो रहा है...",
-    "note": "पहले लॉन्च पर यह एक पल लेगा"
+    "title": "डैशबोर्ड प्रारंभ किया जा रहा है",
+    "description": "तेज़ डेटा लोडिंग के लिए डेटाबेस कैश सेट अप किया जा रहा है...",
+    "note": "पहले लॉन्च में इसमें केवल एक क्षण लगेगा"
   },
   "empty": {
     "noWidgets": "डैशबोर्ड पर कोई विजेट नहीं",
     "addFirst": "अपना पहला विजेट जोड़ें"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | ड्रैग एंड ड्रॉप वर्कस्पेस",
+    "version": "फिनसेप्ट अनुकूलन योग्य डैशबोर्ड v2.0.0 | कार्यक्षेत्र को खींचें और छोड़ें",
     "layout": "लेआउट",
-    "custom": "कस्टम",
+    "custom": "रिवाज़",
     "empty": "खाली",
     "active": "सक्रिय",
     "cache": "कैश: सक्षम",
-    "label": "[HI] Status"
+    "label": "स्थिति"
   },
   "messages": {
-    "layoutSaved": "[HI] Dashboard layout saved!",
-    "resetConfirm": "[HI] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "डैशबोर्ड लेआउट सहेजा गया!",
+    "resetConfirm": "डैशबोर्ड को डिफ़ॉल्ट लेआउट पर रीसेट करें? यह सभी कस्टम विजेट हटा देगा."
   }
 }

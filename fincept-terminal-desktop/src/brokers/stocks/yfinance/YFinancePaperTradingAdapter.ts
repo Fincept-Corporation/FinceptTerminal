@@ -266,7 +266,6 @@ export class YFinancePaperTradingAdapter extends BaseStockBrokerAdapter {
       // Map TimeFrame to yfinance interval format
       const intervalMap: Record<TimeFrame, string> = {
         '1m': '1m',
-        '2m': '2m',
         '3m': '5m', // yfinance doesn't have 3m, use 5m
         '5m': '5m',
         '10m': '15m', // yfinance doesn't have 10m, use 15m

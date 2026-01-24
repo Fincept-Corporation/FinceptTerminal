@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "CÀI ĐẶT",
+  "sidebar": {
+    "credentials": "Thông tin xác thực API",
+    "polymarket": "API đa thị trường",
+    "llm": "Cấu hình LLM",
+    "dataSources": "Nguồn dữ liệu",
+    "backtesting": "Kiểm tra lại",
+    "stockSymbols": "Ký hiệu chứng khoán",
+    "tabLayout": "Bố cục tab",
+    "appearance": "Vẻ bề ngoài",
+    "language": "Ngôn ngữ",
+    "storage": "Bộ nhớ & Bộ nhớ đệm"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[VI] Manage API keys and credentials for external services",
-    "enterValue": "[VI] Enter value..."
+    "title": "QUẢN LÝ CHỨNG NHẬN API",
+    "description": "Quản lý khóa API và thông tin xác thực cho các dịch vụ bên ngoài",
+    "apiKey": "Khóa API",
+    "enterValue": "Nhập giá trị..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[VI] Customize the visual appearance of your terminal",
-    "currentSettings": "[VI] CURRENT SETTINGS"
+    "title": "XUẤT HIỆN ĐẦU CUỐI",
+    "description": "Tùy chỉnh giao diện trực quan của thiết bị đầu cuối của bạn bao gồm phông chữ, màu sắc, múi giờ và phím tắt.",
+    "fontFamily": "GIA ĐÌNH PHÔNG CHỮ",
+    "currentSettings": "CÀI ĐẶT PHÔNG CHỮ",
+    "baseFontSize": "KÍCH THƯỚC CƠ SỞ",
+    "fontWeight": "TRỌNG LƯỢNG PHÔNG CHỮ",
+    "weightNormal": "Bình thường (400)",
+    "weightSemibold": "Nửa đậm (600)",
+    "weightBold": "Đậm (700)",
+    "enableItalic": "BẬT PHONG CÁCH TIẾNG Ý",
+    "fontSizeSmall": "Nhỏ (9px)",
+    "fontSizeLarge": "Lớn (18px)",
+    "colorTheme": "CHỦ ĐỀ MÀU SẮC",
+    "defaultTimezone": "Múi giờ mặc định",
+    "timezoneDescription": "Đặt múi giờ mặc định được hiển thị trên thanh điều hướng. Các tiện ích trên trang tổng quan có thể sử dụng cài đặt múi giờ của riêng chúng.",
+    "functionKeys": "BẢNG XẾP PHÍM CHỨC NĂNG",
+    "functionKeysDescription": "Định cấu hình tab hoặc hành động mà mỗi phím chức năng (F1-F12) sẽ kích hoạt. Những thay đổi sẽ được phản ánh trên thanh trạng thái và phím tắt.",
+    "livePreview": "XEM TRƯỚC TRỰC TIẾP",
+    "previewTitle": "XEM TRƯỚC FINCEPT Terminal",
+    "previewBody": "Nội dung: Phân tích thị trường theo thời gian thực và theo dõi danh mục đầu tư",
+    "previewSmall": "Văn bản nhỏ: Dữ liệu thị trường, dấu thời gian và siêu dữ liệu",
+    "statusConnected": "ĐÃ KẾT NỐI",
+    "statusAlert": "BÁO ĐỘNG",
+    "statusWarning": "CẢNH BÁO",
+    "saveConfig": "LƯU CẤU HÌNH",
+    "reset": "CÀI LẠI",
+    "saveSuccess": "Đã lưu thành công giao diện thiết bị đầu cuối và ánh xạ khóa",
+    "resetSuccess": "Đặt lại về giao diện mặc định và ánh xạ phím"
   },
-  "sidebar": {
-    "credentials": "[VI] API Credentials",
-    "llm": "[VI] LLM Configuration",
-    "dataSources": "[VI] Data Sources",
-    "backtesting": "[VI] Backtesting",
-    "tabLayout": "[VI] Tab Layout",
-    "appearance": "[VI] Appearance",
-    "language": "[VI] Language",
-    "polymarket": "[VI] Polymarket API"
+  "stockSymbols": {
+    "title": "Cơ sở dữ liệu ký hiệu chứng khoán",
+    "description": "Tải xuống và quản lý dữ liệu biểu tượng nhà môi giới để tìm kiếm ngoại tuyến nhanh chóng. Dữ liệu ký hiệu bao gồm cổ phiếu, F&O, hàng hóa và các công cụ phái sinh tiền tệ. Cập nhật thường xuyên để có được các công cụ mới nhất và hết hạn."
   },
   "terminalConfig": {
-    "title": "[VI] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[VI] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[VI] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[VI] TOOLBAR MENU SECTIONS",
-    "newSection": "[VI] NEW SECTION",
-    "deleteSection": "[VI] DELETE",
-    "moveTo": "[VI] MOVE TO ▼",
-    "resetToDefault": "[VI] RESET TO DEFAULT",
-    "noTabsInSection": "[VI] No tabs in this section",
-    "tip": "[VI] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "CẤU HÌNH BỐ CỤC TAB",
+    "headerTabs": "THẺ TIÊU ĐỀ (THANH TAB CHÍNH)",
+    "headerTabsDesc": "Kéo để sắp xếp lại. Các tab này xuất hiện trong điều hướng tiêu đề chính.",
+    "toolbarSections": "CÁC PHẦN MENU THANH CÔNG CỤ",
+    "newSection": "PHẦN MỚI",
+    "deleteSection": "XÓA BỎ",
+    "moveTo": "CHUYỂN ĐẾN ▼",
+    "resetToDefault": "ĐẶT LẠI VỀ MẶC ĐỊNH",
+    "noTabsInSection": "Không có tab nào trong phần này",
+    "tip": "MẸO: Kéo các tab để sắp xếp lại chúng. Sử dụng các nút mũi tên để di chuyển các tab giữa phần tiêu đề và menu. Các thay đổi được lưu tự động."
   },
   "llm": {
-    "title": "[VI] LLM CONFIGURATION",
-    "description": "[VI] Configure AI models and providers",
-    "connected": "[VI] CONNECTED",
-    "disconnected": "[VI] DISCONNECTED",
-    "provider": "[VI] AI PROVIDER",
-    "globalSettings": "[VI] GLOBAL AI SETTINGS",
-    "temperature": "[VI] TEMPERATURE",
-    "maxTokens": "[VI] MAX TOKENS",
-    "systemPrompt": "[VI] SYSTEM PROMPT",
-    "modelLibrary": "[VI] MODEL LIBRARY",
-    "multiModelConfigs": "[VI] Multi-model configs"
+    "title": "CẤU HÌNH LLM",
+    "description": "Định cấu hình các mô hình và nhà cung cấp AI",
+    "connected": "ĐÃ KẾT NỐI",
+    "disconnected": "ĐÃ NGẮT KẾT NỐI",
+    "provider": "NHÀ CUNG CẤP AI",
+    "globalSettings": "CÀI ĐẶT AI TOÀN CẦU",
+    "temperature": "NHIỆT ĐỘ",
+    "maxTokens": "TỐI ĐA",
+    "systemPrompt": "NHẮC NHỞ HỆ THỐNG",
+    "modelLibrary": "THƯ VIỆN MẪU",
+    "multiModelConfigs": "Cấu hình đa mô hình"
   },
   "buttons": {
-    "save": "[VI] SAVE",
-    "cancel": "[VI] CANCEL",
-    "add": "[VI] ADD"
+    "save": "CỨU",
+    "cancel": "HỦY BỎ",
+    "add": "THÊM VÀO"
   },
   "footer": {
-    "database": "[VI] Database: SQLite",
-    "storage": "[VI] Storage: File-based",
-    "secureStorage": "[VI] All data stored securely in fincept_terminal.db"
+    "database": "Cơ sở dữ liệu: SQLite",
+    "storage": "Lưu trữ: Dựa trên tệp",
+    "secureStorage": "Tất cả dữ liệu được lưu trữ an toàn trong fincept_terminal.db"
   }
 }

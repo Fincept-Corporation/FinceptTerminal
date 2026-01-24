@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "إعدادات",
+  "sidebar": {
+    "credentials": "بيانات اعتماد API",
+    "polymarket": "واجهة برمجة تطبيقات بولي ماركت",
+    "llm": "تكوين LLM",
+    "dataSources": "مصادر البيانات",
+    "backtesting": "الاختبار الخلفي",
+    "stockSymbols": "رموز الأسهم",
+    "tabLayout": "تخطيط علامة التبويب",
+    "appearance": "مظهر",
+    "language": "لغة",
+    "storage": "التخزين وذاكرة التخزين المؤقت"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[AR] Manage API keys and credentials for external services",
-    "enterValue": "[AR] Enter value..."
+    "title": "إدارة بيانات اعتماد API",
+    "description": "إدارة مفاتيح API وبيانات الاعتماد للخدمات الخارجية",
+    "apiKey": "مفتاح واجهة برمجة التطبيقات",
+    "enterValue": "أدخل القيمة..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[AR] Customize the visual appearance of your terminal",
-    "currentSettings": "[AR] CURRENT SETTINGS"
+    "title": "المظهر النهائي",
+    "description": "قم بتخصيص المظهر المرئي لجهازك بما في ذلك الخطوط والألوان والمنطقة الزمنية واختصارات لوحة المفاتيح.",
+    "fontFamily": "عائلة الخط",
+    "currentSettings": "إعدادات الخط",
+    "baseFontSize": "حجم الخط الأساسي",
+    "fontWeight": "وزن الخط",
+    "weightNormal": "عادي (400)",
+    "weightSemibold": "شبه غامق (600)",
+    "weightBold": "جريئة (700)",
+    "enableItalic": "تمكين النمط المائل",
+    "fontSizeSmall": "صغير (9 بكسل)",
+    "fontSizeLarge": "كبير (18 بكسل)",
+    "colorTheme": "موضوع اللون",
+    "defaultTimezone": "المنطقة الزمنية الافتراضية",
+    "timezoneDescription": "قم بتعيين المنطقة الزمنية الافتراضية المعروضة في شريط التنقل. يمكن لأدوات لوحة المعلومات استخدام إعدادات المنطقة الزمنية الخاصة بها.",
+    "functionKeys": "تعيينات المفاتيح الوظيفية",
+    "functionKeysDescription": "قم بتكوين علامة التبويب أو الإجراء الذي يجب أن يقوم كل مفتاح وظيفي (F1-F12) بتشغيله. سوف تنعكس التغييرات في شريط الحالة واختصارات لوحة المفاتيح.",
+    "livePreview": "معاينة مباشرة",
+    "previewTitle": "معاينة محطة FINCEPT",
+    "previewBody": "النص الأساسي: تحليل السوق في الوقت الحقيقي وتتبع المحفظة",
+    "previewSmall": "نص صغير: بيانات السوق، والطوابع الزمنية، والبيانات الوصفية",
+    "statusConnected": "متصل",
+    "statusAlert": "يُحذًِر",
+    "statusWarning": "تحذير",
+    "saveConfig": "حفظ التكوين",
+    "reset": "إعادة ضبط",
+    "saveSuccess": "تم حفظ مظهر المحطة الطرفية وتعيينات المفاتيح بنجاح",
+    "resetSuccess": "إعادة التعيين إلى المظهر الافتراضي وتعيينات المفاتيح"
   },
-  "sidebar": {
-    "credentials": "[AR] API Credentials",
-    "llm": "[AR] LLM Configuration",
-    "dataSources": "[AR] Data Sources",
-    "backtesting": "[AR] Backtesting",
-    "tabLayout": "[AR] Tab Layout",
-    "appearance": "[AR] Appearance",
-    "language": "[AR] Language",
-    "polymarket": "[AR] Polymarket API"
+  "stockSymbols": {
+    "title": "قاعدة بيانات رمز الأسهم",
+    "description": "قم بتنزيل وإدارة بيانات رمز الوسيط للبحث السريع في وضع عدم الاتصال. تتضمن بيانات الرمز الأسهم وF&O والسلع ومشتقات العملات. قم بالتحديث بانتظام للحصول على أحدث الأدوات وانتهاء الصلاحية."
   },
   "terminalConfig": {
-    "title": "[AR] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[AR] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[AR] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[AR] TOOLBAR MENU SECTIONS",
-    "newSection": "[AR] NEW SECTION",
-    "deleteSection": "[AR] DELETE",
-    "moveTo": "[AR] MOVE TO ▼",
-    "resetToDefault": "[AR] RESET TO DEFAULT",
-    "noTabsInSection": "[AR] No tabs in this section",
-    "tip": "[AR] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "تكوين تخطيط علامة التبويب",
+    "headerTabs": "علامات التبويب الرئيسية (شريط علامات التبويب الرئيسي)",
+    "headerTabsDesc": "اسحب لإعادة الترتيب. تظهر علامات التبويب هذه في شريط التنقل الرئيسي.",
+    "toolbarSections": "أقسام قائمة شريط الأدوات",
+    "newSection": "قسم جديد",
+    "deleteSection": "يمسح",
+    "moveTo": "انتقل إلى ▼",
+    "resetToDefault": "إعادة التعيين إلى الوضع الافتراضي",
+    "noTabsInSection": "لا توجد علامات تبويب في هذا القسم",
+    "tip": "نصيحة: اسحب علامات التبويب لإعادة ترتيبها. استخدم أزرار الأسهم لتحريك علامات التبويب بين أقسام الرأس والقائمة. يتم حفظ التغييرات تلقائيا."
   },
   "llm": {
-    "title": "[AR] LLM CONFIGURATION",
-    "description": "[AR] Configure AI models and providers",
-    "connected": "[AR] CONNECTED",
-    "disconnected": "[AR] DISCONNECTED",
-    "provider": "[AR] AI PROVIDER",
-    "globalSettings": "[AR] GLOBAL AI SETTINGS",
-    "temperature": "[AR] TEMPERATURE",
-    "maxTokens": "[AR] MAX TOKENS",
-    "systemPrompt": "[AR] SYSTEM PROMPT",
-    "modelLibrary": "[AR] MODEL LIBRARY",
-    "multiModelConfigs": "[AR] Multi-model configs"
+    "title": "تكوين ماجستير",
+    "description": "تكوين نماذج وموفري الذكاء الاصطناعي",
+    "connected": "متصل",
+    "disconnected": "غير متصل",
+    "provider": "مزود الذكاء الاصطناعي",
+    "globalSettings": "إعدادات الذكاء الاصطناعي العالمية",
+    "temperature": "درجة حرارة",
+    "maxTokens": "الحد الأقصى من الرموز",
+    "systemPrompt": "موجه النظام",
+    "modelLibrary": "المكتبة النموذجية",
+    "multiModelConfigs": "تكوينات متعددة النماذج"
   },
   "buttons": {
-    "save": "[AR] SAVE",
-    "cancel": "[AR] CANCEL",
-    "add": "[AR] ADD"
+    "save": "يحفظ",
+    "cancel": "يلغي",
+    "add": "يضيف"
   },
   "footer": {
-    "database": "[AR] Database: SQLite",
-    "storage": "[AR] Storage: File-based",
-    "secureStorage": "[AR] All data stored securely in fincept_terminal.db"
+    "database": "قاعدة البيانات: سكليتي",
+    "storage": "التخزين: قائم على الملفات",
+    "secureStorage": "جميع البيانات مخزنة بشكل آمن في fincept_terminal.db"
   }
 }

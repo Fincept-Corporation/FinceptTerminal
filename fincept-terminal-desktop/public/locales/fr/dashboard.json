@@ -5,71 +5,77 @@
     "widgets": "WIDGETS"
   },
   "buttons": {
-    "addWidget": "AJOUTER WIDGET",
-    "saveLayout": "SAUVEGARDER",
-    "reset": "RÉINITIALISER"
+    "addWidget": "AJOUTER UN WIDGET",
+    "saveLayout": "ENREGISTRER LA MISE EN PAGE",
+    "reset": "RÉINITIALISER",
+    "help": "AIDE"
   },
   "widgets": {
     "loading": "Chargement...",
     "error": "Erreur",
-    "globalIndices": "INDICES MONDIAUX - TOP 12",
-    "forex": "PAIRES FOREX",
+    "globalIndices": "Indices mondiaux - Top 12",
+    "forex": "Forex - Paires majeures",
     "crypto": "CRYPTOMONNAIES",
-    "commodities": "MATIÈRES PREMIÈRES",
-    "news": "ACTUALITÉS",
+    "commodities": "Matières premières",
+    "news": "NOUVELLES",
     "forum": "FORUM",
-    "watchlist": "LISTE DE SUIVI",
+    "watchlist": "LISTE DE SURVEILLANCE",
+    "maritimeIntelligence": "Renseignement maritime",
+    "unknown": "Type de widget inconnu",
     "index": "INDICE",
     "symbol": "SYMBOLE",
     "price": "PRIX",
-    "change": "VAR",
-    "percentChange": "%VAR",
-    "noIndexData": "Pas de données d'indices",
-    "noForexData": "Pas de données forex",
-    "noCryptoData": "Pas de données crypto",
-    "noCommoditiesData": "Pas de données matières premières",
-    "noForumPosts": "Pas de publications",
-    "noStocksInWatchlist": "Pas d'actions dans la liste",
-    "noWatchlistSelected": "Aucune liste sélectionnée",
-    "noData": "Pas de données",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Aucune donnée d'index disponible",
+    "noForexData": "Aucune donnée forex disponible",
+    "noCryptoData": "Aucune donnée cryptographique disponible",
+    "noCommoditiesData": "Aucune donnée sur les produits disponible",
+    "noForumPosts": "Aucun message de forum disponible",
+    "noStocksInWatchlist": "Aucune action dans la liste de surveillance",
+    "noWatchlistSelected": "Aucune liste de surveillance sélectionnée",
+    "noData": "Aucune donnée disponible",
     "pair": "PAIRE",
     "rate": "TAUX",
-    "commodity": "MATIÈRE PREMIÈRE",
-    "maritimeIntelligence": "⚓ RENSEIGNEMENT MARITIME",
+    "commodity": "MARCHANDISE",
     "globe3D": "GLOBE 3D",
     "vessels": "NAVIRES",
-    "routes": "ROUTES",
+    "routes": "ITINÉRAIRES",
     "vol24h": "VOL 24H",
-    "topTradeCorridors": "CORRIDORS COMMERCIAUX PRINCIPAUX",
+    "topTradeCorridors": "PRINCIPAUX CORRIDORS COMMERCIAUX",
     "ships": "navires",
-    "unknown": "[FR] Unknown widget type"
+    "marketNews": "Actualités du marché",
+    "secPressReleases": "Communiqués de presse de la SEC",
+    "cryptoNews": "Actualités cryptographiques",
+    "trendingForum": "Forum des tendances",
+    "techStocks": "Actions technologiques"
   },
   "tips": {
-    "drag": "Glissez les widgets pour réorganiser",
-    "resize": "Redimensionnez depuis le coin inférieur droit",
-    "remove": "Supprimez les widgets avec le bouton X",
-    "responsive": "Mise en page responsive - pleine largeur"
+    "drag": "Faites glisser les widgets pour les réorganiser",
+    "resize": "Redimensionner à partir du coin inférieur droit",
+    "remove": "Supprimer les widgets avec le bouton X",
+    "responsive": "Mise en page réactive - utilise toute la largeur"
   },
   "loading": {
-    "title": "Initialisation du Tableau de Bord",
-    "description": "Configuration du cache pour un chargement plus rapide...",
-    "note": "Cela ne prendra qu'un moment au premier lancement"
+    "title": "Initialisation du tableau de bord",
+    "description": "Configuration du cache de base de données pour un chargement plus rapide des données...",
+    "note": "Cela ne prendra qu'un instant au premier lancement"
   },
   "empty": {
-    "noWidgets": "Pas de widgets sur le tableau de bord",
+    "noWidgets": "Aucun widget sur le tableau de bord",
     "addFirst": "AJOUTEZ VOTRE PREMIER WIDGET"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Espace glisser-déposer",
+    "version": "Tableau de bord personnalisable Fincept v2.0.0 | Glisser-déposer l'espace de travail",
     "layout": "Mise en page",
-    "custom": "Personnalisé",
+    "custom": "Coutume",
     "empty": "Vide",
     "active": "ACTIF",
-    "cache": "Cache: ACTIVÉ",
-    "label": "[FR] Status"
+    "cache": "Cache : ACTIVÉ",
+    "label": "Statut"
   },
   "messages": {
-    "layoutSaved": "[FR] Dashboard layout saved!",
-    "resetConfirm": "[FR] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Disposition du tableau de bord enregistrée !",
+    "resetConfirm": "Réinitialiser le tableau de bord à la présentation par défaut ? Cela supprimera tous les widgets personnalisés."
   }
 }

@@ -6,70 +6,76 @@
   },
   "buttons": {
     "addWidget": "เพิ่มวิดเจ็ต",
-    "saveLayout": "บันทึกเลย์เอาต์",
-    "reset": "รีเซ็ต"
+    "saveLayout": "บันทึกเค้าโครง",
+    "reset": "รีเซ็ต",
+    "help": "ช่วย"
   },
   "widgets": {
     "loading": "กำลังโหลด...",
     "error": "ข้อผิดพลาด",
-    "globalIndices": "ดัชนีโลก - 12 อันดับแรก",
-    "forex": "คู่เงิน",
+    "globalIndices": "ดัชนีระดับโลก - 12 อันดับแรก",
+    "forex": "ฟอเร็กซ์ - คู่หลัก",
     "crypto": "สกุลเงินดิจิทัล",
     "commodities": "สินค้าโภคภัณฑ์",
     "news": "ข่าว",
     "forum": "ฟอรัม",
-    "watchlist": "รายการติดตาม",
+    "watchlist": "รายการเฝ้าดู",
+    "maritimeIntelligence": "หน่วยสืบราชการลับทางทะเล",
+    "unknown": "ประเภทวิดเจ็ตที่ไม่รู้จัก",
     "index": "ดัชนี",
-    "symbol": "สัญลักษณ์",
+    "symbol": "เครื่องหมาย",
     "price": "ราคา",
-    "change": "เปลี่ยน",
-    "percentChange": "%เปลี่ยน",
+    "change": "ซีเอชจี",
+    "percentChange": "%ซีเอชจี",
     "noIndexData": "ไม่มีข้อมูลดัชนี",
     "noForexData": "ไม่มีข้อมูลฟอเร็กซ์",
-    "noCryptoData": "ไม่มีข้อมูลคริปโต",
+    "noCryptoData": "ไม่มีข้อมูลการเข้ารหัสลับ",
     "noCommoditiesData": "ไม่มีข้อมูลสินค้าโภคภัณฑ์",
-    "noForumPosts": "ไม่มีโพสต์ฟอรัม",
-    "noStocksInWatchlist": "ไม่มีหุ้นในรายการ",
-    "noWatchlistSelected": "ไม่ได้เลือกรายการ",
+    "noForumPosts": "ไม่มีโพสต์ในฟอรัม",
+    "noStocksInWatchlist": "ไม่มีหุ้นในรายการเฝ้าดู",
+    "noWatchlistSelected": "ไม่ได้เลือกรายการเฝ้าดู",
     "noData": "ไม่มีข้อมูล",
     "pair": "คู่",
-    "rate": "อัตรา",
-    "commodity": "สินค้า",
-    "maritimeIntelligence": "⚓ ข่าวกรองทางทะเล",
-    "globe3D": "ลูกโลก 3D",
+    "rate": "ประเมิน",
+    "commodity": "สินค้าโภคภัณฑ์",
+    "globe3D": "ลูกโลก 3 มิติ",
     "vessels": "เรือ",
     "routes": "เส้นทาง",
-    "vol24h": "ปริมาณ 24ชม",
-    "topTradeCorridors": "เส้นทางการค้าหลัก",
+    "vol24h": "ฉบับ 24H",
+    "topTradeCorridors": "ทางเดินการค้าชั้นนำ",
     "ships": "เรือ",
-    "unknown": "[TH] Unknown widget type"
+    "marketNews": "ข่าวการตลาด",
+    "secPressReleases": "ข่าวประชาสัมพันธ์ ก.ล.ต",
+    "cryptoNews": "ข่าวการเข้ารหัสลับ",
+    "trendingForum": "ฟอรั่มที่กำลังมาแรง",
+    "techStocks": "หุ้นเทคโนโลยี"
   },
   "tips": {
-    "drag": "ลากวิดเจ็ตเพื่อจัดเรียง",
+    "drag": "ลากวิดเจ็ตเพื่อจัดเรียงใหม่",
     "resize": "ปรับขนาดจากมุมขวาล่าง",
     "remove": "ลบวิดเจ็ตด้วยปุ่ม X",
-    "responsive": "เลย์เอาต์ตอบสนอง - ใช้ความกว้างเต็ม"
+    "responsive": "รูปแบบที่ปรับเปลี่ยนตามอุปกรณ์ - ใช้ความกว้างเต็ม"
   },
   "loading": {
     "title": "กำลังเริ่มต้นแดชบอร์ด",
-    "description": "กำลังตั้งค่าแคชฐานข้อมูลเพื่อโหลดข้อมูลเร็วขึ้น...",
-    "note": "จะใช้เวลาสักครู่ในการเริ่มต้นครั้งแรก"
+    "description": "การตั้งค่าแคชฐานข้อมูลเพื่อให้โหลดข้อมูลได้เร็วขึ้น...",
+    "note": "ขั้นตอนนี้จะใช้เวลาสักครู่ในการเปิดตัวครั้งแรก"
   },
   "empty": {
     "noWidgets": "ไม่มีวิดเจ็ตบนแดชบอร์ด",
     "addFirst": "เพิ่มวิดเจ็ตแรกของคุณ"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | พื้นที่ทำงานลากและวาง",
-    "layout": "เลย์เอาต์",
+    "version": "Fincept แดชบอร์ดที่ปรับแต่งได้ v2.0.0 | ลากและวางพื้นที่ทำงาน",
+    "layout": "เค้าโครง",
     "custom": "กำหนดเอง",
-    "empty": "ว่าง",
-    "active": "ใช้งาน",
-    "cache": "แคช: เปิดใช้",
-    "label": "[TH] Status"
+    "empty": "ว่างเปล่า",
+    "active": "คล่องแคล่ว",
+    "cache": "แคช: เปิดใช้งานแล้ว",
+    "label": "สถานะ"
   },
   "messages": {
-    "layoutSaved": "[TH] Dashboard layout saved!",
-    "resetConfirm": "[TH] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "บันทึกเค้าโครงแดชบอร์ดแล้ว!",
+    "resetConfirm": "รีเซ็ตแดชบอร์ดเป็นรูปแบบเริ่มต้นหรือไม่ การดำเนินการนี้จะลบวิดเจ็ตที่กำหนดเองทั้งหมด"
   }
 }

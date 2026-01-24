@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, AlertTriangle, CheckCircle, Clock, ExternalLink, X } from 'lucide-react';
+import { Bell, AlertTriangle, Clock, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from 'react-i18next';
 
 interface AlertsWidgetProps {
   id: string;
@@ -21,12 +22,6 @@ interface Alert {
   status: 'active' | 'triggered' | 'expired';
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_YELLOW = '#FFD700';
 
 export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
   id,
@@ -34,6 +29,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,22 +105,22 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'triggered':
-        return <Bell size={12} style={{ color: FINCEPT_YELLOW }} />;
+        return <Bell size={12} style={{ color: 'var(--ft-color-warning)' }} />;
       case 'active':
-        return <Clock size={12} style={{ color: FINCEPT_GREEN }} />;
+        return <Clock size={12} style={{ color: 'var(--ft-color-success)' }} />;
       default:
-        return <AlertTriangle size={12} style={{ color: FINCEPT_GRAY }} />;
+        return <AlertTriangle size={12} style={{ color: 'var(--ft-color-text-muted)' }} />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'triggered':
-        return FINCEPT_YELLOW;
+        return 'var(--ft-color-warning)';
       case 'active':
-        return FINCEPT_GREEN;
+        return 'var(--ft-color-success)';
       default:
-        return FINCEPT_GRAY;
+        return 'var(--ft-color-text-muted)';
     }
   };
 
@@ -139,7 +135,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
       onRefresh={loadAlerts}
       isLoading={loading}
       error={error}
-      headerColor={FINCEPT_YELLOW}
+      headerColor="var(--ft-color-warning)"
     >
       <div style={{ padding: '4px' }}>
         {/* Summary bar */}
@@ -147,17 +143,17 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           padding: '4px 8px',
-          backgroundColor: '#111',
+          backgroundColor: 'var(--ft-color-panel)',
           marginBottom: '4px',
-          fontSize: '9px'
+          fontSize: 'var(--ft-font-size-tiny)'
         }}>
-          <span style={{ color: FINCEPT_GREEN }}>
+          <span style={{ color: 'var(--ft-color-success)' }}>
             <Clock size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-            {activeCount} Active
+            {activeCount} {t('widgets.active')}
           </span>
-          <span style={{ color: FINCEPT_YELLOW }}>
+          <span style={{ color: 'var(--ft-color-warning)' }}>
             <Bell size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-            {triggeredCount} Triggered
+            {triggeredCount} {t('widgets.triggered')}
           </span>
         </div>
 
@@ -167,7 +163,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
             key={alert.id}
             style={{
               padding: '6px 8px',
-              borderBottom: '1px solid #333',
+              borderBottom: '1px solid var(--ft-border-color)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
@@ -176,17 +172,17 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
             {getStatusIcon(alert.status)}
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '10px', color: FINCEPT_WHITE, fontWeight: 'bold' }}>
+                <span style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)', fontWeight: 'bold' }}>
                   {alert.symbol}
                 </span>
-                <span style={{ fontSize: '9px', color: getStatusColor(alert.status) }}>
+                <span style={{ fontSize: 'var(--ft-font-size-tiny)', color: getStatusColor(alert.status) }}>
                   {alert.status.toUpperCase()}
                 </span>
               </div>
-              <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>
+              <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>
                 {alert.field} {alert.condition}
                 {alert.triggeredAt && (
-                  <span style={{ marginLeft: '8px', color: FINCEPT_YELLOW }}>
+                  <span style={{ marginLeft: '8px', color: 'var(--ft-color-warning)' }}>
                     @ {alert.triggeredAt}
                   </span>
                 )}
@@ -196,10 +192,10 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
         ))}
 
         {alerts.length === 0 && !loading && (
-          <div style={{ padding: '12px', textAlign: 'center', color: FINCEPT_GRAY, fontSize: '10px' }}>
+          <div style={{ padding: '12px', textAlign: 'center', color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)' }}>
             <Bell size={20} style={{ marginBottom: '8px', opacity: 0.5 }} />
-            <div>No alerts configured</div>
-            <div style={{ fontSize: '9px', marginTop: '4px' }}>Set up alerts in Monitoring tab</div>
+            <div>{t('widgets.noAlertsConfigured')}</div>
+            <div style={{ fontSize: 'var(--ft-font-size-tiny)', marginTop: '4px' }}>{t('widgets.alertsSetupHint')}</div>
           </div>
         )}
 
@@ -209,8 +205,8 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: FINCEPT_YELLOW,
-              fontSize: '9px',
+              color: 'var(--ft-color-warning)',
+              fontSize: 'var(--ft-font-size-tiny)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -218,7 +214,7 @@ export const AlertsWidget: React.FC<AlertsWidgetProps> = ({
               gap: '4px'
             }}
           >
-            <span>Manage Alerts</span>
+            <span>{t('widgets.manageAlerts')}</span>
             <ExternalLink size={10} />
           </div>
         )}

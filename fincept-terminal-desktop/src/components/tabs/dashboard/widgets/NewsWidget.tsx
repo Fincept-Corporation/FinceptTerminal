@@ -4,12 +4,6 @@ import { BaseWidget } from './BaseWidget';
 import { fetchAllNews, NewsArticle } from '../../../../services/news/newsService';
 import { useCache } from '../../../../hooks/useCache';
 
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GREEN = '#00C800';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_YELLOW = '#FFFF00';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_BLUE = '#6496FA';
 
 interface NewsWidgetProps {
   id: string;
@@ -50,19 +44,20 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
     return filtered.slice(0, limit);
   }, [allNews, category, limit]);
 
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'FLASH': return FINCEPT_RED;
-      case 'URGENT': return '#FFA500';
-      case 'BREAKING': return FINCEPT_YELLOW;
-      default: return FINCEPT_GREEN;
+      case 'FLASH': return 'var(--ft-color-alert)';
+      case 'URGENT': return 'var(--ft-color-primary)';
+      case 'BREAKING': return 'var(--ft-color-warning)';
+      default: return 'var(--ft-color-success)';
     }
   };
 
   return (
     <BaseWidget
       id={id}
-      title={`${t('widgets.news')} - ${category}`}
+      title={`${t('widgets.news')} - ${t(`widgets.category${category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()}`, category)}`}
       onRemove={onRemove}
       onRefresh={refresh}
       isLoading={loading}
@@ -75,23 +70,23 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
             style={{
               marginBottom: '8px',
               paddingBottom: '8px',
-              borderBottom: index < news.length - 1 ? `1px solid ${FINCEPT_GRAY}` : 'none'
+              borderBottom: index < news.length - 1 ? '1px solid var(--ft-border-color)' : 'none'
             }}
           >
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '2px', fontSize: '8px' }}>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '2px', fontSize: 'var(--ft-font-size-tiny)' }}>
               <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold' }}>
                 [{article.priority}]
               </span>
-              <span style={{ color: FINCEPT_BLUE }}>[{article.category}]</span>
-              <span style={{ color: FINCEPT_GRAY }}>{article.time}</span>
+              <span style={{ color: 'var(--ft-color-info)' }}>[{article.category}]</span>
+              <span style={{ color: 'var(--ft-color-text-muted)' }}>{article.time}</span>
             </div>
-            <div style={{ color: FINCEPT_WHITE, fontSize: '10px', fontWeight: 'bold', marginBottom: '2px', lineHeight: '1.2' }}>
+            <div style={{ color: 'var(--ft-color-text)', fontSize: 'var(--ft-font-size-small)', fontWeight: 'bold', marginBottom: '2px', lineHeight: '1.2' }}>
               {article.headline}
             </div>
-            <div style={{ color: FINCEPT_GRAY, fontSize: '9px', lineHeight: '1.2' }}>
+            <div style={{ color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-tiny)', lineHeight: '1.2' }}>
               {article.summary.substring(0, 100)}...
             </div>
-            <div style={{ color: FINCEPT_GRAY, fontSize: '8px', marginTop: '2px' }}>
+            <div style={{ color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-tiny)', marginTop: '2px' }}>
               {article.source}
             </div>
           </div>

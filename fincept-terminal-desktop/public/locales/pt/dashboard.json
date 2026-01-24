@@ -7,69 +7,75 @@
   "buttons": {
     "addWidget": "ADICIONAR WIDGET",
     "saveLayout": "SALVAR LAYOUT",
-    "reset": "REINICIAR"
+    "reset": "REINICIAR",
+    "help": "AJUDA"
   },
   "widgets": {
     "loading": "Carregando...",
     "error": "Erro",
-    "globalIndices": "ÍNDICES GLOBAIS - TOP 12",
-    "forex": "PARES FOREX",
+    "globalIndices": "Índices Globais - Top 12",
+    "forex": "Forex - Pares Principais",
     "crypto": "CRIPTOMOEDAS",
-    "commodities": "COMMODITIES",
+    "commodities": "Mercadorias",
     "news": "NOTÍCIAS",
     "forum": "FÓRUM",
-    "watchlist": "LISTA DE ACOMPANHAMENTO",
+    "watchlist": "LISTA DE ASSISTIR",
+    "maritimeIntelligence": "Inteligência Marítima",
+    "unknown": "Tipo de widget desconhecido",
     "index": "ÍNDICE",
     "symbol": "SÍMBOLO",
     "price": "PREÇO",
-    "change": "VAR",
-    "percentChange": "%VAR",
-    "noIndexData": "Sem dados de índices",
-    "noForexData": "Sem dados de forex",
-    "noCryptoData": "Sem dados de cripto",
-    "noCommoditiesData": "Sem dados de commodities",
-    "noForumPosts": "Sem publicações",
-    "noStocksInWatchlist": "Sem ações na lista",
-    "noWatchlistSelected": "Nenhuma lista selecionada",
-    "noData": "Sem dados",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Nenhum dado de índice disponível",
+    "noForexData": "Nenhum dado forex disponível",
+    "noCryptoData": "Nenhum dado criptográfico disponível",
+    "noCommoditiesData": "Não há dados de commodities disponíveis",
+    "noForumPosts": "Nenhuma postagem no fórum disponível",
+    "noStocksInWatchlist": "Nenhuma ação na lista de observação",
+    "noWatchlistSelected": "Nenhuma lista de observação selecionada",
+    "noData": "Não há dados disponíveis",
     "pair": "PAR",
-    "rate": "TAXA",
-    "commodity": "COMMODITY",
-    "maritimeIntelligence": "⚓ INTELIGÊNCIA MARÍTIMA",
+    "rate": "AVALIAR",
+    "commodity": "MERCADORIA",
     "globe3D": "GLOBO 3D",
     "vessels": "NAVIOS",
     "routes": "ROTAS",
     "vol24h": "VOL 24H",
     "topTradeCorridors": "PRINCIPAIS CORREDORES COMERCIAIS",
     "ships": "navios",
-    "unknown": "[PT] Unknown widget type"
+    "marketNews": "Notícias do mercado",
+    "secPressReleases": "Comunicados de imprensa da SEC",
+    "cryptoNews": "Notícias criptográficas",
+    "trendingForum": "Fórum de tendências",
+    "techStocks": "Ações de tecnologia"
   },
   "tips": {
-    "drag": "Arraste widgets para reorganizar",
-    "resize": "Redimensione do canto inferior direito",
+    "drag": "Arraste os widgets para reorganizar",
+    "resize": "Redimensionar do canto inferior direito",
     "remove": "Remova widgets com o botão X",
-    "responsive": "Layout responsivo - largura total"
+    "responsive": "Layout responsivo – usa largura total"
   },
   "loading": {
-    "title": "Inicializando Painel",
-    "description": "Configurando cache do banco de dados para carregamento mais rápido...",
-    "note": "Isso levará apenas um momento na primeira inicialização"
+    "title": "Inicializando o painel",
+    "description": "Configurando o cache do banco de dados para carregamento mais rápido de dados...",
+    "note": "Isso levará apenas um momento no primeiro lançamento"
   },
   "empty": {
-    "noWidgets": "Sem widgets no painel",
+    "noWidgets": "Nenhum widget no painel",
     "addFirst": "ADICIONE SEU PRIMEIRO WIDGET"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Espaço de trabalho arrastar e soltar",
-    "layout": "Layout",
+    "version": "Painel personalizável Fincept v2.0.0 | Arrastar e soltar espaço de trabalho",
+    "layout": "Disposição",
     "custom": "Personalizado",
     "empty": "Vazio",
     "active": "ATIVO",
     "cache": "Cache: ATIVADO",
-    "label": "[PT] Status"
+    "label": "Status"
   },
   "messages": {
-    "layoutSaved": "[PT] Dashboard layout saved!",
-    "resetConfirm": "[PT] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Layout do painel salvo!",
+    "resetConfirm": "Redefinir o painel para o layout padrão? Isso removerá todos os widgets personalizados."
   }
 }

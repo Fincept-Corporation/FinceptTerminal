@@ -69,7 +69,9 @@ class IntentClassifier:
         QueryIntent.ANALYSIS: [
             "analyze", "analysis", "valuation", "dcf", "fair value",
             "fundamental", "technical", "chart", "indicator", "pattern",
-            "support", "resistance", "trend"
+            "support", "resistance", "trend", "investment thesis",
+            "stock analysis", "equity research", "price target", "outlook",
+            "forecast", "recommendation", "rating", "overvalued", "undervalued"
         ],
         QueryIntent.RISK: [
             "risk", "var", "volatility", "drawdown", "sharpe", "beta",
@@ -356,7 +358,8 @@ class SuperAgent:
         self,
         query: str,
         session_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        user_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Route and execute query.
@@ -365,6 +368,7 @@ class SuperAgent:
             query: User query
             session_id: Optional session ID
             context: Optional context
+            user_config: Optional user-provided model config (from UI settings)
 
         Returns:
             Response from routed agent
@@ -376,12 +380,41 @@ class SuperAgent:
         routing = self.route(query)
         logger.info(f"Routed to {routing.agent_id} with confidence {routing.confidence:.2f}")
 
-        # Build config
+        # Build config - use user's model config if provided, otherwise default
+        model_config = (
+            user_config.get("model", {}) if user_config
+            else {"provider": "openai", "model_id": "gpt-4o-mini"}
+        )
+
         config = {
-            "model": {"provider": "openai", "model_id": "gpt-4-turbo"},
+            "model": model_config,
             "instructions": self._get_instructions_for_intent(routing.intent),
             **routing.config
         }
+
+        # Merge user config overrides (tools, reasoning, etc.)
+        if user_config:
+            if user_config.get("tools"):
+                config["tools"] = user_config["tools"]
+            if user_config.get("reasoning") is not None:
+                config["reasoning"] = user_config["reasoning"]
+            if user_config.get("instructions"):
+                config["instructions"] = user_config["instructions"]
+
+        # Validate model config before execution
+        model_provider = config.get("model", {}).get("provider", "")
+        model_id = config.get("model", {}).get("model_id", "")
+        if not model_provider or not model_id:
+            return {
+                "success": False,
+                "error": "No LLM model configured. Please configure a model provider and model ID in Settings > LLM Configuration.",
+                "routing": {
+                    "intent": routing.intent.value,
+                    "agent_id": routing.agent_id,
+                    "confidence": routing.confidence,
+                    "matched_keywords": routing.matched_keywords
+                }
+            }
 
         # Try to load specific agent
         loader = get_loader()
@@ -404,17 +437,26 @@ class SuperAgent:
                     "agent_id": routing.agent_id,
                     "confidence": routing.confidence,
                     "matched_keywords": routing.matched_keywords
-                }
+                },
+                "model_used": f"{model_provider}/{model_id}"
             }
         except Exception as e:
+            error_msg = str(e)
+            # Provide helpful error for common issues
+            if "api_key" in error_msg.lower() or "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                error_msg = f"API key error for provider '{model_provider}': {error_msg}. Check your API key in Settings > LLM Configuration."
+            elif "connection" in error_msg.lower() or "connect" in error_msg.lower():
+                error_msg = f"Connection error for '{model_provider}': {error_msg}. Check your base URL and network."
+
             return {
                 "success": False,
-                "error": str(e),
+                "error": error_msg,
                 "routing": {
                     "intent": routing.intent.value,
                     "agent_id": routing.agent_id,
                     "confidence": routing.confidence
-                }
+                },
+                "model_attempted": f"{model_provider}/{model_id}"
             }
 
     def execute_multi(
@@ -541,8 +583,9 @@ def route_query(query: str, api_keys: Dict[str, str] = None) -> Dict[str, Any]:
 def execute_query(
     query: str,
     api_keys: Dict[str, str] = None,
-    session_id: str = None
+    session_id: str = None,
+    config: Dict[str, Any] = None
 ) -> Dict[str, Any]:
     """Route and execute a query"""
     agent = SuperAgent(api_keys=api_keys)
-    return agent.execute(query, session_id)
+    return agent.execute(query, session_id, user_config=config)

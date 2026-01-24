@@ -8,7 +8,7 @@
 import type { StockBrokerMetadata, Region, IStockBrokerAdapter } from './types';
 
 // ============================================================================
-// NIFTY 50 COMPONENTS (Jan 2025)
+// NIFTY 50 COMPONENTS (Jan 2026)
 // ============================================================================
 
 const NIFTY_50_SYMBOLS = [

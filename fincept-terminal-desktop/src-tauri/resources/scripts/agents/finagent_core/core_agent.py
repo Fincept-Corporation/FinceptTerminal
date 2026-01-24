@@ -449,6 +449,87 @@ class CoreAgent:
 
 
 # =============================================================================
+# Builder Pattern
+# =============================================================================
+
+class CoreAgentBuilder:
+    """
+    Builder for creating agent configuration dictionaries.
+
+    Usage:
+        config = (CoreAgentBuilder()
+            .with_model("openai", "gpt-4o")
+            .with_tools(["yfinance", "duckduckgo"])
+            .with_memory()
+            .with_reasoning("chain_of_thought")
+            .build())
+        agent = CoreAgent(api_keys={...})
+        response = agent.run("query", config)
+    """
+
+    def __init__(self):
+        self._config: Dict[str, Any] = {}
+
+    def with_model(self, provider: str, model_id: Optional[str] = None, **kwargs) -> "CoreAgentBuilder":
+        """Set the model provider and ID."""
+        self._config["model"] = {"provider": provider}
+        if model_id:
+            self._config["model"]["model_id"] = model_id
+        if kwargs:
+            self._config["model"].update(kwargs)
+        return self
+
+    def with_instructions(self, instructions: str) -> "CoreAgentBuilder":
+        """Set agent instructions."""
+        self._config["instructions"] = instructions
+        return self
+
+    def with_tools(self, tools: List[str]) -> "CoreAgentBuilder":
+        """Set tools to use."""
+        self._config["tools"] = tools
+        return self
+
+    def with_memory(self, enabled: bool = True) -> "CoreAgentBuilder":
+        """Enable memory."""
+        self._config["memory"] = enabled
+        return self
+
+    def with_reasoning(self, strategy: str = "chain_of_thought") -> "CoreAgentBuilder":
+        """Enable reasoning with a strategy."""
+        self._config["reasoning"] = {"strategy": strategy}
+        return self
+
+    def with_knowledge(self, knowledge_config: Dict[str, Any]) -> "CoreAgentBuilder":
+        """Set knowledge base configuration."""
+        self._config["knowledge"] = knowledge_config
+        return self
+
+    def with_output_format(self, fmt: str = "markdown") -> "CoreAgentBuilder":
+        """Set output format."""
+        self._config["output_format"] = fmt
+        return self
+
+    def with_guardrails(self, guardrails_config: Optional[Dict[str, Any]] = None) -> "CoreAgentBuilder":
+        """Enable guardrails."""
+        self._config["guardrails"] = guardrails_config or True
+        return self
+
+    def with_name(self, name: str) -> "CoreAgentBuilder":
+        """Set agent name."""
+        self._config["name"] = name
+        return self
+
+    def with_debug(self, enabled: bool = True) -> "CoreAgentBuilder":
+        """Enable debug mode."""
+        self._config["debug"] = enabled
+        return self
+
+    def build(self) -> Dict[str, Any]:
+        """Build and return the configuration dictionary."""
+        return self._config.copy()
+
+
+# =============================================================================
 # Entry Point - Single JSON Payload
 # =============================================================================
 

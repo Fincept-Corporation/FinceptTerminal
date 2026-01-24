@@ -183,7 +183,7 @@ export const ZERODHA_METADATA: StockBrokerMetadata = {
   },
 
   defaultSymbols: [
-    // NIFTY 50 Components (Jan 2025)
+    // NIFTY 50 Components (Jan 2026)
     'HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK',
     'BAJFINANCE', 'BAJAJFINSV', 'HDFCLIFE', 'SBILIFE', 'INDUSINDBK',
     'TCS', 'INFY', 'WIPRO', 'HCLTECH', 'TECHM', 'LTIM',

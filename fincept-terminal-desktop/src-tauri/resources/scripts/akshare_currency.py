@@ -72,11 +72,11 @@ def get_currency_latest(base="USD"):
     """Get latest exchange rates for base currency"""
     return safe_call(ak.currency_latest, base=base)
 
-def get_currency_history(base="USD", symbol="CNY", start_date="2020-01-01", end_date="2025-12-31"):
+def get_currency_history(base="USD", symbol="CNY", start_date="2020-01-01", end_date="2026-12-31"):
     """Get historical exchange rate data"""
     return safe_call(ak.currency_history, base=base, symbol=symbol, start_date=start_date, end_date=end_date)
 
-def get_currency_time_series(base="USD", symbol="CNY", start_date="2020-01-01", end_date="2025-12-31"):
+def get_currency_time_series(base="USD", symbol="CNY", start_date="2020-01-01", end_date="2026-12-31"):
     """Get currency time series data"""
     return safe_call(ak.currency_time_series, base=base, symbol=symbol, start_date=start_date, end_date=end_date)
 

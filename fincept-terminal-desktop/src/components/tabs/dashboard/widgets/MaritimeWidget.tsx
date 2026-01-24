@@ -2,13 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GREEN = '#00C800';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_CYAN = '#00FFFF';
-const FINCEPT_YELLOW = '#FFFF00';
-
 interface TradeRoute {
   name: string;
   value: string;
@@ -51,10 +44,10 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'critical': return FINCEPT_RED;
-      case 'delayed': return FINCEPT_YELLOW;
-      case 'active': return FINCEPT_GREEN;
-      default: return FINCEPT_GRAY;
+      case 'critical': return 'var(--ft-color-alert)';
+      case 'delayed': return 'var(--ft-color-warning)';
+      case 'active': return 'var(--ft-color-success)';
+      default: return 'var(--ft-color-text-muted)';
     }
   };
 
@@ -212,7 +205,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
       id={id}
       title={t('widgets.maritimeIntelligence')}
       onRemove={onRemove}
-      headerColor={FINCEPT_CYAN}
+      headerColor="var(--ft-color-accent)"
     >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* 3D Globe Section - Top 60% */}
@@ -222,7 +215,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
             position: 'relative',
             overflow: 'hidden',
             cursor: 'pointer',
-            borderBottom: `2px solid ${FINCEPT_CYAN}`
+            borderBottom: '2px solid var(--ft-color-accent)'
           }}
           title="Click to open full Maritime Intelligence view"
         >
@@ -233,7 +226,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
               width: '100%',
               height: '100%',
               border: 'none',
-              background: '#000'
+              background: 'var(--ft-color-background)'
             }}
           />
           <div style={{
@@ -252,7 +245,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
         </div>
 
         {/* Trade Data Section - Bottom 40% */}
-        <div style={{ flex: '0 0 40%', padding: '6px', fontSize: '8px', overflowY: 'auto' }}>
+        <div style={{ flex: '0 0 40%', padding: '6px', fontSize: 'var(--ft-font-size-tiny)', overflowY: 'auto' }}>
           {/* Intelligence Stats */}
           <div style={{
             display: 'grid',
@@ -260,30 +253,30 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
             gap: '4px',
             marginBottom: '6px',
             paddingBottom: '4px',
-            borderBottom: `1px solid ${FINCEPT_GRAY}`
+            borderBottom: '1px solid var(--ft-border-color)'
           }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: FINCEPT_GRAY, fontSize: '6px' }}>{t('widgets.vessels')}</div>
-              <div style={{ color: FINCEPT_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
+              <div style={{ color: 'var(--ft-color-text-muted)', fontSize: '6px' }}>{t('widgets.vessels')}</div>
+              <div style={{ color: 'var(--ft-color-accent)', fontWeight: 'bold', fontSize: 'var(--ft-font-size-small)' }}>
                 {intelligence.active_vessels}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: FINCEPT_GRAY, fontSize: '6px' }}>{t('widgets.routes')}</div>
-              <div style={{ color: FINCEPT_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
+              <div style={{ color: 'var(--ft-color-text-muted)', fontSize: '6px' }}>{t('widgets.routes')}</div>
+              <div style={{ color: 'var(--ft-color-accent)', fontWeight: 'bold', fontSize: 'var(--ft-font-size-small)' }}>
                 {intelligence.monitored_routes}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: FINCEPT_GRAY, fontSize: '6px' }}>{t('widgets.vol24h')}</div>
-              <div style={{ color: FINCEPT_GREEN, fontWeight: 'bold', fontSize: '10px' }}>
+              <div style={{ color: 'var(--ft-color-text-muted)', fontSize: '6px' }}>{t('widgets.vol24h')}</div>
+              <div style={{ color: 'var(--ft-color-success)', fontWeight: 'bold', fontSize: 'var(--ft-font-size-small)' }}>
                 {intelligence.trade_volume}
               </div>
             </div>
           </div>
 
           {/* Top Trade Routes */}
-          <div style={{ color: FINCEPT_CYAN, fontSize: '7px', fontWeight: 'bold', marginBottom: '3px' }}>
+          <div style={{ color: 'var(--ft-color-accent)', fontSize: '7px', fontWeight: 'bold', marginBottom: '3px' }}>
             {t('widgets.topTradeCorridors')}
           </div>
           {TRADE_ROUTES.map((route, idx) => (
@@ -303,7 +296,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
                 alignItems: 'center',
                 marginBottom: '1px'
               }}>
-                <span style={{ color: FINCEPT_WHITE, fontSize: '7px', fontWeight: 'bold' }}>
+                <span style={{ color: 'var(--ft-color-text)', fontSize: '7px', fontWeight: 'bold' }}>
                   {route.name}
                 </span>
                 <span style={{
@@ -316,8 +309,8 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '6px' }}>
-                <span style={{ color: FINCEPT_GRAY }}>{route.value}</span>
-                <span style={{ color: FINCEPT_CYAN }}>{route.vessels} {t('widgets.ships')}</span>
+                <span style={{ color: 'var(--ft-color-text-muted)' }}>{route.value}</span>
+                <span style={{ color: 'var(--ft-color-accent)' }}>{route.vessels} {t('widgets.ships')}</span>
               </div>
             </div>
           ))}

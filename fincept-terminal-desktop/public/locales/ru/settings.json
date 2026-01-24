@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "НАСТРОЙКИ",
+  "sidebar": {
+    "credentials": "Учетные данные API",
+    "polymarket": "Полимаркет API",
+    "llm": "Конфигурация LLM",
+    "dataSources": "Источники данных",
+    "backtesting": "Бэктестирование",
+    "stockSymbols": "Биржевые символы",
+    "tabLayout": "Макет вкладок",
+    "appearance": "Появление",
+    "language": "Язык",
+    "storage": "Хранение и кэш"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[RU] Manage API keys and credentials for external services",
-    "enterValue": "[RU] Enter value..."
+    "title": "Управление учетными данными API",
+    "description": "Управление ключами API и учетными данными для внешних служб.",
+    "apiKey": "API-ключ",
+    "enterValue": "Введите значение..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[RU] Customize the visual appearance of your terminal",
-    "currentSettings": "[RU] CURRENT SETTINGS"
+    "title": "ВНЕШНИЙ ВИД ТЕРМИНАЛА",
+    "description": "Настройте внешний вид вашего терминала, включая шрифты, цвета, часовой пояс и сочетания клавиш.",
+    "fontFamily": "СЕМЕЙСТВО ШРИФТОВ",
+    "currentSettings": "НАСТРОЙКИ ШРИФТА",
+    "baseFontSize": "БАЗОВЫЙ РАЗМЕР ШРИФТА",
+    "fontWeight": "ВЕС ШРИФТА",
+    "weightNormal": "Нормальный (400)",
+    "weightSemibold": "Полужирный (600)",
+    "weightBold": "Жирный (700)",
+    "enableItalic": "ВКЛЮЧИТЬ КУРСИВ",
+    "fontSizeSmall": "Маленький (9 пикселей)",
+    "fontSizeLarge": "Большой (18 пикселей)",
+    "colorTheme": "ЦВЕТОВАЯ ТЕМА",
+    "defaultTimezone": "ЧАСОВОЙ ПОЯС ПО УМОЛЧАНИЮ",
+    "timezoneDescription": "Установите часовой пояс по умолчанию, отображаемый на панели навигации. Виджеты информационной панели могут использовать собственные настройки часового пояса.",
+    "functionKeys": "СООТНОШЕНИЕ ФУНКЦИОНАЛЬНЫХ КЛАВИШ",
+    "functionKeysDescription": "Настройте, какую вкладку или действие должна запускать каждая функциональная клавиша (F1–F12). Изменения будут отражены в строке состояния и сочетаниях клавиш.",
+    "livePreview": "ПРЯМОЙ ПРОСМОТР",
+    "previewTitle": "ОБЗОР ТЕРМИНАЛА FINCEPT",
+    "previewBody": "Основной текст: анализ рынка в реальном времени и отслеживание портфеля.",
+    "previewSmall": "Мелкий текст: рыночные данные, временные метки и метаданные.",
+    "statusConnected": "ПОДКЛЮЧЕНО",
+    "statusAlert": "ТРЕВОГА",
+    "statusWarning": "ПРЕДУПРЕЖДЕНИЕ",
+    "saveConfig": "СОХРАНИТЬ КОНФИГУРАЦИЯ",
+    "reset": "ПЕРЕЗАГРУЗИТЬ",
+    "saveSuccess": "Внешний вид терминала и сопоставление клавиш успешно сохранены.",
+    "resetSuccess": "Сброс к внешнему виду и сопоставлению клавиш по умолчанию"
   },
-  "sidebar": {
-    "credentials": "[RU] API Credentials",
-    "llm": "[RU] LLM Configuration",
-    "dataSources": "[RU] Data Sources",
-    "backtesting": "[RU] Backtesting",
-    "tabLayout": "[RU] Tab Layout",
-    "appearance": "[RU] Appearance",
-    "language": "[RU] Language",
-    "polymarket": "[RU] Polymarket API"
+  "stockSymbols": {
+    "title": "База данных биржевых символов",
+    "description": "Загружайте и управляйте данными символов брокера для быстрого поиска в автономном режиме. Данные символов включают акции, финансовые и операционные инструменты, сырьевые товары и валютные деривативы. Регулярно обновляйте, чтобы получать новейшие инструменты и сроки их действия."
   },
   "terminalConfig": {
-    "title": "[RU] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[RU] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[RU] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[RU] TOOLBAR MENU SECTIONS",
-    "newSection": "[RU] NEW SECTION",
-    "deleteSection": "[RU] DELETE",
-    "moveTo": "[RU] MOVE TO ▼",
-    "resetToDefault": "[RU] RESET TO DEFAULT",
-    "noTabsInSection": "[RU] No tabs in this section",
-    "tip": "[RU] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "КОНФИГУРАЦИЯ ВКЛАДКИ",
+    "headerTabs": "ВКЛАДКИ ЗАГОЛОВКА (ГЛАВНАЯ ПАНЕЛЬ ВКЛАДОК)",
+    "headerTabsDesc": "Перетащите, чтобы изменить порядок. Эти вкладки появляются в главном меню заголовка.",
+    "toolbarSections": "РАЗДЕЛЫ МЕНЮ ПАНЕЛИ ИНСТРУМЕНТОВ",
+    "newSection": "НОВЫЙ РАЗДЕЛ",
+    "deleteSection": "УДАЛИТЬ",
+    "moveTo": "ПЕРЕХОДИТЬ В ▼",
+    "resetToDefault": "СБРОС НА НАСТРОЙКИ ПО УМОЛЧАНИЮ",
+    "noTabsInSection": "В этом разделе нет вкладок",
+    "tip": "СОВЕТ: Перетаскивайте вкладки, чтобы изменить их порядок. Используйте кнопки со стрелками для перемещения вкладок между разделами заголовка и меню. Изменения сохраняются автоматически."
   },
   "llm": {
-    "title": "[RU] LLM CONFIGURATION",
-    "description": "[RU] Configure AI models and providers",
-    "connected": "[RU] CONNECTED",
-    "disconnected": "[RU] DISCONNECTED",
-    "provider": "[RU] AI PROVIDER",
-    "globalSettings": "[RU] GLOBAL AI SETTINGS",
-    "temperature": "[RU] TEMPERATURE",
-    "maxTokens": "[RU] MAX TOKENS",
-    "systemPrompt": "[RU] SYSTEM PROMPT",
-    "modelLibrary": "[RU] MODEL LIBRARY",
-    "multiModelConfigs": "[RU] Multi-model configs"
+    "title": "КОНФИГУРАЦИЯ LLM",
+    "description": "Настройка моделей и поставщиков ИИ",
+    "connected": "ПОДКЛЮЧЕНО",
+    "disconnected": "ОТКЛЮЧЕНО",
+    "provider": "ИИ-ПРОВАЙДЕР",
+    "globalSettings": "ГЛОБАЛЬНЫЕ НАСТРОЙКИ ИИ",
+    "temperature": "ТЕМПЕРАТУРА",
+    "maxTokens": "МАКС. ТОКЕНОВ",
+    "systemPrompt": "СИСТЕМНАЯ ПОДСКАЗКА",
+    "modelLibrary": "МОДЕЛЬНАЯ БИБЛИОТЕКА",
+    "multiModelConfigs": "Мультимодельные конфигурации"
   },
   "buttons": {
-    "save": "[RU] SAVE",
-    "cancel": "[RU] CANCEL",
-    "add": "[RU] ADD"
+    "save": "СОХРАНЯТЬ",
+    "cancel": "ОТМЕНА",
+    "add": "ДОБАВЛЯТЬ"
   },
   "footer": {
-    "database": "[RU] Database: SQLite",
-    "storage": "[RU] Storage: File-based",
-    "secureStorage": "[RU] All data stored securely in fincept_terminal.db"
+    "database": "База данных: SQLite.",
+    "storage": "Хранение: файловое",
+    "secureStorage": "Все данные надежно хранятся в fincept_terminal.db."
   }
 }

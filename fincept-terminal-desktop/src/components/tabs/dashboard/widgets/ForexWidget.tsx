@@ -4,11 +4,6 @@ import { BaseWidget } from './BaseWidget';
 import { marketDataService, QuoteData } from '../../../../services/markets/marketDataService';
 import { useCache } from '../../../../hooks/useCache';
 
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GREEN = '#00C800';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_PURPLE = '#C864FF';
 
 interface ForexWidgetProps {
   id: string;
@@ -17,15 +12,15 @@ interface ForexWidgetProps {
 
 const MAJOR_FOREX_PAIRS = ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X', 'EURCHF=X'];
 
-const FOREX_NAMES: { [key: string]: string } = {
-  'EURUSD=X': 'EUR/USD',
-  'GBPUSD=X': 'GBP/USD',
-  'USDJPY=X': 'USD/JPY',
-  'AUDUSD=X': 'AUD/USD',
-  'USDCAD=X': 'USD/CAD',
-  'USDCHF=X': 'USD/CHF',
-  'NZDUSD=X': 'NZD/USD',
-  'EURCHF=X': 'EUR/CHF'
+const FOREX_NAME_KEYS: { [key: string]: string } = {
+  'EURUSD=X': 'widgets.forexEURUSD',
+  'GBPUSD=X': 'widgets.forexGBPUSD',
+  'USDJPY=X': 'widgets.forexUSDJPY',
+  'AUDUSD=X': 'widgets.forexAUDUSD',
+  'USDCAD=X': 'widgets.forexUSDCAD',
+  'USDCHF=X': 'widgets.forexUSDCHF',
+  'NZDUSD=X': 'widgets.forexNZDUSD',
+  'EURCHF=X': 'widgets.forexEURCHF'
 };
 
 export const ForexWidget: React.FC<ForexWidgetProps> = ({ id, onRemove }) => {
@@ -85,10 +80,10 @@ export const ForexWidget: React.FC<ForexWidgetProps> = ({ id, onRemove }) => {
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr 1fr',
           gap: '4px',
-          fontSize: '9px',
+          fontSize: 'var(--ft-font-size-tiny)',
           fontWeight: 'bold',
-          color: FINCEPT_WHITE,
-          borderBottom: `1px solid ${FINCEPT_GRAY}`,
+          color: 'var(--ft-color-text)',
+          borderBottom: '1px solid var(--ft-border-color)',
           padding: '4px 0',
           marginBottom: '4px'
         }}>
@@ -108,23 +103,23 @@ export const ForexWidget: React.FC<ForexWidgetProps> = ({ id, onRemove }) => {
               display: 'grid',
               gridTemplateColumns: '2fr 1fr 1fr 1fr',
               gap: '4px',
-              fontSize: '9px',
+              fontSize: 'var(--ft-font-size-tiny)',
               padding: '2px 0',
-              borderBottom: `1px solid rgba(120,120,120,0.3)`
+              borderBottom: '1px solid var(--ft-border-color)'
             }}
           >
-            <div style={{ color: FINCEPT_PURPLE }}>{FOREX_NAMES[quote.symbol] || quote.symbol}</div>
-            <div style={{ color: FINCEPT_WHITE, textAlign: 'right' }}>
+            <div style={{ color: 'var(--ft-color-purple)' }}>{FOREX_NAME_KEYS[quote.symbol] ? t(FOREX_NAME_KEYS[quote.symbol]) : quote.symbol}</div>
+            <div style={{ color: 'var(--ft-color-text)', textAlign: 'right' }}>
               {quote.price.toFixed(4)}
             </div>
             <div style={{
-              color: quote.change >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
+              color: quote.change >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
               textAlign: 'right'
             }}>
               {formatChange(quote.change)}
             </div>
             <div style={{
-              color: quote.change_percent >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
+              color: quote.change_percent >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
               textAlign: 'right'
             }}>
               {formatPercent(quote.change_percent)}
@@ -132,7 +127,7 @@ export const ForexWidget: React.FC<ForexWidgetProps> = ({ id, onRemove }) => {
           </div>
         ))}
         {(!quotes || quotes.length === 0) && !loading && !error && (
-          <div style={{ color: FINCEPT_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
+          <div style={{ color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)', textAlign: 'center', padding: '12px' }}>
             {t('widgets.noForexData')}
           </div>
         )}

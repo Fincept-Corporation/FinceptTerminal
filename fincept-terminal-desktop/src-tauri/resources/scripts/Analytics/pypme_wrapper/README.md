@@ -132,7 +132,7 @@ python core.py
 - **pypme**: 0.6.2
 - **Wrapper Version**: 1.0.0
 - **Coverage**: 100% (7/7 functions)
-- **Last Updated**: 2025-12-29
+- **Last Updated**: 2026-01-23
 
 ## License
 

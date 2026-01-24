@@ -138,6 +138,9 @@ def get_info(symbol):
             "short_ratio": info.get('shortRatio'),
             "short_percent_of_float": info.get('shortPercentOfFloat'),
             "peg_ratio": info.get('trailingPegRatio'),
+            "total_assets": info.get('totalAssets'),
+            "total_liabilities": info.get('totalDebt'),
+            "book_value_total": (info.get('bookValue') or 0) * (info.get('sharesOutstanding') or 0) if info.get('bookValue') and info.get('sharesOutstanding') else None,
             "timestamp": int(datetime.now().timestamp())
         }
 

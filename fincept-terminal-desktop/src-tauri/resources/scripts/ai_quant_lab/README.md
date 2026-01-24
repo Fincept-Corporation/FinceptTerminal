@@ -249,4 +249,4 @@ Called from Rust backend for frontend integration.
 
 ---
 
-**Total Modules**: 12 (8 Qlib + 4 RDAgent) | **Frameworks**: Qlib, RDAgent | **ML Models**: 10+ algorithms | **Last Updated**: 2025-12-28
+**Total Modules**: 12 (8 Qlib + 4 RDAgent) | **Frameworks**: Qlib, RDAgent | **ML Models**: 10+ algorithms | **Last Updated**: 2026-01-23

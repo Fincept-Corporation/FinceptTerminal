@@ -135,6 +135,17 @@ export interface BacktestRequest {
   hedging?: boolean; // Allow simultaneous long/short positions
   exclusiveOrders?: boolean; // Auto-close previous positions when opening new ones
   margin?: number; // Leverage/margin ratio (1.0 = no leverage, 2.0 = 2x)
+
+  // VectorBT advanced parameters
+  slippage?: number;       // Slippage as decimal (e.g., 0.001 = 0.1%)
+  stopLoss?: number;       // Stop-loss as decimal (e.g., 0.05 = 5%), 0 = disabled
+  takeProfit?: number;     // Take-profit as decimal (e.g., 0.10 = 10%), 0 = disabled
+  trailingStop?: number;   // Trailing stop as decimal (e.g., 0.03 = 3%), 0 = disabled
+  positionSizing?: 'fixed' | 'kelly' | 'fixed_fractional' | 'vol_target';
+  positionSizeValue?: number; // Size value for position sizing mode
+  allowShort?: boolean;    // Allow short selling
+  leverage?: number;       // Leverage multiplier
+  compareRandom?: boolean; // Compare vs random portfolio for stat significance
 }
 
 export interface BacktestConfig {
@@ -165,6 +176,47 @@ export interface BacktestResult {
   startTime?: string;
   endTime?: string;
   duration?: number;
+  advancedMetrics?: AdvancedMetricsResult;
+  monthlyReturns?: MonthlyReturnsRow[];
+  rollingMetrics?: RollingMetricsResult;
+  usingSyntheticData?: boolean;
+}
+
+export interface AdvancedMetricsResult {
+  var95: number;
+  var99: number;
+  cvar95: number;
+  cvar99: number;
+  ulcerIndex: number;
+  omegaRatio: number;
+  tailRatio: number;
+  kurtosis: number;
+  skewness: number;
+  avgDailyReturn: number;
+  dailyReturnStd: number;
+  dailyReturnP5: number;
+  dailyReturnP25: number;
+  dailyReturnP75: number;
+  dailyReturnP95: number;
+  returnsHistogram: { bin: number; count: number }[];
+  benchmarkAlpha: number;
+  benchmarkBeta: number;
+  informationRatio: number;
+  trackingError: number;
+  rSquared: number;
+  benchmarkCorrelation: number;
+}
+
+export interface MonthlyReturnsRow {
+  year: number;
+  months: (number | null)[];
+  yearTotal: number;
+}
+
+export interface RollingMetricsResult {
+  rollingSharpe: { date: string; value: number }[];
+  rollingVolatility: { date: string; value: number }[];
+  rollingDrawdown: { date: string; value: number }[];
 }
 
 export interface BacktestStatus {

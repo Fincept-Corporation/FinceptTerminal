@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactFlow, {
   Node,
@@ -78,16 +78,14 @@ const buildGraph = (data: GraphData, colors: NodeColors) => {
   };
 
   // 1. Corporate Events
-  const eventItems =
-    data.corporate_events && data.corporate_events.length > 0
-      ? data.corporate_events.map((e) => ({
-          label: formatDate(e.filing_date),
-          value: e.items?.[0] || 'Event',
-          url: e.filing_url,
-        }))
-      : [{ label: 'No events available', value: 'Loading...' }];
-
-  addDataNode('events', 'events', 'Corporate Events', eventItems, '#ef4444');
+  if (data.corporate_events && data.corporate_events.length > 0) {
+    const eventItems = data.corporate_events.slice(0, 8).map((e) => ({
+      label: formatDate(e.filing_date),
+      value: e.items?.[0] || e.description || '8-K Filing',
+      url: e.filing_url,
+    }));
+    addDataNode('events', 'events', 'Corporate Events', eventItems, '#ef4444');
+  }
 
   // 2. Recent SEC Filings
   if (data.filings && data.filings.length > 0) {
@@ -103,52 +101,46 @@ const buildGraph = (data: GraphData, colors: NodeColors) => {
     );
   }
 
-  // 3. Financials
-  if (data.financials) {
-    addDataNode(
-      'financials',
-      'financials',
-      'Financial Metrics',
-      [
-        { label: 'Revenue', value: formatMoney(data.financials.revenue) },
-        { label: 'Gross Profit', value: formatMoney(data.financials.gross_profit) },
-        { label: 'Operating CF', value: formatMoney(data.financials.operating_cashflow) },
-        { label: 'Free CF', value: formatMoney(data.financials.free_cashflow) },
-        { label: 'EBITDA Margin', value: formatPercent(data.financials.ebitda_margins) },
-        { label: 'Profit Margin', value: formatPercent(data.financials.profit_margins) },
-        { label: 'Revenue Growth', value: formatPercent(data.financials.revenue_growth) },
-        { label: 'Earnings Growth', value: formatPercent(data.financials.earnings_growth) },
-      ],
-      '#10b981'
-    );
+  // 3. Financials - only show non-zero metrics
+  if (data.financials && (data.financials.revenue || data.financials.gross_profit || data.financials.ebitda_margins)) {
+    const financialItems: { label: string; value: string }[] = [];
+    if (data.financials.revenue) financialItems.push({ label: 'Revenue', value: formatMoney(data.financials.revenue) });
+    if (data.financials.gross_profit) financialItems.push({ label: 'Gross Profit', value: formatMoney(data.financials.gross_profit) });
+    if (data.financials.operating_cashflow) financialItems.push({ label: 'Operating CF', value: formatMoney(data.financials.operating_cashflow) });
+    if (data.financials.free_cashflow) financialItems.push({ label: 'Free CF', value: formatMoney(data.financials.free_cashflow) });
+    if (data.financials.ebitda_margins) financialItems.push({ label: 'EBITDA Margin', value: formatPercent(data.financials.ebitda_margins) });
+    if (data.financials.profit_margins) financialItems.push({ label: 'Profit Margin', value: formatPercent(data.financials.profit_margins) });
+    if (data.financials.revenue_growth) financialItems.push({ label: 'Revenue Growth', value: formatPercent(data.financials.revenue_growth) });
+    if (data.financials.earnings_growth) financialItems.push({ label: 'Earnings Growth', value: formatPercent(data.financials.earnings_growth) });
+
+    if (financialItems.length > 0) {
+      addDataNode('financials', 'financials', 'Financial Metrics', financialItems, '#10b981');
+    }
   }
 
-  // 4. Balance Sheet
-  if (data.balance_sheet) {
-    addDataNode(
-      'balance',
-      'balance',
-      'Balance Sheet',
-      [
-        { label: 'Total Assets', value: formatMoney(data.balance_sheet.total_assets) },
-        { label: 'Total Liabilities', value: formatMoney(data.balance_sheet.total_liabilities) },
-        { label: 'Equity', value: formatMoney(data.balance_sheet.stockholders_equity) },
-        { label: 'Cash', value: formatMoney(data.balance_sheet.total_cash) },
-        { label: 'Debt', value: formatMoney(data.balance_sheet.total_debt) },
-        { label: 'Shares Out', value: formatNumber(data.balance_sheet.shares_outstanding) },
-      ],
-      colors.accent
-    );
+  // 4. Balance Sheet - only show if we have meaningful data
+  if (data.balance_sheet && (data.balance_sheet.total_cash || data.balance_sheet.total_debt || data.balance_sheet.total_assets)) {
+    const balanceItems: { label: string; value: string }[] = [];
+    if (data.balance_sheet.total_assets) balanceItems.push({ label: 'Total Assets', value: formatMoney(data.balance_sheet.total_assets) });
+    if (data.balance_sheet.total_liabilities) balanceItems.push({ label: 'Total Liabilities', value: formatMoney(data.balance_sheet.total_liabilities) });
+    if (data.balance_sheet.stockholders_equity) balanceItems.push({ label: 'Equity', value: formatMoney(data.balance_sheet.stockholders_equity) });
+    if (data.balance_sheet.total_cash) balanceItems.push({ label: 'Cash', value: formatMoney(data.balance_sheet.total_cash) });
+    if (data.balance_sheet.total_debt) balanceItems.push({ label: 'Debt', value: formatMoney(data.balance_sheet.total_debt) });
+    if (data.balance_sheet.shares_outstanding) balanceItems.push({ label: 'Shares Out', value: formatNumber(data.balance_sheet.shares_outstanding) });
+
+    if (balanceItems.length > 0) {
+      addDataNode('balance', 'balance', 'Balance Sheet', balanceItems, colors.accent);
+    }
   }
 
   // 5. Analysts
-  if (data.analysts) {
+  if (data.analysts && data.analysts.recommendation !== 'N/A') {
     addDataNode(
       'analysts',
       'analysts',
       'Analyst Coverage',
       [
-        { label: 'Recommendation', value: data.analysts.recommendation.toUpperCase() },
+        { label: 'Recommendation', value: (data.analysts.recommendation || 'N/A').toUpperCase() },
         {
           label: 'Rating Score',
           value: data.analysts.recommendation_mean ? data.analysts.recommendation_mean.toFixed(2) : 'N/A',
@@ -156,21 +148,21 @@ const buildGraph = (data: GraphData, colors: NodeColors) => {
         { label: 'Target Price', value: formatMoney(data.analysts.target_price) },
         { label: 'Target High', value: formatMoney(data.analysts.target_high) },
         { label: 'Target Low', value: formatMoney(data.analysts.target_low) },
-        { label: 'Analysts', value: String(data.analysts.analyst_count) },
+        { label: 'Analysts', value: String(data.analysts.analyst_count || 0) },
       ],
       '#8b5cf6'
     );
   }
 
   // 6. Ownership
-  if (data.ownership) {
+  if (data.ownership && (data.ownership.insider_percent || data.ownership.institutional_percent)) {
     addDataNode(
       'ownership',
       'ownership',
       'Ownership Structure',
       [
-        { label: 'Insider %', value: `${data.ownership.insider_percent.toFixed(2)}%` },
-        { label: 'Institutional %', value: `${data.ownership.institutional_percent.toFixed(2)}%` },
+        { label: 'Insider %', value: `${(data.ownership.insider_percent || 0).toFixed(2)}%` },
+        { label: 'Institutional %', value: `${(data.ownership.institutional_percent || 0).toFixed(2)}%` },
         { label: 'Float Shares', value: formatNumber(data.ownership.float_shares) },
         { label: 'Total Shares', value: formatNumber(data.ownership.shares_outstanding) },
       ],
@@ -179,18 +171,18 @@ const buildGraph = (data: GraphData, colors: NodeColors) => {
   }
 
   // 7. Valuation
-  if (data.valuation) {
+  if (data.valuation && (data.valuation.pe_ratio || data.valuation.enterprise_value)) {
     addDataNode(
       'valuation',
       'valuation',
       'Valuation Metrics',
       [
-        { label: 'P/E Ratio', value: data.valuation.pe_ratio.toFixed(2) },
-        { label: 'Forward P/E', value: data.valuation.forward_pe.toFixed(2) },
-        { label: 'Price/Book', value: data.valuation.price_to_book.toFixed(2) },
+        { label: 'P/E Ratio', value: (data.valuation.pe_ratio || 0).toFixed(2) },
+        { label: 'Forward P/E', value: (data.valuation.forward_pe || 0).toFixed(2) },
+        { label: 'Price/Book', value: (data.valuation.price_to_book || 0).toFixed(2) },
         { label: 'Enterprise Value', value: formatMoney(data.valuation.enterprise_value) },
-        { label: 'EV/Revenue', value: data.valuation.enterprise_to_revenue.toFixed(2) },
-        { label: 'PEG Ratio', value: data.valuation.peg_ratio.toFixed(2) },
+        { label: 'EV/Revenue', value: (data.valuation.enterprise_to_revenue || 0).toFixed(2) },
+        { label: 'PEG Ratio', value: (data.valuation.peg_ratio || 0).toFixed(2) },
       ],
       '#ec4899'
     );
@@ -234,7 +226,9 @@ const RelationshipMapTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSymbol, setSelectedSymbol] = useState(DEFAULT_TICKER);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingTime, setLoadingTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const loadingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -256,6 +250,14 @@ const RelationshipMapTab: React.FC = () => {
     async (ticker: string) => {
       setIsLoading(true);
       setError(null);
+      setLoadingTime(0);
+
+      // Start loading timer
+      if (loadingTimerRef.current) clearInterval(loadingTimerRef.current);
+      loadingTimerRef.current = setInterval(() => {
+        setLoadingTime((prev) => prev + 1);
+      }, 1000);
+
       try {
         const data = await relationshipMapService.getRelationshipMap(ticker);
         const { nodes: newNodes, edges: newEdges } = buildGraph(data as unknown as GraphData, nodeColors);
@@ -265,6 +267,10 @@ const RelationshipMapTab: React.FC = () => {
         console.error('[UI] Error:', err);
         setError(`Failed to load data for ${ticker}`);
       } finally {
+        if (loadingTimerRef.current) {
+          clearInterval(loadingTimerRef.current);
+          loadingTimerRef.current = null;
+        }
         setIsLoading(false);
       }
     },
@@ -273,18 +279,24 @@ const RelationshipMapTab: React.FC = () => {
 
   useEffect(() => {
     fetchRelationshipData(selectedSymbol);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSymbol]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (loadingTimerRef.current) clearInterval(loadingTimerRef.current);
+    };
   }, []);
 
   const handleSearch = useCallback(
-    async (e: React.FormEvent) => {
+    (e: React.FormEvent) => {
       e.preventDefault();
       if (!searchQuery.trim()) return;
-
       const ticker = searchQuery.toUpperCase().trim();
       setSelectedSymbol(ticker);
-      await fetchRelationshipData(ticker);
     },
-    [searchQuery, fetchRelationshipData]
+    [searchQuery]
   );
 
   // Memoize container style
@@ -393,7 +405,14 @@ const RelationshipMapTab: React.FC = () => {
                 {t('loading.title')} {selectedSymbol}...
               </p>
               <p className="text-sm mt-2" style={{ color: colors.textMuted }}>
-                {t('loading.subtitle')}
+                {loadingTime < 5
+                  ? t('loading.subtitle')
+                  : loadingTime < 15
+                    ? 'Fetching SEC filings and market data...'
+                    : 'Almost there, waiting for SEC data...'}
+              </p>
+              <p className="text-xs mt-1 font-mono" style={{ color: colors.textMuted }}>
+                {loadingTime}s
               </p>
             </div>
           </div>

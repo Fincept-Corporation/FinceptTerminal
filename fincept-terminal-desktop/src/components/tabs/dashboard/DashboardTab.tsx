@@ -113,7 +113,7 @@ interface DashboardTabProps {
 }
 
 const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
-  const { colors, fontSize, fontFamily, fontStyle, fontWeight } = useTerminalTheme();
+  const { colors, fontSize } = useTerminalTheme();
   const { t } = useTranslation('dashboard');
   const [widgets, setWidgets] = useState<WidgetInstance[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -427,24 +427,18 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
           width: '60px',
           height: '60px',
           border: '4px solid #404040',
-          borderTop: '4px solid #ea580c',
+          borderTop: `4px solid ${colors.primary}`,
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
         }} />
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
         <div style={{ textAlign: 'center', maxWidth: '500px' }}>
-          <h3 style={{ color: '#ea580c', fontSize: '18px', marginBottom: '10px' }}>
+          <h3 style={{ color: colors.primary, fontSize: fontSize.heading, marginBottom: '10px' }}>
             {t('loading.title')}
           </h3>
-          <p style={{ color: '#a3a3a3', fontSize: '13px', lineHeight: '1.5' }}>
+          <p style={{ color: colors.textMuted, fontSize: fontSize.subheading, lineHeight: '1.5' }}>
             {t('loading.description')}
           </p>
-          <p style={{ color: '#787878', fontSize: '11px', marginTop: '10px' }}>
+          <p style={{ color: colors.textMuted, fontSize: fontSize.body, marginTop: '10px' }}>
             {t('loading.note')}
           </p>
         </div>
@@ -457,9 +451,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
       height: '100%',
       backgroundColor: colors.background,
       color: colors.text,
-      fontFamily: fontFamily,
-      fontWeight: fontWeight,
-      fontStyle: fontStyle,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
@@ -568,10 +559,10 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
                 gap: '4px',
                 borderRadius: '2px'
               }}
-              title="Start dashboard tour"
+              title={t('buttons.help')}
             >
               <Info size={14} />
-              HELP
+              {t('buttons.help')}
             </button>
             <button
               id="dashboard-add-widget"

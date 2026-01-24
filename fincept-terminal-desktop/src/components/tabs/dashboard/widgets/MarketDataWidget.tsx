@@ -4,10 +4,6 @@ import { BaseWidget } from './BaseWidget';
 import { marketDataService, QuoteData } from '../../../../services/markets/marketDataService';
 import { useCache } from '../../../../hooks/useCache';
 
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GREEN = '#00C800';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_GRAY = '#787878';
 
 interface MarketDataWidgetProps {
   id: string;
@@ -45,7 +41,7 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
   return (
     <BaseWidget
       id={id}
-      title={`MARKETS - ${category}`}
+      title={`${t('widgets.markets')} - ${category}`}
       onRemove={onRemove}
       onRefresh={refresh}
       isLoading={loading}
@@ -56,10 +52,10 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr 1fr',
           gap: '4px',
-          fontSize: '9px',
+          fontSize: 'var(--ft-font-size-tiny)',
           fontWeight: 'bold',
-          color: FINCEPT_WHITE,
-          borderBottom: `1px solid ${FINCEPT_GRAY}`,
+          color: 'var(--ft-color-text)',
+          borderBottom: '1px solid var(--ft-border-color)',
           padding: '4px 0',
           marginBottom: '4px'
         }}>
@@ -75,21 +71,21 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
               display: 'grid',
               gridTemplateColumns: '2fr 1fr 1fr 1fr',
               gap: '4px',
-              fontSize: '9px',
+              fontSize: 'var(--ft-font-size-tiny)',
               padding: '2px 0',
-              borderBottom: `1px solid rgba(120,120,120,0.3)`
+              borderBottom: '1px solid var(--ft-border-color)'
             }}
           >
-            <div style={{ color: FINCEPT_WHITE }}>{quote.symbol}</div>
-            <div style={{ color: FINCEPT_WHITE, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
+            <div style={{ color: 'var(--ft-color-text)' }}>{quote.symbol}</div>
+            <div style={{ color: 'var(--ft-color-text)', textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
             <div style={{
-              color: quote.change >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
+              color: quote.change >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
               textAlign: 'right'
             }}>
               {formatChange(quote.change)}
             </div>
             <div style={{
-              color: quote.change_percent >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
+              color: quote.change_percent >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
               textAlign: 'right'
             }}>
               {formatPercent(quote.change_percent)}

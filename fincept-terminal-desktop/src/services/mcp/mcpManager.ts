@@ -30,11 +30,11 @@ export interface MCPServerWithStats extends MCPServer {
 class MCPManager {
   private clients = new Map<string, MCPClient>();
   private healthCheckInterval: NodeJS.Timeout | null = null;
+  private healthCheckStarted = false;
   private serverErrors = new Map<string, { count: number; lastError: string; lastErrorTime: number }>();
 
   constructor() {
-    // Start health check on initialization
-    this.startHealthCheck();
+    // Health check is deferred until the first server starts
   }
 
   // Install a new MCP server
@@ -159,6 +159,12 @@ class MCPManager {
       // Clear error tracking on successful start
       this.serverErrors.delete(serverId);
 
+      // Start health check on first successful server start
+      if (!this.healthCheckStarted) {
+        this.startHealthCheck();
+        this.healthCheckStarted = true;
+      }
+
       mcpLogger.info(`Server ${server.name} started with ${tools.length} tools`);
     } catch (error) {
       mcpLogger.error(`Error starting server ${serverId}:`, error);
@@ -217,15 +223,22 @@ class MCPManager {
     const serversWithStats = await Promise.all(
       servers.map(async (server) => {
         const stats = await sqliteService.getMCPServerStats(server.id);
-        // Check actual status by verifying client exists and is connected
+        // Determine actual status: preserve 'error' from DB, otherwise check client connection
         const client = this.clients.get(server.id);
-        const actualStatus = client && client.isConnected() ? 'running' : 'stopped';
+        let actualStatus: 'running' | 'stopped' | 'error';
+        if (client && client.isConnected()) {
+          actualStatus = 'running';
+        } else if (server.status === 'error' || this.serverErrors.has(server.id)) {
+          actualStatus = 'error';
+        } else {
+          actualStatus = 'stopped';
+        }
 
         return {
           ...server,
           args: server.args ? JSON.parse(server.args) : [],
           env: server.env ? JSON.parse(server.env) : undefined,
-          status: actualStatus as 'running' | 'stopped' | 'error',
+          status: actualStatus,
           toolCount: stats.toolCount,
           callsToday: stats.callsToday,
           lastUsed: stats.lastUsed || undefined
@@ -335,14 +348,14 @@ class MCPManager {
     }
   }
 
-  // Start all enabled servers
+  // Start all enabled servers that have auto_start set
   async startAllEnabledServers(): Promise<void> {
     const servers = await sqliteService.getMCPServers();
-    const enabledServers = servers.filter(s => s.enabled);
+    const autoStartServers = servers.filter(s => s.enabled && s.auto_start);
 
-    mcpLogger.info(`Starting ${enabledServers.length} enabled servers`);
+    mcpLogger.info(`Starting ${autoStartServers.length} enabled auto-start servers`);
 
-    for (const server of enabledServers) {
+    for (const server of autoStartServers) {
       try {
         await this.startServer(server.id);
       } catch (error) {
@@ -393,7 +406,13 @@ class MCPManager {
     // Only start health check after servers have had time to initialize
     setTimeout(() => {
       this.healthCheckInterval = setInterval(async () => {
-        for (const [serverId, client] of this.clients.entries()) {
+        // Snapshot the client entries to avoid mutation during iteration
+        const clientEntries = Array.from(this.clients.entries());
+
+        for (const [serverId, client] of clientEntries) {
+          // Skip if client was removed during this iteration cycle
+          if (!this.clients.has(serverId)) continue;
+
           try {
             const isAlive = await client.ping();
 

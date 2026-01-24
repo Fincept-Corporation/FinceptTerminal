@@ -309,8 +309,26 @@ pub fn execute_python_subprocess(
         .map_err(|e| format!("Failed to execute Python: {}", e))?;
 
     if output.status.success() {
-        String::from_utf8(output.stdout)
-            .map_err(|e| format!("Failed to parse output: {}", e))
+        let raw_output = String::from_utf8(output.stdout)
+            .map_err(|e| format!("Failed to parse output: {}", e))?;
+
+        // Extract JSON from output - handles case where logging/warnings leak to stdout
+        // Look for the last line that starts with '{' or '[' (our JSON result)
+        let json_line = raw_output
+            .lines()
+            .rev()
+            .find(|line| {
+                let trimmed = line.trim();
+                trimmed.starts_with('{') || trimmed.starts_with('[')
+            });
+
+        match json_line {
+            Some(json) => Ok(json.to_string()),
+            None => {
+                // If no JSON found, return raw output (might be plain text result)
+                Ok(raw_output.trim().to_string())
+            }
+        }
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);

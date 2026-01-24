@@ -14,7 +14,8 @@ import {
   TestResult,
   BacktestRequest,
   BacktestResult,
-  BacktestStatus,
+  OptimizationRequest,
+  OptimizationResult,
   DataRequest,
   HistoricalData,
   IndicatorType,
@@ -56,56 +57,22 @@ export class VectorBTAdapter extends BaseBacktestingAdapter {
   readonly capabilities = VECTORBT_CAPABILITIES;
   readonly description = 'Ultra-fast vectorized backtesting with NumPy/Pandas';
 
-  private activeBacktests: Map<string, BacktestStatus> = new Map();
-
   async initialize(config: ProviderConfig): Promise<InitResult> {
-    try {
-      this.ensureInitialized();
-
-      // Test Python and VectorBT availability
-      const result = await invoke<{ success: boolean; stdout: string }>('execute_python_backtest', {
-        provider: 'vectorbt',
-        command: 'test_import',
-        args: JSON.stringify({}),
-      });
-
-      if (!result.success) {
-        return this.createErrorResult('VectorBT not installed. Run: pip install vectorbt');
-      }
-
-      this.config = config;
-      this.initialized = true;
-
-      return this.createSuccessResult('VectorBT initialized successfully');
-    } catch (error) {
-      return this.createErrorResult(error instanceof Error ? error : String(error));
-    }
+    this.config = config;
+    return this.createSuccessResult('VectorBT ready');
   }
 
   async testConnection(): Promise<TestResult> {
-    this.ensureInitialized();
-
     try {
-      const result = await invoke<{ success: boolean; stdout: string }>('execute_python_backtest', {
+      const stdout = await invoke<string>('execute_python_backtest', {
         provider: 'vectorbt',
         command: 'test_connection',
         args: JSON.stringify({}),
       });
 
-      if (!result.success) {
-        return {
-          success: false,
-          message: 'VectorBT connection test failed',
-          error: 'Failed to import vectorbt module',
-        };
-      }
-
-      this.connected = true;
-
-      const response = JSON.parse(result.stdout);
       return {
         success: true,
-        message: `VectorBT ${response.version} is available`,
+        message: 'VectorBT is available',
         latency: 0,
       };
     } catch (error) {
@@ -117,70 +84,139 @@ export class VectorBTAdapter extends BaseBacktestingAdapter {
     }
   }
 
-  async disconnect(): Promise<void> {
-    this.activeBacktests.clear();
-    this.connected = false;
-    this.initialized = false;
-  }
-
   async runBacktest(request: BacktestRequest): Promise<BacktestResult> {
-    this.ensureConnected();
-
     const backtestId = this.generateId();
 
     try {
-      // Track as active
-      this.activeBacktests.set(backtestId, {
+      const args: Record<string, any> = {
         id: backtestId,
-        status: 'running',
-        progress: 0,
-        message: 'Running VectorBT backtest...',
-      });
+        strategy: request.strategy,
+        startDate: request.startDate,
+        endDate: request.endDate,
+        initialCapital: request.initialCapital,
+        assets: request.assets,
+        parameters: request.parameters,
+      };
 
-      // Execute Python backtest
-      const result = await invoke<{ success: boolean; stdout: string }>('execute_python_backtest', {
+      // Pass advanced execution parameters
+      if (request.commission !== undefined) args.commission = request.commission;
+      if (request.slippage !== undefined) args.slippage = request.slippage;
+      if (request.benchmark) args.benchmark = request.benchmark;
+      if (request.stopLoss) args.stopLoss = request.stopLoss;
+      if (request.takeProfit) args.takeProfit = request.takeProfit;
+      if (request.trailingStop) args.trailingStop = request.trailingStop;
+      if (request.positionSizing) args.positionSizing = request.positionSizing;
+      if (request.positionSizeValue !== undefined) args.positionSizeValue = request.positionSizeValue;
+      if (request.allowShort !== undefined) args.allowShort = request.allowShort;
+      if (request.leverage !== undefined && request.leverage > 1) args.leverage = request.leverage;
+      if (request.compareRandom) args.compareRandom = true;
+
+      const stdout = await invoke<string>('execute_python_backtest', {
         provider: 'vectorbt',
         command: 'run_backtest',
-        args: JSON.stringify({
-          id: backtestId,
-          strategy: request.strategy,
-          startDate: request.startDate,
-          endDate: request.endDate,
-          initialCapital: request.initialCapital,
-          assets: request.assets,
-          parameters: request.parameters,
-        }),
+        args: JSON.stringify(args),
       });
 
-      this.activeBacktests.delete(backtestId);
-
+      const result = this.extractJSON(stdout);
       if (!result.success) {
-        throw new Error('VectorBT backtest failed');
+        throw new Error(result.error || 'VectorBT backtest failed');
       }
 
-      const backtestResult = JSON.parse(result.stdout);
-      return backtestResult as BacktestResult;
+      return result.data as BacktestResult;
     } catch (error) {
-      this.activeBacktests.delete(backtestId);
       throw new Error(`VectorBT backtest failed: ${error}`);
     }
   }
 
-  async getBacktestStatus(id: string): Promise<BacktestStatus> {
-    const status = this.activeBacktests.get(id);
-    if (!status) {
-      return {
-        id,
-        status: 'completed',
-        progress: 100,
-        message: 'Backtest not found or already completed',
+  /**
+   * Run vectorized parameter optimization
+   */
+  async optimize(request: OptimizationRequest): Promise<OptimizationResult> {
+    try {
+      const args: Record<string, any> = {
+        strategy: request.strategy,
+        parameterRanges: request.parameterGrid,
+        objective: request.objective || 'sharpe_ratio',
+        startDate: request.startDate || request.config?.startDate,
+        endDate: request.endDate || request.config?.endDate,
+        initialCapital: request.initialCapital || request.config?.initialCapital || 100000,
+        assets: request.assets || request.config?.assets || [],
+        parameters: request.parameters,
+        maxIterations: request.maxIterations,
+        algorithm: request.algorithm || 'grid',
       };
+
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'optimize',
+        args: JSON.stringify(args),
+      });
+
+      const result = this.extractJSON(stdout);
+      if (!result.success) {
+        throw new Error(result.error || 'VectorBT optimization failed');
+      }
+
+      return result.data as OptimizationResult;
+    } catch (error) {
+      throw new Error(`VectorBT optimization failed: ${error}`);
     }
-    return status;
   }
 
-  async cancelBacktest(id: string): Promise<void> {
-    this.activeBacktests.delete(id);
+  /**
+   * Run walk-forward optimization
+   */
+  async walkForward(request: {
+    strategy: any;
+    parameterRanges: Record<string, { min: number; max: number; step: number }>;
+    objective: string;
+    nSplits: number;
+    trainRatio: number;
+    startDate: string;
+    endDate: string;
+    initialCapital: number;
+    assets: any[];
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'walk_forward',
+        args: JSON.stringify(request),
+      });
+
+      const result = this.extractJSON(stdout);
+      if (!result.success) {
+        throw new Error(result.error || 'VectorBT walk-forward failed');
+      }
+
+      return result.data;
+    } catch (error) {
+      throw new Error(`VectorBT walk-forward failed: ${error}`);
+    }
+  }
+
+  /**
+   * Extract JSON from stdout that may contain non-JSON lines
+   */
+  private extractJSON(stdout: string): any {
+    // Try parsing directly first
+    try {
+      return JSON.parse(stdout);
+    } catch {
+      // Find the last JSON object in the output
+      const lines = stdout.split('\n');
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line.startsWith('{')) {
+          try {
+            return JSON.parse(line);
+          } catch {
+            continue;
+          }
+        }
+      }
+      throw new Error('No valid JSON found in VectorBT output');
+    }
   }
 
   async getHistoricalData(request: DataRequest): Promise<HistoricalData[]> {
@@ -206,37 +242,77 @@ export class VectorBTAdapter extends BaseBacktestingAdapter {
   }
 
   async calculateIndicator(type: IndicatorType, params: IndicatorParams): Promise<IndicatorResult> {
-    throw new Error('Use VectorBT indicators within backtests');
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'calculate_indicator',
+        args: JSON.stringify({ indicator: type, ...params }),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Indicator calculation failed');
+      return result.data as IndicatorResult;
+    } catch (error) {
+      throw new Error(`Indicator calculation failed: ${error}`);
+    }
   }
 
   async getAvailableIndicators(): Promise<IndicatorCatalog> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'get_indicators',
+        args: JSON.stringify({}),
+      });
+      const result = this.extractJSON(stdout);
+      if (result.success && result.data) return result.data as IndicatorCatalog;
+    } catch { /* fall through to static catalog */ }
+
     return {
       categories: [
         {
           name: 'Trend',
           indicators: [
-            { id: 'sma', name: 'Simple Moving Average', params: ['window'] },
-            { id: 'ema', name: 'Exponential Moving Average', params: ['span'] },
-            { id: 'bb', name: 'Bollinger Bands', params: ['window', 'alpha'] },
+            { id: 'ma', name: 'Moving Average (SMA/EMA)', params: ['period', 'type'] },
+            { id: 'bbands', name: 'Bollinger Bands', params: ['period', 'std_dev'] },
+            { id: 'keltner', name: 'Keltner Channel', params: ['ema_period', 'atr_period', 'multiplier'] },
+            { id: 'donchian', name: 'Donchian Channel', params: ['period'] },
           ],
         },
         {
           name: 'Momentum',
           indicators: [
-            { id: 'rsi', name: 'RSI', params: ['window'] },
+            { id: 'rsi', name: 'RSI', params: ['period'] },
             { id: 'macd', name: 'MACD', params: ['fast', 'slow', 'signal'] },
+            { id: 'stoch', name: 'Stochastic', params: ['k_period', 'd_period'] },
+            { id: 'momentum', name: 'Momentum', params: ['period'] },
+            { id: 'williams_r', name: 'Williams %R', params: ['period'] },
+            { id: 'cci', name: 'CCI', params: ['period'] },
           ],
         },
         {
           name: 'Volatility',
           indicators: [
-            { id: 'atr', name: 'ATR', params: ['window'] },
-            { id: 'stdev', name: 'Standard Deviation', params: ['window'] },
+            { id: 'atr', name: 'ATR', params: ['period'] },
+            { id: 'mstd', name: 'Moving Std Dev', params: ['period'] },
+            { id: 'zscore', name: 'Z-Score', params: ['period'] },
+          ],
+        },
+        {
+          name: 'Volume',
+          indicators: [
+            { id: 'obv', name: 'On-Balance Volume', params: [] },
+            { id: 'vwap', name: 'VWAP', params: [] },
+          ],
+        },
+        {
+          name: 'Trend Strength',
+          indicators: [
+            { id: 'adx', name: 'ADX', params: ['period'] },
           ],
         },
       ],
-      total: 50,
-      description: 'VectorBT has 50+ vectorized indicators',
+      total: 16,
+      description: 'VectorBT 16 vectorized indicators available',
     };
   }
 
@@ -256,14 +332,6 @@ export class VectorBTAdapter extends BaseBacktestingAdapter {
   }
 
   async getHealth(): Promise<HealthStatus> {
-    if (!this.initialized) {
-      return { status: 'unhealthy', message: 'Not initialized' };
-    }
-
-    if (!this.connected) {
-      return { status: 'degraded', message: 'Not connected' };
-    }
-
     return { status: 'healthy', message: 'VectorBT operational' };
   }
 }

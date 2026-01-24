@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "사용자 정의 대시보드",
-    "live": "실시간",
+    "title": "맞춤형 대시보드",
+    "live": "살다",
     "widgets": "위젯"
   },
   "buttons": {
     "addWidget": "위젯 추가",
     "saveLayout": "레이아웃 저장",
-    "reset": "리셋"
+    "reset": "다시 놓기",
+    "help": "돕다"
   },
   "widgets": {
-    "loading": "로딩 중...",
+    "loading": "로드 중...",
     "error": "오류",
-    "globalIndices": "글로벌 지수 - TOP 12",
-    "forex": "외환 쌍",
+    "globalIndices": "글로벌 지수 - 상위 12위",
+    "forex": "외환 - 주요 쌍",
     "crypto": "암호화폐",
-    "commodities": "원자재",
-    "news": "뉴스",
-    "forum": "포럼",
-    "watchlist": "관심목록",
-    "index": "지수",
-    "symbol": "심볼",
+    "commodities": "필수품",
+    "news": "소식",
+    "forum": "법정",
+    "watchlist": "관심 목록",
+    "maritimeIntelligence": "해양 인텔리전스",
+    "unknown": "알 수 없는 위젯 유형",
+    "index": "색인",
+    "symbol": "상징",
     "price": "가격",
-    "change": "변동",
-    "percentChange": "변동%",
-    "noIndexData": "지수 데이터 없음",
-    "noForexData": "외환 데이터 없음",
-    "noCryptoData": "암호화폐 데이터 없음",
-    "noCommoditiesData": "원자재 데이터 없음",
-    "noForumPosts": "포럼 게시물 없음",
-    "noStocksInWatchlist": "관심목록에 종목 없음",
-    "noWatchlistSelected": "관심목록 미선택",
-    "noData": "데이터 없음",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "사용 가능한 색인 데이터가 없습니다.",
+    "noForexData": "사용 가능한 외환 데이터가 없습니다.",
+    "noCryptoData": "사용 가능한 암호화 데이터가 없습니다.",
+    "noCommoditiesData": "사용 가능한 상품 데이터가 없습니다.",
+    "noForumPosts": "사용 가능한 포럼 게시물이 없습니다.",
+    "noStocksInWatchlist": "관심 목록에 주식이 없습니다",
+    "noWatchlistSelected": "선택된 관심 목록이 없습니다.",
+    "noData": "사용 가능한 데이터가 없습니다.",
     "pair": "쌍",
-    "rate": "환율",
-    "commodity": "원자재",
-    "maritimeIntelligence": "⚓ 해양 인텔리전스",
-    "globe3D": "3D 지구본",
+    "rate": "비율",
+    "commodity": "상품",
+    "globe3D": "3D 글로브",
     "vessels": "선박",
-    "routes": "항로",
-    "vol24h": "24시간 거래량",
-    "topTradeCorridors": "주요 무역 회랑",
-    "ships": "선박",
-    "unknown": "[KO] Unknown widget type"
+    "routes": "노선",
+    "vol24h": "24시간 볼륨",
+    "topTradeCorridors": "상위 무역 통로",
+    "ships": "배송",
+    "marketNews": "시장 뉴스",
+    "secPressReleases": "SEC 보도자료",
+    "cryptoNews": "암호화폐 뉴스",
+    "trendingForum": "인기 포럼",
+    "techStocks": "기술주"
   },
   "tips": {
-    "drag": "위젯을 드래그하여 재배열",
-    "resize": "우측 하단에서 크기 조정",
+    "drag": "재정렬하려면 위젯을 드래그하세요.",
+    "resize": "오른쪽 하단에서 크기 조정",
     "remove": "X 버튼으로 위젯 제거",
     "responsive": "반응형 레이아웃 - 전체 너비 사용"
   },
   "loading": {
     "title": "대시보드 초기화 중",
-    "description": "빠른 데이터 로딩을 위한 캐시 설정 중...",
-    "note": "첫 실행 시에만 잠시 시간이 걸립니다"
+    "description": "더 빠른 데이터 로드를 위해 데이터베이스 캐시를 설정하는 중...",
+    "note": "처음 시작할 때 시간이 조금 걸립니다."
   },
   "empty": {
-    "noWidgets": "대시보드에 위젯 없음",
-    "addFirst": "첫 번째 위젯 추가"
+    "noWidgets": "대시보드에 위젯이 없습니다",
+    "addFirst": "첫 번째 위젯을 추가하세요"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | 드래그 앤 드롭 워크스페이스",
-    "layout": "레이아웃",
-    "custom": "사용자 정의",
-    "empty": "비어있음",
-    "active": "활성",
-    "cache": "캐시: 활성화",
-    "label": "[KO] Status"
+    "version": "Fincept 맞춤형 대시보드 v2.0.0 | 드래그 앤 드롭 작업 공간",
+    "layout": "공들여 나열한 것",
+    "custom": "관습",
+    "empty": "비어 있는",
+    "active": "활동적인",
+    "cache": "캐시: 활성화됨",
+    "label": "상태"
   },
   "messages": {
-    "layoutSaved": "[KO] Dashboard layout saved!",
-    "resetConfirm": "[KO] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "대시보드 레이아웃이 저장되었습니다!",
+    "resetConfirm": "대시보드를 기본 레이아웃으로 재설정하시겠습니까? 이렇게 하면 모든 맞춤 위젯이 제거됩니다."
   }
 }

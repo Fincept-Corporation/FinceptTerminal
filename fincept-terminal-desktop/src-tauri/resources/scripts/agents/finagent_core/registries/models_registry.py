@@ -266,6 +266,15 @@ class ModelsRegistry:
             "api_key_env": "INTERNLM_API_KEY",
             "default_model": None,
         },
+
+        # Fincept (Built-in custom endpoint)
+        "fincept": {
+            "class": "finagent_core.registries.fincept_model.FinceptChat",
+            "models": ["fincept-llm"],
+            "api_key_env": "FINCEPT_API_KEY",
+            "default_model": "fincept-llm",
+            "base_url": "https://finceptbackend.share.zrok.io/research/llm",
+        },
     }
 
     _loaded_models: Dict[str, Any] = {}
@@ -298,9 +307,17 @@ class ModelsRegistry:
         provider_lower = provider.lower()
 
         if provider_lower not in cls.MODEL_CATALOG:
-            raise ValueError(f"Unknown provider: {provider}. Available: {list(cls.MODEL_CATALOG.keys())}")
-
-        config = cls.MODEL_CATALOG[provider_lower]
+            # Unknown provider - treat as OpenAI-compatible with custom base_url
+            # This supports custom endpoints like "fincept", "local-llm", etc.
+            logger.info(f"Unknown provider '{provider}', treating as OpenAI-compatible endpoint")
+            config = {
+                "class": "agno.models.openai.OpenAIChat",
+                "models": [],
+                "api_key_env": f"{provider.upper()}_API_KEY",
+                "default_model": model_id,
+            }
+        else:
+            config = cls.MODEL_CATALOG[provider_lower]
 
         # Resolve model ID
         final_model_id = model_id or config.get("default_model")
@@ -310,9 +327,15 @@ class ModelsRegistry:
         # Resolve API key
         final_api_key = api_key
         if not final_api_key and api_keys:
-            env_key = config.get("api_key_env")
-            if env_key:
-                final_api_key = api_keys.get(env_key)
+            # Try provider-specific key first, then env_key from config
+            final_api_key = api_keys.get(f"{provider.upper()}_API_KEY")
+            if not final_api_key:
+                env_key = config.get("api_key_env")
+                if env_key:
+                    final_api_key = api_keys.get(env_key)
+            # Also try lowercase provider name as key
+            if not final_api_key:
+                final_api_key = api_keys.get(provider_lower)
 
         # Try environment variable as fallback
         if not final_api_key and config.get("api_key_env"):
@@ -339,8 +362,12 @@ class ModelsRegistry:
             if final_api_key:
                 model_kwargs["api_key"] = final_api_key
 
-            # Add base_url for local models
-            if config.get("base_url"):
+            # Add base_url - check api_keys for custom endpoint, then config default
+            base_url_key = f"{provider.upper()}_BASE_URL"
+            custom_base_url = (api_keys or {}).get(base_url_key)
+            if custom_base_url:
+                model_kwargs["base_url"] = custom_base_url
+            elif config.get("base_url"):
                 model_kwargs["base_url"] = kwargs.pop("base_url", config["base_url"])
 
             # Add optional parameters (Agno uses these names)

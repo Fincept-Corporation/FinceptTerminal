@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "DASHBOARD YANG DAPAT DISESUAIKAN",
-    "live": "LANGSUNG",
+    "title": "DAsbor yang dapat disesuaikan",
+    "live": "HIDUP",
     "widgets": "WIDGET"
   },
   "buttons": {
-    "addWidget": "TAMBAH WIDGET",
-    "saveLayout": "SIMPAN LAYOUT",
-    "reset": "RESET"
+    "addWidget": "TAMBAHKAN WIDGET",
+    "saveLayout": "SIMPAN TATA LETAK",
+    "reset": "MENGATUR ULANG",
+    "help": "MEMBANTU"
   },
   "widgets": {
     "loading": "Memuat...",
-    "error": "Error",
-    "globalIndices": "INDEKS GLOBAL - TOP 12",
-    "forex": "PASANGAN FOREX",
-    "crypto": "CRYPTOCURRENCY",
-    "commodities": "KOMODITAS",
+    "error": "Kesalahan",
+    "globalIndices": "Indeks Global - 12 Teratas",
+    "forex": "Forex - Pasangan Utama",
+    "crypto": "MATA UANG KRIPTO",
+    "commodities": "Komoditas",
     "news": "BERITA",
     "forum": "FORUM",
-    "watchlist": "WATCHLIST",
+    "watchlist": "DAFTAR PERHATIAN",
+    "maritimeIntelligence": "Intelijen Maritim",
+    "unknown": "Jenis widget tidak diketahui",
     "index": "INDEKS",
     "symbol": "SIMBOL",
     "price": "HARGA",
     "change": "CHG",
     "percentChange": "%CHG",
-    "noIndexData": "Tidak ada data indeks",
-    "noForexData": "Tidak ada data forex",
-    "noCryptoData": "Tidak ada data kripto",
-    "noCommoditiesData": "Tidak ada data komoditas",
-    "noForumPosts": "Tidak ada post forum",
-    "noStocksInWatchlist": "Tidak ada saham di watchlist",
-    "noWatchlistSelected": "Tidak ada watchlist dipilih",
-    "noData": "Tidak ada data",
+    "noIndexData": "Tidak ada data indeks yang tersedia",
+    "noForexData": "Tidak ada data valas yang tersedia",
+    "noCryptoData": "Tidak ada data kripto yang tersedia",
+    "noCommoditiesData": "Tidak ada data komoditas yang tersedia",
+    "noForumPosts": "Tidak ada postingan forum yang tersedia",
+    "noStocksInWatchlist": "Tidak ada saham dalam daftar pantauan",
+    "noWatchlistSelected": "Tidak ada daftar pantauan yang dipilih",
+    "noData": "Tidak ada data yang tersedia",
     "pair": "PASANGAN",
-    "rate": "KURS",
-    "commodity": "KOMODITAS",
-    "maritimeIntelligence": "⚓ INTELIJEN MARITIM",
-    "globe3D": "GLOBE 3D",
+    "rate": "KECEPATAN",
+    "commodity": "KOMODITI",
+    "globe3D": "DUNIA 3D",
     "vessels": "KAPAL",
     "routes": "RUTE",
-    "vol24h": "VOL 24J",
-    "topTradeCorridors": "KORIDOR PERDAGANGAN UTAMA",
+    "vol24h": "VOL 24JAM",
+    "topTradeCorridors": "KORIDOR PERDAGANGAN TERATAS",
     "ships": "kapal",
-    "unknown": "[ID] Unknown widget type"
+    "marketNews": "Berita Pasar",
+    "secPressReleases": "Siaran Pers SEC",
+    "cryptoNews": "Berita Kripto",
+    "trendingForum": "Forum Tren",
+    "techStocks": "Saham Teknologi"
   },
   "tips": {
     "drag": "Seret widget untuk mengatur ulang",
     "resize": "Ubah ukuran dari sudut kanan bawah",
     "remove": "Hapus widget dengan tombol X",
-    "responsive": "Layout responsif - menggunakan lebar penuh"
+    "responsive": "Tata letak responsif - menggunakan lebar penuh"
   },
   "loading": {
-    "title": "Menginisialisasi Dashboard",
-    "description": "Menyiapkan cache database untuk pemuatan data lebih cepat...",
-    "note": "Ini hanya membutuhkan waktu sebentar saat peluncuran pertama"
+    "title": "Inisialisasi Dasbor",
+    "description": "Menyiapkan cache database untuk memuat data lebih cepat...",
+    "note": "Ini hanya akan memakan waktu beberapa saat pada peluncuran pertama"
   },
   "empty": {
-    "noWidgets": "Tidak ada widget di dashboard",
-    "addFirst": "TAMBAH WIDGET PERTAMA ANDA"
+    "noWidgets": "Tidak ada widget di dasbor",
+    "addFirst": "TAMBAHKAN WIDGET PERTAMA ANDA"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Workspace seret & lepas",
-    "layout": "Layout",
-    "custom": "Kustom",
+    "version": "Dasbor Fincept yang Dapat Disesuaikan v2.0.0 | Seret & lepas ruang kerja",
+    "layout": "Tata Letak",
+    "custom": "Kebiasaan",
     "empty": "Kosong",
     "active": "AKTIF",
-    "cache": "Cache: AKTIF",
-    "label": "[ID] Status"
+    "cache": "Tembolok: DIAKTIFKAN",
+    "label": "Status"
   },
   "messages": {
-    "layoutSaved": "[ID] Dashboard layout saved!",
-    "resetConfirm": "[ID] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Tata letak dasbor disimpan!",
+    "resetConfirm": "Setel ulang dasbor ke tata letak default? Ini akan menghapus semua widget khusus."
   }
 }

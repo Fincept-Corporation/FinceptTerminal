@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, AlertTriangle, TrendingUp, ExternalLink } from 'lucide-react';
+import { Calendar, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
+import { useTranslation } from 'react-i18next';
 
 interface CalendarWidgetProps {
   id: string;
@@ -20,12 +21,6 @@ interface EconomicEvent {
   previous?: string;
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_YELLOW = '#FFD700';
 
 const COUNTRY_FLAGS: Record<string, string> = {
   US: '🇺🇸',
@@ -46,6 +41,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [events, setEvents] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -146,14 +142,15 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+
   const getImpactColor = (impact: string) => {
     switch (impact) {
       case 'high':
-        return FINCEPT_RED;
+        return 'var(--ft-color-alert)';
       case 'medium':
-        return FINCEPT_ORANGE;
+        return 'var(--ft-color-primary)';
       default:
-        return FINCEPT_GRAY;
+        return 'var(--ft-color-text-muted)';
     }
   };
 
@@ -176,7 +173,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
       onRefresh={loadEvents}
       isLoading={loading}
       error={error}
-      headerColor={FINCEPT_ORANGE}
+      headerColor="var(--ft-color-primary)"
     >
       <div style={{ padding: '4px' }}>
         {/* Header */}
@@ -185,14 +182,14 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
           gridTemplateColumns: '50px 30px 1fr 60px',
           gap: '4px',
           padding: '4px 8px',
-          borderBottom: '1px solid #333',
-          color: FINCEPT_GRAY,
-          fontSize: '8px'
+          borderBottom: '1px solid var(--ft-border-color)',
+          color: 'var(--ft-color-text-muted)',
+          fontSize: 'var(--ft-font-size-tiny)'
         }}>
-          <span>TIME</span>
+          <span>{t('widgets.time')}</span>
           <span></span>
-          <span>EVENT</span>
-          <span style={{ textAlign: 'right' }}>IMPACT</span>
+          <span>{t('widgets.event')}</span>
+          <span style={{ textAlign: 'right' }}>{t('widgets.impact')}</span>
         </div>
 
         {events.slice(0, limit).map((event) => (
@@ -203,29 +200,29 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
               gridTemplateColumns: '50px 30px 1fr 60px',
               gap: '4px',
               padding: '6px 8px',
-              borderBottom: '1px solid #222',
+              borderBottom: '1px solid var(--ft-border-color)',
               alignItems: 'center'
             }}
           >
-            <span style={{ fontSize: '10px', color: FINCEPT_WHITE, fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)', fontFamily: 'monospace' }}>
               {event.time}
             </span>
             <span style={{ fontSize: '12px' }}>
               {COUNTRY_FLAGS[event.country] || event.country}
             </span>
             <div>
-              <div style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
+              <div style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)' }}>
                 {event.event}
               </div>
-              <div style={{ fontSize: '8px', color: FINCEPT_GRAY }}>
-                {event.actual && <span style={{ color: FINCEPT_GREEN }}>A: {event.actual} </span>}
+              <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>
+                {event.actual && <span style={{ color: 'var(--ft-color-success)' }}>A: {event.actual} </span>}
                 {event.forecast && <span>F: {event.forecast} </span>}
                 {event.previous && <span>P: {event.previous}</span>}
               </div>
             </div>
             <span style={{
               textAlign: 'right',
-              fontSize: '10px',
+              fontSize: 'var(--ft-font-size-small)',
               color: getImpactColor(event.impact),
               letterSpacing: '1px'
             }}>
@@ -235,9 +232,9 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
         ))}
 
         {events.length === 0 && !loading && (
-          <div style={{ padding: '12px', textAlign: 'center', color: FINCEPT_GRAY, fontSize: '10px' }}>
+          <div style={{ padding: '12px', textAlign: 'center', color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)' }}>
             <Calendar size={20} style={{ marginBottom: '8px', opacity: 0.5 }} />
-            <div>No events scheduled</div>
+            <div>{t('widgets.noEventsScheduled')}</div>
           </div>
         )}
 
@@ -247,12 +244,12 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
           justifyContent: 'center',
           gap: '12px',
           padding: '6px',
-          borderTop: '1px solid #333',
-          fontSize: '8px'
+          borderTop: '1px solid var(--ft-border-color)',
+          fontSize: 'var(--ft-font-size-tiny)'
         }}>
-          <span style={{ color: FINCEPT_RED }}>●●● High</span>
-          <span style={{ color: FINCEPT_ORANGE }}>●●○ Medium</span>
-          <span style={{ color: FINCEPT_GRAY }}>●○○ Low</span>
+          <span style={{ color: 'var(--ft-color-alert)' }}>●●● {t('widgets.impactHigh')}</span>
+          <span style={{ color: 'var(--ft-color-primary)' }}>●●○ {t('widgets.impactMedium')}</span>
+          <span style={{ color: 'var(--ft-color-text-muted)' }}>●○○ {t('widgets.impactLow')}</span>
         </div>
 
         {onNavigate && (
@@ -261,8 +258,8 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: FINCEPT_ORANGE,
-              fontSize: '9px',
+              color: 'var(--ft-color-primary)',
+              fontSize: 'var(--ft-font-size-tiny)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -270,7 +267,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
               gap: '4px'
             }}
           >
-            <span>View Full Calendar</span>
+            <span>{t('widgets.viewFullCalendar')}</span>
             <ExternalLink size={10} />
           </div>
         )}

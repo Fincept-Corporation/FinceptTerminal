@@ -66,7 +66,7 @@ def get_stock_board_concept_cons_em(symbol="人工智能"):
     """Get concept board constituents (EastMoney)"""
     return safe_call(ak.stock_board_concept_cons_em, symbol=symbol)
 
-def get_stock_board_concept_hist_em(symbol="人工智能", period="daily", start_date="20200101", end_date="20251231", adjust=""):
+def get_stock_board_concept_hist_em(symbol="人工智能", period="daily", start_date="20200101", end_date="20261231", adjust=""):
     """Get concept board historical data (EastMoney)"""
     return safe_call(ak.stock_board_concept_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
@@ -109,7 +109,7 @@ def get_stock_board_industry_cons_em(symbol="小金属"):
     """Get industry board constituents (EastMoney)"""
     return safe_call(ak.stock_board_industry_cons_em, symbol=symbol)
 
-def get_stock_board_industry_hist_em(symbol="小金属", period="daily", start_date="20200101", end_date="20251231", adjust=""):
+def get_stock_board_industry_hist_em(symbol="小金属", period="daily", start_date="20200101", end_date="20261231", adjust=""):
     """Get industry board historical data (EastMoney)"""
     return safe_call(ak.stock_board_industry_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 

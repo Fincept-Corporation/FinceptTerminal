@@ -4,6 +4,25 @@
 import { invoke } from '@tauri-apps/api/core';
 
 // ============================================================================
+// TIMEOUT UTILITY
+// ============================================================================
+
+/**
+ * Wrap a promise with a timeout. Returns null if the promise doesn't resolve in time.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label?: string): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => {
+      setTimeout(() => {
+        console.warn(`[RelationshipMapService] ${label || 'Request'} timed out after ${ms}ms`);
+        resolve(null);
+      }, ms);
+    }),
+  ]);
+}
+
+// ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
 
@@ -148,7 +167,8 @@ class RelationshipMapService {
   }
 
   /**
-   * Get comprehensive relationship map data for a ticker
+   * Get comprehensive relationship map data for a ticker.
+   * Uses individual timeouts per data source so slow sources don't block the UI.
    */
   async getRelationshipMap(ticker: string): Promise<RelationshipMapData> {
     const upperTicker = ticker.toUpperCase();
@@ -162,21 +182,17 @@ class RelationshipMapService {
 
     console.log(`[RelationshipMapService] Cache miss for ${upperTicker}, fetching...`);
     try {
-      const [edgarCompany, edgarProxy, edgarFilings, edgarEvents, yfinanceInfo] = await Promise.allSettled([
-        this.getEdgarCompany(ticker),
-        this.getEdgarProxy(ticker),
-        this.getEdgarFilings(ticker),
-        this.getEdgarCorporateEvents(ticker),
-        this.getYFinanceInfo(ticker)
+      // Use individual timeouts: yfinance is fast (10s), edgar company/filings (15s),
+      // proxy and events can be slow so give them 20s max
+      const [edgarCompany, edgarProxy, edgarFilings, edgarEvents, yfinanceInfo] = await Promise.all([
+        withTimeout(this.getEdgarCompany(ticker), 15000, 'EdgarCompany'),
+        withTimeout(this.getEdgarProxy(ticker), 20000, 'EdgarProxy'),
+        withTimeout(this.getEdgarFilings(ticker), 15000, 'EdgarFilings'),
+        withTimeout(this.getEdgarCorporateEvents(ticker), 15000, 'EdgarEvents'),
+        withTimeout(this.getYFinanceInfo(ticker), 10000, 'YFinanceInfo'),
       ]);
 
-      const companyData = edgarCompany.status === 'fulfilled' ? edgarCompany.value : null;
-      const proxyData = edgarProxy.status === 'fulfilled' ? edgarProxy.value : null;
-      const filingsData = edgarFilings.status === 'fulfilled' ? edgarFilings.value : null;
-      const eventsData = edgarEvents.status === 'fulfilled' ? edgarEvents.value : null;
-      const yfinanceData = yfinanceInfo.status === 'fulfilled' ? yfinanceInfo.value : null;
-
-      const result = this.combineData(ticker, companyData, proxyData, filingsData, eventsData, yfinanceData);
+      const result = this.combineData(ticker, edgarCompany, edgarProxy, edgarFilings, edgarEvents, yfinanceInfo);
 
       // Store in cache
       this.cache.set(upperTicker, {
@@ -200,7 +216,12 @@ class RelationshipMapService {
         command: 'get_company',
         args: [ticker]
       });
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      if (parsed?.error) {
+        console.warn('[Edgar] Company returned error:', parsed.error);
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[Edgar] Company error:', error);
       return null;
@@ -216,7 +237,12 @@ class RelationshipMapService {
         command: 'get_proxy_statement',
         args: [ticker]
       });
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      if (parsed?.error) {
+        console.warn('[Edgar] Proxy returned error:', parsed.error);
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[Edgar] Proxy error:', error);
       return null;
@@ -224,7 +250,7 @@ class RelationshipMapService {
   }
 
   /**
-   * Fetch Edgar filings
+   * Fetch Edgar filings (limited to 10 for faster response)
    */
   private async getEdgarFilings(ticker: string) {
     try {
@@ -232,7 +258,12 @@ class RelationshipMapService {
         command: 'get_company_filings',
         args: [ticker]
       });
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      if (parsed?.error) {
+        console.warn('[Edgar] Filings returned error:', parsed.error);
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[Edgar] Filings error:', error);
       return null;
@@ -240,15 +271,20 @@ class RelationshipMapService {
   }
 
   /**
-   * Fetch Edgar corporate events (8-K filings)
+   * Fetch Edgar corporate events (8-K filings) - limited to 10
    */
   private async getEdgarCorporateEvents(ticker: string) {
     try {
       const result = await invoke<string>('execute_edgar_command', {
         command: 'get_corporate_events',
-        args: [ticker]
+        args: [ticker, '10']
       });
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      if (parsed?.error) {
+        console.warn('[Edgar] Corporate Events returned error:', parsed.error);
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[Edgar] Corporate Events error:', error);
       return null;
@@ -264,7 +300,12 @@ class RelationshipMapService {
         command: 'info',
         args: [ticker]
       });
-      return JSON.parse(result);
+      const parsed = JSON.parse(result);
+      if (parsed?.error) {
+        console.warn('[YFinance] Info returned error:', parsed.error);
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error('[YFinance] Info error:', error);
       return null;
@@ -311,14 +352,21 @@ class RelationshipMapService {
     // Extract corporate events
     const corporate_events: CorporateEvent[] = this.extractCorporateEvents(edgarEvents);
 
-    // Extract balance sheet
+    // Extract balance sheet - use book_value_total as stockholders_equity proxy
+    const bookValueTotal = yfinanceData?.book_value_total || 0;
+    const totalDebt = yfinanceData?.total_debt || 0;
+    const totalCash = yfinanceData?.total_cash || 0;
+    // Approximate total assets = equity + debt
+    const estimatedAssets = yfinanceData?.total_assets || (bookValueTotal + totalDebt) || 0;
+    const estimatedLiabilities = yfinanceData?.total_liabilities || totalDebt || 0;
+
     const balance_sheet: BalanceSheetMetrics = {
-      total_assets: yfinanceData?.total_assets || 0,
-      total_liabilities: yfinanceData?.total_liabilities || 0,
-      stockholders_equity: (yfinanceData?.total_assets || 0) - (yfinanceData?.total_liabilities || 0),
+      total_assets: estimatedAssets,
+      total_liabilities: estimatedLiabilities,
+      stockholders_equity: bookValueTotal || (estimatedAssets - estimatedLiabilities),
       shares_outstanding: yfinanceData?.shares_outstanding || 0,
-      total_cash: yfinanceData?.total_cash || 0,
-      total_debt: yfinanceData?.total_debt || 0,
+      total_cash: totalCash,
+      total_debt: totalDebt,
     };
 
     // Extract financial metrics

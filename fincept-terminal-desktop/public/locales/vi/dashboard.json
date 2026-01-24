@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "BẢNG ĐIỀU KHIỂN TÙY CHỈNH",
-    "live": "TRỰC TIẾP",
-    "widgets": "WIDGET"
+    "title": "BẢNG TỔNG QUAN CÓ THỂ TÙY CHỈNH",
+    "live": "SỐNG",
+    "widgets": "TIỆN ÍCH"
   },
   "buttons": {
-    "addWidget": "THÊM WIDGET",
+    "addWidget": "THÊM TIỆN ÍCH",
     "saveLayout": "LƯU BỐ CỤC",
-    "reset": "ĐẶT LẠI"
+    "reset": "CÀI LẠI",
+    "help": "GIÚP ĐỠ"
   },
   "widgets": {
     "loading": "Đang tải...",
     "error": "Lỗi",
-    "globalIndices": "CHỈ SỐ TOÀN CẦU - TOP 12",
-    "forex": "CẶP TIỀN TỆ",
-    "crypto": "TIỀN MÃ HÓA",
-    "commodities": "HÀNG HÓA",
+    "globalIndices": "Chỉ số toàn cầu - Top 12",
+    "forex": "Forex - Các cặp chính",
+    "crypto": "TIỀN ĐIỆN TỬ",
+    "commodities": "Hàng hóa",
     "news": "TIN TỨC",
     "forum": "DIỄN ĐÀN",
-    "watchlist": "THEO DÕI",
+    "watchlist": "DANH SÁCH THEO DÕI",
+    "maritimeIntelligence": "Tình báo hàng hải",
+    "unknown": "Loại tiện ích không xác định",
     "index": "CHỈ SỐ",
-    "symbol": "MÃ",
+    "symbol": "BIỂU TƯỢNG",
     "price": "GIÁ",
-    "change": "THAY ĐỔI",
-    "percentChange": "%THAY ĐỔI",
-    "noIndexData": "Không có dữ liệu chỉ số",
-    "noForexData": "Không có dữ liệu forex",
-    "noCryptoData": "Không có dữ liệu crypto",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Không có dữ liệu chỉ mục",
+    "noForexData": "Không có dữ liệu ngoại hối có sẵn",
+    "noCryptoData": "Không có dữ liệu về tiền điện tử",
     "noCommoditiesData": "Không có dữ liệu hàng hóa",
-    "noForumPosts": "Không có bài viết",
-    "noStocksInWatchlist": "Không có cổ phiếu trong danh sách",
-    "noWatchlistSelected": "Chưa chọn danh sách",
-    "noData": "Không có dữ liệu",
-    "pair": "CẶP",
-    "rate": "TỶ GIÁ",
+    "noForumPosts": "Không có bài viết diễn đàn có sẵn",
+    "noStocksInWatchlist": "Không có cổ phiếu trong danh sách theo dõi",
+    "noWatchlistSelected": "Không có danh sách theo dõi nào được chọn",
+    "noData": "Không có sẵn dữ liệu",
+    "pair": "ĐÔI",
+    "rate": "TỶ LỆ",
     "commodity": "HÀNG HÓA",
-    "maritimeIntelligence": "⚓ THÔNG TIN HÀNG HẢI",
-    "globe3D": "QUẢN CẦU 3D",
+    "globe3D": "TOÀN CẦU 3D",
     "vessels": "TÀU",
-    "routes": "TUYẾN",
-    "vol24h": "KHỐI LƯỢNG 24G",
-    "topTradeCorridors": "HÀNH LANG THƯƠNG MẠI CHÍNH",
-    "ships": "tàu",
-    "unknown": "[VI] Unknown widget type"
+    "routes": "TUYẾN ĐƯỜNG",
+    "vol24h": "TẬP 24H",
+    "topTradeCorridors": "HÀNH TRÌNH THƯƠNG MẠI HÀNG ĐẦU",
+    "ships": "tàu thuyền",
+    "marketNews": "Tin tức thị trường",
+    "secPressReleases": "Thông cáo báo chí của SEC",
+    "cryptoNews": "Tin tức tiền điện tử",
+    "trendingForum": "Diễn đàn xu hướng",
+    "techStocks": "Cổ phiếu công nghệ"
   },
   "tips": {
-    "drag": "Kéo widget để sắp xếp lại",
+    "drag": "Kéo các widget để sắp xếp lại",
     "resize": "Thay đổi kích thước từ góc dưới bên phải",
     "remove": "Xóa widget bằng nút X",
     "responsive": "Bố cục đáp ứng - sử dụng toàn bộ chiều rộng"
   },
   "loading": {
-    "title": "Khởi tạo Bảng điều khiển",
-    "description": "Thiết lập bộ nhớ đệm cơ sở dữ liệu để tải dữ liệu nhanh hơn...",
-    "note": "Chỉ mất một chút thời gian khi khởi động lần đầu"
+    "title": "Đang khởi tạo bảng điều khiển",
+    "description": "Thiết lập bộ đệm cơ sở dữ liệu để tải dữ liệu nhanh hơn...",
+    "note": "Việc này sẽ chỉ mất một chút thời gian trong lần khởi chạy đầu tiên"
   },
   "empty": {
-    "noWidgets": "Không có widget trên bảng điều khiển",
-    "addFirst": "THÊM WIDGET ĐẦU TIÊN"
+    "noWidgets": "Không có tiện ích nào trên bảng điều khiển",
+    "addFirst": "THÊM TIỆN ÍCH ĐẦU TIÊN CỦA BẠN"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Không gian làm việc kéo thả",
-    "layout": "Bố cục",
-    "custom": "Tùy chỉnh",
+    "version": "Bảng điều khiển có thể tùy chỉnh Fincept v2.0.0 | Kéo và thả không gian làm việc",
+    "layout": "Cách trình bày",
+    "custom": "Phong tục",
     "empty": "Trống",
-    "active": "HOẠT ĐỘNG",
-    "cache": "Cache: BẬT",
-    "label": "[VI] Status"
+    "active": "TÍCH CỰC",
+    "cache": "Bộ nhớ đệm: ĐÃ BẬT",
+    "label": "Trạng thái"
   },
   "messages": {
-    "layoutSaved": "[VI] Dashboard layout saved!",
-    "resetConfirm": "[VI] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Đã lưu bố cục trang tổng quan!",
+    "resetConfirm": "Đặt lại trang tổng quan về bố cục mặc định? Điều này sẽ loại bỏ tất cả các vật dụng tùy chỉnh."
   }
 }

@@ -1,60 +1,90 @@
 {
   "title": "设置",
+  "sidebar": {
+    "credentials": "API 凭证",
+    "polymarket": "综合市场API",
+    "llm": "法学硕士配置",
+    "dataSources": "数据来源",
+    "backtesting": "回测",
+    "stockSymbols": "股票代码",
+    "tabLayout": "选项卡布局",
+    "appearance": "外貌",
+    "language": "语言",
+    "storage": "存储和缓存"
+  },
   "credentials": {
-    "title": "API 凭据",
-    "apiKey": "API 密钥",
-    "description": "[ZH] Manage API keys and credentials for external services",
-    "enterValue": "[ZH] Enter value..."
+    "title": "API 凭证管理",
+    "description": "管理外部服务的 API 密钥和凭据",
+    "apiKey": "API密钥",
+    "enterValue": "输入值..."
   },
   "terminal": {
-    "title": "终端外观",
+    "title": "端子外观",
+    "description": "自定义终端的视觉外观，包括字体、颜色、时区和键盘快捷键。",
     "fontFamily": "字体系列",
-    "description": "[ZH] Customize the visual appearance of your terminal",
-    "currentSettings": "[ZH] CURRENT SETTINGS"
+    "currentSettings": "字体设置",
+    "baseFontSize": "基本字体大小",
+    "fontWeight": "字体粗细",
+    "weightNormal": "普通 (400)",
+    "weightSemibold": "半粗体 (600)",
+    "weightBold": "粗体 (700)",
+    "enableItalic": "启用斜体样式",
+    "fontSizeSmall": "小（9 像素）",
+    "fontSizeLarge": "大（18 像素）",
+    "colorTheme": "颜色主题",
+    "defaultTimezone": "默认时区",
+    "timezoneDescription": "设置导航栏中显示的默认时区。仪表板小部件可以使用自己的时区设置。",
+    "functionKeys": "功能键映射",
+    "functionKeysDescription": "配置每个功能键 (F1-F12) 应触发哪个选项卡或操作。更改将反映在状态栏和键盘快捷键中。",
+    "livePreview": "实时预览",
+    "previewTitle": "FinCEPT 终端预览",
+    "previewBody": "正文：实时市场分析和投资组合跟踪",
+    "previewSmall": "小文本：市场数据、时间戳和元数据",
+    "statusConnected": "连接",
+    "statusAlert": "警报",
+    "statusWarning": "警告",
+    "saveConfig": "保存配置",
+    "reset": "重置",
+    "saveSuccess": "终端外观和按键映射已成功保存",
+    "resetSuccess": "重置为默认外观和键映射"
   },
-  "sidebar": {
-    "credentials": "[ZH] API Credentials",
-    "llm": "[ZH] LLM Configuration",
-    "dataSources": "[ZH] Data Sources",
-    "backtesting": "[ZH] Backtesting",
-    "tabLayout": "[ZH] Tab Layout",
-    "appearance": "[ZH] Appearance",
-    "language": "[ZH] Language",
-    "polymarket": "[ZH] Polymarket API"
+  "stockSymbols": {
+    "title": "股票代码数据库",
+    "description": "下载和管理经纪商代码数据以进行快速离线搜索。符号数据包括股票、F&O、商品和货币衍生品。定期更新以获得最新的工具和有效期。"
   },
   "terminalConfig": {
-    "title": "[ZH] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[ZH] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[ZH] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[ZH] TOOLBAR MENU SECTIONS",
-    "newSection": "[ZH] NEW SECTION",
-    "deleteSection": "[ZH] DELETE",
-    "moveTo": "[ZH] MOVE TO ▼",
-    "resetToDefault": "[ZH] RESET TO DEFAULT",
-    "noTabsInSection": "[ZH] No tabs in this section",
-    "tip": "[ZH] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "选项卡布局配置",
+    "headerTabs": "标题选项卡（主选项卡栏）",
+    "headerTabsDesc": "拖动以重新排序。这些选项卡显示在主标题导航中。",
+    "toolbarSections": "工具栏菜单部分",
+    "newSection": "新部分",
+    "deleteSection": "删除",
+    "moveTo": "移至▼",
+    "resetToDefault": "重置为默认值",
+    "noTabsInSection": "此部分没有选项卡",
+    "tip": "提示：拖动选项卡可对其重新排序。使用箭头按钮在标题和菜单部分之间移动选项卡。更改会自动保存。"
   },
   "llm": {
-    "title": "[ZH] LLM CONFIGURATION",
-    "description": "[ZH] Configure AI models and providers",
-    "connected": "[ZH] CONNECTED",
-    "disconnected": "[ZH] DISCONNECTED",
-    "provider": "[ZH] AI PROVIDER",
-    "globalSettings": "[ZH] GLOBAL AI SETTINGS",
-    "temperature": "[ZH] TEMPERATURE",
-    "maxTokens": "[ZH] MAX TOKENS",
-    "systemPrompt": "[ZH] SYSTEM PROMPT",
-    "modelLibrary": "[ZH] MODEL LIBRARY",
-    "multiModelConfigs": "[ZH] Multi-model configs"
+    "title": "法学硕士配置",
+    "description": "配置 AI 模型和提供者",
+    "connected": "连接",
+    "disconnected": "已断开连接",
+    "provider": "人工智能提供商",
+    "globalSettings": "全局人工智能设置",
+    "temperature": "温度",
+    "maxTokens": "最大代币数",
+    "systemPrompt": "系统提示符",
+    "modelLibrary": "模型库",
+    "multiModelConfigs": "多模型配置"
   },
   "buttons": {
-    "save": "[ZH] SAVE",
-    "cancel": "[ZH] CANCEL",
-    "add": "[ZH] ADD"
+    "save": "节省",
+    "cancel": "取消",
+    "add": "添加"
   },
   "footer": {
-    "database": "[ZH] Database: SQLite",
-    "storage": "[ZH] Storage: File-based",
-    "secureStorage": "[ZH] All data stored securely in fincept_terminal.db"
+    "database": "数据库：SQLite",
+    "storage": "存储：基于文件",
+    "secureStorage": "所有数据都安全地存储在fincept_terminal.db中"
   }
 }

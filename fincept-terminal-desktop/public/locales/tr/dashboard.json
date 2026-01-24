@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "ÖZELLEŞTİRİLEBİLİR PANEL",
+    "title": "ÖZELLEŞTİRİLEBİLİR GÖSTERGE PANELİ",
     "live": "CANLI",
-    "widgets": "WİDGETLAR"
+    "widgets": "WIDGET'LAR"
   },
   "buttons": {
-    "addWidget": "WİDGET EKLE",
-    "saveLayout": "DÜZENI KAYDET",
-    "reset": "SIFIRLA"
+    "addWidget": "WIDGET EKLE",
+    "saveLayout": "DÜZENİ KAYDET",
+    "reset": "SIFIRLAMA",
+    "help": "YARDIM"
   },
   "widgets": {
     "loading": "Yükleniyor...",
     "error": "Hata",
-    "globalIndices": "GLOBAL ENDEKSLER - EN İYİ 12",
-    "forex": "FOREX ÇİFTLERİ",
+    "globalIndices": "Küresel Endeksler - İlk 12",
+    "forex": "Forex - Ana Çiftler",
     "crypto": "KRİPTO PARALAR",
-    "commodities": "EMTİALAR",
+    "commodities": "Emtialar",
     "news": "HABERLER",
     "forum": "FORUM",
     "watchlist": "İZLEME LİSTESİ",
-    "index": "ENDEKS",
+    "maritimeIntelligence": "Denizcilik İstihbaratı",
+    "unknown": "Bilinmeyen widget türü",
+    "index": "DİZİN",
     "symbol": "SEMBOL",
     "price": "FİYAT",
-    "change": "DEĞ",
-    "percentChange": "%DEĞ",
-    "noIndexData": "Endeks verisi yok",
-    "noForexData": "Forex verisi yok",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Dizin verisi yok",
+    "noForexData": "Forex verisi mevcut değil",
     "noCryptoData": "Kripto verisi yok",
-    "noCommoditiesData": "Emtia verisi yok",
-    "noForumPosts": "Forum postu yok",
-    "noStocksInWatchlist": "Listede hisse yok",
-    "noWatchlistSelected": "Liste seçilmedi",
+    "noCommoditiesData": "Emtia verisi mevcut değil",
+    "noForumPosts": "Forum gönderisi yok",
+    "noStocksInWatchlist": "İzleme listesinde hisse senedi yok",
+    "noWatchlistSelected": "İzleme listesi seçilmedi",
     "noData": "Veri yok",
     "pair": "ÇİFT",
-    "rate": "KURS",
+    "rate": "ORAN",
     "commodity": "EMTİA",
-    "maritimeIntelligence": "⚓ DENİZCİLİK İSTİHBARATI",
     "globe3D": "3D KÜRE",
     "vessels": "GEMİLER",
     "routes": "ROTALAR",
-    "vol24h": "HCM 24S",
-    "topTradeCorridors": "ANA TİCARET KORİDORLARI",
-    "ships": "gemi",
-    "unknown": "[TR] Unknown widget type"
+    "vol24h": "CİLT 24 SAAT",
+    "topTradeCorridors": "EN ÜST TİCARET KORİDORLARI",
+    "ships": "gemiler",
+    "marketNews": "Piyasa Haberleri",
+    "secPressReleases": "SEC Basın Bültenleri",
+    "cryptoNews": "Kripto Haberleri",
+    "trendingForum": "Trend Olan Forum",
+    "techStocks": "Teknoloji Hisse Senetleri"
   },
   "tips": {
-    "drag": "Widget'ları yeniden düzenlemek için sürükleyin",
-    "resize": "Sağ alt köşeden yeniden boyutlandırın",
-    "remove": "X butonu ile widget'ları kaldırın",
-    "responsive": "Duyarlı düzen - tam genişlik kullanır"
+    "drag": "Yeniden düzenlemek için widget'ları sürükleyin",
+    "resize": "Sağ alt köşeden yeniden boyutlandır",
+    "remove": "X düğmesiyle widget'ları kaldırın",
+    "responsive": "Duyarlı düzen - tam genişliği kullanır"
   },
   "loading": {
-    "title": "Panel Başlatılıyor",
+    "title": "Kontrol Paneli Başlatılıyor",
     "description": "Daha hızlı veri yükleme için veritabanı önbelleği ayarlanıyor...",
-    "note": "Bu ilk açılışta sadece bir an sürecek"
+    "note": "Bu, ilk başlatmada yalnızca bir dakika sürecektir"
   },
   "empty": {
-    "noWidgets": "Panelde widget yok",
-    "addFirst": "İLK WİDGETİNİZİ EKLEYİN"
+    "noWidgets": "Kontrol panelinde widget yok",
+    "addFirst": "İLK WIDGETINIZI EKLEYİN"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Sürükle bırak çalışma alanı",
+    "version": "Fincept Özelleştirilebilir Kontrol Paneli v2.0.0 | Sürükle ve bırak çalışma alanı",
     "layout": "Düzen",
-    "custom": "Özel",
+    "custom": "Gelenek",
     "empty": "Boş",
     "active": "AKTİF",
     "cache": "Önbellek: ETKİN",
-    "label": "[TR] Status"
+    "label": "Durum"
   },
   "messages": {
-    "layoutSaved": "[TR] Dashboard layout saved!",
-    "resetConfirm": "[TR] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Kontrol paneli düzeni kaydedildi!",
+    "resetConfirm": "Kontrol paneli varsayılan düzene sıfırlansın mı? Bu, tüm özel widget'ları kaldıracaktır."
   }
 }

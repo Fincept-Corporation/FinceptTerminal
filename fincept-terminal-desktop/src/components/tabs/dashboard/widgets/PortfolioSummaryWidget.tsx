@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Briefcase, PieChart, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { sqliteService } from '@/services/core/sqliteService';
+import { useTranslation } from 'react-i18next';
 
 interface PortfolioSummaryWidgetProps {
   id: string;
@@ -20,19 +21,13 @@ interface PortfolioData {
   currency: string;
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_BLUE = '#0088FF';
-
 export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
   id,
   portfolioId,
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
   const [topPositions, setTopPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,7 +121,7 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
       onRefresh={loadPortfolio}
       isLoading={loading}
       error={error}
-      headerColor={FINCEPT_BLUE}
+      headerColor="var(--ft-color-info)"
     >
       <div style={{ padding: '8px' }}>
         {portfolio ? (
@@ -139,25 +134,25 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
               marginBottom: '12px'
             }}>
               <div style={{
-                backgroundColor: '#111',
+                backgroundColor: 'var(--ft-color-panel)',
                 padding: '8px',
                 borderRadius: '2px'
               }}>
-                <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>TOTAL VALUE</div>
-                <div style={{ fontSize: '14px', fontWeight: 'bold', color: FINCEPT_ORANGE }}>
+                <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>TOTAL VALUE</div>
+                <div style={{ fontSize: 'var(--ft-font-size-heading)', fontWeight: 'bold', color: 'var(--ft-color-primary)' }}>
                   {formatCurrency(portfolio.totalValue, portfolio.currency)}
                 </div>
               </div>
               <div style={{
-                backgroundColor: '#111',
+                backgroundColor: 'var(--ft-color-panel)',
                 padding: '8px',
                 borderRadius: '2px'
               }}>
-                <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>TOTAL GAIN</div>
+                <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>TOTAL GAIN</div>
                 <div style={{
-                  fontSize: '14px',
+                  fontSize: 'var(--ft-font-size-heading)',
                   fontWeight: 'bold',
-                  color: portfolio.totalGain >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
+                  color: portfolio.totalGain >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px'
@@ -171,10 +166,10 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
             {/* Top Positions */}
             <div style={{ marginBottom: '8px' }}>
               <div style={{
-                fontSize: '9px',
-                color: FINCEPT_GRAY,
+                fontSize: 'var(--ft-font-size-tiny)',
+                color: 'var(--ft-color-text-muted)',
                 marginBottom: '4px',
-                borderBottom: '1px solid #333',
+                borderBottom: '1px solid var(--ft-border-color)',
                 paddingBottom: '4px'
               }}>
                 TOP POSITIONS ({portfolio.positions} total)
@@ -187,21 +182,21 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '4px 0',
-                    borderBottom: '1px solid #222'
+                    borderBottom: '1px solid var(--ft-border-color)'
                   }}
                 >
                   <div>
-                    <span style={{ fontSize: '10px', color: FINCEPT_WHITE, fontWeight: 'bold' }}>
+                    <span style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)', fontWeight: 'bold' }}>
                       {pos.symbol}
                     </span>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
+                    <div style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)' }}>
                       {formatCurrency(pos.current_value || 0)}
                     </div>
                     <div style={{
-                      fontSize: '9px',
-                      color: (pos.gain_percent || 0) >= 0 ? FINCEPT_GREEN : FINCEPT_RED
+                      fontSize: 'var(--ft-font-size-tiny)',
+                      color: (pos.gain_percent || 0) >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)'
                     }}>
                       {(pos.gain_percent || 0) >= 0 ? '+' : ''}{(pos.gain_percent || 0).toFixed(1)}%
                     </div>
@@ -211,10 +206,10 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
             </div>
           </>
         ) : (
-          <div style={{ textAlign: 'center', padding: '20px', color: FINCEPT_GRAY }}>
+          <div style={{ textAlign: 'center', padding: '20px', color: 'var(--ft-color-text-muted)' }}>
             <Briefcase size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
-            <div style={{ fontSize: '10px' }}>No portfolio found</div>
-            <div style={{ fontSize: '9px', marginTop: '4px' }}>Create one in Portfolio tab</div>
+            <div style={{ fontSize: 'var(--ft-font-size-small)' }}>{t('widgets.noPortfolioFound')}</div>
+            <div style={{ fontSize: 'var(--ft-font-size-tiny)', marginTop: '4px' }}>{t('widgets.createPortfolioHint')}</div>
           </div>
         )}
 
@@ -224,8 +219,8 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: FINCEPT_BLUE,
-              fontSize: '9px',
+              color: 'var(--ft-color-info)',
+              fontSize: 'var(--ft-font-size-tiny)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -233,7 +228,7 @@ export const PortfolioSummaryWidget: React.FC<PortfolioSummaryWidgetProps> = ({
               gap: '4px'
             }}
           >
-            <span>Open Portfolio Tab</span>
+            <span>{t('widgets.openPortfolioTab')}</span>
             <ExternalLink size={10} />
           </div>
         )}

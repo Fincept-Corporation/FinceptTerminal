@@ -12,31 +12,48 @@ export interface FontSettings {
 
 export interface ColorTheme {
   name: string;
-  primary: string;      // Replaces FINCEPT_ORANGE
-  secondary: string;    // Replaces FINCEPT_GREEN
-  success: string;      // Success/positive states (same as secondary)
-  alert: string;        // Replaces FINCEPT_RED
-  warning: string;      // FINCEPT_YELLOW
-  info: string;         // FINCEPT_BLUE
-  accent: string;       // FINCEPT_CYAN
-  purple: string;       // FINCEPT_PURPLE
-  text: string;         // FINCEPT_WHITE
-  textMuted: string;    // FINCEPT_GRAY
-  background: string;   // FINCEPT_DARK_BG
-  panel: string;        // FINCEPT_PANEL_BG
+  isCustom?: boolean;
+  primary: string;
+  secondary: string;
+  success: string;
+  alert: string;
+  warning: string;
+  info: string;
+  accent: string;
+  purple: string;
+  text: string;
+  textMuted: string;
+  background: string;
+  panel: string;
+}
+
+export interface LayoutSettings {
+  density: 'compact' | 'default' | 'comfortable';
+  borderRadius: number;
+  borderStyle: 'none' | 'subtle' | 'normal' | 'prominent';
+  lineHeight: number;
+  letterSpacing: number;
+}
+
+export interface EffectSettings {
+  widgetOpacity: number;
+  glowEnabled: boolean;
+  glowIntensity: number;
 }
 
 export interface TerminalTheme {
   font: FontSettings;
   colors: ColorTheme;
+  layout: LayoutSettings;
+  effects: EffectSettings;
 }
 
 export interface FontSizes {
-  heading: string;      // H1
-  subheading: string;   // H2
-  body: string;         // Normal text
-  small: string;        // Labels, metadata
-  tiny: string;         // Very small text
+  heading: string;
+  subheading: string;
+  body: string;
+  small: string;
+  tiny: string;
 }
 
 // Predefined color themes
@@ -148,7 +165,19 @@ class TerminalThemeService {
         weight: 'normal',
         italic: false
       },
-      colors: COLOR_THEMES['fincept-classic']
+      colors: COLOR_THEMES['fincept-classic'],
+      layout: {
+        density: 'default',
+        borderRadius: 2,
+        borderStyle: 'normal',
+        lineHeight: 1.4,
+        letterSpacing: 0
+      },
+      effects: {
+        widgetOpacity: 1,
+        glowEnabled: false,
+        glowIntensity: 0.5
+      }
     };
   }
 
@@ -158,15 +187,27 @@ class TerminalThemeService {
       const stored = await getSetting(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Merge with defaults to handle missing properties
+        const defaults = this.getDefaultTheme();
         this.theme = {
           font: {
-            family: parsed.font?.family || 'Consolas',
-            baseSize: parsed.font?.baseSize || 11,
-            weight: parsed.font?.weight || 'normal',
-            italic: parsed.font?.italic || false
+            family: parsed.font?.family || defaults.font.family,
+            baseSize: parsed.font?.baseSize || defaults.font.baseSize,
+            weight: parsed.font?.weight || defaults.font.weight,
+            italic: parsed.font?.italic || defaults.font.italic
           },
-          colors: parsed.colors || COLOR_THEMES['fincept-classic']
+          colors: parsed.colors || defaults.colors,
+          layout: {
+            density: parsed.layout?.density || defaults.layout.density,
+            borderRadius: parsed.layout?.borderRadius ?? defaults.layout.borderRadius,
+            borderStyle: parsed.layout?.borderStyle || defaults.layout.borderStyle,
+            lineHeight: parsed.layout?.lineHeight ?? defaults.layout.lineHeight,
+            letterSpacing: parsed.layout?.letterSpacing ?? defaults.layout.letterSpacing
+          },
+          effects: {
+            widgetOpacity: parsed.effects?.widgetOpacity ?? defaults.effects.widgetOpacity,
+            glowEnabled: parsed.effects?.glowEnabled ?? defaults.effects.glowEnabled,
+            glowIntensity: parsed.effects?.glowIntensity ?? defaults.effects.glowIntensity
+          }
         };
       }
     } catch (error) {
@@ -239,16 +280,26 @@ class TerminalThemeService {
 
   // Reset to defaults
   resetToDefault(): void {
-    this.theme = {
-      font: {
-        family: 'Consolas',
-        baseSize: 11,
-        weight: 'normal',
-        italic: false
-      },
-      colors: COLOR_THEMES['fincept-classic']
-    };
+    this.theme = this.getDefaultTheme();
     this.saveTheme(this.theme);
+  }
+
+  // Get spacing unit based on density
+  getSpacingUnit(): number {
+    const units = { compact: 4, default: 6, comfortable: 8 };
+    return units[this.theme.layout.density];
+  }
+
+  // Get border width based on style
+  getBorderWidth(): string {
+    const widths = { none: '0px', subtle: '1px', normal: '1px', prominent: '2px' };
+    return widths[this.theme.layout.borderStyle];
+  }
+
+  // Get border color based on style
+  getBorderColor(): string {
+    const colors = { none: 'transparent', subtle: '#1A1A1A', normal: '#2A2A2A', prominent: '#3A3A3A' };
+    return colors[this.theme.layout.borderStyle];
   }
 
   // Get current color theme key

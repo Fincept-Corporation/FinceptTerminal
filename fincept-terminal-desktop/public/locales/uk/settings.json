@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "НАЛАШТУВАННЯ",
+  "sidebar": {
+    "credentials": "Облікові дані API",
+    "polymarket": "API Polymarket",
+    "llm": "Конфігурація LLM",
+    "dataSources": "Джерела даних",
+    "backtesting": "Тестування",
+    "stockSymbols": "Біржові символи",
+    "tabLayout": "Макет вкладки",
+    "appearance": "Зовнішній вигляд",
+    "language": "Мова",
+    "storage": "Пам'ять і кеш"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[UK] Manage API keys and credentials for external services",
-    "enterValue": "[UK] Enter value..."
+    "title": "КЕРУВАННЯ ОБЛІКОВИМИ ДАННИМИ API",
+    "description": "Керуйте ключами API та обліковими даними для зовнішніх служб",
+    "apiKey": "Ключ API",
+    "enterValue": "Введіть значення..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[UK] Customize the visual appearance of your terminal",
-    "currentSettings": "[UK] CURRENT SETTINGS"
+    "title": "ТЕРМІНАЛ ПОЯВА",
+    "description": "Налаштуйте візуальний вигляд свого терміналу, включаючи шрифти, кольори, часовий пояс і комбінації клавіш.",
+    "fontFamily": "СІМЕЙСТВО ШРИФТОВ",
+    "currentSettings": "НАЛАШТУВАННЯ ШРИФТУ",
+    "baseFontSize": "БАЗОВИЙ РОЗМІР ШРИФТУ",
+    "fontWeight": "ВАГА ШРИФТУ",
+    "weightNormal": "Нормальний (400)",
+    "weightSemibold": "Напівжирний (600)",
+    "weightBold": "Жирний (700)",
+    "enableItalic": "УВІМКНУТИ КУРСИВ",
+    "fontSizeSmall": "Маленький (9 пікселів)",
+    "fontSizeLarge": "Великий (18 пікселів)",
+    "colorTheme": "КОЛЬОРОВА ТЕМА",
+    "defaultTimezone": "ЧАСОВИЙ ПОЯС ЗА ПРОМОВЧАННЯМ",
+    "timezoneDescription": "Установіть часовий пояс за умовчанням, який відображається на навігаційній панелі. Віджети інформаційної панелі можуть використовувати власні налаштування часового поясу.",
+    "functionKeys": "ЗОБРАЖЕННЯ ФУНКЦІОНАЛЬНИХ КЛАВІШ",
+    "functionKeysDescription": "Налаштуйте, яку вкладку чи дію повинна запускати кожна функціональна клавіша (F1-F12). Зміни відображатимуться в рядку стану та комбінаціях клавіш.",
+    "livePreview": "ПОПЕРЕДНІЙ ПЕРЕГЛЯД",
+    "previewTitle": "ПЕРЕГЛЯД ТЕРМІНАЛУ FINCEPT",
+    "previewBody": "Основний текст: аналіз ринку в реальному часі та відстеження портфеля",
+    "previewSmall": "Маленький текст: ринкові дані, позначки часу та метадані",
+    "statusConnected": "ПІДКЛЮЧЕНО",
+    "statusAlert": "ПОПЕРЕДЖЕННЯ",
+    "statusWarning": "УВАГА",
+    "saveConfig": "ЗБЕРЕГТИ КОНФІГУРАЦІЮ",
+    "reset": "СКИДАННЯ",
+    "saveSuccess": "Вигляд терміналу та зіставлення клавіш успішно збережено",
+    "resetSuccess": "Відновити зовнішній вигляд і зіставлення клавіш за замовчуванням"
   },
-  "sidebar": {
-    "credentials": "[UK] API Credentials",
-    "llm": "[UK] LLM Configuration",
-    "dataSources": "[UK] Data Sources",
-    "backtesting": "[UK] Backtesting",
-    "tabLayout": "[UK] Tab Layout",
-    "appearance": "[UK] Appearance",
-    "language": "[UK] Language",
-    "polymarket": "[UK] Polymarket API"
+  "stockSymbols": {
+    "title": "База даних символів акцій",
+    "description": "Завантажуйте дані символів брокера та керуйте ними для швидкого пошуку в автономному режимі. Дані про символи включають акції, F&O, товари та валютні деривативи. Регулярно оновлюйте, щоб отримувати найновіші інструменти та терміни дії."
   },
   "terminalConfig": {
-    "title": "[UK] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[UK] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[UK] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[UK] TOOLBAR MENU SECTIONS",
-    "newSection": "[UK] NEW SECTION",
-    "deleteSection": "[UK] DELETE",
-    "moveTo": "[UK] MOVE TO ▼",
-    "resetToDefault": "[UK] RESET TO DEFAULT",
-    "noTabsInSection": "[UK] No tabs in this section",
-    "tip": "[UK] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "КОНФІГУРАЦІЯ РОЗМІТУ Вкладок",
+    "headerTabs": "Вкладки ЗАГОЛОВКА (ОСНОВНА ПАНЕЛЬ Вкладок)",
+    "headerTabsDesc": "Перетягніть, щоб змінити порядок. Ці вкладки відображаються в головному навігаційному заголовку.",
+    "toolbarSections": "РОЗДІЛИ МЕНЮ ПАНЕЛІ ІНСТРУМЕНТІВ",
+    "newSection": "НОВИЙ РОЗДІЛ",
+    "deleteSection": "ВИДАЛИТИ",
+    "moveTo": "ПЕРЕМІСТИТИ ДО ▼",
+    "resetToDefault": "СКИНУТИ ДО ЗАМОВЧУВАННЯ",
+    "noTabsInSection": "У цьому розділі немає вкладок",
+    "tip": "ПОРАДА. Перетягуйте вкладки, щоб змінити їх порядок. Використовуйте кнопки зі стрілками для переміщення вкладок між заголовками та розділами меню. Зміни зберігаються автоматично."
   },
   "llm": {
-    "title": "[UK] LLM CONFIGURATION",
-    "description": "[UK] Configure AI models and providers",
-    "connected": "[UK] CONNECTED",
-    "disconnected": "[UK] DISCONNECTED",
-    "provider": "[UK] AI PROVIDER",
-    "globalSettings": "[UK] GLOBAL AI SETTINGS",
-    "temperature": "[UK] TEMPERATURE",
-    "maxTokens": "[UK] MAX TOKENS",
-    "systemPrompt": "[UK] SYSTEM PROMPT",
-    "modelLibrary": "[UK] MODEL LIBRARY",
-    "multiModelConfigs": "[UK] Multi-model configs"
+    "title": "КОНФІГУРАЦІЯ LLM",
+    "description": "Налаштуйте моделі та постачальників AI",
+    "connected": "ПІДКЛЮЧЕНО",
+    "disconnected": "ВІДКЛЮЧЕНО",
+    "provider": "ПОСТАЧАЛЬНИК ШІ",
+    "globalSettings": "ГЛОБАЛЬНІ НАЛАШТУВАННЯ ШІ",
+    "temperature": "ТЕМПЕРАТУРА",
+    "maxTokens": "МАКС. ЖЕТОНІВ",
+    "systemPrompt": "СИСТЕМНА ПІДКАЗКА",
+    "modelLibrary": "БІБЛІОТЕКА МОДЕЛЕЙ",
+    "multiModelConfigs": "Багатомодельні конфігурації"
   },
   "buttons": {
-    "save": "[UK] SAVE",
-    "cancel": "[UK] CANCEL",
-    "add": "[UK] ADD"
+    "save": "ЗБЕРЕГТИ",
+    "cancel": "СКАСУВАТИ",
+    "add": "ДОДАТИ"
   },
   "footer": {
-    "database": "[UK] Database: SQLite",
-    "storage": "[UK] Storage: File-based",
-    "secureStorage": "[UK] All data stored securely in fincept_terminal.db"
+    "database": "База даних: SQLite",
+    "storage": "Зберігання: файлове",
+    "secureStorage": "Усі дані безпечно зберігаються у fincept_terminal.db"
   }
 }

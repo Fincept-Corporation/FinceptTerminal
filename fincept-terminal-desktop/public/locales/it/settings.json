@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "IMPOSTAZIONI",
+  "sidebar": {
+    "credentials": "Credenziali API",
+    "polymarket": "API del polimercato",
+    "llm": "Configurazione LLM",
+    "dataSources": "Fonti dei dati",
+    "backtesting": "Backtesting",
+    "stockSymbols": "Simboli azionari",
+    "tabLayout": "Disposizione scheda",
+    "appearance": "Aspetto",
+    "language": "Lingua",
+    "storage": "Archiviazione e cache"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[IT] Manage API keys and credentials for external services",
-    "enterValue": "[IT] Enter value..."
+    "title": "GESTIONE CREDENZIALI API",
+    "description": "Gestisci chiavi API e credenziali per servizi esterni",
+    "apiKey": "Chiave API",
+    "enterValue": "Inserisci il valore..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[IT] Customize the visual appearance of your terminal",
-    "currentSettings": "[IT] CURRENT SETTINGS"
+    "title": "ASPETTO DEL TERMINALE",
+    "description": "Personalizza l'aspetto visivo del tuo terminale inclusi caratteri, colori, fuso orario e scorciatoie da tastiera.",
+    "fontFamily": "FAMIGLIA DI FONT",
+    "currentSettings": "IMPOSTAZIONI DEI CARATTERI",
+    "baseFontSize": "DIMENSIONE CARATTERE BASE",
+    "fontWeight": "PESO DEL CARATTERE",
+    "weightNormal": "Normale (400)",
+    "weightSemibold": "Semi-grassetto (600)",
+    "weightBold": "Grassetto (700)",
+    "enableItalic": "ABILITA STILE CORSIVO",
+    "fontSizeSmall": "Piccolo (9px)",
+    "fontSizeLarge": "Grande (18px)",
+    "colorTheme": "TEMA COLORE",
+    "defaultTimezone": "FUSO ORARIO PREDEFINITO",
+    "timezoneDescription": "Imposta il fuso orario predefinito visualizzato nella barra di navigazione. I widget della dashboard possono utilizzare le proprie impostazioni del fuso orario.",
+    "functionKeys": "MAPPATURA DEI TASTI FUNZIONE",
+    "functionKeysDescription": "Configura quale scheda o azione deve attivare ciascun tasto funzione (F1-F12). Le modifiche si rifletteranno nella barra di stato e nelle scorciatoie da tastiera.",
+    "livePreview": "ANTEPRIMA DAL VIVO",
+    "previewTitle": "ANTEPRIMA DEL TERMINALE FINCEPT",
+    "previewBody": "Corpo del testo: analisi di mercato in tempo reale e monitoraggio del portafoglio",
+    "previewSmall": "Testo piccolo: dati di mercato, timestamp e metadati",
+    "statusConnected": "COLLEGATO",
+    "statusAlert": "AVVISO",
+    "statusWarning": "AVVERTIMENTO",
+    "saveConfig": "SALVA CONFIGURAZIONE",
+    "reset": "RESET",
+    "saveSuccess": "Aspetto del terminale e mappature dei tasti salvate correttamente",
+    "resetSuccess": "Ripristina l'aspetto predefinito e le mappature dei tasti"
   },
-  "sidebar": {
-    "credentials": "[IT] API Credentials",
-    "llm": "[IT] LLM Configuration",
-    "dataSources": "[IT] Data Sources",
-    "backtesting": "[IT] Backtesting",
-    "tabLayout": "[IT] Tab Layout",
-    "appearance": "[IT] Appearance",
-    "language": "[IT] Language",
-    "polymarket": "[IT] Polymarket API"
+  "stockSymbols": {
+    "title": "Database dei simboli azionari",
+    "description": "Scarica e gestisci i dati dei simboli del broker per una rapida ricerca offline. I dati dei simboli includono azioni, F&O, materie prime e derivati ​​valutari. Aggiorna regolarmente per ottenere gli strumenti e le scadenze più recenti."
   },
   "terminalConfig": {
-    "title": "[IT] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[IT] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[IT] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[IT] TOOLBAR MENU SECTIONS",
-    "newSection": "[IT] NEW SECTION",
-    "deleteSection": "[IT] DELETE",
-    "moveTo": "[IT] MOVE TO ▼",
-    "resetToDefault": "[IT] RESET TO DEFAULT",
-    "noTabsInSection": "[IT] No tabs in this section",
-    "tip": "[IT] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "CONFIGURAZIONE LAYOUT SCHEDA",
+    "headerTabs": "SCHEDE DELL'INTESTAZIONE (BARRA DELLE SCHEDE PRINCIPALI)",
+    "headerTabsDesc": "Trascina per riordinare. Queste schede vengono visualizzate nella navigazione dell'intestazione principale.",
+    "toolbarSections": "SEZIONI DEL MENU DELLA BARRA DEGLI STRUMENTI",
+    "newSection": "NUOVA SEZIONE",
+    "deleteSection": "ELIMINARE",
+    "moveTo": "SPOSTA A ▼",
+    "resetToDefault": "RIPRISTINO SU PREDEFINITO",
+    "noTabsInSection": "Nessuna scheda in questa sezione",
+    "tip": "SUGGERIMENTO: trascina le schede per riordinarle. Utilizza i pulsanti freccia per spostare le schede tra le sezioni dell'intestazione e del menu. Le modifiche vengono salvate automaticamente."
   },
   "llm": {
-    "title": "[IT] LLM CONFIGURATION",
-    "description": "[IT] Configure AI models and providers",
-    "connected": "[IT] CONNECTED",
-    "disconnected": "[IT] DISCONNECTED",
-    "provider": "[IT] AI PROVIDER",
-    "globalSettings": "[IT] GLOBAL AI SETTINGS",
-    "temperature": "[IT] TEMPERATURE",
-    "maxTokens": "[IT] MAX TOKENS",
-    "systemPrompt": "[IT] SYSTEM PROMPT",
-    "modelLibrary": "[IT] MODEL LIBRARY",
-    "multiModelConfigs": "[IT] Multi-model configs"
+    "title": "CONFIGURAZIONE LLM",
+    "description": "Configura modelli e fornitori di intelligenza artificiale",
+    "connected": "COLLEGATO",
+    "disconnected": "DISCONNESSO",
+    "provider": "FORNITORE DI IA",
+    "globalSettings": "IMPOSTAZIONI AI GLOBALI",
+    "temperature": "TEMPERATURA",
+    "maxTokens": "GETTONI MAX",
+    "systemPrompt": "RICHIESTA DI SISTEMA",
+    "modelLibrary": "BIBLIOTECA DI MODELLI",
+    "multiModelConfigs": "Configurazioni multi-modello"
   },
   "buttons": {
-    "save": "[IT] SAVE",
-    "cancel": "[IT] CANCEL",
-    "add": "[IT] ADD"
+    "save": "SALVA",
+    "cancel": "CANCELLARE",
+    "add": "AGGIUNGERE"
   },
   "footer": {
-    "database": "[IT] Database: SQLite",
-    "storage": "[IT] Storage: File-based",
-    "secureStorage": "[IT] All data stored securely in fincept_terminal.db"
+    "database": "Base dati: SQLite",
+    "storage": "Archiviazione: basata su file",
+    "secureStorage": "Tutti i dati archiviati in modo sicuro in fincept_terminal.db"
   }
 }

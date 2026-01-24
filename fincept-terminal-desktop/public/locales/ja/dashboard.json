@@ -5,71 +5,77 @@
     "widgets": "ウィジェット"
   },
   "buttons": {
-    "addWidget": "ウィジェット追加",
-    "saveLayout": "レイアウト保存",
-    "reset": "リセット"
+    "addWidget": "ウィジェットを追加",
+    "saveLayout": "レイアウトの保存",
+    "reset": "リセット",
+    "help": "ヘルプ"
   },
   "widgets": {
     "loading": "読み込み中...",
     "error": "エラー",
-    "globalIndices": "グローバル指数 - トップ12",
-    "forex": "為替ペア",
+    "globalIndices": "グローバル指数 - トップ 12",
+    "forex": "外国為替 - 主要ペア",
     "crypto": "暗号通貨",
-    "commodities": "コモディティ",
+    "commodities": "商品",
     "news": "ニュース",
     "forum": "フォーラム",
     "watchlist": "ウォッチリスト",
-    "index": "指数",
+    "maritimeIntelligence": "海洋インテリジェンス",
+    "unknown": "不明なウィジェットの種類",
+    "index": "索引",
     "symbol": "シンボル",
     "price": "価格",
-    "change": "変動",
-    "percentChange": "変動%",
-    "noIndexData": "指数データなし",
-    "noForexData": "為替データなし",
-    "noCryptoData": "暗号通貨データなし",
-    "noCommoditiesData": "コモディティデータなし",
-    "noForumPosts": "投稿なし",
-    "noStocksInWatchlist": "ウォッチリストに銘柄なし",
-    "noWatchlistSelected": "ウォッチリスト未選択",
-    "noData": "データなし",
+    "change": "変更",
+    "percentChange": "%CHG",
+    "noIndexData": "利用可能なインデックス データがありません",
+    "noForexData": "利用可能な外国為替データがありません",
+    "noCryptoData": "利用可能な暗号データ​​がありません",
+    "noCommoditiesData": "利用可能な商品データはありません",
+    "noForumPosts": "利用可能なフォーラム投稿はありません",
+    "noStocksInWatchlist": "ウォッチリストに銘柄がありません",
+    "noWatchlistSelected": "ウォッチリストが選択されていません",
+    "noData": "利用可能なデータがありません",
     "pair": "ペア",
     "rate": "レート",
-    "commodity": "コモディティ",
-    "maritimeIntelligence": "⚓ 海事インテリジェンス",
+    "commodity": "商品",
     "globe3D": "3Dグローブ",
-    "vessels": "船舶",
+    "vessels": "容器",
     "routes": "ルート",
-    "vol24h": "24時間出来高",
-    "topTradeCorridors": "主要貿易回廊",
+    "vol24h": "24H巻",
+    "topTradeCorridors": "トップ貿易回廊",
     "ships": "船",
-    "unknown": "[JA] Unknown widget type"
+    "marketNews": "マーケットニュース",
+    "secPressReleases": "SEC プレスリリース",
+    "cryptoNews": "暗号ニュース",
+    "trendingForum": "トレンドフォーラム",
+    "techStocks": "ハイテク株"
   },
   "tips": {
-    "drag": "ウィジェットをドラッグして並び替え",
-    "resize": "右下からサイズ変更",
-    "remove": "Xボタンでウィジェット削除",
-    "responsive": "レスポンシブレイアウト - 全幅使用"
+    "drag": "ウィジェットをドラッグして並べ替えます",
+    "resize": "右下隅からサイズを変更します",
+    "remove": "Xボタンでウィジェットを削除",
+    "responsive": "レスポンシブ レイアウト - 全幅を使用します"
   },
   "loading": {
-    "title": "ダッシュボード初期化中",
-    "description": "高速データ読み込みのためのキャッシュ設定中...",
-    "note": "初回起動時のみ少し時間がかかります"
+    "title": "ダッシュボードを初期化しています",
+    "description": "データの読み込みを高速化するためにデータベース キャッシュを設定しています...",
+    "note": "初回起動時はほんの少しだけかかります"
   },
   "empty": {
-    "noWidgets": "ダッシュボードにウィジェットなし",
-    "addFirst": "最初のウィジェットを追加"
+    "noWidgets": "ダッシュボードにウィジェットがありません",
+    "addFirst": "最初のウィジェットを追加する"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | ドラッグ&ドロップワークスペース",
+    "version": "Fincept カスタマイズ可能なダッシュボード v2.0.0 |ワークスペースをドラッグ＆ドロップ",
     "layout": "レイアウト",
     "custom": "カスタム",
-    "empty": "空",
+    "empty": "空の",
     "active": "アクティブ",
     "cache": "キャッシュ: 有効",
-    "label": "[JA] Status"
+    "label": "状態"
   },
   "messages": {
-    "layoutSaved": "[JA] Dashboard layout saved!",
-    "resetConfirm": "[JA] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "ダッシュボードのレイアウトが保存されました。",
+    "resetConfirm": "ダッシュボードをデフォルトのレイアウトにリセットしますか?これにより、すべてのカスタム ウィジェットが削除されます。"
   }
 }

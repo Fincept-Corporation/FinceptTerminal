@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { sqliteService } from '@/services/core/sqliteService';
+import { useTranslation } from 'react-i18next';
 
 interface PerformanceWidgetProps {
   id: string;
@@ -17,18 +18,12 @@ interface PerformanceData {
   winRate: number;
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_CYAN = '#00E5FF';
-
 export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   id,
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [performance, setPerformance] = useState<PerformanceData[]>([]);
   const [totalPnL, setTotalPnL] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -103,18 +98,18 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   return (
     <BaseWidget
       id={id}
-      title="PERFORMANCE TRACKER"
+      title={t('widgets.performanceTracker')}
       onRemove={onRemove}
       onRefresh={loadPerformance}
       isLoading={loading}
       error={error}
-      headerColor={totalPnL >= 0 ? FINCEPT_GREEN : FINCEPT_RED}
+      headerColor={totalPnL >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)'}
     >
       <div style={{ padding: '4px' }}>
         {/* Total P&L Header */}
         <div style={{
           padding: '8px',
-          backgroundColor: '#111',
+          backgroundColor: 'var(--ft-color-panel)',
           margin: '4px',
           borderRadius: '2px',
           display: 'flex',
@@ -122,11 +117,11 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           alignItems: 'center'
         }}>
           <div>
-            <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>TOTAL P&L</div>
+            <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>{t('widgets.totalPnL')}</div>
             <div style={{
-              fontSize: '18px',
+              fontSize: 'var(--ft-font-size-heading)',
               fontWeight: 'bold',
-              color: totalPnL >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
+              color: totalPnL >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px'
@@ -138,11 +133,11 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           <div style={{
             textAlign: 'right'
           }}>
-            <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>WIN RATE</div>
+            <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>{t('widgets.winRate')}</div>
             <div style={{
-              fontSize: '14px',
+              fontSize: 'var(--ft-font-size-heading)',
               fontWeight: 'bold',
-              color: FINCEPT_ORANGE
+              color: 'var(--ft-color-primary)'
             }}>
               {performance[performance.length - 1]?.winRate || 0}%
             </div>
@@ -155,14 +150,14 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           gridTemplateColumns: '70px 1fr 50px 50px',
           gap: '4px',
           padding: '4px 8px',
-          borderBottom: '1px solid #333',
-          color: FINCEPT_GRAY,
-          fontSize: '8px'
+          borderBottom: '1px solid var(--ft-border-color)',
+          color: 'var(--ft-color-text-muted)',
+          fontSize: 'var(--ft-font-size-tiny)'
         }}>
-          <span>PERIOD</span>
-          <span style={{ textAlign: 'right' }}>P&L</span>
-          <span style={{ textAlign: 'right' }}>TRADES</span>
-          <span style={{ textAlign: 'right' }}>WIN%</span>
+          <span>{t('widgets.period')}</span>
+          <span style={{ textAlign: 'right' }}>{t('widgets.pnl')}</span>
+          <span style={{ textAlign: 'right' }}>{t('widgets.trades')}</span>
+          <span style={{ textAlign: 'right' }}>{t('widgets.winPercent')}</span>
         </div>
 
         {/* Performance rows */}
@@ -174,39 +169,39 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
               gridTemplateColumns: '70px 1fr 50px 50px',
               gap: '4px',
               padding: '6px 8px',
-              borderBottom: '1px solid #222',
+              borderBottom: '1px solid var(--ft-border-color)',
               alignItems: 'center'
             }}
           >
-            <span style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
+            <span style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)' }}>
               {perf.period}
             </span>
             <div style={{ textAlign: 'right' }}>
               <div style={{
-                fontSize: '10px',
+                fontSize: 'var(--ft-font-size-small)',
                 fontWeight: 'bold',
-                color: perf.pnl >= 0 ? FINCEPT_GREEN : FINCEPT_RED
+                color: perf.pnl >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)'
               }}>
                 {perf.pnl >= 0 ? '+' : ''}{formatCurrency(perf.pnl)}
               </div>
               <div style={{
-                fontSize: '8px',
-                color: perf.pnl >= 0 ? FINCEPT_GREEN : FINCEPT_RED
+                fontSize: 'var(--ft-font-size-tiny)',
+                color: perf.pnl >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)'
               }}>
                 {perf.pnl >= 0 ? '+' : ''}{perf.pnlPercent.toFixed(2)}%
               </div>
             </div>
             <span style={{
               textAlign: 'right',
-              fontSize: '10px',
-              color: FINCEPT_WHITE
+              fontSize: 'var(--ft-font-size-small)',
+              color: 'var(--ft-color-text)'
             }}>
               {perf.trades}
             </span>
             <span style={{
               textAlign: 'right',
-              fontSize: '10px',
-              color: perf.winRate >= 55 ? FINCEPT_GREEN : perf.winRate >= 45 ? FINCEPT_ORANGE : FINCEPT_RED
+              fontSize: 'var(--ft-font-size-small)',
+              color: perf.winRate >= 55 ? 'var(--ft-color-success)' : perf.winRate >= 45 ? 'var(--ft-color-primary)' : 'var(--ft-color-alert)'
             }}>
               {perf.winRate.toFixed(1)}%
             </span>
@@ -219,18 +214,18 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: FINCEPT_GREEN,
-              fontSize: '9px',
+              color: 'var(--ft-color-success)',
+              fontSize: 'var(--ft-font-size-tiny)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '4px',
-              borderTop: '1px solid #333',
+              borderTop: '1px solid var(--ft-border-color)',
               marginTop: '4px'
             }}
           >
-            <span>View Detailed Analytics</span>
+            <span>{t('widgets.viewDetailedAnalytics')}</span>
             <ExternalLink size={10} />
           </div>
         )}

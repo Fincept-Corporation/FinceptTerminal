@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "PANEL PERSONALIZABLE",
-    "live": "EN VIVO",
-    "widgets": "WIDGETS"
+    "title": "TABLERO PERSONALIZABLE",
+    "live": "VIVIR",
+    "widgets": "APARATOS"
   },
   "buttons": {
     "addWidget": "AÑADIR WIDGET",
     "saveLayout": "GUARDAR DISEÑO",
-    "reset": "REINICIAR"
+    "reset": "REINICIAR",
+    "help": "AYUDA"
   },
   "widgets": {
     "loading": "Cargando...",
     "error": "Error",
-    "globalIndices": "ÍNDICES GLOBALES - TOP 12",
-    "forex": "PARES FOREX",
+    "globalIndices": "Índices globales - Top 12",
+    "forex": "Forex - Pares principales",
     "crypto": "CRIPTOMONEDAS",
-    "commodities": "MATERIAS PRIMAS",
+    "commodities": "Materias primas",
     "news": "NOTICIAS",
     "forum": "FORO",
-    "watchlist": "LISTA DE SEGUIMIENTO",
+    "watchlist": "LISTA DE SEGURIDAD",
+    "maritimeIntelligence": "Inteligencia Marítima",
+    "unknown": "Tipo de widget desconocido",
     "index": "ÍNDICE",
     "symbol": "SÍMBOLO",
     "price": "PRECIO",
-    "change": "CAM",
-    "percentChange": "%CAM",
-    "noIndexData": "Sin datos de índices",
-    "noForexData": "Sin datos de forex",
-    "noCryptoData": "Sin datos de cripto",
-    "noCommoditiesData": "Sin datos de materias primas",
-    "noForumPosts": "Sin publicaciones",
-    "noStocksInWatchlist": "Sin acciones en lista",
-    "noWatchlistSelected": "Sin lista seleccionada",
-    "noData": "Sin datos",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "No hay datos de índice disponibles",
+    "noForexData": "No hay datos de divisas disponibles",
+    "noCryptoData": "No hay datos criptográficos disponibles",
+    "noCommoditiesData": "No hay datos disponibles sobre productos básicos",
+    "noForumPosts": "No hay publicaciones en el foro disponibles",
+    "noStocksInWatchlist": "No hay acciones en la lista de seguimiento",
+    "noWatchlistSelected": "No se seleccionó ninguna lista de seguimiento",
+    "noData": "No hay datos disponibles",
     "pair": "PAR",
     "rate": "TASA",
-    "commodity": "MATERIA PRIMA",
-    "maritimeIntelligence": "⚓ INTELIGENCIA MARÍTIMA",
+    "commodity": "PRODUCTO",
     "globe3D": "GLOBO 3D",
     "vessels": "BUQUES",
     "routes": "RUTAS",
     "vol24h": "VOL 24H",
-    "topTradeCorridors": "CORREDORES COMERCIALES PRINCIPALES",
+    "topTradeCorridors": "PRINCIPALES CORREDORES COMERCIALES",
     "ships": "barcos",
-    "unknown": "[ES] Unknown widget type"
+    "marketNews": "Noticias del mercado",
+    "secPressReleases": "Comunicados de prensa de la SEC",
+    "cryptoNews": "Noticias criptográficas",
+    "trendingForum": "Foro de tendencias",
+    "techStocks": "Acciones tecnológicas"
   },
   "tips": {
-    "drag": "Arrastra widgets para reorganizar",
-    "resize": "Redimensiona desde la esquina inferior derecha",
-    "remove": "Elimina widgets con el botón X",
-    "responsive": "Diseño responsivo - usa ancho completo"
+    "drag": "Arrastre los widgets para reorganizarlos",
+    "resize": "Cambiar tamaño desde la esquina inferior derecha",
+    "remove": "Eliminar widgets con el botón X",
+    "responsive": "Diseño responsivo: utiliza el ancho completo"
   },
   "loading": {
-    "title": "Inicializando Panel",
-    "description": "Configurando caché de base de datos para carga más rápida...",
-    "note": "Esto solo tomará un momento en el primer inicio"
+    "title": "Inicializando el panel",
+    "description": "Configurando el caché de la base de datos para una carga de datos más rápida...",
+    "note": "Esto sólo tomará un momento en el primer lanzamiento."
   },
   "empty": {
-    "noWidgets": "Sin widgets en el panel",
+    "noWidgets": "No hay widgets en el tablero",
     "addFirst": "AÑADE TU PRIMER WIDGET"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Espacio de trabajo arrastrar y soltar",
-    "layout": "Diseño",
-    "custom": "Personalizado",
+    "version": "Panel personalizable de Fincept v2.0.0 | Espacio de trabajo de arrastrar y soltar",
+    "layout": "Disposición",
+    "custom": "Costumbre",
     "empty": "Vacío",
     "active": "ACTIVO",
     "cache": "Caché: HABILITADO",
-    "label": "[ES] Status"
+    "label": "Estado"
   },
   "messages": {
-    "layoutSaved": "[ES] Dashboard layout saved!",
-    "resetConfirm": "[ES] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "¡Diseño del panel guardado!",
+    "resetConfirm": "¿Restablecer el panel al diseño predeterminado? Esto eliminará todos los widgets personalizados."
   }
 }

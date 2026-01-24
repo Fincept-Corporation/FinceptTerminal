@@ -7,8 +7,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use crate::utils::python;
 
 // Windows-specific imports to hide console windows
@@ -27,30 +25,6 @@ pub struct CommandResult {
     exit_code: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProcessInfo {
-    process_id: u32,
-}
-
-#[derive(Debug, Clone)]
-struct RunningProcess {
-    pid: u32,
-    // In production, would store child process handle for cancellation
-}
-
-// State for tracking running processes
-pub struct BacktestingState {
-    running_processes: Arc<Mutex<HashMap<String, RunningProcess>>>,
-}
-
-impl Default for BacktestingState {
-    fn default() -> Self {
-        Self {
-            running_processes: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
 // ============================================================================
 // Commands
 // ============================================================================
@@ -60,7 +34,8 @@ impl Default for BacktestingState {
 /**
  * Execute generic command
  *
- * Used for testing connections, running utilities, etc.
+ * Only allows a restricted set of safe commands for testing connections
+ * and running backtesting utilities. Prevents command injection.
  */
 #[tauri::command]
 pub async fn execute_command(command: String) -> Result<CommandResult, String> {
@@ -71,7 +46,36 @@ pub async fn execute_command(command: String) -> Result<CommandResult, String> {
     }
 
     let program = parts[0];
+
+    // Allowlist of safe programs
+    let allowed_programs = [
+        "python", "python3", "python.exe",
+        "pip", "pip3", "pip.exe",
+    ];
+
+    // Extract just the binary name from potential full path
+    let program_name = std::path::Path::new(program)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(program)
+        .to_lowercase();
+
+    if !allowed_programs.iter().any(|&allowed| program_name == allowed.to_lowercase()) {
+        return Err(format!(
+            "Command '{}' is not allowed. Only Python-related commands are permitted.",
+            program
+        ));
+    }
+
     let args = &parts[1..];
+
+    // Block dangerous Python flags/arguments
+    for arg in args.iter() {
+        let lower_arg = arg.to_lowercase();
+        if lower_arg == "-c" || lower_arg == "--command" {
+            return Err("Inline code execution via -c flag is not allowed".to_string());
+        }
+    }
 
     // Execute
     let output = Command::new(program)
@@ -130,6 +134,12 @@ pub async fn execute_python_backtest(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Python providers print JSON errors to stdout then exit(1)
+        // Include both stdout and stderr for full error context
+        if !stdout.is_empty() {
+            return Err(format!("Python script failed: {}", stdout.trim()));
+        }
         return Err(format!("Python script failed: {}", stderr));
     }
 
@@ -138,47 +148,117 @@ pub async fn execute_python_backtest(
 }
 
 /**
+ * Validate that a path is within the allowed backtesting data directory.
+ * Prevents path traversal attacks and access to system files.
+ */
+fn validate_backtesting_path(path: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::PathBuf;
+
+    let path = PathBuf::from(path);
+
+    // Canonicalize to resolve any .. or symlinks
+    // For new files that don't exist yet, validate the parent directory
+    let resolved = if path.exists() {
+        path.canonicalize()
+            .map_err(|e| format!("Failed to resolve path: {}", e))?
+    } else {
+        // For non-existent paths, check parent exists and is valid
+        let parent = path.parent()
+            .ok_or_else(|| "Invalid path: no parent directory".to_string())?;
+        if !parent.exists() {
+            return Err("Parent directory does not exist".to_string());
+        }
+        let resolved_parent = parent.canonicalize()
+            .map_err(|e| format!("Failed to resolve parent path: {}", e))?;
+        resolved_parent.join(path.file_name().unwrap_or_default())
+    };
+
+    // Only allow paths within user's app data or home directory for backtesting
+    let allowed_roots: Vec<PathBuf> = vec![
+        // Windows: %APPDATA%/fincept-terminal/backtesting/
+        dirs::data_dir().map(|d| d.join("fincept-terminal")),
+        dirs::config_dir().map(|d| d.join("fincept-terminal")),
+        // Home directory backtesting folder
+        dirs::home_dir().map(|d| d.join(".fincept").join("backtesting")),
+        // Temp directory for intermediate results
+        Some(std::env::temp_dir().join("fincept-backtesting")),
+    ].into_iter().flatten().collect();
+
+    let path_str = resolved.to_string_lossy().to_lowercase();
+
+    // Block access to sensitive system paths regardless
+    let blocked_patterns = [
+        "system32", "windows\\system", "/etc/", "/usr/",
+        ".ssh", ".gnupg", ".aws", "credentials",
+        ".env", "secrets",
+    ];
+
+    for pattern in &blocked_patterns {
+        if path_str.contains(&pattern.to_lowercase()) {
+            return Err(format!("Access to path containing '{}' is not allowed", pattern));
+        }
+    }
+
+    // Check if path is within any allowed root
+    let is_allowed = allowed_roots.iter().any(|root| {
+        resolved.starts_with(root)
+    });
+
+    if !is_allowed {
+        return Err(format!(
+            "Path '{}' is outside allowed directories. Files must be within the fincept-terminal data directory.",
+            path.display()
+        ));
+    }
+
+    Ok(resolved)
+}
+
+/**
  * Check if file exists
  *
- * Utility to verify file paths.
+ * Utility to verify file paths. Only allows paths within backtesting data directory.
  */
 #[tauri::command]
 pub async fn check_file_exists(path: String) -> Result<bool, String> {
-    use std::path::Path;
-    Ok(Path::new(&path).exists())
+    let validated_path = validate_backtesting_path(&path)?;
+    Ok(validated_path.exists())
 }
 
 /**
  * Create directory
  *
- * Creates a directory if it doesn't exist.
+ * Creates a directory if it doesn't exist. Only allows within backtesting data directory.
  */
 #[tauri::command]
 pub async fn create_directory(path: String) -> Result<(), String> {
     use std::fs;
-    fs::create_dir_all(&path).map_err(|e| format!("Failed to create directory: {}", e))
+    let validated_path = validate_backtesting_path(&path)?;
+    fs::create_dir_all(&validated_path).map_err(|e| format!("Failed to create directory: {}", e))
 }
 
 /**
  * Write file
  *
- * Writes content to a file.
+ * Writes content to a file. Only allows within backtesting data directory.
  */
 #[tauri::command]
 pub async fn write_file(path: String, content: String) -> Result<(), String> {
     use std::fs;
-    fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))
+    let validated_path = validate_backtesting_path(&path)?;
+    fs::write(&validated_path, content).map_err(|e| format!("Failed to write file: {}", e))
 }
 
 /**
  * Read file
  *
- * Reads content from a file.
+ * Reads content from a file. Only allows within backtesting data directory.
  */
 #[tauri::command]
 pub async fn read_file(path: String) -> Result<String, String> {
     use std::fs;
-    fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))
+    let validated_path = validate_backtesting_path(&path)?;
+    fs::read_to_string(&validated_path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
 // ============================================================================

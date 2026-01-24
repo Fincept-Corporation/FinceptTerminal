@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "KONFIGUROWALNY PULPIT",
+    "title": "DOSTOSOWALNY PANEL ROZDZIELNY",
     "live": "NA ŻYWO",
-    "widgets": "WIDGETY"
+    "widgets": "WIDŻETY"
   },
   "buttons": {
-    "addWidget": "DODAJ WIDGET",
+    "addWidget": "DODAJ WIDŻET",
     "saveLayout": "ZAPISZ UKŁAD",
-    "reset": "RESETUJ"
+    "reset": "NASTAWIĆ",
+    "help": "POMOC"
   },
   "widgets": {
-    "loading": "Ładowanie...",
+    "loading": "Załadunek...",
     "error": "Błąd",
-    "globalIndices": "GLOBALNE INDEKSY - TOP 12",
-    "forex": "PARY FOREX",
+    "globalIndices": "Globalne indeksy - Top 12",
+    "forex": "Forex – główne pary",
     "crypto": "KRYPTOWALUTY",
-    "commodities": "SUROWCE",
-    "news": "WIADOMOŚCI",
+    "commodities": "Towary",
+    "news": "AKTUALNOŚCI",
     "forum": "FORUM",
     "watchlist": "LISTA OBSERWOWANYCH",
+    "maritimeIntelligence": "Wywiad Morski",
+    "unknown": "Nieznany typ widżetu",
     "index": "INDEKS",
     "symbol": "SYMBOL",
     "price": "CENA",
-    "change": "ZM",
-    "percentChange": "%ZM",
-    "noIndexData": "Brak danych indeksów",
-    "noForexData": "Brak danych forex",
-    "noCryptoData": "Brak danych krypto",
-    "noCommoditiesData": "Brak danych surowców",
-    "noForumPosts": "Brak postów forum",
-    "noStocksInWatchlist": "Brak akcji na liście",
-    "noWatchlistSelected": "Nie wybrano listy",
-    "noData": "Brak danych",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Brak dostępnych danych indeksowych",
+    "noForexData": "Brak dostępnych danych dotyczących rynku Forex",
+    "noCryptoData": "Brak dostępnych danych kryptograficznych",
+    "noCommoditiesData": "Brak danych o towarach",
+    "noForumPosts": "Brak dostępnych postów na forum",
+    "noStocksInWatchlist": "Brak akcji na liście obserwowanych",
+    "noWatchlistSelected": "Nie wybrano listy obserwowanych",
+    "noData": "Brak dostępnych danych",
     "pair": "PARA",
-    "rate": "KURS",
-    "commodity": "SUROWIEC",
-    "maritimeIntelligence": "⚓ WYWIAD MORSKI",
-    "globe3D": "GLOBUS 3D",
+    "rate": "WSKAŹNIK",
+    "commodity": "TOWAR",
+    "globe3D": "GLOB 3D",
     "vessels": "STATKI",
     "routes": "TRASY",
-    "vol24h": "WOL 24H",
-    "topTradeCorridors": "GŁÓWNE KORYTARZE HANDLOWE",
+    "vol24h": "TOM 24H",
+    "topTradeCorridors": "NAJLEPSZE KORYTARZE HANDLOWE",
     "ships": "statki",
-    "unknown": "[PL] Unknown widget type"
+    "marketNews": "Wiadomości rynkowe",
+    "secPressReleases": "Komunikaty prasowe SEC",
+    "cryptoNews": "Wiadomości kryptograficzne",
+    "trendingForum": "Forum trendów",
+    "techStocks": "Akcje technologiczne"
   },
   "tips": {
-    "drag": "Przeciągnij widgety aby zmienić układ",
-    "resize": "Zmień rozmiar z prawego dolnego rogu",
-    "remove": "Usuń widgety przyciskiem X",
-    "responsive": "Responsywny układ - pełna szerokość"
+    "drag": "Przeciągnij widżety, aby zmienić ich kolejność",
+    "resize": "Zmień rozmiar od prawego dolnego rogu",
+    "remove": "Usuń widżety za pomocą przycisku X",
+    "responsive": "Układ responsywny - wykorzystuje całą szerokość"
   },
   "loading": {
-    "title": "Inicjalizacja Pulpitu",
-    "description": "Konfiguracja pamięci podręcznej dla szybszego ładowania...",
-    "note": "Zajmie to tylko chwilę przy pierwszym uruchomieniu"
+    "title": "Inicjowanie pulpitu nawigacyjnego",
+    "description": "Konfigurowanie pamięci podręcznej bazy danych w celu szybszego ładowania danych...",
+    "note": "Przy pierwszym uruchomieniu zajmie to tylko chwilę"
   },
   "empty": {
-    "noWidgets": "Brak widgetów na pulpicie",
-    "addFirst": "DODAJ PIERWSZY WIDGET"
+    "noWidgets": "Brak widżetów na desce rozdzielczej",
+    "addFirst": "DODAJ SWOJ PIERWSZY WIDŻET"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Przeciągnij i upuść",
+    "version": "Konfigurowalny pulpit nawigacyjny Fincept v2.0.0 | Przeciągnij i upuść obszar roboczy",
     "layout": "Układ",
-    "custom": "Własny",
+    "custom": "Zwyczaj",
     "empty": "Pusty",
     "active": "AKTYWNY",
-    "cache": "Cache: WŁĄCZONY",
-    "label": "[PL] Status"
+    "cache": "Pamięć podręczna: WŁĄCZONA",
+    "label": "Status"
   },
   "messages": {
-    "layoutSaved": "[PL] Dashboard layout saved!",
-    "resetConfirm": "[PL] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Układ pulpitu nawigacyjnego został zapisany!",
+    "resetConfirm": "Zresetować pulpit nawigacyjny do układu domyślnego? Spowoduje to usunięcie wszystkich niestandardowych widżetów."
   }
 }

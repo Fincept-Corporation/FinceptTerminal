@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Activity, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import polymarketService, { PolymarketMarket } from '@/services/polymarket/polymarketService';
+import { useTranslation } from 'react-i18next';
 
 interface PolymarketWidgetProps {
   id: string;
@@ -10,11 +11,6 @@ interface PolymarketWidgetProps {
   onNavigate?: () => void;
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
 
 export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
   id,
@@ -22,6 +18,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [markets, setMarkets] = useState<PolymarketMarket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +43,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
     return () => clearInterval(interval);
   }, [limit]);
 
+
   const formatVolume = (volume: number) => {
     if (volume >= 1000000) return `$${(volume / 1000000).toFixed(1)}M`;
     if (volume >= 1000) return `$${(volume / 1000).toFixed(0)}K`;
@@ -60,7 +58,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
       onRefresh={loadMarkets}
       isLoading={loading}
       error={error}
-      headerColor="#9D4EDD"
+      headerColor="var(--ft-color-purple)"
     >
       <div style={{ padding: '4px' }}>
         {markets.slice(0, limit).map((market, index) => (
@@ -68,15 +66,15 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
             key={market.id || index}
             style={{
               padding: '6px 8px',
-              borderBottom: `1px solid #333`,
+              borderBottom: '1px solid var(--ft-border-color)',
               display: 'flex',
               flexDirection: 'column',
               gap: '4px'
             }}
           >
             <div style={{
-              fontSize: '10px',
-              color: FINCEPT_WHITE,
+              fontSize: 'var(--ft-font-size-small)',
+              color: 'var(--ft-color-text)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap'
@@ -85,14 +83,14 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <span style={{ fontSize: '10px', color: FINCEPT_GREEN }}>
+                <span style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-success)' }}>
                   YES: {((parseFloat(market.outcomePrices?.[0] || '0')) * 100).toFixed(0)}%
                 </span>
-                <span style={{ fontSize: '10px', color: FINCEPT_RED }}>
+                <span style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-alert)' }}>
                   NO: {((parseFloat(market.outcomePrices?.[1] || '0')) * 100).toFixed(0)}%
                 </span>
               </div>
-              <span style={{ fontSize: '9px', color: FINCEPT_GRAY }}>
+              <span style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>
                 Vol: {formatVolume(parseFloat(market.volume || '0'))}
               </span>
             </div>
@@ -100,8 +98,8 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
         ))}
 
         {markets.length === 0 && !loading && (
-          <div style={{ padding: '12px', textAlign: 'center', color: FINCEPT_GRAY, fontSize: '10px' }}>
-            No active markets found
+          <div style={{ padding: '12px', textAlign: 'center', color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)' }}>
+            {t('widgets.noActiveMarkets')}
           </div>
         )}
 
@@ -111,8 +109,8 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: '#9D4EDD',
-              fontSize: '9px',
+              color: 'var(--ft-color-purple)',
+              fontSize: 'var(--ft-font-size-tiny)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -120,7 +118,7 @@ export const PolymarketWidget: React.FC<PolymarketWidgetProps> = ({
               gap: '4px'
             }}
           >
-            <span>Open Polymarket Tab</span>
+            <span>{t('widgets.openPolymarketTab')}</span>
             <ExternalLink size={10} />
           </div>
         )}

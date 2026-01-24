@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "PENGATURAN",
+  "sidebar": {
+    "credentials": "Kredensial API",
+    "polymarket": "API Polimarket",
+    "llm": "Konfigurasi LLM",
+    "dataSources": "Sumber Data",
+    "backtesting": "pengujian ulang",
+    "stockSymbols": "Simbol Saham",
+    "tabLayout": "Tata Letak Tab",
+    "appearance": "Penampilan",
+    "language": "Bahasa",
+    "storage": "Penyimpanan & Cache"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[ID] Manage API keys and credentials for external services",
-    "enterValue": "[ID] Enter value..."
+    "title": "MANAJEMEN KREDENSIAL API",
+    "description": "Kelola kunci API dan kredensial untuk layanan eksternal",
+    "apiKey": "Kunci API",
+    "enterValue": "Masukkan nilai..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[ID] Customize the visual appearance of your terminal",
-    "currentSettings": "[ID] CURRENT SETTINGS"
+    "title": "PENAMPILAN TERMINAL",
+    "description": "Sesuaikan tampilan visual terminal Anda termasuk font, warna, zona waktu, dan pintasan keyboard.",
+    "fontFamily": "KELUARGA FONT",
+    "currentSettings": "PENGATURAN FONT",
+    "baseFontSize": "UKURAN FONT DASAR",
+    "fontWeight": "BERAT FONT",
+    "weightNormal": "Biasa (400)",
+    "weightSemibold": "Semi-Tebal (600)",
+    "weightBold": "Tebal (700)",
+    "enableItalic": "AKTIFKAN GAYA ITALIS",
+    "fontSizeSmall": "Kecil (9 piksel)",
+    "fontSizeLarge": "Besar (18 piksel)",
+    "colorTheme": "TEMA WARNA",
+    "defaultTimezone": "ZONA WAKTU DEFAULT",
+    "timezoneDescription": "Atur zona waktu default yang ditampilkan di bilah navigasi. Widget dasbor dapat menggunakan pengaturan zona waktunya sendiri.",
+    "functionKeys": "PEMETAAN KUNCI FUNGSI",
+    "functionKeysDescription": "Konfigurasikan tab atau tindakan mana yang harus dipicu oleh setiap tombol fungsi (F1-F12). Perubahan akan terlihat di bilah status dan pintasan keyboard.",
+    "livePreview": "PRATINJAU LANGSUNG",
+    "previewTitle": "PREVIEW TERMINAL KEUANGAN",
+    "previewBody": "Teks Isi: Analisis pasar real-time dan pelacakan portofolio",
+    "previewSmall": "Teks Kecil: Data pasar, stempel waktu, dan metadata",
+    "statusConnected": "TERHUBUNG",
+    "statusAlert": "PERINGATAN",
+    "statusWarning": "PERINGATAN",
+    "saveConfig": "SIMPAN KONFIGURASI",
+    "reset": "MENGATUR ULANG",
+    "saveSuccess": "Tampilan terminal dan pemetaan kunci berhasil disimpan",
+    "resetSuccess": "Reset ke tampilan default dan pemetaan kunci"
   },
-  "sidebar": {
-    "credentials": "[ID] API Credentials",
-    "llm": "[ID] LLM Configuration",
-    "dataSources": "[ID] Data Sources",
-    "backtesting": "[ID] Backtesting",
-    "tabLayout": "[ID] Tab Layout",
-    "appearance": "[ID] Appearance",
-    "language": "[ID] Language",
-    "polymarket": "[ID] Polymarket API"
+  "stockSymbols": {
+    "title": "Basis Data Simbol Saham",
+    "description": "Unduh dan kelola data simbol broker untuk pencarian offline cepat. Data simbol mencakup saham, F&O, komoditas, dan derivatif mata uang. Perbarui secara berkala untuk mendapatkan instrumen terbaru dan masa berlakunya habis."
   },
   "terminalConfig": {
-    "title": "[ID] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[ID] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[ID] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[ID] TOOLBAR MENU SECTIONS",
-    "newSection": "[ID] NEW SECTION",
-    "deleteSection": "[ID] DELETE",
-    "moveTo": "[ID] MOVE TO ▼",
-    "resetToDefault": "[ID] RESET TO DEFAULT",
-    "noTabsInSection": "[ID] No tabs in this section",
-    "tip": "[ID] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "KONFIGURASI TATA LETAK TAB",
+    "headerTabs": "TAB KEPALA (BAR TAB UTAMA)",
+    "headerTabsDesc": "Tarik untuk menyusun ulang. Tab ini muncul di navigasi header utama.",
+    "toolbarSections": "BAGIAN MENU TOOLBAR",
+    "newSection": "BAGIAN BARU",
+    "deleteSection": "MENGHAPUS",
+    "moveTo": "PINDAHKAN KE ▼",
+    "resetToDefault": "RESET KE DEFAULT",
+    "noTabsInSection": "Tidak ada tab di bagian ini",
+    "tip": "TIPS: Seret tab untuk menyusun ulang tab. Gunakan tombol panah untuk memindahkan tab antara header dan bagian menu. Perubahan disimpan secara otomatis."
   },
   "llm": {
-    "title": "[ID] LLM CONFIGURATION",
-    "description": "[ID] Configure AI models and providers",
-    "connected": "[ID] CONNECTED",
-    "disconnected": "[ID] DISCONNECTED",
-    "provider": "[ID] AI PROVIDER",
-    "globalSettings": "[ID] GLOBAL AI SETTINGS",
-    "temperature": "[ID] TEMPERATURE",
-    "maxTokens": "[ID] MAX TOKENS",
-    "systemPrompt": "[ID] SYSTEM PROMPT",
-    "modelLibrary": "[ID] MODEL LIBRARY",
-    "multiModelConfigs": "[ID] Multi-model configs"
+    "title": "KONFIGURASI LLM",
+    "description": "Konfigurasikan model dan penyedia AI",
+    "connected": "TERHUBUNG",
+    "disconnected": "TERHUBUNG",
+    "provider": "PENYEDIA AI",
+    "globalSettings": "PENGATURAN AI GLOBAL",
+    "temperature": "SUHU",
+    "maxTokens": "TOKEN MAKS",
+    "systemPrompt": "PERINTAH SISTEM",
+    "modelLibrary": "PERPUSTAKAAN MODEL",
+    "multiModelConfigs": "Konfigurasi multi-model"
   },
   "buttons": {
-    "save": "[ID] SAVE",
-    "cancel": "[ID] CANCEL",
-    "add": "[ID] ADD"
+    "save": "MENYIMPAN",
+    "cancel": "MEMBATALKAN",
+    "add": "MENAMBAHKAN"
   },
   "footer": {
-    "database": "[ID] Database: SQLite",
-    "storage": "[ID] Storage: File-based",
-    "secureStorage": "[ID] All data stored securely in fincept_terminal.db"
+    "database": "Basis Data: SQLite",
+    "storage": "Penyimpanan: Berbasis file",
+    "secureStorage": "Semua data disimpan dengan aman di fincept_terminal.db"
   }
 }

@@ -1,7 +1,9 @@
 {
   "title": "BACKTESTING ENGINE",
   "toolbar": {
-    "run": "Run Backtest"
+    "run": "Run Backtest",
+    "running": "Running Backtest...",
+    "selectProvider": "Select Provider"
   },
   "config": {
     "symbolTimeframe": "Symbol & Timeframe",
@@ -9,19 +11,123 @@
     "stockTicker": "Stock ticker to backtest",
     "startDate": "Start Date",
     "endDate": "End Date",
-    "initialCapital": "Initial Capital"
+    "initialCapital": "Initial Capital",
+    "benchmark": "Benchmark",
+    "positionSizing": "Position Sizing"
   },
   "sections": {
     "strategyConfig": "Strategy Configuration",
     "strategyType": "Strategy Type",
     "strategyParams": "Strategy Parameters",
     "backtestResults": "Backtest Results",
-    "advancedSettings": "Advanced Settings"
+    "advancedSettings": "Advanced Settings",
+    "symbols": "Symbols",
+    "dateRange": "Date Range",
+    "strategy": "Strategy",
+    "execution": "Execution",
+    "benchmarkSection": "Benchmark"
+  },
+  "strategies": {
+    "smaCrossover": "SMA Crossover",
+    "emaCrossover": "EMA Crossover",
+    "rsi": "RSI Strategy",
+    "macd": "MACD Strategy",
+    "bollingerBands": "Bollinger Bands",
+    "meanReversion": "Mean Reversion",
+    "momentum": "Momentum",
+    "breakout": "Breakout",
+    "stochastic": "Stochastic",
+    "adxTrend": "ADX Trend",
+    "custom": "Custom Strategy"
   },
   "smaParams": {
     "fastPeriod": "Fast Period",
     "slowPeriod": "Slow Period",
     "fastNote": "Short-term moving average",
     "slowNote": "Long-term moving average"
+  },
+  "rsiParams": {
+    "period": "RSI Period",
+    "oversold": "Oversold Threshold",
+    "overbought": "Overbought Threshold"
+  },
+  "macdParams": {
+    "fastPeriod": "Fast EMA Period",
+    "slowPeriod": "Slow EMA Period",
+    "signalPeriod": "Signal Period",
+    "fastNote": "Fast exponential moving average (default: 12)",
+    "slowNote": "Slow exponential moving average (default: 26)",
+    "signalNote": "Signal line period (default: 9)"
+  },
+  "bollingerParams": {
+    "period": "SMA Period",
+    "stdDev": "Standard Deviation",
+    "periodNote": "Moving average lookback period (default: 20)",
+    "stdDevNote": "Number of standard deviations for bands (default: 2)"
+  },
+  "customStrategy": {
+    "label": "Strategy Code (Python)",
+    "note": "Define a class extending Strategy with init() and next() methods. Code is validated for safety."
+  },
+  "advanced": {
+    "commission": "Commission",
+    "commissionNote": "Trading commission as decimal (e.g., 0.001 = 0.1%)",
+    "slippage": "Slippage",
+    "slippageNote": "Expected slippage as decimal (e.g., 0.0005 = 0.05%)",
+    "leverage": "Leverage",
+    "leverageNote": "Margin/leverage ratio (1.0 = no leverage)"
+  },
+  "metrics": {
+    "totalReturn": "Total Return",
+    "annualizedReturn": "Ann. Return",
+    "sharpeRatio": "Sharpe Ratio",
+    "sortinoRatio": "Sortino Ratio",
+    "calmarRatio": "Calmar Ratio",
+    "maxDrawdown": "Max Drawdown",
+    "winRate": "Win Rate",
+    "totalTrades": "Total Trades",
+    "profitFactor": "Profit Factor",
+    "volatility": "Volatility",
+    "var95": "VaR (95%)",
+    "cvar95": "CVaR (95%)",
+    "omegaRatio": "Omega Ratio",
+    "ulcerIndex": "Ulcer Index",
+    "tailRatio": "Tail Ratio",
+    "skewness": "Skewness",
+    "kurtosis": "Kurtosis",
+    "alpha": "Alpha",
+    "beta": "Beta",
+    "informationRatio": "Information Ratio",
+    "trackingError": "Tracking Error",
+    "rSquared": "R-Squared"
+  },
+  "tabs": {
+    "equity": "Equity",
+    "drawdown": "Drawdown",
+    "distribution": "Distribution",
+    "monthly": "Monthly",
+    "summary": "Summary",
+    "trades": "Trades",
+    "analysis": "Analysis"
+  },
+  "results": {
+    "placeholder": "Configure and run a backtest to see results",
+    "running": "Running backtest with {{provider}}...",
+    "summary": "Backtest Summary",
+    "symbol": "Symbol",
+    "strategy": "Strategy",
+    "period": "Period",
+    "provider": "Provider",
+    "trades": "Recent Trades",
+    "totalTrades": "{{count}} total trades executed",
+    "equityCurve": "Equity Curve",
+    "syntheticDataWarning": "Results use SYNTHETIC data. Install yfinance for real market data: pip install yfinance"
+  },
+  "errors": {
+    "loadProviders": "Failed to load backtesting providers",
+    "switchProvider": "Failed to switch provider",
+    "noProvider": "No backtesting provider selected",
+    "providerNotFound": "Selected provider not found",
+    "validationTitle": "Validation Errors"
   }
 }

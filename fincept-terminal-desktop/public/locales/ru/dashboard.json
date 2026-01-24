@@ -1,75 +1,81 @@
 {
   "header": {
     "title": "НАСТРАИВАЕМАЯ ПАНЕЛЬ",
-    "live": "ЖИВОЙ",
+    "live": "ЖИТЬ",
     "widgets": "ВИДЖЕТЫ"
   },
   "buttons": {
     "addWidget": "ДОБАВИТЬ ВИДЖЕТ",
     "saveLayout": "СОХРАНИТЬ МАКЕТ",
-    "reset": "СБРОС"
+    "reset": "ПЕРЕЗАГРУЗИТЬ",
+    "help": "ПОМОЩЬ"
   },
   "widgets": {
     "loading": "Загрузка...",
     "error": "Ошибка",
-    "globalIndices": "ГЛОБАЛЬНЫЕ ИНДЕКСЫ - ТОП 12",
-    "forex": "ПАРЫ FOREX",
+    "globalIndices": "Глобальные индексы - Топ-12",
+    "forex": "Форекс — основные пары",
     "crypto": "КРИПТОВАЛЮТЫ",
-    "commodities": "СЫРЬЕ",
+    "commodities": "Товары",
     "news": "НОВОСТИ",
     "forum": "ФОРУМ",
-    "watchlist": "СПИСОК НАБЛЮДЕНИЯ",
+    "watchlist": "СПИСОК ПРОСМОТРА",
+    "maritimeIntelligence": "Морская разведка",
+    "unknown": "Неизвестный тип виджета",
     "index": "ИНДЕКС",
     "symbol": "СИМВОЛ",
     "price": "ЦЕНА",
-    "change": "ИЗМ",
-    "percentChange": "%ИЗМ",
-    "noIndexData": "Нет данных индексов",
-    "noForexData": "Нет данных forex",
-    "noCryptoData": "Нет данных крипто",
-    "noCommoditiesData": "Нет данных сырья",
-    "noForumPosts": "Нет постов",
-    "noStocksInWatchlist": "Нет акций в списке",
-    "noWatchlistSelected": "Список не выбран",
-    "noData": "Нет данных",
+    "change": "CHG",
+    "percentChange": "% CHG",
+    "noIndexData": "Индексные данные отсутствуют",
+    "noForexData": "Нет данных о Форексе",
+    "noCryptoData": "Криптовалютные данные недоступны.",
+    "noCommoditiesData": "Данные о товарах отсутствуют",
+    "noForumPosts": "Нет доступных сообщений на форуме",
+    "noStocksInWatchlist": "В списке наблюдения нет акций",
+    "noWatchlistSelected": "Список наблюдения не выбран",
+    "noData": "Нет доступных данных",
     "pair": "ПАРА",
-    "rate": "КУРС",
-    "commodity": "СЫРЬЕ",
-    "maritimeIntelligence": "⚓ МОРСКАЯ РАЗВЕДКА",
+    "rate": "СТАВКА",
+    "commodity": "ТОВАР",
     "globe3D": "3D ГЛОБУС",
-    "vessels": "СУДА",
+    "vessels": "СУДЫ",
     "routes": "МАРШРУТЫ",
     "vol24h": "ОБЪЕМ 24Ч",
-    "topTradeCorridors": "ОСНОВНЫЕ ТОРГОВЫЕ КОРИДОРЫ",
-    "ships": "суда",
-    "unknown": "[RU] Unknown widget type"
+    "topTradeCorridors": "ТОП ТОРГОВЫХ КОРИДОРОВ",
+    "ships": "корабли",
+    "marketNews": "Новости рынка",
+    "secPressReleases": "Пресс-релизы SEC",
+    "cryptoNews": "Крипто-новости",
+    "trendingForum": "Трендовый форум",
+    "techStocks": "Технологические акции"
   },
   "tips": {
-    "drag": "Перетащите виджеты для перестановки",
-    "resize": "Измените размер из нижнего правого угла",
-    "remove": "Удалите виджеты кнопкой X",
-    "responsive": "Адаптивный макет - полная ширина"
+    "drag": "Перетащите виджеты, чтобы изменить их порядок",
+    "resize": "Изменение размера в правом нижнем углу",
+    "remove": "Удаление виджетов с помощью кнопки X",
+    "responsive": "Адаптивный макет — используется полная ширина."
   },
   "loading": {
-    "title": "Инициализация Панели",
-    "description": "Настройка кеша базы данных для быстрой загрузки...",
-    "note": "Это займет мгновение при первом запуске"
+    "title": "Инициализация информационной панели",
+    "description": "Настройка кэша базы данных для более быстрой загрузки данных...",
+    "note": "Это займет всего минуту при первом запуске."
   },
   "empty": {
-    "noWidgets": "Нет виджетов на панели",
-    "addFirst": "ДОБАВЬТЕ ПЕРВЫЙ ВИДЖЕТ"
+    "noWidgets": "Нет виджетов на панели управления",
+    "addFirst": "ДОБАВЬТЕ СВОЙ ПЕРВЫЙ ВИДЖЕТ"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Перетаскивание рабочего пространства",
+    "version": "Настраиваемая информационная панель Fincept v2.0.0 | Перетащите рабочую область",
     "layout": "Макет",
-    "custom": "Пользовательский",
-    "empty": "Пусто",
-    "active": "АКТИВЕН",
-    "cache": "Кеш: ВКЛЮЧЕН",
-    "label": "[RU] Status"
+    "custom": "Обычай",
+    "empty": "Пустой",
+    "active": "АКТИВНЫЙ",
+    "cache": "Кэш: ВКЛЮЧЕН",
+    "label": "Статус"
   },
   "messages": {
-    "layoutSaved": "[RU] Dashboard layout saved!",
-    "resetConfirm": "[RU] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Макет панели управления сохранен!",
+    "resetConfirm": "Сбросить панель управления к макету по умолчанию? Это приведет к удалению всех пользовательских виджетов."
   }
 }

@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "DASHBOARD PERSONALIZZABILE",
-    "live": "LIVE",
+    "title": "CRUSCOTTO PERSONALIZZABILE",
+    "live": "VIVERE",
     "widgets": "WIDGET"
   },
   "buttons": {
     "addWidget": "AGGIUNGI WIDGET",
     "saveLayout": "SALVA LAYOUT",
-    "reset": "RESET"
+    "reset": "RESET",
+    "help": "AIUTO"
   },
   "widgets": {
     "loading": "Caricamento...",
     "error": "Errore",
-    "globalIndices": "INDICI GLOBALI - TOP 12",
-    "forex": "COPPIE FOREX",
+    "globalIndices": "Indici globali - Primi 12",
+    "forex": "Forex - Coppie principali",
     "crypto": "CRIPTOVALUTE",
-    "commodities": "MATERIE PRIME",
-    "news": "NOTIZIE",
-    "forum": "FORUM",
-    "watchlist": "LISTA PREFERITI",
+    "commodities": "Merci",
+    "news": "NOTIZIA",
+    "forum": "FORO",
+    "watchlist": "LISTA DEI PREFERITI",
+    "maritimeIntelligence": "Intelligenza marittima",
+    "unknown": "Tipo di widget sconosciuto",
     "index": "INDICE",
     "symbol": "SIMBOLO",
     "price": "PREZZO",
-    "change": "VAR",
-    "percentChange": "%VAR",
-    "noIndexData": "Nessun dato indici",
-    "noForexData": "Nessun dato forex",
-    "noCryptoData": "Nessun dato crypto",
-    "noCommoditiesData": "Nessun dato materie prime",
-    "noForumPosts": "Nessun post",
-    "noStocksInWatchlist": "Nessun titolo nella lista",
-    "noWatchlistSelected": "Nessuna lista selezionata",
-    "noData": "Nessun dato",
-    "pair": "COPPIA",
-    "rate": "TASSO",
-    "commodity": "MATERIA PRIMA",
-    "maritimeIntelligence": "⚓ INTELLIGENCE MARITTIMA",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Nessun dato dell'indice disponibile",
+    "noForexData": "Nessun dato Forex disponibile",
+    "noCryptoData": "Nessun dato crittografico disponibile",
+    "noCommoditiesData": "Nessun dato sulle materie prime disponibile",
+    "noForumPosts": "Nessun post del forum disponibile",
+    "noStocksInWatchlist": "Nessun titolo nella watchlist",
+    "noWatchlistSelected": "Nessuna lista di controllo selezionata",
+    "noData": "Nessun dato disponibile",
+    "pair": "PAIO",
+    "rate": "VALUTARE",
+    "commodity": "MERCE",
     "globe3D": "GLOBO 3D",
-    "vessels": "NAVI",
-    "routes": "ROTTE",
-    "vol24h": "VOL 24H",
-    "topTradeCorridors": "CORRIDOI COMMERCIALI PRINCIPALI",
+    "vessels": "VASI",
+    "routes": "PERCORSI",
+    "vol24h": "VOLUME 24 ORE",
+    "topTradeCorridors": "I MIGLIORI CORRIDOI COMMERCIALI",
     "ships": "navi",
-    "unknown": "[IT] Unknown widget type"
+    "marketNews": "Notizie di mercato",
+    "secPressReleases": "Comunicati stampa della SEC",
+    "cryptoNews": "Notizie sulle criptovalute",
+    "trendingForum": "Forum di tendenza",
+    "techStocks": "Titoli tecnologici"
   },
   "tips": {
-    "drag": "Trascina i widget per riorganizzare",
+    "drag": "Trascina i widget per riorganizzarli",
     "resize": "Ridimensiona dall'angolo in basso a destra",
-    "remove": "Rimuovi widget con il pulsante X",
-    "responsive": "Layout responsivo - larghezza completa"
+    "remove": "Rimuovi i widget con il pulsante X",
+    "responsive": "Layout reattivo: utilizza l'intera larghezza"
   },
   "loading": {
-    "title": "Inizializzazione Dashboard",
-    "description": "Configurazione cache database per caricamento più veloce...",
-    "note": "Questo richiederà solo un momento al primo avvio"
+    "title": "Inizializzazione del dashboard",
+    "description": "Configurazione della cache del database per un caricamento più rapido dei dati...",
+    "note": "Ciò richiederà solo un momento al primo avvio"
   },
   "empty": {
-    "noWidgets": "Nessun widget nella dashboard",
+    "noWidgets": "Nessun widget sulla dashboard",
     "addFirst": "AGGIUNGI IL TUO PRIMO WIDGET"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Spazio di lavoro drag & drop",
-    "layout": "Layout",
-    "custom": "Personalizzato",
+    "version": "Dashboard personalizzabile Fincept v2.0.0 | Trascina e rilascia l'area di lavoro",
+    "layout": "Disposizione",
+    "custom": "Costume",
     "empty": "Vuoto",
     "active": "ATTIVO",
     "cache": "Cache: ABILITATA",
-    "label": "[IT] Status"
+    "label": "Stato"
   },
   "messages": {
-    "layoutSaved": "[IT] Dashboard layout saved!",
-    "resetConfirm": "[IT] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Layout della dashboard salvato!",
+    "resetConfirm": "Reimpostare la dashboard sul layout predefinito? Ciò rimuoverà tutti i widget personalizzati."
   }
 }

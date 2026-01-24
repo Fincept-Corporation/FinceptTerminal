@@ -1,15 +1,17 @@
 // agents.rs - Unified agent commands with single JSON payload
-use crate::utils::python::get_script_path;
+use crate::utils::python::execute_python_subprocess;
 use crate::python_runtime;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use std::time::Duration;
 use tokio::time::timeout;
 
-/// Default timeout for agent operations (10 seconds)
-const AGENT_TIMEOUT_SECS: u64 = 10;
-/// Shorter timeout for discovery operations (5 seconds)
-const DISCOVERY_TIMEOUT_SECS: u64 = 5;
+/// Default timeout for agent operations (120 seconds - LLM calls can take 30-60s+)
+const AGENT_TIMEOUT_SECS: u64 = 120;
+/// Shorter timeout for discovery/listing operations (15 seconds)
+const DISCOVERY_TIMEOUT_SECS: u64 = 15;
+/// Timeout for routing-only operations (no LLM call, just keyword matching)
+const ROUTING_TIMEOUT_SECS: u64 = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentParameter {
@@ -74,22 +76,29 @@ pub async fn execute_core_agent(
     execute_core_agent_with_timeout(app, payload, AGENT_TIMEOUT_SECS).await
 }
 
-/// Execute CoreAgent with custom timeout
+/// Execute CoreAgent with custom timeout using direct subprocess execution
+/// This bypasses the worker pool for reliability on Windows
 async fn execute_core_agent_with_timeout(
     app: tauri::AppHandle,
     payload: serde_json::Value,
     timeout_secs: u64,
 ) -> Result<String, String> {
-    // Use main.py as unified entry point for all actions
-    let script_path = get_script_path(&app, "agents/finagent_core/main.py")?;
     let payload_str = serde_json::to_string(&payload)
         .map_err(|e| format!("Failed to serialize payload: {}", e))?;
 
-    // Execute with timeout protection
+    let app_clone = app.clone();
+    let args: Vec<String> = vec![payload_str];
+
+    // Execute Python subprocess in a blocking task with timeout
     let result = timeout(
         Duration::from_secs(timeout_secs),
         tokio::task::spawn_blocking(move || {
-            python_runtime::execute_python_script(&script_path, vec![payload_str])
+            execute_python_subprocess(
+                &app_clone,
+                "agents/finagent_core/main.py",
+                &args,
+                Some("agno"),
+            )
         })
     ).await;
 
@@ -101,6 +110,7 @@ async fn execute_core_agent_with_timeout(
 }
 
 /// Route a query to the appropriate agent using SuperAgent
+/// Uses shorter timeout since routing is just keyword matching (no LLM call)
 #[tauri::command]
 pub async fn route_query(
     app: tauri::AppHandle,
@@ -112,7 +122,7 @@ pub async fn route_query(
         "api_keys": api_keys.unwrap_or_default(),
         "params": { "query": query }
     });
-    execute_core_agent(app, payload).await
+    execute_core_agent_with_timeout(app, payload, ROUTING_TIMEOUT_SECS).await
 }
 
 /// Execute a query with automatic routing via SuperAgent
@@ -122,10 +132,12 @@ pub async fn execute_routed_query(
     query: String,
     api_keys: Option<std::collections::HashMap<String, String>>,
     session_id: Option<String>,
+    config: Option<serde_json::Value>,
 ) -> Result<String, String> {
     let payload = serde_json::json!({
         "action": "execute_query",
         "api_keys": api_keys.unwrap_or_default(),
+        "config": config.unwrap_or(serde_json::json!({})),
         "params": {
             "query": query,
             "session_id": session_id

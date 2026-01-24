@@ -186,8 +186,6 @@ class BacktestingProviderBase(ABC):
     """
 
     def __init__(self):
-        self.initialized = False
-        self.connected = False
         self.config: Optional[Dict[str, Any]] = None
 
     # ========================================================================
@@ -323,9 +321,8 @@ class BacktestingProviderBase(ABC):
         raise NotImplementedError(f"Optimization not supported by {self.name}")
 
     def disconnect(self) -> None:
-        """Clean up resources and disconnect"""
-        self.connected = False
-        self.initialized = False
+        """Clean up resources (no-op for subprocess-based providers)"""
+        pass
 
     def validate_strategy(self, strategy: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -366,15 +363,12 @@ class BacktestingProviderBase(ABC):
         return datetime.utcnow().isoformat() + 'Z'
 
     def _ensure_initialized(self) -> None:
-        """Check if provider is initialized, raise error if not"""
-        if not self.initialized:
-            raise RuntimeError(f"{self.name} is not initialized. Call initialize() first.")
+        """No-op: Each subprocess is fresh, no persistent state needed"""
+        pass
 
     def _ensure_connected(self) -> None:
-        """Check if provider is connected, raise error if not"""
-        self._ensure_initialized()
-        if not self.connected:
-            raise RuntimeError(f"{self.name} is not connected. Call test_connection() first.")
+        """No-op: Each subprocess is fresh, no persistent state needed"""
+        pass
 
     def _create_success_result(self, message: str) -> Dict[str, Any]:
         """Create success result dictionary"""

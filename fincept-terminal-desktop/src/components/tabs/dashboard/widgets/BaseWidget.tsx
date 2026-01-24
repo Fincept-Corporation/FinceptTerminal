@@ -14,12 +14,6 @@ export interface BaseWidgetProps {
   headerColor?: string;
 }
 
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_PANEL_BG = '#000000';
-
 export const BaseWidget: React.FC<BaseWidgetProps> = ({
   title,
   onRemove,
@@ -28,23 +22,25 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
   children,
   isLoading = false,
   error = null,
-  headerColor = FINCEPT_ORANGE
+  headerColor
 }) => {
   const { t } = useTranslation('dashboard');
   return (
     <div style={{
       height: '100%',
       width: '100%',
-      backgroundColor: FINCEPT_PANEL_BG,
-      border: `1px solid ${FINCEPT_GRAY}`,
+      backgroundColor: 'var(--ft-color-background)',
+      border: 'var(--ft-border-width) solid var(--ft-border-color)',
+      borderRadius: 'var(--ft-border-radius)',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      opacity: 'var(--ft-widget-opacity)'
     }}>
       {/* Widget Header */}
       <div style={{
-        backgroundColor: '#1a1a1a',
-        borderBottom: `1px solid ${FINCEPT_GRAY}`,
+        backgroundColor: 'var(--ft-color-panel)',
+        borderBottom: 'var(--ft-border-width) solid var(--ft-border-color)',
         padding: '4px 8px',
         display: 'flex',
         alignItems: 'center',
@@ -55,8 +51,8 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
         <div
           className="widget-drag-handle"
           style={{
-            color: headerColor,
-            fontSize: '11px',
+            color: headerColor || 'var(--ft-color-primary)',
+            fontSize: 'var(--ft-font-size-body)',
             fontWeight: 'bold',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -75,14 +71,12 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                color: FINCEPT_GRAY,
+                color: 'var(--ft-color-text-muted)',
                 cursor: 'pointer',
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.color = FINCEPT_WHITE}
-              onMouseLeave={(e) => e.currentTarget.style.color = FINCEPT_GRAY}
               title="Configure"
             >
               <Settings size={12} />
@@ -95,14 +89,12 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                color: isLoading ? FINCEPT_GRAY : FINCEPT_WHITE,
+                color: isLoading ? 'var(--ft-color-text-muted)' : 'var(--ft-color-text)',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
               }}
-              onMouseEnter={(e) => !isLoading && (e.currentTarget.style.color = headerColor)}
-              onMouseLeave={(e) => !isLoading && (e.currentTarget.style.color = FINCEPT_WHITE)}
               title="Refresh"
             >
               <RefreshCw size={12} style={{ animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
@@ -114,14 +106,12 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                color: FINCEPT_GRAY,
+                color: 'var(--ft-color-text-muted)',
                 cursor: 'pointer',
                 padding: '2px',
                 display: 'flex',
                 alignItems: 'center'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.color = FINCEPT_RED}
-              onMouseLeave={(e) => e.currentTarget.style.color = FINCEPT_GRAY}
               title="Remove"
             >
               <X size={12} />
@@ -139,8 +129,8 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
         {error ? (
           <div style={{
             padding: '12px',
-            color: FINCEPT_RED,
-            fontSize: '10px',
+            color: 'var(--ft-color-alert)',
+            fontSize: 'var(--ft-font-size-small)',
             textAlign: 'center'
           }}>
             {t('widgets.error')}: {error}
@@ -157,14 +147,14 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
             <div style={{
               width: '30px',
               height: '30px',
-              border: '3px solid #404040',
-              borderTop: '3px solid #ea580c',
+              border: '3px solid var(--ft-color-text-muted)',
+              borderTop: '3px solid var(--ft-color-primary)',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite'
             }} />
             <div style={{
-              color: FINCEPT_GRAY,
-              fontSize: '9px',
+              color: 'var(--ft-color-text-muted)',
+              fontSize: 'var(--ft-font-size-tiny)',
               textAlign: 'center'
             }}>
               {t('widgets.loading')}
@@ -174,14 +164,6 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
           children
         )}
       </div>
-
-      {/* Global spin animation */}
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 };

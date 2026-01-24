@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "การตั้งค่า",
+  "sidebar": {
+    "credentials": "ข้อมูลรับรอง API",
+    "polymarket": "API โพลีมาร์เก็ต",
+    "llm": "การกำหนดค่า LLM",
+    "dataSources": "แหล่งข้อมูล",
+    "backtesting": "การทดสอบย้อนกลับ",
+    "stockSymbols": "สัญลักษณ์หุ้น",
+    "tabLayout": "เค้าโครงแท็บ",
+    "appearance": "รูปร่าง",
+    "language": "ภาษา",
+    "storage": "พื้นที่เก็บข้อมูลและแคช"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[TH] Manage API keys and credentials for external services",
-    "enterValue": "[TH] Enter value..."
+    "title": "การจัดการข้อมูลรับรอง API",
+    "description": "จัดการคีย์ API และข้อมูลรับรองสำหรับบริการภายนอก",
+    "apiKey": "คีย์ API",
+    "enterValue": "ใส่ค่า..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[TH] Customize the visual appearance of your terminal",
-    "currentSettings": "[TH] CURRENT SETTINGS"
+    "title": "รูปลักษณ์ภายนอกของเทอร์มินัล",
+    "description": "ปรับแต่งรูปลักษณ์ของเทอร์มินัลของคุณ รวมถึงแบบอักษร สี เขตเวลา และแป้นพิมพ์ลัด",
+    "fontFamily": "ครอบครัวแบบอักษร",
+    "currentSettings": "การตั้งค่าแบบอักษร",
+    "baseFontSize": "ขนาดตัวอักษรพื้นฐาน",
+    "fontWeight": "น้ำหนักตัวอักษร",
+    "weightNormal": "ปกติ (400)",
+    "weightSemibold": "กึ่งหนา (600)",
+    "weightBold": "ตัวหนา (700)",
+    "enableItalic": "เปิดใช้งานรูปแบบตัวเอียง",
+    "fontSizeSmall": "เล็ก (9px)",
+    "fontSizeLarge": "ใหญ่ (18px)",
+    "colorTheme": "ธีมสี",
+    "defaultTimezone": "เขตเวลาเริ่มต้น",
+    "timezoneDescription": "ตั้งค่าเขตเวลาเริ่มต้นที่แสดงในแถบนำทาง วิดเจ็ตแดชบอร์ดสามารถใช้การตั้งค่าเขตเวลาของตนเองได้",
+    "functionKeys": "การแมปคีย์ฟังก์ชัน",
+    "functionKeysDescription": "กำหนดค่าแท็บหรือการดำเนินการที่แต่ละปุ่มฟังก์ชัน (F1-F12) ควรทริกเกอร์ การเปลี่ยนแปลงจะปรากฏในแถบสถานะและแป้นพิมพ์ลัด",
+    "livePreview": "ดูตัวอย่างสด",
+    "previewTitle": "ตัวอย่างเทอร์มินัล FINCEPT",
+    "previewBody": "ข้อความเนื้อหา: การวิเคราะห์ตลาดแบบเรียลไทม์และการติดตามพอร์ตโฟลิโอ",
+    "previewSmall": "ข้อความขนาดเล็ก: ข้อมูลตลาด การประทับเวลา และข้อมูลเมตา",
+    "statusConnected": "เชื่อมต่อแล้ว",
+    "statusAlert": "เตือน",
+    "statusWarning": "คำเตือน",
+    "saveConfig": "บันทึกการกำหนดค่า",
+    "reset": "รีเซ็ต",
+    "saveSuccess": "บันทึกลักษณะเทอร์มินัลและการแมปคีย์เรียบร้อยแล้ว",
+    "resetSuccess": "รีเซ็ตเป็นรูปลักษณ์เริ่มต้นและการแมปคีย์"
   },
-  "sidebar": {
-    "credentials": "[TH] API Credentials",
-    "llm": "[TH] LLM Configuration",
-    "dataSources": "[TH] Data Sources",
-    "backtesting": "[TH] Backtesting",
-    "tabLayout": "[TH] Tab Layout",
-    "appearance": "[TH] Appearance",
-    "language": "[TH] Language",
-    "polymarket": "[TH] Polymarket API"
+  "stockSymbols": {
+    "title": "ฐานข้อมูลสัญลักษณ์หุ้น",
+    "description": "ดาวน์โหลดและจัดการข้อมูลสัญลักษณ์โบรกเกอร์เพื่อการค้นหาออฟไลน์ที่รวดเร็ว ข้อมูลสัญลักษณ์ประกอบด้วยหุ้น F&O สินค้าโภคภัณฑ์ และอนุพันธ์สกุลเงิน อัปเดตเป็นประจำเพื่อรับเครื่องมือล่าสุดและการหมดอายุ"
   },
   "terminalConfig": {
-    "title": "[TH] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[TH] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[TH] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[TH] TOOLBAR MENU SECTIONS",
-    "newSection": "[TH] NEW SECTION",
-    "deleteSection": "[TH] DELETE",
-    "moveTo": "[TH] MOVE TO ▼",
-    "resetToDefault": "[TH] RESET TO DEFAULT",
-    "noTabsInSection": "[TH] No tabs in this section",
-    "tip": "[TH] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "การกำหนดค่าเค้าโครงแท็บ",
+    "headerTabs": "แท็บส่วนหัว (แถบแท็บหลัก)",
+    "headerTabsDesc": "ลากเพื่อเรียงลำดับใหม่ แท็บเหล่านี้ปรากฏในการนำทางส่วนหัวหลัก",
+    "toolbarSections": "ส่วนเมนูแถบเครื่องมือ",
+    "newSection": "ส่วนใหม่",
+    "deleteSection": "ลบ",
+    "moveTo": "ย้ายไปที่ ▼",
+    "resetToDefault": "รีเซ็ตเป็นค่าเริ่มต้น",
+    "noTabsInSection": "ไม่มีแท็บในส่วนนี้",
+    "tip": "เคล็ดลับ: ลากแท็บเพื่อจัดเรียงใหม่ ใช้ปุ่มลูกศรเพื่อย้ายแท็บระหว่างส่วนหัวและส่วนเมนู การเปลี่ยนแปลงจะถูกบันทึกโดยอัตโนมัติ"
   },
   "llm": {
-    "title": "[TH] LLM CONFIGURATION",
-    "description": "[TH] Configure AI models and providers",
-    "connected": "[TH] CONNECTED",
-    "disconnected": "[TH] DISCONNECTED",
-    "provider": "[TH] AI PROVIDER",
-    "globalSettings": "[TH] GLOBAL AI SETTINGS",
-    "temperature": "[TH] TEMPERATURE",
-    "maxTokens": "[TH] MAX TOKENS",
-    "systemPrompt": "[TH] SYSTEM PROMPT",
-    "modelLibrary": "[TH] MODEL LIBRARY",
-    "multiModelConfigs": "[TH] Multi-model configs"
+    "title": "การกำหนดค่า LLM",
+    "description": "กำหนดค่าโมเดล AI และผู้ให้บริการ",
+    "connected": "เชื่อมต่อแล้ว",
+    "disconnected": "ตัดการเชื่อมต่อแล้ว",
+    "provider": "ผู้ให้บริการ AI",
+    "globalSettings": "การตั้งค่า AI ทั่วโลก",
+    "temperature": "อุณหภูมิ",
+    "maxTokens": "โทเค็นสูงสุด",
+    "systemPrompt": "พร้อมท์ระบบ",
+    "modelLibrary": "ไลบรารีโมเดล",
+    "multiModelConfigs": "การกำหนดค่าหลายรุ่น"
   },
   "buttons": {
-    "save": "[TH] SAVE",
-    "cancel": "[TH] CANCEL",
-    "add": "[TH] ADD"
+    "save": "บันทึก",
+    "cancel": "ยกเลิก",
+    "add": "เพิ่ม"
   },
   "footer": {
-    "database": "[TH] Database: SQLite",
-    "storage": "[TH] Storage: File-based",
-    "secureStorage": "[TH] All data stored securely in fincept_terminal.db"
+    "database": "ฐานข้อมูล: SQLite",
+    "storage": "พื้นที่เก็บข้อมูล: ตามไฟล์",
+    "secureStorage": "ข้อมูลทั้งหมดเก็บไว้อย่างปลอดภัยใน fincept_terminal.db"
   }
 }

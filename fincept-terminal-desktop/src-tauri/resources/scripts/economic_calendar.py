@@ -9,11 +9,11 @@ import json
 from datetime import datetime
 import time
 
-def scrape_forex_calendar(date_str="oct15.2025"):
+def scrape_forex_calendar(date_str="oct15.2026"):
     """
     Scrapes Forex Factory calendar for given date
     Args:
-        date_str: Date in format like 'oct15.2025'
+        date_str: Date in format like 'oct15.2026'
     Returns:
         JSON with structured data
     """
@@ -95,7 +95,7 @@ def scrape_forex_calendar(date_str="oct15.2025"):
     }
 
 # Alternative using requests-html for dynamic content
-def scrape_forex_calendar_alt(date_str="oct15.2025"):
+def scrape_forex_calendar_alt(date_str="oct15.2026"):
     """Alternative method using requests-html"""
     from requests_html import HTMLSession
 
@@ -144,7 +144,7 @@ def scrape_forex_calendar_alt(date_str="oct15.2025"):
 
 if __name__ == "__main__":
     # Use Selenium method (more reliable)
-    data = scrape_forex_calendar("oct16.2025")
+    data = scrape_forex_calendar("oct16.2026")
 
     # Save to JSON file
     with open('forex_calendar.json', 'w') as f:

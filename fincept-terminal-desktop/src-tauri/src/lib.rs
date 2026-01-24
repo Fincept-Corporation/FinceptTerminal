@@ -23,7 +23,6 @@ mod websocket;
 mod barter_integration;
 mod services;
 mod paper_trading;
-// mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
 struct MCPProcess {
@@ -600,55 +599,28 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-// Execute Python script with arguments and environment variables
+// Execute Python script via worker pool (persistent processes, no subprocess spawn per call)
+// Falls back to subprocess if worker pool is not initialized
 #[tauri::command]
-fn execute_python_script(
+async fn execute_python_script(
     app: tauri::AppHandle,
     script_name: String,
     args: Vec<String>,
     env: std::collections::HashMap<String, String>,
 ) -> Result<String, String> {
-    let python_path = utils::python::get_python_path(&app)?;
     let script_path = utils::python::get_script_path(&app, &script_name)?;
 
-    // Verify paths exist
-    // Skip existence check for system Python commands (like "python" or "python3")
-    // which are found in PATH but not as file paths
-    let is_system_command = python_path.to_string_lossy() == "python"
-        || python_path.to_string_lossy() == "python3"
-        || python_path.to_string_lossy() == "python.exe";
-
-    if !is_system_command && !python_path.exists() {
-        return Err(format!("Python executable not found at: {:?}", python_path));
-    }
     if !script_path.exists() {
         return Err(format!("Script not found at: {:?}", script_path));
     }
 
-    let mut cmd = Command::new(&python_path);
-    cmd.arg(&script_path).args(&args);
-
-    // Add environment variables
-    for (key, value) in env {
-        cmd.env(key, value);
-    }
-
-    // Hide console window on Windows
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    match cmd.output() {
-        Ok(output) => {
-            if output.status.success() {
-                String::from_utf8(output.stdout)
-                    .map_err(|e| format!("Failed to parse output: {}", e))
-            } else {
-                let error = String::from_utf8_lossy(&output.stderr);
-                Err(format!("Python script failed: {}", error))
-            }
-        }
-        Err(e) => Err(format!("Failed to execute Python script: {}", e)),
-    }
+    // Use worker pool (persistent Python processes) - no new subprocess per call
+    worker_pool::execute_python_script_with_priority(
+        script_path,
+        args,
+        "venv-numpy2",
+        1, // NORMAL priority
+    ).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -704,7 +676,6 @@ pub fn run() {
         .manage(MCPState {
             processes: Mutex::new(HashMap::new()),
         })
-        .manage(commands::backtesting::BacktestingState::default())
         .manage(ws_state)
         .manage(barter_state)
         .setup(move |app| {
@@ -1373,7 +1344,7 @@ pub fn run() {
             commands::jupyter::get_python_version,
             commands::jupyter::install_python_package,
             commands::jupyter::list_python_packages,
-            // commands::finscript_cmd::execute_finscript, // TODO: Implement FinScript
+            commands::finscript_cmd::execute_finscript,
             // Python Agent Commands
             commands::agents::list_available_agents,
             commands::agents::execute_python_agent,

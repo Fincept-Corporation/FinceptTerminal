@@ -144,6 +144,7 @@ const AgentConfigTab: React.FC = () => {
   const [agentsByCategory, setAgentsByCategory] = useState<Record<string, AgentCard[]>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [loading, setLoading] = useState(false);
+  const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -217,24 +218,29 @@ const AgentConfigTab: React.FC = () => {
       setError(null);
 
       try {
-        // Set a timeout for the entire loading process
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Loading timeout - please check your backend service')), 10000)
-        );
-
-        const loadPromise = Promise.all([
+        // Load critical data (agents list + LLM configs) with reasonable timeout
+        // System data (tools, models) loads in background - UI works without it
+        const criticalPromise = Promise.all([
           loadDiscoveredAgents(),
-          loadSystemData(),
           loadLLMConfigs(),
         ]);
 
-        await Promise.race([loadPromise, timeoutPromise]);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Loading timeout - please check your backend service')), 30000)
+        );
+
+        await Promise.race([criticalPromise, timeoutPromise]);
       } catch (err: any) {
         console.error('Failed to load initial data:', err);
         setError(err.message || 'Failed to load agent data');
       } finally {
         setLoading(false);
       }
+
+      // Load system data in background (non-blocking)
+      loadSystemData().catch(err => {
+        console.warn('System data loading failed (non-critical):', err);
+      });
     };
 
     loadInitialData();
@@ -276,9 +282,9 @@ const AgentConfigTab: React.FC = () => {
 
   const loadSystemData = async () => {
     try {
-      // Add timeout for system data loading
+      // Load system info and tools with generous timeout (Python subprocess startup can be slow)
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('System data loading timeout')), 5000)
+        setTimeout(() => reject(new Error('System data loading timeout')), 30000)
       );
 
       const dataPromise = Promise.all([
@@ -292,7 +298,7 @@ const AgentConfigTab: React.FC = () => {
       if (tools) setToolsInfo(tools);
     } catch (err) {
       console.error('Failed to load system data:', err);
-      // Set default/empty system info
+      // Non-critical - UI works without system data
       setSystemInfo(null);
       setToolsInfo(null);
     }
@@ -390,6 +396,10 @@ const AgentConfigTab: React.FC = () => {
           apiKeys[`${providerUpper}_API_KEY`] = config.api_key;
           apiKeys[config.provider] = config.api_key;
         }
+        // Pass base_url for custom endpoints (Ollama, Azure, etc.)
+        if (config.base_url) {
+          apiKeys[`${config.provider.toUpperCase()}_BASE_URL`] = config.base_url;
+        }
       }
       return apiKeys;
     } catch {
@@ -404,7 +414,7 @@ const AgentConfigTab: React.FC = () => {
   const runAgent = async () => {
     if (!testQuery.trim()) return;
 
-    setLoading(true);
+    setExecuting(true);
     setError(null);
     setTestResult(null);
 
@@ -428,8 +438,20 @@ const AgentConfigTab: React.FC = () => {
           },
         ]);
 
-        // Execute with routing
-        const result = await agentService.executeRoutedQuery(testQuery, apiKeys);
+        // Execute with routing - pass user's model config so agent uses configured LLM
+        const userConfig = agentService.buildAgentConfig(
+          editedConfig.provider,
+          editedConfig.model_id,
+          editedConfig.instructions,
+          {
+            tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
+            temperature: editedConfig.temperature,
+            maxTokens: editedConfig.max_tokens,
+            memory: editedConfig.enable_memory,
+            reasoning: editedConfig.enable_reasoning,
+          }
+        );
+        const result = await agentService.executeRoutedQuery(testQuery, apiKeys, undefined, userConfig);
         setTestResult(result);
 
         setChatMessages(prev => [
@@ -483,14 +505,14 @@ const AgentConfigTab: React.FC = () => {
     } catch (err: any) {
       setError(err.toString());
     } finally {
-      setLoading(false);
+      setExecuting(false);
     }
   };
 
   const runTeam = async () => {
     if (teamMembers.length === 0 || !testQuery.trim()) return;
 
-    setLoading(true);
+    setExecuting(true);
     setError(null);
 
     try {
@@ -530,12 +552,12 @@ const AgentConfigTab: React.FC = () => {
     } catch (err: any) {
       setError(err.toString());
     } finally {
-      setLoading(false);
+      setExecuting(false);
     }
   };
 
   const runWorkflow = async (workflowType: string) => {
-    setLoading(true);
+    setExecuting(true);
     setError(null);
 
     try {
@@ -564,7 +586,7 @@ const AgentConfigTab: React.FC = () => {
     } catch (err: any) {
       setError(err.toString());
     } finally {
-      setLoading(false);
+      setExecuting(false);
     }
   };
 
@@ -575,7 +597,7 @@ const AgentConfigTab: React.FC = () => {
   const createPlan = async () => {
     if (!workflowSymbol.trim()) return;
 
-    setLoading(true);
+    setExecuting(true);
     setError(null);
 
     try {
@@ -590,7 +612,7 @@ const AgentConfigTab: React.FC = () => {
     } catch (err: any) {
       setError(err.toString());
     } finally {
-      setLoading(false);
+      setExecuting(false);
     }
   };
 
@@ -1513,7 +1535,7 @@ const AgentConfigTab: React.FC = () => {
           {/* Run Button */}
           <button
             onClick={runAgent}
-            disabled={loading}
+            disabled={executing}
             style={{
               width: '100%',
               padding: '10px',
@@ -1528,10 +1550,10 @@ const AgentConfigTab: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '6px',
-              opacity: loading ? 0.7 : 1,
+              opacity: executing ? 0.7 : 1,
             }}
           >
-            {loading ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+            {executing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
             {useAutoRouting ? 'RUN WITH AUTO-ROUTING' : 'RUN AGENT'}
           </button>
         </div>
@@ -1834,7 +1856,7 @@ const AgentConfigTab: React.FC = () => {
 
           <button
             onClick={runTeam}
-            disabled={loading || teamMembers.length === 0}
+            disabled={executing || teamMembers.length === 0}
             style={{
               width: '100%',
               padding: '10px',
@@ -1973,7 +1995,7 @@ const AgentConfigTab: React.FC = () => {
             />
             <button
               onClick={() => runWorkflow('stock_analysis')}
-              disabled={loading}
+              disabled={executing}
               style={{
                 width: '100%',
                 padding: '8px',
@@ -1983,8 +2005,8 @@ const AgentConfigTab: React.FC = () => {
                 borderRadius: '2px',
                 fontSize: '9px',
                 fontWeight: 700,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
+                cursor: executing ? 'not-allowed' : 'pointer',
+                opacity: executing ? 0.7 : 1,
               }}
             >
               ANALYZE
@@ -2014,7 +2036,7 @@ const AgentConfigTab: React.FC = () => {
             </p>
             <button
               onClick={() => runWorkflow('portfolio_rebal')}
-              disabled={loading}
+              disabled={executing}
               style={{
                 width: '100%',
                 padding: '8px',
@@ -2024,8 +2046,8 @@ const AgentConfigTab: React.FC = () => {
                 borderRadius: '2px',
                 fontSize: '9px',
                 fontWeight: 700,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
+                cursor: executing ? 'not-allowed' : 'pointer',
+                opacity: executing ? 0.7 : 1,
               }}
             >
               REBALANCE
@@ -2055,7 +2077,7 @@ const AgentConfigTab: React.FC = () => {
             </p>
             <button
               onClick={() => runWorkflow('risk_assessment')}
-              disabled={loading}
+              disabled={executing}
               style={{
                 width: '100%',
                 padding: '8px',
@@ -2065,8 +2087,8 @@ const AgentConfigTab: React.FC = () => {
                 borderRadius: '2px',
                 fontSize: '9px',
                 fontWeight: 700,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
+                cursor: executing ? 'not-allowed' : 'pointer',
+                opacity: executing ? 0.7 : 1,
               }}
             >
               ASSESS RISK
@@ -2185,7 +2207,7 @@ const AgentConfigTab: React.FC = () => {
           />
           <button
             onClick={createPlan}
-            disabled={loading}
+            disabled={executing}
             style={{
               width: '100%',
               padding: '8px',
@@ -2674,9 +2696,21 @@ const AgentConfigTab: React.FC = () => {
     // Add user message
     setChatMessages(prev => [...prev, { role: 'user', content: query, timestamp: new Date() }]);
 
-    setLoading(true);
+    setExecuting(true);
     try {
       const apiKeys = await getApiKeys();
+      const userConfig = agentService.buildAgentConfig(
+        editedConfig.provider,
+        editedConfig.model_id,
+        editedConfig.instructions,
+        {
+          tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
+          temperature: editedConfig.temperature,
+          maxTokens: editedConfig.max_tokens,
+          memory: editedConfig.enable_memory,
+          reasoning: editedConfig.enable_reasoning,
+        }
+      );
 
       if (useAutoRouting) {
         // Route and execute
@@ -2693,7 +2727,7 @@ const AgentConfigTab: React.FC = () => {
           },
         ]);
 
-        const result = await agentService.executeRoutedQuery(query, apiKeys);
+        const result = await agentService.executeRoutedQuery(query, apiKeys, undefined, userConfig);
         setChatMessages(prev => [
           ...prev,
           {
@@ -2705,19 +2739,7 @@ const AgentConfigTab: React.FC = () => {
         ]);
       } else {
         // Direct agent execution
-        const config = agentService.buildAgentConfig(
-          editedConfig.provider,
-          editedConfig.model_id,
-          editedConfig.instructions,
-          {
-            tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
-            temperature: editedConfig.temperature,
-            maxTokens: editedConfig.max_tokens,
-            memory: editedConfig.enable_memory,
-          }
-        );
-
-        const result = await agentService.runAgent(query, config, apiKeys);
+        const result = await agentService.runAgent(query, userConfig, apiKeys);
         setChatMessages(prev => [
           ...prev,
           {
@@ -2734,7 +2756,7 @@ const AgentConfigTab: React.FC = () => {
         { role: 'system', content: `Error: ${err.message}`, timestamp: new Date() },
       ]);
     } finally {
-      setLoading(false);
+      setExecuting(false);
     }
   };
 
@@ -2897,7 +2919,7 @@ const AgentConfigTab: React.FC = () => {
           />
           <button
             onClick={handleChatSubmit}
-            disabled={loading || !chatInput.trim()}
+            disabled={executing || !chatInput.trim()}
             style={{
               padding: '10px 16px',
               backgroundColor: FINCEPT.ORANGE,
@@ -2906,7 +2928,7 @@ const AgentConfigTab: React.FC = () => {
               borderRadius: '2px',
               fontSize: '10px',
               fontWeight: 700,
-              cursor: (loading || !chatInput.trim()) ? 'not-allowed' : 'pointer',
+              cursor: (executing || !chatInput.trim()) ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',

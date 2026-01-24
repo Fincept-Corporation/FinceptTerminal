@@ -29,7 +29,7 @@ const PrivacyPolicyScreen: React.FC<PrivacyPolicyScreenProps> = ({ onNavigate })
 
       <div className="space-y-6 text-sm">
         <div>
-          <p className="text-zinc-500 text-xs mb-4">Last updated: January 1, 2025</p>
+          <p className="text-zinc-500 text-xs mb-4">Last updated: January 1, 2026</p>
         </div>
 
         <section>

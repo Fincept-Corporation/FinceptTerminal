@@ -18,7 +18,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 const NUM_WORKERS: usize = 3;  // Three Python processes for better concurrency
 const NUM_THREADS: usize = 4;  // Number of concurrent scripts per process
-const TASK_TIMEOUT_SECS: u64 = 30;  // Maximum time for a task before timeout
+const TASK_TIMEOUT_SECS: u64 = 120;  // Maximum time for a task before timeout (LLM calls can take 30-60s+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerTask {

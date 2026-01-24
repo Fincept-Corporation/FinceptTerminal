@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "설정",
+  "sidebar": {
+    "credentials": "API 자격 증명",
+    "polymarket": "폴리마켓 API",
+    "llm": "LLM 구성",
+    "dataSources": "데이터 소스",
+    "backtesting": "백테스팅",
+    "stockSymbols": "주식 기호",
+    "tabLayout": "탭 레이아웃",
+    "appearance": "모습",
+    "language": "언어",
+    "storage": "스토리지 및 캐시"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[KO] Manage API keys and credentials for external services",
-    "enterValue": "[KO] Enter value..."
+    "title": "API 자격 증명 관리",
+    "description": "외부 서비스에 대한 API 키 및 자격 증명 관리",
+    "apiKey": "API 키",
+    "enterValue": "값을 입력하세요..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[KO] Customize the visual appearance of your terminal",
-    "currentSettings": "[KO] CURRENT SETTINGS"
+    "title": "터미널 외관",
+    "description": "글꼴, 색상, 시간대, 키보드 단축키를 포함하여 터미널의 시각적 모양을 사용자 정의하세요.",
+    "fontFamily": "글꼴 계열",
+    "currentSettings": "글꼴 설정",
+    "baseFontSize": "기본 글꼴 크기",
+    "fontWeight": "글꼴 두께",
+    "weightNormal": "노멀(400)",
+    "weightSemibold": "세미 볼드 (600)",
+    "weightBold": "볼드(700)",
+    "enableItalic": "기울임꼴 스타일 활성화",
+    "fontSizeSmall": "작음(9px)",
+    "fontSizeLarge": "대형(18px)",
+    "colorTheme": "컬러 테마",
+    "defaultTimezone": "기본 시간대",
+    "timezoneDescription": "탐색 표시줄에 표시되는 기본 시간대를 설정합니다. 대시보드 위젯은 자체 시간대 설정을 사용할 수 있습니다.",
+    "functionKeys": "기능 키 매핑",
+    "functionKeysDescription": "각 기능 키(F1-F12)가 트리거할 탭 또는 작업을 구성합니다. 변경 사항은 상태 표시줄과 키보드 단축키에 반영됩니다.",
+    "livePreview": "실시간 미리보기",
+    "previewTitle": "FINCEPT 터미널 미리보기",
+    "previewBody": "본문: 실시간 시장 분석 및 포트폴리오 추적",
+    "previewSmall": "작은 텍스트: 시장 데이터, 타임스탬프 및 메타데이터",
+    "statusConnected": "연결됨",
+    "statusAlert": "알리다",
+    "statusWarning": "경고",
+    "saveConfig": "구성 저장",
+    "reset": "다시 놓기",
+    "saveSuccess": "터미널 모양 및 키 매핑이 성공적으로 저장되었습니다.",
+    "resetSuccess": "기본 모양 및 키 매핑으로 재설정"
   },
-  "sidebar": {
-    "credentials": "[KO] API Credentials",
-    "llm": "[KO] LLM Configuration",
-    "dataSources": "[KO] Data Sources",
-    "backtesting": "[KO] Backtesting",
-    "tabLayout": "[KO] Tab Layout",
-    "appearance": "[KO] Appearance",
-    "language": "[KO] Language",
-    "polymarket": "[KO] Polymarket API"
+  "stockSymbols": {
+    "title": "주식 기호 데이터베이스",
+    "description": "빠른 오프라인 검색을 위해 브로커 심볼 데이터를 다운로드하고 관리하세요. 기호 데이터에는 주식, F&O, 상품 및 통화 파생상품이 포함됩니다. 최신 상품과 만료 날짜를 확인하려면 정기적으로 업데이트하세요."
   },
   "terminalConfig": {
-    "title": "[KO] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[KO] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[KO] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[KO] TOOLBAR MENU SECTIONS",
-    "newSection": "[KO] NEW SECTION",
-    "deleteSection": "[KO] DELETE",
-    "moveTo": "[KO] MOVE TO ▼",
-    "resetToDefault": "[KO] RESET TO DEFAULT",
-    "noTabsInSection": "[KO] No tabs in this section",
-    "tip": "[KO] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "탭 레이아웃 구성",
+    "headerTabs": "헤더 탭(메인 탭 바)",
+    "headerTabsDesc": "재정렬하려면 드래그하세요. 이러한 탭은 기본 헤더 탐색에 나타납니다.",
+    "toolbarSections": "툴바 메뉴 섹션",
+    "newSection": "새로운 섹션",
+    "deleteSection": "삭제",
+    "moveTo": "▼로 이동",
+    "resetToDefault": "기본값으로 재설정",
+    "noTabsInSection": "이 섹션에는 탭이 없습니다.",
+    "tip": "팁: 탭을 끌어서 순서를 바꾸세요. 화살표 버튼을 사용하여 헤더와 메뉴 섹션 간에 탭을 이동하세요. 변경 사항은 자동으로 저장됩니다."
   },
   "llm": {
-    "title": "[KO] LLM CONFIGURATION",
-    "description": "[KO] Configure AI models and providers",
-    "connected": "[KO] CONNECTED",
-    "disconnected": "[KO] DISCONNECTED",
-    "provider": "[KO] AI PROVIDER",
-    "globalSettings": "[KO] GLOBAL AI SETTINGS",
-    "temperature": "[KO] TEMPERATURE",
-    "maxTokens": "[KO] MAX TOKENS",
-    "systemPrompt": "[KO] SYSTEM PROMPT",
-    "modelLibrary": "[KO] MODEL LIBRARY",
-    "multiModelConfigs": "[KO] Multi-model configs"
+    "title": "LLM 구성",
+    "description": "AI 모델 및 공급자 구성",
+    "connected": "연결됨",
+    "disconnected": "연결이 끊김",
+    "provider": "AI 제공자",
+    "globalSettings": "글로벌 AI 설정",
+    "temperature": "온도",
+    "maxTokens": "최대 토큰",
+    "systemPrompt": "시스템 프롬프트",
+    "modelLibrary": "모델 라이브러리",
+    "multiModelConfigs": "다중 모델 구성"
   },
   "buttons": {
-    "save": "[KO] SAVE",
-    "cancel": "[KO] CANCEL",
-    "add": "[KO] ADD"
+    "save": "구하다",
+    "cancel": "취소",
+    "add": "추가하다"
   },
   "footer": {
-    "database": "[KO] Database: SQLite",
-    "storage": "[KO] Storage: File-based",
-    "secureStorage": "[KO] All data stored securely in fincept_terminal.db"
+    "database": "데이터베이스: SQLite",
+    "storage": "저장: 파일 기반",
+    "secureStorage": "모든 데이터는 fincept_terminal.db에 안전하게 저장됩니다."
   }
 }

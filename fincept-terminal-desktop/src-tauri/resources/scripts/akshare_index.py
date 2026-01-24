@@ -50,7 +50,7 @@ def safe_call(func, *args, **kwargs):
 
 # ==================== CHINESE INDEX DATA ====================
 
-def get_index_zh_a_hist(symbol="000001", period="daily", start_date="20200101", end_date="20251231"):
+def get_index_zh_a_hist(symbol="000001", period="daily", start_date="20200101", end_date="20261231"):
     """Get Chinese A-share index historical data"""
     return safe_call(ak.index_zh_a_hist, symbol=symbol, period=period, start_date=start_date, end_date=end_date)
 
@@ -97,7 +97,7 @@ def get_index_component_sw(symbol="801010"):
     """Get Shenwan index components"""
     return safe_call(ak.index_component_sw, symbol=symbol)
 
-def get_index_analysis_daily_sw(symbol="801010", start_date="20200101", end_date="20251231"):
+def get_index_analysis_daily_sw(symbol="801010", start_date="20200101", end_date="20261231"):
     """Get Shenwan index daily analysis"""
     return safe_call(ak.index_analysis_daily_sw, symbol=symbol, start_date=start_date, end_date=end_date)
 
@@ -132,7 +132,7 @@ def get_index_detail_cni(symbol="399001"):
     """Get CNI index details"""
     return safe_call(ak.index_detail_cni, symbol=symbol)
 
-def get_index_detail_hist_cni(symbol="399001", start_date="20200101", end_date="20251231"):
+def get_index_detail_hist_cni(symbol="399001", start_date="20200101", end_date="20261231"):
     """Get CNI index historical details"""
     return safe_call(ak.index_detail_hist_cni, symbol=symbol, date=start_date)
 
@@ -143,7 +143,7 @@ def get_index_global_spot():
     """Get global index spot data"""
     return safe_call(ak.index_global_spot_em)
 
-def get_index_global_hist(symbol=".DJI", period="daily", start_date="20200101", end_date="20251231"):
+def get_index_global_hist(symbol=".DJI", period="daily", start_date="20200101", end_date="20261231"):
     """Get global index historical data (e.g., .DJI, .IXIC, .INX)"""
     return safe_call(ak.index_global_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date)
 

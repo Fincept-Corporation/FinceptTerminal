@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "TABLOU DE BORD PERSONALIZABIL",
-    "live": "LIVE",
-    "widgets": "WIDGET-URI"
+    "title": "TABLA DE BORD PERSONIZABILĂ",
+    "live": "TRĂI",
+    "widgets": "WIDGET-uri"
   },
   "buttons": {
     "addWidget": "ADAUGĂ WIDGET",
-    "saveLayout": "SALVEAZĂ ASPECT",
-    "reset": "RESETEAZĂ"
+    "saveLayout": "SALVAȚI ASPECTUL",
+    "reset": "RESET",
+    "help": "AJUTOR"
   },
   "widgets": {
-    "loading": "Se încarcă...",
+    "loading": "Încărcare...",
     "error": "Eroare",
-    "globalIndices": "INDICI GLOBALI - TOP 12",
-    "forex": "PERECHI FOREX",
+    "globalIndices": "Indici globali - Top 12",
+    "forex": "Forex - Perechi majore",
     "crypto": "CRIPTOMONEDE",
-    "commodities": "MĂRFURI",
-    "news": "ȘTIRI",
+    "commodities": "Mărfuri",
+    "news": "ŞTIRI",
     "forum": "FORUM",
-    "watchlist": "LISTĂ DE URMĂRIRE",
-    "index": "INDICE",
+    "watchlist": "LISTĂ DE CERINȚARE",
+    "maritimeIntelligence": "Informații maritime",
+    "unknown": "Tip necunoscut de widget",
+    "index": "INDEX",
     "symbol": "SIMBOL",
-    "price": "PREȚ",
-    "change": "SCH",
-    "percentChange": "%SCH",
-    "noIndexData": "Nu există date indici",
-    "noForexData": "Nu există date forex",
-    "noCryptoData": "Nu există date cripto",
-    "noCommoditiesData": "Nu există date mărfuri",
-    "noForumPosts": "Nu există postări",
-    "noStocksInWatchlist": "Nu există acțiuni în listă",
-    "noWatchlistSelected": "Nicio listă selectată",
-    "noData": "Nu există date",
+    "price": "PREŢ",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "Nu există date de index disponibile",
+    "noForexData": "Nu sunt disponibile date valutare",
+    "noCryptoData": "Nu sunt disponibile date criptografice",
+    "noCommoditiesData": "Nu sunt disponibile date despre mărfuri",
+    "noForumPosts": "Nu sunt disponibile postări pe forum",
+    "noStocksInWatchlist": "Nu există stocuri în lista de urmărire",
+    "noWatchlistSelected": "Nu a fost selectată nicio listă de urmărire",
+    "noData": "Nu există date disponibile",
     "pair": "PERECHE",
-    "rate": "CURS",
+    "rate": "RATA",
     "commodity": "MARFĂ",
-    "maritimeIntelligence": "⚓ INFORMAȚII MARITIME",
-    "globe3D": "GLOB 3D",
+    "globe3D": "GLOBUL 3D",
     "vessels": "NAVE",
     "routes": "RUTE",
-    "vol24h": "VOL 24O",
-    "topTradeCorridors": "CORIDOARE COMERCIALE PRINCIPALE",
-    "ships": "nave",
-    "unknown": "[RO] Unknown widget type"
+    "vol24h": "VOL 24H",
+    "topTradeCorridors": "CORidoarele comerciale de top",
+    "ships": "navelor",
+    "marketNews": "Știri de piață",
+    "secPressReleases": "Comunicate de presă SEC",
+    "cryptoNews": "Știri Crypto",
+    "trendingForum": "Forum de tendințe",
+    "techStocks": "Stocuri de tehnologie"
   },
   "tips": {
-    "drag": "Trageți widget-urile pentru rearanjare",
+    "drag": "Trageți widget-uri pentru a rearanja",
     "resize": "Redimensionați din colțul din dreapta jos",
-    "remove": "Eliminați cu butonul X",
-    "responsive": "Aspect responsiv - lățime completă"
+    "remove": "Eliminați widget-urile cu butonul X",
+    "responsive": "Aspect receptiv - folosește lățimea completă"
   },
   "loading": {
-    "title": "Inițializare Tablou de Bord",
-    "description": "Configurare cache pentru încărcare mai rapidă...",
-    "note": "Va dura doar o clipă la prima lansare"
+    "title": "Inițializarea tabloului de bord",
+    "description": "Se configurează memoria cache a bazei de date pentru o încărcare mai rapidă a datelor...",
+    "note": "Acest lucru va dura doar un moment la prima lansare"
   },
   "empty": {
-    "noWidgets": "Niciun widget pe tablou",
-    "addFirst": "ADAUGĂ PRIMUL WIDGET"
+    "noWidgets": "Fără widget-uri pe tabloul de bord",
+    "addFirst": "ADAUGĂ PRIMUL TĂU WIDGET"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Spațiu de lucru drag & drop",
+    "version": "Tabloul de bord personalizabil Fincept v2.0.0 | Trageți și plasați spațiul de lucru",
     "layout": "Aspect",
     "custom": "Personalizat",
     "empty": "Gol",
     "active": "ACTIV",
     "cache": "Cache: ACTIVAT",
-    "label": "[RO] Status"
+    "label": "Stare"
   },
   "messages": {
-    "layoutSaved": "[RO] Dashboard layout saved!",
-    "resetConfirm": "[RO] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Aspectul tabloului de bord a fost salvat!",
+    "resetConfirm": "Resetați tabloul de bord la aspectul implicit? Aceasta va elimina toate widget-urile personalizate."
   }
 }

@@ -6,51 +6,55 @@
  */
 
 // ========== COLOR PALETTE ==========
+// These reference CSS custom properties set by ThemeContext
+// so they update dynamically when user changes theme in Settings
 export const FINCEPT = {
   // Primary Colors
-  ORANGE: '#FF8800',          // Primary brand color, headers, highlights
-  WHITE: '#FFFFFF',            // Primary text
+  ORANGE: 'var(--ft-color-primary, #FF8800)',
+  WHITE: 'var(--ft-color-text, #FFFFFF)',
 
   // Status Colors
-  RED: '#FF3B3B',              // Alerts, losses, sell signals
-  GREEN: '#00D66F',            // Success, gains, buy signals
-  YELLOW: '#FFD700',           // Warnings, price highlights
+  RED: 'var(--ft-color-alert, #FF3B3B)',
+  GREEN: 'var(--ft-color-success, #00D66F)',
+  YELLOW: 'var(--ft-color-warning, #FFD700)',
 
   // Accent Colors
-  CYAN: '#00E5FF',             // Accent, info elements
-  BLUE: '#0088FF',             // Action buttons, secondary accent
-  PURPLE: '#9D4EDD',           // Alternative accent color
+  CYAN: 'var(--ft-color-accent, #00E5FF)',
+  BLUE: 'var(--ft-color-info, #0088FF)',
+  PURPLE: 'var(--ft-color-purple, #9D4EDD)',
 
   // Grayscale
-  GRAY: '#787878',             // Secondary text, labels, muted content
-  MUTED: '#4A4A4A',            // Disabled/secondary elements
+  GRAY: 'var(--ft-color-text-muted, #787878)',
+  MUTED: '#4A4A4A',
 
   // Backgrounds
-  DARK_BG: '#000000',          // Main background (pure black)
-  PANEL_BG: '#0F0F0F',         // Panel/card backgrounds (slightly lighter black)
-  HEADER_BG: '#1A1A1A',        // Header sections
-  HOVER: '#1F1F1F',            // Hover states
+  DARK_BG: 'var(--ft-color-background, #000000)',
+  PANEL_BG: 'var(--ft-color-panel, #0F0F0F)',
+  HEADER_BG: '#1A1A1A',
+  HOVER: '#1F1F1F',
 
   // Borders
-  BORDER: '#2A2A2A',           // Border lines, dividers
+  BORDER: '#2A2A2A',
 } as const;
 
 // ========== TYPOGRAPHY ==========
+// These reference CSS custom properties set by ThemeContext
+// so they update dynamically when user changes font in Settings
 export const TYPOGRAPHY = {
   // Font Families
-  MONO: '"IBM Plex Mono", "Consolas", "Monaco", "Courier New", monospace',
+  MONO: 'var(--ft-font-family)',
 
-  // Font Sizes (consistent scale)
-  TINY: '8px',
-  SMALL: '9px',
-  BODY: '10px',
-  DEFAULT: '11px',
-  SUBHEADING: '12px',
-  HEADING: '14px',
+  // Font Sizes (consistent scale via CSS vars)
+  TINY: 'var(--ft-font-size-tiny, 9px)',
+  SMALL: 'var(--ft-font-size-small, 10px)',
+  BODY: 'var(--ft-font-size-body, 11px)',
+  DEFAULT: 'var(--ft-font-size-body, 11px)',
+  SUBHEADING: 'var(--ft-font-size-subheading, 13px)',
+  HEADING: 'var(--ft-font-size-heading, 15px)',
   LARGE: '16px',
 
   // Font Weights
-  REGULAR: 400,
+  REGULAR: 'var(--ft-font-weight, 400)' as unknown as number,
   SEMIBOLD: 600,
   BOLD: 700,
 

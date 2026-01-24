@@ -29,7 +29,7 @@ const TrademarksScreen: React.FC<TrademarksScreenProps> = ({ onNavigate }) => {
 
       <div className="space-y-6 text-sm">
         <div>
-          <p className="text-zinc-500 text-xs mb-4">Last updated: January 1, 2025</p>
+          <p className="text-zinc-500 text-xs mb-4">Last updated: January 1, 2026</p>
         </div>
 
         <section>
@@ -130,7 +130,7 @@ const TrademarksScreen: React.FC<TrademarksScreenProps> = ({ onNavigate }) => {
           <h3 className="text-white text-lg font-medium mb-3">Copyright Notice</h3>
           <div className="text-zinc-300 text-xs leading-relaxed space-y-2">
             <p>
-              © 2025 Fincept LP. All rights reserved.
+              © 2026 Fincept LP. All rights reserved.
             </p>
             <p>
               The content, features, and functionality of Fincept Terminal are protected by copyright, trademark, patent, and other intellectual property laws.

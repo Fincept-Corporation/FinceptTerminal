@@ -33,9 +33,12 @@ import SupportTicketTab from '@/components/tabs/support-ticket';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import { HeaderSupportButtons } from '@/components/common/HeaderSupportButtons';
 import AgentConfigTab from '@/components/tabs/agent-config';
-import RelationshipMapTab from '@/components/tabs/relationship-map';
+import RelationshipMapTab from '@/components/tabs/relationship-map-v2/RelationshipMapTabV2';
 import MonitoringTab from '@/components/tabs/monitoring';
 import { useTranslation } from 'react-i18next';
+import { WorkspaceProvider } from '@/contexts/WorkspaceContext';
+import WorkspaceDialog from './WorkspaceDialog';
+import { terminalMCPProvider } from '@/services/mcp/internal';
 
 // Lazy loaded tabs (heavy/Python-dependent)
 const EquityResearchTab = React.lazy(() => import('@/components/tabs/equity-research'));
@@ -212,7 +215,17 @@ function FinxeptTerminalContent() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [workspaceDialogMode, setWorkspaceDialogMode] = useState<'save' | 'open' | 'new' | 'export' | 'import' | null>(null);
   const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
+
+  // Wire internal MCP provider with terminal contexts
+  React.useEffect(() => {
+    terminalMCPProvider.setContexts({
+      setActiveTab,
+      getActiveTab: () => activeTab,
+      navigateToScreen: (screen: string) => navigation.navigateToScreen?.(screen as any),
+    });
+  }, [activeTab, navigation]);
 
   React.useEffect(() => {
     document.body.style.margin = '0';
@@ -389,16 +402,19 @@ function FinxeptTerminalContent() {
         setTimeout(() => setStatusMessage(''), 3000);
         break;
       case 'new_workspace':
-        setStatusMessage("New Workspace - Feature coming soon");
-        setTimeout(() => setStatusMessage(''), 3000);
+        setWorkspaceDialogMode('new');
         break;
       case 'open_workspace':
-        setStatusMessage("Open Workspace - Feature coming soon");
-        setTimeout(() => setStatusMessage(''), 3000);
+        setWorkspaceDialogMode('open');
         break;
       case 'save_workspace':
-        setStatusMessage("Save Workspace - Feature coming soon");
-        setTimeout(() => setStatusMessage(''), 3000);
+        setWorkspaceDialogMode('save');
+        break;
+      case 'export_workspace':
+        setWorkspaceDialogMode('export');
+        break;
+      case 'import_workspace':
+        setWorkspaceDialogMode('import');
         break;
       case 'zoom_in':
         setStatusMessage("Zoom In - Use Ctrl++ in browser");
@@ -538,8 +554,8 @@ function FinxeptTerminalContent() {
     { label: 'New Workspace', shortcut: 'Ctrl+N', icon: null, action: 'new_workspace' },
     { label: 'Open Workspace', shortcut: 'Ctrl+O', icon: null, action: 'open_workspace' },
     { label: 'Save Workspace', shortcut: 'Ctrl+S', icon: null, action: 'save_workspace' },
-    { label: 'Export Portfolio', shortcut: 'Ctrl+E', icon: <Download size={12} />, action: 'export', separator: true },
-    { label: 'Import Data', icon: null, action: 'import_data' },
+    { label: 'Export Workspace', icon: null, action: 'export_workspace' },
+    { label: 'Import Workspace', icon: null, action: 'import_workspace', separator: true },
     { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit', separator: true }
   ];
 
@@ -1287,6 +1303,16 @@ function FinxeptTerminalContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {workspaceDialogMode && (
+        <WorkspaceDialog
+          mode={workspaceDialogMode}
+          activeTab={activeTab}
+          onClose={() => setWorkspaceDialogMode(null)}
+          onLoadWorkspace={(tab) => setActiveTab(tab)}
+          onStatusMessage={(msg) => { setStatusMessage(msg); setTimeout(() => setStatusMessage(''), 3000); }}
+        />
+      )}
     </div>
   );
 }
@@ -1295,7 +1321,9 @@ function FinxeptTerminalContent() {
 export default function FinxeptTerminal() {
   return (
     <InterfaceModeProvider>
-      <FinxeptTerminalContent />
+      <WorkspaceProvider>
+        <FinxeptTerminalContent />
+      </WorkspaceProvider>
     </InterfaceModeProvider>
   );
 }

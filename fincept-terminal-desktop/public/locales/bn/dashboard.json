@@ -2,74 +2,80 @@
   "header": {
     "title": "কাস্টমাইজেবল ড্যাশবোর্ড",
     "live": "লাইভ",
-    "widgets": "উইজেট"
+    "widgets": "উইজেটস"
   },
   "buttons": {
     "addWidget": "উইজেট যোগ করুন",
     "saveLayout": "লেআউট সংরক্ষণ করুন",
-    "reset": "রিসেট"
+    "reset": "রিসেট",
+    "help": "সাহায্য"
   },
   "widgets": {
     "loading": "লোড হচ্ছে...",
     "error": "ত্রুটি",
-    "globalIndices": "বৈশ্বিক সূচক - শীর্ষ ১২",
-    "forex": "ফরেক্স জোড়া",
+    "globalIndices": "বৈশ্বিক সূচক - শীর্ষ 12",
+    "forex": "ফরেক্স - প্রধান জোড়া",
     "crypto": "ক্রিপ্টোকারেন্সি",
-    "commodities": "পণ্য",
+    "commodities": "পণ্যসামগ্রী",
     "news": "সংবাদ",
     "forum": "ফোরাম",
     "watchlist": "ওয়াচলিস্ট",
-    "index": "সূচক",
-    "symbol": "সিম্বল",
-    "price": "মূল্য",
-    "change": "পরিবর্তন",
-    "percentChange": "%পরিবর্তন",
-    "noIndexData": "সূচক ডেটা নেই",
-    "noForexData": "ফরেক্স ডেটা নেই",
-    "noCryptoData": "ক্রিপ্টো ডেটা নেই",
-    "noCommoditiesData": "পণ্য ডেটা নেই",
-    "noForumPosts": "কোনো পোস্ট নেই",
+    "maritimeIntelligence": "মেরিটাইম ইন্টেলিজেন্স",
+    "unknown": "অজানা উইজেট প্রকার",
+    "index": "INDEX",
+    "symbol": "SYMBOL",
+    "price": "PRICE",
+    "change": "সিএইচজি",
+    "percentChange": "% সিএইচজি",
+    "noIndexData": "কোন সূচক তথ্য উপলব্ধ নেই",
+    "noForexData": "কোন ফরেক্স তথ্য উপলব্ধ",
+    "noCryptoData": "কোন ক্রিপ্টো ডেটা উপলব্ধ নেই",
+    "noCommoditiesData": "কোন পণ্য তথ্য উপলব্ধ",
+    "noForumPosts": "কোন ফোরাম পোস্ট উপলব্ধ",
     "noStocksInWatchlist": "ওয়াচলিস্টে কোনো স্টক নেই",
-    "noWatchlistSelected": "কোনো ওয়াচলিস্ট নির্বাচিত নয়",
-    "noData": "কোনো ডেটা নেই",
+    "noWatchlistSelected": "কোনো ওয়াচলিস্ট নির্বাচন করা হয়নি",
+    "noData": "কোন তথ্য উপলব্ধ নেই",
     "pair": "জোড়া",
-    "rate": "রেট",
-    "commodity": "পণ্য",
-    "maritimeIntelligence": "⚓ সামুদ্রিক গোয়েন্দা",
+    "rate": "হার",
+    "commodity": "কমোডিটি",
     "globe3D": "3D গ্লোব",
     "vessels": "জাহাজ",
     "routes": "রুট",
-    "vol24h": "ভলিউম ২৪ঘ",
+    "vol24h": "VOL 24H",
     "topTradeCorridors": "শীর্ষ বাণিজ্য করিডোর",
     "ships": "জাহাজ",
-    "unknown": "[BN] Unknown widget type"
+    "marketNews": "বাজারের খবর",
+    "secPressReleases": "এসইসি প্রেস রিলিজ",
+    "cryptoNews": "ক্রিপ্টো খবর",
+    "trendingForum": "ট্রেন্ডিং ফোরাম",
+    "techStocks": "টেক স্টক"
   },
   "tips": {
-    "drag": "উইজেট টেনে সাজান",
-    "resize": "নিচের ডান কোণা থেকে আকার পরিবর্তন করুন",
-    "remove": "X বোতাম দিয়ে উইজেট সরান",
-    "responsive": "রেসপন্সিভ লেআউট - পূর্ণ প্রস্থ ব্যবহার করে"
+    "drag": "পুনরায় সাজাতে উইজেট টেনে আনুন",
+    "resize": "নীচে-ডান কোণ থেকে আকার পরিবর্তন করুন",
+    "remove": "এক্স বোতাম দিয়ে উইজেটগুলি সরান",
+    "responsive": "প্রতিক্রিয়াশীল লেআউট - সম্পূর্ণ প্রস্থ ব্যবহার করে"
   },
   "loading": {
-    "title": "ড্যাশবোর্ড শুরু হচ্ছে",
-    "description": "দ্রুত ডেটা লোডিংয়ের জন্য ক্যাশ সেটআপ করা হচ্ছে...",
-    "note": "প্রথম চালুতে এটি একটু সময় নেবে"
+    "title": "ড্যাশবোর্ড শুরু করা হচ্ছে",
+    "description": "দ্রুত ডেটা লোড করার জন্য ডাটাবেস ক্যাশে সেট আপ করা হচ্ছে...",
+    "note": "প্রথম লঞ্চে এটি শুধুমাত্র একটি মুহূর্ত লাগবে"
   },
   "empty": {
-    "noWidgets": "ড্যাশবোর্ডে কোনো উইজেট নেই",
+    "noWidgets": "ড্যাশবোর্ডে কোন উইজেট নেই",
     "addFirst": "আপনার প্রথম উইজেট যোগ করুন"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | ড্র্যাগ অ্যান্ড ড্রপ ওয়ার্কস্পেস",
+    "version": "Fincept কাস্টমাইজযোগ্য ড্যাশবোর্ড v2.0.0 | ওয়ার্কস্পেস টেনে আনুন",
     "layout": "লেআউট",
     "custom": "কাস্টম",
     "empty": "খালি",
     "active": "সক্রিয়",
-    "cache": "ক্যাশ: সক্রিয়",
-    "label": "[BN] Status"
+    "cache": "ক্যাশে: সক্ষম",
+    "label": "স্ট্যাটাস"
   },
   "messages": {
-    "layoutSaved": "[BN] Dashboard layout saved!",
-    "resetConfirm": "[BN] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "ড্যাশবোর্ড লেআউট সংরক্ষিত!",
+    "resetConfirm": "ডিফল্ট লেআউটে ড্যাশবোর্ড রিসেট করবেন? এটি সমস্ত কাস্টম উইজেট মুছে ফেলবে।"
   }
 }

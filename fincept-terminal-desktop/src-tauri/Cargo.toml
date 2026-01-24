@@ -30,6 +30,7 @@ tauri-plugin-updater = "2.8"
 tauri-plugin-process = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
+dirs = "5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

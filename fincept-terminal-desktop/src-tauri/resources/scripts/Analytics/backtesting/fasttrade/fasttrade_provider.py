@@ -148,12 +148,8 @@ class FastTradeProvider(BacktestingProviderBase):
             self.run_backtest = run_backtest
             self.validate_backtest = validate_backtest
 
-            self.initialized = True
-            self.connected = True
             self.config = config
-
-            self._log(f'Fast-Trade provider initialized successfully (v{self.version})')
-            return self._create_success_result(f'Fast-Trade {self.version} initialized')
+            return self._create_success_result(f'Fast-Trade {self.version} ready')
 
         except ImportError as e:
             self._error('Fast-Trade not installed', e)
@@ -164,22 +160,17 @@ class FastTradeProvider(BacktestingProviderBase):
 
     def test_connection(self) -> Dict[str, Any]:
         """Test if fast-trade is available"""
-        self._ensure_initialized()
-
         try:
-            # Test that we can import and use the library
-            if self.fast_trade is None:
-                raise RuntimeError('Fast-Trade not initialized')
-
-            return self._create_success_result('Fast-Trade is available')
-
+            import fast_trade
+            return self._create_success_result(f'Fast-Trade {fast_trade.__version__} is available')
+        except ImportError:
+            return self._create_error_result('Fast-Trade not installed. Run: pip install fast-trade')
         except Exception as e:
             return self._create_error_result(str(e))
 
     def disconnect(self) -> None:
-        """Disconnect from provider"""
-        self.connected = False
-        self._log('Fast-Trade provider disconnected')
+        """No-op for subprocess providers"""
+        pass
 
     # ========================================================================
     # Backtest Execution
@@ -195,9 +186,8 @@ class FastTradeProvider(BacktestingProviderBase):
         Returns:
             BacktestResult with performance metrics, trades, equity curve
         """
-        self._ensure_connected()
-
         try:
+            from fast_trade import run_backtest as ft_run_backtest, validate_backtest as ft_validate_backtest
             self._log('Starting Fast-Trade backtest execution')
 
             # Extract request parameters
@@ -217,14 +207,14 @@ class FastTradeProvider(BacktestingProviderBase):
             )
 
             # Validate configuration
-            validation = self.validate_backtest(ft_config)
+            validation = ft_validate_backtest(ft_config)
             if not validation.get('valid', True):
                 errors = validation.get('errors', [])
                 return self._create_error_result(f'Strategy validation failed: {errors}')
 
             # Run backtest
             self._log('Executing fast-trade backtest...')
-            result = self.run_backtest(ft_config)
+            result = ft_run_backtest(ft_config)
 
             # Convert result to standard format
             backtest_result = self._convert_result(

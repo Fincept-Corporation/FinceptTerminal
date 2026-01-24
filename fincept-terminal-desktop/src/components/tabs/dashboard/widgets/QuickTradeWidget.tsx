@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Zap, DollarSign, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, Zap, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
+import { useTranslation } from 'react-i18next';
 
 interface QuickTradeWidgetProps {
   id: string;
@@ -16,13 +17,6 @@ interface QuickAction {
   changePercent: number;
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_CYAN = '#00E5FF';
-
 const QUICK_SYMBOLS: QuickAction[] = [
   { symbol: 'BTC/USD', name: 'Bitcoin', price: 97250, change: 1250, changePercent: 1.30 },
   { symbol: 'ETH/USD', name: 'Ethereum', price: 3420, change: -45, changePercent: -1.30 },
@@ -36,6 +30,7 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
   const [quantity, setQuantity] = useState('');
@@ -53,7 +48,7 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
       title="QUICK TRADE"
       onRemove={onRemove}
       isLoading={false}
-      headerColor={FINCEPT_CYAN}
+      headerColor="var(--ft-color-accent)"
     >
       <div style={{ padding: '4px' }}>
         {/* Header */}
@@ -62,13 +57,13 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
           gridTemplateColumns: '1fr 80px 80px',
           gap: '4px',
           padding: '4px 8px',
-          borderBottom: '1px solid #333',
-          color: FINCEPT_GRAY,
-          fontSize: '8px'
+          borderBottom: '1px solid var(--ft-border-color)',
+          color: 'var(--ft-color-text-muted)',
+          fontSize: 'var(--ft-font-size-tiny)'
         }}>
-          <span>SYMBOL</span>
-          <span style={{ textAlign: 'center' }}>PRICE</span>
-          <span style={{ textAlign: 'center' }}>ACTION</span>
+          <span>{t('widgets.symbol')}</span>
+          <span style={{ textAlign: 'center' }}>{t('widgets.price')}</span>
+          <span style={{ textAlign: 'center' }}>{t('widgets.action')}</span>
         </div>
 
         {QUICK_SYMBOLS.map((asset) => (
@@ -79,17 +74,17 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
               gridTemplateColumns: '1fr 80px 80px',
               gap: '4px',
               padding: '6px 8px',
-              borderBottom: '1px solid #222',
+              borderBottom: '1px solid var(--ft-border-color)',
               alignItems: 'center'
             }}
           >
             <div>
-              <div style={{ fontSize: '10px', color: FINCEPT_WHITE, fontWeight: 'bold' }}>
+              <div style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)', fontWeight: 'bold' }}>
                 {asset.symbol}
               </div>
               <div style={{
-                fontSize: '9px',
-                color: asset.change >= 0 ? FINCEPT_GREEN : FINCEPT_RED,
+                fontSize: 'var(--ft-font-size-tiny)',
+                color: asset.change >= 0 ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '2px'
@@ -100,8 +95,8 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
             </div>
             <div style={{
               textAlign: 'center',
-              fontSize: '10px',
-              color: FINCEPT_ORANGE,
+              fontSize: 'var(--ft-font-size-small)',
+              color: 'var(--ft-color-primary)',
               fontWeight: 'bold',
               fontFamily: 'monospace'
             }}>
@@ -111,11 +106,11 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
               <button
                 onClick={() => handleQuickTrade(asset.symbol, 'buy')}
                 style={{
-                  backgroundColor: FINCEPT_GREEN,
+                  backgroundColor: 'var(--ft-color-success)',
                   color: '#000',
                   border: 'none',
                   padding: '3px 8px',
-                  fontSize: '9px',
+                  fontSize: 'var(--ft-font-size-tiny)',
                   fontWeight: 'bold',
                   cursor: 'pointer',
                   borderRadius: '2px'
@@ -128,11 +123,11 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
               <button
                 onClick={() => handleQuickTrade(asset.symbol, 'sell')}
                 style={{
-                  backgroundColor: FINCEPT_RED,
+                  backgroundColor: 'var(--ft-color-alert)',
                   color: '#000',
                   border: 'none',
                   padding: '3px 8px',
-                  fontSize: '9px',
+                  fontSize: 'var(--ft-font-size-tiny)',
                   fontWeight: 'bold',
                   cursor: 'pointer',
                   borderRadius: '2px'
@@ -149,18 +144,18 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
         {/* Quick order panel */}
         {selectedSymbol && (
           <div style={{
-            backgroundColor: '#111',
+            backgroundColor: 'var(--ft-color-panel)',
             padding: '8px',
             margin: '8px',
             borderRadius: '2px',
-            border: `1px solid ${orderSide === 'buy' ? FINCEPT_GREEN : FINCEPT_RED}`
+            border: `1px solid ${orderSide === 'buy' ? 'var(--ft-color-success)' : 'var(--ft-color-alert)'}`
           }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
               marginBottom: '8px'
             }}>
-              <span style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
+              <span style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)' }}>
                 {orderSide.toUpperCase()} {selectedSymbol}
               </span>
               <button
@@ -168,9 +163,9 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: FINCEPT_GRAY,
+                  color: 'var(--ft-color-text-muted)',
                   cursor: 'pointer',
-                  fontSize: '10px'
+                  fontSize: 'var(--ft-font-size-small)'
                 }}
               >
                 ✕
@@ -184,11 +179,11 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
                 onChange={(e) => setQuantity(e.target.value)}
                 style={{
                   flex: 1,
-                  backgroundColor: '#000',
-                  border: '1px solid #333',
-                  color: FINCEPT_WHITE,
+                  backgroundColor: 'var(--ft-color-background)',
+                  border: '1px solid var(--ft-border-color)',
+                  color: 'var(--ft-color-text)',
                   padding: '4px 8px',
-                  fontSize: '10px'
+                  fontSize: 'var(--ft-font-size-small)'
                 }}
               />
               <button
@@ -198,11 +193,11 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
                   setQuantity('');
                 }}
                 style={{
-                  backgroundColor: orderSide === 'buy' ? FINCEPT_GREEN : FINCEPT_RED,
+                  backgroundColor: orderSide === 'buy' ? 'var(--ft-color-success)' : 'var(--ft-color-alert)',
                   color: '#000',
                   border: 'none',
                   padding: '4px 12px',
-                  fontSize: '10px',
+                  fontSize: 'var(--ft-font-size-small)',
                   fontWeight: 'bold',
                   cursor: 'pointer'
                 }}
@@ -216,12 +211,12 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
         {/* Footer */}
         <div style={{
           padding: '6px 8px',
-          borderTop: '1px solid #333',
+          borderTop: '1px solid var(--ft-border-color)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <span style={{ fontSize: '8px', color: FINCEPT_GRAY }}>
+          <span style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>
             <Zap size={10} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
             One-click trading enabled
           </span>
@@ -229,8 +224,8 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
             <div
               onClick={onNavigate}
               style={{
-                color: FINCEPT_CYAN,
-                fontSize: '9px',
+                color: 'var(--ft-color-accent)',
+                fontSize: 'var(--ft-font-size-tiny)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',

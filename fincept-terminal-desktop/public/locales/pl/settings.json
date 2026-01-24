@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "USTAWIENIA",
+  "sidebar": {
+    "credentials": "Poświadczenia API",
+    "polymarket": "API Polymarketu",
+    "llm": "Konfiguracja LLM",
+    "dataSources": "Źródła danych",
+    "backtesting": "Testowanie historyczne",
+    "stockSymbols": "Symbole giełdowe",
+    "tabLayout": "Układ zakładek",
+    "appearance": "Wygląd",
+    "language": "Język",
+    "storage": "Przechowywanie i pamięć podręczna"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[PL] Manage API keys and credentials for external services",
-    "enterValue": "[PL] Enter value..."
+    "title": "ZARZĄDZANIE UPRAWNIENIAMI API",
+    "description": "Zarządzaj kluczami API i poświadczeniami dla usług zewnętrznych",
+    "apiKey": "Klucz API",
+    "enterValue": "Wpisz wartość..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[PL] Customize the visual appearance of your terminal",
-    "currentSettings": "[PL] CURRENT SETTINGS"
+    "title": "WYGLĄD TERMINALU",
+    "description": "Dostosuj wygląd terminala, włączając czcionki, kolory, strefę czasową i skróty klawiaturowe.",
+    "fontFamily": "RODZINA CZCIONEK",
+    "currentSettings": "USTAWIENIA CZCIONKI",
+    "baseFontSize": "PODSTAWOWY ROZMIAR CZCIONKI",
+    "fontWeight": "WAGA CZCIONKI",
+    "weightNormal": "Normalny (400)",
+    "weightSemibold": "Półpogrubione (600)",
+    "weightBold": "Pogrubione (700)",
+    "enableItalic": "WŁĄCZ STYL KURSYWĄ",
+    "fontSizeSmall": "Mały (9px)",
+    "fontSizeLarge": "Duży (18 pikseli)",
+    "colorTheme": "TEMAT KOLORÓW",
+    "defaultTimezone": "DOMYŚLNA STREFA CZASOWA",
+    "timezoneDescription": "Ustaw domyślną strefę czasową wyświetlaną na pasku nawigacyjnym. Widżety pulpitu nawigacyjnego mogą korzystać z własnych ustawień strefy czasowej.",
+    "functionKeys": "MAPOWANIE KLAWISZY FUNKCYJNYCH",
+    "functionKeysDescription": "Skonfiguruj zakładkę lub akcję, którą powinien uruchamiać każdy klawisz funkcyjny (F1-F12). Zmiany zostaną odzwierciedlone na pasku stanu i skrótach klawiaturowych.",
+    "livePreview": "PODGLĄD NA ŻYWO",
+    "previewTitle": "PODGLĄD TERMINALU FINCEPT",
+    "previewBody": "Tekst treści: analiza rynku w czasie rzeczywistym i śledzenie portfela",
+    "previewSmall": "Mały tekst: dane rynkowe, znaczniki czasu i metadane",
+    "statusConnected": "POŁĄCZONY",
+    "statusAlert": "ALARM",
+    "statusWarning": "OSTRZEŻENIE",
+    "saveConfig": "ZAPISZ KONFIGURACJĘ",
+    "reset": "NASTAWIĆ",
+    "saveSuccess": "Wygląd terminala i mapowania klawiszy zostały pomyślnie zapisane",
+    "resetSuccess": "Przywróć domyślny wygląd i mapowania klawiszy"
   },
-  "sidebar": {
-    "credentials": "[PL] API Credentials",
-    "llm": "[PL] LLM Configuration",
-    "dataSources": "[PL] Data Sources",
-    "backtesting": "[PL] Backtesting",
-    "tabLayout": "[PL] Tab Layout",
-    "appearance": "[PL] Appearance",
-    "language": "[PL] Language",
-    "polymarket": "[PL] Polymarket API"
+  "stockSymbols": {
+    "title": "Baza danych symboli giełdowych",
+    "description": "Pobieraj i zarządzaj danymi symboli brokerów w celu szybkiego wyszukiwania w trybie offline. Dane symboli obejmują akcje, F&O, towary i walutowe instrumenty pochodne. Regularnie aktualizuj, aby uzyskać najnowsze instrumenty i daty wygaśnięcia."
   },
   "terminalConfig": {
-    "title": "[PL] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[PL] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[PL] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[PL] TOOLBAR MENU SECTIONS",
-    "newSection": "[PL] NEW SECTION",
-    "deleteSection": "[PL] DELETE",
-    "moveTo": "[PL] MOVE TO ▼",
-    "resetToDefault": "[PL] RESET TO DEFAULT",
-    "noTabsInSection": "[PL] No tabs in this section",
-    "tip": "[PL] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "KONFIGURACJA UKŁADU ZAKŁADEK",
+    "headerTabs": "ZAKŁADKI NAGŁÓWKA (GŁÓWNY PASEK ZAKŁADEK)",
+    "headerTabsDesc": "Przeciągnij, aby zmienić kolejność. Zakładki te pojawiają się w głównym nagłówku nawigacji.",
+    "toolbarSections": "SEKCJE MENU PASKA NARZĘDZI",
+    "newSection": "NOWA SEKCJA",
+    "deleteSection": "USUWAĆ",
+    "moveTo": "PRZEJDŹ DO ▼",
+    "resetToDefault": "ZRESETUJ DO USTAWIEŃ DOMYŚLNYCH",
+    "noTabsInSection": "Brak zakładek w tej sekcji",
+    "tip": "WSKAZÓWKA: Przeciągnij karty, aby zmienić ich kolejność. Użyj przycisków strzałek, aby przenosić karty pomiędzy sekcjami nagłówka i menu. Zmiany są zapisywane automatycznie."
   },
   "llm": {
-    "title": "[PL] LLM CONFIGURATION",
-    "description": "[PL] Configure AI models and providers",
-    "connected": "[PL] CONNECTED",
-    "disconnected": "[PL] DISCONNECTED",
-    "provider": "[PL] AI PROVIDER",
-    "globalSettings": "[PL] GLOBAL AI SETTINGS",
-    "temperature": "[PL] TEMPERATURE",
-    "maxTokens": "[PL] MAX TOKENS",
-    "systemPrompt": "[PL] SYSTEM PROMPT",
-    "modelLibrary": "[PL] MODEL LIBRARY",
-    "multiModelConfigs": "[PL] Multi-model configs"
+    "title": "KONFIGURACJA LLM",
+    "description": "Skonfiguruj modele i dostawców AI",
+    "connected": "POŁĄCZONY",
+    "disconnected": "BEZŁADNY",
+    "provider": "DOSTAWCA AI",
+    "globalSettings": "GLOBALNE USTAWIENIA AI",
+    "temperature": "TEMPERATURA",
+    "maxTokens": "MAX ŻETONÓW",
+    "systemPrompt": "WSKAZÓWKA SYSTEMOWA",
+    "modelLibrary": "BIBLIOTEKA MODELI",
+    "multiModelConfigs": "Konfiguracje wielu modeli"
   },
   "buttons": {
-    "save": "[PL] SAVE",
-    "cancel": "[PL] CANCEL",
-    "add": "[PL] ADD"
+    "save": "RATOWAĆ",
+    "cancel": "ANULOWAĆ",
+    "add": "DODAĆ"
   },
   "footer": {
-    "database": "[PL] Database: SQLite",
-    "storage": "[PL] Storage: File-based",
-    "secureStorage": "[PL] All data stored securely in fincept_terminal.db"
+    "database": "Baza danych: SQLite",
+    "storage": "Przechowywanie: oparte na plikach",
+    "secureStorage": "Wszystkie dane są bezpiecznie przechowywane w fincept_terminal.db"
   }
 }

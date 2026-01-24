@@ -142,7 +142,7 @@ def get_futures_global_spot():
     """Get global futures spot data"""
     return safe_call(ak.futures_global_spot_em)
 
-def get_futures_global_hist(symbol="101", period="daily", start_date="20200101", end_date="20251231"):
+def get_futures_global_hist(symbol="101", period="daily", start_date="20200101", end_date="20261231"):
     """Get global futures historical data"""
     return safe_call(ak.futures_global_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date)
 
@@ -230,7 +230,7 @@ def get_futures_spot_price():
     """Get futures spot prices"""
     return safe_call(ak.futures_spot_price)
 
-def get_futures_spot_price_daily(start_day="20200101", end_day="20251231", vars_list=None):
+def get_futures_spot_price_daily(start_day="20200101", end_day="20261231", vars_list=None):
     """Get daily spot prices"""
     return safe_call(ak.futures_spot_price_daily, start_day=start_day, end_day=end_day)
 

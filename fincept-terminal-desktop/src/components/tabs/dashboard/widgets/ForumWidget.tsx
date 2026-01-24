@@ -4,11 +4,6 @@ import { BaseWidget } from './BaseWidget';
 import { ForumApiService } from '../../../../services/forum/forumApi';
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_BLUE = '#6496FA';
-const FINCEPT_CYAN = '#00FFFF';
-const FINCEPT_GREEN = '#00C800';
 
 interface ForumPost {
   id: string;
@@ -81,6 +76,7 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
     return () => clearInterval(interval);
   }, [categoryId, limit]);
 
+
   return (
     <BaseWidget
       id={id}
@@ -102,29 +98,28 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
             style={{
               marginBottom: '8px',
               paddingBottom: '8px',
-              borderBottom: index < posts.length - 1 ? `1px solid ${FINCEPT_GRAY}` : 'none',
-              cursor: 'pointer',
-              transition: 'opacity 0.2s'
+              borderBottom: index < posts.length - 1 ? '1px solid var(--ft-border-color)' : 'none',
+              cursor: 'pointer'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
-            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.7'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
           >
-            <div style={{ color: FINCEPT_WHITE, fontSize: '10px', fontWeight: 'bold', marginBottom: '2px', lineHeight: '1.2' }}>
+            <div style={{ color: 'var(--ft-color-text)', fontSize: 'var(--ft-font-size-small)', fontWeight: 'bold', marginBottom: '2px', lineHeight: '1.2' }}>
               {post.title.substring(0, 60)}{post.title.length > 60 ? '...' : ''}
             </div>
-            <div style={{ display: 'flex', gap: '8px', fontSize: '8px', color: FINCEPT_GRAY }}>
-              <span style={{ color: FINCEPT_CYAN }}>@{post.author}</span>
-              <span style={{ color: FINCEPT_BLUE }}>[{post.category}]</span>
+            <div style={{ display: 'flex', gap: '8px', fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>
+              <span style={{ color: 'var(--ft-color-accent)' }}>@{post.author}</span>
+              <span style={{ color: 'var(--ft-color-info)' }}>[{post.category}]</span>
               <span>{post.time}</span>
             </div>
-            <div style={{ display: 'flex', gap: '8px', fontSize: '8px', color: FINCEPT_GRAY, marginTop: '2px' }}>
-              <span style={{ color: FINCEPT_GREEN }}>👍 {post.likes}</span>
+            <div style={{ display: 'flex', gap: '8px', fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)', marginTop: '2px' }}>
+              <span style={{ color: 'var(--ft-color-success)' }}>👍 {post.likes}</span>
               <span>💬 {post.replies}</span>
             </div>
           </div>
         ))}
         {posts.length === 0 && !loading && !error && (
-          <div style={{ color: FINCEPT_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
+          <div style={{ color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-small)', textAlign: 'center', padding: '12px' }}>
             {t('widgets.noForumPosts')}
           </div>
         )}

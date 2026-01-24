@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "AYARLAR",
+  "sidebar": {
+    "credentials": "API Kimlik Bilgileri",
+    "polymarket": "Polimarket API'si",
+    "llm": "Yüksek Lisans Yapılandırması",
+    "dataSources": "Veri Kaynakları",
+    "backtesting": "Geriye dönük test",
+    "stockSymbols": "Hisse Senedi Sembolleri",
+    "tabLayout": "Sekme Düzeni",
+    "appearance": "Dış görünüş",
+    "language": "Dil",
+    "storage": "Depolama ve Önbellek"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[TR] Manage API keys and credentials for external services",
-    "enterValue": "[TR] Enter value..."
+    "title": "API KİMLİK BİLGİLERİ YÖNETİMİ",
+    "description": "Harici hizmetler için API anahtarlarını ve kimlik bilgilerini yönetin",
+    "apiKey": "API Anahtarı",
+    "enterValue": "Değer girin..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[TR] Customize the visual appearance of your terminal",
-    "currentSettings": "[TR] CURRENT SETTINGS"
+    "title": "TERMİNAL GÖRÜNÜMÜ",
+    "description": "Yazı tipleri, renkler, saat dilimi ve klavye kısayolları dahil olmak üzere terminalinizin görsel görünümünü özelleştirin.",
+    "fontFamily": "YAZI TİPİ AİLESİ",
+    "currentSettings": "YAZI TİPİ AYARLARI",
+    "baseFontSize": "TEMEL YAZI TİPİ BOYUTU",
+    "fontWeight": "Yazı Tipi Ağırlığı",
+    "weightNormal": "Normal (400)",
+    "weightSemibold": "Yarı Kalın (600)",
+    "weightBold": "Kalın (700)",
+    "enableItalic": "İTALİK STİLİ ETKİNLEŞTİRİN",
+    "fontSizeSmall": "Küçük (9px)",
+    "fontSizeLarge": "Büyük (18 piksel)",
+    "colorTheme": "RENK TEMASI",
+    "defaultTimezone": "VARSAYILAN ZAMAN DİLİMİ",
+    "timezoneDescription": "Gezinme çubuğunda görüntülenen varsayılan saat dilimini ayarlayın. Kontrol paneli widget'ları kendi saat dilimi ayarlarını kullanabilir.",
+    "functionKeys": "FONKSİYON TUŞU EŞLEMELERİ",
+    "functionKeysDescription": "Her işlev tuşunun (F1-F12) hangi sekmeyi veya eylemi tetikleyeceğini yapılandırın. Değişiklikler durum çubuğuna ve klavye kısayollarına yansıtılacaktır.",
+    "livePreview": "CANLI ÖNİZLEME",
+    "previewTitle": "FINCEPT TERMİNAL Önizlemesi",
+    "previewBody": "Gövde Metni: Gerçek zamanlı piyasa analizi ve portföy takibi",
+    "previewSmall": "Küçük Metin: Piyasa verileri, zaman damgaları ve meta veriler",
+    "statusConnected": "BAĞLI",
+    "statusAlert": "UYARI",
+    "statusWarning": "UYARI",
+    "saveConfig": "YAPILANDIRMAYI KAYDET",
+    "reset": "SIFIRLAMA",
+    "saveSuccess": "Terminal görünümü ve tuş eşlemeleri başarıyla kaydedildi",
+    "resetSuccess": "Varsayılan görünüme ve tuş eşlemelerine sıfırla"
   },
-  "sidebar": {
-    "credentials": "[TR] API Credentials",
-    "llm": "[TR] LLM Configuration",
-    "dataSources": "[TR] Data Sources",
-    "backtesting": "[TR] Backtesting",
-    "tabLayout": "[TR] Tab Layout",
-    "appearance": "[TR] Appearance",
-    "language": "[TR] Language",
-    "polymarket": "[TR] Polymarket API"
+  "stockSymbols": {
+    "title": "Hisse Senedi Sembol Veritabanı",
+    "description": "Hızlı çevrimdışı arama için komisyoncu sembolü verilerini indirin ve yönetin. Sembol verileri hisse senetlerini, F&O'yu, emtiaları ve döviz türevlerini içerir. En yeni araçları ve son kullanma tarihlerini almak için düzenli olarak güncelleyin."
   },
   "terminalConfig": {
-    "title": "[TR] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[TR] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[TR] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[TR] TOOLBAR MENU SECTIONS",
-    "newSection": "[TR] NEW SECTION",
-    "deleteSection": "[TR] DELETE",
-    "moveTo": "[TR] MOVE TO ▼",
-    "resetToDefault": "[TR] RESET TO DEFAULT",
-    "noTabsInSection": "[TR] No tabs in this section",
-    "tip": "[TR] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "SEKME DÜZENİ YAPILANDIRMASI",
+    "headerTabs": "BAŞLIK SEKMELERİ (ANA SEKME ÇUBUĞU)",
+    "headerTabsDesc": "Yeniden sıralamak için sürükleyin. Bu sekmeler ana başlık navigasyonunda görünür.",
+    "toolbarSections": "ARAÇ ÇUBUĞU MENÜ BÖLÜMLERİ",
+    "newSection": "YENİ BÖLÜM",
+    "deleteSection": "SİLMEK",
+    "moveTo": "▼'E TAŞIN",
+    "resetToDefault": "VARSAYILANA SIFIRLA",
+    "noTabsInSection": "Bu bölümde sekme yok",
+    "tip": "İPUCU: Yeniden sıralamak için sekmeleri sürükleyin. Sekmeleri başlık ve menü bölümleri arasında taşımak için ok düğmelerini kullanın. Değişiklikler otomatik olarak kaydedilir."
   },
   "llm": {
-    "title": "[TR] LLM CONFIGURATION",
-    "description": "[TR] Configure AI models and providers",
-    "connected": "[TR] CONNECTED",
-    "disconnected": "[TR] DISCONNECTED",
-    "provider": "[TR] AI PROVIDER",
-    "globalSettings": "[TR] GLOBAL AI SETTINGS",
-    "temperature": "[TR] TEMPERATURE",
-    "maxTokens": "[TR] MAX TOKENS",
-    "systemPrompt": "[TR] SYSTEM PROMPT",
-    "modelLibrary": "[TR] MODEL LIBRARY",
-    "multiModelConfigs": "[TR] Multi-model configs"
+    "title": "LLM YAPILANDIRMASI",
+    "description": "Yapay zeka modellerini ve sağlayıcılarını yapılandırma",
+    "connected": "BAĞLI",
+    "disconnected": "BAĞLANTI KESİLDİ",
+    "provider": "Yapay Zeka Sağlayıcı",
+    "globalSettings": "KÜRESEL YZ AYARLARI",
+    "temperature": "SICAKLIK",
+    "maxTokens": "MAKS TOKEN",
+    "systemPrompt": "SİSTEM İSTEMİ",
+    "modelLibrary": "MODEL KÜTÜPHANE",
+    "multiModelConfigs": "Çok modelli yapılandırmalar"
   },
   "buttons": {
-    "save": "[TR] SAVE",
-    "cancel": "[TR] CANCEL",
-    "add": "[TR] ADD"
+    "save": "KAYDETMEK",
+    "cancel": "İPTAL ETMEK",
+    "add": "EKLEMEK"
   },
   "footer": {
-    "database": "[TR] Database: SQLite",
-    "storage": "[TR] Storage: File-based",
-    "secureStorage": "[TR] All data stored securely in fincept_terminal.db"
+    "database": "Veritabanı: SQLite",
+    "storage": "Depolama: Dosya tabanlı",
+    "secureStorage": "Tüm veriler fincept_terminal.db'de güvenli bir şekilde saklanır"
   }
 }

@@ -11,11 +11,20 @@ Performance notes:
 
 import sys
 import json
+import logging
 import signal
 import time
 from pathlib import Path
 from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
+# Force ALL logging to stderr so stdout stays clean for JSON output
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)-8s %(name)s: %(message)s',
+    stream=sys.stderr,
+    force=True
+)
 
 # Add parent directory to path
 parent_dir = str(Path(__file__).parent.parent)
@@ -178,7 +187,7 @@ def dispatch_action(
         query = params.get("query")
         if not query:
             return {"success": False, "error": "Missing 'query'"}
-        return execute_query(query, api_keys, params.get("session_id"))
+        return execute_query(query, api_keys, params.get("session_id"), config)
 
     if action == "execute_multi_query":
         from finagent_core.super_agent import SuperAgent

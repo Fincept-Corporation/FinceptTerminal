@@ -26,6 +26,21 @@ import {
 import { useSettingsData } from './hooks';
 import type { SettingsSection, SettingsColors } from './types';
 
+// Fincept Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+};
+
 export default function SettingsTab() {
   const { t } = useTranslation('settings');
   const { session } = useAuth();
@@ -76,63 +91,60 @@ export default function SettingsTab() {
     { id: 'llm' as SettingsSection, icon: Bot, label: t('sidebar.llm') },
     { id: 'dataConnections' as SettingsSection, icon: Database, label: t('sidebar.dataSources') },
     { id: 'backtesting' as SettingsSection, icon: Activity, label: t('sidebar.backtesting') },
-    { id: 'stockSymbols' as SettingsSection, icon: Briefcase, label: 'Stock Symbols' },
+    { id: 'stockSymbols' as SettingsSection, icon: Briefcase, label: t('sidebar.stockSymbols') },
     { id: 'terminalConfig' as SettingsSection, icon: SettingsIcon, label: t('sidebar.tabLayout') },
     { id: 'terminal' as SettingsSection, icon: Terminal, label: t('sidebar.appearance') },
     { id: 'language' as SettingsSection, icon: Globe, label: t('sidebar.language') },
-    { id: 'storage' as SettingsSection, icon: HardDrive, label: 'Storage & Cache' },
+    { id: 'storage' as SettingsSection, icon: HardDrive, label: t('sidebar.storage') },
   ];
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: colors.background }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.DARK_BG, fontFamily: '"IBM Plex Mono", "Consolas", monospace' }}>
       <style>{`
-        *::-webkit-scrollbar { width: 8px; height: 8px; }
-        *::-webkit-scrollbar-track { background: ${colors.panel}; }
-        *::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
-        *::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
-
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        @keyframes slideIn {
-          from { transform: translateX(-10px); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
+        *::-webkit-scrollbar { width: 6px; height: 6px; }
+        *::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
+        *::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
       `}</style>
 
-      {/* Header */}
+      {/* Top Navigation Bar */}
       <div style={{
-        borderBottom: `2px solid ${colors.primary}`,
-        padding: '12px 16px',
-        background: `linear-gradient(180deg, #1a1a1a 0%, ${colors.panel} 100%)`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+        padding: '8px 16px',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <SettingsIcon size={20} color={colors.primary} />
-          <span style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }}>
+          <SettingsIcon size={16} color={FINCEPT.ORANGE} />
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            color: FINCEPT.WHITE,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase'
+          }}>
             {t('title')}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
-            padding: '4px 8px',
-            background: dbInitialized ? '#0a3a0a' : '#3a0a0a',
-            border: `1px solid ${dbInitialized ? '#00ff00' : '#ff0000'}`,
-            borderRadius: '3px'
+            padding: '2px 6px',
+            backgroundColor: dbInitialized ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
+            color: dbInitialized ? FINCEPT.GREEN : FINCEPT.RED,
+            fontSize: '8px',
+            fontWeight: 700,
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
           }}>
-            <span style={{ color: dbInitialized ? '#00ff00' : '#ff0000', fontSize: '9px', fontWeight: 'bold' }}>
-              <Database size={10} style={{ display: 'inline', marginRight: '4px' }} />
-              SQLite: {dbInitialized ? t('llm.connected') : t('llm.disconnected')}
+            <Database size={10} />
+            <span style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {dbInitialized ? t('llm.connected') : t('llm.disconnected')}
             </span>
           </div>
         </div>
@@ -141,11 +153,13 @@ export default function SettingsTab() {
       {/* Message Banner */}
       {message && (
         <div style={{
-          padding: '8px 16px',
-          background: message.type === 'success' ? '#0a3a0a' : '#3a0a0a',
-          borderBottom: `1px solid ${message.type === 'success' ? '#00ff00' : '#ff0000'}`,
-          color: message.type === 'success' ? '#00ff00' : '#ff0000',
-          fontSize: '10px',
+          padding: '6px 16px',
+          backgroundColor: message.type === 'success' ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
+          borderBottom: `1px solid ${message.type === 'success' ? FINCEPT.GREEN : FINCEPT.RED}`,
+          color: message.type === 'success' ? FINCEPT.GREEN : FINCEPT.RED,
+          fontSize: '9px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
           flexShrink: 0
         }}>
           {message.text}
@@ -154,32 +168,65 @@ export default function SettingsTab() {
 
       {/* Main Layout */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-        {/* Sidebar Navigation */}
-        <div style={{ width: '220px', borderRight: '1px solid #1a1a1a', background: colors.panel, flexShrink: 0 }}>
-          <div style={{ padding: '16px 0' }}>
+        {/* Left Panel - Sidebar Navigation */}
+        <div style={{
+          width: '280px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          flexShrink: 0,
+          overflowY: 'auto'
+        }}>
+          {/* Section Header */}
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`
+          }}>
+            <span style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GRAY,
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase'
+            }}>
+              SETTINGS MENU
+            </span>
+          </div>
+
+          {/* Navigation Items */}
+          <div style={{ padding: '4px 0' }}>
             {sidebarItems.map((item) => (
               <div
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
                 style={{
-                  padding: '12px 16px',
+                  padding: '10px 12px',
+                  backgroundColor: activeSection === item.id ? `${FINCEPT.ORANGE}15` : 'transparent',
+                  borderLeft: activeSection === item.id ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
                   cursor: 'pointer',
-                  background: activeSection === item.id ? '#1a1a1a' : 'transparent',
-                  borderLeft: activeSection === item.id ? `3px solid ${colors.primary}` : '3px solid transparent',
+                  transition: 'all 0.2s',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.2s'
+                  gap: '10px'
                 }}
                 onMouseEnter={(e) => {
-                  if (activeSection !== item.id) e.currentTarget.style.background = '#151515';
+                  if (activeSection !== item.id) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                 }}
                 onMouseLeave={(e) => {
-                  if (activeSection !== item.id) e.currentTarget.style.background = 'transparent';
+                  if (activeSection !== item.id) e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
-                <item.icon size={16} color={activeSection === item.id ? colors.primary : colors.text} />
-                <span style={{ color: colors.text, fontSize: '11px', fontWeight: activeSection === item.id ? 'bold' : 'normal' }}>
+                <item.icon
+                  size={12}
+                  color={activeSection === item.id ? FINCEPT.ORANGE : FINCEPT.GRAY}
+                />
+                <span style={{
+                  color: activeSection === item.id ? FINCEPT.WHITE : FINCEPT.GRAY,
+                  fontSize: '10px',
+                  fontWeight: activeSection === item.id ? 700 : 400,
+                  letterSpacing: '0.3px',
+                  textTransform: 'uppercase'
+                }}>
                   {item.label}
                 </span>
               </div>
@@ -187,9 +234,9 @@ export default function SettingsTab() {
           </div>
         </div>
 
-        {/* Main Content */}
+        {/* Center Content */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '20px', minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', minHeight: 0 }}>
             {/* Credentials Section */}
             {activeSection === 'credentials' && (
               <CredentialsSection
@@ -266,15 +313,29 @@ export default function SettingsTab() {
 
             {/* Stock Symbols Section */}
             {activeSection === 'stockSymbols' && (
-              <div style={{ maxWidth: '600px' }}>
-                <div style={{ marginBottom: '16px' }}>
-                  <h2 style={{ fontSize: '16px', fontWeight: 700, color: colors.text, margin: 0 }}>
-                    Stock Symbol Database
+              <div>
+                <div style={{
+                  marginBottom: '16px',
+                  paddingBottom: '12px',
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`
+                }}>
+                  <h2 style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: FINCEPT.WHITE,
+                    margin: 0,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase'
+                  }}>
+                    {t('stockSymbols.title')}
                   </h2>
-                  <p style={{ fontSize: '11px', color: colors.textMuted, marginTop: '8px', lineHeight: 1.5 }}>
-                    Download and manage broker symbol data for fast offline search.
-                    Symbol data includes stocks, F&O, commodities, and currency derivatives.
-                    Update regularly to get latest instruments and expiries.
+                  <p style={{
+                    fontSize: '10px',
+                    color: FINCEPT.GRAY,
+                    marginTop: '8px',
+                    lineHeight: 1.5
+                  }}>
+                    {t('stockSymbols.description')}
                   </p>
                 </div>
                 <MasterContractManager
@@ -299,7 +360,7 @@ export default function SettingsTab() {
 
             {/* Language Section */}
             {activeSection === 'language' && (
-              <div style={{ padding: '20px' }}>
+              <div>
                 <LanguageSelector />
               </div>
             )}
@@ -315,17 +376,31 @@ export default function SettingsTab() {
         </div>
       </div>
 
-      {/* Footer */}
-      <TabFooter
-        tabName="SETTINGS"
-        leftInfo={[
-          { label: t('footer.database'), color: colors.text },
-          { label: t('footer.storage'), color: colors.text },
-        ]}
-        statusInfo={t('footer.secureStorage')}
-        backgroundColor={colors.panel}
-        borderColor={colors.primary}
-      />
+      {/* Status Bar (Bottom) */}
+      <div style={{
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        padding: '4px 16px',
+        fontSize: '9px',
+        color: FINCEPT.GRAY,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <span style={{ textTransform: 'uppercase' }}>SETTINGS</span>
+          <span style={{ color: FINCEPT.MUTED }}>|</span>
+          <span style={{ textTransform: 'uppercase' }}>{t('footer.database')}</span>
+          <span style={{ color: FINCEPT.MUTED }}>|</span>
+          <span style={{ textTransform: 'uppercase' }}>{t('footer.storage')}</span>
+        </div>
+        <div style={{ textTransform: 'uppercase' }}>
+          {t('footer.secureStorage')}
+        </div>
+      </div>
     </div>
   );
 }

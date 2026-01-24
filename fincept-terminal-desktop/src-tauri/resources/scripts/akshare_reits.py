@@ -53,7 +53,7 @@ def get_reits_realtime():
     """Get REITs realtime data"""
     return safe_call(ak.reits_realtime_em)
 
-def get_reits_hist(symbol="180101", period="daily", start_date="20200101", end_date="20251231", adjust=""):
+def get_reits_hist(symbol="180101", period="daily", start_date="20200101", end_date="20261231", adjust=""):
     """Get REITs historical data"""
     return safe_call(ak.reits_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 

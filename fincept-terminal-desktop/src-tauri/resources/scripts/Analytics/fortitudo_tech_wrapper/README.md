@@ -4,7 +4,7 @@
 
 **Version**: 2.0 (Complete)
 **Library**: fortitudo.tech v1.2
-**Date**: 2025-12-28
+**Date**: 2026-01-23
 **Test Status**: All 24 wrapper functions tested and working
 
 ---
@@ -437,14 +437,14 @@ weights_2d = np.array([[0.4], [0.3], [0.3]])  # Also works
 
 ## Changelog
 
-### Version 2.0 (2025-12-28)
+### Version 2.0 (2026-01-23)
 - ✅ Added advanced.py (entropy pooling, exposure stacking, vol surface)
 - ✅ Added data.py (all data loading functions)
 - ✅ 100% library function coverage achieved (18/18)
 - ✅ All 24 wrapper functions tested and working
 - ✅ Complete documentation
 
-### Version 1.0 (2025-12-28)
+### Version 1.0 (2026-01-23)
 - Initial release with functions.py and option_pricing.py
 - 11 core portfolio and option pricing functions
 
@@ -452,4 +452,4 @@ weights_2d = np.array([[0.4], [0.3], [0.3]])  # Also works
 
 **Status**: Production Ready - Complete Library Coverage
 **Test Coverage**: 100% (24/24 functions tested)
-**Last Updated**: 2025-12-28
+**Last Updated**: 2026-01-23

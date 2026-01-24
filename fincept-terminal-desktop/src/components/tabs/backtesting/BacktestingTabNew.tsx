@@ -1,427 +1,306 @@
 /**
- * Backtesting Tab - Professional Backtesting Interface
+ * BacktestingTabNew - Orchestrator Component
  *
- * Clean, provider-aware backtesting UI that works with:
- * - Backtesting.py (Python strategies, fast event-driven)
- * - VectorBT (NumPy vectorized, ultra-fast)
- * - Backtrader (Python-based backtesting framework)
+ * Thin orchestrator managing state, provider registration, and backtest execution.
+ * Delegates UI to ConfigPanel, ChartPanel, and ResultsPanel.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, TrendingUp, Settings, Play, StopCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Activity, AlertTriangle, Zap } from 'lucide-react';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
-import { BacktestRequest, BacktestResult } from '@/services/backtesting/interfaces/types';
+import { BacktestRequest } from '@/services/backtesting/interfaces/types';
 import { sqliteService } from '@/services/core/sqliteService';
+import {
+  F, panelStyle, BacktestConfigExtended, StrategyType,
+  ExtendedEquityPoint, ExtendedTrade, AdvancedMetrics, MonthlyReturnsData, RollingMetric,
+  getDefaultParameters,
+} from './backtestingStyles';
+import ConfigPanel from './ConfigPanel';
+import ChartPanel from './ChartPanel';
+import ResultsPanel from './ResultsPanel';
+import OptimizationPanel from './OptimizationPanel';
 
 // ============================================================================
-// Types
+// Component
 // ============================================================================
-
-interface BacktestConfig {
-  // Universal
-  symbol: string;
-  startDate: string;
-  endDate: string;
-  initialCapital: number;
-
-  // Strategy
-  strategyType: 'sma_crossover' | 'ema_crossover' | 'rsi' | 'macd' | 'bollinger_bands' | 'custom';
-  strategyCode?: string;
-
-  // Parameters (dynamic based on strategy)
-  parameters: Record<string, any>;
-
-  // Provider-specific
-  commission?: number;
-  slippage?: number;
-  leverage?: number;
-}
 
 const BacktestingTabNew: React.FC = () => {
   const { t } = useTranslation('backtesting');
-  const colors = {
-    bg: '#0A0A0A',
-    panel: '#1A1A1A',
-    border: '#2A2A2A',
-    accent: '#FF8800',
-    text: '#FFFFFF',
-    textMuted: '#888888',
-    success: '#00FF88',
-    alert: '#FF4444',
-  };
 
-  // ============================================================================
-  // State
-  // ============================================================================
-
+  // --- Provider State ---
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
-  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
 
-  const [config, setConfig] = useState<BacktestConfig>({
-    symbol: 'SPY',
+  // --- Config State ---
+  const [config, setConfig] = useState<BacktestConfigExtended>({
+    symbols: ['SPY'],
+    weights: [1.0],
     startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
     initialCapital: 100000,
     strategyType: 'sma_crossover',
-    parameters: {
-      fastPeriod: 10,
-      slowPeriod: 20,
-    },
+    parameters: { fastPeriod: 10, slowPeriod: 20 },
     commission: 0.001,
     slippage: 0.0005,
     leverage: 1,
+    benchmark: 'SPY',
+    positionSizing: 'fixed',
+    positionSizeValue: 1.0,
+    stopLoss: 0,
+    takeProfit: 0,
+    trailingStop: 0,
+    allowShort: false,
+    compareRandom: false,
   });
 
+  // --- Result State ---
   const [isRunning, setIsRunning] = useState(false);
-  const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [equity, setEquity] = useState<ExtendedEquityPoint[]>([]);
+  const [trades, setTrades] = useState<ExtendedTrade[]>([]);
+  const [performance, setPerformance] = useState<Record<string, number>>({});
+  const [statistics, setStatistics] = useState<Record<string, number | string>>({});
+  const [advancedMetrics, setAdvancedMetrics] = useState<AdvancedMetrics | undefined>();
+  const [monthlyReturns, setMonthlyReturns] = useState<MonthlyReturnsData[]>([]);
+  const [usingSyntheticData, setUsingSyntheticData] = useState(false);
+  const [extendedStats, setExtendedStats] = useState<Record<string, number | string>>({});
+  const [rollingSharpe, setRollingSharpe] = useState<RollingMetric[]>([]);
+  const [rollingVolatility, setRollingVolatility] = useState<RollingMetric[]>([]);
+  const [rollingDrawdown, setRollingDrawdown] = useState<RollingMetric[]>([]);
+  const [tradeAnalysis, setTradeAnalysis] = useState<Record<string, number | string>>({});
+  const [drawdownAnalysis, setDrawdownAnalysis] = useState<any>(null);
+  const [showOptimization, setShowOptimization] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
-  const [expandedSections, setExpandedSections] = useState({
-    provider: true,
-    symbol: true,
-    strategy: true,
-    parameters: true,
-    advanced: false,
-    results: true,
-  });
-
-  // ============================================================================
-  // Initialize
-  // ============================================================================
-
+  // --- Provider Registration ---
   useEffect(() => {
-    initializeProviders();
+    registerProviders();
   }, []);
 
-  const initializeProviders = async () => {
+  const registerProviders = async () => {
     try {
+      if (!backtestingRegistry.hasProviders()) {
+        try {
+          const { backtestingPyAdapter } = await import(
+            '@/services/backtesting/adapters/backtestingpy/BacktestingPyAdapter'
+          );
+          backtestingRegistry.registerProvider(backtestingPyAdapter);
+        } catch (err) {
+          console.warn('[Backtesting] Failed to register default provider:', err);
+        }
+      }
+
       const allProviders = backtestingRegistry.listProviders();
-      const providerNames = allProviders.map(p => typeof p === 'string' ? p : p.name);
+      const providerNames = allProviders.map((p: { name: string }) => p.name);
       setAvailableProviders(providerNames);
 
-      // Get active provider from DB
-      const dbProviders = await sqliteService.getBacktestingProviders();
-      const activeDbProvider = dbProviders.find(p => p.is_active === true || (p.is_active as any) === 1);
-
-      if (activeDbProvider) {
-        setActiveProvider(activeDbProvider.name);
-      } else if (providerNames.length > 0) {
-        setActiveProvider(providerNames[0]);
+      try {
+        const dbProviders = await sqliteService.getBacktestingProviders();
+        const activeDbProvider = dbProviders.find(
+          (p: { is_active?: boolean | number; name: string }) =>
+            p.is_active === true || (p.is_active as unknown) === 1
+        );
+        if (activeDbProvider && providerNames.includes(activeDbProvider.name)) {
+          setActiveProvider(activeDbProvider.name);
+        } else if (providerNames.length > 0) {
+          setActiveProvider(providerNames[0]);
+        }
+      } catch {
+        if (providerNames.length > 0) setActiveProvider(providerNames[0]);
       }
     } catch (err) {
-      console.error('[Backtesting] Failed to initialize providers:', err);
+      console.error('[Backtesting] Failed to register providers:', err);
       setError('Failed to load backtesting providers');
     }
   };
 
-  // ============================================================================
-  // Provider Switching
-  // ============================================================================
+  // --- Provider Switch ---
+  const handleProviderChange = useCallback(async (providerName: string) => {
+    const provider = backtestingRegistry.getProvider(providerName);
+    if (!provider) return;
+    setActiveProvider(providerName);
+    setError(null);
+    try { await sqliteService.setActiveBacktestingProvider(providerName); } catch { /* non-critical */ }
+  }, []);
 
-  const handleProviderSwitch = async (providerName: string) => {
-    try {
-      setShowProviderDropdown(false);
-
-      const provider = backtestingRegistry.getProvider(providerName);
-      if (!provider) {
-        throw new Error(`Provider ${providerName} not found`);
-      }
-
-      await backtestingRegistry.setActiveProvider(providerName);
-      await sqliteService.setActiveBacktestingProvider(providerName);
-
-      setActiveProvider(providerName);
-      setError(null);
-
-      // Reset config based on provider capabilities
-      resetConfigForProvider(providerName);
-    } catch (err) {
-      setError(`Failed to switch provider: ${err}`);
-    }
-  };
-
-  const resetConfigForProvider = (providerName: string) => {
-    // Provider-specific defaults
-    if (providerName === 'Backtesting.py') {
-      setConfig(prev => ({
-        ...prev,
-        strategyType: 'sma_crossover',
-        parameters: { fastPeriod: 10, slowPeriod: 20 },
-        commission: 0.001,
-      }));
-    } else if (providerName === 'VectorBT') {
-      setConfig(prev => ({
-        ...prev,
-        strategyType: 'sma_crossover',
-        parameters: { fastWindow: 10, slowWindow: 20 },
-      }));
-    }
-  };
-
-  // ============================================================================
-  // Run Backtest
-  // ============================================================================
-
-  const handleRunBacktest = async () => {
-    if (!activeProvider) {
-      setError('No active provider selected');
-      return;
-    }
+  // --- Run Backtest ---
+  const handleRunBacktest = useCallback(async () => {
+    if (!activeProvider) { setError('No provider selected'); return; }
+    if (config.symbols.length === 0) { setError('Add at least one symbol'); return; }
 
     setIsRunning(true);
     setError(null);
-    setResult(null);
+    setEquity([]);
+    setTrades([]);
+    setPerformance({});
+    setStatistics({});
+    setAdvancedMetrics(undefined);
+    setMonthlyReturns([]);
+    setExtendedStats({});
+    setRollingSharpe([]);
+    setRollingVolatility([]);
+    setRollingDrawdown([]);
+    setTradeAnalysis({});
+    setDrawdownAnalysis(null);
 
     try {
       const provider = backtestingRegistry.getProvider(activeProvider);
-      if (!provider) {
-        throw new Error('Provider not found');
-      }
+      if (!provider) throw new Error('Provider not found');
 
-      // Build request based on provider type
       const request: BacktestRequest = {
         strategy: {
-          name: `${config.strategyType} - ${config.symbol}`,
+          name: `${config.strategyType} - ${config.symbols.join(',')}`,
           type: config.strategyType,
-          code: config.strategyCode,
           parameters: config.parameters,
         },
         startDate: config.startDate,
         endDate: config.endDate,
         initialCapital: config.initialCapital,
-        assets: [{
-          symbol: config.symbol,
-          assetClass: 'stocks',
-          weight: 1.0,
-        }],
+        assets: config.symbols.map((sym, i) => ({
+          symbol: sym,
+          assetClass: 'stocks' as const,
+          weight: config.weights[i] || 1.0 / config.symbols.length,
+        })),
         commission: config.commission,
-        // Backtesting.py specific
+        slippage: config.slippage,
         tradeOnClose: false,
         hedging: false,
         exclusiveOrders: true,
         margin: config.leverage,
+        leverage: config.leverage,
+        benchmark: config.benchmark || undefined,
+        stopLoss: config.stopLoss || undefined,
+        takeProfit: config.takeProfit || undefined,
+        trailingStop: config.trailingStop || undefined,
+        positionSizing: config.positionSizing,
+        positionSizeValue: config.positionSizeValue,
+        allowShort: config.allowShort,
+        compareRandom: config.compareRandom || undefined,
       };
 
-      console.log('[Backtesting] Running backtest:', request);
+      const result = await provider.runBacktest(request);
 
-      const backtestResult = await provider.runBacktest(request);
+      // Parse result
+      if (result) {
+        setPerformance((result.performance || {}) as unknown as Record<string, number>);
+        setStatistics((result.statistics || {}) as unknown as Record<string, number | string>);
+        setEquity((result.equity || []) as ExtendedEquityPoint[]);
+        setTrades((result.trades || []) as ExtendedTrade[]);
+        setUsingSyntheticData(!!(result as any).usingSyntheticData);
 
-      setResult(backtestResult);
-      setExpandedSections(prev => ({ ...prev, results: true }));
+        // Advanced metrics (may come from Python as advancedMetrics or advanced_metrics)
+        const am = (result as any).advancedMetrics || (result as any).advanced_metrics;
+        if (am) setAdvancedMetrics(am);
 
+        const mr = (result as any).monthlyReturns || (result as any).monthly_returns;
+        if (mr) setMonthlyReturns(mr);
+
+        // Extended stats from backtesting.py (SQN, Kelly, CAGR, etc.)
+        const es = (result as any).extendedStats || (result as any).extended_stats;
+        if (es) setExtendedStats(es);
+
+        // Rolling metrics
+        const rm = (result as any).rollingMetrics || (result as any).rolling_metrics;
+        if (rm) {
+          if (rm.rollingSharpe) setRollingSharpe(rm.rollingSharpe);
+          if (rm.rollingVolatility) setRollingVolatility(rm.rollingVolatility);
+          if (rm.rollingDrawdown) setRollingDrawdown(rm.rollingDrawdown);
+        }
+        // Also check advancedMetrics for rolling data
+        if (am) {
+          if (am.rollingSharpe && am.rollingSharpe.length > 0) setRollingSharpe(am.rollingSharpe);
+          if (am.rollingVolatility && am.rollingVolatility.length > 0) setRollingVolatility(am.rollingVolatility);
+          if (am.rollingDrawdown && am.rollingDrawdown.length > 0) setRollingDrawdown(am.rollingDrawdown);
+        }
+
+        // Trade analysis & drawdown analysis
+        const ta = (result as any).tradeAnalysis || (result as any).trade_analysis;
+        if (ta) setTradeAnalysis(ta);
+        const da = (result as any).drawdownAnalysis || (result as any).drawdown_analysis;
+        if (da) setDrawdownAnalysis(da);
+      }
     } catch (err) {
       console.error('[Backtesting] Error:', err);
       setError(String(err));
     } finally {
       setIsRunning(false);
     }
-  };
+  }, [activeProvider, config]);
 
-  // ============================================================================
-  // UI Helpers
-  // ============================================================================
+  // --- Optimization Handler ---
+  const handleOptimize = useCallback(async (params: {
+    parameterRanges: { key: string; min: number; max: number; step: number }[];
+    objective: string;
+    algorithm: 'grid' | 'random';
+    maxIterations?: number;
+  }) => {
+    if (!activeProvider) return null;
+    setIsOptimizing(true);
+    try {
+      const provider = backtestingRegistry.getProvider(activeProvider);
+      if (!provider || !(provider as any).optimize) throw new Error('Provider does not support optimization');
 
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const SectionHeader: React.FC<{
-    title: string;
-    section: keyof typeof expandedSections;
-    icon: React.ReactNode;
-  }> = ({ title, section, icon }) => (
-    <div
-      onClick={() => toggleSection(section)}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '12px 16px',
-        background: colors.panel,
-        borderBottom: `1px solid ${colors.border}`,
-        cursor: 'pointer',
-        userSelect: 'none',
-      }}
-    >
-      {expandedSections[section] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-      {icon}
-      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{title}</span>
-    </div>
-  );
-
-  const FormField: React.FC<{
-    label: string;
-    children: React.ReactNode;
-    description?: string;
-  }> = ({ label, children, description }) => (
-    <div style={{ marginBottom: '16px' }}>
-      <label style={{
-        display: 'block',
-        fontSize: '0.85rem',
-        color: colors.textMuted,
-        marginBottom: '6px',
-        fontWeight: 500,
-      }}>
-        {label}
-      </label>
-      {children}
-      {description && (
-        <div style={{ fontSize: '0.75rem', color: colors.textMuted, marginTop: '4px' }}>
-          {description}
-        </div>
-      )}
-    </div>
-  );
-
-  // ============================================================================
-  // Strategy-Specific Parameters
-  // ============================================================================
-
-  const renderStrategyParameters = () => {
-    if (config.strategyType === 'sma_crossover') {
-      return (
-        <>
-          <FormField label={t('smaParams.fastPeriod')} description={t('smaParams.fastNote')}>
-            <input
-              type="number"
-              value={config.parameters.fastPeriod || 10}
-              onChange={(e) => setConfig(prev => ({
-                ...prev,
-                parameters: { ...prev.parameters, fastPeriod: parseInt(e.target.value) }
-              }))}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '4px',
-                color: colors.text,
-                fontSize: '0.9rem',
-              }}
-            />
-          </FormField>
-
-          <FormField label={t('smaParams.slowPeriod')} description={t('smaParams.slowNote')}>
-            <input
-              type="number"
-              value={config.parameters.slowPeriod || 20}
-              onChange={(e) => setConfig(prev => ({
-                ...prev,
-                parameters: { ...prev.parameters, slowPeriod: parseInt(e.target.value) }
-              }))}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '4px',
-                color: colors.text,
-                fontSize: '0.9rem',
-              }}
-            />
-          </FormField>
-        </>
-      );
-    } else if (config.strategyType === 'rsi') {
-      return (
-        <>
-          <FormField label="RSI Period" description="Lookback period for RSI">
-            <input
-              type="number"
-              value={config.parameters.period || 14}
-              onChange={(e) => setConfig(prev => ({
-                ...prev,
-                parameters: { ...prev.parameters, period: parseInt(e.target.value) }
-              }))}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '4px',
-                color: colors.text,
-                fontSize: '0.9rem',
-              }}
-            />
-          </FormField>
-
-          <FormField label="Oversold Threshold">
-            <input
-              type="number"
-              value={config.parameters.oversold || 30}
-              onChange={(e) => setConfig(prev => ({
-                ...prev,
-                parameters: { ...prev.parameters, oversold: parseInt(e.target.value) }
-              }))}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '4px',
-                color: colors.text,
-                fontSize: '0.9rem',
-              }}
-            />
-          </FormField>
-
-          <FormField label="Overbought Threshold">
-            <input
-              type="number"
-              value={config.parameters.overbought || 70}
-              onChange={(e) => setConfig(prev => ({
-                ...prev,
-                parameters: { ...prev.parameters, overbought: parseInt(e.target.value) }
-              }))}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '4px',
-                color: colors.text,
-                fontSize: '0.9rem',
-              }}
-            />
-          </FormField>
-        </>
-      );
-    } else if (config.strategyType === 'custom' && activeProvider === 'Backtesting.py') {
-      return (
-        <FormField label="Python Strategy Code" description="Custom strategy using Backtesting.py API">
-          <textarea
-            value={config.strategyCode || ''}
-            onChange={(e) => setConfig(prev => ({ ...prev, strategyCode: e.target.value }))}
-            placeholder={`class MyStrategy(Strategy):
-    def init(self):
-        self.sma = self.I(SMA, self.data.Close, 20)
-
-    def next(self):
-        if self.data.Close[-1] > self.sma[-1]:
-            self.buy()
-        elif self.data.Close[-1] < self.sma[-1]:
-            self.sell()`}
-            style={{
-              width: '100%',
-              minHeight: '200px',
-              padding: '12px',
-              background: colors.bg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '4px',
-              color: colors.text,
-              fontSize: '0.85rem',
-              fontFamily: 'monospace',
-              resize: 'vertical',
-            }}
-          />
-        </FormField>
-      );
+      const result = await (provider as any).optimize({
+        strategy: { type: config.strategyType, parameters: config.parameters },
+        parameterGrid: params.parameterRanges.map(r => ({ name: r.key, min: r.min, max: r.max, step: r.step })),
+        objective: params.objective,
+        algorithm: params.algorithm,
+        maxIterations: params.maxIterations,
+        startDate: config.startDate,
+        endDate: config.endDate,
+        initialCapital: config.initialCapital,
+        assets: config.symbols.map((sym, i) => ({
+          symbol: sym, assetClass: 'stocks' as const,
+          weight: config.weights[i] || 1.0 / config.symbols.length,
+        })),
+      });
+      return result;
+    } catch (err) {
+      setError(String(err));
+      return null;
+    } finally {
+      setIsOptimizing(false);
     }
+  }, [activeProvider, config]);
 
-    return null;
-  };
+  // --- Walk-Forward Handler ---
+  const handleWalkForward = useCallback(async (params: {
+    parameterRanges: { key: string; min: number; max: number; step: number }[];
+    objective: string;
+    nSplits: number;
+    trainRatio: number;
+  }) => {
+    if (!activeProvider) return null;
+    setIsOptimizing(true);
+    try {
+      const provider = backtestingRegistry.getProvider(activeProvider);
+      if (!provider || !(provider as any).walkForward) throw new Error('Provider does not support walk-forward');
+
+      const result = await (provider as any).walkForward({
+        strategy: { type: config.strategyType, parameters: config.parameters },
+        parameterRanges: Object.fromEntries(
+          params.parameterRanges.map(r => [r.key, { min: r.min, max: r.max, step: r.step }])
+        ),
+        objective: params.objective,
+        nSplits: params.nSplits,
+        trainRatio: params.trainRatio,
+        startDate: config.startDate,
+        endDate: config.endDate,
+        initialCapital: config.initialCapital,
+        assets: config.symbols.map((sym, i) => ({
+          symbol: sym, assetClass: 'stocks' as const,
+          weight: config.weights[i] || 1.0 / config.symbols.length,
+        })),
+      });
+      return result;
+    } catch (err) {
+      setError(String(err));
+      return null;
+    } finally {
+      setIsOptimizing(false);
+    }
+  }, [activeProvider, config]);
 
   // ============================================================================
   // Render
@@ -429,473 +308,127 @@ const BacktestingTabNew: React.FC = () => {
 
   return (
     <div style={{
-      width: '100%',
-      height: '100%',
-      background: colors.bg,
-      color: colors.text,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', height: '100%',
+      backgroundColor: F.DARK_BG, fontFamily: '"IBM Plex Mono", "Consolas", monospace',
     }}>
-      {/* Header */}
+      {/* Title Bar */}
       <div style={{
-        backgroundColor: '#1A1A1A',
-        borderBottom: `2px solid ${colors.accent}`,
-        padding: '12px 20px',
-        boxShadow: `0 2px 8px rgba(255, 136, 0, 0.2)`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '8px 14px', borderBottom: `1px solid ${F.BORDER}`,
+        backgroundColor: F.PANEL_BG,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Activity size={20} color={colors.accent} style={{ filter: `drop-shadow(0 0 4px ${colors.accent})` }} />
-          <span style={{
-            color: colors.accent,
-            fontWeight: 700,
-            fontSize: '15px',
-            letterSpacing: '0.5px',
-            textShadow: `0 0 10px rgba(255, 136, 0, 0.4)`,
-          }}>
-            {t('title')}
+        <Activity size={14} color={F.ORANGE} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          BACKTESTING
+        </span>
+        {activeProvider && (
+          <span style={{ fontSize: '9px', color: F.GRAY, marginLeft: '8px' }}>
+            [{activeProvider}]
           </span>
+        )}
+        <button
+          onClick={() => setShowOptimization(!showOptimization)}
+          style={{
+            marginLeft: 'auto', padding: '4px 8px', fontSize: '9px', fontWeight: 700,
+            fontFamily: '"IBM Plex Mono", monospace', cursor: 'pointer',
+            backgroundColor: showOptimization ? F.ORANGE : F.HEADER_BG,
+            color: showOptimization ? F.DARK_BG : F.GRAY,
+            border: `1px solid ${showOptimization ? F.ORANGE : F.BORDER}`,
+            borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '4px',
+          }}
+        >
+          <Zap size={10} />OPTIMIZE
+        </button>
+        {(isRunning || isOptimizing) && (
+          <span style={{ fontSize: '9px', color: F.ORANGE }}>
+            {isOptimizing ? 'OPTIMIZING...' : 'RUNNING...'}
+          </span>
+        )}
+      </div>
+
+      {/* Error Banner */}
+      {error && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '8px 14px', backgroundColor: '#1A0000',
+          borderBottom: `1px solid ${F.RED}`, fontSize: '10px', color: F.RED,
+        }}>
+          <AlertTriangle size={12} />
+          {error}
+        </div>
+      )}
+
+      {/* Main Layout: Config | Charts | Results */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* Left: Config Panel */}
+        <div style={{ width: '280px', borderRight: `1px solid ${F.BORDER}`, flexShrink: 0 }}>
+          <ConfigPanel
+            config={config}
+            onConfigChange={setConfig}
+            onRunBacktest={handleRunBacktest}
+            isRunning={isRunning}
+            availableProviders={availableProviders}
+            activeProvider={activeProvider}
+            onProviderChange={handleProviderChange}
+          />
         </div>
 
-        {/* Provider Selector */}
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowProviderDropdown(!showProviderDropdown)}
-            style={{
-              padding: '6px 14px',
-              background: colors.panel,
-              border: `1px solid ${colors.accent}`,
-              borderRadius: '4px',
-              color: colors.text,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-            }}
-          >
-            <Settings size={14} />
-            {activeProvider || 'Select Provider'}
-            <ChevronDown size={14} />
-          </button>
+        {/* Center: Chart Panel */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <ChartPanel
+            equity={equity}
+            initialCapital={config.initialCapital}
+            advancedMetrics={advancedMetrics}
+            monthlyReturns={monthlyReturns}
+            rollingSharpe={rollingSharpe}
+            rollingVolatility={rollingVolatility}
+            rollingDrawdown={rollingDrawdown}
+          />
+        </div>
 
-          {showProviderDropdown && (
-            <div style={{
-              position: 'absolute',
-              top: '100%',
-              right: 0,
-              marginTop: '4px',
-              background: colors.panel,
-              border: `1px solid ${colors.accent}`,
-              borderRadius: '4px',
-              minWidth: '200px',
-              zIndex: 1000,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            }}>
-              {availableProviders.map(provider => (
-                <div
-                  key={provider}
-                  onClick={() => handleProviderSwitch(provider)}
-                  style={{
-                    padding: '10px 14px',
-                    cursor: 'pointer',
-                    borderBottom: `1px solid ${colors.border}`,
-                    background: provider === activeProvider ? `${colors.accent}22` : 'transparent',
-                    color: provider === activeProvider ? colors.accent : colors.text,
-                    fontWeight: provider === activeProvider ? 600 : 400,
-                  }}
-                >
-                  {provider}
-                </div>
-              ))}
-            </div>
+        {/* Right: Results or Optimization Panel */}
+        <div style={{ width: '300px', borderLeft: `1px solid ${F.BORDER}`, flexShrink: 0 }}>
+          {showOptimization ? (
+            <OptimizationPanel
+              config={config}
+              onOptimize={handleOptimize}
+              onWalkForward={handleWalkForward}
+              isRunning={isOptimizing}
+            />
+          ) : (
+            <ResultsPanel
+              performance={performance}
+              statistics={statistics}
+              trades={trades}
+              advancedMetrics={advancedMetrics}
+              usingSyntheticData={usingSyntheticData}
+              extendedStats={extendedStats}
+              tradeAnalysis={tradeAnalysis}
+              drawdownAnalysis={drawdownAnalysis}
+            />
           )}
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Status Bar */}
       <div style={{
-        flex: 1,
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '16px',
-        padding: '16px',
-        overflow: 'auto',
+        display: 'flex', alignItems: 'center', gap: '12px',
+        padding: '4px 14px', borderTop: `1px solid ${F.BORDER}`,
+        backgroundColor: F.PANEL_BG, fontSize: '9px', color: F.GRAY,
       }}>
-        {/* Left Column - Configuration */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-          {/* Symbol Selection */}
-          <div style={{
-            background: colors.panel,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '6px',
-            overflow: 'hidden',
-          }}>
-            <SectionHeader title={t('config.symbolTimeframe')} section="symbol" icon={<TrendingUp size={16} />} />
-
-            {expandedSections.symbol && (
-              <div style={{ padding: '16px' }}>
-                <FormField label={t('config.symbol')} description={t('config.stockTicker')}>
-                  <input
-                    type="text"
-                    value={config.symbol}
-                    onChange={(e) => setConfig(prev => ({ ...prev, symbol: e.target.value.toUpperCase() }))}
-                    placeholder="SPY"
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      background: colors.bg,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '4px',
-                      color: colors.text,
-                      fontSize: '1rem',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                    }}
-                  />
-                </FormField>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <FormField label={t('config.startDate')}>
-                    <input
-                      type="date"
-                      value={config.startDate}
-                      onChange={(e) => setConfig(prev => ({ ...prev, startDate: e.target.value }))}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        background: colors.bg,
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: '4px',
-                        color: colors.text,
-                        fontSize: '0.9rem',
-                      }}
-                    />
-                  </FormField>
-
-                  <FormField label={t('config.endDate')}>
-                    <input
-                      type="date"
-                      value={config.endDate}
-                      onChange={(e) => setConfig(prev => ({ ...prev, endDate: e.target.value }))}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        background: colors.bg,
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: '4px',
-                        color: colors.text,
-                        fontSize: '0.9rem',
-                      }}
-                    />
-                  </FormField>
-                </div>
-
-                <FormField label={t('config.initialCapital')}>
-                  <input
-                    type="number"
-                    value={config.initialCapital}
-                    onChange={(e) => setConfig(prev => ({ ...prev, initialCapital: parseFloat(e.target.value) }))}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      background: colors.bg,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '4px',
-                      color: colors.text,
-                      fontSize: '0.9rem',
-                    }}
-                  />
-                </FormField>
-              </div>
-            )}
-          </div>
-
-          {/* Strategy Selection */}
-          <div style={{
-            background: colors.panel,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '6px',
-            overflow: 'hidden',
-          }}>
-            <SectionHeader title={t('sections.strategyConfig')} section="strategy" icon={<Settings size={16} />} />
-
-            {expandedSections.strategy && (
-              <div style={{ padding: '16px' }}>
-                <FormField label={t('sections.strategyType')}>
-                  <select
-                    value={config.strategyType}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      strategyType: e.target.value as any,
-                      parameters: {},
-                    }))}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      background: colors.bg,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '4px',
-                      color: colors.text,
-                      fontSize: '0.9rem',
-                    }}
-                  >
-                    <option value="sma_crossover">SMA Crossover</option>
-                    <option value="rsi">RSI Strategy</option>
-                    <option value="macd">MACD Strategy</option>
-                    {activeProvider === 'Backtesting.py' && (
-                      <option value="custom">Custom Python Code</option>
-                    )}
-                  </select>
-                </FormField>
-              </div>
-            )}
-          </div>
-
-          {/* Parameters */}
-          <div style={{
-            background: colors.panel,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '6px',
-            overflow: 'hidden',
-          }}>
-            <SectionHeader title={t('sections.strategyParams')} section="parameters" icon={<Settings size={16} />} />
-
-            {expandedSections.parameters && (
-              <div style={{ padding: '16px' }}>
-                {renderStrategyParameters()}
-              </div>
-            )}
-          </div>
-
-          {/* Advanced Settings */}
-          <div style={{
-            background: colors.panel,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '6px',
-            overflow: 'hidden',
-          }}>
-            <SectionHeader title={t('sections.advancedSettings')} section="advanced" icon={<Settings size={16} />} />
-
-            {expandedSections.advanced && (
-              <div style={{ padding: '16px' }}>
-                <FormField label="Commission (%)" description="Trading commission percentage">
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={config.commission}
-                    onChange={(e) => setConfig(prev => ({ ...prev, commission: parseFloat(e.target.value) }))}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      background: colors.bg,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '4px',
-                      color: colors.text,
-                      fontSize: '0.9rem',
-                    }}
-                  />
-                </FormField>
-
-                <FormField label="Slippage (%)" description="Expected slippage per trade">
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={config.slippage}
-                    onChange={(e) => setConfig(prev => ({ ...prev, slippage: parseFloat(e.target.value) }))}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      background: colors.bg,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '4px',
-                      color: colors.text,
-                      fontSize: '0.9rem',
-                    }}
-                  />
-                </FormField>
-
-                <FormField label="Leverage" description="Margin/leverage multiplier">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={config.leverage}
-                    onChange={(e) => setConfig(prev => ({ ...prev, leverage: parseFloat(e.target.value) }))}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      background: colors.bg,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '4px',
-                      color: colors.text,
-                      fontSize: '0.9rem',
-                    }}
-                  />
-                </FormField>
-              </div>
-            )}
-          </div>
-
-          {/* Run Button */}
-          <button
-            onClick={handleRunBacktest}
-            disabled={isRunning || !activeProvider}
-            style={{
-              padding: '14px',
-              background: isRunning ? colors.border : `linear-gradient(135deg, ${colors.accent}, #FF6600)`,
-              border: 'none',
-              borderRadius: '6px',
-              color: colors.text,
-              fontSize: '1rem',
-              fontWeight: 700,
-              cursor: isRunning ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              boxShadow: isRunning ? 'none' : `0 4px 12px rgba(255, 136, 0, 0.3)`,
-              transition: 'all 0.2s',
-            }}
-          >
-            {isRunning ? (
-              <>
-                <StopCircle size={18} />
-                Running Backtest...
-              </>
-            ) : (
-              <>
-                <Play size={18} />
-                {t('toolbar.run')}
-              </>
-            )}
-          </button>
-
-          {error && (
-            <div style={{
-              padding: '12px',
-              background: `${colors.alert}22`,
-              border: `1px solid ${colors.alert}`,
-              borderRadius: '6px',
-              color: colors.alert,
-              fontSize: '0.85rem',
-            }}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Right Column - Results */}
-        <div style={{
-          background: colors.panel,
-          border: `1px solid ${colors.border}`,
-          borderRadius: '6px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        }}>
-          <SectionHeader title={t('sections.backtestResults')} section="results" icon={<TrendingUp size={16} />} />
-
-          {expandedSections.results && (
-            <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
-              {!result && !isRunning && (
-                <div style={{
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: colors.textMuted,
-                  fontSize: '0.9rem',
-                }}>
-                  Configure your backtest and click "Run Backtest" to see results
-                </div>
-              )}
-
-              {isRunning && (
-                <div style={{
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'column',
-                  gap: '16px',
-                }}>
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF8800]"></div>
-                  <div style={{ color: colors.textMuted }}>Running backtest on {activeProvider}...</div>
-                </div>
-              )}
-
-              {result && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Summary */}
-                  <div style={{
-                    padding: '16px',
-                    background: colors.bg,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '6px',
-                  }}>
-                    <h4 style={{ marginBottom: '12px', fontSize: '0.9rem', color: colors.textMuted }}>
-                      Backtest Summary
-                    </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.85rem' }}>
-                      <div>Symbol: <span style={{ color: colors.accent, fontWeight: 600 }}>{config.symbol}</span></div>
-                      <div>Strategy: <span style={{ color: colors.text, fontWeight: 600 }}>{config.strategyType}</span></div>
-                      <div>Period: {config.startDate} to {config.endDate}</div>
-                      <div>Provider: {activeProvider}</div>
-                    </div>
-                  </div>
-
-                  {/* Performance Metrics */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    {[
-                      { label: 'Total Return', value: ((result.performance?.totalReturn ?? 0) * 100).toFixed(2) + '%', positive: (result.performance?.totalReturn ?? 0) > 0 },
-                      { label: 'Sharpe Ratio', value: (result.performance?.sharpeRatio ?? 0).toFixed(2), positive: (result.performance?.sharpeRatio ?? 0) > 0 },
-                      { label: 'Max Drawdown', value: ((result.performance?.maxDrawdown ?? 0) * 100).toFixed(2) + '%', positive: false },
-                      { label: 'Win Rate', value: ((result.performance?.winRate ?? 0) * 100).toFixed(1) + '%', positive: true },
-                      { label: 'Total Trades', value: (result.performance?.totalTrades ?? 0).toString(), positive: true },
-                      { label: 'Profit Factor', value: (result.performance?.profitFactor ?? 0).toFixed(2), positive: (result.performance?.profitFactor ?? 0) > 1 },
-                    ].map((metric) => (
-                      <div key={metric.label} style={{
-                        padding: '12px',
-                        background: colors.bg,
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: '6px',
-                      }}>
-                        <div style={{ fontSize: '0.75rem', color: colors.textMuted, marginBottom: '4px' }}>
-                          {metric.label}
-                        </div>
-                        <div style={{
-                          fontSize: '1.3rem',
-                          fontWeight: 'bold',
-                          color: metric.positive ? colors.success : colors.alert,
-                        }}>
-                          {metric.value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Trades Summary */}
-                  <div style={{
-                    padding: '12px',
-                    background: colors.bg,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '6px',
-                  }}>
-                    <h4 style={{ marginBottom: '8px', fontSize: '0.85rem' }}>Recent Trades</h4>
-                    <div style={{ fontSize: '0.75rem', color: colors.textMuted }}>
-                      {result.trades?.length ?? 0} total trades executed
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <span>SYMBOLS: {config.symbols.join(', ') || 'None'}</span>
+        <span>|</span>
+        <span>RANGE: {config.startDate} → {config.endDate}</span>
+        <span>|</span>
+        <span>CAPITAL: ${config.initialCapital.toLocaleString()}</span>
+        {equity.length > 0 && (
+          <>
+            <span>|</span>
+            <span style={{ color: (performance.totalReturn || 0) >= 0 ? F.GREEN : F.RED }}>
+              RETURN: {((performance.totalReturn || 0) * 100).toFixed(2)}%
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

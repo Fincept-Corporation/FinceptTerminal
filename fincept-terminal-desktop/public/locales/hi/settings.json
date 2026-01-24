@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "सेटिंग्स",
+  "sidebar": {
+    "credentials": "एपीआई क्रेडेंशियल",
+    "polymarket": "पॉलीमार्केट एपीआई",
+    "llm": "एलएलएम कॉन्फ़िगरेशन",
+    "dataSources": "डेटा स्रोत",
+    "backtesting": "बैकटेस्टिंग",
+    "stockSymbols": "स्टॉक चिह्न",
+    "tabLayout": "टैब लेआउट",
+    "appearance": "उपस्थिति",
+    "language": "भाषा",
+    "storage": "भंडारण एवं कैश"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[HI] Manage API keys and credentials for external services",
-    "enterValue": "[HI] Enter value..."
+    "title": "एपीआई क्रेडेंशियल प्रबंधन",
+    "description": "बाहरी सेवाओं के लिए एपीआई कुंजी और क्रेडेंशियल प्रबंधित करें",
+    "apiKey": "एपीआई कुंजी",
+    "enterValue": "मान दर्ज करें..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[HI] Customize the visual appearance of your terminal",
-    "currentSettings": "[HI] CURRENT SETTINGS"
+    "title": "टर्मिनल उपस्थिति",
+    "description": "फ़ॉन्ट, रंग, समयक्षेत्र और कीबोर्ड शॉर्टकट सहित अपने टर्मिनल के दृश्य स्वरूप को अनुकूलित करें।",
+    "fontFamily": "फुहारा परिवार",
+    "currentSettings": "फ़ॉन्ट सेटिंग्स",
+    "baseFontSize": "आधार फ़ॉन्ट आकार",
+    "fontWeight": "फ़ॉन्ट वजन",
+    "weightNormal": "सामान्य (400)",
+    "weightSemibold": "सेमी-बोल्ड (600)",
+    "weightBold": "बोल्ड (700)",
+    "enableItalic": "इटैलिक शैली सक्षम करें",
+    "fontSizeSmall": "छोटा (9पीएक्स)",
+    "fontSizeLarge": "बड़ा (18px)",
+    "colorTheme": "रंग थीम",
+    "defaultTimezone": "डिफ़ॉल्ट समयक्षेत्र",
+    "timezoneDescription": "नेविगेशन बार में प्रदर्शित डिफ़ॉल्ट समयक्षेत्र सेट करें। डैशबोर्ड विजेट अपनी स्वयं की टाइमज़ोन सेटिंग्स का उपयोग कर सकते हैं।",
+    "functionKeys": "फ़ंक्शन कुंजी मैपिंग",
+    "functionKeysDescription": "कॉन्फ़िगर करें कि प्रत्येक फ़ंक्शन कुंजी (F1-F12) को कौन सा टैब या क्रिया ट्रिगर करनी चाहिए। परिवर्तन स्टेटस बार और कीबोर्ड शॉर्टकट में दिखाई देंगे।",
+    "livePreview": "लाइव पूर्वावलोकन",
+    "previewTitle": "फिनसेप्ट टर्मिनल पूर्वावलोकन",
+    "previewBody": "मुख्य पाठ: वास्तविक समय बाजार विश्लेषण और पोर्टफोलियो ट्रैकिंग",
+    "previewSmall": "छोटा पाठ: बाज़ार डेटा, टाइमस्टैम्प और मेटाडेटा",
+    "statusConnected": "जुड़े हुए",
+    "statusAlert": "चेतावनी",
+    "statusWarning": "चेतावनी",
+    "saveConfig": "कॉन्फ़िगरेशन सहेजें",
+    "reset": "रीसेट करें",
+    "saveSuccess": "टर्मिनल उपस्थिति और कुंजी मैपिंग सफलतापूर्वक सहेजी गई",
+    "resetSuccess": "डिफ़ॉल्ट उपस्थिति और कुंजी मैपिंग पर रीसेट करें"
   },
-  "sidebar": {
-    "credentials": "[HI] API Credentials",
-    "llm": "[HI] LLM Configuration",
-    "dataSources": "[HI] Data Sources",
-    "backtesting": "[HI] Backtesting",
-    "tabLayout": "[HI] Tab Layout",
-    "appearance": "[HI] Appearance",
-    "language": "[HI] Language",
-    "polymarket": "[HI] Polymarket API"
+  "stockSymbols": {
+    "title": "स्टॉक प्रतीक डेटाबेस",
+    "description": "तेज़ ऑफ़लाइन खोज के लिए ब्रोकर प्रतीक डेटा डाउनलोड और प्रबंधित करें। प्रतीक डेटा में स्टॉक, एफएंडओ, कमोडिटी और मुद्रा डेरिवेटिव शामिल हैं। नवीनतम उपकरण और एक्सपायरी प्राप्त करने के लिए नियमित रूप से अपडेट करें।"
   },
   "terminalConfig": {
-    "title": "[HI] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[HI] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[HI] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[HI] TOOLBAR MENU SECTIONS",
-    "newSection": "[HI] NEW SECTION",
-    "deleteSection": "[HI] DELETE",
-    "moveTo": "[HI] MOVE TO ▼",
-    "resetToDefault": "[HI] RESET TO DEFAULT",
-    "noTabsInSection": "[HI] No tabs in this section",
-    "tip": "[HI] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "टैब लेआउट कॉन्फ़िगरेशन",
+    "headerTabs": "हेडर टैब (मुख्य टैब बार)",
+    "headerTabsDesc": "पुन: व्यवस्थित करने के लिए खींचें। ये टैब मुख्य हेडर नेविगेशन में दिखाई देते हैं।",
+    "toolbarSections": "टूलबार मेनू अनुभाग",
+    "newSection": "नया अनुभाग",
+    "deleteSection": "मिटाना",
+    "moveTo": "▼ पर जाएँ",
+    "resetToDefault": "वितथ पर ले जाएं",
+    "noTabsInSection": "इस अनुभाग में कोई टैब नहीं",
+    "tip": "सुझाव: टैब को पुन: व्यवस्थित करने के लिए उन्हें खींचें। हेडर और मेनू अनुभागों के बीच टैब को स्थानांतरित करने के लिए तीर बटन का उपयोग करें। परिवर्तन स्वचालित रूप से सहेजे जाते हैं."
   },
   "llm": {
-    "title": "[HI] LLM CONFIGURATION",
-    "description": "[HI] Configure AI models and providers",
-    "connected": "[HI] CONNECTED",
-    "disconnected": "[HI] DISCONNECTED",
-    "provider": "[HI] AI PROVIDER",
-    "globalSettings": "[HI] GLOBAL AI SETTINGS",
-    "temperature": "[HI] TEMPERATURE",
-    "maxTokens": "[HI] MAX TOKENS",
-    "systemPrompt": "[HI] SYSTEM PROMPT",
-    "modelLibrary": "[HI] MODEL LIBRARY",
-    "multiModelConfigs": "[HI] Multi-model configs"
+    "title": "एलएलएम कॉन्फ़िगरेशन",
+    "description": "एआई मॉडल और प्रदाताओं को कॉन्फ़िगर करें",
+    "connected": "जुड़े हुए",
+    "disconnected": "डिस्कनेक्ट किया गया",
+    "provider": "एआई प्रदाता",
+    "globalSettings": "वैश्विक एआई सेटिंग्स",
+    "temperature": "तापमान",
+    "maxTokens": "अधिकतम टोकन",
+    "systemPrompt": "सिस्टम प्रॉम्प्ट",
+    "modelLibrary": "मॉडल लाइब्रेरी",
+    "multiModelConfigs": "मल्टी-मॉडल कॉन्फ़िगरेशन"
   },
   "buttons": {
-    "save": "[HI] SAVE",
-    "cancel": "[HI] CANCEL",
-    "add": "[HI] ADD"
+    "save": "बचाना",
+    "cancel": "रद्द करना",
+    "add": "जोड़ना"
   },
   "footer": {
-    "database": "[HI] Database: SQLite",
-    "storage": "[HI] Storage: File-based",
-    "secureStorage": "[HI] All data stored securely in fincept_terminal.db"
+    "database": "डेटाबेस: SQLite",
+    "storage": "भंडारण: फ़ाइल-आधारित",
+    "secureStorage": "सभी डेटा fincept_terminal.db में सुरक्षित रूप से संग्रहीत हैं"
   }
 }

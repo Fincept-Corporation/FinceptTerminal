@@ -120,7 +120,7 @@ const formatCurrency = (value: number, currencyCode: string = 'INR', compact: bo
   })}`;
 };
 
-// NIFTY 50 Components - Full watchlist (current constituents as of Jan 2025)
+// NIFTY 50 Components - Full watchlist (current constituents as of Jan 2026)
 const DEFAULT_WATCHLIST = [
   // Financials (Weight: ~35%)
   'HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK',

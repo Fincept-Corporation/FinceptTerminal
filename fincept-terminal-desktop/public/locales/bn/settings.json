@@ -1,60 +1,90 @@
 {
-  "title": "Settings",
+  "title": "সেটিংস",
+  "sidebar": {
+    "credentials": "API শংসাপত্র",
+    "polymarket": "পলিমার্কেট এপিআই",
+    "llm": "এলএলএম কনফিগারেশন",
+    "dataSources": "তথ্য উত্স",
+    "backtesting": "ব্যাকটেস্টিং",
+    "stockSymbols": "স্টক প্রতীক",
+    "tabLayout": "ট্যাব লেআউট",
+    "appearance": "চেহারা",
+    "language": "ভাষা",
+    "storage": "স্টোরেজ এবং ক্যাশে"
+  },
   "credentials": {
-    "title": "API Credentials",
-    "apiKey": "API Key",
-    "description": "[BN] Manage API keys and credentials for external services",
-    "enterValue": "[BN] Enter value..."
+    "title": "এপিআই ক্রেডেনশিয়াল ম্যানেজমেন্ট",
+    "description": "বাহ্যিক পরিষেবাগুলির জন্য API কী এবং শংসাপত্রগুলি পরিচালনা করুন৷",
+    "apiKey": "API কী",
+    "enterValue": "মান লিখুন..."
   },
   "terminal": {
-    "title": "Terminal Appearance",
-    "fontFamily": "Font Family",
-    "description": "[BN] Customize the visual appearance of your terminal",
-    "currentSettings": "[BN] CURRENT SETTINGS"
+    "title": "টার্মিনাল উপস্থিতি",
+    "description": "ফন্ট, রং, টাইমজোন এবং কীবোর্ড শর্টকাট সহ আপনার টার্মিনালের ভিজ্যুয়াল চেহারা কাস্টমাইজ করুন।",
+    "fontFamily": "ফন্ট পরিবার",
+    "currentSettings": "ফন্ট সেটিংস",
+    "baseFontSize": "বেস ফন্ট সাইজ",
+    "fontWeight": "হরফের ওজন",
+    "weightNormal": "সাধারণ (400)",
+    "weightSemibold": "সেমি-বোল্ড (600)",
+    "weightBold": "বোল্ড (700)",
+    "enableItalic": "ইটালিক শৈলী সক্ষম করুন",
+    "fontSizeSmall": "ছোট (9px)",
+    "fontSizeLarge": "বড় (18px)",
+    "colorTheme": "রঙিন থিম",
+    "defaultTimezone": "ডিফল্ট টাইমজোন",
+    "timezoneDescription": "নেভিগেশন বারে প্রদর্শিত ডিফল্ট টাইমজোন সেট করুন। ড্যাশবোর্ড উইজেট তাদের নিজস্ব টাইমজোন সেটিংস ব্যবহার করতে পারে।",
+    "functionKeys": "ফাংশন কী ম্যাপিং",
+    "functionKeysDescription": "প্রতিটি ফাংশন কী (F1-F12) কোন ট্যাব বা অ্যাকশনটি ট্রিগার করবে তা কনফিগার করুন। পরিবর্তনগুলি স্ট্যাটাস বার এবং কীবোর্ড শর্টকাটে প্রতিফলিত হবে।",
+    "livePreview": "লাইভ প্রিভিউ",
+    "previewTitle": "ফিনসেপ্ট টার্মিনাল প্রিভিউ",
+    "previewBody": "বডি টেক্সট: রিয়েল-টাইম মার্কেট অ্যানালাইসিস এবং পোর্টফোলিও ট্র্যাকিং",
+    "previewSmall": "ছোট টেক্সট: মার্কেট ডেটা, টাইমস্ট্যাম্প এবং মেটাডেটা",
+    "statusConnected": "সংযুক্ত",
+    "statusAlert": "সতর্কতা",
+    "statusWarning": "সতর্কতা",
+    "saveConfig": "কনফিগারেশন সংরক্ষণ করুন",
+    "reset": "রিসেট",
+    "saveSuccess": "টার্মিনাল উপস্থিতি এবং কী ম্যাপিং সফলভাবে সংরক্ষণ করা হয়েছে৷",
+    "resetSuccess": "ডিফল্ট চেহারা এবং কী ম্যাপিং রিসেট করুন"
   },
-  "sidebar": {
-    "credentials": "[BN] API Credentials",
-    "llm": "[BN] LLM Configuration",
-    "dataSources": "[BN] Data Sources",
-    "backtesting": "[BN] Backtesting",
-    "tabLayout": "[BN] Tab Layout",
-    "appearance": "[BN] Appearance",
-    "language": "[BN] Language",
-    "polymarket": "[BN] Polymarket API"
+  "stockSymbols": {
+    "title": "স্টক সিম্বল ডাটাবেস",
+    "description": "দ্রুত অফলাইন অনুসন্ধানের জন্য ব্রোকার প্রতীক ডেটা ডাউনলোড এবং পরিচালনা করুন। সিম্বল ডেটাতে স্টক, F&O, কমোডিটি এবং কারেন্সি ডেরিভেটিভস অন্তর্ভুক্ত থাকে। সর্বশেষ উপকরণ এবং মেয়াদ শেষ হওয়ার জন্য নিয়মিত আপডেট করুন।"
   },
   "terminalConfig": {
-    "title": "[BN] TAB LAYOUT CONFIGURATION",
-    "headerTabs": "[BN] HEADER TABS (MAIN TAB BAR)",
-    "headerTabsDesc": "[BN] Drag to reorder. These tabs appear in the main header navigation.",
-    "toolbarSections": "[BN] TOOLBAR MENU SECTIONS",
-    "newSection": "[BN] NEW SECTION",
-    "deleteSection": "[BN] DELETE",
-    "moveTo": "[BN] MOVE TO ▼",
-    "resetToDefault": "[BN] RESET TO DEFAULT",
-    "noTabsInSection": "[BN] No tabs in this section",
-    "tip": "[BN] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+    "title": "ট্যাব লেআউট কনফিগারেশন",
+    "headerTabs": "হেডার ট্যাব (প্রধান ট্যাব বার)",
+    "headerTabsDesc": "পুনরায় সাজাতে টেনে আনুন। এই ট্যাবগুলি প্রধান হেডার নেভিগেশনে উপস্থিত হয়।",
+    "toolbarSections": "টুলবার মেনু বিভাগ",
+    "newSection": "নতুন বিভাগ",
+    "deleteSection": "মুছুন",
+    "moveTo": "▼-এ যান",
+    "resetToDefault": "ডিফল্টে রিসেট করুন",
+    "noTabsInSection": "এই বিভাগে কোন ট্যাব নেই",
+    "tip": "টিপ: ট্যাবগুলিকে পুনরায় সাজাতে টেনে আনুন৷ হেডার এবং মেনু বিভাগের মধ্যে ট্যাব সরাতে তীর বোতাম ব্যবহার করুন। পরিবর্তন স্বয়ংক্রিয়ভাবে সংরক্ষিত হয়."
   },
   "llm": {
-    "title": "[BN] LLM CONFIGURATION",
-    "description": "[BN] Configure AI models and providers",
-    "connected": "[BN] CONNECTED",
-    "disconnected": "[BN] DISCONNECTED",
-    "provider": "[BN] AI PROVIDER",
-    "globalSettings": "[BN] GLOBAL AI SETTINGS",
-    "temperature": "[BN] TEMPERATURE",
-    "maxTokens": "[BN] MAX TOKENS",
-    "systemPrompt": "[BN] SYSTEM PROMPT",
-    "modelLibrary": "[BN] MODEL LIBRARY",
-    "multiModelConfigs": "[BN] Multi-model configs"
+    "title": "এলএলএম কনফিগারেশন",
+    "description": "AI মডেল এবং প্রদানকারী কনফিগার করুন",
+    "connected": "সংযুক্ত",
+    "disconnected": "সংযোগ বিচ্ছিন্ন",
+    "provider": "এআই প্রদানকারী",
+    "globalSettings": "গ্লোবাল এআই সেটিংস",
+    "temperature": "তাপমাত্রা",
+    "maxTokens": "সর্বোচ্চ টোকেন",
+    "systemPrompt": "সিস্টেম প্রম্পট",
+    "modelLibrary": "মডেল লাইব্রেরি",
+    "multiModelConfigs": "মাল্টি-মডেল কনফিগারেশন"
   },
   "buttons": {
-    "save": "[BN] SAVE",
-    "cancel": "[BN] CANCEL",
-    "add": "[BN] ADD"
+    "save": "সংরক্ষণ করুন",
+    "cancel": "বাতিল করুন",
+    "add": "যোগ করুন"
   },
   "footer": {
-    "database": "[BN] Database: SQLite",
-    "storage": "[BN] Storage: File-based",
-    "secureStorage": "[BN] All data stored securely in fincept_terminal.db"
+    "database": "ডাটাবেস: SQLite",
+    "storage": "স্টোরেজ: ফাইল-ভিত্তিক",
+    "secureStorage": "সমস্ত ডেটা fincept_terminal.db এ সুরক্ষিতভাবে সংরক্ষিত"
   }
 }

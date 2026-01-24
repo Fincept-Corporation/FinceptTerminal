@@ -11,7 +11,7 @@ interface FooterProps {
 const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   return (
     <div className="relative z-10 p-4 text-xs text-zinc-500 flex justify-between items-center mt-auto border-t border-zinc-800">
-      <div>© 2025 Fincept LP All rights reserved.</div>
+      <div>© 2026 Fincept LP All rights reserved.</div>
       <div className="flex space-x-4">
         <button
           onClick={() => onNavigate('contactUs')}

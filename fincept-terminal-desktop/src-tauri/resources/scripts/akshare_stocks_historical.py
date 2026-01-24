@@ -50,11 +50,11 @@ def safe_call(func, *args, **kwargs):
 
 # ==================== A-SHARES HISTORICAL ====================
 
-def get_stock_zh_a_hist(symbol="000001", period="daily", start_date="20200101", end_date="20251231", adjust=""):
+def get_stock_zh_a_hist(symbol="000001", period="daily", start_date="20200101", end_date="20261231", adjust=""):
     """Get A-shares historical data"""
     return safe_call(ak.stock_zh_a_hist, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
-def get_stock_zh_a_hist_min_em(symbol="000001", period="1", start_date="2024-01-01 09:30:00", end_date="2025-12-31 15:00:00", adjust=""):
+def get_stock_zh_a_hist_min_em(symbol="000001", period="1", start_date="2024-01-01 09:30:00", end_date="2026-12-31 15:00:00", adjust=""):
     """Get A-shares minute historical data (EastMoney)"""
     return safe_call(ak.stock_zh_a_hist_min_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
@@ -62,11 +62,11 @@ def get_stock_zh_a_hist_pre_min_em(symbol="000001"):
     """Get A-shares pre-market minute data"""
     return safe_call(ak.stock_zh_a_hist_pre_min_em, symbol=symbol)
 
-def get_stock_zh_a_hist_tx(symbol="sz000001", start_date="20200101", end_date="20251231"):
+def get_stock_zh_a_hist_tx(symbol="sz000001", start_date="20200101", end_date="20261231"):
     """Get A-shares historical data (Tencent)"""
     return safe_call(ak.stock_zh_a_hist_tx, symbol=symbol, start_date=start_date, end_date=end_date)
 
-def get_stock_zh_a_daily(symbol="sz000001", start_date="20200101", end_date="20251231", adjust="qfq"):
+def get_stock_zh_a_daily(symbol="sz000001", start_date="20200101", end_date="20261231", adjust="qfq"):
     """Get A-shares daily data"""
     return safe_call(ak.stock_zh_a_daily, symbol=symbol, start_date=start_date, end_date=end_date, adjust=adjust)
 
@@ -74,14 +74,14 @@ def get_stock_zh_a_minute(symbol="sz000001", period="1", adjust=""):
     """Get A-shares minute data"""
     return safe_call(ak.stock_zh_a_minute, symbol=symbol, period=period, adjust=adjust)
 
-def get_stock_zh_a_cdr_daily(symbol="689009", start_date="20200101", end_date="20251231"):
+def get_stock_zh_a_cdr_daily(symbol="689009", start_date="20200101", end_date="20261231"):
     """Get A-shares CDR daily data"""
     return safe_call(ak.stock_zh_a_cdr_daily, symbol=symbol, start_date=start_date, end_date=end_date)
 
 
 # ==================== B-SHARES HISTORICAL ====================
 
-def get_stock_zh_b_daily(symbol="sh900901", start_date="20200101", end_date="20251231", adjust="qfq"):
+def get_stock_zh_b_daily(symbol="sh900901", start_date="20200101", end_date="20261231", adjust="qfq"):
     """Get B-shares daily data"""
     return safe_call(ak.stock_zh_b_daily, symbol=symbol, start_date=start_date, end_date=end_date, adjust=adjust)
 
@@ -92,11 +92,11 @@ def get_stock_zh_b_minute(symbol="sh900901", period="1", adjust=""):
 
 # ==================== HK STOCKS HISTORICAL ====================
 
-def get_stock_hk_hist(symbol="00700", period="daily", start_date="20200101", end_date="20251231", adjust=""):
+def get_stock_hk_hist(symbol="00700", period="daily", start_date="20200101", end_date="20261231", adjust=""):
     """Get HK stocks historical data"""
     return safe_call(ak.stock_hk_hist, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
-def get_stock_hk_hist_min_em(symbol="00700", period="1", start_date="2024-01-01 09:30:00", end_date="2025-12-31 16:00:00", adjust=""):
+def get_stock_hk_hist_min_em(symbol="00700", period="1", start_date="2024-01-01 09:30:00", end_date="2026-12-31 16:00:00", adjust=""):
     """Get HK stocks minute historical data"""
     return safe_call(ak.stock_hk_hist_min_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
@@ -107,11 +107,11 @@ def get_stock_hk_daily(symbol="00700", adjust="qfq"):
 
 # ==================== US STOCKS HISTORICAL ====================
 
-def get_stock_us_hist(symbol="105.AAPL", period="daily", start_date="20200101", end_date="20251231", adjust=""):
+def get_stock_us_hist(symbol="105.AAPL", period="daily", start_date="20200101", end_date="20261231", adjust=""):
     """Get US stocks historical data"""
     return safe_call(ak.stock_us_hist, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
-def get_stock_us_hist_min_em(symbol="105.AAPL", period="1", start_date="2024-01-01 09:30:00", end_date="2025-12-31 16:00:00", adjust=""):
+def get_stock_us_hist_min_em(symbol="105.AAPL", period="1", start_date="2024-01-01 09:30:00", end_date="2026-12-31 16:00:00", adjust=""):
     """Get US stocks minute historical data"""
     return safe_call(ak.stock_us_hist_min_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
@@ -122,7 +122,7 @@ def get_stock_us_daily(symbol="AAPL", adjust="qfq"):
 
 # ==================== A+H SHARES HISTORICAL ====================
 
-def get_stock_zh_ah_daily(symbol="02318", start_date="20200101", end_date="20251231"):
+def get_stock_zh_ah_daily(symbol="02318", start_date="20200101", end_date="20261231"):
     """Get A+H shares daily data"""
     return safe_call(ak.stock_zh_ah_daily, symbol=symbol, start_date=start_date, end_date=end_date)
 
@@ -133,7 +133,7 @@ def get_stock_zh_index_daily(symbol="sh000001"):
     """Get Chinese index daily data"""
     return safe_call(ak.stock_zh_index_daily, symbol=symbol)
 
-def get_stock_zh_index_daily_em(symbol="000001", start_date="20200101", end_date="20251231"):
+def get_stock_zh_index_daily_em(symbol="000001", start_date="20200101", end_date="20261231"):
     """Get Chinese index daily data (EastMoney)"""
     return safe_call(ak.stock_zh_index_daily_em, symbol=symbol, start_date=start_date, end_date=end_date)
 
@@ -141,7 +141,7 @@ def get_stock_zh_index_daily_tx(symbol="sh000001"):
     """Get Chinese index daily data (Tencent)"""
     return safe_call(ak.stock_zh_index_daily_tx, symbol=symbol)
 
-def get_stock_zh_index_hist_csindex(symbol="000001", start_date="20200101", end_date="20251231"):
+def get_stock_zh_index_hist_csindex(symbol="000001", start_date="20200101", end_date="20261231"):
     """Get CSIndex historical data"""
     return safe_call(ak.stock_zh_index_hist_csindex, symbol=symbol, start_date=start_date, end_date=end_date)
 
@@ -149,7 +149,7 @@ def get_stock_zh_index_value_csindex(symbol="000001"):
     """Get CSIndex value data"""
     return safe_call(ak.stock_zh_index_value_csindex, symbol=symbol)
 
-def get_stock_hk_index_daily_em(symbol="HSI", start_date="20200101", end_date="20251231"):
+def get_stock_hk_index_daily_em(symbol="HSI", start_date="20200101", end_date="20261231"):
     """Get HK index daily data (EastMoney)"""
     return safe_call(ak.stock_hk_index_daily_em, symbol=symbol, start_date=start_date, end_date=end_date)
 

@@ -227,7 +227,7 @@ export const FYERS_METADATA: StockBrokerMetadata = {
 };
 
 // ============================================================================
-// NIFTY 50 COMPONENTS (Current constituents as of Jan 2025)
+// NIFTY 50 COMPONENTS (Current constituents as of Jan 2026)
 // ============================================================================
 
 export const NIFTY_50_SYMBOLS = [

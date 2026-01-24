@@ -5,6 +5,22 @@ import { ollamaService } from '@/services/chat/ollamaService';
 import { LLMModelsService, type ModelInfo } from '@/services/llmModelsService';
 import type { SettingsColors } from '../types';
 
+// Fincept Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+};
+
 interface LLMConfigSectionProps {
   colors: SettingsColors;
   llmConfigs: LLMConfig[];

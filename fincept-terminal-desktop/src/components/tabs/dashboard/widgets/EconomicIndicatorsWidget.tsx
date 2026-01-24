@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Activity, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from 'react-i18next';
 
 interface EconomicIndicatorsWidgetProps {
   id: string;
@@ -17,12 +18,6 @@ interface Indicator {
   date: string;
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_CYAN = '#00E5FF';
 
 // Key economic indicators with their display info
 const KEY_INDICATORS = [
@@ -38,6 +33,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [indicators, setIndicators] = useState<Indicator[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +87,8 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
           { name: 'US GDP Growth', code: 'GDP', value: '2.8%', change: 0.3, date: 'Q3 2024' },
           { name: 'Unemployment Rate', code: 'UNRATE', value: '4.1%', change: -0.1, date: 'Dec 2024' },
           { name: 'CPI Inflation', code: 'CPI', value: '3.2%', change: 0.2, date: 'Dec 2024' },
-          { name: 'Fed Funds Rate', code: 'FEDFUNDS', value: '5.33%', change: 0, date: 'Jan 2025' },
-          { name: '10Y Treasury', code: 'DGS10', value: '4.58%', change: 0.12, date: 'Jan 2025' },
+          { name: 'Fed Funds Rate', code: 'FEDFUNDS', value: '5.33%', change: 0, date: 'Jan 2026' },
+          { name: '10Y Treasury', code: 'DGS10', value: '4.58%', change: 0.12, date: 'Jan 2026' },
         ]);
       } else {
         setIndicators(results);
@@ -103,8 +99,8 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
         { name: 'US GDP Growth', code: 'GDP', value: '2.8%', change: 0.3, date: 'Q3 2024' },
         { name: 'Unemployment Rate', code: 'UNRATE', value: '4.1%', change: -0.1, date: 'Dec 2024' },
         { name: 'CPI Inflation', code: 'CPI', value: '3.2%', change: 0.2, date: 'Dec 2024' },
-        { name: 'Fed Funds Rate', code: 'FEDFUNDS', value: '5.33%', change: 0, date: 'Jan 2025' },
-        { name: '10Y Treasury', code: 'DGS10', value: '4.58%', change: 0.12, date: 'Jan 2025' },
+        { name: 'Fed Funds Rate', code: 'FEDFUNDS', value: '5.33%', change: 0, date: 'Jan 2026' },
+        { name: '10Y Treasury', code: 'DGS10', value: '4.58%', change: 0.12, date: 'Jan 2026' },
       ]);
     } finally {
       setLoading(false);
@@ -117,6 +113,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
     return () => clearInterval(interval);
   }, []);
 
+
   return (
     <BaseWidget
       id={id}
@@ -125,7 +122,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
       onRefresh={loadIndicators}
       isLoading={loading}
       error={error}
-      headerColor={FINCEPT_CYAN}
+      headerColor="var(--ft-color-accent)"
     >
       <div style={{ padding: '4px' }}>
         {/* Header row */}
@@ -134,16 +131,16 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
           gridTemplateColumns: '1fr 70px 60px',
           gap: '8px',
           padding: '4px 8px',
-          borderBottom: '1px solid #333',
-          color: FINCEPT_GRAY,
-          fontSize: '9px'
+          borderBottom: '1px solid var(--ft-border-color)',
+          color: 'var(--ft-color-text-muted)',
+          fontSize: 'var(--ft-font-size-tiny)'
         }}>
-          <span>INDICATOR</span>
-          <span style={{ textAlign: 'right' }}>VALUE</span>
-          <span style={{ textAlign: 'right' }}>CHG</span>
+          <span>{t('widgets.indicator')}</span>
+          <span style={{ textAlign: 'right' }}>{t('widgets.value')}</span>
+          <span style={{ textAlign: 'right' }}>{t('widgets.chg')}</span>
         </div>
 
-        {indicators.map((ind, index) => (
+        {indicators.map((ind) => (
           <div
             key={ind.code}
             style={{
@@ -151,26 +148,26 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
               gridTemplateColumns: '1fr 70px 60px',
               gap: '8px',
               padding: '6px 8px',
-              borderBottom: `1px solid #222`,
+              borderBottom: '1px solid var(--ft-border-color)',
               alignItems: 'center'
             }}
           >
             <div>
-              <div style={{ fontSize: '10px', color: FINCEPT_WHITE }}>{ind.name}</div>
-              <div style={{ fontSize: '8px', color: FINCEPT_GRAY }}>{ind.date}</div>
+              <div style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)' }}>{ind.name}</div>
+              <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>{ind.date}</div>
             </div>
             <div style={{
               textAlign: 'right',
-              fontSize: '11px',
+              fontSize: 'var(--ft-font-size-body)',
               fontWeight: 'bold',
-              color: FINCEPT_ORANGE
+              color: 'var(--ft-color-primary)'
             }}>
               {ind.value}
             </div>
             <div style={{
               textAlign: 'right',
-              fontSize: '10px',
-              color: ind.change > 0 ? FINCEPT_GREEN : ind.change < 0 ? FINCEPT_RED : FINCEPT_GRAY,
+              fontSize: 'var(--ft-font-size-small)',
+              color: ind.change > 0 ? 'var(--ft-color-success)' : ind.change < 0 ? 'var(--ft-color-alert)' : 'var(--ft-color-text-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
@@ -188,8 +185,8 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: FINCEPT_CYAN,
-              fontSize: '9px',
+              color: 'var(--ft-color-accent)',
+              fontSize: 'var(--ft-font-size-tiny)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -197,7 +194,7 @@ export const EconomicIndicatorsWidget: React.FC<EconomicIndicatorsWidgetProps> =
               gap: '4px'
             }}
           >
-            <span>Open Economics Tab</span>
+            <span>{t('widgets.openEconomicsTab')}</span>
             <ExternalLink size={10} />
           </div>
         )}

@@ -205,4 +205,4 @@ See `agno_trading/core/debate_orchestrator.py` for debate framework.
 
 ---
 
-**Total Agents**: 30+ agents | **Categories**: 4 (Geopolitics, Hedge Funds, Investors, Economic) | **Framework**: FinAgent Core | **LLM**: Ollama (local) | **Last Updated**: 2025-12-28
+**Total Agents**: 30+ agents | **Categories**: 4 (Geopolitics, Hedge Funds, Investors, Economic) | **Framework**: FinAgent Core | **LLM**: Ollama (local) | **Last Updated**: 2026-01-23

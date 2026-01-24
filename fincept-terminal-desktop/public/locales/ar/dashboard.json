@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "لوحة معلومات قابلة للتخصيص",
-    "live": "مباشر",
-    "widgets": "الأدوات"
+    "title": "لوحة تحكم قابلة للتخصيص",
+    "live": "يعيش",
+    "widgets": "الحاجيات"
   },
   "buttons": {
-    "addWidget": "إضافة أداة",
+    "addWidget": "إضافة القطعة",
     "saveLayout": "حفظ التخطيط",
-    "reset": "إعادة تعيين"
+    "reset": "إعادة ضبط",
+    "help": "يساعد"
   },
   "widgets": {
-    "loading": "جاري التحميل...",
+    "loading": "تحميل...",
     "error": "خطأ",
-    "globalIndices": "المؤشرات العالمية - أفضل 12",
-    "forex": "أزواج العملات",
+    "globalIndices": "المؤشرات العالمية - أعلى 12",
+    "forex": "الفوركس - الأزواج الرئيسية",
     "crypto": "العملات المشفرة",
     "commodities": "السلع",
-    "news": "الأخبار",
+    "news": "أخبار",
     "forum": "المنتدى",
     "watchlist": "قائمة المراقبة",
-    "index": "المؤشر",
-    "symbol": "الرمز",
-    "price": "السعر",
-    "change": "التغير",
-    "percentChange": "نسبة التغير",
-    "noIndexData": "لا توجد بيانات مؤشرات",
-    "noForexData": "لا توجد بيانات عملات",
-    "noCryptoData": "لا توجد بيانات عملات مشفرة",
-    "noCommoditiesData": "لا توجد بيانات سلع",
-    "noForumPosts": "لا توجد منشورات",
+    "maritimeIntelligence": "الاستخبارات البحرية",
+    "unknown": "نوع القطعة غير معروف",
+    "index": "فِهرِس",
+    "symbol": "رمز",
+    "price": "سعر",
+    "change": "CHG",
+    "percentChange": "%CHG",
+    "noIndexData": "لا توجد بيانات فهرس متاحة",
+    "noForexData": "لا توجد بيانات فوركس متاحة",
+    "noCryptoData": "لا توجد بيانات تشفير متاحة",
+    "noCommoditiesData": "لا توجد بيانات السلع المتاحة",
+    "noForumPosts": "لا توجد مشاركات المنتدى المتاحة",
     "noStocksInWatchlist": "لا توجد أسهم في قائمة المراقبة",
-    "noWatchlistSelected": "لم يتم اختيار قائمة مراقبة",
-    "noData": "لا توجد بيانات",
-    "pair": "الزوج",
-    "rate": "السعر",
-    "commodity": "السلعة",
-    "maritimeIntelligence": "⚓ المعلومات البحرية",
-    "globe3D": "الكرة ثلاثية الأبعاد",
+    "noWatchlistSelected": "لم يتم تحديد قائمة مراقبة",
+    "noData": "لا توجد بيانات متاحة",
+    "pair": "زوج",
+    "rate": "معدل",
+    "commodity": "سلعة",
+    "globe3D": "الكرة الأرضية ثلاثية الأبعاد",
     "vessels": "السفن",
-    "routes": "المسارات",
-    "vol24h": "الحجم 24س",
-    "topTradeCorridors": "أهم ممرات التجارة",
-    "ships": "سفن",
-    "unknown": "[AR] Unknown widget type"
+    "routes": "الطرق",
+    "vol24h": "المجلد 24 ساعة",
+    "topTradeCorridors": "أعلى الممرات التجارية",
+    "ships": "السفن",
+    "marketNews": "أخبار السوق",
+    "secPressReleases": "البيانات الصحفية للجنة الأوراق المالية والبورصات",
+    "cryptoNews": "أخبار التشفير",
+    "trendingForum": "المنتدى الرائج",
+    "techStocks": "أسهم التكنولوجيا"
   },
   "tips": {
-    "drag": "اسحب الأدوات لإعادة الترتيب",
-    "resize": "غيّر الحجم من الزاوية السفلية اليمنى",
-    "remove": "أزل الأدوات بالضغط على X",
-    "responsive": "تخطيط متجاوب - يستخدم العرض الكامل"
+    "drag": "اسحب الأدوات لإعادة ترتيبها",
+    "resize": "تغيير الحجم من الزاوية اليمنى السفلى",
+    "remove": "إزالة الحاجيات مع زر X",
+    "responsive": "تخطيط سريع الاستجابة - يستخدم العرض الكامل"
   },
   "loading": {
     "title": "تهيئة لوحة المعلومات",
-    "description": "إعداد ذاكرة التخزين المؤقت لتحميل أسرع للبيانات...",
-    "note": "سيستغرق هذا لحظة فقط عند التشغيل الأول"
+    "description": "جارٍ إعداد ذاكرة التخزين المؤقت لقاعدة البيانات لتحميل البيانات بشكل أسرع...",
+    "note": "لن يستغرق هذا سوى لحظة واحدة عند الإطلاق الأول"
   },
   "empty": {
-    "noWidgets": "لا توجد أدوات في لوحة المعلومات",
-    "addFirst": "أضف أول أداة لك"
+    "noWidgets": "لا الحاجيات على لوحة القيادة",
+    "addFirst": "أضف القطعة الأولى الخاصة بك"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | مساحة عمل سحب وإفلات",
-    "layout": "التخطيط",
+    "version": "لوحة معلومات Fincept القابلة للتخصيص v2.0.0 | سحب وإسقاط مساحة العمل",
+    "layout": "تَخطِيط",
     "custom": "مخصص",
     "empty": "فارغ",
-    "active": "نشط",
-    "cache": "التخزين المؤقت: مفعّل",
-    "label": "[AR] Status"
+    "active": "نشيط",
+    "cache": "ذاكرة التخزين المؤقت: ممكّنة",
+    "label": "حالة"
   },
   "messages": {
-    "layoutSaved": "[AR] Dashboard layout saved!",
-    "resetConfirm": "[AR] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "تم حفظ تخطيط لوحة المعلومات!",
+    "resetConfirm": "هل تريد إعادة تعيين لوحة المعلومات إلى التخطيط الافتراضي؟ سيؤدي هذا إلى إزالة جميع الأدوات المخصصة."
   }
 }

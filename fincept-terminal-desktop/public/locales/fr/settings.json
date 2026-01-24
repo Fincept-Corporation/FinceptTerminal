@@ -1,60 +1,90 @@
 {
   "title": "PARAMÈTRES",
+  "sidebar": {
+    "credentials": "Informations d'identification API",
+    "polymarket": "API Polymarché",
+    "llm": "Configuration LLM",
+    "dataSources": "Sources de données",
+    "backtesting": "Backtesting",
+    "stockSymbols": "Symboles boursiers",
+    "tabLayout": "Disposition des onglets",
+    "appearance": "Apparence",
+    "language": "Langue",
+    "storage": "Stockage et cache"
+  },
   "credentials": {
-    "title": "GESTION DES IDENTIFIANTS API",
-    "description": "Gérer les clés API et les identifiants pour les services externes",
+    "title": "GESTION DES CRÉDENTIELS API",
+    "description": "Gérer les clés API et les informations d'identification pour les services externes",
     "apiKey": "Clé API",
     "enterValue": "Entrez la valeur..."
   },
   "terminal": {
-    "title": "APPARENCE DU TERMINAL",
-    "description": "Personnalisez l'apparence visuelle de votre terminal",
+    "title": "ASPECT DU TERMINAL",
+    "description": "Personnalisez l'apparence visuelle de votre terminal, notamment les polices, les couleurs, le fuseau horaire et les raccourcis clavier.",
     "fontFamily": "FAMILLE DE POLICE",
-    "currentSettings": "PARAMÈTRES ACTUELS"
+    "currentSettings": "PARAMÈTRES DE POLICE",
+    "baseFontSize": "TAILLE DE POLICE DE BASE",
+    "fontWeight": "POIDS DE LA POLICE",
+    "weightNormal": "Normale (400)",
+    "weightSemibold": "Semi-gras (600)",
+    "weightBold": "Gras (700)",
+    "enableItalic": "ACTIVER LE STYLE ITALIQUE",
+    "fontSizeSmall": "Petit (9px)",
+    "fontSizeLarge": "Grand (18px)",
+    "colorTheme": "THÈME DE COULEUR",
+    "defaultTimezone": "FUSEAU HORAIRE PAR DÉFAUT",
+    "timezoneDescription": "Définissez le fuseau horaire par défaut affiché dans la barre de navigation. Les widgets du tableau de bord peuvent utiliser leurs propres paramètres de fuseau horaire.",
+    "functionKeys": "MAPPAGES DES TOUCHES DE FONCTION",
+    "functionKeysDescription": "Configurez quel onglet ou quelle action chaque touche de fonction (F1-F12) doit déclencher. Les modifications seront reflétées dans la barre d'état et les raccourcis clavier.",
+    "livePreview": "APERÇU EN DIRECT",
+    "previewTitle": "APERÇU DU TERMINAL FINCEPT",
+    "previewBody": "Corps du texte : Analyse de marché en temps réel et suivi de portefeuille",
+    "previewSmall": "Petit texte : données de marché, horodatages et métadonnées",
+    "statusConnected": "CONNECTÉ",
+    "statusAlert": "ALERTE",
+    "statusWarning": "AVERTISSEMENT",
+    "saveConfig": "ENREGISTRER LA CONFIGURATION",
+    "reset": "RÉINITIALISER",
+    "saveSuccess": "L'apparence du terminal et les mappages de touches ont été enregistrés avec succès",
+    "resetSuccess": "Réinitialiser l'apparence et les mappages de touches par défaut"
+  },
+  "stockSymbols": {
+    "title": "Base de données des symboles boursiers",
+    "description": "Téléchargez et gérez les données des symboles du courtier pour une recherche rapide hors ligne. Les données sur les symboles incluent les actions, les F&O, les matières premières et les dérivés sur devises. Mettez à jour régulièrement pour obtenir les derniers instruments et expirations."
   },
   "terminalConfig": {
     "title": "CONFIGURATION DE LA DISPOSITION DES ONGLETS",
-    "headerTabs": "ONGLETS D'EN-TÊTE (BARRE PRINCIPALE)",
-    "headerTabsDesc": "Faites glisser pour réorganiser. Ces onglets apparaissent dans la navigation principale de l'en-tête.",
+    "headerTabs": "ONGLETS D'EN-TÊTE (BARRE D'ONGLETS PRINCIPALE)",
+    "headerTabsDesc": "Faites glisser pour réorganiser. Ces onglets apparaissent dans la navigation d'en-tête principale.",
     "toolbarSections": "SECTIONS DU MENU DE LA BARRE D'OUTILS",
     "newSection": "NOUVELLE SECTION",
     "deleteSection": "SUPPRIMER",
     "moveTo": "DÉPLACER VERS ▼",
-    "resetToDefault": "RÉINITIALISER PAR DÉFAUT",
+    "resetToDefault": "RÉINITIALISATION PAR DÉFAUT",
     "noTabsInSection": "Aucun onglet dans cette section",
-    "tip": "ASTUCE: Faites glisser les onglets pour les réorganiser. Utilisez les boutons fléchés pour déplacer les onglets entre l'en-tête et les sections de menu. Les modifications sont enregistrées automatiquement."
+    "tip": "CONSEIL : faites glisser les onglets pour les réorganiser. Utilisez les boutons fléchés pour déplacer les onglets entre les sections d’en-tête et de menu. Les modifications sont enregistrées automatiquement."
   },
   "llm": {
     "title": "CONFIGURATION LLM",
-    "description": "Configurer les modèles et fournisseurs d'IA",
+    "description": "Configurer les modèles et les fournisseurs d'IA",
     "connected": "CONNECTÉ",
     "disconnected": "DÉCONNECTÉ",
-    "provider": "[FR] AI PROVIDER",
-    "globalSettings": "[FR] GLOBAL AI SETTINGS",
-    "temperature": "[FR] TEMPERATURE",
-    "maxTokens": "[FR] MAX TOKENS",
-    "systemPrompt": "[FR] SYSTEM PROMPT",
-    "modelLibrary": "[FR] MODEL LIBRARY",
-    "multiModelConfigs": "[FR] Multi-model configs"
+    "provider": "FOURNISSEUR D'IA",
+    "globalSettings": "PARAMÈTRES GLOBAUX DE L'IA",
+    "temperature": "TEMPÉRATURE",
+    "maxTokens": "MAXI DE JETONS",
+    "systemPrompt": "INVITE SYSTÈME",
+    "modelLibrary": "BIBLIOTHÈQUE DE MODÈLES",
+    "multiModelConfigs": "Configurations multimodèles"
   },
   "buttons": {
-    "save": "ENREGISTRER",
+    "save": "SAUVEGARDER",
     "cancel": "ANNULER",
     "add": "AJOUTER"
   },
-  "sidebar": {
-    "credentials": "[FR] API Credentials",
-    "llm": "[FR] LLM Configuration",
-    "dataSources": "[FR] Data Sources",
-    "backtesting": "[FR] Backtesting",
-    "tabLayout": "[FR] Tab Layout",
-    "appearance": "[FR] Appearance",
-    "language": "[FR] Language",
-    "polymarket": "[FR] Polymarket API"
-  },
   "footer": {
-    "database": "[FR] Database: SQLite",
-    "storage": "[FR] Storage: File-based",
-    "secureStorage": "[FR] All data stored securely in fincept_terminal.db"
+    "database": "Base de données : SQLite",
+    "storage": "Stockage : basé sur des fichiers",
+    "secureStorage": "Toutes les données stockées en toute sécurité dans fincept_terminal.db"
   }
 }

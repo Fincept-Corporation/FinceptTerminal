@@ -1,75 +1,81 @@
 {
   "header": {
-    "title": "НАСТРОЮВАНА ПАНЕЛЬ",
+    "title": "НАЛАШТУВАННЯ ПРИЛАДНОЇ ПАНЕЛІ",
     "live": "НАЖИВО",
     "widgets": "ВІДЖЕТИ"
   },
   "buttons": {
     "addWidget": "ДОДАТИ ВІДЖЕТ",
     "saveLayout": "ЗБЕРЕГТИ МАКЕТ",
-    "reset": "СКИНУТИ"
+    "reset": "СКИДАННЯ",
+    "help": "ДОПОМОГА"
   },
   "widgets": {
     "loading": "Завантаження...",
     "error": "Помилка",
-    "globalIndices": "СВІТОВІ ІНДЕКСИ - ТОП 12",
-    "forex": "ПАРИ FOREX",
+    "globalIndices": "Глобальні індекси - Топ 12",
+    "forex": "Форекс - основні пари",
     "crypto": "КРИПТОВАЛЮТИ",
-    "commodities": "СИРОВИНА",
+    "commodities": "Товари",
     "news": "НОВИНИ",
     "forum": "ФОРУМ",
-    "watchlist": "СПИСОК СПОСТЕРЕЖЕННЯ",
+    "watchlist": "СПИСОК ПЕРЕГЛЯДУ",
+    "maritimeIntelligence": "Морська розвідка",
+    "unknown": "Невідомий тип віджета",
     "index": "ІНДЕКС",
     "symbol": "СИМВОЛ",
     "price": "ЦІНА",
-    "change": "ЗМ",
-    "percentChange": "%ЗМ",
-    "noIndexData": "Немає даних індексів",
-    "noForexData": "Немає даних forex",
-    "noCryptoData": "Немає даних крипто",
-    "noCommoditiesData": "Немає даних сировини",
-    "noForumPosts": "Немає постів",
-    "noStocksInWatchlist": "Немає акцій у списку",
-    "noWatchlistSelected": "Список не вибрано",
+    "change": "CHG",
+    "percentChange": "% CHG",
+    "noIndexData": "Немає даних індексу",
+    "noForexData": "Немає даних про форекс",
+    "noCryptoData": "Криптографічні дані відсутні",
+    "noCommoditiesData": "Немає даних про товари",
+    "noForumPosts": "Немає повідомлень на форумі",
+    "noStocksInWatchlist": "Немає акцій у списку спостереження",
+    "noWatchlistSelected": "Список спостереження не вибрано",
     "noData": "Немає даних",
     "pair": "ПАРА",
-    "rate": "КУРС",
-    "commodity": "СИРОВИНА",
-    "maritimeIntelligence": "⚓ МОРСЬКА РОЗВІДКА",
+    "rate": "СТАВКА",
+    "commodity": "ТОВАРНИЙ",
     "globe3D": "3D ГЛОБУС",
-    "vessels": "СУДНА",
+    "vessels": "ПОСУДИ",
     "routes": "МАРШРУТИ",
-    "vol24h": "ОБ'ЄМ 24Г",
-    "topTradeCorridors": "ОСНОВНІ ТОРГОВІ КОРИДОРИ",
-    "ships": "судна",
-    "unknown": "[UK] Unknown widget type"
+    "vol24h": "VOL 24H",
+    "topTradeCorridors": "ТОП ТОРГІВЕЛЬНИХ КОРИДОРОВ",
+    "ships": "кораблі",
+    "marketNews": "Новини ринку",
+    "secPressReleases": "Прес-релізи SEC",
+    "cryptoNews": "Крипто новини",
+    "trendingForum": "Популярний форум",
+    "techStocks": "Технологічні акції"
   },
   "tips": {
-    "drag": "Перетягніть віджети для перестановки",
-    "resize": "Змінюйте розмір з правого нижнього кута",
-    "remove": "Видаляйте віджети кнопкою X",
-    "responsive": "Адаптивний макет - повна ширина"
+    "drag": "Перетягніть віджети, щоб змінити порядок",
+    "resize": "Змінити розмір від нижнього правого кута",
+    "remove": "Видаліть віджети за допомогою кнопки X",
+    "responsive": "Адаптивний макет – використовується повна ширина"
   },
   "loading": {
-    "title": "Ініціалізація Панелі",
-    "description": "Налаштування кешу бази даних для швидшого завантаження...",
-    "note": "Це займе мить лише при першому запуску"
+    "title": "Ініціалізація інформаційної панелі",
+    "description": "Налаштування кешу бази даних для швидшого завантаження даних...",
+    "note": "Під час першого запуску це займе лише деякий час"
   },
   "empty": {
-    "noWidgets": "Немає віджетів на панелі",
-    "addFirst": "ДОДАЙТЕ ПЕРШИЙ ВІДЖЕТ"
+    "noWidgets": "На інформаційній панелі немає віджетів",
+    "addFirst": "ДОДАТИ СВІЙ ПЕРШИЙ ВІДЖЕТ"
   },
   "status": {
-    "version": "Fincept Customizable Dashboard v2.0.0 | Робоча область перетягування",
+    "version": "Fincept Customizable Dashboard v2.0.0 | Перетягніть робочу область",
     "layout": "Макет",
-    "custom": "Власний",
+    "custom": "Custom",
     "empty": "Порожній",
     "active": "АКТИВНИЙ",
     "cache": "Кеш: УВІМКНЕНО",
-    "label": "[UK] Status"
+    "label": "Статус"
   },
   "messages": {
-    "layoutSaved": "[UK] Dashboard layout saved!",
-    "resetConfirm": "[UK] Reset dashboard to default layout? This will remove all custom widgets."
+    "layoutSaved": "Макет інформаційної панелі збережено!",
+    "resetConfirm": "Скинути інформаційну панель до макета за замовчуванням? Це призведе до видалення всіх спеціальних віджетів."
   }
 }

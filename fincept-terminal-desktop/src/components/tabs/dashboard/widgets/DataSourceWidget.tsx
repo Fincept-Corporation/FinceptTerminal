@@ -11,12 +11,6 @@ interface DataSourceWidgetProps {
   onRemove?: () => void;
 }
 
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GREEN = '#00ff00';
-const FINCEPT_RED = '#ff0000';
-const FINCEPT_GRAY = '#787878';
-
 export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
   id,
   alias,
@@ -55,15 +49,15 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
   }, [data, loading]);
 
   const renderDataValue = (value: any): React.ReactNode => {
-    if (value === null || value === undefined) return <span style={{ color: FINCEPT_GRAY }}>N/A</span>;
+    if (value === null || value === undefined) return <span style={{ color: 'var(--ft-color-text-muted)' }}>N/A</span>;
 
     if (typeof value === 'object') {
       return (
-        <div style={{ fontSize: '9px', fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 'var(--ft-font-size-tiny)', fontFamily: 'monospace' }}>
           {Object.entries(value).slice(0, 10).map(([key, val]) => (
-            <div key={key} style={{ padding: '2px 0', borderBottom: `1px solid #1a1a1a` }}>
-              <span style={{ color: FINCEPT_ORANGE }}>{key}:</span>{' '}
-              <span style={{ color: FINCEPT_WHITE }}>
+            <div key={key} style={{ padding: '2px 0', borderBottom: '1px solid var(--ft-border-color)' }}>
+              <span style={{ color: 'var(--ft-color-primary)' }}>{key}:</span>{' '}
+              <span style={{ color: 'var(--ft-color-text)' }}>
                 {typeof val === 'object' ? JSON.stringify(val).substring(0, 50) : String(val)}
               </span>
             </div>
@@ -72,7 +66,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
       );
     }
 
-    return <span style={{ color: FINCEPT_WHITE }}>{String(value)}</span>;
+    return <span style={{ color: 'var(--ft-color-text)' }}>{String(value)}</span>;
   };
 
   const renderContent = () => {
@@ -87,8 +81,8 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           padding: '20px',
           textAlign: 'center'
         }}>
-          <AlertCircle size={32} color={FINCEPT_RED} />
-          <div style={{ color: FINCEPT_RED, fontSize: '11px', marginTop: '8px' }}>
+          <AlertCircle size={32} color="var(--ft-color-alert)" />
+          <div style={{ color: 'var(--ft-color-alert)', fontSize: 'var(--ft-font-size-body)', marginTop: '8px' }}>
             {error}
           </div>
         </div>
@@ -105,7 +99,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           height: '100%',
           gap: '8px'
         }}>
-          <div style={{ color: FINCEPT_ORANGE, fontSize: '10px' }}>
+          <div style={{ color: 'var(--ft-color-primary)', fontSize: 'var(--ft-font-size-small)' }}>
             {t('widgets.loading')}
           </div>
         </div>
@@ -121,8 +115,8 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           justifyContent: 'center',
           height: '100%',
           gap: '8px',
-          color: FINCEPT_GRAY,
-          fontSize: '10px'
+          color: 'var(--ft-color-text-muted)',
+          fontSize: 'var(--ft-font-size-small)'
         }}>
           <Database size={24} />
           <div>{t('widgets.noData')}</div>
@@ -130,11 +124,11 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
             <button
               onClick={refreshDataSources}
               style={{
-                background: FINCEPT_ORANGE,
+                background: 'var(--ft-color-primary)',
                 color: '#000',
                 border: 'none',
                 padding: '6px 12px',
-                fontSize: '9px',
+                fontSize: 'var(--ft-font-size-tiny)',
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 marginTop: '8px'
@@ -148,7 +142,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
     }
 
     return (
-      <div style={{ padding: '8px', fontSize: '10px' }}>
+      <div style={{ padding: '8px', fontSize: 'var(--ft-font-size-small)' }}>
         {/* Status Bar */}
         <div style={{
           display: 'flex',
@@ -156,31 +150,31 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           alignItems: 'center',
           marginBottom: '8px',
           padding: '4px 8px',
-          backgroundColor: isBlinking ? '#1a1a1a' : '#0a0a0a',
-          border: `1px solid ${connected ? FINCEPT_GREEN : FINCEPT_GRAY}`,
-          fontSize: '9px',
+          backgroundColor: isBlinking ? 'var(--ft-color-panel)' : 'var(--ft-color-panel)',
+          border: `1px solid ${connected ? 'var(--ft-color-success)' : 'var(--ft-color-text-muted)'}`,
+          fontSize: 'var(--ft-font-size-tiny)',
           transition: 'background-color 0.3s ease'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {source?.type === 'websocket' ? (
-              <Wifi size={12} color={connected ? FINCEPT_GREEN : FINCEPT_GRAY} />
+              <Wifi size={12} color={connected ? 'var(--ft-color-success)' : 'var(--ft-color-text-muted)'} />
             ) : (
-              <Database size={12} color={FINCEPT_ORANGE} />
+              <Database size={12} color="var(--ft-color-primary)" />
             )}
-            <span style={{ color: FINCEPT_WHITE }}>
+            <span style={{ color: 'var(--ft-color-text)' }}>
               {source?.type === 'websocket' ? 'WebSocket' : 'REST API'}
             </span>
-            <span style={{ color: connected ? FINCEPT_GREEN : FINCEPT_GRAY }}>
+            <span style={{ color: connected ? 'var(--ft-color-success)' : 'var(--ft-color-text-muted)' }}>
               {connected ? '● LIVE' : '○ IDLE'}
             </span>
             {updateCount > 0 && (
-              <span style={{ color: FINCEPT_ORANGE, fontSize: '8px' }}>
+              <span style={{ color: 'var(--ft-color-primary)', fontSize: 'var(--ft-font-size-tiny)' }}>
                 #{updateCount}
               </span>
             )}
           </div>
 
-          <div style={{ color: FINCEPT_GRAY, fontSize: '8px' }}>
+          <div style={{ color: 'var(--ft-color-text-muted)', fontSize: 'var(--ft-font-size-tiny)' }}>
             {lastUpdate && (
               <span>{lastUpdate.toLocaleTimeString()}</span>
             )}
@@ -191,8 +185,8 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
         <div style={{
           maxHeight: 'calc(100% - 60px)',
           overflowY: 'auto',
-          backgroundColor: '#050505',
-          border: `1px solid #1a1a1a`,
+          backgroundColor: 'var(--ft-color-panel)',
+          border: '1px solid var(--ft-border-color)',
           padding: '8px'
         }}>
           {renderDataValue(data)}
@@ -205,11 +199,11 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
               onClick={refreshDataSources}
               disabled={loading}
               style={{
-                background: loading ? FINCEPT_GRAY : FINCEPT_ORANGE,
+                background: loading ? 'var(--ft-color-text-muted)' : 'var(--ft-color-primary)',
                 color: '#000',
                 border: 'none',
                 padding: '4px 12px',
-                fontSize: '9px',
+                fontSize: 'var(--ft-font-size-tiny)',
                 fontWeight: 'bold',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 width: '100%'
@@ -231,7 +225,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
       onRefresh={source?.type === 'rest_api' ? refreshDataSources : undefined}
       isLoading={loading && !data}
       error={null}
-      headerColor={source?.type === 'websocket' ? FINCEPT_GREEN : FINCEPT_ORANGE}
+      headerColor={source?.type === 'websocket' ? 'var(--ft-color-success)' : 'var(--ft-color-primary)'}
     >
       {renderContent()}
     </BaseWidget>

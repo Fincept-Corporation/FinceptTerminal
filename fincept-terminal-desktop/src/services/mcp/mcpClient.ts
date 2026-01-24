@@ -47,12 +47,9 @@ class MCPClient {
   private serverId: string;
   private processId: number | null = null;
   private messageId = 0;
-  private pendingRequests = new Map<number, {
-    resolve: (value: any) => void;
-    reject: (error: any) => void;
-  }>();
   private isInitialized = false;
   private capabilities: MCPServerCapabilities = {};
+  private requestTimeoutMs = 30000; // 30 second timeout for requests
 
   constructor(serverId: string) {
     this.serverId = serverId;
@@ -212,11 +209,10 @@ class MCPClient {
 
       this.processId = null;
       this.isInitialized = false;
-      this.pendingRequests.clear();
     }
   }
 
-  // Send JSON-RPC request
+  // Send JSON-RPC request with timeout
   private async sendRequest(method: string, params: any): Promise<any> {
     const id = this.messageId++;
 
@@ -227,29 +223,28 @@ class MCPClient {
       params
     };
 
-    return new Promise(async (resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
-
-      try {
-        const response = await invoke<string>('send_mcp_request', {
-          serverId: this.serverId,
-          request: JSON.stringify(request)
-        });
-
-        const parsed = JSON.parse(response);
-
-        if (parsed.error) {
-          reject(new Error(parsed.error.message || 'MCP request failed'));
-          this.pendingRequests.delete(id);
-        } else {
-          resolve(parsed.result);
-          this.pendingRequests.delete(id);
-        }
-      } catch (error) {
-        reject(error);
-        this.pendingRequests.delete(id);
-      }
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`MCP request '${method}' timed out after ${this.requestTimeoutMs}ms`));
+      }, this.requestTimeoutMs);
     });
+
+    const requestPromise = (async () => {
+      const response = await invoke<string>('send_mcp_request', {
+        serverId: this.serverId,
+        request: JSON.stringify(request)
+      });
+
+      const parsed = JSON.parse(response);
+
+      if (parsed.error) {
+        throw new Error(parsed.error.message || 'MCP request failed');
+      }
+
+      return parsed.result;
+    })();
+
+    return Promise.race([requestPromise, timeoutPromise]);
   }
 
   // Send notification (no response expected)

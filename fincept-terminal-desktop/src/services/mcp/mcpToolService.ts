@@ -3,6 +3,7 @@
 
 import { mcpManager } from './mcpManager';
 import { mcpLogger } from '../core/loggerService';
+import { terminalMCPProvider, INTERNAL_SERVER_ID } from './internal';
 
 export interface MCPTool {
   serverId: string;
@@ -51,13 +52,16 @@ class MCPToolService {
         return this.toolCache;
       }
 
-      // Fetch fresh tools
-      const tools = await mcpManager.getAllTools();
+      // Fetch fresh tools from external servers + internal provider
+      const externalTools = await mcpManager.getAllTools();
+      const internalTools = terminalMCPProvider.listTools();
+      const tools = [...internalTools, ...externalTools];
+      const previousCount = this.toolCache.length;
       this.toolCache = tools;
       this.cacheTimestamp = now;
 
-      // Only log when tools are actually available or when count changes
-      if (tools.length > 0 && tools.length !== this.toolCache.length) {
+      // Log when tool count changes
+      if (tools.length > 0 && tools.length !== previousCount) {
         mcpLogger.debug('Tools updated:', tools.length);
       }
       return tools;
@@ -77,6 +81,11 @@ class MCPToolService {
     toolName: string,
     params: Record<string, any>
   ): Promise<MCPToolExecutionResult> {
+    // Route to internal provider for terminal tools
+    if (serverId === INTERNAL_SERVER_ID) {
+      return terminalMCPProvider.callTool(toolName, params);
+    }
+
     const startTime = Date.now();
 
     try {
@@ -317,16 +326,17 @@ class MCPToolService {
 
   /**
    * Parse OpenAI function name back to serverId and toolName
+   * Uses first occurrence of '__' as delimiter to handle IDs containing '__'
    */
   parseOpenAIFunctionName(functionName: string): { serverId: string; toolName: string } | null {
-    const parts = functionName.split('__');
-    if (parts.length !== 2) {
+    const separatorIndex = functionName.indexOf('__');
+    if (separatorIndex === -1 || separatorIndex === 0 || separatorIndex === functionName.length - 2) {
       mcpLogger.error('Invalid function name format:', functionName);
       return null;
     }
     return {
-      serverId: parts[0],
-      toolName: parts[1]
+      serverId: functionName.substring(0, separatorIndex),
+      toolName: functionName.substring(separatorIndex + 2)
     };
   }
 }

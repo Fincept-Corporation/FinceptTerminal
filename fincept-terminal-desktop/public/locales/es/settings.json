@@ -1,60 +1,90 @@
 {
-  "title": "CONFIGURACIÓN",
+  "title": "AJUSTES",
+  "sidebar": {
+    "credentials": "Credenciales API",
+    "polymarket": "API de polimercado",
+    "llm": "Configuración de Máster en Derecho",
+    "dataSources": "Fuentes de datos",
+    "backtesting": "Prueba retrospectiva",
+    "stockSymbols": "Símbolos bursátiles",
+    "tabLayout": "Diseño de pestañas",
+    "appearance": "Apariencia",
+    "language": "Idioma",
+    "storage": "Almacenamiento y caché"
+  },
   "credentials": {
     "title": "GESTIÓN DE CREDENCIALES API",
     "description": "Administrar claves API y credenciales para servicios externos",
     "apiKey": "Clave API",
-    "enterValue": "Ingrese valor..."
+    "enterValue": "Introduzca el valor..."
   },
   "terminal": {
-    "title": "APARIENCIA DEL TERMINAL",
-    "description": "Personalice la apariencia visual de su terminal",
-    "fontFamily": "FAMILIA DE FUENTE",
-    "currentSettings": "CONFIGURACIÓN ACTUAL"
+    "title": "APARIENCIA TERMINAL",
+    "description": "Personalice la apariencia visual de su terminal, incluidas fuentes, colores, zona horaria y atajos de teclado.",
+    "fontFamily": "FAMILIA DE FUENTES",
+    "currentSettings": "CONFIGURACIÓN DE FUENTE",
+    "baseFontSize": "TAMAÑO DE FUENTE BÁSICO",
+    "fontWeight": "PESO DE FUENTE",
+    "weightNormal": "Normales (400)",
+    "weightSemibold": "Semi-negrita (600)",
+    "weightBold": "Negrita (700)",
+    "enableItalic": "HABILITAR ESTILO CURSIVA",
+    "fontSizeSmall": "Pequeño (9px)",
+    "fontSizeLarge": "Grande (18 píxeles)",
+    "colorTheme": "TEMA DE COLOR",
+    "defaultTimezone": "ZONA HORARIA PREDETERMINADA",
+    "timezoneDescription": "Establezca la zona horaria predeterminada que se muestra en la barra de navegación. Los widgets del panel pueden usar su propia configuración de zona horaria.",
+    "functionKeys": "ASIGNACIONES DE TECLAS DE FUNCIÓN",
+    "functionKeysDescription": "Configure qué pestaña o acción debe activar cada tecla de función (F1-F12). Los cambios se reflejarán en la barra de estado y los atajos de teclado.",
+    "livePreview": "VISTA PREVIA EN VIVO",
+    "previewTitle": "VISTA PREVIA DEL TERMINAL FINCEPT",
+    "previewBody": "Texto del cuerpo: análisis de mercado en tiempo real y seguimiento de cartera",
+    "previewSmall": "Texto pequeño: datos de mercado, marcas de tiempo y metadatos",
+    "statusConnected": "CONECTADO",
+    "statusAlert": "ALERTA",
+    "statusWarning": "ADVERTENCIA",
+    "saveConfig": "GUARDAR CONFIGURACIÓN",
+    "reset": "REINICIAR",
+    "saveSuccess": "La apariencia del terminal y las asignaciones de teclas se guardaron correctamente",
+    "resetSuccess": "Restablecer la apariencia predeterminada y las asignaciones de teclas"
+  },
+  "stockSymbols": {
+    "title": "Base de datos de símbolos bursátiles",
+    "description": "Descargue y administre datos de símbolos de corredores para una búsqueda rápida sin conexión. Los datos de símbolos incluyen acciones, F&O, materias primas y derivados de divisas. Actualice periódicamente para obtener los últimos instrumentos y vencimientos."
   },
   "terminalConfig": {
-    "title": "CONFIGURACIÓN DE DISEÑO DE PESTAÑAS",
-    "headerTabs": "PESTAÑAS DE ENCABEZADO (BARRA PRINCIPAL)",
-    "headerTabsDesc": "Arrastre para reordenar. Estas pestañas aparecen en la navegación principal del encabezado.",
-    "toolbarSections": "SECCIONES DEL MENÚ DE HERRAMIENTAS",
+    "title": "CONFIGURACIÓN DEL DISEÑO DE PESTAÑAS",
+    "headerTabs": "PESTAÑAS DEL ENCABEZADO (BARRA DE PESTAÑAS PRINCIPAL)",
+    "headerTabsDesc": "Arrastre para reordenar. Estas pestañas aparecen en la navegación del encabezado principal.",
+    "toolbarSections": "SECCIONES DEL MENÚ DE LA BARRA DE HERRAMIENTAS",
     "newSection": "NUEVA SECCIÓN",
-    "deleteSection": "ELIMINAR",
+    "deleteSection": "BORRAR",
     "moveTo": "MOVER A ▼",
-    "resetToDefault": "RESTABLECER A PREDETERMINADO",
+    "resetToDefault": "RESTABLECER A LOS PREDETERMINADOS",
     "noTabsInSection": "No hay pestañas en esta sección",
-    "tip": "CONSEJO: Arrastre pestañas para reordenarlas. Use los botones de flecha para mover pestañas entre el encabezado y las secciones del menú. Los cambios se guardan automáticamente."
+    "tip": "SUGERENCIA: arrastre las pestañas para reordenarlas. Utilice los botones de flecha para mover pestañas entre las secciones del encabezado y del menú. Los cambios se guardan automáticamente."
   },
   "llm": {
-    "title": "CONFIGURACIÓN LLM",
+    "title": "CONFIGURACIÓN DEL LLM",
     "description": "Configurar modelos y proveedores de IA",
     "connected": "CONECTADO",
     "disconnected": "DESCONECTADO",
-    "provider": "[ES] AI PROVIDER",
-    "globalSettings": "[ES] GLOBAL AI SETTINGS",
-    "temperature": "[ES] TEMPERATURE",
-    "maxTokens": "[ES] MAX TOKENS",
-    "systemPrompt": "[ES] SYSTEM PROMPT",
-    "modelLibrary": "[ES] MODEL LIBRARY",
-    "multiModelConfigs": "[ES] Multi-model configs"
+    "provider": "PROVEEDOR DE IA",
+    "globalSettings": "AJUSTES GLOBALES DE IA",
+    "temperature": "TEMPERATURA",
+    "maxTokens": "FICHAS MÁXIMAS",
+    "systemPrompt": "AVISO DEL SISTEMA",
+    "modelLibrary": "BIBLIOTECA DE MODELOS",
+    "multiModelConfigs": "Configuraciones multimodelo"
   },
   "buttons": {
-    "save": "GUARDAR",
+    "save": "AHORRAR",
     "cancel": "CANCELAR",
     "add": "AGREGAR"
   },
-  "sidebar": {
-    "credentials": "[ES] API Credentials",
-    "llm": "[ES] LLM Configuration",
-    "dataSources": "[ES] Data Sources",
-    "backtesting": "[ES] Backtesting",
-    "tabLayout": "[ES] Tab Layout",
-    "appearance": "[ES] Appearance",
-    "language": "[ES] Language",
-    "polymarket": "[ES] Polymarket API"
-  },
   "footer": {
-    "database": "[ES] Database: SQLite",
-    "storage": "[ES] Storage: File-based",
-    "secureStorage": "[ES] All data stored securely in fincept_terminal.db"
+    "database": "Base de datos: SQLite",
+    "storage": "Almacenamiento: basado en archivos",
+    "secureStorage": "Todos los datos almacenados de forma segura en fincept_terminal.db"
   }
 }

@@ -974,17 +974,20 @@ export async function routeQuery(
 
 /**
  * Execute query with automatic routing via SuperAgent
+ * Passes user's model config so the agent uses the configured LLM
  */
 export async function executeRoutedQuery(
   query: string,
   apiKeys?: Record<string, string>,
-  sessionId?: string
+  sessionId?: string,
+  config?: AgentConfig
 ): Promise<AgentResponse> {
   try {
     const result = await invoke<string>('execute_routed_query', {
       query,
       apiKeys,
       sessionId,
+      config: config || undefined,
     });
     return JSON.parse(result) as AgentResponse;
   } catch (error: any) {

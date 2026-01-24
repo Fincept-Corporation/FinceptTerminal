@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, AlertTriangle, Shield, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
 import { geopoliticsService } from '@/services/geopolitics/geopoliticsService';
+import { useTranslation } from 'react-i18next';
 
 interface GeopoliticsWidgetProps {
   id: string;
@@ -17,13 +18,6 @@ interface ThreatLevel {
   description: string;
 }
 
-const FINCEPT_GREEN = '#00FF00';
-const FINCEPT_RED = '#FF0000';
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_YELLOW = '#FFD700';
-const FINCEPT_PURPLE = '#9D4EDD';
 
 export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
   id,
@@ -31,6 +25,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
   onRemove,
   onNavigate
 }) => {
+  const { t } = useTranslation('dashboard');
   const [threats, setThreats] = useState<ThreatLevel[]>([]);
   const [overallRisk, setOverallRisk] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -112,21 +107,22 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
     return () => clearInterval(interval);
   }, [selectedCountry]);
 
+
   const getLevelColor = (level: number) => {
-    if (level >= 7) return FINCEPT_RED;
-    if (level >= 5) return FINCEPT_ORANGE;
-    if (level >= 3) return FINCEPT_YELLOW;
-    return FINCEPT_GREEN;
+    if (level >= 7) return 'var(--ft-color-alert)';
+    if (level >= 5) return 'var(--ft-color-primary)';
+    if (level >= 3) return 'var(--ft-color-warning)';
+    return 'var(--ft-color-success)';
   };
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
       case 'up':
-        return <TrendingUp size={10} style={{ color: FINCEPT_RED }} />;
+        return <TrendingUp size={10} style={{ color: 'var(--ft-color-alert)' }} />;
       case 'down':
-        return <TrendingDown size={10} style={{ color: FINCEPT_GREEN }} />;
+        return <TrendingDown size={10} style={{ color: 'var(--ft-color-success)' }} />;
       default:
-        return <span style={{ color: FINCEPT_GRAY }}>—</span>;
+        return <span style={{ color: 'var(--ft-color-text-muted)' }}>—</span>;
     }
   };
 
@@ -145,21 +141,21 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
       onRefresh={loadGeopoliticsData}
       isLoading={loading}
       error={error}
-      headerColor={FINCEPT_PURPLE}
+      headerColor="var(--ft-color-purple)"
     >
       <div style={{ padding: '4px' }}>
         {/* Country selector */}
-        <div style={{ padding: '4px 8px', borderBottom: '1px solid #333' }}>
+        <div style={{ padding: '4px 8px', borderBottom: '1px solid var(--ft-border-color)' }}>
           <select
             value={selectedCountry}
             onChange={(e) => setSelectedCountry(e.target.value)}
             style={{
               width: '100%',
-              backgroundColor: '#111',
-              border: '1px solid #333',
-              color: FINCEPT_WHITE,
+              backgroundColor: 'var(--ft-color-panel)',
+              border: '1px solid var(--ft-border-color)',
+              color: 'var(--ft-color-text)',
               padding: '4px',
-              fontSize: '10px'
+              fontSize: 'var(--ft-font-size-small)'
             }}
           >
             {countries.map(c => (
@@ -171,17 +167,17 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
         {/* Overall risk indicator */}
         <div style={{
           padding: '8px',
-          backgroundColor: '#111',
+          backgroundColor: 'var(--ft-color-panel)',
           margin: '8px',
-          borderRadius: '2px',
+          borderRadius: 'var(--ft-border-radius)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
           <div>
-            <div style={{ fontSize: '9px', color: FINCEPT_GRAY }}>OVERALL RISK</div>
+            <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>{t('widgets.overallRisk')}</div>
             <div style={{
-              fontSize: '20px',
+              fontSize: 'var(--ft-font-size-heading)',
               fontWeight: 'bold',
               color: getLevelColor(overallRisk)
             }}>
@@ -192,9 +188,9 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
             backgroundColor: getLevelColor(overallRisk),
             color: '#000',
             padding: '4px 8px',
-            fontSize: '10px',
+            fontSize: 'var(--ft-font-size-small)',
             fontWeight: 'bold',
-            borderRadius: '2px'
+            borderRadius: 'var(--ft-border-radius)'
           }}>
             {getRiskLabel(overallRisk)}
           </div>
@@ -209,14 +205,14 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 padding: '6px 8px',
-                borderBottom: '1px solid #222'
+                borderBottom: '1px solid var(--ft-border-color)'
               }}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '10px', color: FINCEPT_WHITE }}>
+                <div style={{ fontSize: 'var(--ft-font-size-small)', color: 'var(--ft-color-text)' }}>
                   {threat.category}
                 </div>
-                <div style={{ fontSize: '8px', color: FINCEPT_GRAY }}>
+                <div style={{ fontSize: 'var(--ft-font-size-tiny)', color: 'var(--ft-color-text-muted)' }}>
                   {threat.description}
                 </div>
               </div>
@@ -225,7 +221,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
                 <div style={{
                   width: '60px',
                   height: '6px',
-                  backgroundColor: '#333',
+                  backgroundColor: 'var(--ft-border-color)',
                   borderRadius: '3px',
                   overflow: 'hidden'
                 }}>
@@ -237,7 +233,7 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
                   }} />
                 </div>
                 <span style={{
-                  fontSize: '10px',
+                  fontSize: 'var(--ft-font-size-small)',
                   fontWeight: 'bold',
                   color: getLevelColor(threat.level),
                   width: '24px',
@@ -256,18 +252,18 @@ export const GeopoliticsWidget: React.FC<GeopoliticsWidgetProps> = ({
             style={{
               padding: '6px',
               textAlign: 'center',
-              color: FINCEPT_PURPLE,
-              fontSize: '9px',
+              color: 'var(--ft-color-purple)',
+              fontSize: 'var(--ft-font-size-tiny)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '4px',
-              borderTop: '1px solid #333',
+              borderTop: '1px solid var(--ft-border-color)',
               marginTop: '4px'
             }}
           >
-            <span>Open Geopolitics Tab</span>
+            <span>{t('widgets.openGeopoliticsTab')}</span>
             <ExternalLink size={10} />
           </div>
         )}

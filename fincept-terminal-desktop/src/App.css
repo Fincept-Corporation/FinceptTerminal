@@ -13,6 +13,7 @@
   }
 }
 
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -53,6 +54,43 @@
 
 :root {
   --radius: 0.625rem;
+
+  /* Fincept Terminal Font Defaults */
+  --ft-font-family: 'Consolas', monospace;
+  --ft-font-size-heading: 15px;
+  --ft-font-size-subheading: 13px;
+  --ft-font-size-body: 11px;
+  --ft-font-size-small: 10px;
+  --ft-font-size-tiny: 9px;
+  --ft-font-weight: 400;
+  --ft-font-style: normal;
+
+  /* Fincept Terminal Color Defaults */
+  --ft-color-primary: #FFA500;
+  --ft-color-secondary: #00C800;
+  --ft-color-success: #00C800;
+  --ft-color-alert: #FF0000;
+  --ft-color-warning: #FFFF00;
+  --ft-color-info: #6496FA;
+  --ft-color-accent: #00FFFF;
+  --ft-color-purple: #C864FF;
+  --ft-color-text: #FFFFFF;
+  --ft-color-text-muted: #787878;
+  --ft-color-background: #000000;
+  --ft-color-panel: #0a0a0a;
+
+  /* Fincept Terminal Layout Defaults */
+  --ft-spacing-unit: 6px;
+  --ft-border-radius: 2px;
+  --ft-border-width: 1px;
+  --ft-border-color: #2A2A2A;
+  --ft-line-height: 1.4;
+  --ft-letter-spacing: 0px;
+
+  /* Fincept Terminal Effect Defaults */
+  --ft-widget-opacity: 1;
+  --ft-glow-enabled: 0;
+  --ft-glow-intensity: 0.5;
   --background: oklch(1 0 0);
   --foreground: oklch(0.147 0.004 49.25);
   --card: oklch(1 0 0);
@@ -128,6 +166,13 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--ft-font-family, 'Consolas', monospace);
+    font-size: var(--ft-font-size-body, 11px);
+    font-weight: var(--ft-font-weight, 400);
+    font-style: var(--ft-font-style, normal);
+    color: var(--ft-color-text, #FFFFFF);
+    line-height: var(--ft-line-height, 1.4);
+    letter-spacing: var(--ft-letter-spacing, 0px);
   }
 }
 

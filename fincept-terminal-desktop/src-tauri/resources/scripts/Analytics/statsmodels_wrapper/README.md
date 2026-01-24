@@ -290,7 +290,7 @@ python stats_extended.py  # Test extended stats module
 - **Wrapper Version**: 2.0.0 (Complete Coverage)
 - **Total Functions**: 200+
 - **Coverage**: 100% of statsmodels API
-- **Last Updated**: 2025-12-29
+- **Last Updated**: 2026-01-23
 
 ## License
 

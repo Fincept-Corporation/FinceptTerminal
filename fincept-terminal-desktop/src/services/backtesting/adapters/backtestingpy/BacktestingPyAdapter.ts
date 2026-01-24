@@ -15,7 +15,6 @@ import {
   TestResult,
   BacktestRequest,
   BacktestResult,
-  BacktestStatus,
   DataRequest,
   HistoricalData,
   DataCatalog,
@@ -56,8 +55,6 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
   readonly version = '0.3.3';
   readonly capabilities = BACKTESTINGPY_CAPABILITIES;
   readonly description = 'Lightweight, fast event-driven backtesting with interactive charts';
-
-  private activeBacktests: Map<string, BacktestStatus> = new Map();
 
   /**
    * Extract JSON from Python output (filters out log messages)
@@ -115,39 +112,11 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
   }
 
   async initialize(config: ProviderConfig): Promise<InitResult> {
-    try {
-      // Call Python provider initialization - returns JSON string
-      const stdout = await invoke<string>(
-        'execute_python_backtest',
-        {
-          provider: 'backtestingpy',
-          command: 'initialize',
-          args: JSON.stringify(config || {}),
-        }
-      );
-
-      // Extract and parse JSON response from Python
-      const result = this.extractJSON(stdout) as { success: boolean; data?: any; error?: string; message?: string };
-
-      if (!result.success) {
-        return this.createErrorResult(
-          result.error || 'Backtesting.py not installed. Run: pip install backtesting'
-        );
-      }
-
-      this.config = config;
-      this.initialized = true;
-
-      return this.createSuccessResult(result.message || 'Backtesting.py initialized successfully');
-    } catch (error) {
-      backtestingLogger.error('Initialize error:', error);
-      return this.createErrorResult(error instanceof Error ? error.message : String(error));
-    }
+    this.config = config;
+    return this.createSuccessResult('Backtesting.py ready');
   }
 
   async testConnection(): Promise<TestResult> {
-    this.ensureInitialized();
-
     try {
       const stdout = await invoke<string>(
         'execute_python_backtest',
@@ -168,8 +137,6 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
         };
       }
 
-      this.connected = true;
-
       return {
         success: true,
         message: result.message || 'Backtesting.py is available',
@@ -184,36 +151,11 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
     }
   }
 
-  async disconnect(): Promise<void> {
-    try {
-      await invoke('execute_python_backtest', {
-        provider: 'backtestingpy',
-        command: 'disconnect',
-        args: JSON.stringify({}),
-      });
-
-      this.activeBacktests.clear();
-      this.connected = false;
-      this.initialized = false;
-    } catch (error) {
-      backtestingLogger.error('Disconnect error:', error);
-    }
-  }
-
   async runBacktest(request: BacktestRequest): Promise<BacktestResult> {
-    this.ensureConnected();
 
     const backtestId = this.generateBacktestId();
 
     try {
-      // Track as active
-      this.activeBacktests.set(backtestId, {
-        id: backtestId,
-        status: 'running',
-        progress: 0,
-        message: 'Running Backtesting.py backtest...',
-      });
-
       backtestingLogger.debug('Running backtest:', {
         id: backtestId,
         strategy: request.strategy?.name,
@@ -239,6 +181,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
             hedging: request.hedging,
             exclusiveOrders: request.exclusiveOrders,
             margin: request.margin,
+            benchmark: request.benchmark,
           }),
         }
       );
@@ -251,9 +194,6 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
 
       backtestingLogger.debug('Python response:', result);
       backtestingLogger.debug('Has data field?', 'data' in result);
-
-      // Update status
-      this.activeBacktests.delete(backtestId);
 
       if (!result.success) {
         throw new Error(result.error || 'Backtest execution failed');
@@ -277,15 +217,12 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
 
       return backtestResult;
     } catch (error) {
-      this.activeBacktests.delete(backtestId);
       backtestingLogger.error('Backtest error:', error);
       throw error;
     }
   }
 
   async optimize(request: OptimizationRequest): Promise<OptimizationResult> {
-    this.ensureConnected();
-
     try {
       backtestingLogger.debug('Running optimization:', {
         strategy: request.strategy?.name,
@@ -331,8 +268,6 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
   }
 
   async getHistoricalData(request: DataRequest): Promise<HistoricalData[]> {
-    this.ensureConnected();
-
     try {
       // Backtesting.py doesn't provide data fetching
       // This would need to be implemented using external data providers
@@ -355,8 +290,6 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
     type: IndicatorType,
     params: IndicatorParams
   ): Promise<IndicatorResult> {
-    this.ensureConnected();
-
     try {
       // Indicators can be calculated, but backtesting.py uses external libraries
       backtestingLogger.warn('Indicator calculation not directly supported');

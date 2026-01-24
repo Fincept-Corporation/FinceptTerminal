@@ -51,7 +51,6 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
   readonly capabilities = FASTTRADE_CAPABILITIES;
   readonly description = 'Fast, low-code backtesting with JSON-based strategies and 80+ FINTA indicators';
 
-  private activeBacktests: Map<string, BacktestStatus> = new Map();
 
   /**
    * Extract JSON from Python output
@@ -107,43 +106,11 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
   }
 
   async initialize(config: ProviderConfig): Promise<InitResult> {
-    try {
-      const stdout = await invoke<string>('execute_python_backtest', {
-        provider: 'fasttrade',
-        command: 'initialize',
-        args: JSON.stringify(config || {}),
-      });
-
-      const result = this.extractJSON(stdout) as {
-        success: boolean;
-        data?: any;
-        error?: string;
-        message?: string;
-      };
-
-      if (!result.success) {
-        return this.createErrorResult(
-          result.error || 'Fast-Trade not installed. Run: pip install fast-trade'
-        );
-      }
-
-      this.config = config;
-      this.initialized = true;
-
-      return this.createSuccessResult(
-        result.message || 'Fast-Trade initialized successfully'
-      );
-    } catch (error) {
-      console.error('[FastTradeAdapter] Initialize error:', error);
-      return this.createErrorResult(
-        error instanceof Error ? error.message : String(error)
-      );
-    }
+    this.config = config;
+    return this.createSuccessResult('Fast-Trade ready');
   }
 
   async testConnection(): Promise<TestResult> {
-    this.ensureInitialized();
-
     try {
       const stdout = await invoke<string>('execute_python_backtest', {
         provider: 'fasttrade',
@@ -161,8 +128,6 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
         };
       }
 
-      this.connected = true;
-
       return {
         success: true,
         message: result.message || 'Fast-Trade is available',
@@ -177,35 +142,10 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
     }
   }
 
-  async disconnect(): Promise<void> {
-    try {
-      await invoke('execute_python_backtest', {
-        provider: 'fasttrade',
-        command: 'disconnect',
-        args: JSON.stringify({}),
-      });
-
-      this.activeBacktests.clear();
-      this.connected = false;
-      this.initialized = false;
-    } catch (error) {
-      console.error('[FastTradeAdapter] Disconnect error:', error);
-    }
-  }
-
   async runBacktest(request: BacktestRequest): Promise<BacktestResult> {
-    this.ensureConnected();
-
     const backtestId = this.generateBacktestId();
 
     try {
-      this.activeBacktests.set(backtestId, {
-        id: backtestId,
-        status: 'running',
-        progress: 0,
-        message: 'Running Fast-Trade backtest...',
-      });
-
       const stdout = await invoke<string>('execute_python_backtest', {
         provider: 'fasttrade',
         command: 'run_backtest',
@@ -221,8 +161,6 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
 
       const result = this.extractJSON(stdout);
 
-      this.activeBacktests.delete(backtestId);
-
       if (!result.success) {
         throw new Error(result.error || 'Backtest failed');
       }
@@ -233,7 +171,6 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
 
       return result.data as BacktestResult;
     } catch (error) {
-      this.activeBacktests.delete(backtestId);
       console.error('[FastTradeAdapter] Backtest error:', error);
       throw error;
     }
@@ -300,11 +237,6 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
   }
 
   async getBacktestStatus(backtestId: string): Promise<BacktestStatus> {
-    const status = this.activeBacktests.get(backtestId);
-    if (status) {
-      return status;
-    }
-    // Return default status if not found
     return {
       id: backtestId,
       status: 'completed',
@@ -314,8 +246,7 @@ export class FastTradeAdapter extends BaseBacktestingAdapter {
   }
 
   async cancelBacktest(backtestId: string): Promise<void> {
-    // Fast-Trade backtests are fast, cancellation not implemented
-    this.activeBacktests.delete(backtestId);
+    // Fast-Trade backtests are very fast, cancellation is a no-op
   }
 
   protected generateBacktestId(): string {

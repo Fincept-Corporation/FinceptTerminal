@@ -1,341 +1,221 @@
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import React, { useMemo } from 'react';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface MarkdownRendererProps {
   content: string;
   style?: React.CSSProperties;
 }
 
-const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {} }) => {
-  // Fincept color scheme
-  const FINCEPT_ORANGE = '#FFA500';
-  const FINCEPT_WHITE = '#FFFFFF';
-  const FINCEPT_YELLOW = '#FFFF00';
-  const FINCEPT_GRAY = '#787878';
-  const FINCEPT_DARK_BG = '#000000';
-  const FINCEPT_PANEL_BG = '#0a0a0a';
-  const FINCEPT_GREEN = '#00C800';
+// Configure marked with GFM enabled
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
 
+const MARKDOWN_CSS = `
+.fincept-md h1 {
+  color: #FFA500;
+  font-size: 20px;
+  font-weight: bold;
+  margin-top: 16px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid #FFA500;
+}
+.fincept-md h2 {
+  color: #FFA500;
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 14px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #787878;
+}
+.fincept-md h3 {
+  color: #FFFF00;
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+.fincept-md h4 {
+  color: #FFFF00;
+  font-size: 15px;
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+.fincept-md h5, .fincept-md h6 {
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: bold;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.fincept-md p {
+  margin-bottom: 12px;
+  color: #FFFFFF;
+}
+.fincept-md ul {
+  margin-left: 20px;
+  margin-bottom: 12px;
+  list-style-type: disc;
+  color: #FFFFFF;
+}
+.fincept-md ol {
+  margin-left: 20px;
+  margin-bottom: 12px;
+  list-style-type: decimal;
+  color: #FFFFFF;
+}
+.fincept-md li {
+  margin-bottom: 6px;
+  color: #FFFFFF;
+}
+.fincept-md pre {
+  background-color: #000000;
+  padding: 0;
+  margin: 0 0 12px 0;
+  overflow-x: auto;
+}
+.fincept-md pre code {
+  display: block;
+  background-color: #000000;
+  color: #00C800;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: Consolas, monospace;
+  border: 1px solid #787878;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.fincept-md code {
+  background-color: #000000;
+  color: #00C800;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: Consolas, monospace;
+  border: 1px solid #787878;
+}
+.fincept-md blockquote {
+  border-left: 4px solid #FFA500;
+  margin-left: 0;
+  padding-left: 16px;
+  margin-bottom: 12px;
+  color: #787878;
+  font-style: italic;
+}
+.fincept-md a {
+  color: #FFA500;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fincept-md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 12px;
+  border: 1px solid #787878;
+}
+.fincept-md thead {
+  background-color: #000000;
+}
+.fincept-md tr {
+  border-bottom: 1px solid #787878;
+}
+.fincept-md th {
+  padding: 8px;
+  text-align: left;
+  color: #FFA500;
+  font-weight: bold;
+  border: 1px solid #787878;
+}
+.fincept-md td {
+  padding: 8px;
+  color: #FFFFFF;
+  border: 1px solid #787878;
+}
+.fincept-md hr {
+  border: none;
+  border-top: 1px solid #787878;
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+.fincept-md strong {
+  color: #FFFF00;
+  font-weight: bold;
+}
+.fincept-md em {
+  color: #FFFFFF;
+  font-style: italic;
+}
+.fincept-md del {
+  color: #787878;
+  text-decoration: line-through;
+}
+.fincept-md input[type="checkbox"] {
+  margin-right: 6px;
+}
+`;
+
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {} }) => {
   const markdownStyles: React.CSSProperties = {
-    color: FINCEPT_WHITE,
+    color: '#FFFFFF',
     fontSize: '14px',
     lineHeight: '1.6',
     ...style
   };
 
-  // Safety check for content
+  const html = useMemo(() => {
+    if (!content || typeof content !== 'string') return '';
+    try {
+      const raw = marked.parse(content) as string;
+      return DOMPurify.sanitize(raw, {
+        ADD_ATTR: ['target'],
+        ALLOWED_TAGS: [
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          'p', 'br', 'hr',
+          'ul', 'ol', 'li',
+          'strong', 'em', 'del', 'code', 'pre',
+          'blockquote', 'a', 'img',
+          'table', 'thead', 'tbody', 'tr', 'th', 'td',
+          'input', 'span', 'div', 'sub', 'sup',
+        ],
+      });
+    } catch (error) {
+      console.error('Error rendering markdown:', error);
+      return '';
+    }
+  }, [content]);
+
   if (!content || typeof content !== 'string') {
     return (
-      <div style={{ ...markdownStyles, color: FINCEPT_GRAY }}>
+      <div style={{ ...markdownStyles, color: '#787878' }}>
         (No content to display)
       </div>
     );
   }
 
-  try {
+  if (!html) {
     return (
       <div style={markdownStyles}>
-        <ReactMarkdown
-        remarkPlugins={[remarkGfm as any]}
-        components={{
-          // Headings
-          h1: ({ children }) => (
-            <h1 style={{
-              color: FINCEPT_ORANGE,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              marginTop: '16px',
-              marginBottom: '12px',
-              borderBottom: `2px solid ${FINCEPT_ORANGE}`
-            }}>
-              {children}
-            </h1>
-          ),
-          h2: ({ children }) => (
-            <h2 style={{
-              color: FINCEPT_ORANGE,
-              fontSize: '18px',
-              fontWeight: 'bold',
-              marginTop: '14px',
-              marginBottom: '10px',
-              borderBottom: `1px solid ${FINCEPT_GRAY}`
-            }}>
-              {children}
-            </h2>
-          ),
-          h3: ({ children }) => (
-            <h3 style={{
-              color: FINCEPT_YELLOW,
-              fontSize: '16px',
-              fontWeight: 'bold',
-              marginTop: '12px',
-              marginBottom: '8px'
-            }}>
-              {children}
-            </h3>
-          ),
-          h4: ({ children }) => (
-            <h4 style={{
-              color: FINCEPT_YELLOW,
-              fontSize: '15px',
-              fontWeight: 'bold',
-              marginTop: '10px',
-              marginBottom: '6px'
-            }}>
-              {children}
-            </h4>
-          ),
-          h5: ({ children }) => (
-            <h5 style={{
-              color: FINCEPT_WHITE,
-              fontSize: '14px',
-              fontWeight: 'bold',
-              marginTop: '8px',
-              marginBottom: '4px'
-            }}>
-              {children}
-            </h5>
-          ),
-          h6: ({ children }) => (
-            <h6 style={{
-              color: FINCEPT_WHITE,
-              fontSize: '13px',
-              fontWeight: 'bold',
-              marginTop: '6px',
-              marginBottom: '3px'
-            }}>
-              {children}
-            </h6>
-          ),
-
-          // Paragraphs
-          p: ({ children }) => (
-            <p style={{
-              marginBottom: '12px',
-              color: FINCEPT_WHITE
-            }}>
-              {children}
-            </p>
-          ),
-
-          // Lists
-          ul: ({ children }) => (
-            <ul style={{
-              marginLeft: '20px',
-              marginBottom: '12px',
-              listStyleType: 'disc',
-              color: FINCEPT_WHITE
-            }}>
-              {children}
-            </ul>
-          ),
-          ol: ({ children }) => (
-            <ol style={{
-              marginLeft: '20px',
-              marginBottom: '12px',
-              listStyleType: 'decimal',
-              color: FINCEPT_WHITE
-            }}>
-              {children}
-            </ol>
-          ),
-          li: ({ children }) => (
-            <li style={{
-              marginBottom: '6px',
-              color: FINCEPT_WHITE
-            }}>
-              {children}
-            </li>
-          ),
-
-          // Code blocks
-          code: ({ inline, children, ...props }: any) => {
-            if (inline) {
-              return (
-                <code style={{
-                  backgroundColor: FINCEPT_DARK_BG,
-                  color: FINCEPT_GREEN,
-                  padding: '2px 6px',
-                  borderRadius: '3px',
-                  fontSize: '13px',
-                  fontFamily: 'Consolas, monospace',
-                  border: `1px solid ${FINCEPT_GRAY}`
-                }} {...props}>
-                  {children}
-                </code>
-              );
-            }
-            return (
-              <code style={{
-                display: 'block',
-                backgroundColor: FINCEPT_DARK_BG,
-                color: FINCEPT_GREEN,
-                padding: '12px',
-                borderRadius: '4px',
-                fontSize: '13px',
-                fontFamily: 'Consolas, monospace',
-                border: `1px solid ${FINCEPT_GRAY}`,
-                marginBottom: '12px',
-                overflowX: 'auto',
-                whiteSpace: 'pre-wrap'
-              }} {...props}>
-                {children}
-              </code>
-            );
-          },
-
-          // Pre blocks
-          pre: ({ children }) => (
-            <pre style={{
-              backgroundColor: FINCEPT_DARK_BG,
-              padding: '0',
-              margin: '0 0 12px 0',
-              overflowX: 'auto'
-            }}>
-              {children}
-            </pre>
-          ),
-
-          // Blockquotes
-          blockquote: ({ children }) => (
-            <blockquote style={{
-              borderLeft: `4px solid ${FINCEPT_ORANGE}`,
-              marginLeft: '0',
-              paddingLeft: '16px',
-              marginBottom: '12px',
-              color: FINCEPT_GRAY,
-              fontStyle: 'italic'
-            }}>
-              {children}
-            </blockquote>
-          ),
-
-          // Links
-          a: ({ children, href }) => (
-            <a href={href} style={{
-              color: FINCEPT_ORANGE,
-              textDecoration: 'underline',
-              cursor: 'pointer'
-            }} target="_blank" rel="noopener noreferrer">
-              {children}
-            </a>
-          ),
-
-          // Tables
-          table: ({ children }) => (
-            <table style={{
-              borderCollapse: 'collapse',
-              width: '100%',
-              marginBottom: '12px',
-              border: `1px solid ${FINCEPT_GRAY}`
-            }}>
-              {children}
-            </table>
-          ),
-          thead: ({ children }) => (
-            <thead style={{
-              backgroundColor: FINCEPT_DARK_BG
-            }}>
-              {children}
-            </thead>
-          ),
-          tbody: ({ children }) => (
-            <tbody>
-              {children}
-            </tbody>
-          ),
-          tr: ({ children }) => (
-            <tr style={{
-              borderBottom: `1px solid ${FINCEPT_GRAY}`
-            }}>
-              {children}
-            </tr>
-          ),
-          th: ({ children }) => (
-            <th style={{
-              padding: '8px',
-              textAlign: 'left',
-              color: FINCEPT_ORANGE,
-              fontWeight: 'bold',
-              border: `1px solid ${FINCEPT_GRAY}`
-            }}>
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td style={{
-              padding: '8px',
-              color: FINCEPT_WHITE,
-              border: `1px solid ${FINCEPT_GRAY}`
-            }}>
-              {children}
-            </td>
-          ),
-
-          // Horizontal rule
-          hr: () => (
-            <hr style={{
-              border: 'none',
-              borderTop: `1px solid ${FINCEPT_GRAY}`,
-              marginTop: '16px',
-              marginBottom: '16px'
-            }} />
-          ),
-
-          // Strong/Bold
-          strong: ({ children }) => (
-            <strong style={{
-              color: FINCEPT_YELLOW,
-              fontWeight: 'bold'
-            }}>
-              {children}
-            </strong>
-          ),
-
-          // Emphasis/Italic
-          em: ({ children }) => (
-            <em style={{
-              color: FINCEPT_WHITE,
-              fontStyle: 'italic'
-            }}>
-              {children}
-            </em>
-          ),
-
-          // Delete/Strikethrough
-          del: ({ children }) => (
-            <del style={{
-              color: FINCEPT_GRAY,
-              textDecoration: 'line-through'
-            }}>
-              {children}
-            </del>
-          )
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-      </div>
-    );
-  } catch (error) {
-    console.error('Error rendering markdown:', error);
-    return (
-      <div style={{ ...markdownStyles, color: FINCEPT_GRAY }}>
-        <div style={{ color: '#ff6b6b', marginBottom: '8px' }}>
-          Error rendering markdown content
-        </div>
-        <pre style={{
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          fontSize: '12px',
-          color: FINCEPT_WHITE
-        }}>
+        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '12px', color: '#FFFFFF' }}>
           {content}
         </pre>
       </div>
     );
   }
+
+  return (
+    <>
+      <style>{MARKDOWN_CSS}</style>
+      <div
+        className="fincept-md"
+        style={markdownStyles}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </>
+  );
 };
 
 export default MarkdownRenderer;
