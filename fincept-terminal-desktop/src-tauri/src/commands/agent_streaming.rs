@@ -1,7 +1,6 @@
 // Agent Streaming Module - High-performance streaming agent execution
 // Uses Tauri events for real-time token streaming and parallel execution
 
-use crate::utils::python::get_script_path;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use std::sync::Arc;
@@ -80,7 +79,6 @@ pub async fn execute_agent_streaming(
         obj.insert("stream_id".to_string(), serde_json::json!(stream_id.clone()));
     }
 
-    let script_path = get_script_path(&app, "agents/finagent_core/core_agent_stream.py")?;
     let payload_str = serde_json::to_string(&payload)
         .map_err(|e| format!("Failed to serialize payload: {}", e))?;
 
@@ -101,7 +99,8 @@ pub async fn execute_agent_streaming(
 
         // Execute with streaming callback
         match execute_with_stream_callback(
-            &script_path,
+            &app_clone,
+            "agents/finagent_core/core_agent_stream.py",
             vec![payload_str],
             move |chunk_type, content, metadata| {
                 // Check cancellation
@@ -192,8 +191,6 @@ pub async fn execute_agents_parallel(
     let start_time = std::time::Instant::now();
     let max_concurrent = max_concurrent.unwrap_or(4);
 
-    let script_path = get_script_path(&app, "agents/finagent_core/core_agent.py")?;
-
     // Create semaphore for concurrency control
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
@@ -202,18 +199,19 @@ pub async fn execute_agents_parallel(
 
     for (idx, task) in tasks.into_iter().enumerate() {
         let task_id = format!("{}-{}", batch_id, idx);
-        let script_path = script_path.clone();
+        let app_clone = app.clone();
         let semaphore = semaphore.clone();
         let task_start = std::time::Instant::now();
 
         let handle = tokio::spawn(async move {
             // Acquire semaphore permit
-            let _permit = semaphore.acquire().await.unwrap();
+            let _permit = semaphore.acquire().await
+                .map_err(|e| format!("Semaphore closed: {}", e))?;
 
             let payload_str = serde_json::to_string(&task)
                 .map_err(|e| format!("Failed to serialize: {}", e))?;
 
-            match crate::python_runtime::execute_python_script_async(&script_path, vec![payload_str]).await {
+            match crate::python::execute(&app_clone, "agents/finagent_core/core_agent.py", vec![payload_str]).await {
                 Ok(result) => {
                     let parsed: serde_json::Value = serde_json::from_str(&result)
                         .unwrap_or(serde_json::json!({"raw": result}));
@@ -285,15 +283,12 @@ pub async fn execute_agent_priority(
     payload: serde_json::Value,
     priority: u8,  // 0=HIGH, 1=NORMAL, 2=LOW
 ) -> Result<String, String> {
-    let script_path = get_script_path(&app, "agents/finagent_core/core_agent.py")?;
     let payload_str = serde_json::to_string(&payload)
         .map_err(|e| format!("Failed to serialize payload: {}", e))?;
 
-    crate::python_runtime::execute_python_script_async_with_priority(
-        &script_path,
-        vec![payload_str],
-        priority
-    ).await
+    // Priority is currently ignored - using standard execute
+    let _ = priority; // Acknowledge unused parameter
+    crate::python::execute(&app, "agents/finagent_core/core_agent.py", vec![payload_str]).await
 }
 
 /// Get status of all active agent streams
@@ -312,7 +307,8 @@ pub async fn get_active_agent_streams() -> Result<String, String> {
 /// Internal: Execute with streaming callback (simulated for now)
 /// In production, this would use a named pipe or socket to get streaming output
 async fn execute_with_stream_callback<F>(
-    script_path: &std::path::PathBuf,
+    app: &AppHandle,
+    script_name: &str,
     args: Vec<String>,
     mut callback: F,
 ) -> Result<String, String>
@@ -325,7 +321,7 @@ where
     // Emit thinking indicator
     callback("thinking", "Processing your request...", None);
 
-    let result = crate::python_runtime::execute_python_script_async(script_path, args).await?;
+    let result = crate::python::execute(app, script_name, args).await?;
 
     // Parse and emit tokens (simulated chunking for now)
     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&result) {

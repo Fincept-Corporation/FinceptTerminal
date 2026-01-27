@@ -181,6 +181,14 @@ pub struct MCPTool {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InternalMCPToolSetting {
+    pub tool_name: String,
+    pub category: String,
+    pub is_enabled: bool,
+    pub updated_at: String,
+}
+
 // ============================================================================
 // Context Recorder
 // ============================================================================

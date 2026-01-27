@@ -1,17 +1,9 @@
 // YFinance data source wrapper using Python yfinance
 // Modular design: if this fails, app continues working with other data sources
+// Refactored to use unified python module API
 
 use serde::{Deserialize, Serialize};
 use anyhow::{Result, Context};
-use std::process::Command;
-use std::path::PathBuf;
-
-// Windows-specific imports to hide console windows
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuoteData {
@@ -40,21 +32,14 @@ pub struct HistoricalData {
 }
 
 pub struct YFinanceProvider {
-    python_path: PathBuf,
-    script_path: PathBuf,
+    app: tauri::AppHandle,
 }
 
 impl YFinanceProvider {
     /// Create a new YFinance provider instance with runtime paths
     pub fn new(app: &tauri::AppHandle) -> Result<Self> {
-        let python_path = crate::utils::python::get_python_path(app)
-            .map_err(|e| anyhow::anyhow!(e))?;
-        let script_path = crate::utils::python::get_script_path(app, "yfinance_data.py")
-            .map_err(|e| anyhow::anyhow!(e))?;
-
         Ok(Self {
-            python_path,
-            script_path,
+            app: app.clone(),
         })
     }
 
@@ -84,28 +69,13 @@ impl YFinanceProvider {
 
     /// Internal batch fetch method - calls Python yfinance script with multiple symbols
     async fn fetch_batch_quotes(&self, symbols: Vec<String>) -> Result<Vec<QuoteData>> {
-        let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path).arg("batch_quotes");
+        let mut args = vec!["batch_quotes".to_string()];
+        args.extend(symbols);
 
-        for symbol in symbols {
-            cmd.arg(symbol);
-        }
+        let output = crate::python::execute_sync(&self.app, "yfinance_data.py", args)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        // Hide console window on Windows
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
-
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Python script failed: {}", error);
-        }
-
-        let json_output = String::from_utf8_lossy(&output.stdout);
-        let quotes: Vec<QuoteData> = serde_json::from_str(&json_output)
+        let quotes: Vec<QuoteData> = serde_json::from_str(&output)
             .context("Failed to parse JSON from Python script")?;
 
         Ok(quotes)
@@ -113,26 +83,12 @@ impl YFinanceProvider {
 
     /// Internal fetch method - calls Python yfinance script
     async fn fetch_quote(&self, symbol: &str) -> Result<QuoteData> {
-        let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path)
-            .arg("quote")
-            .arg(symbol);
+        let args = vec!["quote".to_string(), symbol.to_string()];
 
-        // Hide console window on Windows
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        let output = crate::python::execute_sync(&self.app, "yfinance_data.py", args)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Python script failed: {}", error);
-        }
-
-        let json_output = String::from_utf8_lossy(&output.stdout);
-        let quote: QuoteData = serde_json::from_str(&json_output)
+        let quote: QuoteData = serde_json::from_str(&output)
             .context("Failed to parse JSON from Python script")?;
 
         Ok(quote)
@@ -162,28 +118,17 @@ impl YFinanceProvider {
         start_date: &str,
         end_date: &str,
     ) -> Result<Vec<HistoricalData>> {
-        let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path)
-            .arg("historical")
-            .arg(symbol)
-            .arg(start_date)
-            .arg(end_date);
+        let args = vec![
+            "historical".to_string(),
+            symbol.to_string(),
+            start_date.to_string(),
+            end_date.to_string(),
+        ];
 
-        // Hide console window on Windows
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        let output = crate::python::execute_sync(&self.app, "yfinance_data.py", args)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Python script failed: {}", error);
-        }
-
-        let json_output = String::from_utf8_lossy(&output.stdout);
-        let historical: Vec<HistoricalData> = serde_json::from_str(&json_output)
+        let historical: Vec<HistoricalData> = serde_json::from_str(&output)
             .context("Failed to parse JSON from Python script")?;
 
         Ok(historical)
@@ -241,26 +186,12 @@ impl YFinanceProvider {
 
     /// Internal info fetch method - calls Python yfinance script
     async fn fetch_info(&self, symbol: &str) -> Result<serde_json::Value> {
-        let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path)
-            .arg("info")
-            .arg(symbol);
+        let args = vec!["info".to_string(), symbol.to_string()];
 
-        // Hide console window on Windows
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        let output = crate::python::execute_sync(&self.app, "yfinance_data.py", args)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Python script failed: {}", error);
-        }
-
-        let json_output = String::from_utf8_lossy(&output.stdout);
-        let info: serde_json::Value = serde_json::from_str(&json_output)
+        let info: serde_json::Value = serde_json::from_str(&output)
             .context("Failed to parse JSON from Python script")?;
 
         Ok(info)
@@ -276,26 +207,12 @@ impl YFinanceProvider {
 
     /// Internal financials fetch method - calls Python yfinance script
     async fn fetch_financials(&self, symbol: &str) -> Result<serde_json::Value> {
-        let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path)
-            .arg("financials")
-            .arg(symbol);
+        let args = vec!["financials".to_string(), symbol.to_string()];
 
-        // Hide console window on Windows
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        let output = crate::python::execute_sync(&self.app, "yfinance_data.py", args)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Python script failed: {}", error);
-        }
-
-        let json_output = String::from_utf8_lossy(&output.stdout);
-        let financials: serde_json::Value = serde_json::from_str(&json_output)
+        let financials: serde_json::Value = serde_json::from_str(&output)
             .context("Failed to parse JSON from Python script")?;
 
         Ok(financials)

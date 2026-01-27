@@ -37,12 +37,31 @@ class AlternativeDataWrapper:
 
     def __init__(self):
         self.session = None
-        self.default_timeout = 30
+        self.default_timeout = 15
         self.retry_delay = 2
 
         # Common date parameters
         self.default_start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
         self.default_end_date = datetime.now().strftime('%Y%m%d')
+
+        # Configure requests timeout globally for akshare
+        self._configure_timeout()
+
+    def _configure_timeout(self):
+        """Configure default timeout for HTTP requests used by akshare"""
+        try:
+            import requests
+            from requests.adapters import HTTPAdapter
+            # Patch the default session timeout if akshare uses requests internally
+            old_init = requests.Session.__init__
+
+            def patched_init(self_session, *args, **kwargs):
+                old_init(self_session, *args, **kwargs)
+                self_session.timeout = 15
+
+            requests.Session.__init__ = patched_init
+        except Exception:
+            pass
 
     def _convert_dataframe_to_json_safe(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
         """Convert DataFrame to JSON-safe format, handling dates and other non-serializable types"""
@@ -89,7 +108,7 @@ class AlternativeDataWrapper:
                     else:
                         return {
                             "success": False,
-                            "error": "No data returned",
+                            "error": "No data returned from this endpoint",
                             "data": [],
                             "count": 0,
                             "timestamp": int(datetime.now().timestamp()),
@@ -98,6 +117,23 @@ class AlternativeDataWrapper:
 
             except Exception as e:
                 last_error = str(e)
+                # Don't retry on timeout/connection errors - server is likely unreachable
+                is_timeout = any(keyword in last_error.lower() for keyword in [
+                    'timeout', 'timed out', 'max retries exceeded',
+                    'connectionerror', 'connecttimeouterror',
+                    'connection refused', 'unreachable'
+                ])
+                if is_timeout:
+                    return {
+                        "success": False,
+                        "error": f"Data source unavailable: The upstream server for '{func.__name__}' is not responding. This is a third-party service issue.",
+                        "data": [],
+                        "count": 0,
+                        "timestamp": int(datetime.now().timestamp()),
+                        "data_quality": "unavailable",
+                        "retry_after": 300  # suggest retry after 5 minutes
+                    }
+
                 if attempt < max_retries - 1:
                     time.sleep(self.retry_delay ** attempt)
                     continue
@@ -129,7 +165,7 @@ class AlternativeDataWrapper:
 
     def get_air_quality_hebei(self) -> Dict[str, Any]:
         """Get Hebei province air quality data"""
-        return self._safe_call_with_retry(ak.air_quality_hebei)
+        return self._safe_call_with_retry(ak.air_quality_hebei, max_retries=1)
 
     def get_air_zhenqi(self) -> Dict[str, Any]:
         """Get nationwide air quality data"""

@@ -1,6 +1,5 @@
 // French Government data commands
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
 /// Execute French Government Python script command
 #[tauri::command]
@@ -13,9 +12,7 @@ pub async fn execute_french_gov_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with PyO3
-    let script_path = get_script_path(&app, "french_gov_api.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    python::execute(&app, "french_gov_api.py", cmd_args).await
 }
 
 /// Search French government datasets

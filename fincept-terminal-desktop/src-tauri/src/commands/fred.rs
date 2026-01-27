@@ -1,8 +1,6 @@
 // FRED (Federal Reserve Economic Data) commands
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
-/// Execute FRED Python script command with PyO3
 #[tauri::command]
 pub async fn execute_fred_command(
     app: tauri::AppHandle,
@@ -11,9 +9,7 @@ pub async fn execute_fred_command(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-
-    let script_path = get_script_path(&app, "fred_data.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    python::execute(&app, "fred_data.py", cmd_args).await
 }
 
 /// Get FRED series data

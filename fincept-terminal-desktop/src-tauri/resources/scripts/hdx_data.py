@@ -191,7 +191,7 @@ def extract_dataset_details(dataset: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def main(args: Optional[List[str]] = None) -> str:
-    """Main entry point supporting both PyO3 and subprocess execution"""
+    """Main entry point for script execution"""
     if args is None:
         args = sys.argv[1:]
 

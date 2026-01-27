@@ -11,6 +11,7 @@ import { Activity, AlertTriangle, Zap } from 'lucide-react';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { BacktestRequest } from '@/services/backtesting/interfaces/types';
 import { sqliteService } from '@/services/core/sqliteService';
+import { portfolioService, Portfolio } from '@/services/portfolio/portfolioService';
 import {
   F, panelStyle, BacktestConfigExtended, StrategyType,
   ExtendedEquityPoint, ExtendedTrade, AdvancedMetrics, MonthlyReturnsData, RollingMetric,
@@ -36,8 +37,8 @@ const BacktestingTabNew: React.FC = () => {
   const [config, setConfig] = useState<BacktestConfigExtended>({
     symbols: ['SPY'],
     weights: [1.0],
-    startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    startDate: new Date(Date.now() - 366 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     initialCapital: 100000,
     strategyType: 'sma_crossover',
     parameters: { fastPeriod: 10, slowPeriod: 20 },
@@ -73,9 +74,40 @@ const BacktestingTabNew: React.FC = () => {
   const [showOptimization, setShowOptimization] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
 
+  // --- Portfolio State ---
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+
   // --- Provider Registration ---
   useEffect(() => {
     registerProviders();
+  }, []);
+
+  // --- Fetch User Portfolios ---
+  useEffect(() => {
+    portfolioService.getPortfolios()
+      .then(setPortfolios)
+      .catch(() => setPortfolios([]));
+  }, []);
+
+  // --- Portfolio Selection Handler ---
+  const handlePortfolioSelect = useCallback(async (portfolioId: string) => {
+    if (!portfolioId) return;
+    try {
+      const assets = await portfolioService.getPortfolioAssets(portfolioId);
+      if (assets.length === 0) return;
+
+      const symbols = assets.map(a => a.symbol);
+      const costBases = assets.map(a => a.quantity * a.avg_buy_price);
+      const totalCost = costBases.reduce((s, c) => s + c, 0);
+
+      const weights = totalCost > 0
+        ? costBases.map(c => c / totalCost)
+        : assets.map(() => 1.0 / assets.length);
+
+      setConfig(prev => ({ ...prev, symbols, weights }));
+    } catch (err) {
+      console.warn('[Backtesting] Failed to load portfolio assets:', err);
+    }
   }, []);
 
   const registerProviders = async () => {
@@ -222,7 +254,10 @@ const BacktestingTabNew: React.FC = () => {
       }
     } catch (err) {
       console.error('[Backtesting] Error:', err);
-      setError(String(err));
+      // Clean up double-wrapped error messages
+      let errMsg = String(err).replace(/^Error:\s*/g, '');
+      errMsg = errMsg.replace(/VectorBT backtest failed:\s*VectorBT backtest failed:\s*/g, 'VectorBT backtest failed: ');
+      setError(errMsg);
     } finally {
       setIsRunning(false);
     }
@@ -349,12 +384,13 @@ const BacktestingTabNew: React.FC = () => {
       {/* Error Banner */}
       {error && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
+          display: 'flex', alignItems: 'flex-start', gap: '8px',
           padding: '8px 14px', backgroundColor: '#1A0000',
           borderBottom: `1px solid ${F.RED}`, fontSize: '10px', color: F.RED,
+          maxHeight: '120px', overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
         }}>
-          <AlertTriangle size={12} />
-          {error}
+          <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -370,6 +406,8 @@ const BacktestingTabNew: React.FC = () => {
             availableProviders={availableProviders}
             activeProvider={activeProvider}
             onProviderChange={handleProviderChange}
+            portfolios={portfolios}
+            onPortfolioSelect={handlePortfolioSelect}
           />
         </div>
 

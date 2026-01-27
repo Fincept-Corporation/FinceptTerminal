@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Info, Settings } from 'lucide-react';
-import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { fetchAllNews, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData, setNewsCacheTTL, invalidateNewsCache } from '@/services/news/newsService';
+import { Info, Settings, RefreshCw, Clock, Zap, Newspaper, ExternalLink, Copy, BookOpen } from 'lucide-react';
+import { fetchAllNews, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData, setNewsCacheTTL } from '@/services/news/newsService';
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
 import RecordingControlPanel from '@/components/common/RecordingControlPanel';
 import { TimezoneSelector } from '@/components/common/TimezoneSelector';
@@ -10,16 +9,112 @@ import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgenc
 import { createNewsTabTour } from '@/components/tabs/tours/newsTabTour';
 import RSSFeedSettingsModal from './RSSFeedSettingsModal';
 
-// Extend Window interface for Tauri
 declare global {
-  interface Window {
-    __TAURI__?: any;
-  }
+  interface Window { __TAURI__?: any; }
 }
 
+// ── FINCEPT Design System ──
+const F = {
+  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
+  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F', HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A', HOVER: '#1F1F1F', MUTED: '#4A4A4A', CYAN: '#00E5FF',
+  YELLOW: '#FFD700', BLUE: '#0088FF', PURPLE: '#9D4EDD',
+};
+const FONT = '"IBM Plex Mono","Consolas",monospace';
+
+// ── Helpers ──
+const priColor = (p: string) => ({ FLASH: F.RED, URGENT: F.ORANGE, BREAKING: F.YELLOW, ROUTINE: F.GRAY }[p] || F.MUTED);
+const sentColor = (s: string) => ({ BULLISH: F.GREEN, BEARISH: F.RED, NEUTRAL: F.YELLOW }[s] || F.MUTED);
+const impColor = (i: string) => ({ HIGH: F.RED, MEDIUM: F.YELLOW, LOW: F.GREEN }[i] || F.MUTED);
+
+// ── Section Header ──
+const SectionHead: React.FC<{ title: string; right?: React.ReactNode }> = ({ title, right }) => (
+  <div style={{
+    padding: '4px 8px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}`,
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0,
+  }}>
+    <span style={{ fontSize: '8px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>{title}</span>
+    {right && <span style={{ fontSize: '8px', color: F.CYAN }}>{right}</span>}
+  </div>
+);
+
+// ── Compact Row ──
+const NewsRow: React.FC<{
+  article: NewsArticle; selected: boolean; onClick: () => void;
+}> = ({ article, selected, onClick }) => (
+  <div
+    onClick={onClick}
+    style={{
+      display: 'flex', alignItems: 'center', gap: '6px',
+      padding: '3px 6px', cursor: 'pointer',
+      backgroundColor: selected ? `${F.ORANGE}15` : 'transparent',
+      borderLeft: selected ? `2px solid ${F.ORANGE}` : `2px solid transparent`,
+      borderBottom: `1px solid ${F.BORDER}08`,
+      transition: 'background 0.15s',
+      minHeight: '20px',
+    }}
+    onMouseEnter={e => { if (!selected) e.currentTarget.style.backgroundColor = F.HOVER; }}
+    onMouseLeave={e => { if (!selected) e.currentTarget.style.backgroundColor = 'transparent'; }}
+  >
+    <span style={{ color: F.MUTED, fontSize: '8px', minWidth: '38px', flexShrink: 0 }}>{article.time}</span>
+    <span style={{
+      color: priColor(article.priority), fontSize: '7px', fontWeight: 700,
+      minWidth: '40px', flexShrink: 0, letterSpacing: '0.3px',
+    }}>{article.priority}</span>
+    <span style={{
+      color: F.CYAN, fontSize: '7px', fontWeight: 700,
+      minWidth: '55px', flexShrink: 0, letterSpacing: '0.3px',
+    }}>{article.source}</span>
+    <span style={{
+      color: F.WHITE, fontSize: '9px', fontWeight: selected ? 700 : 400,
+      flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    }}>{article.headline}</span>
+    <span style={{
+      color: sentColor(article.sentiment), fontSize: '7px', fontWeight: 700,
+      minWidth: '28px', flexShrink: 0, textAlign: 'right',
+    }}>{article.sentiment?.charAt(0) || '-'}</span>
+    <span style={{
+      color: impColor(article.impact), fontSize: '7px', fontWeight: 700,
+      minWidth: '10px', flexShrink: 0, textAlign: 'center',
+    }}>{article.impact?.charAt(0) || '-'}</span>
+  </div>
+);
+
+// ── Alert Row (for left sidebar) ──
+const AlertRow: React.FC<{ article: NewsArticle; onClick: () => void }> = ({ article, onClick }) => (
+  <div onClick={onClick} style={{
+    padding: '4px 6px', cursor: 'pointer',
+    borderLeft: `2px solid ${priColor(article.priority)}`,
+    marginBottom: '2px', transition: 'background 0.15s',
+  }}
+    onMouseEnter={e => e.currentTarget.style.backgroundColor = F.HOVER}
+    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+  >
+    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '1px' }}>
+      <span style={{ color: priColor(article.priority), fontSize: '7px', fontWeight: 700 }}>{article.priority}</span>
+      <span style={{ color: F.MUTED, fontSize: '7px' }}>{article.time}</span>
+    </div>
+    <div style={{
+      color: F.WHITE, fontSize: '8px', fontWeight: 700, lineHeight: '1.2',
+      overflow: 'hidden', textOverflow: 'ellipsis',
+      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any,
+    }}>{article.headline}</div>
+  </div>
+);
+
+// ── Stat Row ──
+const StatRow: React.FC<{ label: string; value: number | string; color: string }> = ({ label, value, color }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: '8px' }}>
+    <span style={{ color: F.GRAY }}>{label}</span>
+    <span style={{ color, fontWeight: 700 }}>{value}</span>
+  </div>
+);
+
+// ══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════
 const NewsTab: React.FC = () => {
   const { t } = useTranslation('news');
-  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [newsUpdateCount, setNewsUpdateCount] = useState(0);
@@ -30,7 +125,7 @@ const NewsTab: React.FC = () => {
   const [feedCount, setFeedCount] = useState(9);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [showWebView, setShowWebView] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(10); // minutes
+  const [refreshInterval, setRefreshInterval] = useState(10);
   const [showIntervalSettings, setShowIntervalSettings] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [analysisData, setAnalysisData] = useState<NewsAnalysisData | null>(null);
@@ -38,1588 +133,543 @@ const NewsTab: React.FC = () => {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showFeedSettings, setShowFeedSettings] = useState(false);
 
-  // Function to record current news data
+  // ── Data loading ──
   const recordCurrentData = async () => {
     if (newsArticles.length > 0) {
       try {
         const sources = await getActiveSources();
-        const recordData = {
-          articles: newsArticles,
-          totalCount: newsArticles.length,
+        await contextRecorderService.recordApiResponse('News', 'news-feed', {
+          articles: newsArticles, totalCount: newsArticles.length,
           alertCount: newsArticles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
-          sources: sources,
-          timestamp: new Date().toISOString(),
-          filter: activeFilter
-        };
-        await contextRecorderService.recordApiResponse(
-          'News',
-          'news-feed',
-          recordData,
-          `News Feed (Snapshot) - ${new Date().toLocaleString()}`,
-          ['news', 'rss', 'snapshot', activeFilter.toLowerCase()]
-        );
-      } catch (error) {
-        // Silently handle recording errors
-      }
+          sources, timestamp: new Date().toISOString(), filter: activeFilter,
+        }, `News Feed (Snapshot) - ${new Date().toLocaleString()}`, ['news', 'rss', 'snapshot', activeFilter.toLowerCase()]);
+      } catch { /* silent */ }
     }
   };
 
-  // Manual refresh function - always fetches fresh data (bypasses cache)
-  const handleRefresh = useCallback(async (forceRefresh: boolean = true) => {
+  const handleRefresh = useCallback(async (forceRefresh = true) => {
     setLoading(true);
     try {
-      // Force refresh bypasses cache to get fresh data
       const [articles, sources, count] = await Promise.all([
-        fetchAllNews(forceRefresh),
-        getActiveSources(),
-        getRSSFeedCount()
+        fetchAllNews(forceRefresh), getActiveSources(), getRSSFeedCount(),
       ]);
       setNewsArticles(articles);
       setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
       setActiveSources(sources);
       setFeedCount(count);
       setNewsUpdateCount(prev => prev + 1);
-
-      // Record data if recording is active
       if (isRecording && articles.length > 0) {
         try {
-          const recordData = {
-            articles: articles,
-            totalCount: articles.length,
+          await contextRecorderService.recordApiResponse('News', 'news-feed', {
+            articles, totalCount: articles.length,
             alertCount: articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
-            sources: sources,
-            timestamp: new Date().toISOString(),
-            filter: activeFilter
-          };
-          await contextRecorderService.recordApiResponse(
-            'News',
-            'news-feed',
-            recordData,
-            `News Feed - ${new Date().toLocaleString()}`,
-            ['news', 'rss', 'live-feed', activeFilter.toLowerCase()]
-          );
-        } catch (error) {
-          // Silently handle recording errors
-        }
+            sources, timestamp: new Date().toISOString(), filter: activeFilter,
+          }, `News Feed - ${new Date().toLocaleString()}`, ['news', 'rss', 'live-feed', activeFilter.toLowerCase()]);
+        } catch { /* silent */ }
       }
-    } catch (error) {
-      // Silently handle fetch errors
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* silent */ } finally { setLoading(false); }
   }, [isRecording, activeFilter]);
 
-  // Handle AI analysis of article
   const handleAnalyzeArticle = async () => {
     if (!selectedArticle?.link) return;
-
-    setAnalyzingArticle(true);
-    setShowAnalysis(false);
-    setAnalysisData(null);
-
+    setAnalyzingArticle(true); setShowAnalysis(false); setAnalysisData(null);
     try {
       const result = await analyzeNewsArticle(selectedArticle.link);
-
-      if (result.success && 'data' in result) {
-        setAnalysisData(result.data);
-        setShowAnalysis(true);
-      } else if ('error' in result) {
-        console.error('Analysis failed:', result.error);
-      }
-    } catch (error) {
-      console.error('Analysis error:', error);
-    } finally {
-      setAnalyzingArticle(false);
-    }
+      if (result.success && 'data' in result) { setAnalysisData(result.data); setShowAnalysis(true); }
+    } catch { /* silent */ } finally { setAnalyzingArticle(false); }
   };
 
-  // Track if this is the initial mount to use cached data
   const isInitialMount = useRef(true);
+  useEffect(() => { setNewsCacheTTL(refreshInterval); }, [refreshInterval]);
 
-  // Update cache TTL when refresh interval changes
   useEffect(() => {
-    setNewsCacheTTL(refreshInterval);
-  }, [refreshInterval]);
-
-  // Fetch real news on mount and based on refresh interval
-  useEffect(() => {
-    const loadNews = async (forceRefresh: boolean = false) => {
+    const loadNews = async (force = false) => {
       setLoading(true);
       try {
-        // On initial mount, try to use cached data; on interval refreshes, force fresh data
-        const [articles, sources, count] = await Promise.all([
-          fetchAllNews(forceRefresh),
-          getActiveSources(),
-          getRSSFeedCount()
-        ]);
+        const [articles, sources, count] = await Promise.all([fetchAllNews(force), getActiveSources(), getRSSFeedCount()]);
         setNewsArticles(articles);
         setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
-        setActiveSources(sources);
-        setFeedCount(count);
+        setActiveSources(sources); setFeedCount(count);
         setNewsUpdateCount(prev => prev + 1);
-
-        // Record data if recording is active
-        if (isRecording && articles.length > 0) {
-          try {
-            const recordData = {
-              articles: articles,
-              totalCount: articles.length,
-              alertCount: articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
-              sources: sources,
-              timestamp: new Date().toISOString(),
-              filter: activeFilter
-            };
-            await contextRecorderService.recordApiResponse(
-              'News',
-              'news-feed',
-              recordData,
-              `News Feed - ${new Date().toLocaleString()}`,
-              ['news', 'rss', 'live-feed', activeFilter.toLowerCase()]
-            );
-          } catch (error) {
-            // Silently handle recording errors
-          }
-        }
-      } catch (error) {
-        // Silently handle fetch errors
-      } finally {
-        setLoading(false);
-      }
+      } catch { /* silent */ } finally { setLoading(false); }
     };
-
-    // On initial mount, use cached data if available
-    // Otherwise, interval refreshes force fresh data
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      loadNews(false); // Use cache on initial mount
-    } else {
-      loadNews(true); // Force refresh when interval changes
-    }
-
-    // Refresh news based on user interval - ALWAYS force fresh data on interval
-    const newsRefreshInterval = setInterval(() => {
-      console.log(`[NewsTab] Auto-refresh triggered (${refreshInterval}min interval) - fetching fresh data`);
-      loadNews(true); // Always force refresh on interval
-    }, refreshInterval * 60 * 1000);
-
-    return () => clearInterval(newsRefreshInterval);
+    if (isInitialMount.current) { isInitialMount.current = false; loadNews(false); } else { loadNews(true); }
+    const iv = setInterval(() => loadNews(true), refreshInterval * 60 * 1000);
+    return () => clearInterval(iv);
   }, [refreshInterval, isRecording, activeFilter]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(t);
   }, []);
 
-  // Generate continuous ticker text with all news items
-  const generateContinuousTickerText = () => {
-    if (newsArticles.length === 0) {
-      return t('messages.loadingFeeds');
-    }
-
-    // Create a long string of all news items
-    return newsArticles.map(article =>
-      `🔴 ${article.priority} | ${article.source} | ${article.headline.toUpperCase()}     `
-    ).join('');
-  };
-
-  const newsTickerText = generateContinuousTickerText();
-
-  // Calculate animation duration based on content length (more content = slower speed)
-  // Base: 1600 seconds for 1000 characters, scale proportionally
-  const tickerDuration = Math.max(1200, Math.min(4800, (newsTickerText.length / 1000) * 1600));
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'FLASH': return colors.alert;
-      case 'URGENT': return colors.primary;
-      case 'BREAKING': return colors.warning;
-      case 'ROUTINE': return colors.secondary;
-      default: return colors.textMuted;
-    }
-  };
-
-  const getArticleSentimentColor = (sentiment: string) => {
-    switch (sentiment) {
-      case 'BULLISH': return colors.secondary;
-      case 'BEARISH': return colors.alert;
-      case 'NEUTRAL': return colors.warning;
-      default: return colors.textMuted;
-    }
-  };
-
-  const getImpactColor = (impact: string) => {
-    switch (impact) {
-      case 'HIGH': return colors.alert;
-      case 'MEDIUM': return colors.warning;
-      case 'LOW': return colors.secondary;
-      default: return colors.textMuted;
-    }
-  };
-
+  // ── Derived data ──
   const filteredNews = activeFilter === 'ALL'
     ? newsArticles
-    : newsArticles.filter(article => article.category === activeFilter);
+    : newsArticles.filter(a => a.category === activeFilter);
 
-  // Calculate stats from real data
-  const bullishCount = newsArticles.filter(a => a.sentiment === 'BULLISH').length;
-  const bearishCount = newsArticles.filter(a => a.sentiment === 'BEARISH').length;
-  const neutralCount = newsArticles.filter(a => a.sentiment === 'NEUTRAL').length;
-  const totalCount = newsArticles.length || 1;
-  const sentimentScore = ((bullishCount - bearishCount) / totalCount).toFixed(2);
+  const urgentNews = newsArticles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT' || a.priority === 'BREAKING');
 
-  // Category counts
-  const breakingCount = newsArticles.filter(a => a.priority === 'BREAKING' || a.priority === 'FLASH').length;
-  const earningsCount = newsArticles.filter(a => a.category === 'EARNINGS').length;
-  const economicCount = newsArticles.filter(a => a.category === 'ECONOMIC').length;
+  const bullish = newsArticles.filter(a => a.sentiment === 'BULLISH').length;
+  const bearish = newsArticles.filter(a => a.sentiment === 'BEARISH').length;
+  const neutral = newsArticles.filter(a => a.sentiment === 'NEUTRAL').length;
+  const total = newsArticles.length || 1;
+  const score = ((bullish - bearish) / total).toFixed(2);
 
+  const catCounts: Record<string, number> = {};
+  newsArticles.forEach(a => { catCounts[a.category] = (catCounts[a.category] || 0) + 1; });
+
+  // Ticker
+  const tickerText = newsArticles.length === 0 ? t('messages.loadingFeeds')
+    : newsArticles.map(a => `${a.priority} | ${a.source} | ${a.headline.toUpperCase()}     `).join('');
+  const tickerDur = Math.max(1200, Math.min(4800, (tickerText.length / 1000) * 1600));
+
+  // Filter defs
+  const filters = [
+    { key: 'F1', label: 'ALL', f: 'ALL' }, { key: 'F2', label: 'MKT', f: 'MARKETS' },
+    { key: 'F3', label: 'ERN', f: 'EARNINGS' }, { key: 'F4', label: 'ECO', f: 'ECONOMIC' },
+    { key: 'F5', label: 'TCH', f: 'TECH' }, { key: 'F6', label: 'NRG', f: 'ENERGY' },
+    { key: 'F7', label: 'BNK', f: 'BANKING' }, { key: 'F8', label: 'CRY', f: 'CRYPTO' },
+    { key: 'F9', label: 'GEO', f: 'GEOPOLITICS' },
+  ];
+
+  // ── Open article externally ──
+  const openExternal = async (url: string) => {
+    try {
+      if (window.__TAURI__) {
+        const { openUrl } = await import('@tauri-apps/plugin-opener');
+        await openUrl(url);
+      } else {
+        window.open(url, '_blank', 'noopener');
+      }
+    } catch { await navigator.clipboard.writeText(url); }
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════════════
   return (
     <div style={{
-      height: '100%',
-      backgroundColor: colors.background,
-      color: colors.text,
-      fontFamily: fontFamily,
-      fontWeight: fontWeight,
-      fontStyle: fontStyle,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-      fontSize: fontSize.body
+      height: '100%', backgroundColor: F.DARK_BG, color: F.WHITE, fontFamily: FONT,
+      overflow: 'hidden', display: 'flex', flexDirection: 'column', fontSize: '9px',
     }}>
-      {/* Complex Header with News Ticker */}
+
+      {/* ── TOP NAV ── */}
       <div style={{
-        backgroundColor: colors.panel,
-        borderBottom: `1px solid ${colors.textMuted}`,
-        padding: '4px 8px',
-        flexShrink: 0
+        backgroundColor: F.HEADER_BG, borderBottom: `2px solid ${F.ORANGE}`,
+        padding: '4px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: `0 2px 8px ${F.ORANGE}20`, flexShrink: 0, position: 'relative',
       }}>
-        {/* Main Status Line */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-          <span style={{ color: colors.primary, fontWeight: 'bold' }}>{t('title')}</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.alert, fontWeight: 'bold', animation: 'blink 1s infinite' }}>{t('header.liveFeed')}</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.warning }}>{t('header.alerts')}: {alertCount}</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.secondary }}>● {feedCount} {t('header.sources')}</span>
-          <span style={{ color: colors.text }}>|</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Newspaper size={12} style={{ color: F.ORANGE }} />
+          <span style={{ color: F.ORANGE, fontWeight: 700, fontSize: '10px', letterSpacing: '0.5px' }}>
+            {t('title')}
+          </span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span style={{ color: F.RED, fontWeight: 700, fontSize: '8px', animation: 'blink 1s infinite' }}>LIVE</span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span style={{ color: F.YELLOW, fontSize: '8px', fontWeight: 700 }}>ALT:{alertCount}</span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span style={{ color: F.GREEN, fontSize: '8px', fontWeight: 700 }}>{feedCount}SRC</span>
+          <span style={{ color: F.BORDER }}>|</span>
           <TimezoneSelector compact />
-          <span style={{ color: colors.text }}>|</span>
-          <button
-            onClick={() => {
-              const tour = createNewsTabTour();
-              tour.drive();
-            }}
-            style={{
-              backgroundColor: colors.info,
-              color: colors.background,
-              border: 'none',
-              padding: '2px 8px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              borderRadius: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-            title="Start news tour"
-          >
-            <Info size={12} />
-            HELP
-          </button>
-          <span style={{ color: colors.text }}>|</span>
-          <button
-            id="news-refresh"
-            onClick={() => handleRefresh(true)}
-            disabled={loading}
-            style={{
-              backgroundColor: loading ? colors.textMuted : colors.secondary,
-              color: colors.background,
-              border: 'none',
-              padding: '2px 8px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              borderRadius: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-            title="Refresh news feeds"
-          >
-            🔄 {loading ? t('header.updating') : t('header.refresh')}
-          </button>
-          <span style={{ color: colors.text }}>|</span>
-          <button
-            id="news-interval-settings"
-            onClick={() => setShowIntervalSettings(!showIntervalSettings)}
-            style={{
-              backgroundColor: colors.info,
-              color: colors.background,
-              border: 'none',
-              padding: '2px 8px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              borderRadius: '2px'
-            }}
-            title="Auto-refresh settings"
-          >
-            ⏱ {refreshInterval}min
-          </button>
-          <span style={{ color: colors.text }}>|</span>
-          <button
-            onClick={() => setShowFeedSettings(true)}
-            style={{
-              backgroundColor: colors.purple,
-              color: colors.text,
-              border: 'none',
-              padding: '2px 8px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              borderRadius: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-            title="RSS Feed Settings"
-          >
-            <Settings size={12} />
-            SOURCES
-          </button>
-          <span style={{ color: colors.text }}>|</span>
-          <RecordingControlPanel
-            tabName="News"
-            onRecordingChange={setIsRecording}
-            onRecordingStart={recordCurrentData}
-          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button onClick={() => { createNewsTabTour().drive(); }}
+            style={{ padding: '2px 6px', background: 'none', border: `1px solid ${F.BORDER}`, color: F.GRAY, fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}
+          ><Info size={9} />HELP</button>
+          <button id="news-refresh" onClick={() => handleRefresh(true)} disabled={loading}
+            style={{ padding: '2px 6px', backgroundColor: loading ? F.MUTED : F.ORANGE, color: loading ? F.GRAY : F.DARK_BG, border: 'none', fontSize: '8px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}
+          ><RefreshCw size={9} />{loading ? 'WAIT' : 'REFRESH'}</button>
+          <button id="news-interval-settings" onClick={() => setShowIntervalSettings(!showIntervalSettings)}
+            style={{ padding: '2px 6px', background: 'none', border: `1px solid ${F.BORDER}`, color: F.GRAY, fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}
+          ><Clock size={9} />{refreshInterval}M</button>
+          <button onClick={() => setShowFeedSettings(true)}
+            style={{ padding: '2px 6px', background: 'none', border: `1px solid ${F.BORDER}`, color: F.GRAY, fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}
+          ><Settings size={9} />SRC</button>
+          <RecordingControlPanel tabName="News" onRecordingChange={setIsRecording} onRecordingStart={recordCurrentData} />
         </div>
 
-        {/* Interval Settings Dropdown */}
         {showIntervalSettings && (
-          <div style={{
-            position: 'absolute',
-            top: '30px',
-            right: '8px',
-            backgroundColor: colors.panel,
-            border: `2px solid ${colors.primary}`,
-            borderRadius: '4px',
-            padding: '8px',
-            zIndex: 1000,
-            boxShadow: `0 4px 8px rgba(0,0,0,0.3)`
-          }}>
-            <div style={{ fontSize: '11px', color: colors.warning, fontWeight: 'bold', marginBottom: '6px' }}>
-              {t('autoRefresh.title')}
-            </div>
-            {[1, 2, 5, 10, 15, 30].map(min => (
-              <button
-                key={min}
-                onClick={() => {
-                  setRefreshInterval(min);
-                  setShowIntervalSettings(false);
-                }}
-                style={{
-                  width: '100%',
-                  backgroundColor: refreshInterval === min ? colors.primary : colors.background,
-                  color: refreshInterval === min ? colors.background : colors.text,
-                  border: `1px solid ${colors.textMuted}`,
-                  padding: '4px 8px',
-                  fontSize: '10px',
-                  fontWeight: refreshInterval === min ? 'bold' : 'normal',
-                  cursor: 'pointer',
-                  marginBottom: '2px',
-                  textAlign: 'left'
-                }}
-              >
-                {min} {min > 1 ? t('autoRefresh.minutes') : t('autoRefresh.minute')}
-              </button>
+          <div style={{ position: 'absolute', top: '100%', right: 12, backgroundColor: F.PANEL_BG, border: `1px solid ${F.ORANGE}`, borderRadius: '2px', padding: '6px', zIndex: 1000, marginTop: '2px' }}>
+            <div style={{ fontSize: '8px', color: F.GRAY, fontWeight: 700, marginBottom: '4px', letterSpacing: '0.5px' }}>INTERVAL</div>
+            {[1, 2, 5, 10, 15, 30].map(m => (
+              <button key={m} onClick={() => { setRefreshInterval(m); setShowIntervalSettings(false); }}
+                style={{ width: '100%', backgroundColor: refreshInterval === m ? F.ORANGE : 'transparent', color: refreshInterval === m ? F.DARK_BG : F.WHITE, border: `1px solid ${refreshInterval === m ? F.ORANGE : F.BORDER}`, padding: '2px 6px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', marginBottom: '1px', textAlign: 'left', borderRadius: '2px' }}
+              >{m}min</button>
             ))}
           </div>
         )}
+      </div>
 
-        {/* News Ticker - Continuous seamless scroll like Fincept */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>
-          <span style={{ color: colors.warning, fontWeight: 'bold' }}>{t('messages.breaking')}:</span>
-          <div className="ticker-wrap" style={{
-            flex: 1,
-            overflow: 'hidden',
-            position: 'relative',
-            height: '20px'
-          }}>
-            <div className="ticker-move">
-              <span className="ticker-item">{newsTickerText}</span>
-              <span className="ticker-item">{newsTickerText}</span>
+      {/* ── TICKER ── */}
+      <div style={{ backgroundColor: F.PANEL_BG, borderBottom: `1px solid ${F.BORDER}`, padding: '2px 12px', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <span style={{ color: F.RED, fontWeight: 700, fontSize: '8px', flexShrink: 0 }}>BREAKING:</span>
+        <div className="ticker-wrap" style={{ flex: 1, overflow: 'hidden', height: '14px' }}>
+          <div className="ticker-move">
+            <span className="ticker-item">{tickerText}</span>
+            <span className="ticker-item">{tickerText}</span>
+          </div>
+        </div>
+        <span style={{ color: loading ? F.YELLOW : F.GREEN, fontSize: '8px', fontWeight: 700, flexShrink: 0 }}>
+          {loading ? 'UPD' : (isUsingMockData() ? 'DEMO' : 'LIVE')}
+        </span>
+      </div>
+
+      {/* ── FILTER BAR ── */}
+      <div id="news-filters" style={{ backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}`, padding: '2px 6px', flexShrink: 0, display: 'flex', gap: '2px' }}>
+        {filters.map(item => (
+          <button key={item.key} onClick={() => setActiveFilter(item.f)}
+            style={{
+              padding: '2px 8px', backgroundColor: activeFilter === item.f ? F.ORANGE : 'transparent',
+              color: activeFilter === item.f ? F.DARK_BG : F.GRAY, border: 'none',
+              fontSize: '8px', fontWeight: 700, letterSpacing: '0.3px', cursor: 'pointer', borderRadius: '2px',
+            }}>
+            <span style={{ color: activeFilter === item.f ? F.DARK_BG : F.MUTED, marginRight: '2px', fontSize: '7px' }}>{item.key}</span>
+            {item.label}
+            {catCounts[item.f] ? <span style={{ marginLeft: '3px', opacity: 0.6 }}>({catCounts[item.f]})</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {/* ── COLUMN HEADER for feed table ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 6px',
+        backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}`, flexShrink: 0,
+        fontSize: '7px', fontWeight: 700, color: F.MUTED, letterSpacing: '0.5px',
+      }}>
+        <span style={{ minWidth: '38px' }}>TIME</span>
+        <span style={{ minWidth: '40px' }}>PRI</span>
+        <span style={{ minWidth: '55px' }}>SOURCE</span>
+        <span style={{ flex: 1 }}>HEADLINE</span>
+        <span style={{ minWidth: '28px', textAlign: 'right' }}>SNT</span>
+        <span style={{ minWidth: '10px', textAlign: 'center' }}>I</span>
+      </div>
+
+      {/* ══ MAIN CONTENT ══ */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', gap: '1px', backgroundColor: F.BORDER }}>
+
+        {/* ── LEFT SIDEBAR: Alerts + Stats ── */}
+        <div style={{ width: '200px', flexShrink: 0, backgroundColor: F.PANEL_BG, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Breaking Alerts */}
+          <SectionHead title="BREAKING / URGENT" right={`${urgentNews.length}`} />
+          <div style={{ flex: 1, overflow: 'auto', padding: '2px' }}>
+            {urgentNews.length === 0 ? (
+              <div style={{ padding: '12px', color: F.MUTED, fontSize: '8px', textAlign: 'center' }}>NO ALERTS</div>
+            ) : urgentNews.slice(0, 20).map(a => (
+              <AlertRow key={a.id} article={a} onClick={() => setSelectedArticle(a)} />
+            ))}
+          </div>
+
+          {/* Category Breakdown */}
+          <SectionHead title="CATEGORY BREAKDOWN" />
+          <div style={{ padding: '4px 6px', borderBottom: `1px solid ${F.BORDER}` }}>
+            {Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([cat, count]) => (
+              <StatRow key={cat} label={cat} value={count} color={F.CYAN} />
+            ))}
+          </div>
+
+          {/* Sentiment */}
+          <SectionHead title="SENTIMENT" />
+          <div style={{ padding: '4px 6px' }}>
+            <StatRow label="BULLISH" value={`${bullish} (${Math.round((bullish / total) * 100)}%)`} color={F.GREEN} />
+            <StatRow label="BEARISH" value={`${bearish} (${Math.round((bearish / total) * 100)}%)`} color={F.RED} />
+            <StatRow label="NEUTRAL" value={`${neutral} (${Math.round((neutral / total) * 100)}%)`} color={F.YELLOW} />
+            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${F.BORDER}` }}>
+              <StatRow label="NET SCORE" value={`${score} ${parseFloat(score) > 0 ? 'BULL' : parseFloat(score) < 0 ? 'BEAR' : 'FLAT'}`}
+                color={parseFloat(score) > 0 ? F.GREEN : parseFloat(score) < 0 ? F.RED : F.YELLOW} />
+            </div>
+            {/* Sentiment bar */}
+            <div style={{ marginTop: '4px', height: '3px', backgroundColor: F.BORDER, borderRadius: '2px', display: 'flex', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.round((bullish / total) * 100)}%`, backgroundColor: F.GREEN }} />
+              <div style={{ width: `${Math.round((neutral / total) * 100)}%`, backgroundColor: F.YELLOW }} />
+              <div style={{ width: `${Math.round((bearish / total) * 100)}%`, backgroundColor: F.RED }} />
             </div>
           </div>
-          <span style={{ color: colors.secondary, fontSize: '9px' }}>
-            ● {t('header.live')}
-          </span>
+
+          {/* Quick Stats */}
+          <SectionHead title="FEED STATS" />
+          <div style={{ padding: '4px 6px' }}>
+            <StatRow label="TOTAL" value={newsArticles.length} color={F.CYAN} />
+            <StatRow label="FEEDS" value={feedCount} color={F.CYAN} />
+            <StatRow label="UPDATES" value={newsUpdateCount} color={F.CYAN} />
+            <StatRow label="FILTER" value={activeFilter} color={F.ORANGE} />
+          </div>
         </div>
 
-        {/* Sources and Stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px', flexWrap: 'wrap' }}>
-          <span style={{ color: colors.textMuted }}>{t('header.activeSources')}:</span>
-          {activeSources.slice(0, 12).map((source, idx) => (
-            <span key={idx} style={{ color: colors.secondary }}>{source}●</span>
-          ))}
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>{t('header.articles')}:</span>
-          <span style={{ color: colors.accent }}>{newsArticles.length}</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>{t('header.status')}:</span>
-          <span style={{ color: loading ? colors.warning : colors.secondary }}>
-            {loading ? t('header.updating') : (isUsingMockData() ? `● ${t('header.demoMode')}` : `● ${t('header.live')}`)}
-          </span>
-        </div>
-      </div>
-
-      {/* Function Keys Bar */}
-      <div id="news-filters" style={{
-        backgroundColor: colors.panel,
-        borderBottom: `1px solid ${colors.textMuted}`,
-        padding: '2px 4px',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2px' }}>
-          {[
-            { key: "F1", label: "ALL", filter: "ALL" },
-            { key: "F2", label: "MARKETS", filter: "MARKETS" },
-            { key: "F3", label: "EARNINGS", filter: "EARNINGS" },
-            { key: "F4", label: "ECON", filter: "ECONOMIC" },
-            { key: "F5", label: "TECH", filter: "TECH" },
-            { key: "F6", label: "ENERGY", filter: "ENERGY" },
-            { key: "F7", label: "BANKING", filter: "BANKING" },
-            { key: "F8", label: "CRYPTO", filter: "CRYPTO" },
-            { key: "F9", label: "GEOPO", filter: "GEOPOLITICS" },
-            { key: "F10", label: "FLASH", filter: "FLASH" },
-            { key: "F11", label: "URGENT", filter: "URGENT" },
-            { key: "F12", label: "REFRESH", filter: "REFRESH" }
-          ].map(item => (
-            <button key={item.key}
-              onClick={() => {
-                if (item.filter === 'REFRESH') {
-                  window.location.reload();
-                } else if (item.filter === 'FLASH') {
-                  setActiveFilter('ALL');
-                  setNewsArticles(prev => prev.filter(a => a.priority === 'FLASH'));
-                } else if (item.filter === 'URGENT') {
-                  setActiveFilter('ALL');
-                  setNewsArticles(prev => prev.filter(a => a.priority === 'URGENT' || a.priority === 'FLASH'));
-                } else {
-                  setActiveFilter(item.filter);
-                }
-              }}
-              style={{
-                backgroundColor: activeFilter === item.filter ? colors.primary : colors.background,
-                border: `1px solid ${colors.textMuted}`,
-                color: activeFilter === item.filter ? colors.background : colors.text,
-                padding: '2px 4px',
-                fontSize: '9px',
-                height: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: activeFilter === item.filter ? 'bold' : 'normal',
-                cursor: 'pointer'
-              }}>
-              <span style={{ color: colors.warning }}>{item.key}:</span>
-              <span style={{ marginLeft: '2px' }}>{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Content - 3 Column Dense News Layout */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '4px', backgroundColor: '#050505' }}>
-        <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
-
-          {/* Left Panel - Breaking News Stream (Primary Feed) */}
-          <div id="news-primary-feed" style={{
-            flex: 1,
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-              {t('feeds.primary')} [{activeFilter}]
-            </div>
-            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
+        {/* ── CENTER: Dense News Feed ── */}
+        <div id="news-primary-feed" style={{ flex: 1, backgroundColor: F.PANEL_BG, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ flex: 1, overflow: 'auto' }}>
             {loading && newsArticles.length === 0 ? (
-              <div style={{ color: colors.warning, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
-                Loading news from {feedCount} RSS feeds...
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: F.MUTED, fontSize: '9px' }}>
+                <RefreshCw size={16} className="animate-spin" style={{ marginBottom: '6px', opacity: 0.5 }} />
+                Loading {feedCount} feeds...
               </div>
             ) : filteredNews.length === 0 ? (
-              <div style={{ color: colors.textMuted, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
-                No articles found for filter: {activeFilter}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: F.MUTED, fontSize: '9px' }}>
+                <Newspaper size={16} style={{ marginBottom: '6px', opacity: 0.5 }} />
+                No articles for: {activeFilter}
               </div>
-            ) : null}
-
-            {filteredNews.slice(0, Math.ceil(filteredNews.length / 3)).map((article, index) => (
-              <div key={article.id} style={{
-                marginBottom: '6px',
-                borderLeft: `3px solid ${getPriorityColor(article.priority)}`,
-                paddingLeft: '4px',
-                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                cursor: article.link ? 'pointer' : 'default'
-              }}
-                onClick={() => setSelectedArticle(article)}
-              >
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
-                  <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
-                  <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold', minWidth: '60px' }}>
-                    [{article.priority}]
-                  </span>
-                  <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
-                  <span style={{ color: colors.purple, minWidth: '30px' }}>{article.region}</span>
-                  <span style={{ color: getArticleSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
-                </div>
-
-                <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
-                  {article.headline}
-                </div>
-
-                <div style={{ color: colors.textMuted, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
-                  {article.summary}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                  <span style={{ color: colors.accent }}>{article.source}</span>
-                  <span style={{ color: getImpactColor(article.impact) }}>IMPACT: {article.impact}</span>
-                </div>
-              </div>
+            ) : filteredNews.map(article => (
+              <NewsRow key={article.id} article={article}
+                selected={selectedArticle?.id === article.id}
+                onClick={() => { setSelectedArticle(article); setShowAnalysis(false); setAnalysisData(null); setShowWebView(false); }}
+              />
             ))}
           </div>
+        </div>
 
-          {/* Center Panel - Secondary News Feed */}
-          <div style={{
-            flex: 1,
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-              {t('feeds.secondary')} [{activeFilter}]
-            </div>
-            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-            {filteredNews.slice(Math.ceil(filteredNews.length / 3), Math.ceil(filteredNews.length * 2 / 3)).map((article, index) => (
-              <div key={article.id} style={{
-                marginBottom: '6px',
-                borderLeft: `3px solid ${getPriorityColor(article.priority)}`,
-                paddingLeft: '4px',
-                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                cursor: article.link ? 'pointer' : 'default'
-              }}
-                onClick={() => setSelectedArticle(article)}
-              >
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
-                  <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
-                  <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold', minWidth: '60px' }}>
-                    [{article.priority}]
-                  </span>
-                  <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
-                  <span style={{ color: colors.purple, minWidth: '30px' }}>{article.region}</span>
-                  <span style={{ color: getArticleSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
-                </div>
-
-                <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
-                  {article.headline}
-                </div>
-
-                <div style={{ color: colors.textMuted, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
-                  {article.summary}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                  <span style={{ color: colors.accent }}>{article.source}</span>
-                  <span style={{ color: getImpactColor(article.impact) }}>IMPACT: {article.impact}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Right Panel - AI Analytics */}
-          <div id="news-ai-analysis" style={{
-            width: '500px',
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '8px',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            maxHeight: '100%'
-          }}>
-            {/* News Analytics Section */}
-            <div style={{ flex: 1, minHeight: '600px', overflowY: 'auto' }}>
-              <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '0.5px' }}>
-                {t('analytics.title')}
-              </div>
-              <div style={{ borderBottom: `2px solid ${colors.primary}`, marginBottom: '12px' }}></div>
-
-              {showAnalysis && analysisData ? (
-                /* AI Analysis Display */
-                <div style={{ fontSize: '11px' }}>
-                  {/* Header */}
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '12px',
-                    padding: '8px',
-                    background: 'rgba(147, 51, 234, 0.1)',
-                    border: `1px solid #9333ea`
-                  }}>
-                    <span style={{ color: '#9333ea', fontSize: '11px', fontWeight: 'bold' }}>
-                      AI POWERED ANALYSIS
-                    </span>
-                    <span style={{ fontSize: '9px', color: colors.textMuted }}>
-                      {analysisData.credits_used} CREDITS | {analysisData.credits_remaining.toLocaleString()} REMAINING
-                    </span>
-                  </div>
-
-                  {/* Summary */}
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{
-                      fontSize: '10px',
-                      color: colors.warning,
-                      fontWeight: 'bold',
-                      marginBottom: '6px',
-                      letterSpacing: '0.5px'
-                    }}>
-                      SUMMARY
+        {/* ── RIGHT: Article Detail + AI Analysis ── */}
+        <div id="news-ai-analysis" style={{ width: '340px', flexShrink: 0, backgroundColor: F.PANEL_BG, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {selectedArticle ? (
+            <>
+              {/* Article Detail */}
+              <SectionHead title="ARTICLE DETAIL" right={selectedArticle.time} />
+              <div style={{ overflow: 'auto', flex: 1, padding: '6px' }}>
+                {/* Show web view or detail */}
+                {showWebView ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button onClick={() => setShowWebView(false)}
+                        style={{ padding: '3px 8px', backgroundColor: F.ORANGE, color: F.DARK_BG, border: 'none', fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px' }}
+                      >BACK</button>
+                      <span style={{ color: F.GRAY, fontSize: '8px', fontWeight: 700, display: 'flex', alignItems: 'center' }}>READER VIEW</span>
                     </div>
-                    <div style={{
-                      fontSize: '11px',
-                      color: colors.text,
-                      lineHeight: '1.6',
-                      padding: '8px',
-                      background: 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${colors.textMuted}`
-                    }}>
-                      {analysisData.analysis.summary}
-                    </div>
-                  </div>
-
-                  {/* Key Points */}
-                  {analysisData.analysis.key_points.length > 0 && (
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{
-                        fontSize: '10px',
-                        color: colors.warning,
-                        fontWeight: 'bold',
-                        marginBottom: '6px',
-                        letterSpacing: '0.5px'
-                      }}>
-                        KEY POINTS
-                      </div>
-                      <div style={{
-                        padding: '8px',
-                        background: 'rgba(255,255,255,0.02)',
-                        border: `1px solid ${colors.textMuted}`
-                      }}>
-                        {analysisData.analysis.key_points.map((point, idx) => (
-                          <div key={idx} style={{
-                            marginBottom: '6px',
-                            fontSize: '10px',
-                            color: colors.text,
-                            paddingLeft: '12px',
-                            borderLeft: `2px solid ${colors.primary}`,
-                            lineHeight: '1.5'
-                          }}>
-                            {point}
-                          </div>
+                    <div style={{ padding: '4px 6px', borderBottom: `2px solid ${F.ORANGE}` }}>
+                      <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                        {[{ label: selectedArticle.priority, color: priColor(selectedArticle.priority) },
+                          { label: selectedArticle.category, color: F.CYAN },
+                          { label: selectedArticle.sentiment, color: sentColor(selectedArticle.sentiment) },
+                        ].map((b, i) => (
+                          <span key={i} style={{ padding: '1px 4px', backgroundColor: `${b.color}20`, color: b.color, fontSize: '7px', fontWeight: 700, borderRadius: '2px' }}>{b.label}</span>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Sentiment & Market Impact Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                    <div>
-                      <div style={{
-                        fontSize: '10px',
-                        color: colors.warning,
-                        fontWeight: 'bold',
-                        marginBottom: '6px',
-                        letterSpacing: '0.5px'
-                      }}>
-                        SENTIMENT
-                      </div>
-                      <div style={{
-                        padding: '8px',
-                        background: 'rgba(0,0,0,0.3)',
-                        border: `1px solid ${colors.textMuted}`,
-                        fontSize: '10px'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ color: colors.textMuted }}>Score:</span>
-                          <span style={{ color: getSentimentColor(analysisData.analysis.sentiment.score), fontWeight: 'bold' }}>
-                            {analysisData.analysis.sentiment.score.toFixed(2)}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ color: colors.textMuted }}>Intensity:</span>
-                          <span style={{ color: colors.text }}>{analysisData.analysis.sentiment.intensity.toFixed(2)}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: colors.textMuted }}>Confidence:</span>
-                          <span style={{ color: colors.secondary }}>
-                            {(analysisData.analysis.sentiment.confidence * 100).toFixed(0)}%
-                          </span>
-                        </div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, lineHeight: '1.3', color: F.WHITE, marginBottom: '4px' }}>{selectedArticle.headline}</div>
+                      <div style={{ fontSize: '8px', color: F.GRAY, display: 'flex', gap: '8px' }}>
+                        <span>{selectedArticle.source}</span>
+                        <span>{selectedArticle.region}</span>
+                        {selectedArticle.tickers?.length > 0 && <span style={{ color: F.CYAN }}>{selectedArticle.tickers.join(', ')}</span>}
                       </div>
                     </div>
-                    <div>
-                      <div style={{
-                        fontSize: '10px',
-                        color: colors.warning,
-                        fontWeight: 'bold',
-                        marginBottom: '6px',
-                        letterSpacing: '0.5px'
-                      }}>
-                        MARKET IMPACT
-                      </div>
-                      <div style={{
-                        padding: '8px',
-                        background: 'rgba(0,0,0,0.3)',
-                        border: `1px solid ${colors.textMuted}`,
-                        fontSize: '10px'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ color: colors.textMuted }}>Urgency:</span>
-                          <span style={{
-                            color: getUrgencyColor(analysisData.analysis.market_impact.urgency),
-                            fontWeight: 'bold'
-                          }}>
-                            {analysisData.analysis.market_impact.urgency}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: colors.textMuted }}>Prediction:</span>
-                          <span style={{ color: colors.text, textTransform: 'uppercase', fontSize: '9px' }}>
-                            {analysisData.analysis.market_impact.prediction.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </div>
+                    <div style={{ fontSize: '9px', lineHeight: '1.6', color: F.WHITE }}>{selectedArticle.summary}</div>
+                    <div style={{ padding: '8px', backgroundColor: `${F.ORANGE}10`, border: `1px solid ${F.ORANGE}`, borderRadius: '2px', fontSize: '8px', color: F.GRAY }}>
+                      <span style={{ color: F.YELLOW, fontWeight: 700 }}>NOTE: </span>
+                      RSS summary shown. Click "OPEN" for full article.
                     </div>
-                  </div>
-
-                  {/* Risk Signals */}
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{
-                      fontSize: '10px',
-                      color: colors.warning,
-                      fontWeight: 'bold',
-                      marginBottom: '6px',
-                      letterSpacing: '0.5px'
-                    }}>
-                      RISK SIGNALS
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      {Object.entries(analysisData.analysis.risk_signals).map(([type, signal]) => (
-                        <div key={type} style={{
-                          padding: '8px',
-                          background: 'rgba(0,0,0,0.3)',
-                          border: `1px solid ${colors.textMuted}`,
-                          fontSize: '10px'
-                        }}>
-                          <div style={{
-                            color: getRiskColor(signal.level),
-                            fontWeight: 'bold',
-                            marginBottom: '4px',
-                            fontSize: '9px',
-                            letterSpacing: '0.3px'
-                          }}>
-                            {type.toUpperCase()}: {signal.level.toUpperCase()}
-                          </div>
-                          {signal.details && (
-                            <div style={{
-                              color: colors.textMuted,
-                              fontSize: '9px',
-                              lineHeight: '1.4'
-                            }}>
-                              {signal.details}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Topics & Keywords */}
-                  {(analysisData.analysis.topics.length > 0 || analysisData.analysis.keywords.length > 0) && (
-                    <div style={{ marginBottom: '16px' }}>
-                      {analysisData.analysis.topics.length > 0 && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{
-                            fontSize: '10px',
-                            color: colors.warning,
-                            fontWeight: 'bold',
-                            marginBottom: '6px',
-                            letterSpacing: '0.5px'
-                          }}>
-                            TOPICS
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {analysisData.analysis.topics.map((topic, idx) => (
-                              <span key={idx} style={{
-                                background: 'rgba(147, 51, 234, 0.2)',
-                                padding: '4px 8px',
-                                fontSize: '9px',
-                                color: colors.text,
-                                border: '1px solid #9333ea',
-                                fontWeight: 'bold',
-                                letterSpacing: '0.3px'
-                              }}>
-                                {topic}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {analysisData.analysis.keywords.length > 0 && (
-                        <div>
-                          <div style={{
-                            fontSize: '10px',
-                            color: colors.warning,
-                            fontWeight: 'bold',
-                            marginBottom: '6px',
-                            letterSpacing: '0.5px'
-                          }}>
-                            KEYWORDS
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {analysisData.analysis.keywords.slice(0, 8).map((keyword, idx) => (
-                              <span key={idx} style={{
-                                background: 'rgba(100, 100, 100, 0.2)',
-                                padding: '4px 8px',
-                                fontSize: '9px',
-                                color: colors.textMuted,
-                                border: `1px solid ${colors.textMuted}`
-                              }}>
-                                {keyword}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Entities */}
-                  {analysisData.analysis.entities.organizations.length > 0 && (
-                    <div>
-                      <div style={{
-                        fontSize: '10px',
-                        color: colors.warning,
-                        fontWeight: 'bold',
-                        marginBottom: '6px',
-                        letterSpacing: '0.5px'
-                      }}>
-                        ORGANIZATIONS
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {analysisData.analysis.entities.organizations.map((org, idx) => (
-                          <div key={idx} style={{
-                            background: 'rgba(0,0,0,0.3)',
-                            padding: '6px 10px',
-                            border: `1px solid ${colors.textMuted}`,
-                            fontSize: '10px'
-                          }}>
-                            <div style={{ color: colors.text, fontWeight: 'bold', marginBottom: '2px' }}>
-                              {org.name}
-                            </div>
-                            <div style={{ color: colors.textMuted, fontSize: '9px' }}>
-                              {org.sector} {org.ticker ? `| ${org.ticker}` : ''}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Default Analytics Display */
-                <>
-                  {/* Sentiment Analysis */}
-                  <div style={{ marginBottom: '16px', fontSize: '10px' }}>
-                    <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '6px', letterSpacing: '0.5px' }}>
-                      SENTIMENT ANALYSIS
-                    </div>
-                    <div style={{
-                      padding: '8px',
-                      background: 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${colors.textMuted}`
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>Bullish Articles:</span>
-                        <span style={{ color: colors.secondary }}>{bullishCount} ({Math.round((bullishCount / totalCount) * 100)}%)</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>Bearish Articles:</span>
-                        <span style={{ color: colors.alert }}>{bearishCount} ({Math.round((bearishCount / totalCount) * 100)}%)</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>Neutral Articles:</span>
-                        <span style={{ color: colors.warning }}>{neutralCount} ({Math.round((neutralCount / totalCount) * 100)}%)</span>
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        marginTop: '8px',
-                        paddingTop: '8px',
-                        borderTop: `1px solid ${colors.textMuted}`
-                      }}>
-                        <span style={{ color: colors.accent, fontWeight: 'bold' }}>Sentiment Score:</span>
-                        <span style={{
-                          color: parseFloat(sentimentScore) > 0 ? colors.secondary : parseFloat(sentimentScore) < 0 ? colors.alert : colors.warning,
-                          fontWeight: 'bold'
-                        }}>
-                          {sentimentScore} ({parseFloat(sentimentScore) > 0 ? 'BULLISH' : parseFloat(sentimentScore) < 0 ? 'BEARISH' : 'NEUTRAL'})
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* News Flow Statistics */}
-                  <div style={{ marginBottom: '16px', fontSize: '10px' }}>
-                    <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '6px', letterSpacing: '0.5px' }}>
-                      NEWS FLOW STATS
-                    </div>
-                    <div style={{
-                      padding: '8px',
-                      background: 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${colors.textMuted}`
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>Total Articles:</span>
-                        <span style={{ color: colors.text }}>{newsArticles.length}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>Breaking News:</span>
-                        <span style={{ color: colors.alert }}>{breakingCount}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>Earnings Reports:</span>
-                        <span style={{ color: colors.info }}>{earningsCount}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>Economic Data:</span>
-                        <span style={{ color: colors.purple }}>{economicCount}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: colors.textMuted }}>High Priority:</span>
-                        <span style={{ color: colors.primary }}>{alertCount}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{
-                    padding: '12px',
-                    background: 'rgba(147, 51, 234, 0.1)',
-                    border: `1px solid #9333ea`,
-                    textAlign: 'center',
-                    fontSize: '10px',
-                    color: colors.textMuted
-                  }}>
-                    Select an article and click AI ANALYZE for detailed insights
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Tertiary News Feed */}
-            <div style={{
-              borderTop: `2px solid ${colors.textMuted}`,
-              paddingTop: '4px',
-              marginTop: '12px',
-              flex: '0 0 auto',
-              maxHeight: '300px',
-              overflowY: 'auto'
-            }}>
-              <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-                {t('feeds.additional')}
-              </div>
-              <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-              {filteredNews.slice(Math.ceil(filteredNews.length * 2 / 3)).map((article, index) => (
-                <div key={article.id} style={{
-                  marginBottom: '6px',
-                  borderLeft: `3px solid ${getPriorityColor(article.priority)}`,
-                  paddingLeft: '4px',
-                  backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  cursor: article.link ? 'pointer' : 'default'
-                }}
-                  onClick={() => setSelectedArticle(article)}
-                >
-                  <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
-                    <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
-                    <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold', minWidth: '60px' }}>
-                      [{article.priority}]
-                    </span>
-                    <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
-                  </div>
-
-                  <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
-                    {article.headline}
-                  </div>
-
-                  <div style={{ color: colors.textMuted, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
-                    {article.summary.slice(0, 150)}...
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                    <span style={{ color: colors.accent }}>{article.source}</span>
-                    <span style={{ color: getArticleSentimentColor(article.sentiment) }}>{article.sentiment}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${colors.textMuted}`,
-        backgroundColor: colors.panel,
-        padding: '2px 8px',
-        fontSize: '10px',
-        color: colors.textMuted,
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>FinceptTerminal Professional News v1.0.0 | Real-time from {feedCount} RSS feeds</span>
-            <span>Articles: {newsArticles.length} | Filter: {activeFilter} | Updates: {newsUpdateCount}</span>
-          </div>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>High Priority: {alertCount} | Sentiment: {sentimentScore}</span>
-            <span>Session: {currentTime.toTimeString().substring(0, 8)}</span>
-            <span style={{ color: loading ? colors.warning : colors.secondary }}>
-              {loading ? 'UPDATING...' : 'FEED: LIVE'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Article Detail Modal */}
-      {selectedArticle && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999
-        }}
-          onClick={() => setSelectedArticle(null)}
-        >
-          <div id="news-article-detail" style={{
-            backgroundColor: colors.panel,
-            border: `2px solid ${colors.primary}`,
-            borderRadius: '4px',
-            width: showWebView ? '90vw' : '600px',
-            maxWidth: '95vw',
-            height: showWebView ? '90vh' : 'auto',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: `0 0 20px ${colors.primary}`,
-            transition: 'all 0.3s ease'
-          }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div style={{
-              backgroundColor: colors.background,
-              borderBottom: `2px solid ${colors.primary}`,
-              padding: '8px 12px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexShrink: 0
-            }}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px' }}>
-                <span style={{ color: colors.primary, fontWeight: 'bold' }}>ARTICLE DETAILS</span>
-                <span style={{ color: colors.text }}>|</span>
-                <span style={{ color: getPriorityColor(selectedArticle.priority), fontWeight: 'bold' }}>
-                  [{selectedArticle.priority}]
-                </span>
-                <span style={{ color: colors.info }}>[{selectedArticle.category}]</span>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedArticle(null);
-                  setShowWebView(false);
-                }}
-                style={{
-                  backgroundColor: colors.alert,
-                  color: colors.text,
-                  border: 'none',
-                  padding: '4px 8px',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  borderRadius: '2px'
-                }}
-              >
-                ✕ CLOSE
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div style={{
-              padding: showWebView ? '0' : '12px',
-              overflow: 'auto',
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              {/* Reader View */}
-              {showWebView && selectedArticle.link ? (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  {/* Reader View Header */}
-                  <div style={{
-                    backgroundColor: colors.background,
-                    padding: '8px',
-                    borderBottom: `1px solid ${colors.textMuted}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '10px'
-                  }}>
-                    <button
-                      onClick={() => setShowWebView(false)}
-                      style={{
-                        backgroundColor: colors.primary,
-                        color: colors.background,
-                        border: 'none',
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        borderRadius: '2px'
-                      }}
-                    >
-                      ← BACK TO SUMMARY
-                    </button>
-                    <span style={{ color: colors.textMuted }}>|</span>
-                    <span style={{ color: colors.warning, fontWeight: 'bold' }}>READER VIEW</span>
-                    <span style={{ color: colors.textMuted }}>|</span>
-                    <span style={{ color: colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {selectedArticle.source}
-                    </span>
-                    <button
-                      onClick={async () => {
-                        if (window.__TAURI__) {
-                          const { openUrl } = await import('@tauri-apps/plugin-opener');
-                          await openUrl(selectedArticle.link!);
-                        } else {
-                          window.open(selectedArticle.link, '_blank');
-                        }
-                      }}
-                      style={{
-                        backgroundColor: colors.info,
-                        color: colors.text,
-                        border: 'none',
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        borderRadius: '2px'
-                      }}
-                    >
-                      🔗 OPEN FULL ARTICLE
-                    </button>
-                  </div>
-
-                  {/* Reader View Content */}
-                  <div style={{
-                    flex: 1,
-                    overflow: 'auto',
-                    padding: '24px',
-                    backgroundColor: '#1a1a1a',
-                    color: '#e0e0e0'
-                  }}>
-                    {/* Article Header */}
-                    <div style={{
-                      marginBottom: '24px',
-                      paddingBottom: '16px',
-                      borderBottom: `2px solid ${colors.primary}`
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        gap: '8px',
-                        marginBottom: '12px',
-                        fontSize: '11px'
-                      }}>
-                        <span style={{
-                          backgroundColor: getPriorityColor(selectedArticle.priority),
-                          color: colors.background,
-                          padding: '2px 8px',
-                          borderRadius: '2px',
-                          fontWeight: 'bold'
-                        }}>
-                          {selectedArticle.priority}
-                        </span>
-                        <span style={{
-                          backgroundColor: colors.info,
-                          color: colors.text,
-                          padding: '2px 8px',
-                          borderRadius: '2px',
-                          fontWeight: 'bold'
-                        }}>
-                          {selectedArticle.category}
-                        </span>
-                        <span style={{
-                          backgroundColor: getArticleSentimentColor(selectedArticle.sentiment),
-                          color: colors.background,
-                          padding: '2px 8px',
-                          borderRadius: '2px',
-                          fontWeight: 'bold'
-                        }}>
-                          {selectedArticle.sentiment}
-                        </span>
-                      </div>
-
-                      <h1 style={{
-                        fontSize: '24px',
-                        fontWeight: 'bold',
-                        lineHeight: '1.3',
-                        marginBottom: '12px',
-                        color: colors.text
-                      }}>
-                        {selectedArticle.headline}
-                      </h1>
-
-                      <div style={{
-                        display: 'flex',
-                        gap: '16px',
-                        fontSize: '12px',
-                        color: colors.textMuted
-                      }}>
-                        <span>📰 {selectedArticle.source}</span>
-                        <span>🕒 {selectedArticle.time}</span>
-                        <span>🌍 {selectedArticle.region}</span>
-                        {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
-                          <span>📊 {selectedArticle.tickers.join(', ')}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Article Content */}
-                    <div style={{
-                      fontSize: '16px',
-                      lineHeight: '1.8',
-                      color: '#d0d0d0',
-                      maxWidth: '800px',
-                      margin: '0 auto'
-                    }}>
-                      <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '500', color: '#e0e0e0' }}>
-                        {selectedArticle.summary}
-                      </p>
-
-                      <div style={{
-                        backgroundColor: 'rgba(255, 165, 0, 0.1)',
-                        border: `1px solid ${colors.primary}`,
-                        borderRadius: '4px',
-                        padding: '16px',
-                        marginTop: '24px'
-                      }}>
-                        <p style={{ fontSize: '14px', color: colors.warning, marginBottom: '8px', fontWeight: 'bold' }}>
-                          ℹ️ Reader View Limitation
-                        </p>
-                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: colors.textMuted, marginBottom: '12px' }}>
-                          Most news websites block embedding for security reasons. This reader view shows the article summary from the RSS feed.
-                        </p>
-                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: colors.textMuted }}>
-                          For the complete article with images, videos, and full content, please click the "🔗 OPEN FULL ARTICLE" button above to view it in your browser.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Article Metadata */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '8px',
-                    marginBottom: '12px',
-                    padding: '8px',
-                    backgroundColor: 'rgba(255, 165, 0, 0.05)',
-                    border: `1px solid ${colors.textMuted}`,
-                    fontSize: '10px'
-                  }}>
-                    <div>
-                      <span style={{ color: colors.textMuted }}>SOURCE: </span>
-                      <span style={{ color: colors.accent, fontWeight: 'bold' }}>{selectedArticle.source}</span>
-                    </div>
-                    <div>
-                      <span style={{ color: colors.textMuted }}>TIME: </span>
-                      <span style={{ color: colors.text }}>{selectedArticle.time}</span>
-                    </div>
-                    <div>
-                      <span style={{ color: colors.textMuted }}>REGION: </span>
-                      <span style={{ color: colors.purple }}>{selectedArticle.region}</span>
-                    </div>
-                    <div>
-                      <span style={{ color: colors.textMuted }}>SENTIMENT: </span>
-                      <span style={{ color: getArticleSentimentColor(selectedArticle.sentiment), fontWeight: 'bold' }}>
-                        {selectedArticle.sentiment}
-                      </span>
-                    </div>
-                    <div>
-                      <span style={{ color: colors.textMuted }}>IMPACT: </span>
-                      <span style={{ color: getImpactColor(selectedArticle.impact), fontWeight: 'bold' }}>
-                        {selectedArticle.impact}
-                      </span>
-                    </div>
-                    {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
-                      <div>
-                        <span style={{ color: colors.textMuted }}>TICKERS: </span>
-                        <span style={{ color: colors.secondary, fontWeight: 'bold' }}>
-                          {selectedArticle.tickers.join(', ')}
-                        </span>
-                      </div>
+                    {selectedArticle.link && (
+                      <button onClick={() => openExternal(selectedArticle.link!)}
+                        style={{ padding: '4px 8px', backgroundColor: F.BLUE, color: F.WHITE, border: 'none', fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
+                      ><ExternalLink size={10} />OPEN FULL ARTICLE</button>
                     )}
                   </div>
-
-                  {/* Article Headline */}
-                  <div style={{
-                    color: colors.text,
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    lineHeight: '1.4',
-                    marginBottom: '12px',
-                    padding: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    borderLeft: `4px solid ${getPriorityColor(selectedArticle.priority)}`
-                  }}>
-                    {selectedArticle.headline}
-                  </div>
-
-                  {/* Article Summary */}
-                  <div style={{
-                    color: colors.textMuted,
-                    fontSize: '12px',
-                    lineHeight: '1.6',
-                    marginBottom: '16px'
-                  }}>
-                    {selectedArticle.summary}
-                  </div>
-
-                  {/* Action Buttons */}
-                  {selectedArticle.link && (
-                    <div style={{
-                      display: 'flex',
-                      gap: '8px',
-                      paddingTop: '12px',
-                      borderTop: `1px solid ${colors.textMuted}`
-                    }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowWebView(true);
-                        }}
-                        style={{
-                          backgroundColor: colors.secondary,
-                          color: colors.background,
-                          border: 'none',
-                          padding: '6px 12px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          borderRadius: '2px',
-                          flex: 1
-                        }}
-                      >
-                        READ IN APP
-                      </button>
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          const link = selectedArticle.link;
-
-                          if (!link) {
-                            return;
-                          }
-
-                          try {
-                            if (window.__TAURI__) {
-                              const { openUrl } = await import('@tauri-apps/plugin-opener');
-                              await openUrl(link);
-                            } else {
-                              const a = document.createElement('a');
-                              a.href = link;
-                              a.target = '_blank';
-                              a.rel = 'noopener noreferrer';
-                              document.body.appendChild(a);
-                              a.click();
-                              document.body.removeChild(a);
-                            }
-                          } catch (error) {
-                            await navigator.clipboard.writeText(link);
-                          }
-                        }}
-                        style={{
-                          backgroundColor: colors.info,
-                          color: colors.text,
-                          border: 'none',
-                          padding: '6px 12px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          borderRadius: '2px',
-                          flex: 1
-                        }}
-                      >
-                        OPEN IN BROWSER
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const link = selectedArticle.link;
-                          if (link) {
-                            navigator.clipboard.writeText(link);
-                            e.currentTarget.textContent = 'COPIED!';
-                            setTimeout(() => {
-                              e.currentTarget.textContent = 'COPY LINK';
-                            }, 2000);
-                          }
-                        }}
-                        style={{
-                          backgroundColor: colors.textMuted,
-                          color: colors.text,
-                          border: 'none',
-                          padding: '6px 12px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          borderRadius: '2px'
-                        }}
-                        title="Copy link to clipboard"
-                      >
-                        COPY LINK
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAnalyzeArticle();
-                        }}
-                        disabled={analyzingArticle}
-                        style={{
-                          backgroundColor: analyzingArticle ? colors.textMuted : '#9333ea',
-                          color: colors.text,
-                          border: 'none',
-                          padding: '6px 12px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          cursor: analyzingArticle ? 'not-allowed' : 'pointer',
-                          borderRadius: '2px',
-                          opacity: analyzingArticle ? 0.6 : 1
-                        }}
-                        title="AI-powered analysis (10 credits)"
-                      >
-                        {analyzingArticle ? 'ANALYZING...' : 'AI ANALYZE'}
-                      </button>
+                ) : (
+                  <>
+                    {/* Priority + Meta badges */}
+                    <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                      {[
+                        { label: selectedArticle.priority, color: priColor(selectedArticle.priority) },
+                        { label: selectedArticle.category, color: F.CYAN },
+                        { label: selectedArticle.sentiment, color: sentColor(selectedArticle.sentiment) },
+                        { label: selectedArticle.region, color: F.PURPLE },
+                        { label: `IMPACT: ${selectedArticle.impact}`, color: impColor(selectedArticle.impact) },
+                      ].map((b, i) => (
+                        <span key={i} style={{ padding: '1px 5px', backgroundColor: `${b.color}15`, color: b.color, fontSize: '7px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${b.color}30` }}>{b.label}</span>
+                      ))}
                     </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+
+                    {/* Source + time */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', color: F.GRAY, marginBottom: '6px' }}>
+                      <span style={{ color: F.CYAN, fontWeight: 700 }}>{selectedArticle.source}</span>
+                      <span>{selectedArticle.time}</span>
+                    </div>
+
+                    {/* Headline */}
+                    <div style={{
+                      color: F.WHITE, fontSize: '11px', fontWeight: 700, lineHeight: '1.3', marginBottom: '6px',
+                      padding: '6px', backgroundColor: F.DARK_BG, borderLeft: `2px solid ${priColor(selectedArticle.priority)}`, borderRadius: '2px',
+                    }}>{selectedArticle.headline}</div>
+
+                    {/* Tickers */}
+                    {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
+                      <div style={{ display: 'flex', gap: '3px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                        {selectedArticle.tickers.map((t, i) => (
+                          <span key={i} style={{ padding: '1px 5px', backgroundColor: `${F.GREEN}15`, color: F.GREEN, fontSize: '7px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${F.GREEN}30` }}>{t}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    <div style={{ color: F.GRAY, fontSize: '9px', lineHeight: '1.5', marginBottom: '8px' }}>{selectedArticle.summary}</div>
+
+                    {/* Action buttons */}
+                    {selectedArticle.link && (
+                      <div style={{ display: 'flex', gap: '3px', marginBottom: '8px' }}>
+                        <button onClick={() => setShowWebView(true)}
+                          style={{ flex: 1, padding: '4px', backgroundColor: F.GREEN, color: F.DARK_BG, border: 'none', fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}
+                        ><BookOpen size={9} />READ</button>
+                        <button onClick={() => openExternal(selectedArticle.link!)}
+                          style={{ flex: 1, padding: '4px', backgroundColor: F.BLUE, color: F.WHITE, border: 'none', fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}
+                        ><ExternalLink size={9} />OPEN</button>
+                        <button onClick={() => { navigator.clipboard.writeText(selectedArticle.link!); }}
+                          style={{ padding: '4px 8px', background: 'none', border: `1px solid ${F.BORDER}`, color: F.GRAY, fontSize: '8px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}
+                        ><Copy size={9} /></button>
+                        <button onClick={handleAnalyzeArticle} disabled={analyzingArticle}
+                          style={{ flex: 1, padding: '4px', backgroundColor: analyzingArticle ? F.MUTED : F.PURPLE, color: F.WHITE, border: 'none', fontSize: '8px', fontWeight: 700, cursor: analyzingArticle ? 'not-allowed' : 'pointer', borderRadius: '2px', opacity: analyzingArticle ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}
+                        ><Zap size={9} />{analyzingArticle ? 'WAIT' : 'AI'}</button>
+                      </div>
+                    )}
+
+                    {/* AI Analysis Results */}
+                    {showAnalysis && analysisData && (
+                      <div style={{ borderTop: `1px solid ${F.BORDER}`, paddingTop: '6px' }}>
+                        <div style={{ padding: '4px 6px', backgroundColor: `${F.PURPLE}15`, border: `1px solid ${F.PURPLE}`, borderRadius: '2px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '7px' }}>
+                          <span style={{ color: F.PURPLE, fontWeight: 700 }}>AI ANALYSIS</span>
+                          <span style={{ color: F.GRAY }}>{analysisData.credits_used}CR | {analysisData.credits_remaining.toLocaleString()}REM</span>
+                        </div>
+
+                        {/* Summary */}
+                        <div style={{ fontSize: '8px', color: F.WHITE, lineHeight: '1.5', padding: '4px 6px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', marginBottom: '6px' }}>
+                          {analysisData.analysis.summary}
+                        </div>
+
+                        {/* Key points */}
+                        {analysisData.analysis.key_points.length > 0 && (
+                          <div style={{ marginBottom: '6px' }}>
+                            <div style={{ fontSize: '7px', color: F.GRAY, fontWeight: 700, marginBottom: '3px', letterSpacing: '0.5px' }}>KEY POINTS</div>
+                            {analysisData.analysis.key_points.map((p, i) => (
+                              <div key={i} style={{ fontSize: '8px', color: F.WHITE, paddingLeft: '6px', borderLeft: `2px solid ${F.ORANGE}`, marginBottom: '3px', lineHeight: '1.3' }}>{p}</div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Sentiment + Impact grid */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '6px' }}>
+                          <div style={{ padding: '4px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', fontSize: '7px' }}>
+                            <div style={{ color: F.GRAY, fontWeight: 700, marginBottom: '2px' }}>SENTIMENT</div>
+                            <StatRow label="Score" value={analysisData.analysis.sentiment.score.toFixed(2)} color={getSentimentColor(analysisData.analysis.sentiment.score)} />
+                            <StatRow label="Intensity" value={analysisData.analysis.sentiment.intensity.toFixed(2)} color={F.CYAN} />
+                            <StatRow label="Confidence" value={`${(analysisData.analysis.sentiment.confidence * 100).toFixed(0)}%`} color={F.GREEN} />
+                          </div>
+                          <div style={{ padding: '4px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', fontSize: '7px' }}>
+                            <div style={{ color: F.GRAY, fontWeight: 700, marginBottom: '2px' }}>MARKET IMPACT</div>
+                            <StatRow label="Urgency" value={analysisData.analysis.market_impact.urgency} color={getUrgencyColor(analysisData.analysis.market_impact.urgency)} />
+                            <StatRow label="Prediction" value={analysisData.analysis.market_impact.prediction.replace('_', ' ').toUpperCase()} color={F.CYAN} />
+                          </div>
+                        </div>
+
+                        {/* Risk Signals */}
+                        <div style={{ marginBottom: '6px' }}>
+                          <div style={{ fontSize: '7px', color: F.GRAY, fontWeight: 700, marginBottom: '3px', letterSpacing: '0.5px' }}>RISK SIGNALS</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px' }}>
+                            {Object.entries(analysisData.analysis.risk_signals).map(([type, signal]) => (
+                              <div key={type} style={{ padding: '3px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', fontSize: '7px' }}>
+                                <span style={{ color: getRiskColor(signal.level), fontWeight: 700 }}>{type.toUpperCase()}: {signal.level.toUpperCase()}</span>
+                                {signal.details && <div style={{ color: F.MUTED, fontSize: '7px', marginTop: '1px' }}>{signal.details}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Topics + Keywords */}
+                        {(analysisData.analysis.topics.length > 0 || analysisData.analysis.keywords.length > 0) && (
+                          <div style={{ marginBottom: '6px' }}>
+                            {analysisData.analysis.topics.length > 0 && (
+                              <>
+                                <div style={{ fontSize: '7px', color: F.GRAY, fontWeight: 700, marginBottom: '2px' }}>TOPICS</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', marginBottom: '4px' }}>
+                                  {analysisData.analysis.topics.map((t, i) => (
+                                    <span key={i} style={{ padding: '1px 4px', backgroundColor: `${F.PURPLE}20`, color: F.WHITE, fontSize: '7px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${F.PURPLE}` }}>{t}</span>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                            {analysisData.analysis.keywords.length > 0 && (
+                              <>
+                                <div style={{ fontSize: '7px', color: F.GRAY, fontWeight: 700, marginBottom: '2px' }}>KEYWORDS</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+                                  {analysisData.analysis.keywords.slice(0, 8).map((k, i) => (
+                                    <span key={i} style={{ padding: '1px 4px', backgroundColor: `${F.MUTED}20`, color: F.GRAY, fontSize: '7px', borderRadius: '2px', border: `1px solid ${F.MUTED}` }}>{k}</span>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Entities */}
+                        {analysisData.analysis.entities.organizations.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: '7px', color: F.GRAY, fontWeight: 700, marginBottom: '2px' }}>ORGANIZATIONS</div>
+                            {analysisData.analysis.entities.organizations.map((org, i) => (
+                              <div key={i} style={{ padding: '3px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', fontSize: '7px', marginBottom: '2px' }}>
+                                <span style={{ color: F.WHITE, fontWeight: 700 }}>{org.name}</span>
+                                <span style={{ color: F.GRAY, marginLeft: '4px' }}>{org.sector} {org.ticker ? `| ${org.ticker}` : ''}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            /* No article selected */
+            <>
+              <SectionHead title="ARTICLE DETAIL" />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: F.MUTED, padding: '20px', textAlign: 'center' }}>
+                <Newspaper size={20} style={{ marginBottom: '8px', opacity: 0.3 }} />
+                <div style={{ fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>SELECT AN ARTICLE</div>
+                <div style={{ fontSize: '8px' }}>Click any row in the feed to view details, read the full article, or run AI analysis.</div>
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* CSS for animations and transparent scrollbars */}
+      {/* ── STATUS BAR ── */}
+      <div style={{
+        backgroundColor: F.HEADER_BG, borderTop: `1px solid ${F.BORDER}`,
+        padding: '2px 12px', fontSize: '8px', color: F.GRAY, flexShrink: 0,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <span>FINCEPT NEWS v1.0</span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span>FEEDS:<span style={{ color: F.CYAN }}>{feedCount}</span></span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span>ART:<span style={{ color: F.CYAN }}>{newsArticles.length}</span></span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span>FLT:<span style={{ color: F.ORANGE }}>{activeFilter}</span></span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span>UPD:<span style={{ color: F.CYAN }}>{newsUpdateCount}</span></span>
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <span>PRI:<span style={{ color: F.RED }}>{alertCount}</span></span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span>SNT:<span style={{ color: parseFloat(score) > 0 ? F.GREEN : parseFloat(score) < 0 ? F.RED : F.YELLOW }}>{score}</span></span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span>{currentTime.toTimeString().substring(0, 8)}</span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span style={{ color: loading ? F.YELLOW : F.GREEN, fontWeight: 700 }}>{loading ? 'UPD' : 'LIVE'}</span>
+        </div>
+      </div>
+
+      {/* ── CSS ── */}
       <style>{`
-        .ticker-wrap {
-          width: 100%;
-          overflow: hidden;
-          background-color: transparent;
-          padding: 0;
-        }
-
-        .ticker-move {
-          display: inline-block;
-          white-space: nowrap;
-          animation: tickerScroll ${tickerDuration}s linear infinite;
-          padding-right: 100%;
-        }
-
-        .ticker-item {
-          display: inline-block;
-          padding-right: 3em;
-          color: ${colors.text};
-          font-size: 11px;
-          white-space: nowrap;
-        }
-
-        @keyframes tickerScroll {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
-        }
-
-        @keyframes blink {
-          0%, 50% { opacity: 1; }
-          51%, 100% { opacity: 0.3; }
-        }
-
-        /* Transparent scrollbars for all browsers */
-        * {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(120, 120, 120, 0.3) transparent;
-        }
-
-        *::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-
-        *::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        *::-webkit-scrollbar-thumb {
-          background-color: rgba(120, 120, 120, 0.3);
-          border-radius: 4px;
-          border: 2px solid transparent;
-        }
-
-        *::-webkit-scrollbar-thumb:hover {
-          background-color: rgba(120, 120, 120, 0.5);
-        }
-
-        *::-webkit-scrollbar-corner {
-          background: transparent;
-        }
+        .ticker-wrap{width:100%;overflow:hidden;background:transparent;padding:0}
+        .ticker-move{display:inline-block;white-space:nowrap;animation:tickerScroll ${tickerDur}s linear infinite;padding-right:100%}
+        .ticker-item{display:inline-block;padding-right:3em;color:${F.WHITE};font-size:9px;white-space:nowrap;font-family:${FONT}}
+        @keyframes tickerScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:.3}}
+        *::-webkit-scrollbar{width:5px;height:5px}
+        *::-webkit-scrollbar-track{background:${F.DARK_BG}}
+        *::-webkit-scrollbar-thumb{background:${F.BORDER};border-radius:3px}
+        *::-webkit-scrollbar-thumb:hover{background:${F.MUTED}}
       `}</style>
 
-      {/* RSS Feed Settings Modal */}
-      <RSSFeedSettingsModal
-        isOpen={showFeedSettings}
-        onClose={() => setShowFeedSettings(false)}
-        onFeedsUpdated={() => handleRefresh(true)}
-      />
+      <RSSFeedSettingsModal isOpen={showFeedSettings} onClose={() => setShowFeedSettings(false)} onFeedsUpdated={() => handleRefresh(true)} />
     </div>
   );
 };

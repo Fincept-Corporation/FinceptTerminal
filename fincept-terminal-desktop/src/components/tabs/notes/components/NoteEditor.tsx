@@ -242,7 +242,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {/* Reminder Date */}
         <div style={{ marginBottom: '12px' }}>
           <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, marginBottom: '4px', display: 'block' }}>
-            REMINDER DATE
+            REMINDER DATE (Click to select)
           </label>
           <input
             type="datetime-local"
@@ -255,8 +255,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               border: `1px solid ${FINCEPT.BORDER}`,
               color: FINCEPT.WHITE,
               fontSize: '10px',
-              outline: 'none'
+              outline: 'none',
+              cursor: 'pointer',
+              colorScheme: 'dark'
             }}
+            placeholder="Select date and time"
           />
         </div>
 

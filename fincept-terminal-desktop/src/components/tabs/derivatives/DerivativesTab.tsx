@@ -9,22 +9,24 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
-import { TabFooter } from '@/components/common/TabFooter';
 
-// Fincept-style color palette
-const COLORS = {
-  ORANGE: '#FF8800',
-  GREEN: '#00D66F',
-  RED: '#FF3B3B',
-  BLUE: '#0088FF',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BG: '#0F0F0F',
-  PANEL: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  TEXT: '#FFFFFF',
-  MUTED: '#787878'
+// Fincept Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',      // Primary accent, CTAs, selected states
+  WHITE: '#FFFFFF',       // Primary text
+  RED: '#FF3B3B',         // Negative, errors, sell
+  GREEN: '#00D66F',       // Positive, success, buy
+  GRAY: '#787878',        // Secondary text, labels
+  DARK_BG: '#000000',     // Main background
+  PANEL_BG: '#0F0F0F',    // Card/panel background
+  HEADER_BG: '#1A1A1A',   // Header/toolbar background
+  BORDER: '#2A2A2A',      // Borders, dividers
+  HOVER: '#1F1F1F',       // Hover state background
+  MUTED: '#4A4A4A',       // Disabled, inactive
+  CYAN: '#00E5FF',        // Info, data values
+  YELLOW: '#FFD700',      // Alerts, prices
+  BLUE: '#0088FF',        // Secondary accent
+  PURPLE: '#9D4EDD',      // Tertiary accent
 };
 
 type InstrumentType = 'bonds' | 'equity-options' | 'fx-options' | 'swaps' | 'credit';
@@ -266,15 +268,15 @@ export function DerivativesTab() {
 
   const renderInstrumentSelector = () => {
     const instruments = [
-      { id: 'bonds', label: 'Bonds', icon: DollarSign },
-      { id: 'equity-options', label: 'Equity Options', icon: TrendingUp },
-      { id: 'fx-options', label: 'FX Options', icon: Activity },
-      { id: 'swaps', label: 'Interest Rate Swaps', icon: BarChart3 },
-      { id: 'credit', label: 'Credit Derivatives', icon: Target }
+      { id: 'bonds', label: 'BONDS', icon: DollarSign },
+      { id: 'equity-options', label: 'EQUITY OPTIONS', icon: TrendingUp },
+      { id: 'fx-options', label: 'FX OPTIONS', icon: Activity },
+      { id: 'swaps', label: 'IR SWAPS', icon: BarChart3 },
+      { id: 'credit', label: 'CREDIT', icon: Target }
     ];
 
     return (
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
         {instruments.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -283,90 +285,152 @@ export function DerivativesTab() {
               setResult(null);
               setError(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded whitespace-nowrap transition-all ${
-              activeInstrument === id
-                ? 'bg-orange-500 text-white shadow-lg'
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-            }`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              backgroundColor: activeInstrument === id ? FINCEPT.ORANGE : 'transparent',
+              color: activeInstrument === id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+            }}
           >
-            <Icon className="w-4 h-4" />
-            <span className="text-sm font-medium">{label}</span>
+            <Icon size={12} />
+            <span>{label}</span>
           </button>
         ))}
       </div>
     );
   };
 
+  // Shared styles
+  const panelStyle: React.CSSProperties = {
+    backgroundColor: FINCEPT.PANEL_BG,
+    border: `1px solid ${FINCEPT.BORDER}`,
+    borderRadius: '2px',
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    padding: '12px',
+    backgroundColor: FINCEPT.HEADER_BG,
+    borderBottom: `1px solid ${FINCEPT.BORDER}`,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: '9px',
+    fontWeight: 700,
+    color: FINCEPT.GRAY,
+    letterSpacing: '0.5px',
+    marginBottom: '4px',
+    display: 'block',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 10px',
+    backgroundColor: FINCEPT.DARK_BG,
+    color: FINCEPT.WHITE,
+    border: `1px solid ${FINCEPT.BORDER}`,
+    borderRadius: '2px',
+    fontSize: '10px',
+    fontFamily: '"IBM Plex Mono", monospace',
+  };
+
+  const primaryButtonStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 16px',
+    backgroundColor: FINCEPT.ORANGE,
+    color: FINCEPT.DARK_BG,
+    border: 'none',
+    borderRadius: '2px',
+    fontSize: '9px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    fontFamily: '"IBM Plex Mono", monospace',
+  };
+
   const renderBondsPanel = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
       {/* Bond Pricing Calculator */}
-      <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Calculator className="w-5 h-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-white">Bond Price Calculator</h3>
+      <div style={panelStyle}>
+        <div style={sectionHeaderStyle}>
+          <Calculator size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>BOND PRICE CALCULATOR</span>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Issue Date</label>
+              <label style={labelStyle}>ISSUE DATE</label>
               <input
                 type="date"
                 value={bondParams.issueDate}
                 onChange={(e) => setBondParams({ ...bondParams, issueDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Settlement Date</label>
+              <label style={labelStyle}>SETTLEMENT DATE</label>
               <input
                 type="date"
                 value={bondParams.settlementDate}
                 onChange={(e) => setBondParams({ ...bondParams, settlementDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Maturity Date</label>
+            <label style={labelStyle}>MATURITY DATE</label>
             <input
               type="date"
               value={bondParams.maturityDate}
               onChange={(e) => setBondParams({ ...bondParams, maturityDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Coupon Rate (%)</label>
+              <label style={labelStyle}>COUPON RATE (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={bondParams.couponRate}
                 onChange={(e) => setBondParams({ ...bondParams, couponRate: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">YTM (%)</label>
+              <label style={labelStyle}>YTM (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={bondParams.ytm}
                 onChange={(e) => setBondParams({ ...bondParams, ytm: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Payment Frequency</label>
+            <label style={labelStyle}>PAYMENT FREQUENCY</label>
             <select
               value={bondParams.freq}
               onChange={(e) => setBondParams({ ...bondParams, freq: parseInt(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             >
               <option value={1}>Annual</option>
               <option value={2}>Semi-Annual</option>
@@ -377,81 +441,84 @@ export function DerivativesTab() {
           <button
             onClick={calculateBondPrice}
             disabled={loading}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+            style={{
+              ...primaryButtonStyle,
+              opacity: loading ? 0.5 : 1,
+            }}
           >
-            {loading ? 'Calculating...' : 'Calculate Bond Price'}
+            {loading ? 'CALCULATING...' : 'CALCULATE BOND PRICE'}
           </button>
         </div>
       </div>
 
       {/* YTM Calculator */}
-      <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Percent className="w-5 h-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-white">Yield to Maturity Calculator</h3>
+      <div style={panelStyle}>
+        <div style={sectionHeaderStyle}>
+          <Percent size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>YIELD TO MATURITY</span>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Issue Date</label>
+              <label style={labelStyle}>ISSUE DATE</label>
               <input
                 type="date"
                 value={bondParams.issueDate}
                 onChange={(e) => setBondParams({ ...bondParams, issueDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Settlement Date</label>
+              <label style={labelStyle}>SETTLEMENT DATE</label>
               <input
                 type="date"
                 value={bondParams.settlementDate}
                 onChange={(e) => setBondParams({ ...bondParams, settlementDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Maturity Date</label>
+            <label style={labelStyle}>MATURITY DATE</label>
             <input
               type="date"
               value={bondParams.maturityDate}
               onChange={(e) => setBondParams({ ...bondParams, maturityDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Coupon Rate (%)</label>
+              <label style={labelStyle}>COUPON RATE (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={bondParams.couponRate}
                 onChange={(e) => setBondParams({ ...bondParams, couponRate: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Clean Price</label>
+              <label style={labelStyle}>CLEAN PRICE</label>
               <input
                 type="number"
                 step="0.01"
                 value={bondParams.cleanPrice}
                 onChange={(e) => setBondParams({ ...bondParams, cleanPrice: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Payment Frequency</label>
+            <label style={labelStyle}>PAYMENT FREQUENCY</label>
             <select
               value={bondParams.freq}
               onChange={(e) => setBondParams({ ...bondParams, freq: parseInt(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             >
               <option value={1}>Annual</option>
               <option value={2}>Semi-Annual</option>
@@ -462,9 +529,12 @@ export function DerivativesTab() {
           <button
             onClick={calculateBondYTM}
             disabled={loading}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+            style={{
+              ...primaryButtonStyle,
+              opacity: loading ? 0.5 : 1,
+            }}
           >
-            {loading ? 'Calculating...' : 'Calculate YTM'}
+            {loading ? 'CALCULATING...' : 'CALCULATE YTM'}
           </button>
         </div>
       </div>
@@ -472,99 +542,99 @@ export function DerivativesTab() {
   );
 
   const renderEquityOptionsPanel = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
       {/* Option Pricing */}
-      <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-5 h-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-white">Black-Scholes Option Pricing</h3>
+      <div style={panelStyle}>
+        <div style={sectionHeaderStyle}>
+          <TrendingUp size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>BLACK-SCHOLES PRICING</span>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Valuation Date</label>
+              <label style={labelStyle}>VALUATION DATE</label>
               <input
                 type="date"
                 value={optionParams.valuationDate}
                 onChange={(e) => setOptionParams({ ...optionParams, valuationDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Expiry Date</label>
+              <label style={labelStyle}>EXPIRY DATE</label>
               <input
                 type="date"
                 value={optionParams.expiryDate}
                 onChange={(e) => setOptionParams({ ...optionParams, expiryDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Strike Price</label>
+              <label style={labelStyle}>STRIKE PRICE</label>
               <input
                 type="number"
                 step="0.01"
                 value={optionParams.strike}
                 onChange={(e) => setOptionParams({ ...optionParams, strike: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Spot Price</label>
+              <label style={labelStyle}>SPOT PRICE</label>
               <input
                 type="number"
                 step="0.01"
                 value={optionParams.spot}
                 onChange={(e) => setOptionParams({ ...optionParams, spot: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Volatility (%)</label>
+              <label style={labelStyle}>VOLATILITY (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={optionParams.volatility}
                 onChange={(e) => setOptionParams({ ...optionParams, volatility: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Risk-Free Rate (%)</label>
+              <label style={labelStyle}>RISK-FREE RATE (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={optionParams.riskFreeRate}
                 onChange={(e) => setOptionParams({ ...optionParams, riskFreeRate: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Dividend Yield (%)</label>
+              <label style={labelStyle}>DIVIDEND YIELD (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={optionParams.dividendYield}
                 onChange={(e) => setOptionParams({ ...optionParams, dividendYield: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Option Type</label>
+              <label style={labelStyle}>OPTION TYPE</label>
               <select
                 value={optionParams.optionType}
                 onChange={(e) => setOptionParams({ ...optionParams, optionType: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               >
                 <option value="call">Call</option>
                 <option value="put">Put</option>
@@ -575,105 +645,108 @@ export function DerivativesTab() {
           <button
             onClick={calculateOptionPrice}
             disabled={loading}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+            style={{
+              ...primaryButtonStyle,
+              opacity: loading ? 0.5 : 1,
+            }}
           >
-            {loading ? 'Calculating...' : 'Calculate Option Price & Greeks'}
+            {loading ? 'CALCULATING...' : 'CALCULATE PRICE & GREEKS'}
           </button>
         </div>
       </div>
 
       {/* Implied Volatility */}
-      <div className="bg-gray-900 rounded-lg border border-gray-800 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Activity className="w-5 h-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-white">Implied Volatility Calculator</h3>
+      <div style={panelStyle}>
+        <div style={sectionHeaderStyle}>
+          <Activity size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>IMPLIED VOLATILITY</span>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Valuation Date</label>
+              <label style={labelStyle}>VALUATION DATE</label>
               <input
                 type="date"
                 value={optionParams.valuationDate}
                 onChange={(e) => setOptionParams({ ...optionParams, valuationDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Expiry Date</label>
+              <label style={labelStyle}>EXPIRY DATE</label>
               <input
                 type="date"
                 value={optionParams.expiryDate}
                 onChange={(e) => setOptionParams({ ...optionParams, expiryDate: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Strike Price</label>
+              <label style={labelStyle}>STRIKE PRICE</label>
               <input
                 type="number"
                 step="0.01"
                 value={optionParams.strike}
                 onChange={(e) => setOptionParams({ ...optionParams, strike: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Spot Price</label>
+              <label style={labelStyle}>SPOT PRICE</label>
               <input
                 type="number"
                 step="0.01"
                 value={optionParams.spot}
                 onChange={(e) => setOptionParams({ ...optionParams, spot: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Market Option Price</label>
+            <label style={labelStyle}>MARKET OPTION PRICE</label>
             <input
               type="number"
               step="0.01"
               value={optionParams.optionPrice}
               onChange={(e) => setOptionParams({ ...optionParams, optionPrice: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Risk-Free Rate (%)</label>
+              <label style={labelStyle}>RISK-FREE RATE (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={optionParams.riskFreeRate}
                 onChange={(e) => setOptionParams({ ...optionParams, riskFreeRate: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Dividend Yield (%)</label>
+              <label style={labelStyle}>DIVIDEND YIELD (%)</label>
               <input
                 type="number"
                 step="0.1"
                 value={optionParams.dividendYield}
                 onChange={(e) => setOptionParams({ ...optionParams, dividendYield: parseFloat(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Option Type</label>
+            <label style={labelStyle}>OPTION TYPE</label>
             <select
               value={optionParams.optionType}
               onChange={(e) => setOptionParams({ ...optionParams, optionType: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             >
               <option value="call">Call</option>
               <option value="put">Put</option>
@@ -683,9 +756,12 @@ export function DerivativesTab() {
           <button
             onClick={calculateImpliedVol}
             disabled={loading}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+            style={{
+              ...primaryButtonStyle,
+              opacity: loading ? 0.5 : 1,
+            }}
           >
-            {loading ? 'Calculating...' : 'Calculate Implied Volatility'}
+            {loading ? 'CALCULATING...' : 'CALCULATE IMPLIED VOL'}
           </button>
         </div>
       </div>
@@ -693,107 +769,107 @@ export function DerivativesTab() {
   );
 
   const renderFXOptionsPanel = () => (
-    <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 max-w-2xl">
-      <div className="flex items-center gap-2 mb-4">
-        <Activity className="w-5 h-5 text-orange-500" />
-        <h3 className="text-lg font-semibold text-white">FX Vanilla Option Pricing</h3>
+    <div style={{ ...panelStyle, maxWidth: '700px' }}>
+      <div style={sectionHeaderStyle}>
+        <Activity size={14} style={{ color: FINCEPT.ORANGE }} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>FX VANILLA OPTION PRICING</span>
       </div>
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Valuation Date</label>
+            <label style={labelStyle}>VALUATION DATE</label>
             <input
               type="date"
               value={fxParams.valuationDate}
               onChange={(e) => setFxParams({ ...fxParams, valuationDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Expiry Date</label>
+            <label style={labelStyle}>EXPIRY DATE</label>
             <input
               type="date"
               value={fxParams.expiryDate}
               onChange={(e) => setFxParams({ ...fxParams, expiryDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Strike FX Rate</label>
+            <label style={labelStyle}>STRIKE FX RATE</label>
             <input
               type="number"
               step="0.0001"
               value={fxParams.strike}
               onChange={(e) => setFxParams({ ...fxParams, strike: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Spot FX Rate</label>
+            <label style={labelStyle}>SPOT FX RATE</label>
             <input
               type="number"
               step="0.0001"
               value={fxParams.spot}
               onChange={(e) => setFxParams({ ...fxParams, spot: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Volatility (%)</label>
+            <label style={labelStyle}>VOLATILITY (%)</label>
             <input
               type="number"
               step="0.1"
               value={fxParams.volatility}
               onChange={(e) => setFxParams({ ...fxParams, volatility: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Domestic Rate (%)</label>
+            <label style={labelStyle}>DOMESTIC RATE (%)</label>
             <input
               type="number"
               step="0.1"
               value={fxParams.domesticRate}
               onChange={(e) => setFxParams({ ...fxParams, domesticRate: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Foreign Rate (%)</label>
+            <label style={labelStyle}>FOREIGN RATE (%)</label>
             <input
               type="number"
               step="0.1"
               value={fxParams.foreignRate}
               onChange={(e) => setFxParams({ ...fxParams, foreignRate: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Notional</label>
+            <label style={labelStyle}>NOTIONAL</label>
             <input
               type="number"
               step="10000"
               value={fxParams.notional}
               onChange={(e) => setFxParams({ ...fxParams, notional: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Option Type</label>
+            <label style={labelStyle}>OPTION TYPE</label>
             <select
               value={fxParams.optionType}
               onChange={(e) => setFxParams({ ...fxParams, optionType: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             >
               <option value="call">Call</option>
               <option value="put">Put</option>
@@ -804,60 +880,63 @@ export function DerivativesTab() {
         <button
           onClick={calculateFXOption}
           disabled={loading}
-          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+          style={{
+            ...primaryButtonStyle,
+            opacity: loading ? 0.5 : 1,
+          }}
         >
-          {loading ? 'Calculating...' : 'Calculate FX Option Price'}
+          {loading ? 'CALCULATING...' : 'CALCULATE FX OPTION PRICE'}
         </button>
       </div>
     </div>
   );
 
   const renderSwapsPanel = () => (
-    <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 max-w-2xl">
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart3 className="w-5 h-5 text-orange-500" />
-        <h3 className="text-lg font-semibold text-white">Interest Rate Swap Pricing</h3>
+    <div style={{ ...panelStyle, maxWidth: '700px' }}>
+      <div style={sectionHeaderStyle}>
+        <BarChart3 size={14} style={{ color: FINCEPT.ORANGE }} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>INTEREST RATE SWAP PRICING</span>
       </div>
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Effective Date</label>
+            <label style={labelStyle}>EFFECTIVE DATE</label>
             <input
               type="date"
               value={swapParams.effectiveDate}
               onChange={(e) => setSwapParams({ ...swapParams, effectiveDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Maturity Date</label>
+            <label style={labelStyle}>MATURITY DATE</label>
             <input
               type="date"
               value={swapParams.maturityDate}
               onChange={(e) => setSwapParams({ ...swapParams, maturityDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Fixed Rate (%)</label>
+            <label style={labelStyle}>FIXED RATE (%)</label>
             <input
               type="number"
               step="0.01"
               value={swapParams.fixedRate}
               onChange={(e) => setSwapParams({ ...swapParams, fixedRate: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Frequency</label>
+            <label style={labelStyle}>FREQUENCY</label>
             <select
               value={swapParams.freq}
               onChange={(e) => setSwapParams({ ...swapParams, freq: parseInt(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             >
               <option value={1}>Annual</option>
               <option value={2}>Semi-Annual</option>
@@ -865,97 +944,100 @@ export function DerivativesTab() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Discount Rate (%)</label>
+            <label style={labelStyle}>DISCOUNT RATE (%)</label>
             <input
               type="number"
               step="0.01"
               value={swapParams.discountRate}
               onChange={(e) => setSwapParams({ ...swapParams, discountRate: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Notional Amount</label>
+          <label style={labelStyle}>NOTIONAL AMOUNT</label>
           <input
             type="number"
             step="100000"
             value={swapParams.notional}
             onChange={(e) => setSwapParams({ ...swapParams, notional: parseFloat(e.target.value) })}
-            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+            style={inputStyle}
           />
         </div>
 
         <button
           onClick={calculateSwap}
           disabled={loading}
-          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+          style={{
+            ...primaryButtonStyle,
+            opacity: loading ? 0.5 : 1,
+          }}
         >
-          {loading ? 'Calculating...' : 'Calculate Swap Value'}
+          {loading ? 'CALCULATING...' : 'CALCULATE SWAP VALUE'}
         </button>
       </div>
     </div>
   );
 
   const renderCreditPanel = () => (
-    <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 max-w-2xl">
-      <div className="flex items-center gap-2 mb-4">
-        <Target className="w-5 h-5 text-orange-500" />
-        <h3 className="text-lg font-semibold text-white">Credit Default Swap Pricing</h3>
+    <div style={{ ...panelStyle, maxWidth: '700px' }}>
+      <div style={sectionHeaderStyle}>
+        <Target size={14} style={{ color: FINCEPT.ORANGE }} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>CREDIT DEFAULT SWAP PRICING</span>
       </div>
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Valuation Date</label>
+            <label style={labelStyle}>VALUATION DATE</label>
             <input
               type="date"
               value={cdsParams.valuationDate}
               onChange={(e) => setCdsParams({ ...cdsParams, valuationDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Maturity Date</label>
+            <label style={labelStyle}>MATURITY DATE</label>
             <input
               type="date"
               value={cdsParams.maturityDate}
               onChange={(e) => setCdsParams({ ...cdsParams, maturityDate: e.target.value })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Recovery Rate (%)</label>
+            <label style={labelStyle}>RECOVERY RATE (%)</label>
             <input
               type="number"
               step="1"
               value={cdsParams.recoveryRate}
               onChange={(e) => setCdsParams({ ...cdsParams, recoveryRate: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Spread (bps)</label>
+            <label style={labelStyle}>SPREAD (BPS)</label>
             <input
               type="number"
               step="1"
               value={cdsParams.spreadBps}
               onChange={(e) => setCdsParams({ ...cdsParams, spreadBps: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Notional</label>
+            <label style={labelStyle}>NOTIONAL</label>
             <input
               type="number"
               step="1000000"
               value={cdsParams.notional}
               onChange={(e) => setCdsParams({ ...cdsParams, notional: parseFloat(e.target.value) })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white"
+              style={inputStyle}
             />
           </div>
         </div>
@@ -963,9 +1045,12 @@ export function DerivativesTab() {
         <button
           onClick={calculateCDS}
           disabled={loading}
-          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded transition-colors disabled:opacity-50"
+          style={{
+            ...primaryButtonStyle,
+            opacity: loading ? 0.5 : 1,
+          }}
         >
-          {loading ? 'Calculating...' : 'Calculate CDS Value'}
+          {loading ? 'CALCULATING...' : 'CALCULATE CDS VALUE'}
         </button>
       </div>
     </div>
@@ -974,12 +1059,18 @@ export function DerivativesTab() {
   const renderResults = () => {
     if (error) {
       return (
-        <div className="mt-6 bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+        <div style={{
+          marginTop: '16px',
+          backgroundColor: `${FINCEPT.RED}20`,
+          border: `1px solid ${FINCEPT.RED}`,
+          borderRadius: '2px',
+          padding: '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <AlertCircle size={14} style={{ color: FINCEPT.RED, marginTop: '2px' }} />
             <div>
-              <h4 className="text-red-500 font-semibold mb-1">Error</h4>
-              <p className="text-sm text-red-300">{error}</p>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.RED, marginBottom: '4px' }}>ERROR</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED }}>{error}</div>
             </div>
           </div>
         </div>
@@ -988,45 +1079,92 @@ export function DerivativesTab() {
 
     if (!result) return null;
 
+    const resultCardStyle: React.CSSProperties = {
+      backgroundColor: FINCEPT.HEADER_BG,
+      borderRadius: '2px',
+      padding: '10px',
+    };
+
+    const resultLabelStyle: React.CSSProperties = {
+      fontSize: '9px',
+      fontWeight: 700,
+      color: FINCEPT.GRAY,
+      letterSpacing: '0.5px',
+      marginBottom: '4px',
+    };
+
+    const resultValueStyle: React.CSSProperties = {
+      fontSize: '12px',
+      fontWeight: 700,
+      color: FINCEPT.CYAN,
+      fontFamily: '"IBM Plex Mono", monospace',
+    };
+
+    const bigResultValueStyle: React.CSSProperties = {
+      fontSize: '16px',
+      fontWeight: 700,
+      color: FINCEPT.ORANGE,
+      fontFamily: '"IBM Plex Mono", monospace',
+    };
+
     return (
-      <div className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Results</h3>
+      <div style={{
+        marginTop: '16px',
+        ...panelStyle,
+      }}>
+        <div style={{
+          ...sectionHeaderStyle,
+          justifyContent: 'space-between',
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>RESULTS</span>
           <button
             onClick={copyResults}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-sm transition-colors"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              fontWeight: 700,
+              borderRadius: '2px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
           >
-            <Copy className="w-4 h-4" />
-            Copy
+            <Copy size={10} />
+            COPY
           </button>
         </div>
 
-        <div className="space-y-3">
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {/* Bond Results */}
           {result.clean_price !== undefined && (
             <>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Clean Price</div>
-                  <div className="text-lg font-semibold text-white">{result.clean_price.toFixed(4)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>CLEAN PRICE</div>
+                  <div style={resultValueStyle}>{result.clean_price.toFixed(4)}</div>
                 </div>
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Dirty Price</div>
-                  <div className="text-lg font-semibold text-white">{result.dirty_price?.toFixed(4)}</div>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>DIRTY PRICE</div>
+                  <div style={resultValueStyle}>{result.dirty_price?.toFixed(4)}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Duration</div>
-                  <div className="text-lg font-semibold text-white">{result.duration?.toFixed(2)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>DURATION</div>
+                  <div style={resultValueStyle}>{result.duration?.toFixed(2)}</div>
                 </div>
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Convexity</div>
-                  <div className="text-lg font-semibold text-white">{result.convexity?.toFixed(4)}</div>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>CONVEXITY</div>
+                  <div style={resultValueStyle}>{result.convexity?.toFixed(4)}</div>
                 </div>
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Accrued Interest</div>
-                  <div className="text-lg font-semibold text-white">{result.accrued_interest?.toFixed(4)}</div>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>ACCRUED INT</div>
+                  <div style={resultValueStyle}>{result.accrued_interest?.toFixed(4)}</div>
                 </div>
               </div>
             </>
@@ -1034,39 +1172,39 @@ export function DerivativesTab() {
 
           {/* YTM Results */}
           {result.ytm !== undefined && !result.clean_price && (
-            <div className="bg-gray-800 rounded p-4">
-              <div className="text-xs text-gray-400 mb-1">Yield to Maturity</div>
-              <div className="text-2xl font-bold text-orange-500">{result.ytm.toFixed(4)}%</div>
+            <div style={resultCardStyle}>
+              <div style={resultLabelStyle}>YIELD TO MATURITY</div>
+              <div style={bigResultValueStyle}>{result.ytm.toFixed(4)}%</div>
             </div>
           )}
 
           {/* Option Results */}
           {result.price !== undefined && result.greeks && (
             <>
-              <div className="bg-gray-800 rounded p-4">
-                <div className="text-xs text-gray-400 mb-1">Option Price</div>
-                <div className="text-2xl font-bold text-orange-500">{result.price.toFixed(4)}</div>
+              <div style={resultCardStyle}>
+                <div style={resultLabelStyle}>OPTION PRICE</div>
+                <div style={bigResultValueStyle}>{result.price.toFixed(4)}</div>
               </div>
-              <div className="grid grid-cols-5 gap-3">
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Delta</div>
-                  <div className="text-sm font-semibold text-white">{result.greeks.delta.toFixed(4)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>DELTA</div>
+                  <div style={resultValueStyle}>{result.greeks.delta.toFixed(4)}</div>
                 </div>
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Gamma</div>
-                  <div className="text-sm font-semibold text-white">{result.greeks.gamma.toFixed(4)}</div>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>GAMMA</div>
+                  <div style={resultValueStyle}>{result.greeks.gamma.toFixed(4)}</div>
                 </div>
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Vega</div>
-                  <div className="text-sm font-semibold text-white">{result.greeks.vega.toFixed(4)}</div>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>VEGA</div>
+                  <div style={resultValueStyle}>{result.greeks.vega.toFixed(4)}</div>
                 </div>
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Theta</div>
-                  <div className="text-sm font-semibold text-white">{result.greeks.theta.toFixed(4)}</div>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>THETA</div>
+                  <div style={resultValueStyle}>{result.greeks.theta.toFixed(4)}</div>
                 </div>
-                <div className="bg-gray-800 rounded p-3">
-                  <div className="text-xs text-gray-400 mb-1">Rho</div>
-                  <div className="text-sm font-semibold text-white">{result.greeks.rho.toFixed(4)}</div>
+                <div style={resultCardStyle}>
+                  <div style={resultLabelStyle}>RHO</div>
+                  <div style={resultValueStyle}>{result.greeks.rho.toFixed(4)}</div>
                 </div>
               </div>
             </>
@@ -1074,15 +1212,23 @@ export function DerivativesTab() {
 
           {/* Implied Vol Results */}
           {result.implied_volatility !== undefined && (
-            <div className="bg-gray-800 rounded p-4">
-              <div className="text-xs text-gray-400 mb-1">Implied Volatility</div>
-              <div className="text-2xl font-bold text-orange-500">{result.implied_volatility.toFixed(4)}%</div>
+            <div style={resultCardStyle}>
+              <div style={resultLabelStyle}>IMPLIED VOLATILITY</div>
+              <div style={bigResultValueStyle}>{result.implied_volatility.toFixed(4)}%</div>
             </div>
           )}
 
           {/* Raw JSON for other results */}
           {!result.clean_price && !result.ytm && !result.price && !result.greeks && !result.implied_volatility && (
-            <pre className="bg-gray-800 rounded p-4 text-xs text-gray-300 overflow-x-auto">
+            <pre style={{
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderRadius: '2px',
+              padding: '12px',
+              fontSize: '9px',
+              color: FINCEPT.CYAN,
+              overflow: 'auto',
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}>
               {JSON.stringify(result, null, 2)}
             </pre>
           )}
@@ -1092,33 +1238,53 @@ export function DerivativesTab() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-black text-white">
-      {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4">
-        <div className="flex items-center justify-between">
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
+      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+    }}>
+      {/* Top Navigation Bar */}
+      <div style={{
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Calculator size={20} style={{ color: FINCEPT.ORANGE }} />
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Calculator className="w-6 h-6 text-orange-500" />
-              Derivatives Pricing
+            <h1 style={{ fontSize: '12px', fontWeight: 700, color: FINCEPT.WHITE, margin: 0 }}>
+              DERIVATIVES PRICING
             </h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Professional derivatives valuation powered by FinancePy
-            </p>
+            <span style={{ fontSize: '9px', color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+              PROFESSIONAL VALUATION POWERED BY FINANCEPY
+            </span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-green-500/10 px-3 py-1.5 rounded">
-              <Zap className="w-4 h-4 text-green-500" />
-              <span className="text-xs font-medium text-green-500">FinancePy Active</span>
-            </div>
-          </div>
+        </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '2px 6px',
+          backgroundColor: `${FINCEPT.GREEN}20`,
+          borderRadius: '2px',
+        }}>
+          <Zap size={10} style={{ color: FINCEPT.GREEN }} />
+          <span style={{ fontSize: '8px', fontWeight: 700, color: FINCEPT.GREEN }}>FINANCEPY ACTIVE</span>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      {/* Content Area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {renderInstrumentSelector()}
 
-        <div className="max-w-7xl mx-auto">
+        <div style={{ maxWidth: '1400px' }}>
           {activeInstrument === 'bonds' && renderBondsPanel()}
           {activeInstrument === 'equity-options' && renderEquityOptionsPanel()}
           {activeInstrument === 'fx-options' && renderFXOptionsPanel()}
@@ -1129,7 +1295,23 @@ export function DerivativesTab() {
         </div>
       </div>
 
-      <TabFooter tabName="Derivatives" statusInfo="FinancePy v1.0.1" />
+      {/* Status Bar */}
+      <div style={{
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        padding: '4px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: '9px',
+        color: FINCEPT.GRAY,
+      }}>
+        <span>DERIVATIVES TAB</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span>INSTRUMENT: {activeInstrument.toUpperCase().replace('-', ' ')}</span>
+          <span style={{ color: FINCEPT.CYAN }}>FINANCEPY v1.0.1</span>
+        </div>
+      </div>
     </div>
   );
 }

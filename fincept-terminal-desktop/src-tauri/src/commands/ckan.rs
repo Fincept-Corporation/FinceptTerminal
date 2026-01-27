@@ -1,7 +1,6 @@
 // Universal CKAN Data Portals API commands
 #![allow(dead_code)]
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
 /// Execute Universal CKAN Python script command
 #[tauri::command]
@@ -13,8 +12,7 @@ pub async fn execute_ckan_command(
 ) -> Result<String, String> {
     let mut cmd_args = vec!["--country".to_string(), country, "--action".to_string(), action];
     cmd_args.extend(args);
-    let script_path = get_script_path(&app, "universal_ckan_api.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    python::execute(&app, "universal_ckan_api.py", cmd_args).await
 }
 
 /// Get list of supported countries and their portal information

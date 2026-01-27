@@ -1,5 +1,4 @@
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 use tauri::AppHandle;
 
 /// Fetch company news using GNews
@@ -82,18 +81,7 @@ pub async fn get_company_news_help(app: AppHandle) -> Result<String, String> {
 
 /// Internal helper function to execute news commands
 async fn execute_news_command(app: AppHandle, args: Vec<String>) -> Result<String, String> {
-    let script_name = "fetch_company_news.py";
-    let script_path = get_script_path(&app, script_name)
-        .map_err(|e| format!("Failed to locate script: {}", e))?;
-
-    if !script_path.exists() {
-        return Err(format!(
-            "Company news script not found at: {}",
-            script_path.display()
-        ));
-    }
-
-    match python_runtime::execute_python_script(&script_path, args) {
+    match python::execute(&app, "fetch_company_news.py", args).await {
         Ok(output) => {
             if output.contains("\"success\":false") || output.contains("\"error\"") {
                 return Err(output);

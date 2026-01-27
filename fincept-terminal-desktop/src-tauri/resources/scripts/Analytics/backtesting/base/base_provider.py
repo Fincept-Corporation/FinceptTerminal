@@ -417,10 +417,25 @@ def convert_keys_to_camel(data: Any) -> Any:
         return data
 
 
+def _sanitize_for_json(obj):
+    """Recursively replace NaN/Infinity with None so json.dumps produces valid JSON."""
+    import math
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
+
+
 def json_response(data: Any) -> str:
     """Convert data to JSON string for stdout output with camelCase keys"""
     camel_data = convert_keys_to_camel(data)
-    return json.dumps(camel_data, default=str, ensure_ascii=False)
+    sanitized = _sanitize_for_json(camel_data)
+    return json.dumps(sanitized, default=str, ensure_ascii=False)
 
 
 def parse_json_input(json_str: str) -> Dict[str, Any]:

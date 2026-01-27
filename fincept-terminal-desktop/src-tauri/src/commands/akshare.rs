@@ -1,6 +1,6 @@
 use tauri::command;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use crate::python;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AKShareResponse {
@@ -11,66 +11,29 @@ pub struct AKShareResponse {
     pub error: Option<serde_json::Value>,
 }
 
-fn run_python_script(script: &str, endpoint: &str) -> Result<AKShareResponse, String> {
-    let output = Command::new("python")
-        .arg(format!("resources/scripts/{}", script))
-        .arg(endpoint)
-        .output()
-        .map_err(|e| format!("Failed to execute Python script: {}", e))?;
-
-    if output.status.success() {
-        let result: AKShareResponse = serde_json::from_slice(&output.stdout)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        Ok(result)
-    } else {
-        let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Script error: {}", error_msg))
-    }
+fn run_python_script(app: &tauri::AppHandle, script: &str, endpoint: &str) -> Result<AKShareResponse, String> {
+    let output = python::execute_sync(app, script, vec![endpoint.to_string()])?;
+    serde_json::from_str(&output)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
-fn run_python_script_with_args(script: &str, args: Vec<&str>) -> Result<AKShareResponse, String> {
-    let mut cmd = Command::new("python");
-    cmd.arg(format!("resources/scripts/{}", script));
-    for arg in args {
-        cmd.arg(arg);
-    }
-
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python script: {}", e))?;
-
-    if output.status.success() {
-        let result: AKShareResponse = serde_json::from_slice(&output.stdout)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        Ok(result)
-    } else {
-        let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Script error: {}", error_msg))
-    }
+fn run_python_script_with_args(app: &tauri::AppHandle, script: &str, args: Vec<String>) -> Result<AKShareResponse, String> {
+    let output = python::execute_sync(app, script, args)?;
+    serde_json::from_str(&output)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
-fn run_python_script_with_symbol(script: &str, endpoint: &str, symbol: &str) -> Result<AKShareResponse, String> {
-    let output = Command::new("python")
-        .arg(format!("resources/scripts/{}", script))
-        .arg(endpoint)
-        .arg(symbol)
-        .output()
-        .map_err(|e| format!("Failed to execute Python script: {}", e))?;
-
-    if output.status.success() {
-        let result: AKShareResponse = serde_json::from_slice(&output.stdout)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        Ok(result)
-    } else {
-        let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Script error: {}", error_msg))
-    }
+fn run_python_script_with_symbol(app: &tauri::AppHandle, script: &str, endpoint: &str, symbol: &str) -> Result<AKShareResponse, String> {
+    let output = python::execute_sync(app, script, vec![endpoint.to_string(), symbol.to_string()])?;
+    serde_json::from_str(&output)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
 // ==================== GENERIC AKSHARE COMMAND ====================
 // This allows the frontend to call any endpoint from any script dynamically
 
 #[command]
-pub async fn akshare_query(script: String, endpoint: String, args: Option<Vec<String>>) -> Result<AKShareResponse, String> {
+pub async fn akshare_query(app: tauri::AppHandle, script: String, endpoint: String, args: Option<Vec<String>>) -> Result<AKShareResponse, String> {
     // Validate script name to prevent path traversal
     let valid_scripts = vec![
         "akshare_data.py",
@@ -105,20 +68,18 @@ pub async fn akshare_query(script: String, endpoint: String, args: Option<Vec<St
         return Err(format!("Invalid script: {}. Valid scripts: {:?}", script, valid_scripts));
     }
 
-    let mut cmd_args = vec![endpoint.as_str()];
-    let arg_refs: Vec<&str>;
-    if let Some(ref extra_args) = args {
-        arg_refs = extra_args.iter().map(|s| s.as_str()).collect();
-        cmd_args.extend(arg_refs.iter());
+    let mut cmd_args = vec![endpoint];
+    if let Some(extra_args) = args {
+        cmd_args.extend(extra_args);
     }
 
-    run_python_script_with_args(&script, cmd_args)
+    run_python_script_with_args(&app, &script, cmd_args)
 }
 
 // ==================== GET AVAILABLE ENDPOINTS ====================
 
 #[command]
-pub async fn akshare_get_endpoints(script: String) -> Result<AKShareResponse, String> {
+pub async fn akshare_get_endpoints(app: tauri::AppHandle, script: String) -> Result<AKShareResponse, String> {
     let valid_scripts = vec![
         "akshare_data.py",
         "akshare_bonds.py",
@@ -152,107 +113,107 @@ pub async fn akshare_get_endpoints(script: String) -> Result<AKShareResponse, St
         return Err(format!("Invalid script: {}", script));
     }
 
-    run_python_script(&script, "get_all_endpoints")
+    run_python_script(&app, &script, "get_all_endpoints")
 }
 
 // ==================== STOCK MARKET DATA ====================
 
 #[command]
-pub async fn get_stock_cn_spot() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "stock_zh_spot")
+pub async fn get_stock_cn_spot(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "stock_zh_spot")
 }
 
 #[command]
-pub async fn get_stock_us_spot() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "stock_us_spot")
+pub async fn get_stock_us_spot(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "stock_us_spot")
 }
 
 #[command]
-pub async fn get_stock_hk_spot() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "stock_hk_spot")
+pub async fn get_stock_hk_spot(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "stock_hk_spot")
 }
 
 #[command]
-pub async fn get_stock_hot_rank() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "hot_rank")
+pub async fn get_stock_hot_rank(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "hot_rank")
 }
 
 #[command]
-pub async fn get_stock_industry_list() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "industry_list")
+pub async fn get_stock_industry_list(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "industry_list")
 }
 
 #[command]
-pub async fn get_stock_concept_list() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "concept_list")
+pub async fn get_stock_concept_list(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "concept_list")
 }
 
 #[command]
-pub async fn get_stock_hsgt_data() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "hsgt")
+pub async fn get_stock_hsgt_data(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "hsgt")
 }
 
 #[command]
-pub async fn get_stock_industry_pe() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "industry_pe")
+pub async fn get_stock_industry_pe(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "industry_pe")
 }
 
 // ==================== ECONOMICS ====================
 
 #[command]
-pub async fn get_macro_china_gdp() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_economics_china.py", "gdp")
+pub async fn get_macro_china_gdp(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_economics_china.py", "gdp")
 }
 
 #[command]
-pub async fn get_macro_china_cpi() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_economics_china.py", "cpi")
+pub async fn get_macro_china_cpi(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_economics_china.py", "cpi")
 }
 
 #[command]
-pub async fn get_macro_china_pmi() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_economics_china.py", "pmi")
+pub async fn get_macro_china_pmi(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_economics_china.py", "pmi")
 }
 
 // ==================== BONDS ====================
 
 #[command]
-pub async fn get_bond_china_yield() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_bonds.py", "bond_yield")
+pub async fn get_bond_china_yield(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_bonds.py", "bond_yield")
 }
 
 // ==================== FUNDS ====================
 
 #[command]
-pub async fn get_fund_etf_spot() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "etf_spot")
+pub async fn get_fund_etf_spot(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "etf_spot")
 }
 
 #[command]
-pub async fn get_fund_ranking() -> Result<AKShareResponse, String> {
-    run_python_script("akshare_data.py", "fund_rank")
+pub async fn get_fund_ranking(app: tauri::AppHandle) -> Result<AKShareResponse, String> {
+    run_python_script(&app, "akshare_data.py", "fund_rank")
 }
 
 // ==================== COMPANY INFORMATION ====================
 
 #[command]
-pub async fn get_stock_cn_info(symbol: String) -> Result<AKShareResponse, String> {
-    run_python_script_with_symbol("akshare_company_info.py", "cn_basic", &symbol)
+pub async fn get_stock_cn_info(app: tauri::AppHandle, symbol: String) -> Result<AKShareResponse, String> {
+    run_python_script_with_symbol(&app, "akshare_company_info.py", "cn_basic", &symbol)
 }
 
 #[command]
-pub async fn get_stock_cn_profile(symbol: String) -> Result<AKShareResponse, String> {
-    run_python_script_with_symbol("akshare_company_info.py", "cn_profile", &symbol)
+pub async fn get_stock_cn_profile(app: tauri::AppHandle, symbol: String) -> Result<AKShareResponse, String> {
+    run_python_script_with_symbol(&app, "akshare_company_info.py", "cn_profile", &symbol)
 }
 
 #[command]
-pub async fn get_stock_hk_profile(symbol: String) -> Result<AKShareResponse, String> {
-    run_python_script_with_symbol("akshare_company_info.py", "hk_profile", &symbol)
+pub async fn get_stock_hk_profile(app: tauri::AppHandle, symbol: String) -> Result<AKShareResponse, String> {
+    run_python_script_with_symbol(&app, "akshare_company_info.py", "hk_profile", &symbol)
 }
 
 #[command]
-pub async fn get_stock_us_info(symbol: String) -> Result<AKShareResponse, String> {
-    run_python_script_with_symbol("akshare_company_info.py", "us_info", &symbol)
+pub async fn get_stock_us_info(app: tauri::AppHandle, symbol: String) -> Result<AKShareResponse, String> {
+    run_python_script_with_symbol(&app, "akshare_company_info.py", "us_info", &symbol)
 }
 
 // ==================== DATABASE MANAGEMENT ====================
@@ -300,18 +261,9 @@ pub async fn check_akshare_db_status() -> Result<DbStatusResponse, String> {
 }
 
 #[command]
-pub async fn build_akshare_database() -> Result<String, String> {
-    let output = Command::new("python")
-        .arg("resources/scripts/build_akshare_symbols_db.py")
-        .output()
-        .map_err(|e| format!("Failed to execute database build script: {}", e))?;
-
-    if output.status.success() {
-        Ok("Database built successfully".to_string())
-    } else {
-        let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Database build failed: {}", error_msg))
-    }
+pub async fn build_akshare_database(app: tauri::AppHandle) -> Result<String, String> {
+    python::execute_sync(&app, "build_akshare_symbols_db.py", vec![])
+        .map(|_| "Database built successfully".to_string())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -329,25 +281,16 @@ pub struct Translation {
 }
 
 #[command]
-pub async fn translate_batch(texts: Vec<String>, target_lang: String) -> Result<TranslateResponse, String> {
+pub async fn translate_batch(app: tauri::AppHandle, texts: Vec<String>, target_lang: String) -> Result<TranslateResponse, String> {
     let texts_json = serde_json::to_string(&texts)
         .map_err(|e| format!("Failed to serialize texts: {}", e))?;
 
-    let output = Command::new("python")
-        .arg("resources/scripts/translate_text.py")
-        .arg("batch")
-        .arg(&texts_json)
-        .arg("auto")
-        .arg(&target_lang)
-        .output()
-        .map_err(|e| format!("Failed to execute translation script: {}", e))?;
+    let output = python::execute_sync(
+        &app,
+        "translate_text.py",
+        vec!["batch".to_string(), texts_json, "auto".to_string(), target_lang]
+    )?;
 
-    if output.status.success() {
-        let result: TranslateResponse = serde_json::from_slice(&output.stdout)
-            .map_err(|e| format!("Failed to parse translation response: {}", e))?;
-        Ok(result)
-    } else {
-        let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Translation failed: {}", error_msg))
-    }
+    serde_json::from_str(&output)
+        .map_err(|e| format!("Failed to parse translation response: {}", e))
 }

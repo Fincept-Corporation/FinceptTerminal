@@ -115,6 +115,16 @@ export const COMMANDS: Command[] = [
     keywords: ['ai', 'chat', 'assistant', 'bot', 'help']
   },
   {
+    id: 'notes',
+    name: 'Notes',
+    description: 'Notes and reports',
+    aliases: ['notes', 'note', 'reports', 'docs'],
+    category: 'navigation',
+    action: 'notes',
+    shortcut: 'F11',
+    keywords: ['notes', 'reports', 'documents', 'save', 'write']
+  },
+  {
     id: 'prof',
     name: 'Profile',
     description: 'User profile settings',

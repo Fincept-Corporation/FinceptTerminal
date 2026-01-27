@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FINCEPT_COLORS, WATCHLIST_COLORS } from './utils';
+import { FINCEPT, FONT_FAMILY, WATCHLIST_COLORS } from './utils';
 
 interface CreateWatchlistModalProps {
   onClose: () => void;
@@ -20,7 +20,6 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
       alert('Please enter a watchlist name');
       return;
     }
-
     setLoading(true);
     try {
       await onCreate(name.trim(), description.trim(), selectedColor);
@@ -40,126 +39,175 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.8)',
+      backgroundColor: 'rgba(0,0,0,0.85)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 1000
+      zIndex: 1000,
+      fontFamily: FONT_FAMILY
     }}>
       <div style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `2px solid ${FINCEPT_COLORS.ORANGE}`,
-        padding: '24px',
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderRadius: '2px',
         minWidth: '400px',
-        maxWidth: '500px'
+        maxWidth: '480px',
+        boxShadow: `0 4px 24px rgba(0,0,0,0.6), 0 0 1px ${FINCEPT.ORANGE}40`
       }}>
+        {/* Modal Header */}
         <div style={{
-          color: FINCEPT_COLORS.ORANGE,
-          fontSize: '14px',
-          fontWeight: 'bold',
-          marginBottom: '16px'
+          padding: '12px 16px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
         }}>
-          CREATE NEW WATCHLIST
+          <div style={{
+            width: '8px',
+            height: '8px',
+            backgroundColor: FINCEPT.ORANGE,
+            borderRadius: '2px'
+          }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.ORANGE, letterSpacing: '0.5px' }}>
+            CREATE NEW WATCHLIST
+          </span>
         </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{
-            color: FINCEPT_COLORS.GRAY,
-            fontSize: '10px',
-            display: 'block',
-            marginBottom: '4px'
-          }}>
-            WATCHLIST NAME *
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{
-              width: '100%',
-              background: FINCEPT_COLORS.PANEL_BG,
-              border: `1px solid ${FINCEPT_COLORS.GRAY}`,
-              color: FINCEPT_COLORS.WHITE,
-              padding: '8px',
-              fontSize: '11px',
-              fontFamily: 'Consolas, monospace'
-            }}
-            placeholder="My Watchlist"
-            maxLength={50}
-          />
-        </div>
+        {/* Modal Body */}
+        <div style={{ padding: '16px' }}>
+          {/* Name Field */}
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GRAY,
+              letterSpacing: '0.5px',
+              display: 'block',
+              marginBottom: '6px'
+            }}>
+              WATCHLIST NAME *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !loading && name.trim() && handleCreate()}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '10px',
+                fontFamily: FONT_FAMILY,
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
+              placeholder="My Watchlist"
+              maxLength={50}
+              autoFocus
+            />
+          </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{
-            color: FINCEPT_COLORS.GRAY,
-            fontSize: '10px',
-            display: 'block',
-            marginBottom: '4px'
-          }}>
-            DESCRIPTION
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{
-              width: '100%',
-              background: FINCEPT_COLORS.PANEL_BG,
-              border: `1px solid ${FINCEPT_COLORS.GRAY}`,
-              color: FINCEPT_COLORS.WHITE,
-              padding: '8px',
-              fontSize: '11px',
-              fontFamily: 'Consolas, monospace',
-              resize: 'vertical',
-              minHeight: '60px'
-            }}
-            placeholder="Optional description..."
-            maxLength={200}
-          />
-        </div>
+          {/* Description Field */}
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GRAY,
+              letterSpacing: '0.5px',
+              display: 'block',
+              marginBottom: '6px'
+            }}>
+              DESCRIPTION
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '10px',
+                fontFamily: FONT_FAMILY,
+                resize: 'vertical',
+                minHeight: '60px',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
+              placeholder="Optional description..."
+              maxLength={200}
+            />
+          </div>
 
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{
-            color: FINCEPT_COLORS.GRAY,
-            fontSize: '10px',
-            display: 'block',
-            marginBottom: '8px'
-          }}>
-            COLOR
-          </label>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {WATCHLIST_COLORS.map(color => (
-              <button
-                key={color}
-                onClick={() => setSelectedColor(color)}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  backgroundColor: color,
-                  border: selectedColor === color
-                    ? `3px solid ${FINCEPT_COLORS.WHITE}`
-                    : `1px solid ${FINCEPT_COLORS.GRAY}`,
-                  cursor: 'pointer',
-                  borderRadius: '2px'
-                }}
-                title={color}
-              />
-            ))}
+          {/* Color Picker */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GRAY,
+              letterSpacing: '0.5px',
+              display: 'block',
+              marginBottom: '8px'
+            }}>
+              COLOR
+            </label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {WATCHLIST_COLORS.map(color => (
+                <button
+                  key={color}
+                  onClick={() => setSelectedColor(color)}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    backgroundColor: color,
+                    border: selectedColor === color
+                      ? `2px solid ${FINCEPT.WHITE}`
+                      : `1px solid ${FINCEPT.BORDER}`,
+                    cursor: 'pointer',
+                    borderRadius: '2px',
+                    transition: 'all 0.2s',
+                    boxShadow: selectedColor === color ? `0 0 6px ${color}60` : 'none'
+                  }}
+                  title={color}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+        {/* Modal Footer */}
+        <div style={{
+          padding: '12px 16px',
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          display: 'flex',
+          gap: '8px',
+          justifyContent: 'flex-end'
+        }}>
           <button
             onClick={onClose}
             disabled={loading}
             style={{
-              background: FINCEPT_COLORS.GRAY,
-              color: 'black',
-              border: 'none',
-              padding: '8px 16px',
-              fontSize: '10px',
-              fontWeight: 'bold',
+              padding: '6px 16px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              fontWeight: 700,
+              borderRadius: '2px',
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.5 : 1
+              opacity: loading ? 0.5 : 1,
+              fontFamily: FONT_FAMILY,
+              transition: 'all 0.2s'
             }}
           >
             CANCEL
@@ -168,13 +216,15 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
             onClick={handleCreate}
             disabled={loading || !name.trim()}
             style={{
-              background: (!name.trim() || loading) ? FINCEPT_COLORS.GRAY : FINCEPT_COLORS.ORANGE,
-              color: 'black',
+              padding: '6px 16px',
+              backgroundColor: (!name.trim() || loading) ? FINCEPT.MUTED : FINCEPT.ORANGE,
+              color: FINCEPT.DARK_BG,
               border: 'none',
-              padding: '8px 16px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              cursor: (!name.trim() || loading) ? 'not-allowed' : 'pointer'
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              cursor: (!name.trim() || loading) ? 'not-allowed' : 'pointer',
+              fontFamily: FONT_FAMILY
             }}
           >
             {loading ? 'CREATING...' : 'CREATE'}

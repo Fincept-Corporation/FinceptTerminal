@@ -1,6 +1,5 @@
 // agents.rs - Unified agent commands with single JSON payload
-use crate::utils::python::execute_python_subprocess;
-use crate::python_runtime;
+use crate::python;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use std::time::Duration;
@@ -93,12 +92,7 @@ async fn execute_core_agent_with_timeout(
     let result = timeout(
         Duration::from_secs(timeout_secs),
         tokio::task::spawn_blocking(move || {
-            execute_python_subprocess(
-                &app_clone,
-                "agents/finagent_core/main.py",
-                &args,
-                Some("agno"),
-            )
+            python::execute_sync(&app_clone, "agents/finagent_core/main.py", args)
         })
     ).await;
 
@@ -277,25 +271,6 @@ pub async fn execute_python_agent(
     let script_path = get_agent_script_path(&agent_type)
         .ok_or_else(|| format!("Unknown agent type: {}", agent_type))?;
 
-    let full_script_path = if cfg!(debug_assertions) {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| format!("Failed to get current directory: {}", e))?;
-        let base_dir = if current_dir.ends_with("src-tauri") {
-            current_dir
-        } else {
-            current_dir.join("src-tauri")
-        };
-        base_dir.join("resources").join("scripts").join(script_path)
-    } else {
-        let resource_dir = app.path().resource_dir()
-            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
-        resource_dir.join("scripts").join(script_path)
-    };
-
-    if !full_script_path.exists() {
-        return Err(format!("Script not found: {}", full_script_path.display()));
-    }
-
     let args = vec![
         "--parameters".to_string(),
         serde_json::to_string(&parameters).unwrap_or_default(),
@@ -303,7 +278,7 @@ pub async fn execute_python_agent(
         serde_json::to_string(&inputs).unwrap_or_default(),
     ];
 
-    let result_str = python_runtime::execute_python_script(&full_script_path, args)
+    let result_str = python::execute_sync(&app, script_path, args)
         .map_err(|e| {
             let execution_time = start_time.elapsed().as_millis() as u64;
             format!("Python execution failed after {}ms: {}", execution_time, e)

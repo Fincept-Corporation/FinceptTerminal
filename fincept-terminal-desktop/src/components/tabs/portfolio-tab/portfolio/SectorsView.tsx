@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useState } from 'react';
 import { PortfolioSummary, PortfolioHolding } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent } from './utils';
 import { sectorService } from '../../../../services/data-sources/sectorService';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
+import { FINCEPT, BORDERS, COMMON_STYLES, TYPOGRAPHY, EFFECTS } from '../finceptStyles';
 
 interface SectorsViewProps {
   portfolioSummary: PortfolioSummary;
@@ -16,10 +16,14 @@ interface SectorAllocation {
   color: string;
 }
 
+
 const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
   const currency = portfolioSummary.portfolio.currency;
   const [sectorsLoaded, setSectorsLoaded] = useState(false);
   const [, forceUpdate] = useState(0);
+  const [hoveredSectorRow, setHoveredSectorRow] = useState<string | null>(null);
+  const [hoveredHoldingRow, setHoveredHoldingRow] = useState<string | null>(null);
+  const [hoveredLegendRow, setHoveredLegendRow] = useState<string | null>(null);
 
   // Fincept color palette for sectors
   const sectorColors = [
@@ -109,29 +113,31 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
     <div style={{
       height: '100%',
       backgroundColor: FINCEPT.DARK_BG,
-      padding: SPACING.DEFAULT,
+      padding: '12px',
       overflow: 'auto',
       fontFamily: TYPOGRAPHY.MONO
     }}>
       {/* Section Header */}
       <div style={{
         ...COMMON_STYLES.sectionHeader,
-        marginBottom: SPACING.LARGE
+        marginBottom: '16px'
       }}>
         SECTOR ALLOCATION
       </div>
 
       {!sectorsLoaded && portfolioSummary.holdings.length > 0 && (
         <div style={{
-          padding: SPACING.MEDIUM,
-          marginBottom: SPACING.MEDIUM,
+          padding: '8px',
+          marginBottom: '8px',
           backgroundColor: FINCEPT.PANEL_BG,
           border: BORDERS.CYAN,
+          borderRadius: '2px',
           color: FINCEPT.CYAN,
-          fontSize: TYPOGRAPHY.BODY,
+          fontSize: '11px',
+          fontFamily: TYPOGRAPHY.MONO,
           display: 'flex',
           alignItems: 'center',
-          gap: SPACING.SMALL
+          gap: '4px'
         }}>
           <span style={{ animation: 'pulse 1.5s infinite' }}>●</span>
           Loading sector data from API...
@@ -140,22 +146,23 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
 
       {sectorAllocations.length === 0 ? (
         <div style={{
-          padding: SPACING.XLARGE,
+          padding: '24px',
           textAlign: 'center',
           color: FINCEPT.GRAY,
-          fontSize: TYPOGRAPHY.DEFAULT
+          fontSize: '11px',
+          fontFamily: TYPOGRAPHY.MONO
         }}>
           No sector data available. Add holdings with sector information.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: SPACING.XLARGE }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '24px' }}>
           {/* Pie Chart */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center'
           }}>
-            <svg width="300" height="300" style={{ marginBottom: SPACING.LARGE }}>
+            <svg width="300" height="300" style={{ marginBottom: '16px' }}>
               {/* Pie segments */}
               {pieData.map((sector, index) => (
                 <g key={sector.sector}>
@@ -173,8 +180,8 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                       y={centerY + (radius * 0.7) * Math.sin((((sector.startAngle + sector.endAngle) / 2) - 90) * Math.PI / 180)}
                       textAnchor="middle"
                       fill={FINCEPT.WHITE}
-                      fontSize={TYPOGRAPHY.DEFAULT}
-                      fontWeight={TYPOGRAPHY.BOLD}
+                      fontSize="11px"
+                      fontWeight={700}
                       fontFamily={TYPOGRAPHY.MONO}
                     >
                       {sector.weight.toFixed(1)}%
@@ -196,8 +203,8 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                 y={centerY - 10}
                 textAnchor="middle"
                 fill={FINCEPT.ORANGE}
-                fontSize={TYPOGRAPHY.SUBHEADING}
-                fontWeight={TYPOGRAPHY.BOLD}
+                fontSize="13px"
+                fontWeight={700}
                 fontFamily={TYPOGRAPHY.MONO}
               >
                 SECTORS
@@ -207,8 +214,8 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
                 y={centerY + 10}
                 textAnchor="middle"
                 fill={FINCEPT.WHITE}
-                fontSize={TYPOGRAPHY.HEADING}
-                fontWeight={TYPOGRAPHY.BOLD}
+                fontSize="15px"
+                fontWeight={700}
                 fontFamily={TYPOGRAPHY.MONO}
               >
                 {sectorAllocations.length}
@@ -220,36 +227,44 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
               {sectorAllocations.map(sector => (
                 <div
                   key={sector.sector}
+                  onMouseEnter={() => setHoveredLegendRow(sector.sector)}
+                  onMouseLeave={() => setHoveredLegendRow(null)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    marginBottom: SPACING.SMALL,
-                    padding: SPACING.SMALL,
-                    backgroundColor: FINCEPT.PANEL_BG,
-                    borderLeft: `4px solid ${sector.color}`
+                    marginBottom: '4px',
+                    padding: '4px',
+                    backgroundColor: hoveredLegendRow === sector.sector ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
+                    borderLeft: `4px solid ${sector.color}`,
+                    borderRadius: '2px',
+                    transition: EFFECTS.TRANSITION_STANDARD,
+                    cursor: 'default'
                   }}
                 >
                   <div style={{
                     width: '12px',
                     height: '12px',
                     backgroundColor: sector.color,
-                    marginRight: SPACING.MEDIUM,
-                    border: BORDERS.STANDARD
+                    marginRight: '8px',
+                    border: BORDERS.STANDARD,
+                    borderRadius: '2px'
                   }} />
                   <div style={{ flex: 1 }}>
                     <span style={{
                       color: FINCEPT.WHITE,
-                      fontSize: TYPOGRAPHY.BODY,
-                      fontWeight: TYPOGRAPHY.BOLD
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      fontFamily: TYPOGRAPHY.MONO
                     }}>
                       {sector.sector}
                     </span>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <span style={{
-                      color: FINCEPT.YELLOW,
-                      fontSize: TYPOGRAPHY.BODY,
-                      fontWeight: TYPOGRAPHY.BOLD
+                      color: FINCEPT.CYAN,
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      fontFamily: TYPOGRAPHY.MONO
                     }}>
                       {sector.weight.toFixed(1)}%
                     </span>
@@ -263,10 +278,13 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
           <div>
             <div style={{
               color: FINCEPT.ORANGE,
-              fontSize: TYPOGRAPHY.DEFAULT,
-              fontWeight: TYPOGRAPHY.BOLD,
-              marginBottom: SPACING.MEDIUM,
-              paddingBottom: SPACING.SMALL,
+              fontSize: '11px',
+              fontWeight: 700,
+              fontFamily: TYPOGRAPHY.MONO,
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase',
+              marginBottom: '8px',
+              paddingBottom: '4px',
               borderBottom: BORDERS.ORANGE
             }}>
               SECTOR BREAKDOWN
@@ -276,13 +294,17 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
             <div style={{
               display: 'grid',
               gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
-              gap: SPACING.MEDIUM,
-              padding: SPACING.MEDIUM,
+              gap: '8px',
+              padding: '8px 12px',
               backgroundColor: FINCEPT.HEADER_BG,
-              fontSize: TYPOGRAPHY.BODY,
-              fontWeight: TYPOGRAPHY.BOLD,
+              fontSize: '9px',
+              fontWeight: 700,
+              fontFamily: TYPOGRAPHY.MONO,
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase',
               borderBottom: BORDERS.ORANGE,
-              marginBottom: SPACING.SMALL
+              marginBottom: '4px',
+              borderRadius: '2px'
             }}>
               <div style={{ color: FINCEPT.ORANGE }}>SECTOR</div>
               <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>VALUE</div>
@@ -292,148 +314,174 @@ const SectorsView: React.FC<SectorsViewProps> = ({ portfolioSummary }) => {
 
             {/* Sector Rows */}
             {sectorAllocations.map((sector, index) => {
+              const sectorKey = sector.sector;
               return (
-                <div key={sector.sector} style={{ marginBottom: SPACING.DEFAULT }}>
+                <div key={sectorKey} style={{ marginBottom: '12px' }}>
                   {/* Sector Summary Row */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
-                    gap: SPACING.MEDIUM,
-                    padding: SPACING.MEDIUM,
-                    backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
-                    borderLeft: `3px solid ${sector.color}`,
-                    fontSize: TYPOGRAPHY.BODY,
-                    marginBottom: SPACING.SMALL,
-                    minHeight: '32px',
-                    alignItems: 'center'
-                  }}>
-                    <div style={{ color: sector.color, fontWeight: TYPOGRAPHY.BOLD }}>
+                  <div
+                    onMouseEnter={() => setHoveredSectorRow(sectorKey)}
+                    onMouseLeave={() => setHoveredSectorRow(null)}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
+                      gap: '8px',
+                      padding: '8px',
+                      backgroundColor: hoveredSectorRow === sectorKey
+                        ? FINCEPT.HOVER
+                        : index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+                      borderLeft: `3px solid ${sector.color}`,
+                      borderRadius: '2px',
+                      fontSize: '11px',
+                      fontFamily: TYPOGRAPHY.MONO,
+                      marginBottom: '4px',
+                      minHeight: '32px',
+                      alignItems: 'center',
+                      transition: EFFECTS.TRANSITION_STANDARD,
+                      cursor: 'default'
+                    }}
+                  >
+                    <div style={{ color: sector.color, fontWeight: 700 }}>
                       {sector.sector}
                     </div>
-                    <div style={{ color: FINCEPT.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+                    <div style={{ color: FINCEPT.CYAN, textAlign: 'right', fontWeight: 700, fontSize: '10px' }}>
                       {formatCurrency(sector.value, currency)}
                     </div>
-                    <div style={{ color: FINCEPT.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+                    <div style={{ color: FINCEPT.CYAN, textAlign: 'right', fontWeight: 700, fontSize: '10px' }}>
                       {sector.weight.toFixed(2)}%
                     </div>
-                    <div style={{ color: FINCEPT.CYAN, textAlign: 'right' }}>
+                    <div style={{ color: FINCEPT.CYAN, textAlign: 'right', fontSize: '10px' }}>
                       {sector.holdings.length}
                     </div>
                   </div>
 
                   {/* Holdings in Sector */}
-                  {sector.holdings.map(holding => (
-                    <div
-                      key={holding.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
-                        gap: SPACING.MEDIUM,
-                        padding: `${SPACING.SMALL} ${SPACING.MEDIUM} ${SPACING.SMALL} ${SPACING.LARGE}`,
-                        backgroundColor: 'rgba(255,255,255,0.01)',
-                        fontSize: TYPOGRAPHY.SMALL,
-                        borderLeft: `1px solid ${sector.color}`,
-                        marginLeft: SPACING.MEDIUM,
-                        minHeight: '28px',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div style={{ color: FINCEPT.CYAN }}>└─ {holding.symbol}</div>
-                      <div style={{ color: FINCEPT.WHITE, textAlign: 'right' }}>
-                        {formatCurrency(holding.market_value, currency)}
+                  {sector.holdings.map(holding => {
+                    const holdingKey = `${sectorKey}-${holding.id}`;
+                    return (
+                      <div
+                        key={holding.id}
+                        onMouseEnter={() => setHoveredHoldingRow(holdingKey)}
+                        onMouseLeave={() => setHoveredHoldingRow(null)}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
+                          gap: '8px',
+                          padding: '4px 8px 4px 16px',
+                          backgroundColor: hoveredHoldingRow === holdingKey
+                            ? FINCEPT.HOVER
+                            : 'rgba(255,255,255,0.01)',
+                          fontSize: '10px',
+                          fontFamily: TYPOGRAPHY.MONO,
+                          borderLeft: `1px solid ${sector.color}`,
+                          marginLeft: '8px',
+                          minHeight: '28px',
+                          alignItems: 'center',
+                          borderRadius: '2px',
+                          transition: EFFECTS.TRANSITION_STANDARD,
+                          cursor: 'default'
+                        }}
+                      >
+                        <div style={{ color: FINCEPT.CYAN }}>{'\u2514\u2500'} {holding.symbol}</div>
+                        <div style={{ color: FINCEPT.WHITE, textAlign: 'right' }}>
+                          {formatCurrency(holding.market_value, currency)}
+                        </div>
+                        <div style={{ color: FINCEPT.GRAY, textAlign: 'right' }}>
+                          {holding.weight.toFixed(2)}%
+                        </div>
+                        <div style={{
+                          color: holding.unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
+                          textAlign: 'right',
+                          fontWeight: 600
+                        }}>
+                          {formatPercent(holding.unrealized_pnl_percent)}
+                        </div>
                       </div>
-                      <div style={{ color: FINCEPT.GRAY, textAlign: 'right' }}>
-                        {holding.weight.toFixed(2)}%
-                      </div>
-                      <div style={{
-                        color: holding.unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                        textAlign: 'right',
-                        fontWeight: TYPOGRAPHY.SEMIBOLD
-                      }}>
-                        {formatPercent(holding.unrealized_pnl_percent)}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}
 
             {/* Sector Statistics */}
             <div style={{
-              marginTop: SPACING.LARGE,
-              padding: SPACING.DEFAULT,
+              marginTop: '16px',
+              padding: '12px',
               backgroundColor: FINCEPT.PANEL_BG,
               border: BORDERS.ORANGE,
+              borderRadius: '2px'
             }}>
               <div style={{
                 color: FINCEPT.ORANGE,
-                fontSize: TYPOGRAPHY.BODY,
-                fontWeight: TYPOGRAPHY.BOLD,
-                marginBottom: SPACING.MEDIUM
+                fontSize: '9px',
+                fontWeight: 700,
+                fontFamily: TYPOGRAPHY.MONO,
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase',
+                marginBottom: '8px'
               }}>
                 DIVERSIFICATION METRICS
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <div style={{
-                    color: FINCEPT.GRAY,
-                    fontSize: TYPOGRAPHY.SMALL,
-                    marginBottom: SPACING.TINY
+                    ...COMMON_STYLES.dataLabel,
+                    marginBottom: '2px'
                   }}>
                     Total Sectors
                   </div>
                   <div style={{
                     color: FINCEPT.CYAN,
-                    fontSize: TYPOGRAPHY.HEADING,
-                    fontWeight: TYPOGRAPHY.BOLD
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    fontFamily: TYPOGRAPHY.MONO
                   }}>
                     {sectorAllocations.length}
                   </div>
                 </div>
                 <div>
                   <div style={{
-                    color: FINCEPT.GRAY,
-                    fontSize: TYPOGRAPHY.SMALL,
-                    marginBottom: SPACING.TINY
+                    ...COMMON_STYLES.dataLabel,
+                    marginBottom: '2px'
                   }}>
                     Largest Sector
                   </div>
                   <div style={{
                     color: FINCEPT.YELLOW,
-                    fontSize: TYPOGRAPHY.HEADING,
-                    fontWeight: TYPOGRAPHY.BOLD
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    fontFamily: TYPOGRAPHY.MONO
                   }}>
                     {sectorAllocations[0]?.sector || 'N/A'} ({sectorAllocations[0]?.weight.toFixed(1)}%)
                   </div>
                 </div>
                 <div>
                   <div style={{
-                    color: FINCEPT.GRAY,
-                    fontSize: TYPOGRAPHY.SMALL,
-                    marginBottom: SPACING.TINY
+                    ...COMMON_STYLES.dataLabel,
+                    marginBottom: '2px'
                   }}>
                     Concentration Risk
                   </div>
                   <div style={{
                     color: sectorAllocations[0]?.weight > 40 ? FINCEPT.RED : sectorAllocations[0]?.weight > 25 ? FINCEPT.YELLOW : FINCEPT.GREEN,
-                    fontSize: TYPOGRAPHY.HEADING,
-                    fontWeight: TYPOGRAPHY.BOLD
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    fontFamily: TYPOGRAPHY.MONO
                   }}>
                     {sectorAllocations[0]?.weight > 40 ? 'HIGH' : sectorAllocations[0]?.weight > 25 ? 'MEDIUM' : 'LOW'}
                   </div>
                 </div>
                 <div>
                   <div style={{
-                    color: FINCEPT.GRAY,
-                    fontSize: TYPOGRAPHY.SMALL,
-                    marginBottom: SPACING.TINY
+                    ...COMMON_STYLES.dataLabel,
+                    marginBottom: '2px'
                   }}>
                     Diversification
                   </div>
                   <div style={{
                     color: sectorAllocations.length >= 5 ? FINCEPT.GREEN : sectorAllocations.length >= 3 ? FINCEPT.YELLOW : FINCEPT.RED,
-                    fontSize: TYPOGRAPHY.HEADING,
-                    fontWeight: TYPOGRAPHY.BOLD
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    fontFamily: TYPOGRAPHY.MONO
                   }}>
                     {sectorAllocations.length >= 5 ? 'GOOD' : sectorAllocations.length >= 3 ? 'MODERATE' : 'POOR'}
                   </div>

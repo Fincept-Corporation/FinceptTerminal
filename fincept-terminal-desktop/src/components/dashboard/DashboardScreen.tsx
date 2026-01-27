@@ -64,6 +64,7 @@ const Visualization3DTab = React.lazy(() => import('@/components/tabs/visualizat
 const PolymarketTab = React.lazy(() => import('@/components/tabs/polymarket'));
 const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/trade-visualization'));
 const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena'));
+const NotesTab = React.lazy(() => import('@/components/tabs/notes').then(m => ({ default: m.NotesTab })));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -1062,6 +1063,11 @@ function FinxeptTerminalContent() {
                 onNavigateToSettings={() => setActiveTab('settings')}
                 onNavigateToTab={(tabName) => setActiveTab(tabName)}
               />
+            </TabsContent>
+            <TabsContent value="notes" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <NotesTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="mcp" className="h-full m-0 p-0">
               <MCPTab onNavigateToTab={(tabName) => setActiveTab(tabName)} />

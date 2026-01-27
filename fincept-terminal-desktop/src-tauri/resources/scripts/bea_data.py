@@ -577,7 +577,7 @@ class BEAWrapper:
 
 
 def main(args=None):
-    # Support both PyO3 and subprocess
+    
     if args is None:
         args = sys.argv[1:]
     """CLI interface for BEA Data Fetcher"""

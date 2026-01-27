@@ -7,11 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use crate::utils::python;
-
-// Windows-specific imports to hide console windows
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+use crate::python;
 
 // ============================================================================
 // Types
@@ -77,18 +73,23 @@ pub async fn execute_command(command: String) -> Result<CommandResult, String> {
         }
     }
 
-    // Execute
-    let output = Command::new(program)
-        .args(args)
-        .output()
-        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    // Execute in blocking thread to avoid blocking the async runtime
+    let program = program.to_string();
+    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
-    Ok(CommandResult {
-        success: output.status.success(),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        exit_code: output.status.code().unwrap_or(-1),
-    })
+    tokio::task::spawn_blocking(move || {
+        let output = Command::new(&program)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+        Ok(CommandResult {
+            success: output.status.success(),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            exit_code: output.status.code().unwrap_or(-1),
+        })
+    }).await.map_err(|e| format!("Task join error: {}", e))?
 }
 
 // Removed kill_lean_process - Lean support discontinued
@@ -106,45 +107,20 @@ pub async fn execute_python_backtest(
     args: String,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    // Use library-specific Python path (switches between numpy1/numpy2 venvs)
-    let python_path = python::get_python_path_for_library(&app, Some(&provider))?;
-
-    // Build script path - handle both dev and production
-    let script_relative_path = format!(
+    // Build script name - handle both dev and production
+    let script_name = format!(
         "Analytics/backtesting/{}/{}",
         provider.to_lowercase(),
         format!("{}_provider.py", provider.to_lowercase())
     );
 
-    // Use the central get_script_path utility which handles path resolution
-    let script_path = python::get_script_path(&app, &script_relative_path)?;
+    // Build arguments for Python script
+    let script_args = vec![command, args];
 
-    // Execute Python script
-    let mut cmd = Command::new(&python_path);
+    // Execute Python script using new API
+    let output = python::execute(&app, &script_name, script_args).await?;
 
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-
-    let output = cmd
-        .arg(&script_path)
-        .arg(&command)
-        .arg(&args)
-        .output()
-        .map_err(|e| format!("Failed to execute Python script: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        // Python providers print JSON errors to stdout then exit(1)
-        // Include both stdout and stderr for full error context
-        if !stdout.is_empty() {
-            return Err(format!("Python script failed: {}", stdout.trim()));
-        }
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(stdout)
+    Ok(output)
 }
 
 /**
@@ -265,5 +241,5 @@ pub async fn read_file(path: String) -> Result<String, String> {
 // Helper Functions
 // ============================================================================
 
-// Note: get_python_path() has been removed - now using crate::utils::python::get_python_path()
+// Note: get_python_path() has been removed - now using crate::python::get_python_path()
 // which properly handles dev vs production mode with #[cfg(debug_assertions)]

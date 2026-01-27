@@ -4,6 +4,7 @@ import { TrendingUp, BarChart3, PieChart, LineChart, Target, Shield, Calculator,
 import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Scatter, ScatterChart, ZAxis } from 'recharts';
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, EFFECTS } from '../finceptStyles';
 
 // Library selection
 const LIBRARIES = [
@@ -624,14 +625,14 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
   return (
     <div style={{
       height: '100%',
-      backgroundColor: '#000000',
-      color: '#FFFFFF',
-      fontFamily: 'IBM Plex Mono, monospace',
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
+      fontFamily: TYPOGRAPHY.MONO,
       overflow: 'auto',
-      padding: '16px'
+      padding: SPACING.LARGE
     }}>
       {/* Navigation Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #333' }}>
+      <div style={{ display: 'flex', gap: SPACING.MEDIUM, marginBottom: SPACING.XLARGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
         {[
           { id: 'optimize', label: 'OPTIMIZE', icon: Calculator },
           { id: 'frontier', label: 'EFFICIENT FRONTIER', icon: LineChart },
@@ -643,18 +644,22 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             key={id}
             onClick={() => setActiveTab(id as any)}
             style={{
-              padding: '8px 16px',
-              backgroundColor: activeTab === id ? '#FF8800' : 'transparent',
-              color: activeTab === id ? '#000' : '#FFF',
+              padding: '6px 12px',
+              backgroundColor: activeTab === id ? FINCEPT.ORANGE : 'transparent',
+              color: activeTab === id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
               border: 'none',
-              borderBottom: activeTab === id ? '2px solid #FF8800' : '2px solid transparent',
+              borderBottom: activeTab === id ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+              borderRadius: '2px',
               cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: '11px',
-              fontWeight: 'bold',
+              fontFamily: TYPOGRAPHY.MONO,
+              fontSize: TYPOGRAPHY.TINY,
+              fontWeight: TYPOGRAPHY.BOLD,
+              letterSpacing: TYPOGRAPHY.WIDE,
+              textTransform: 'uppercase' as const,
+              transition: EFFECTS.TRANSITION_STANDARD,
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: SPACING.SMALL
             }}
           >
             <Icon size={14} />
@@ -672,20 +677,21 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: '1px solid #333',
+          border: BORDERS.STANDARD,
+          borderRadius: '2px',
           flexDirection: 'column',
-          gap: '8px',
+          gap: SPACING.MEDIUM,
           padding: '20px'
         }}>
           <div style={{
             width: '32px',
             height: '32px',
-            border: '3px solid #333',
-            borderTop: '3px solid #00E5FF',
+            border: `3px solid ${FINCEPT.BORDER}`,
+            borderTop: `3px solid ${FINCEPT.CYAN}`,
             borderRadius: '50%',
             animation: 'spin 1s linear infinite'
           }} />
-          <div style={{ color: '#00E5FF', fontSize: '11px', fontWeight: '500' }}>
+          <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: 500 }}>
             {activeTab === 'optimize' && 'Optimizing...'}
             {activeTab === 'backtest' && 'Running Backtest...'}
             {activeTab === 'allocation' && 'Calculating...'}
@@ -703,12 +709,13 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       {/* Error Display */}
       {error && (
         <div style={{
-          padding: '12px',
-          backgroundColor: 'rgba(255,59,59,0.1)',
-          border: '1px solid #FF3B3B',
-          color: '#FF3B3B',
-          marginBottom: '16px',
-          fontSize: '11px'
+          padding: SPACING.DEFAULT,
+          backgroundColor: `${FINCEPT.RED}1A`,
+          border: BORDERS.RED,
+          borderRadius: '2px',
+          color: FINCEPT.RED,
+          marginBottom: SPACING.LARGE,
+          fontSize: TYPOGRAPHY.BODY
         }}>
           ERROR: {error}
         </div>
@@ -716,23 +723,20 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
 
       {/* OPTIMIZE TAB */}
       {activeTab === 'optimize' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.XLARGE }}>
           {/* Configuration Panel */}
           <div>
             <div style={{
-              color: '#FF8800',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              marginBottom: '16px',
-              borderBottom: '1px solid #FF8800',
-              paddingBottom: '8px'
+              ...COMMON_STYLES.sectionHeader,
+              borderBottom: `1px solid ${FINCEPT.ORANGE}`,
+              paddingBottom: SPACING.MEDIUM
             }}>
               OPTIMIZATION CONFIGURATION
             </div>
 
             {/* Library Selection */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 OPTIMIZATION LIBRARY
               </label>
               <select
@@ -747,13 +751,8 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   }
                 }}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               >
                 {LIBRARIES.map(lib => (
@@ -765,19 +764,20 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             {/* Portfolio Info */}
             {portfolioSummary && portfolioSummary.portfolio && (
               <div style={{
-                marginBottom: '16px',
-                padding: '8px 12px',
-                backgroundColor: '#0F0F0F',
-                border: '1px solid #333',
-                borderLeft: '3px solid #00E5FF'
+                marginBottom: SPACING.LARGE,
+                padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: BORDERS.STANDARD,
+                borderLeft: `3px solid ${FINCEPT.CYAN}`,
+                borderRadius: '2px'
               }}>
-                <div style={{ fontSize: '9px', color: '#787878', marginBottom: '4px' }}>
+                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>
                   OPTIMIZING PORTFOLIO
                 </div>
-                <div style={{ fontSize: '11px', color: '#00E5FF', fontWeight: 'bold' }}>
+                <div style={{ fontSize: TYPOGRAPHY.BODY, color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>
                   {portfolioSummary.portfolio.name}
                 </div>
-                <div style={{ fontSize: '9px', color: '#787878', marginTop: '4px' }}>
+                <div style={{ ...COMMON_STYLES.dataLabel, marginTop: SPACING.SMALL }}>
                   {portfolioSummary.holdings?.length || 0} holdings • Total Value: {new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: portfolioSummary.portfolio.currency || 'USD'
@@ -787,11 +787,11 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             )}
 
             {/* Asset Symbols */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 ASSET SYMBOLS (comma-separated)
                 {portfolioSummary?.holdings && portfolioSummary.holdings.length > 0 && (
-                  <span style={{ color: '#00E5FF', marginLeft: '8px', fontSize: '9px' }}>
+                  <span style={{ color: FINCEPT.CYAN, marginLeft: SPACING.MEDIUM, fontSize: TYPOGRAPHY.TINY }}>
                     • From portfolio
                   </span>
                 )}
@@ -801,39 +801,29 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 value={assetSymbols}
                 onChange={(e) => setAssetSymbols(e.target.value)}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
                 placeholder="AAPL,GOOGL,MSFT,AMZN,TSLA"
               />
               {(!portfolioSummary || portfolioSummary.holdings.length === 0) && (
-                <div style={{ fontSize: '9px', color: '#FF8800', marginTop: '4px' }}>
+                <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.ORANGE, marginTop: SPACING.SMALL }}>
                   No portfolio selected. Using default symbols.
                 </div>
               )}
             </div>
 
             {/* Optimization Method */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 OPTIMIZATION METHOD
               </label>
               <select
                 value={config.optimization_method}
                 onChange={(e) => setConfig({ ...config, optimization_method: e.target.value })}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               >
                 {(library === 'skfolio' ? SKFOLIO_METHODS : PYPORTFOLIOOPT_METHODS).map(m => (
@@ -843,21 +833,16 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             </div>
 
             {/* Objective */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 OBJECTIVE FUNCTION
               </label>
               <select
                 value={config.objective}
                 onChange={(e) => setConfig({ ...config, objective: e.target.value })}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               >
                 {(library === 'skfolio' ? SKFOLIO_OBJECTIVES : PYPORTFOLIOOPT_OBJECTIVES).map(o => (
@@ -868,21 +853,16 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
 
             {/* skfolio-specific: Risk Measure */}
             {library === 'skfolio' && (
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+              <div style={{ marginBottom: SPACING.LARGE }}>
+                <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                   RISK MEASURE
                 </label>
                 <select
                   value={skfolioConfig.risk_measure}
                   onChange={(e) => setSkfolioConfig({ ...skfolioConfig, risk_measure: e.target.value })}
                   style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1A1A1A',
-                    border: '1px solid #333',
-                    color: '#FFF',
-                    fontFamily: 'inherit',
-                    fontSize: '11px'
+                    ...COMMON_STYLES.inputField,
+                    transition: EFFECTS.TRANSITION_STANDARD,
                   }}
                 >
                   {SKFOLIO_RISK_MEASURES.map(r => (
@@ -893,21 +873,16 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             )}
 
             {/* Expected Returns Method */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 EXPECTED RETURNS METHOD
               </label>
               <select
                 value={config.expected_returns_method}
                 onChange={(e) => setConfig({ ...config, expected_returns_method: e.target.value })}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               >
                 {EXPECTED_RETURNS_METHODS.map(m => (
@@ -917,21 +892,16 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             </div>
 
             {/* Risk Model */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 RISK MODEL
               </label>
               <select
                 value={config.risk_model_method}
                 onChange={(e) => setConfig({ ...config, risk_model_method: e.target.value })}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               >
                 {RISK_MODELS.map(m => (
@@ -941,8 +911,8 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             </div>
 
             {/* Risk-Free Rate */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 RISK-FREE RATE (%)
               </label>
               <input
@@ -951,21 +921,16 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 value={config.risk_free_rate * 100}
                 onChange={(e) => setConfig({ ...config, risk_free_rate: parseFloat(e.target.value) / 100 })}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               />
             </div>
 
             {/* Weight Bounds */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM, marginBottom: SPACING.LARGE }}>
               <div>
-                <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                   MIN WEIGHT (%)
                 </label>
                 <input
@@ -974,18 +939,13 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   value={config.weight_bounds_min * 100}
                   onChange={(e) => setConfig({ ...config, weight_bounds_min: parseFloat(e.target.value) / 100 })}
                   style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1A1A1A',
-                    border: '1px solid #333',
-                    color: '#FFF',
-                    fontFamily: 'inherit',
-                    fontSize: '11px'
+                    ...COMMON_STYLES.inputField,
+                    transition: EFFECTS.TRANSITION_STANDARD,
                   }}
                 />
               </div>
               <div>
-                <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                   MAX WEIGHT (%)
                 </label>
                 <input
@@ -994,21 +954,16 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   value={config.weight_bounds_max * 100}
                   onChange={(e) => setConfig({ ...config, weight_bounds_max: parseFloat(e.target.value) / 100 })}
                   style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1A1A1A',
-                    border: '1px solid #333',
-                    color: '#FFF',
-                    fontFamily: 'inherit',
-                    fontSize: '11px'
+                    ...COMMON_STYLES.inputField,
+                    transition: EFFECTS.TRANSITION_STANDARD,
                   }}
                 />
               </div>
             </div>
 
             {/* L2 Regularization */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 L2 REGULARIZATION (Gamma)
               </label>
               <input
@@ -1017,20 +972,15 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 value={config.gamma}
                 onChange={(e) => setConfig({ ...config, gamma: parseFloat(e.target.value) })}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               />
             </div>
 
             {/* Portfolio Value */}
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                 TOTAL PORTFOLIO VALUE ($)
               </label>
               <input
@@ -1039,13 +989,8 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 value={config.total_portfolio_value}
                 onChange={(e) => setConfig({ ...config, total_portfolio_value: parseFloat(e.target.value) })}
                 style={{
-                  width: '100%',
-                  padding: '8px',
-                  backgroundColor: '#1A1A1A',
-                  border: '1px solid #333',
-                  color: '#FFF',
-                  fontFamily: 'inherit',
-                  fontSize: '11px'
+                  ...COMMON_STYLES.inputField,
+                  transition: EFFECTS.TRANSITION_STANDARD,
                 }}
               />
             </div>
@@ -1056,36 +1001,39 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
               disabled={loadingAction === 'optimize'}
               style={{
                 width: '100%',
-                padding: '12px',
-                backgroundColor: loadingAction === 'optimize' ? '#4A4A4A' : '#FF8800',
-                color: loadingAction === 'optimize' ? '#787878' : '#000',
-                border: loadingAction === 'optimize' ? '1px solid #666' : 'none',
-                fontFamily: 'inherit',
-                fontSize: '12px',
-                fontWeight: 'bold',
+                padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`,
+                backgroundColor: loadingAction === 'optimize' ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                color: loadingAction === 'optimize' ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+                border: loadingAction === 'optimize' ? `1px solid ${FINCEPT.GRAY}` : 'none',
+                borderRadius: '2px',
+                fontFamily: TYPOGRAPHY.MONO,
+                fontSize: TYPOGRAPHY.SMALL,
+                fontWeight: TYPOGRAPHY.BOLD,
+                letterSpacing: TYPOGRAPHY.WIDE,
+                textTransform: 'uppercase' as const,
                 cursor: loadingAction === 'optimize' ? 'not-allowed' : 'pointer',
                 opacity: loadingAction === 'optimize' ? 0.6 : 1,
-                transition: 'all 0.2s ease',
+                transition: EFFECTS.TRANSITION_STANDARD,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: SPACING.MEDIUM
               }}
             >
               <Target size={16} />
               {loadingAction === 'optimize' ? 'OPTIMIZING...' : 'RUN OPTIMIZATION'}
             </button>
             {loadingAction === 'optimize' && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM, marginTop: SPACING.DEFAULT }}>
                 <div style={{
                   width: '16px',
                   height: '16px',
-                  border: '2px solid #333',
-                  borderTop: '2px solid #00E5FF',
+                  border: `2px solid ${FINCEPT.BORDER}`,
+                  borderTop: `2px solid ${FINCEPT.CYAN}`,
                   borderRadius: '50%',
                   animation: 'spin 0.8s linear infinite'
                 }} />
-                <span style={{ color: '#00E5FF', fontSize: '11px' }}>Running optimization...</span>
+                <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY }}>Running optimization...</span>
               </div>
             )}
           </div>
@@ -1093,12 +1041,9 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
           {/* Results Panel */}
           <div>
             <div style={{
-              color: '#FF8800',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              marginBottom: '16px',
-              borderBottom: '1px solid #FF8800',
-              paddingBottom: '8px'
+              ...COMMON_STYLES.sectionHeader,
+              borderBottom: `1px solid ${FINCEPT.ORANGE}`,
+              paddingBottom: SPACING.MEDIUM
             }}>
               OPTIMIZATION RESULTS
             </div>
@@ -1106,47 +1051,47 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             {results?.performance_metrics && (
               <>
                 {/* Performance Metrics */}
-                <div style={{ marginBottom: '24px' }}>
-                  <div style={{ color: '#00E5FF', fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+                <div style={{ marginBottom: SPACING.XLARGE }}>
+                  <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.MEDIUM }}>
                     PERFORMANCE METRICS
                   </div>
-                  <div style={{ backgroundColor: '#0F0F0F', padding: '12px', border: '1px solid #333' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '10px' }}>
+                  <div style={{ backgroundColor: FINCEPT.PANEL_BG, padding: SPACING.DEFAULT, border: BORDERS.STANDARD, borderRadius: '2px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT, fontSize: TYPOGRAPHY.SMALL }}>
                       <div>
-                        <div style={{ color: '#787878' }}>Expected Annual Return</div>
-                        <div style={{ color: '#00D66F', fontSize: '14px', fontWeight: 'bold' }}>
+                        <div style={{ color: FINCEPT.GRAY }}>Expected Annual Return</div>
+                        <div style={{ color: FINCEPT.GREEN, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
                           {(results.performance_metrics.expected_annual_return * 100).toFixed(2)}%
                         </div>
                       </div>
                       <div>
-                        <div style={{ color: '#787878' }}>Annual Volatility</div>
-                        <div style={{ color: '#FFD700', fontSize: '14px', fontWeight: 'bold' }}>
+                        <div style={{ color: FINCEPT.GRAY }}>Annual Volatility</div>
+                        <div style={{ color: FINCEPT.YELLOW, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
                           {results.performance_metrics.annual_volatility > 0
                             ? `${(results.performance_metrics.annual_volatility * 100).toFixed(2)}%`
                             : 'N/A'}
                         </div>
                       </div>
                       <div>
-                        <div style={{ color: '#787878' }}>Sharpe Ratio</div>
-                        <div style={{ color: '#FF8800', fontSize: '14px', fontWeight: 'bold' }}>
+                        <div style={{ color: FINCEPT.GRAY }}>Sharpe Ratio</div>
+                        <div style={{ color: FINCEPT.ORANGE, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
                           {results.performance_metrics.sharpe_ratio.toFixed(3)}
                         </div>
                       </div>
                       <div>
-                        <div style={{ color: '#787878' }}>Sortino Ratio</div>
-                        <div style={{ color: '#00E5FF', fontSize: '14px', fontWeight: 'bold' }}>
+                        <div style={{ color: FINCEPT.GRAY }}>Sortino Ratio</div>
+                        <div style={{ color: FINCEPT.CYAN, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
                           {results.performance_metrics.sortino_ratio?.toFixed(3) || 'N/A'}
                         </div>
                       </div>
                       <div>
-                        <div style={{ color: '#787878' }}>Calmar Ratio</div>
-                        <div style={{ color: '#9C27B0', fontSize: '14px', fontWeight: 'bold' }}>
+                        <div style={{ color: FINCEPT.GRAY }}>Calmar Ratio</div>
+                        <div style={{ color: FINCEPT.PURPLE, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
                           {results.performance_metrics.calmar_ratio?.toFixed(3) || 'N/A'}
                         </div>
                       </div>
                       <div>
-                        <div style={{ color: '#787878' }}>Max Drawdown</div>
-                        <div style={{ color: '#FF5252', fontSize: '14px', fontWeight: 'bold' }}>
+                        <div style={{ color: FINCEPT.GRAY }}>Max Drawdown</div>
+                        <div style={{ color: FINCEPT.RED, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
                           {results.performance_metrics.max_drawdown
                             ? `${(results.performance_metrics.max_drawdown * 100).toFixed(2)}%`
                             : 'N/A'}
@@ -1158,32 +1103,34 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
 
                 {/* Portfolio Weights */}
                 {results.weights && (
-                  <div style={{ marginBottom: '24px' }}>
-                    <div style={{ color: '#00E5FF', fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  <div style={{ marginBottom: SPACING.XLARGE }}>
+                    <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.MEDIUM }}>
                       OPTIMAL WEIGHTS
                     </div>
-                    <div style={{ backgroundColor: '#0F0F0F', border: '1px solid #333', maxHeight: '300px', overflow: 'auto' }}>
+                    <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, borderRadius: '2px', maxHeight: '300px', overflow: 'auto' }}>
                       {Object.entries(results.weights)
                         .sort(([, a], [, b]) => b - a)
                         .map(([symbol, weight]) => (
                           <div
                             key={symbol}
                             style={{
-                              padding: '8px 12px',
-                              borderBottom: '1px solid #1A1A1A',
+                              padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+                              borderBottom: `1px solid ${FINCEPT.HEADER_BG}`,
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
-                              fontSize: '10px'
+                              fontSize: TYPOGRAPHY.SMALL,
+                              transition: EFFECTS.TRANSITION_STANDARD,
                             }}
                           >
-                            <span style={{ color: '#00E5FF', fontWeight: 'bold' }}>{symbol}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{symbol}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
                               <div
                                 style={{
                                   width: '100px',
                                   height: '6px',
-                                  backgroundColor: '#1A1A1A',
+                                  backgroundColor: FINCEPT.HEADER_BG,
+                                  borderRadius: '2px',
                                   position: 'relative',
                                   overflow: 'hidden'
                                 }}
@@ -1195,11 +1142,11 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                                     top: 0,
                                     height: '100%',
                                     width: `${weight * 100}%`,
-                                    backgroundColor: '#FF8800'
+                                    backgroundColor: FINCEPT.ORANGE
                                   }}
                                 />
                               </div>
-                              <span style={{ color: '#FFF', width: '60px', textAlign: 'right' }}>
+                              <span style={{ color: FINCEPT.WHITE, width: '60px', textAlign: 'right' }}>
                                 {(weight * 100).toFixed(2)}%
                               </span>
                             </div>
@@ -1210,23 +1157,27 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 )}
 
                 {/* Export Buttons */}
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: SPACING.MEDIUM }}>
                   <button
                     onClick={() => handleExport('json')}
                     style={{
                       flex: 1,
-                      padding: '8px',
-                      backgroundColor: '#00D66F',
-                      color: '#000',
+                      padding: `${SPACING.MEDIUM} ${SPACING.LARGE}`,
+                      backgroundColor: FINCEPT.GREEN,
+                      color: FINCEPT.DARK_BG,
                       border: 'none',
-                      fontFamily: 'inherit',
-                      fontSize: '10px',
-                      fontWeight: 'bold',
+                      borderRadius: '2px',
+                      fontFamily: TYPOGRAPHY.MONO,
+                      fontSize: TYPOGRAPHY.TINY,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      letterSpacing: TYPOGRAPHY.WIDE,
+                      textTransform: 'uppercase' as const,
                       cursor: 'pointer',
+                      transition: EFFECTS.TRANSITION_STANDARD,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '4px'
+                      gap: SPACING.SMALL
                     }}
                   >
                     <Download size={12} />
@@ -1236,18 +1187,22 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                     onClick={() => handleExport('csv')}
                     style={{
                       flex: 1,
-                      padding: '8px',
-                      backgroundColor: '#00E5FF',
-                      color: '#000',
+                      padding: `${SPACING.MEDIUM} ${SPACING.LARGE}`,
+                      backgroundColor: FINCEPT.CYAN,
+                      color: FINCEPT.DARK_BG,
                       border: 'none',
-                      fontFamily: 'inherit',
-                      fontSize: '10px',
-                      fontWeight: 'bold',
+                      borderRadius: '2px',
+                      fontFamily: TYPOGRAPHY.MONO,
+                      fontSize: TYPOGRAPHY.TINY,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      letterSpacing: TYPOGRAPHY.WIDE,
+                      textTransform: 'uppercase' as const,
                       cursor: 'pointer',
+                      transition: EFFECTS.TRANSITION_STANDARD,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '4px'
+                      gap: SPACING.SMALL
                     }}
                   >
                     <Download size={12} />
@@ -1261,10 +1216,11 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
               <div style={{
                 padding: '48px',
                 textAlign: 'center',
-                color: '#787878',
-                fontSize: '11px',
-                backgroundColor: '#0F0F0F',
-                border: '1px solid #333'
+                color: FINCEPT.GRAY,
+                fontSize: TYPOGRAPHY.BODY,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: BORDERS.STANDARD,
+                borderRadius: '2px'
               }}>
                 Configure parameters and click "RUN OPTIMIZATION" to see results
               </div>
@@ -1277,15 +1233,15 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       {activeTab === 'frontier' && (
         <div>
           {/* Configuration Panel */}
-          <div style={{ backgroundColor: '#0F0F0F', padding: '16px', border: '1px solid #333', marginBottom: '16px' }}>
-            <div style={{ color: '#00E5FF', fontSize: '11px', fontWeight: 'bold', marginBottom: '12px' }}>
+          <div style={{ backgroundColor: FINCEPT.PANEL_BG, padding: SPACING.LARGE, border: BORDERS.STANDARD, borderRadius: '2px', marginBottom: SPACING.LARGE }}>
+            <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.DEFAULT }}>
               FRONTIER PARAMETERS
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
               {/* Number of portfolios */}
               <div>
-                <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                   NUMBER OF POINTS
                 </label>
                 <input
@@ -1295,13 +1251,8 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   min="10"
                   max="500"
                   style={{
-                    width: '100%',
-                    padding: '6px',
-                    backgroundColor: '#1A1A1A',
-                    border: '1px solid #333',
-                    color: '#FFF',
-                    fontFamily: 'inherit',
-                    fontSize: '11px'
+                    ...COMMON_STYLES.inputField,
+                    transition: EFFECTS.TRANSITION_STANDARD,
                   }}
                 />
               </div>
@@ -1309,20 +1260,15 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
               {/* Risk Measure for skfolio */}
               {library === 'skfolio' && (
                 <div>
-                  <label style={{ color: '#787878', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                  <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
                     RISK MEASURE
                   </label>
                   <select
                     value={skfolioConfig.risk_measure}
                     onChange={(e) => setSkfolioConfig({ ...skfolioConfig, risk_measure: e.target.value })}
                     style={{
-                      width: '100%',
-                      padding: '6px',
-                      backgroundColor: '#1A1A1A',
-                      border: '1px solid #333',
-                      color: '#FFF',
-                      fontFamily: 'inherit',
-                      fontSize: '11px'
+                      ...COMMON_STYLES.inputField,
+                      transition: EFFECTS.TRANSITION_STANDARD,
                     }}
                   >
                     {SKFOLIO_RISK_MEASURES.map(rm => (
@@ -1334,36 +1280,33 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.DEFAULT, marginBottom: SPACING.XLARGE }}>
             <button
               onClick={handleGenerateFrontier}
               disabled={loadingAction === 'frontier'}
               style={{
-                padding: '12px 24px',
-                backgroundColor: loadingAction === 'frontier' ? '#4A4A4A' : '#FF8800',
-                color: loadingAction === 'frontier' ? '#787878' : '#000',
-                border: loadingAction === 'frontier' ? '1px solid #666' : 'none',
-                fontFamily: 'inherit',
-                fontSize: '12px',
-                fontWeight: 'bold',
+                ...COMMON_STYLES.buttonPrimary,
+                padding: `${SPACING.DEFAULT} ${SPACING.XLARGE}`,
+                backgroundColor: loadingAction === 'frontier' ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                color: loadingAction === 'frontier' ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+                border: loadingAction === 'frontier' ? `1px solid ${FINCEPT.GRAY}` : 'none',
                 cursor: loadingAction === 'frontier' ? 'not-allowed' : 'pointer',
                 opacity: loadingAction === 'frontier' ? 0.6 : 1,
-                transition: 'all 0.2s ease',
               }}
             >
               {loadingAction === 'frontier' ? 'GENERATING...' : 'GENERATE EFFICIENT FRONTIER'}
             </button>
             {loadingAction === 'frontier' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
                 <div style={{
                   width: '16px',
                   height: '16px',
-                  border: '2px solid #333',
-                  borderTop: '2px solid #00E5FF',
+                  border: `2px solid ${FINCEPT.BORDER}`,
+                  borderTop: `2px solid ${FINCEPT.CYAN}`,
                   borderRadius: '50%',
                   animation: 'spin 0.8s linear infinite'
                 }} />
-                <span style={{ color: '#00E5FF', fontSize: '11px' }}>Generating frontier...</span>
+                <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY }}>Generating frontier...</span>
                 <style>{`
                   @keyframes spin {
                     0% { transform: rotate(0deg); }
@@ -1375,8 +1318,8 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
           </div>
 
           {results?.efficient_frontier && results.efficient_frontier.returns && (
-            <div style={{ backgroundColor: '#0F0F0F', padding: '24px', border: '1px solid #333', marginTop: '16px' }}>
-              <div style={{ color: '#00E5FF', fontSize: '12px', fontWeight: 'bold', marginBottom: '16px' }}>
+            <div style={{ backgroundColor: FINCEPT.PANEL_BG, padding: SPACING.XLARGE, border: BORDERS.STANDARD, borderRadius: '2px', marginTop: SPACING.LARGE }}>
+              <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.LARGE }}>
                 EFFICIENT FRONTIER ({results.efficient_frontier.returns?.length || 0} points)
               </div>
 
@@ -1394,10 +1337,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   const sharpe = payload.sharpe || 0;
 
                   // Color gradient based on Sharpe ratio (green for high, yellow for medium, red for low)
-                  let fillColor = '#FF3B3B'; // Red for low Sharpe
-                  if (sharpe > 1.5) fillColor = '#00FF88'; // Green for high Sharpe
-                  else if (sharpe > 0.8) fillColor = '#FFD700'; // Gold for medium Sharpe
-                  else if (sharpe > 0.3) fillColor = '#FF8800'; // Orange for okay Sharpe
+                  let fillColor: string = FINCEPT.RED; // Red for low Sharpe
+                  if (sharpe > 1.5) fillColor = FINCEPT.GREEN; // Green for high Sharpe
+                  else if (sharpe > 0.8) fillColor = FINCEPT.YELLOW; // Gold for medium Sharpe
+                  else if (sharpe > 0.3) fillColor = FINCEPT.ORANGE; // Orange for okay Sharpe
 
                   return (
                     <circle
@@ -1417,9 +1360,9 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                     <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 60 }}>
                       <defs>
                         <linearGradient id="frontierGradient" x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stopColor="#FF3B3B" stopOpacity={0.8} />
-                          <stop offset="50%" stopColor="#FFD700" stopOpacity={0.8} />
-                          <stop offset="100%" stopColor="#00FF88" stopOpacity={0.8} />
+                          <stop offset="0%" stopColor={FINCEPT.RED} stopOpacity={0.8} />
+                          <stop offset="50%" stopColor={FINCEPT.YELLOW} stopOpacity={0.8} />
+                          <stop offset="100%" stopColor={FINCEPT.GREEN} stopOpacity={0.8} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#333" strokeOpacity={0.3} />
@@ -1428,29 +1371,29 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                         dataKey="volatility"
                         name="Volatility"
                         unit="%"
-                        stroke="#787878"
-                        tick={{ fill: '#787878', fontSize: 10 }}
-                        label={{ value: 'Annual Volatility (%)', position: 'insideBottom', offset: -15, fill: '#787878', fontSize: 11 }}
+                        stroke={FINCEPT.GRAY}
+                        tick={{ fill: FINCEPT.GRAY, fontSize: 10 }}
+                        label={{ value: 'Annual Volatility (%)', position: 'insideBottom', offset: -15, fill: FINCEPT.GRAY, fontSize: 11 }}
                       />
                       <YAxis
                         type="number"
                         dataKey="returns"
                         name="Returns"
                         unit="%"
-                        stroke="#787878"
-                        tick={{ fill: '#787878', fontSize: 10 }}
-                        label={{ value: 'Annual Returns (%)', angle: -90, position: 'insideLeft', offset: -40, fill: '#787878', fontSize: 11 }}
+                        stroke={FINCEPT.GRAY}
+                        tick={{ fill: FINCEPT.GRAY, fontSize: 10 }}
+                        label={{ value: 'Annual Returns (%)', angle: -90, position: 'insideLeft', offset: -40, fill: FINCEPT.GRAY, fontSize: 11 }}
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#1A1A1A',
-                          border: '1px solid #00E5FF',
-                          borderRadius: '4px',
-                          fontSize: '10px',
-                          padding: '8px'
+                          backgroundColor: FINCEPT.HEADER_BG,
+                          border: `1px solid ${FINCEPT.CYAN}`,
+                          borderRadius: '2px',
+                          fontSize: TYPOGRAPHY.SMALL,
+                          padding: SPACING.MEDIUM
                         }}
-                        labelStyle={{ color: '#00E5FF' }}
-                        itemStyle={{ color: '#FFF' }}
+                        labelStyle={{ color: FINCEPT.CYAN }}
+                        itemStyle={{ color: FINCEPT.WHITE }}
                         formatter={(value: any, name: string) => {
                           if (name === 'Volatility') return [`${value}%`, 'Volatility'];
                           if (name === 'Returns') return [`${value}%`, 'Returns'];
@@ -1462,7 +1405,7 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                         name="Efficient Frontier"
                         data={chartData}
                         fill="url(#frontierGradient)"
-                        line={{ stroke: '#00E5FF', strokeWidth: 1, strokeOpacity: 0.5 }}
+                        line={{ stroke: FINCEPT.CYAN, strokeWidth: 1, strokeOpacity: 0.5 }}
                         shape={<CustomDot />}
                         isAnimationActive={false}
                       />
@@ -1472,12 +1415,12 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
               })()}
 
               {/* Legend */}
-              <div style={{ marginTop: '16px', fontSize: '10px', color: '#787878', textAlign: 'center' }}>
+              <div style={{ marginTop: SPACING.LARGE, fontSize: TYPOGRAPHY.SMALL, color: FINCEPT.GRAY, textAlign: 'center' }}>
                 Each point represents an optimal portfolio. Color indicates Sharpe ratio:
-                <span style={{ color: '#00FF88', marginLeft: '8px' }}>● High {'>1.5'}</span>
-                <span style={{ color: '#FFD700', marginLeft: '8px' }}>● Good (0.8-1.5)</span>
-                <span style={{ color: '#FF8800', marginLeft: '8px' }}>● Medium (0.3-0.8)</span>
-                <span style={{ color: '#FF3B3B', marginLeft: '8px' }}>● Low {'<0.3'}</span>
+                <span style={{ color: FINCEPT.GREEN, marginLeft: SPACING.MEDIUM }}>● High {'>1.5'}</span>
+                <span style={{ color: FINCEPT.YELLOW, marginLeft: SPACING.MEDIUM }}>● Good (0.8-1.5)</span>
+                <span style={{ color: FINCEPT.ORANGE, marginLeft: SPACING.MEDIUM }}>● Medium (0.3-0.8)</span>
+                <span style={{ color: FINCEPT.RED, marginLeft: SPACING.MEDIUM }}>● Low {'<0.3'}</span>
               </div>
             </div>
           )}
@@ -1487,36 +1430,33 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       {/* BACKTEST TAB */}
       {activeTab === 'backtest' && (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.DEFAULT, marginBottom: SPACING.XLARGE }}>
             <button
               onClick={handleBacktest}
               disabled={loadingAction === 'backtest'}
               style={{
-                padding: '12px 24px',
-                backgroundColor: loadingAction === 'backtest' ? '#4A4A4A' : '#FF8800',
-                color: loadingAction === 'backtest' ? '#787878' : '#000',
-                border: loadingAction === 'backtest' ? '1px solid #666' : 'none',
-                fontFamily: 'inherit',
-                fontSize: '12px',
-                fontWeight: 'bold',
+                ...COMMON_STYLES.buttonPrimary,
+                padding: `${SPACING.DEFAULT} ${SPACING.XLARGE}`,
+                backgroundColor: loadingAction === 'backtest' ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                color: loadingAction === 'backtest' ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+                border: loadingAction === 'backtest' ? `1px solid ${FINCEPT.GRAY}` : 'none',
                 cursor: loadingAction === 'backtest' ? 'not-allowed' : 'pointer',
                 opacity: loadingAction === 'backtest' ? 0.6 : 1,
-                transition: 'all 0.2s ease',
               }}
             >
               {loadingAction === 'backtest' ? 'RUNNING BACKTEST...' : 'RUN BACKTEST'}
             </button>
             {loadingAction === 'backtest' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
                 <div style={{
                   width: '16px',
                   height: '16px',
-                  border: '2px solid #333',
-                  borderTop: '2px solid #00E5FF',
+                  border: `2px solid ${FINCEPT.BORDER}`,
+                  borderTop: `2px solid ${FINCEPT.CYAN}`,
                   borderRadius: '50%',
                   animation: 'spin 0.8s linear infinite'
                 }} />
-                <span style={{ color: '#00E5FF', fontSize: '11px' }}>Running backtest...</span>
+                <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY }}>Running backtest...</span>
                 <style>{`
                   @keyframes spin {
                     0% { transform: rotate(0deg); }
@@ -1528,17 +1468,17 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
           </div>
 
           {results?.backtest_results && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: SPACING.DEFAULT }}>
               {[
-                { label: 'Annual Return', value: results.backtest_results.annual_return, color: '#00D66F', format: '%' },
-                { label: 'Annual Volatility', value: results.backtest_results.annual_volatility, color: '#FFD700', format: '%' },
-                { label: 'Sharpe Ratio', value: results.backtest_results.sharpe_ratio, color: '#FF8800', format: '' },
-                { label: 'Max Drawdown', value: results.backtest_results.max_drawdown, color: '#FF3B3B', format: '%' },
-                { label: 'Calmar Ratio', value: results.backtest_results.calmar_ratio, color: '#00E5FF', format: '' },
+                { label: 'Annual Return', value: results.backtest_results.annual_return, color: FINCEPT.GREEN, format: '%' },
+                { label: 'Annual Volatility', value: results.backtest_results.annual_volatility, color: FINCEPT.YELLOW, format: '%' },
+                { label: 'Sharpe Ratio', value: results.backtest_results.sharpe_ratio, color: FINCEPT.ORANGE, format: '' },
+                { label: 'Max Drawdown', value: results.backtest_results.max_drawdown, color: FINCEPT.RED, format: '%' },
+                { label: 'Calmar Ratio', value: results.backtest_results.calmar_ratio, color: FINCEPT.CYAN, format: '' },
               ].map(metric => (
-                <div key={metric.label} style={{ backgroundColor: '#0F0F0F', padding: '16px', border: '1px solid #333' }}>
-                  <div style={{ color: '#787878', fontSize: '9px', marginBottom: '4px' }}>{metric.label}</div>
-                  <div style={{ color: metric.color, fontSize: '18px', fontWeight: 'bold' }}>
+                <div key={metric.label} style={{ ...COMMON_STYLES.metricCard, padding: SPACING.LARGE }}>
+                  <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>{metric.label}</div>
+                  <div style={{ color: metric.color, fontSize: '18px', fontWeight: TYPOGRAPHY.BOLD }}>
                     {metric.format === '%'
                       ? `${(metric.value * 100).toFixed(2)}%`
                       : metric.value.toFixed(3)
@@ -1554,36 +1494,33 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       {/* ALLOCATION TAB */}
       {activeTab === 'allocation' && (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.DEFAULT, marginBottom: SPACING.XLARGE }}>
             <button
               onClick={handleDiscreteAllocation}
               disabled={loadingAction === 'allocation' || !results?.weights}
               style={{
-                padding: '12px 24px',
-                backgroundColor: (loadingAction === 'allocation' || !results?.weights) ? '#4A4A4A' : '#FF8800',
-                color: (loadingAction === 'allocation' || !results?.weights) ? '#787878' : '#000',
-                border: (loadingAction === 'allocation' || !results?.weights) ? '1px solid #666' : 'none',
-                fontFamily: 'inherit',
-                fontSize: '12px',
-                fontWeight: 'bold',
+                ...COMMON_STYLES.buttonPrimary,
+                padding: `${SPACING.DEFAULT} ${SPACING.XLARGE}`,
+                backgroundColor: (loadingAction === 'allocation' || !results?.weights) ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                color: (loadingAction === 'allocation' || !results?.weights) ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+                border: (loadingAction === 'allocation' || !results?.weights) ? `1px solid ${FINCEPT.GRAY}` : 'none',
                 cursor: (loadingAction === 'allocation' || !results?.weights) ? 'not-allowed' : 'pointer',
                 opacity: (loadingAction === 'allocation' || !results?.weights) ? 0.6 : 1,
-                transition: 'all 0.2s ease',
               }}
             >
               {loadingAction === 'allocation' ? 'CALCULATING...' : 'CALCULATE DISCRETE ALLOCATION'}
             </button>
             {loadingAction === 'allocation' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
                 <div style={{
                   width: '16px',
                   height: '16px',
-                  border: '2px solid #333',
-                  borderTop: '2px solid #00E5FF',
+                  border: `2px solid ${FINCEPT.BORDER}`,
+                  borderTop: `2px solid ${FINCEPT.CYAN}`,
                   borderRadius: '50%',
                   animation: 'spin 0.8s linear infinite'
                 }} />
-                <span style={{ color: '#00E5FF', fontSize: '11px' }}>Calculating allocation...</span>
+                <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY }}>Calculating allocation...</span>
                 <style>{`
                   @keyframes spin {
                     0% { transform: rotate(0deg); }
@@ -1596,58 +1533,59 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
 
           {!results?.weights && (
             <div style={{
-              padding: '16px',
-              backgroundColor: 'rgba(255,136,0,0.1)',
-              border: '1px solid #FF8800',
-              color: '#FF8800',
-              marginBottom: '24px',
-              fontSize: '11px',
-              borderRadius: '4px'
+              padding: SPACING.LARGE,
+              backgroundColor: `${FINCEPT.ORANGE}1A`,
+              border: BORDERS.ORANGE,
+              color: FINCEPT.ORANGE,
+              marginBottom: SPACING.XLARGE,
+              fontSize: TYPOGRAPHY.BODY,
+              borderRadius: '2px'
             }}>
-              ℹ️ Please run optimization first to get portfolio weights
+              Please run optimization first to get portfolio weights
             </div>
           )}
 
           {results?.discrete_allocation && (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-                <div style={{ backgroundColor: '#0F0F0F', padding: '16px', border: '1px solid #333' }}>
-                  <div style={{ color: '#787878', fontSize: '9px' }}>Total Value</div>
-                  <div style={{ color: '#00E5FF', fontSize: '18px', fontWeight: 'bold' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.DEFAULT, marginBottom: SPACING.XLARGE }}>
+                <div style={{ ...COMMON_STYLES.metricCard, padding: SPACING.LARGE }}>
+                  <div style={{ ...COMMON_STYLES.dataLabel }}>Total Value</div>
+                  <div style={{ color: FINCEPT.CYAN, fontSize: '18px', fontWeight: TYPOGRAPHY.BOLD }}>
                     ${results.discrete_allocation.total_value.toLocaleString()}
                   </div>
                 </div>
-                <div style={{ backgroundColor: '#0F0F0F', padding: '16px', border: '1px solid #333' }}>
-                  <div style={{ color: '#787878', fontSize: '9px' }}>Allocated</div>
-                  <div style={{ color: '#00D66F', fontSize: '18px', fontWeight: 'bold' }}>
+                <div style={{ ...COMMON_STYLES.metricCard, padding: SPACING.LARGE }}>
+                  <div style={{ ...COMMON_STYLES.dataLabel }}>Allocated</div>
+                  <div style={{ color: FINCEPT.GREEN, fontSize: '18px', fontWeight: TYPOGRAPHY.BOLD }}>
                     ${(results.discrete_allocation.total_value - results.discrete_allocation.leftover_cash).toLocaleString()}
                   </div>
                 </div>
-                <div style={{ backgroundColor: '#0F0F0F', padding: '16px', border: '1px solid #333' }}>
-                  <div style={{ color: '#787878', fontSize: '9px' }}>Leftover Cash</div>
-                  <div style={{ color: '#FFD700', fontSize: '18px', fontWeight: 'bold' }}>
+                <div style={{ ...COMMON_STYLES.metricCard, padding: SPACING.LARGE }}>
+                  <div style={{ ...COMMON_STYLES.dataLabel }}>Leftover Cash</div>
+                  <div style={{ color: FINCEPT.YELLOW, fontSize: '18px', fontWeight: TYPOGRAPHY.BOLD }}>
                     ${results.discrete_allocation.leftover_cash.toLocaleString()}
                   </div>
                 </div>
               </div>
 
-              <div style={{ backgroundColor: '#0F0F0F', padding: '16px', border: '1px solid #333' }}>
-                <div style={{ color: '#00E5FF', fontSize: '11px', fontWeight: 'bold', marginBottom: '12px' }}>
+              <div style={{ backgroundColor: FINCEPT.PANEL_BG, padding: SPACING.LARGE, border: BORDERS.STANDARD, borderRadius: '2px' }}>
+                <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.DEFAULT }}>
                   SHARE ALLOCATION
                 </div>
                 {Object.entries(results.discrete_allocation.allocation).map(([symbol, shares]) => (
                   <div
                     key={symbol}
                     style={{
-                      padding: '8px 0',
-                      borderBottom: '1px solid #1A1A1A',
+                      padding: `${SPACING.MEDIUM} 0`,
+                      borderBottom: `1px solid ${FINCEPT.HEADER_BG}`,
                       display: 'flex',
                       justifyContent: 'space-between',
-                      fontSize: '11px'
+                      fontSize: TYPOGRAPHY.BODY,
+                      transition: EFFECTS.TRANSITION_STANDARD,
                     }}
                   >
-                    <span style={{ color: '#00E5FF', fontWeight: 'bold' }}>{symbol}</span>
-                    <span style={{ color: '#FFF' }}>{shares} shares</span>
+                    <span style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{symbol}</span>
+                    <span style={{ color: FINCEPT.WHITE }}>{shares} shares</span>
                   </div>
                 ))}
               </div>
@@ -1659,12 +1597,13 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       {/* RISK ANALYSIS TAB */}
       {activeTab === 'risk' && (
         <div style={{
-          padding: '24px',
+          padding: SPACING.XLARGE,
           textAlign: 'center',
-          backgroundColor: '#0F0F0F',
-          border: '1px solid #333',
-          color: '#787878',
-          fontSize: '11px'
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: BORDERS.STANDARD,
+          borderRadius: '2px',
+          color: FINCEPT.GRAY,
+          fontSize: TYPOGRAPHY.BODY
         }}>
           Risk decomposition and correlation matrix analysis coming soon...
         </div>

@@ -1,6 +1,7 @@
 // Financial Analysis Panel - Fincept Style
 import React, { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { cacheService, CacheService, TTL } from '../../../../services/cache/cacheService';
 import { AlertCircle, CheckCircle, BarChart3, DollarSign, PieChart, Activity, FileText, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import type { StockInfo } from '../types';
 
@@ -83,7 +84,19 @@ export const FinancialAnalysisPanel: React.FC<FinancialAnalysisPanelProps> = ({
 
   const run = useCallback(async () => {
     setLoading(true);
+
+    const cacheKey = CacheService.key('reference', 'financial-analysis', ticker, selected);
+
     try {
+      // Check cache first
+      const cached = await cacheService.get<AnalysisResult>(cacheKey);
+      if (cached) {
+        console.log('Using cached financial analysis for', ticker, selected);
+        setResult(cached.data);
+        setLoading(false);
+        return;
+      }
+
       const cmds: Record<AnalysisType, string> = {
         income: 'analyze_income_statement',
         balance: 'analyze_balance_sheet',
@@ -160,7 +173,13 @@ export const FinancialAnalysisPanel: React.FC<FinancialAnalysisPanelProps> = ({
 
       const res = await invoke<string>(cmds[selected], { data });
       const p = JSON.parse(res);
-      setResult({ success: p.success !== false, summary: p.summary || p.error, results: p.results, metrics: p.metrics, error: p.error });
+      const analysisResult: AnalysisResult = { success: p.success !== false, summary: p.summary || p.error, results: p.results, metrics: p.metrics, error: p.error };
+      setResult(analysisResult);
+
+      // Cache successful results
+      if (analysisResult.success) {
+        await cacheService.set(cacheKey, analysisResult, 'reference', TTL['1h']);
+      }
     } catch (e) {
       setResult({ success: false, error: e instanceof Error ? e.message : 'Failed' });
     } finally {

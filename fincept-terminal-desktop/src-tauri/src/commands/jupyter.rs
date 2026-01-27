@@ -80,7 +80,7 @@ pub async fn execute_python_code(
     execution_count: i32,
 ) -> Result<ExecutionResult, String> {
     // Get bundled Python path
-    let python_path = crate::utils::python::get_python_path(&app)?;
+    let python_path = crate::python::get_python_path(&app, None)?;
 
     // Verify Python exists
     if !python_path.exists() {
@@ -90,32 +90,37 @@ pub async fn execute_python_code(
         ));
     }
 
-    // Create temporary Python script
-    let temp_dir = std::env::temp_dir();
-    let script_path = temp_dir.join(format!("jupyter_cell_{}.py", execution_count));
+    // Run blocking I/O on a dedicated thread to avoid blocking the async runtime
+    let output = tokio::task::spawn_blocking(move || {
+        // Create temporary Python script
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("jupyter_cell_{}.py", execution_count));
 
-    // Write code to temporary file
-    std::fs::write(&script_path, &code)
-        .map_err(|e| format!("Failed to write temp script: {}", e))?;
+        // Write code to temporary file
+        std::fs::write(&script_path, &code)
+            .map_err(|e| format!("Failed to write temp script: {}", e))?;
 
-    // Execute Python code
-    let mut cmd = Command::new(&python_path);
-    cmd.arg(&script_path);
+        // Execute Python code
+        let mut cmd = Command::new(&python_path);
+        cmd.arg(&script_path);
 
-    // Hide console window on Windows
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+        // Hide console window on Windows
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
-    // Set PYTHONIOENCODING to UTF-8 for proper encoding
-    cmd.env("PYTHONIOENCODING", "utf-8");
+        // Set PYTHONIOENCODING to UTF-8 for proper encoding
+        cmd.env("PYTHONIOENCODING", "utf-8");
 
-    // Execute and capture output
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to execute Python: {}", e))?;
+        // Execute and capture output
+        let result = cmd
+            .output()
+            .map_err(|e| format!("Failed to execute Python: {}", e));
 
-    // Clean up temp file
-    let _ = std::fs::remove_file(&script_path);
+        // Clean up temp file
+        let _ = std::fs::remove_file(&script_path);
+
+        result
+    }).await.map_err(|e| format!("Task join error: {}", e))??;
 
     let mut outputs = Vec::new();
 
@@ -227,7 +232,7 @@ pub async fn create_new_notebook() -> Result<JupyterNotebook, String> {
 /// Get Python version from bundled interpreter
 #[tauri::command]
 pub async fn get_python_version(app: tauri::AppHandle) -> Result<String, String> {
-    let python_path = crate::utils::python::get_python_path(&app)?;
+    let python_path = crate::python::get_python_path(&app, None)?;
 
     let mut cmd = Command::new(&python_path);
     cmd.arg("--version");
@@ -258,7 +263,7 @@ pub async fn install_python_package(
     app: tauri::AppHandle,
     package_name: String,
 ) -> Result<String, String> {
-    let python_path = crate::utils::python::get_python_path(&app)?;
+    let python_path = crate::python::get_python_path(&app, None)?;
 
     let mut cmd = Command::new(&python_path);
     cmd.args(&["-m", "pip", "install", &package_name]);
@@ -286,7 +291,7 @@ pub async fn install_python_package(
 /// List installed Python packages
 #[tauri::command]
 pub async fn list_python_packages(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let python_path = crate::utils::python::get_python_path(&app)?;
+    let python_path = crate::python::get_python_path(&app, None)?;
 
     let mut cmd = Command::new(&python_path);
     cmd.args(&["-m", "pip", "list", "--format=freeze"]);

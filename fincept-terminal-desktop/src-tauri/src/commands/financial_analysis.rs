@@ -1,8 +1,7 @@
 // Financial Analysis Module Commands
 // CFA-compliant statement analysis via worker pool or subprocess
 
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 use serde::{Deserialize, Serialize};
 
 /// Financial data input structure
@@ -90,10 +89,9 @@ pub async fn analyze_income_statement(
 ) -> Result<String, String> {
     let json_data = serde_json::to_string(&data)
         .map_err(|e| format!("Failed to serialize data: {}", e))?;
-    
+
     let args = vec!["analyze_income".to_string(), json_data];
-    let script_path = get_script_path(&app, "Analytics/financial_analysis_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/financial_analysis_cli.py", args).await
 }
 
 /// Analyze balance sheet
@@ -104,10 +102,9 @@ pub async fn analyze_balance_sheet(
 ) -> Result<String, String> {
     let json_data = serde_json::to_string(&data)
         .map_err(|e| format!("Failed to serialize data: {}", e))?;
-    
+
     let args = vec!["analyze_balance".to_string(), json_data];
-    let script_path = get_script_path(&app, "Analytics/financial_analysis_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/financial_analysis_cli.py", args).await
 }
 
 /// Analyze cash flow statement
@@ -118,10 +115,9 @@ pub async fn analyze_cash_flow(
 ) -> Result<String, String> {
     let json_data = serde_json::to_string(&data)
         .map_err(|e| format!("Failed to serialize data: {}", e))?;
-    
+
     let args = vec!["analyze_cashflow".to_string(), json_data];
-    let script_path = get_script_path(&app, "Analytics/financial_analysis_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/financial_analysis_cli.py", args).await
 }
 
 /// Run comprehensive financial analysis
@@ -132,10 +128,9 @@ pub async fn analyze_financial_statements(
 ) -> Result<String, String> {
     let json_data = serde_json::to_string(&data)
         .map_err(|e| format!("Failed to serialize data: {}", e))?;
-    
+
     let args = vec!["analyze_comprehensive".to_string(), json_data];
-    let script_path = get_script_path(&app, "Analytics/financial_analysis_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/financial_analysis_cli.py", args).await
 }
 
 /// Get key financial metrics summary
@@ -146,10 +141,9 @@ pub async fn get_financial_key_metrics(
 ) -> Result<String, String> {
     let json_data = serde_json::to_string(&data)
         .map_err(|e| format!("Failed to serialize data: {}", e))?;
-    
+
     let args = vec!["get_key_metrics".to_string(), json_data];
-    let script_path = get_script_path(&app, "Analytics/financial_analysis_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/financial_analysis_cli.py", args).await
 }
 
 /// Convenience command for quick analysis with raw JSON
@@ -160,6 +154,5 @@ pub async fn analyze_financial_json(
     json_data: String,
 ) -> Result<String, String> {
     let args = vec![command, json_data];
-    let script_path = get_script_path(&app, "Analytics/financial_analysis_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/financial_analysis_cli.py", args).await
 }

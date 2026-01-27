@@ -6,12 +6,13 @@
  */
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Play, X, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Play, X, Plus, Briefcase } from 'lucide-react';
 import {
   F, inputStyle, labelStyle, selectStyle, sectionHeaderStyle, panelStyle, buttonStyle,
   BacktestConfigExtended, StrategyType, PositionSizing,
   STRATEGY_DEFINITIONS, getDefaultParameters,
 } from './backtestingStyles';
+import type { Portfolio } from '@/services/portfolio/portfolioService';
 
 interface ConfigPanelProps {
   config: BacktestConfigExtended;
@@ -21,11 +22,14 @@ interface ConfigPanelProps {
   availableProviders: string[];
   activeProvider: string | null;
   onProviderChange: (name: string) => void;
+  portfolios?: Portfolio[];
+  onPortfolioSelect?: (portfolioId: string) => void;
 }
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({
   config, onConfigChange, onRunBacktest, isRunning,
   availableProviders, activeProvider, onProviderChange,
+  portfolios = [], onPortfolioSelect,
 }) => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     symbols: true, strategy: true, dates: true, execution: false, riskManagement: false, benchmark: false,
@@ -67,14 +71,15 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   };
 
   const setDateRange = (years: number | 'ytd' | 'max') => {
-    const end = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+    const end = yesterday.toISOString().split('T')[0];
     let start: string;
     if (years === 'ytd') {
       start = `${new Date().getFullYear()}-01-01`;
     } else if (years === 'max') {
       start = '2000-01-01';
     } else {
-      const d = new Date();
+      const d = new Date(yesterday);
       d.setFullYear(d.getFullYear() - years);
       start = d.toISOString().split('T')[0];
     }
@@ -109,6 +114,34 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
           </div>
           {expandedSections.symbols && (
             <div style={{ padding: '10px 12px' }}>
+              {/* Portfolio Selector */}
+              {portfolios.length > 0 && (
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                    <Briefcase size={10} color={F.ORANGE} />
+                    FROM PORTFOLIO
+                  </label>
+                  <select
+                    style={selectStyle}
+                    defaultValue=""
+                    onChange={e => {
+                      if (e.target.value && onPortfolioSelect) {
+                        onPortfolioSelect(e.target.value);
+                      }
+                    }}
+                  >
+                    <option value="">— Select Portfolio —</option>
+                    {portfolios.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.currency})</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>
+                    Loads symbols &amp; weights from your portfolio
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Symbol Input */}
               <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
                 <input
                   style={{ ...inputStyle, flex: 1 }}

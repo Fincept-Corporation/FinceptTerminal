@@ -119,7 +119,12 @@ export class VectorBTAdapter extends BaseBacktestingAdapter {
 
       const result = this.extractJSON(stdout);
       if (!result.success) {
-        throw new Error(result.error || 'VectorBT backtest failed');
+        // Include logs from Python in the error for debugging
+        const logs = result?.data?.logs || result?.logs || [];
+        const logsStr = Array.isArray(logs) && logs.length > 0
+          ? `\nLogs: ${logs.slice(-5).join('\n')}`
+          : '';
+        throw new Error((result.error || 'VectorBT backtest failed') + logsStr);
       }
 
       return result.data as BacktestResult;

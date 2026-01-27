@@ -1,7 +1,7 @@
 // AI Quant Lab Commands - Qlib and RD-Agent integration
 // Uses direct subprocess execution to avoid worker pool socket issues on Windows
 #![allow(dead_code)]
-use crate::utils::python::execute_python_subprocess;
+use crate::python;
 
 // ============================================================================
 // QLIB COMMANDS
@@ -18,28 +18,28 @@ pub async fn qlib_initialize(
     let reg = region.unwrap_or_else(|| "cn".to_string());
 
     let args = vec!["initialize".to_string(), uri, reg];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 /// Check Qlib status and availability
 #[tauri::command]
 pub async fn qlib_check_status(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["check_status".to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 /// List available pre-trained models
 #[tauri::command]
 pub async fn qlib_list_models(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["list_models".to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 /// Get factor library information
 #[tauri::command]
 pub async fn qlib_get_factor_library(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["get_factor_library".to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 /// Fetch market data using Qlib
@@ -59,7 +59,7 @@ pub async fn qlib_get_data(
     });
 
     let args = vec!["get_data".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 /// Train a Qlib model
@@ -77,7 +77,7 @@ pub async fn qlib_train_model(
     });
 
     let args = vec!["train_model".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 /// Run backtest with Qlib
@@ -93,7 +93,7 @@ pub async fn qlib_run_backtest(
     });
 
     let args = vec!["run_backtest".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 /// Optimize portfolio weights
@@ -109,7 +109,7 @@ pub async fn qlib_optimize_portfolio(
     });
 
     let args = vec!["optimize_portfolio".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/qlib_service.py", &args, Some("qlib"))
+    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
 }
 
 // ============================================================================
@@ -128,21 +128,21 @@ pub async fn rdagent_initialize(
         vec!["initialize".to_string()]
     };
 
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Check RD-Agent status and availability
 #[tauri::command]
 pub async fn rdagent_check_status(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["check_status".to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Get RD-Agent capabilities
 #[tauri::command]
 pub async fn rdagent_get_capabilities(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["get_capabilities".to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Start autonomous factor mining
@@ -162,7 +162,7 @@ pub async fn rdagent_start_factor_mining(
     });
 
     let args = vec!["start_factor_mining".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Get factor mining task status
@@ -172,7 +172,7 @@ pub async fn rdagent_get_factor_mining_status(
     task_id: String,
 ) -> Result<String, String> {
     let args = vec!["get_factor_mining_status".to_string(), task_id];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Get discovered factors
@@ -182,7 +182,7 @@ pub async fn rdagent_get_discovered_factors(
     task_id: String,
 ) -> Result<String, String> {
     let args = vec!["get_discovered_factors".to_string(), task_id];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Optimize model using RD-Agent
@@ -200,7 +200,7 @@ pub async fn rdagent_optimize_model(
     });
 
     let args = vec!["optimize_model".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Analyze financial document
@@ -216,7 +216,7 @@ pub async fn rdagent_analyze_document(
     });
 
     let args = vec!["analyze_document".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }
 
 /// Run autonomous research
@@ -234,5 +234,5 @@ pub async fn rdagent_run_autonomous_research(
     });
 
     let args = vec!["run_autonomous_research".to_string(), params.to_string()];
-    execute_python_subprocess(&app, "ai_quant_lab/rd_agent_service.py", &args, Some("rdagent"))
+    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
 }

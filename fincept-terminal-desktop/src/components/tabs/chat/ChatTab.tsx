@@ -3,13 +3,34 @@ import { flushSync } from 'react-dom';
 import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBrokerContext } from '@/contexts/BrokerContext';
 import { useTranslation } from 'react-i18next';
 import { llmApiService, ChatMessage as APIMessage } from '@/services/chat/llmApi';
 import { sqliteService, ChatSession, ChatMessage, RecordedContext, LLMConfig, LLMGlobalSettings, ChatStatistics } from '@/services/core/sqliteService';
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
+import { brokerMCPBridge } from '@/services/mcp/internal/BrokerMCPBridge';
+import { notesMCPBridge } from '@/services/mcp/internal/NotesMCPBridge';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
 import ContextSelector from '@/components/common/ContextSelector';
-import { TabFooter } from '@/components/common/TabFooter';
+
+// Fincept Terminal Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
 
 interface ChatTabProps {
   onNavigateToSettings?: () => void;
@@ -28,6 +49,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const auth = useAuth();
   const { t } = useTranslation('chat');
+  const { activeAdapter, tradingMode, activeBroker } = useBrokerContext();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -67,6 +89,30 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     if (!activeLLMConfig) return false;
     return MCP_SUPPORTED_PROVIDERS.includes(activeLLMConfig.provider.toLowerCase());
   };
+
+  // Connect broker to MCP bridge
+  useEffect(() => {
+    if (activeAdapter) {
+      brokerMCPBridge.connect({
+        activeAdapter,
+        tradingMode,
+        activeBroker,
+      });
+      console.log(`[Chat MCP] Connected to ${activeBroker} in ${tradingMode} mode`);
+    }
+
+    return () => {
+      brokerMCPBridge.disconnect();
+    };
+  }, [activeAdapter, tradingMode, activeBroker]);
+
+  // Connect notes to MCP bridge
+  useEffect(() => {
+    notesMCPBridge.connect();
+    return () => {
+      notesMCPBridge.disconnect();
+    };
+  }, []);
 
   // Initialize database on mount
   useEffect(() => {
@@ -214,16 +260,54 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   };
 
   const generateSmartTitle = (message: string): string => {
-    const cleanMsg = message.replace(/[^\w\s]/g, '').trim();
-    const words = cleanMsg.split(' ');
+    // Clean the message but keep important characters
+    const trimmed = message.trim();
 
-    if (words.length === 0) {
-      return `Chat ${new Date().toLocaleString()}`;
-    } else if (words.length <= 4) {
-      return cleanMsg.substring(0, 40);
-    } else {
-      return words.slice(0, 4).join(' ') + '...';
+    if (!trimmed) {
+      const now = new Date();
+      return `Chat ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
     }
+
+    // Extract keywords from common patterns
+    const lowerMsg = trimmed.toLowerCase();
+
+    // Check for common financial terms
+    const financialKeywords = [
+      'market', 'stock', 'portfolio', 'risk', 'analysis',
+      'trend', 'trading', 'investment', 'price', 'strategy',
+      'forecast', 'data', 'chart', 'indicator', 'technical'
+    ];
+
+    const foundKeyword = financialKeywords.find(kw => lowerMsg.includes(kw));
+    if (foundKeyword) {
+      return foundKeyword.charAt(0).toUpperCase() + foundKeyword.slice(1) + ' Chat';
+    }
+
+    // Check for question words
+    if (lowerMsg.startsWith('what')) return 'What Query';
+    if (lowerMsg.startsWith('how')) return 'How To';
+    if (lowerMsg.startsWith('why')) return 'Why Question';
+    if (lowerMsg.startsWith('when')) return 'When Query';
+    if (lowerMsg.startsWith('where')) return 'Where Query';
+    if (lowerMsg.startsWith('analyze')) return 'Analysis';
+    if (lowerMsg.startsWith('explain')) return 'Explanation';
+    if (lowerMsg.startsWith('compare')) return 'Comparison';
+    if (lowerMsg.startsWith('calculate')) return 'Calculation';
+    if (lowerMsg.startsWith('show') || lowerMsg.startsWith('get')) return 'Data Request';
+
+    // Extract first 2-3 meaningful words (max 20 chars)
+    const words = trimmed.split(/\s+/).filter(w => w.length > 2);
+    if (words.length === 0) {
+      const now = new Date();
+      return `Chat ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+    }
+
+    let title = words.slice(0, 2).join(' ');
+    if (title.length > 20) {
+      title = title.substring(0, 20);
+    }
+
+    return title;
   };
 
   const createNewSession = async (): Promise<string | null> => {
@@ -596,33 +680,61 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       alignItems: 'center',
       justifyContent: 'center',
       height: '100%',
-      backgroundColor: colors.panel
+      backgroundColor: FINCEPT.DARK_BG
     }}>
-      <div style={{ textAlign: 'center', padding: '24px' }}>
-        <Bot size={48} color={colors.primary} style={{ marginBottom: '16px' }} />
-        <div style={{ color: colors.primary, fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
-          {t('title')}
+      <div style={{
+        textAlign: 'center',
+        padding: '24px',
+        maxWidth: '400px'
+      }}>
+        <Bot size={48} color={FINCEPT.ORANGE} style={{ marginBottom: '16px', opacity: 0.8 }} />
+        <div style={{
+          color: FINCEPT.ORANGE,
+          fontSize: '16px',
+          fontWeight: 700,
+          marginBottom: '8px',
+          letterSpacing: '0.5px'
+        }}>
+          {t('title').toUpperCase()}
         </div>
-        <div style={{ color: colors.text, fontSize: '14px', marginBottom: '16px' }}>
+        <div style={{
+          color: FINCEPT.WHITE,
+          fontSize: '11px',
+          marginBottom: '16px',
+          lineHeight: '1.5'
+        }}>
           {t('subtitle')}
         </div>
-        <div style={{ color: colors.warning, fontSize: '12px', marginBottom: '16px' }}>
-          Provider: {activeLLMConfig?.provider.toUpperCase() || 'NONE'} | Model: {activeLLMConfig?.model || 'N/A'}
+        <div style={{
+          padding: '6px 12px',
+          backgroundColor: `${FINCEPT.YELLOW}20`,
+          color: FINCEPT.YELLOW,
+          fontSize: '9px',
+          fontWeight: 700,
+          borderRadius: '2px',
+          marginBottom: '16px',
+          display: 'inline-block',
+          letterSpacing: '0.5px'
+        }}>
+          PROVIDER: {activeLLMConfig?.provider.toUpperCase() || 'NONE'} | MODEL: {activeLLMConfig?.model || 'N/A'}
         </div>
+        <br />
         <button
           onClick={createNewSession}
           style={{
-            backgroundColor: colors.primary,
-            color: 'black',
+            padding: '8px 16px',
+            backgroundColor: FINCEPT.ORANGE,
+            color: FINCEPT.DARK_BG,
             border: 'none',
-            padding: '10px 20px',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            borderRadius: '4px',
-            cursor: 'pointer'
+            fontSize: '9px',
+            fontWeight: 700,
+            borderRadius: '2px',
+            cursor: 'pointer',
+            letterSpacing: '0.5px',
+            transition: 'all 0.2s'
           }}
         >
-          {t('header.newChat')}
+          {t('header.newChat').toUpperCase()}
         </button>
       </div>
     </div>
@@ -640,38 +752,61 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             <div style={{
               maxWidth: '85%',
               minWidth: '120px',
-              backgroundColor: colors.panel,
-              border: `1px solid ${message.role === 'user' ? colors.warning : colors.primary}`,
-              borderRadius: '4px',
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${message.role === 'user' ? FINCEPT.YELLOW : FINCEPT.ORANGE}`,
+              borderRadius: '2px',
               padding: '10px'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginBottom: '8px',
+                paddingBottom: '6px',
+                borderBottom: `1px solid ${FINCEPT.BORDER}`
+              }}>
                 {message.role === 'user' ? (
-                  <User size={12} color={colors.warning} />
+                  <User size={12} color={FINCEPT.YELLOW} />
                 ) : (
-                  <Bot size={12} color={colors.primary} />
+                  <Bot size={12} color={FINCEPT.ORANGE} />
                 )}
                 <span style={{
-                  color: message.role === 'user' ? colors.warning : colors.primary,
-                  fontSize: '11px',
-                  fontWeight: 'bold'
+                  color: message.role === 'user' ? FINCEPT.YELLOW : FINCEPT.ORANGE,
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px'
                 }}>
                   {message.role === 'user' ? 'YOU' : 'AI'}
                 </span>
-                <Clock size={10} color={colors.textMuted} />
-                <span style={{ color: colors.textMuted, fontSize: '10px' }}>
+                <Clock size={10} color={FINCEPT.GRAY} />
+                <span style={{
+                  color: FINCEPT.GRAY,
+                  fontSize: '9px',
+                  letterSpacing: '0.5px',
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                }}>
                   {formatTime(message.timestamp)}
                 </span>
                 {message.provider && (
-                  <span style={{ color: colors.textMuted, fontSize: '10px' }}>
-                    | {message.provider}
+                  <span style={{
+                    color: FINCEPT.GRAY,
+                    fontSize: '9px',
+                    letterSpacing: '0.5px'
+                  }}>
+                    | {message.provider.toUpperCase()}
                   </span>
                 )}
               </div>
               {message.role === 'assistant' && message.content ? (
                 <MarkdownRenderer content={message.content} />
               ) : (
-                <div style={{ color: colors.text, fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                <div style={{
+                  color: FINCEPT.WHITE,
+                  fontSize: '11px',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                }}>
                   {message.content || '(Empty message)'}
                 </div>
               )}
@@ -682,8 +817,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     } catch (error) {
       console.error('Error rendering message:', error, message);
       return (
-        <div key={message.id} style={{ marginBottom: '12px', color: colors.alert }}>
-          Error rendering message
+        <div key={message.id} style={{
+          marginBottom: '12px',
+          color: FINCEPT.RED,
+          fontSize: '10px',
+          letterSpacing: '0.5px'
+        }}>
+          ERROR RENDERING MESSAGE
         </div>
       );
     }
@@ -696,25 +836,41 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'flex-start' }}>
         <div style={{
           maxWidth: '85%',
-          backgroundColor: colors.panel,
-          border: `2px solid ${colors.primary}`,
-          borderRadius: '4px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `2px solid ${FINCEPT.ORANGE}`,
+          borderRadius: '2px',
           padding: '10px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-            <Bot size={12} color={colors.primary} />
-            <span style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold' }}>
-              {t('messages.typing')}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            marginBottom: '8px',
+            paddingBottom: '6px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`
+          }}>
+            <Bot size={12} color={FINCEPT.ORANGE} />
+            <span style={{
+              color: FINCEPT.ORANGE,
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px'
+            }}>
+              {t('messages.typing').toUpperCase()}
             </span>
           </div>
           <div style={{
-            color: colors.text,
-            fontSize: '13px',
-            lineHeight: '1.5',
-            whiteSpace: 'pre-wrap'
+            color: FINCEPT.WHITE,
+            fontSize: '11px',
+            lineHeight: '1.6',
+            whiteSpace: 'pre-wrap',
+            fontFamily: '"IBM Plex Mono", "Consolas", monospace'
           }}>
             {streamingContent}
-            <span style={{ color: colors.primary }}>▊</span>
+            <span style={{
+              color: FINCEPT.ORANGE,
+              animation: 'blink 1s infinite'
+            }}>▊</span>
           </div>
         </div>
       </div>
@@ -724,94 +880,133 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   return (
     <div style={{
       height: '100%',
-      backgroundColor: colors.background,
-      color: colors.text,
-      fontFamily: fontFamily,
-      fontWeight: fontWeight,
-      fontStyle: fontStyle,
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
+      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
       display: 'flex',
-      flexDirection: 'column',
-      fontSize: fontSize.body
+      flexDirection: 'column'
     }}>
       <style>{`
-        /* Transparent/hidden scrollbar styling */
+        /* Scrollbar styling per design system */
         *::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
         }
         *::-webkit-scrollbar-track {
-          background: transparent;
+          background: ${FINCEPT.DARK_BG};
         }
         *::-webkit-scrollbar-thumb {
-          background: rgba(255, 165, 0, 0.2);
-          border-radius: 4px;
+          background: ${FINCEPT.BORDER};
+          border-radius: 3px;
         }
         *::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 165, 0, 0.4);
+          background: ${FINCEPT.MUTED};
         }
         /* For Firefox */
         * {
           scrollbar-width: thin;
-          scrollbar-color: rgba(255, 165, 0, 0.2) transparent;
+          scrollbar-color: ${FINCEPT.BORDER} ${FINCEPT.DARK_BG};
+        }
+        /* Input focus states */
+        input:focus, textarea:focus {
+          outline: none;
+          border-color: ${FINCEPT.ORANGE} !important;
+        }
+        /* Blink animation for cursor */
+        @keyframes blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
         }
       `}</style>
-      {/* Compact Header */}
+      {/* Top Navigation Bar */}
       <div style={{
-        backgroundColor: colors.panel,
-        borderBottom: `1px solid ${colors.textMuted}`,
-        padding: '6px 10px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+        padding: '8px 16px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        flexShrink: 0
+        flexShrink: 0,
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '12px' }}>{t('title')}</span>
-          <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: colors.warning, fontSize: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{
+            color: FINCEPT.ORANGE,
+            fontWeight: 700,
+            fontSize: '11px',
+            letterSpacing: '0.5px'
+          }}>
+            {t('title').toUpperCase()}
+          </span>
+          <span style={{ color: FINCEPT.GRAY }}>|</span>
+          <span style={{
+            color: FINCEPT.YELLOW,
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.5px'
+          }}>
             {activeLLMConfig?.provider.toUpperCase() || 'NO PROVIDER'}
           </span>
-          <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: colors.text, fontSize: '10px' }}>
+          <span style={{ color: FINCEPT.GRAY }}>|</span>
+          <span style={{
+            color: FINCEPT.WHITE,
+            fontSize: '9px',
+            letterSpacing: '0.5px'
+          }}>
             {currentTime.toLocaleTimeString('en-US', { hour12: false })}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={() => onNavigateToSettings?.()}
             style={{
-              backgroundColor: colors.background,
-              border: `1px solid ${colors.textMuted}`,
-              color: colors.text,
-              padding: '4px 8px',
-              fontSize: '10px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              padding: '6px 10px',
+              fontSize: '9px',
+              fontWeight: 700,
+              borderRadius: '2px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: '4px',
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+              e.currentTarget.style.color = FINCEPT.WHITE;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
+              e.currentTarget.style.color = FINCEPT.GRAY;
             }}
             title="Go to Settings tab to configure LLM providers"
           >
             <Settings size={12} />
-            {t('header.settings')}
+            {t('header.settings').toUpperCase()}
           </button>
           <button
             onClick={createNewSession}
             style={{
-              backgroundColor: colors.primary,
+              backgroundColor: FINCEPT.ORANGE,
               border: 'none',
-              color: 'black',
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 'bold',
+              color: FINCEPT.DARK_BG,
+              padding: '8px 16px',
+              fontSize: '9px',
+              fontWeight: 700,
+              borderRadius: '2px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: '4px',
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s'
             }}
           >
             <Plus size={12} />
-            {t('header.newChat')}
+            {t('header.newChat').toUpperCase()}
           </button>
         </div>
       </div>
@@ -820,40 +1015,53 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left Panel - Sessions */}
         <div style={{
-          width: '250px',
-          backgroundColor: colors.panel,
-          borderRight: `1px solid ${colors.textMuted}`,
+          width: '280px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
-          <div style={{ padding: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold' }}>
-                {t('history.sessions')} ({statistics.totalSessions})
-              </div>
+          {/* Section Header */}
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{
+                fontSize: '9px',
+                fontWeight: 700,
+                color: FINCEPT.GRAY,
+                letterSpacing: '0.5px'
+              }}>
+                {t('history.sessions').toUpperCase()} ({statistics.totalSessions})
+              </span>
               {sessions.length > 0 && (
                 <button
                   onClick={deleteAllSessions}
                   style={{
-                    backgroundColor: colors.alert,
-                    color: colors.text,
-                    border: 'none',
                     padding: '2px 6px',
+                    backgroundColor: `${FINCEPT.RED}20`,
+                    color: FINCEPT.RED,
+                    border: 'none',
                     fontSize: '8px',
+                    fontWeight: 700,
+                    borderRadius: '2px',
                     cursor: 'pointer',
-                    fontWeight: 'bold'
+                    letterSpacing: '0.5px',
+                    transition: 'all 0.2s'
                   }}
                   title={t('history.deleteAll')}
                 >
-                  {t('history.clearAll')}
+                  {t('history.clearAll').toUpperCase()}
                 </button>
               )}
             </div>
 
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: '8px' }}>
-              <Search size={12} color={colors.textMuted} style={{ position: 'absolute', left: '6px', top: '6px' }} />
+              <Search size={12} color={FINCEPT.GRAY} style={{ position: 'absolute', left: '8px', top: '9px' }} />
               <input
                 id="session-search"
                 type="text"
@@ -862,18 +1070,25 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   width: '100%',
-                  backgroundColor: colors.background,
-                  border: `1px solid ${colors.textMuted}`,
-                  color: colors.text,
-                  padding: '4px 4px 4px 24px',
-                  fontSize: '10px'
+                  padding: '8px 10px 8px 32px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                 }}
               />
             </div>
 
             {/* Stats */}
-            <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '6px' }}>
-              Messages: {statistics.totalMessages} | Tokens: {statistics.totalTokens.toLocaleString()}
+            <div style={{
+              fontSize: '9px',
+              color: FINCEPT.CYAN,
+              letterSpacing: '0.5px',
+              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+            }}>
+              MESSAGES: {statistics.totalMessages} | TOKENS: {statistics.totalTokens.toLocaleString()}
             </div>
           </div>
 
@@ -883,24 +1098,35 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             style={{
               flex: 1,
               overflow: 'auto',
-              padding: '0 8px 8px'
+              padding: '8px'
             }}
           >
             {filteredSessions.map(session => (
               <div
                 key={session.session_uuid}
                 style={{
-                  backgroundColor: currentSessionUuid === session.session_uuid ? colors.primary + '30' : colors.background,
-                  border: `1px solid ${currentSessionUuid === session.session_uuid ? colors.primary : colors.textMuted}`,
-                  padding: '6px',
-                  marginBottom: '4px',
-                  cursor: renamingSessionId === session.session_uuid ? 'default' : 'pointer'
+                  padding: '10px 12px',
+                  backgroundColor: currentSessionUuid === session.session_uuid ? `${FINCEPT.ORANGE}15` : 'transparent',
+                  borderLeft: currentSessionUuid === session.session_uuid ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                  cursor: renamingSessionId === session.session_uuid ? 'default' : 'pointer',
+                  transition: 'all 0.2s',
+                  marginBottom: '4px'
                 }}
                 onClick={() => renamingSessionId !== session.session_uuid && selectSession(session.session_uuid)}
+                onMouseEnter={(e) => {
+                  if (currentSessionUuid !== session.session_uuid && renamingSessionId !== session.session_uuid) {
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (currentSessionUuid !== session.session_uuid) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
               >
                 {/* Title or Rename Input */}
                 {renamingSessionId === session.session_uuid ? (
-                  <div style={{ marginBottom: '3px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <div style={{ marginBottom: '6px', display: 'flex', gap: '4px', alignItems: 'center' }}>
                     <input
                       type="text"
                       value={renameValue}
@@ -912,12 +1138,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       autoFocus
                       style={{
                         flex: 1,
-                        backgroundColor: colors.background,
-                        border: `1px solid ${colors.primary}`,
-                        color: colors.text,
-                        fontSize: '11px',
-                        padding: '2px 4px',
-                        fontFamily: 'Consolas, monospace'
+                        padding: '4px 6px',
+                        backgroundColor: FINCEPT.DARK_BG,
+                        border: `1px solid ${FINCEPT.ORANGE}`,
+                        color: FINCEPT.WHITE,
+                        fontSize: '10px',
+                        borderRadius: '2px',
+                        fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                       }}
                     />
                     <button
@@ -927,11 +1154,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: colors.secondary,
+                        color: FINCEPT.GREEN,
                         border: 'none',
                         cursor: 'pointer',
                         padding: '0',
-                        display: 'flex'
+                        display: 'flex',
+                        transition: 'all 0.2s'
                       }}
                     >
                       <Check size={12} />
@@ -943,26 +1171,40 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: colors.alert,
+                        color: FINCEPT.RED,
                         border: 'none',
                         cursor: 'pointer',
                         padding: '0',
-                        display: 'flex'
+                        display: 'flex',
+                        transition: 'all 0.2s'
                       }}
                     >
                       <X size={12} />
                     </button>
                   </div>
                 ) : (
-                  <div style={{ color: colors.text, fontSize: '11px', marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{
+                    color: FINCEPT.WHITE,
+                    fontSize: '10px',
+                    marginBottom: '6px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: 700
+                  }}>
                     {session.title}
                   </div>
                 )}
 
                 {/* Actions Row */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: colors.textMuted, fontSize: '9px' }}>
-                    {session.message_count} msgs • {formatSessionTime(session.updated_at)}
+                  <span style={{
+                    color: FINCEPT.GRAY,
+                    fontSize: '9px',
+                    letterSpacing: '0.5px',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                  }}>
+                    {session.message_count} MSGS • {formatSessionTime(session.updated_at)}
                   </span>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button
@@ -972,12 +1214,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: colors.warning,
+                        color: FINCEPT.YELLOW,
                         border: 'none',
                         fontSize: '9px',
                         cursor: 'pointer',
                         padding: '0',
-                        display: 'flex'
+                        display: 'flex',
+                        transition: 'all 0.2s'
                       }}
                       title="Rename session"
                     >
@@ -990,12 +1233,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: colors.alert,
+                        color: FINCEPT.RED,
                         border: 'none',
                         fontSize: '9px',
                         cursor: 'pointer',
                         padding: '0',
-                        display: 'flex'
+                        display: 'flex',
+                        transition: 'all 0.2s'
                       }}
                       title="Delete session"
                     >
@@ -1011,32 +1255,42 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         {/* Center Panel - Chat */}
         <div style={{
           flex: 1,
-          backgroundColor: colors.panel,
+          backgroundColor: FINCEPT.PANEL_BG,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
           {/* Chat Header */}
           <div style={{
-            padding: '6px 10px',
-            borderBottom: `1px solid ${colors.textMuted}`,
+            padding: '12px',
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <span style={{ color: colors.text, fontSize: '11px' }}>
-              {currentSessionUuid ? sessions.find(s => s.session_uuid === currentSessionUuid)?.title || 'Chat' : 'No Active Session'}
+            <span style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GRAY,
+              letterSpacing: '0.5px'
+            }}>
+              {currentSessionUuid ? (sessions.find(s => s.session_uuid === currentSessionUuid)?.title || 'CHAT').toUpperCase() : 'NO ACTIVE SESSION'}
             </span>
             {currentSessionUuid && (
               <button
                 onClick={clearCurrentChat}
                 style={{
-                  backgroundColor: colors.alert,
-                  color: colors.text,
+                  padding: '2px 6px',
+                  backgroundColor: `${FINCEPT.RED}20`,
+                  color: FINCEPT.RED,
                   border: 'none',
-                  padding: '3px 8px',
-                  fontSize: '9px',
-                  cursor: 'pointer'
+                  fontSize: '8px',
+                  fontWeight: 700,
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s'
                 }}
               >
                 CLEAR
@@ -1047,18 +1301,25 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {/* Messages Area with scrollbar */}
           <div style={{
             flex: 1,
-            padding: '10px',
+            padding: '16px',
             overflow: 'auto',
-            backgroundColor: colors.background
+            backgroundColor: FINCEPT.DARK_BG
           }}>
             {messages.length === 0 && !streamingContent ? renderWelcomeScreen() : (
               <div>
                 {messages.map(renderMessage)}
                 {streamingContent && renderStreamingMessage()}
                 {isTyping && !streamingContent && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.textMuted, fontSize: '11px' }}>
-                    <Bot size={12} />
-                    <span>{t('messages.thinking')}</span>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: FINCEPT.GRAY,
+                    fontSize: '9px',
+                    letterSpacing: '0.5px'
+                  }}>
+                    <Bot size={12} color={FINCEPT.GRAY} />
+                    <span>{t('messages.thinking').toUpperCase()}</span>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -1067,8 +1328,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           </div>
 
           {/* Input Area */}
-          <div style={{ padding: '8px', borderTop: `1px solid ${colors.textMuted}` }}>
-            <div style={{ display: 'flex', gap: '6px' }}>
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderTop: `1px solid ${FINCEPT.BORDER}`
+          }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <textarea
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
@@ -1081,179 +1346,300 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 placeholder={t('input.placeholder')}
                 style={{
                   flex: 1,
-                  backgroundColor: colors.background,
-                  border: `1px solid ${colors.textMuted}`,
-                  color: colors.text,
-                  padding: '6px',
-                  fontSize: '11px',
+                  padding: '8px 10px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '10px',
                   resize: 'none',
                   height: '60px',
-                  fontFamily: 'Consolas, monospace'
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                 }}
               />
               <button
                 onClick={handleSendMessage}
                 disabled={!messageInput.trim() || isTyping}
                 style={{
-                  backgroundColor: messageInput.trim() && !isTyping ? colors.primary : colors.textMuted,
-                  color: 'black',
+                  padding: '8px 16px',
+                  backgroundColor: messageInput.trim() && !isTyping ? FINCEPT.ORANGE : FINCEPT.MUTED,
+                  color: FINCEPT.DARK_BG,
                   border: 'none',
-                  padding: '6px 12px',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                  fontWeight: 700,
                   cursor: messageInput.trim() && !isTyping ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px'
+                  gap: '4px',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s',
+                  opacity: messageInput.trim() && !isTyping ? 1 : 0.5
                 }}
               >
                 <Send size={12} />
-                {t('input.send')}
+                {t('input.send').toUpperCase()}
               </button>
             </div>
-            <div style={{ color: colors.textMuted, fontSize: '9px', marginTop: '4px' }}>
-              {messageInput.length > 0 ? `${messageInput.length} chars` : systemStatus}
+            <div style={{
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              marginTop: '6px',
+              letterSpacing: '0.5px',
+              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+            }}>
+              {messageInput.length > 0 ? `${messageInput.length} CHARS` : systemStatus}
             </div>
           </div>
         </div>
 
         {/* Right Panel - Quick Actions & Context Selector */}
         <div style={{
-          width: '250px',
-          backgroundColor: colors.panel,
-          borderLeft: `1px solid ${colors.textMuted}`,
-          padding: '8px',
-          overflow: 'auto',
+          width: '300px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderLeft: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px'
+          overflow: 'hidden'
         }}>
-          {/* Context Selector */}
-          <div>
-            <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              {t('panel.dataContexts')}
-            </div>
-            <ContextSelector
-              chatSessionUuid={currentSessionUuid}
-              onContextsChange={handleContextsChange}
-            />
-          </div>
-
-          {/* Quick Prompts */}
-          <div>
-            <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              {t('panel.quickPrompts')}
-            </div>
-            {[
-              { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
-              { cmd: 'PORTFOLIO', prompt: 'Portfolio diversification recommendations' },
-              { cmd: 'RISK', prompt: 'Investment risk assessment strategies' },
-              { cmd: 'TECHNICAL', prompt: 'Key technical analysis indicators' }
-            ].map(item => (
-              <button
-                key={item.cmd}
-                onClick={() => setMessageInput(item.prompt)}
-                style={{
-                  width: '100%',
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  border: `1px solid ${colors.textMuted}`,
-                  padding: '5px',
-                  fontSize: '9px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  marginBottom: '4px'
-                }}
-              >
-                {item.cmd}
-              </button>
-            ))}
-          </div>
-
-          {/* System Info */}
-          <div>
-            <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
-              {t('panel.systemInfo')}
-            </div>
-            {activeLLMConfig ? (
-              <>
-                <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-                  Provider: {activeLLMConfig.provider.toUpperCase()}
-                </div>
-                <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-                  Model: {activeLLMConfig.model}
-                </div>
-                <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-                  Temp: {llmGlobalSettings.temperature}
-                </div>
-                <div style={{ color: colors.secondary, fontSize: '9px', marginBottom: '2px' }}>
-                  Streaming: Enabled
-                </div>
-              </>
-            ) : (
-              <div style={{ color: colors.alert, fontSize: '9px', marginBottom: '6px' }}>
-                No LLM provider configured
-              </div>
-            )}
+          {/* Context Selector Section */}
+          <div style={{
+            borderBottom: `1px solid ${FINCEPT.BORDER}`
+          }}>
             <div style={{
-              marginTop: '6px',
-              paddingTop: '6px',
-              borderTop: `1px solid ${colors.textMuted}`
+              padding: '12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`
             }}>
-              <div style={{
-                color: mcpToolsCount > 0 ? colors.secondary : colors.textMuted,
+              <span style={{
                 fontSize: '9px',
-                marginBottom: '6px'
+                fontWeight: 700,
+                color: FINCEPT.GRAY,
+                letterSpacing: '0.5px'
               }}>
-                MCP Tools: {mcpToolsCount > 0 ? `${mcpToolsCount} Available [OK]` : 'None'}
-              </div>
-              <button
-                onClick={() => onNavigateToTab?.('mcp')}
-                style={{
-                  width: '100%',
-                  backgroundColor: colors.primary,
-                  color: 'black',
-                  border: 'none',
-                  padding: '5px 8px',
-                  fontSize: '9px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  marginBottom: '6px',
-                  borderRadius: '2px'
-                }}
-                title="Configure MCP servers and tools"
-              >
-                🔧 MCP INTEGRATION
-              </button>
-              {mcpToolsCount > 0 && !providerSupportsMCP() && activeLLMConfig && (
+                {t('panel.dataContexts').toUpperCase()}
+              </span>
+            </div>
+            <div style={{ padding: '12px' }}>
+              <ContextSelector
+                chatSessionUuid={currentSessionUuid}
+                onContextsChange={handleContextsChange}
+              />
+            </div>
+          </div>
+
+          {/* Quick Prompts Section */}
+          <div style={{
+            borderBottom: `1px solid ${FINCEPT.BORDER}`
+          }}>
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`
+            }}>
+              <span style={{
+                fontSize: '9px',
+                fontWeight: 700,
+                color: FINCEPT.GRAY,
+                letterSpacing: '0.5px'
+              }}>
+                {t('panel.quickPrompts').toUpperCase()}
+              </span>
+            </div>
+            <div style={{ padding: '12px' }}>
+              {[
+                { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
+                { cmd: 'PORTFOLIO', prompt: 'Portfolio diversification recommendations' },
+                { cmd: 'RISK', prompt: 'Investment risk assessment strategies' },
+                { cmd: 'TECHNICAL', prompt: 'Key technical analysis indicators' }
+              ].map(item => (
+                <button
+                  key={item.cmd}
+                  onClick={() => setMessageInput(item.prompt)}
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    color: FINCEPT.GRAY,
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    borderRadius: '2px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    marginBottom: '6px',
+                    letterSpacing: '0.5px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                    e.currentTarget.style.color = FINCEPT.WHITE;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    e.currentTarget.style.color = FINCEPT.GRAY;
+                  }}
+                >
+                  {item.cmd}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* System Info Section */}
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`
+            }}>
+              <span style={{
+                fontSize: '9px',
+                fontWeight: 700,
+                color: FINCEPT.GRAY,
+                letterSpacing: '0.5px'
+              }}>
+                {t('panel.systemInfo').toUpperCase()}
+              </span>
+            </div>
+            <div style={{ padding: '12px' }}>
+              {activeLLMConfig ? (
+                <>
+                  <div style={{
+                    color: FINCEPT.CYAN,
+                    fontSize: '9px',
+                    marginBottom: '4px',
+                    letterSpacing: '0.5px',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                  }}>
+                    PROVIDER: {activeLLMConfig.provider.toUpperCase()}
+                  </div>
+                  <div style={{
+                    color: FINCEPT.CYAN,
+                    fontSize: '9px',
+                    marginBottom: '4px',
+                    letterSpacing: '0.5px',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                  }}>
+                    MODEL: {activeLLMConfig.model}
+                  </div>
+                  <div style={{
+                    color: FINCEPT.CYAN,
+                    fontSize: '9px',
+                    marginBottom: '4px',
+                    letterSpacing: '0.5px',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                  }}>
+                    TEMP: {llmGlobalSettings.temperature}
+                  </div>
+                  <div style={{
+                    padding: '2px 6px',
+                    backgroundColor: `${FINCEPT.GREEN}20`,
+                    color: FINCEPT.GREEN,
+                    fontSize: '8px',
+                    fontWeight: 700,
+                    borderRadius: '2px',
+                    display: 'inline-block',
+                    letterSpacing: '0.5px'
+                  }}>
+                    STREAMING: ENABLED
+                  </div>
+                </>
+              ) : (
                 <div style={{
-                  color: colors.alert,
+                  padding: '2px 6px',
+                  backgroundColor: `${FINCEPT.RED}20`,
+                  color: FINCEPT.RED,
                   fontSize: '8px',
-                  marginTop: '4px',
-                  padding: '4px',
-                  backgroundColor: colors.background,
-                  border: `1px solid ${colors.alert}`,
-                  borderRadius: '2px'
+                  fontWeight: 700,
+                  borderRadius: '2px',
+                  letterSpacing: '0.5px'
                 }}>
-                  [WARN] {activeLLMConfig.provider.toUpperCase()} doesn't support MCP tools
+                  NO LLM PROVIDER CONFIGURED
                 </div>
               )}
+              <div style={{
+                marginTop: '12px',
+                paddingTop: '12px',
+                borderTop: `1px solid ${FINCEPT.BORDER}`
+              }}>
+                <div style={{
+                  padding: '2px 6px',
+                  backgroundColor: mcpToolsCount > 0 ? `${FINCEPT.CYAN}20` : `${FINCEPT.MUTED}20`,
+                  color: mcpToolsCount > 0 ? FINCEPT.CYAN : FINCEPT.MUTED,
+                  fontSize: '8px',
+                  fontWeight: 700,
+                  borderRadius: '2px',
+                  marginBottom: '8px',
+                  letterSpacing: '0.5px',
+                  display: 'inline-block'
+                }}>
+                  MCP TOOLS: {mcpToolsCount > 0 ? `${mcpToolsCount} AVAILABLE [OK]` : 'NONE'}
+                </div>
+                <button
+                  onClick={() => onNavigateToTab?.('mcp')}
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px',
+                    backgroundColor: FINCEPT.ORANGE,
+                    color: FINCEPT.DARK_BG,
+                    border: 'none',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    borderRadius: '2px',
+                    cursor: 'pointer',
+                    marginBottom: '8px',
+                    letterSpacing: '0.5px',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Configure MCP servers and tools"
+                >
+                  🔧 MCP INTEGRATION
+                </button>
+                {mcpToolsCount > 0 && !providerSupportsMCP() && activeLLMConfig && (
+                  <div style={{
+                    padding: '6px',
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    border: `1px solid ${FINCEPT.RED}`,
+                    borderRadius: '2px',
+                    color: FINCEPT.RED,
+                    fontSize: '8px',
+                    fontWeight: 700,
+                    letterSpacing: '0.5px'
+                  }}>
+                    [WARN] {activeLLMConfig.provider.toUpperCase()} DOESN'T SUPPORT MCP TOOLS
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <TabFooter
-        tabName="AI CHAT"
-        leftInfo={[
-          { label: `Provider: ${activeLLMConfig?.provider.toUpperCase() || 'NONE'}`, color: colors.textMuted },
-          { label: `Session: ${currentSessionUuid ? 'Active' : 'None'}`, color: colors.textMuted },
-        ]}
-        statusInfo={`Messages: ${messages.length} | ${streamingContent ? 'Streaming...' : 'Ready'}`}
-        backgroundColor={colors.panel}
-        borderColor={colors.textMuted}
-      />
+      {/* Status Bar (Bottom) */}
+      <div style={{
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        padding: '4px 16px',
+        fontSize: '9px',
+        color: FINCEPT.GRAY,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        letterSpacing: '0.5px',
+        fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+      }}>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <span>TAB: AI CHAT</span>
+          <span>|</span>
+          <span>PROVIDER: {activeLLMConfig?.provider.toUpperCase() || 'NONE'}</span>
+          <span>|</span>
+          <span>SESSION: {currentSessionUuid ? 'ACTIVE' : 'NONE'}</span>
+        </div>
+        <div>
+          MESSAGES: {messages.length} | STATUS: {streamingContent ? 'STREAMING...' : 'READY'}
+        </div>
+      </div>
     </div>
   );
 };

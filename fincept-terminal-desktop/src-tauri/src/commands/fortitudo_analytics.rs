@@ -1,6 +1,6 @@
 // Fortitudo.tech Analytics Commands - Portfolio risk analytics via subprocess
 #![allow(dead_code)]
-use crate::utils::python::{execute_python_subprocess, execute_python_subprocess_with_stdin};
+use crate::python;
 
 // ============================================================================
 // FORTITUDO ANALYTICS COMMANDS
@@ -10,12 +10,7 @@ use crate::utils::python::{execute_python_subprocess, execute_python_subprocess_
 #[tauri::command]
 pub async fn fortitudo_check_status(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["check_status".to_string()];
-    execute_python_subprocess(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        &args,
-        Some("fortitudo"),
-    )
+    python::execute_sync(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args)
 }
 
 /// Calculate comprehensive portfolio risk metrics (VaR, CVaR, volatility, Sharpe)
@@ -34,13 +29,9 @@ pub async fn fortitudo_portfolio_metrics(
         "probabilities": probabilities
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "portfolio_metrics",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["portfolio_metrics".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Calculate covariance and correlation matrices with statistical moments
@@ -55,13 +46,9 @@ pub async fn fortitudo_covariance_analysis(
         "probabilities": probabilities
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "covariance_analysis",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["covariance_analysis".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Calculate exponentially decaying probabilities for scenario weighting
@@ -76,13 +63,9 @@ pub async fn fortitudo_exp_decay_weighting(
         "half_life": half_life.unwrap_or(252)
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "exp_decay_weighting",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["exp_decay_weighting".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Price options using Black-Scholes model
@@ -106,12 +89,7 @@ pub async fn fortitudo_option_pricing(
     });
 
     let args = vec!["option_pricing".to_string(), params.to_string()];
-    execute_python_subprocess(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        &args,
-        Some("fortitudo"),
-    )
+    python::execute_sync(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args)
 }
 
 /// Generate option chain for multiple strikes
@@ -135,12 +113,7 @@ pub async fn fortitudo_option_chain(
     });
 
     let args = vec!["option_chain".to_string(), params.to_string()];
-    execute_python_subprocess(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        &args,
-        Some("fortitudo"),
-    )
+    python::execute_sync(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args)
 }
 
 /// Apply entropy pooling for scenario probability adjustment
@@ -156,12 +129,7 @@ pub async fn fortitudo_entropy_pooling(
     });
 
     let args = vec!["entropy_pooling".to_string(), params.to_string()];
-    execute_python_subprocess(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        &args,
-        Some("fortitudo"),
-    )
+    python::execute_sync(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args)
 }
 
 /// Calculate exposure stacking portfolio from sample portfolios
@@ -176,13 +144,9 @@ pub async fn fortitudo_exposure_stacking(
         "n_partitions": n_partitions.unwrap_or(4)
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "exposure_stacking",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["exposure_stacking".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Full portfolio risk analysis combining all metrics
@@ -201,13 +165,9 @@ pub async fn fortitudo_full_analysis(
         "half_life": half_life.unwrap_or(252)
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "full_analysis",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["full_analysis".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Calculate option Greeks (Delta, Gamma, Vega, Theta, Rho)
@@ -231,12 +191,7 @@ pub async fn fortitudo_option_greeks(
     });
 
     let args = vec!["option_greeks".to_string(), params.to_string()];
-    execute_python_subprocess(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        &args,
-        Some("fortitudo"),
-    )
+    python::execute_sync(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args)
 }
 
 /// Mean-Variance portfolio optimization
@@ -261,13 +216,9 @@ pub async fn fortitudo_optimize_mean_variance(
         "target_return": target_return
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "optimize_mean_variance",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["optimize_mean_variance".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Mean-CVaR portfolio optimization
@@ -294,13 +245,9 @@ pub async fn fortitudo_optimize_mean_cvar(
         "target_return": target_return
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "optimize_mean_cvar",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["optimize_mean_cvar".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Generate Mean-Variance efficient frontier
@@ -321,13 +268,9 @@ pub async fn fortitudo_efficient_frontier_mv(
         "risk_free_rate": risk_free_rate.unwrap_or(0.0)
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "efficient_frontier_mv",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["efficient_frontier_mv".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }
 
 /// Generate Mean-CVaR efficient frontier
@@ -348,11 +291,7 @@ pub async fn fortitudo_efficient_frontier_cvar(
         "max_weight": max_weight
     });
 
-    execute_python_subprocess_with_stdin(
-        &app,
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "efficient_frontier_cvar",
-        &params.to_string(),
-        Some("fortitudo"),
-    )
+    let args = vec!["efficient_frontier_cvar".to_string(), params.to_string()];
+    let stdin_data = params.to_string();
+    python::execute_with_stdin(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py", args, &stdin_data)
 }

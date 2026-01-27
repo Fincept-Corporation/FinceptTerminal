@@ -722,19 +722,13 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
 
     let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
-    // Initialize worker pool in background if setup is already complete (non-blocking)
-    // CRITICAL: Use tauri::async_runtime to ensure worker pool lives in Tauri's persistent runtime
+    // Initialize Python runtime in background if setup is already complete
     if !needs_setup && python_installed {
         let app_clone = app.clone();
         tauri::async_runtime::spawn(async move {
-            let install_dir = match get_install_dir(&app_clone) {
-                Ok(dir) => dir,
-                Err(_e) => {
-                    return;
-                }
-            };
-
-            let _ = crate::python_runtime::initialize_global_async(install_dir).await;
+            if let Err(e) = crate::python::initialize(&app_clone).await {
+                eprintln!("[Setup] Python initialization failed: {}", e);
+            }
         });
     }
 
@@ -821,12 +815,10 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
 
         emit_progress(&app, "complete", 100, "Setup complete!", false);
 
-        // Initialize worker pool in background (non-blocking)
-        // CRITICAL: Use tauri::async_runtime to ensure worker pool lives in Tauri's persistent runtime
-        let install_dir_clone = install_dir.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = crate::python_runtime::initialize_global_async(install_dir_clone).await;
-        });
+        // Initialize Python runtime
+        if let Err(e) = crate::python::initialize(&app).await {
+            eprintln!("[Setup] Python initialization warning: {}", e);
+        }
 
         Ok("Setup complete".to_string())
     }.await;

@@ -14,8 +14,16 @@ import json
 from typing import Dict, Any
 from pathlib import Path
 
-# Import base provider
-sys.path.append(str(Path(__file__).parent.parent))
+# Setup paths for both direct execution and package import
+_SCRIPT_DIR = Path(__file__).parent
+_BACKTESTING_DIR = _SCRIPT_DIR.parent
+
+# Add parent dirs to sys.path so absolute imports work when run directly
+if str(_BACKTESTING_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKTESTING_DIR))
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
 from base.base_provider import (
     BacktestingProviderBase,
     BacktestResult,
@@ -49,7 +57,7 @@ class VectorBTProvider(BacktestingProviderBase):
             import vectorbt as vbt
             return vbt.__version__
         except Exception:
-            return "0.26.0"
+            return "pure-numpy"
 
     @property
     def capabilities(self) -> Dict[str, Any]:
@@ -72,33 +80,14 @@ class VectorBTProvider(BacktestingProviderBase):
 
     def initialize(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Initialize VectorBT provider."""
-        try:
-            import vectorbt as vbt
-            self.config = config
-            return self._create_success_result(f'VectorBT {vbt.__version__} ready')
-        except ImportError as e:
-            err_msg = str(e)
-            if '_broadcast_shape' in err_msg or 'numpy' in err_msg.lower():
-                return self._create_error_result(
-                    f'VectorBT incompatible with numpy. '
-                    f'Fix: pip install "numpy<2.0" or upgrade vectorbt. '
-                    f'Detail: {err_msg}'
-                )
-            return self._create_error_result(f'VectorBT not installed: {err_msg}')
+        self.config = config
+        vbt = self._import_vbt()
+        return self._create_success_result(f'VectorBT {vbt.__version__} ready')
 
     def test_connection(self) -> Dict[str, Any]:
         """Test VectorBT availability."""
-        try:
-            import vectorbt as vbt
-            return self._create_success_result(f'VectorBT {vbt.__version__} is available')
-        except ImportError as e:
-            err_msg = str(e)
-            if '_broadcast_shape' in err_msg or 'numpy' in err_msg.lower():
-                return self._create_error_result(
-                    f'VectorBT incompatible with numpy version. '
-                    f'Install: pip install "numpy<2.0"'
-                )
-            return self._create_error_result(f'VectorBT not installed: {err_msg}')
+        vbt = self._import_vbt()
+        return self._create_success_result(f'VectorBT {vbt.__version__} is available')
 
     def run_backtest(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Run backtest using VectorBT with full feature support."""
@@ -114,9 +103,9 @@ class VectorBTProvider(BacktestingProviderBase):
             return self._create_error_result(str(e))
 
         try:
-            from . import vbt_strategies as strat
-            from . import vbt_portfolio as pf
-            from . import vbt_metrics as metrics
+            import vbt_strategies as strat
+            import vbt_portfolio as pf
+            import vbt_metrics as metrics
 
             logs.append(f'{self._current_timestamp()}: Starting VectorBT backtest {backtest_id}')
 
@@ -132,11 +121,15 @@ class VectorBTProvider(BacktestingProviderBase):
             # --- Download market data ---
             symbols = [asset['symbol'] for asset in assets]
             logs.append(f'{self._current_timestamp()}: Downloading data for {symbols}')
+            logs.append(f'{self._current_timestamp()}: Normalized symbols: {self._normalize_symbols(symbols)}')
 
             close_series, using_synthetic = self._load_market_data(
                 symbols, start_date, end_date
             )
-            logs.append(f'{self._current_timestamp()}: Data: {len(close_series)} bars (synthetic={using_synthetic})')
+            logs.append(f'{self._current_timestamp()}: Data: {len(close_series)} bars, '
+                        f'range: {close_series.index[0]} to {close_series.index[-1]}, '
+                        f'price range: {close_series.min():.2f} - {close_series.max():.2f}, '
+                        f'synthetic={using_synthetic}')
 
             # --- Handle custom code strategy ---
             if strategy_type == 'code':
@@ -145,9 +138,18 @@ class VectorBTProvider(BacktestingProviderBase):
                 )
             else:
                 # --- Build strategy signals ---
+                logs.append(f'{self._current_timestamp()}: Building signals for strategy: {strategy_type}, params: {parameters}')
                 entries, exits = strat.build_strategy_signals(
                     vbt, strategy_type, close_series, parameters
                 )
+
+                n_entries = int(entries.sum()) if hasattr(entries, 'sum') else 0
+                n_exits = int(exits.sum()) if hasattr(exits, 'sum') else 0
+                logs.append(f'{self._current_timestamp()}: Signals generated: {n_entries} entries, {n_exits} exits')
+
+                if n_entries == 0:
+                    logs.append(f'{self._current_timestamp()}: WARNING: No entry signals generated! '
+                                f'Check strategy parameters or data length ({len(close_series)} bars)')
 
                 # --- Build portfolio with all features ---
                 portfolio = pf.build_portfolio(
@@ -155,7 +157,10 @@ class VectorBTProvider(BacktestingProviderBase):
                     initial_capital, request
                 )
 
-            logs.append(f'{self._current_timestamp()}: Backtest completed')
+            n_trades = len(portfolio.trades.records_readable) if hasattr(portfolio.trades, 'records_readable') else 0
+            logs.append(f'{self._current_timestamp()}: Backtest completed: {n_trades} trades, '
+                        f'final value: {portfolio.final_value():.2f}, '
+                        f'return: {portfolio.total_return() * 100:.2f}%')
 
             # --- Extract comprehensive metrics ---
             all_metrics = metrics.extract_full_metrics(
@@ -246,8 +251,16 @@ class VectorBTProvider(BacktestingProviderBase):
         except Exception as e:
             self._error(f'Backtest {backtest_id} failed', e)
             import traceback
+            tb = traceback.format_exc()
             logs.append(f'{self._current_timestamp()}: Error: {str(e)}')
-            return self._create_error_result(f'VectorBT backtest failed: {str(e)}')
+            logs.append(f'{self._current_timestamp()}: Traceback: {tb}')
+            error_result = self._create_error_result(f'VectorBT backtest failed: {str(e)}')
+            error_result['data'] = error_result.get('data', {})
+            if isinstance(error_result.get('data'), dict):
+                error_result['data']['logs'] = logs
+            else:
+                error_result['logs'] = logs
+            return error_result
 
     def optimize(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Run parameter optimization."""
@@ -258,7 +271,7 @@ class VectorBTProvider(BacktestingProviderBase):
 
         try:
             import pandas as pd
-            from . import vbt_optimization as opt
+            import vbt_optimization as opt
 
             strategy = request.get('strategy', {})
             strategy_type = strategy.get('type', 'sma_crossover')
@@ -293,7 +306,7 @@ class VectorBTProvider(BacktestingProviderBase):
             return self._create_error_result(str(e))
 
         try:
-            from . import vbt_optimization as opt
+            import vbt_optimization as opt
 
             strategy = request.get('strategy', {})
             strategy_type = strategy.get('type', 'sma_crossover')
@@ -322,12 +335,12 @@ class VectorBTProvider(BacktestingProviderBase):
 
     def get_strategies(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Return available strategy catalog."""
-        from . import vbt_strategies as strat
+        import vbt_strategies as strat
         return {'success': True, 'data': strat.get_strategy_catalog()}
 
     def get_indicators(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Return available indicator catalog."""
-        from . import vbt_indicators as ind
+        import vbt_indicators as ind
         return {'success': True, 'data': ind.get_indicator_catalog()}
 
     def get_historical_data(self, request: Dict[str, Any]) -> list:
@@ -337,29 +350,44 @@ class VectorBTProvider(BacktestingProviderBase):
             import pandas as pd
 
             symbols = request.get('symbols', [])
+            normalized = self._normalize_symbols(symbols)
             start_date = request.get('startDate')
             end_date = request.get('endDate')
             timeframe = request.get('timeframe', 'daily')
 
-            data = yf.download(symbols, start=start_date, end=end_date, progress=False)
+            data = yf.download(
+                normalized if len(normalized) > 1 else normalized[0],
+                start=start_date, end=end_date, progress=False
+            )
 
-            if data.empty:
+            if data is None or data.empty:
                 return []
 
             result = []
-            for symbol in symbols:
-                symbol_data = data if len(symbols) == 1 else data[symbol]
-                bars = []
-                for date, row in symbol_data.iterrows():
-                    bars.append({
-                        'date': date.isoformat(),
-                        'open': float(row.get('Open', 0)),
-                        'high': float(row.get('High', 0)),
-                        'low': float(row.get('Low', 0)),
-                        'close': float(row.get('Close', 0)),
-                        'volume': int(row.get('Volume', 0)),
-                    })
-                result.append({'symbol': symbol, 'timeframe': timeframe, 'data': bars})
+            for i, symbol in enumerate(symbols):
+                norm_sym = normalized[i] if i < len(normalized) else symbol
+                try:
+                    if len(normalized) == 1:
+                        symbol_data = data
+                    elif isinstance(data.columns, pd.MultiIndex):
+                        # MultiIndex: extract per-symbol OHLCV
+                        symbol_data = data.xs(norm_sym, axis=1, level=1) if norm_sym in data.columns.get_level_values(1) else data
+                    else:
+                        symbol_data = data
+
+                    bars = []
+                    for date, row in symbol_data.iterrows():
+                        bars.append({
+                            'date': date.isoformat(),
+                            'open': float(row.get('Open', 0) if hasattr(row, 'get') else 0),
+                            'high': float(row.get('High', 0) if hasattr(row, 'get') else 0),
+                            'low': float(row.get('Low', 0) if hasattr(row, 'get') else 0),
+                            'close': float(row.get('Close', 0) if hasattr(row, 'get') else 0),
+                            'volume': int(row.get('Volume', 0) if hasattr(row, 'get') else 0),
+                        })
+                    result.append({'symbol': symbol, 'timeframe': timeframe, 'data': bars})
+                except Exception:
+                    result.append({'symbol': symbol, 'timeframe': timeframe, 'data': []})
 
             return result
         except Exception as e:
@@ -375,23 +403,27 @@ class VectorBTProvider(BacktestingProviderBase):
     # ========================================================================
 
     def _import_vbt(self):
-        """Import VectorBT with graceful error handling."""
+        """Import VectorBT or return a stub (indicators/portfolio are now pure numpy/pandas)."""
         try:
             import vectorbt as vbt
+            # Verify it's a usable install (some partial installs lack __version__)
+            _ = vbt.__version__
             return vbt
-        except ImportError as e:
-            err_msg = str(e)
-            if '_broadcast_shape' in err_msg or 'numpy' in err_msg.lower():
-                raise RuntimeError(
-                    f'VectorBT incompatible with numpy. '
-                    f'Fix: pip install "numpy<2.0" or pip install vectorbt --upgrade. '
-                    f'Detail: {err_msg}'
-                )
-            raise RuntimeError(f'VectorBT not installed: {err_msg}')
+        except (ImportError, AttributeError):
+            # All indicators and portfolio logic are now pure numpy/pandas,
+            # so vectorbt is no longer required. Return a simple namespace stub.
+            import types
+            stub = types.SimpleNamespace(__version__='pure-numpy')
+            return stub
 
     def _load_market_data(self, symbols: list, start_date: str, end_date: str):
         """
         Load market data, falling back to synthetic if unavailable.
+
+        Handles:
+        - Indian stocks (auto-appends .NS suffix for NSE tickers)
+        - Multi-symbol downloads with newer yfinance MultiIndex columns
+        - Weighted composite series for multi-asset portfolios
 
         Returns:
             (close_series, using_synthetic) tuple
@@ -401,43 +433,132 @@ class VectorBTProvider(BacktestingProviderBase):
 
         using_synthetic = False
 
+        # --- Normalize symbols for yfinance compatibility ---
+        normalized_symbols = self._normalize_symbols(symbols)
+
         try:
             import yfinance as yf
-            raw_data = yf.download(symbols, start=start_date, end=end_date, progress=False)
 
-            if 'Close' in raw_data.columns:
-                close_data = raw_data['Close']
-            elif hasattr(raw_data.columns, 'get_level_values'):
-                if 'Close' in raw_data.columns.get_level_values(0):
-                    close_data = raw_data.xs('Close', axis=1, level=0)
-                else:
-                    close_data = raw_data.iloc[:, 0]
-            else:
-                close_data = raw_data.iloc[:, 0]
+            # Try downloading with normalized symbols
+            raw_data = yf.download(
+                normalized_symbols if len(normalized_symbols) > 1 else normalized_symbols[0],
+                start=start_date, end=end_date, progress=False
+            )
+
+            if raw_data is None or (hasattr(raw_data, 'empty') and raw_data.empty):
+                raise ValueError(f'No data returned for {normalized_symbols}')
+
+            close_data = self._extract_close_column(raw_data, normalized_symbols)
+
+            if close_data is None or (hasattr(close_data, 'empty') and close_data.empty):
+                raise ValueError(f'No Close data for {normalized_symbols}')
 
             if isinstance(close_data, pd.DataFrame):
-                close_data = close_data.iloc[:, 0]
+                # Multi-asset: take first column for strategy signals
+                # (weighted portfolio logic is in the provider)
+                close_data = close_data.iloc[:, 0].dropna()
 
-            if close_data.empty or len(close_data) < 5:
-                raise ValueError('Insufficient data')
+            if len(close_data) < 5:
+                raise ValueError(f'Insufficient data: only {len(close_data)} bars for {normalized_symbols}')
 
             close_series = pd.Series(
-                close_data.values.astype(float),
+                close_data.values.astype(float).flatten(),
                 index=close_data.index,
                 name='Close'
             )
-        except Exception:
+
+        except ImportError:
+            self._error('yfinance not installed', None)
             using_synthetic = True
-            dates = pd.date_range(start=start_date, end=end_date, freq='B')
-            np.random.seed(hash(symbols[0]) % 2**31 if symbols else 42)
-            price = 100.0
-            prices = []
-            for _ in range(len(dates)):
-                price *= (1 + np.random.normal(0.0003, 0.015))
-                prices.append(price)
-            close_series = pd.Series(prices, index=dates, name='Close', dtype=float)
+            close_series = self._generate_synthetic_data(symbols, start_date, end_date)
+        except Exception as e:
+            self._error(f'Data download failed for {normalized_symbols}: {e}', e)
+            using_synthetic = True
+            close_series = self._generate_synthetic_data(symbols, start_date, end_date)
 
         return close_series, using_synthetic
+
+    @staticmethod
+    def _normalize_symbols(symbols: list) -> list:
+        """
+        Clean up symbol list.
+
+        Symbols are expected to already include correct exchange suffixes
+        (e.g., PIDILITIND.NS, AAPL) as resolved at portfolio-add time.
+        This method just strips whitespace and uppercases.
+        """
+        normalized = []
+        for sym in symbols:
+            sym = sym.strip().upper()
+            if sym:
+                normalized.append(sym)
+        return normalized if normalized else symbols
+
+    @staticmethod
+    def _extract_close_column(raw_data, symbols: list):
+        """
+        Robustly extract Close price data from yfinance output.
+
+        Handles:
+        - Single-symbol download (plain columns: Open, High, Low, Close, ...)
+        - Multi-symbol download with MultiIndex columns (Price, Ticker)
+        - Newer yfinance versions that changed column structure
+        """
+        import pandas as pd
+
+        columns = raw_data.columns
+
+        # Case 1: Plain columns (single symbol download)
+        if isinstance(columns, pd.Index) and not isinstance(columns, pd.MultiIndex):
+            if 'Close' in columns:
+                return raw_data['Close']
+            # Fallback to first column
+            return raw_data.iloc[:, 0] if len(columns) > 0 else None
+
+        # Case 2: MultiIndex columns (multi-symbol download)
+        if isinstance(columns, pd.MultiIndex):
+            level_0_vals = columns.get_level_values(0).unique().tolist()
+            level_1_vals = columns.get_level_values(1).unique().tolist()
+
+            # yfinance 0.2.31+: columns are (Price, Ticker) e.g. ('Close', 'AAPL')
+            if 'Close' in level_0_vals:
+                close_data = raw_data['Close']
+                if isinstance(close_data, pd.Series):
+                    return close_data
+                # DataFrame with ticker columns
+                return close_data.dropna(how='all')
+
+            # Some versions: columns are (Ticker, Price)
+            if 'Close' in level_1_vals:
+                close_data = raw_data.xs('Close', axis=1, level=1)
+                if isinstance(close_data, pd.Series):
+                    return close_data
+                return close_data.dropna(how='all')
+
+            # Fallback: take first level-0 group
+            first_group = level_0_vals[0]
+            return raw_data[first_group]
+
+        # Fallback
+        return raw_data.iloc[:, 0] if len(raw_data.columns) > 0 else None
+
+    @staticmethod
+    def _generate_synthetic_data(symbols: list, start_date: str, end_date: str):
+        """Generate synthetic price data as fallback."""
+        import pandas as pd
+        import numpy as np
+
+        dates = pd.date_range(start=start_date, end=end_date, freq='B')
+        if len(dates) == 0:
+            dates = pd.date_range(start='2023-01-01', periods=252, freq='B')
+
+        np.random.seed(hash(symbols[0]) % 2**31 if symbols else 42)
+        price = 100.0
+        prices = []
+        for _ in range(len(dates)):
+            price *= (1 + np.random.normal(0.0003, 0.015))
+            prices.append(price)
+        return pd.Series(prices, index=dates, name='Close', dtype=float)
 
     def _run_custom_code(self, vbt, strategy: dict, close_series, initial_capital: float):
         """Execute custom strategy code."""
@@ -613,7 +734,7 @@ class VectorBTProvider(BacktestingProviderBase):
             # Random benchmark p-value
             if request.get('randomBenchmark', False):
                 try:
-                    from . import vbt_portfolio as pf_mod
+                    import vbt_portfolio as pf_mod
                     vbt = self._import_vbt()
                     close_series = portfolio.close
                     if close_series is not None:
@@ -636,18 +757,25 @@ class VectorBTProvider(BacktestingProviderBase):
     def _load_benchmark(self, symbol: str, start_date: str, end_date: str, target_len: int):
         """Load benchmark equity series normalized to start at 1.0."""
         import numpy as np
+        import pandas as pd
         try:
             import yfinance as yf
-            bench_data = yf.download(symbol, start=start_date, end=end_date, progress=False)['Close']
+            # Normalize benchmark symbol too
+            norm_sym = self._normalize_symbols([symbol])
+            bench_symbol = norm_sym[0] if norm_sym else symbol
+            raw = yf.download(bench_symbol, start=start_date, end=end_date, progress=False)
+            bench_data = self._extract_close_column(raw, [bench_symbol])
+            if isinstance(bench_data, pd.DataFrame):
+                bench_data = bench_data.iloc[:, 0]
             if bench_data is not None and len(bench_data) > 0:
-                values = bench_data.values.astype(float)
+                values = bench_data.values.astype(float).flatten()
                 normalized = values / values[0]
                 if len(normalized) != target_len:
                     indices = np.linspace(0, len(normalized) - 1, target_len).astype(int)
                     normalized = normalized[indices]
                 return normalized
-        except Exception:
-            pass
+        except Exception as e:
+            self._error(f'Benchmark load failed for {symbol}', e)
         return None
 
 
@@ -656,54 +784,78 @@ class VectorBTProvider(BacktestingProviderBase):
 # ============================================================================
 
 def main():
+    import io
+    import os
+    import warnings
+
+    # Suppress all warnings (they can corrupt stdout JSON)
+    warnings.filterwarnings('ignore')
+    os.environ['PYTHONWARNINGS'] = 'ignore'
+
     if len(sys.argv) < 3:
         print(json_response({
             'success': False,
             'error': 'Usage: python vectorbt_provider.py <command> <json_args>'
         }))
-        sys.exit(1)
+        return
 
     command = sys.argv[1]
     json_args = sys.argv[2]
 
+    # Redirect stdout to a buffer during execution so that any stray
+    # print() calls from libraries (numpy, pandas, yfinance, vectorbt)
+    # don't corrupt the JSON output. We capture them and only emit the
+    # final JSON response on the real stdout.
+    real_stdout = sys.stdout
+    captured = io.StringIO()
+
     try:
+        sys.stdout = captured
         args = parse_json_input(json_args)
         provider = VectorBTProvider()
 
         if command == 'test_import':
-            import vectorbt as vbt
-            print(json_response({'success': True, 'version': vbt.__version__}))
+            vbt = provider._import_vbt()
+            result_str = json_response({'success': True, 'version': vbt.__version__})
         elif command == 'test_connection':
             result = provider.test_connection()
-            print(json_response(result))
+            result_str = json_response(result)
         elif command == 'initialize':
             result = provider.initialize(args)
-            print(json_response(result))
+            result_str = json_response(result)
         elif command == 'run_backtest':
             result = provider.run_backtest(args)
-            print(json_response(result))
+            result_str = json_response(result)
         elif command == 'optimize':
             result = provider.optimize(args)
-            print(json_response(result))
+            result_str = json_response(result)
         elif command == 'walk_forward':
             result = provider.walk_forward(args)
-            print(json_response(result))
+            result_str = json_response(result)
         elif command == 'get_strategies':
             result = provider.get_strategies(args)
-            print(json_response(result))
+            result_str = json_response(result)
         elif command == 'get_indicators':
             result = provider.get_indicators(args)
-            print(json_response(result))
+            result_str = json_response(result)
         else:
-            print(json_response({'success': False, 'error': f'Unknown command: {command}'}))
+            result_str = json_response({'success': False, 'error': f'Unknown command: {command}'})
+
+        # Emit only the JSON on the real stdout
+        sys.stdout = real_stdout
+        print(result_str)
 
     except Exception as e:
+        sys.stdout = real_stdout
+        # Dump captured output to stderr for debugging
+        stray_output = captured.getvalue()
+        if stray_output:
+            print(stray_output, file=sys.stderr)
         print(json_response({
             'success': False,
             'error': str(e),
             'traceback': __import__('traceback').format_exc()
         }))
-        sys.exit(1)
 
 
 if __name__ == '__main__':

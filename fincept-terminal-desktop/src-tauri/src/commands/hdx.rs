@@ -1,4 +1,4 @@
-use crate::utils::python::execute_python_script_simple;
+use crate::python;
 use tauri::command;
 
 #[command]
@@ -7,14 +7,12 @@ pub async fn hdx_search_datasets(
     query: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["search_datasets", &query, l]
-    } else {
-        vec!["search_datasets", &query]
-    };
+    let mut args = vec!["search_datasets".to_string(), query];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -22,7 +20,7 @@ pub async fn hdx_get_dataset(
     app: tauri::AppHandle,
     dataset_id: String,
 ) -> Result<String, String> {
-    execute_python_script_simple(&app, "hdx_data.py", &["get_dataset", &dataset_id])
+    python::execute_sync(&app, "hdx_data.py", vec!["get_dataset".to_string(), dataset_id])
 }
 
 #[command]
@@ -31,14 +29,12 @@ pub async fn hdx_search_conflict(
     country: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["search_conflict", &country, l]
-    } else {
-        vec!["search_conflict", &country]
-    };
+    let mut args = vec!["search_conflict".to_string(), country];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -47,14 +43,12 @@ pub async fn hdx_search_humanitarian(
     country: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["search_humanitarian", &country, l]
-    } else {
-        vec!["search_humanitarian", &country]
-    };
+    let mut args = vec!["search_humanitarian".to_string(), country];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -63,14 +57,12 @@ pub async fn hdx_search_by_country(
     country_code: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["search_by_country", &country_code, l]
-    } else {
-        vec!["search_by_country", &country_code]
-    };
+    let mut args = vec!["search_by_country".to_string(), country_code];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -79,14 +71,12 @@ pub async fn hdx_search_by_organization(
     org_slug: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["search_by_organization", &org_slug, l]
-    } else {
-        vec!["search_by_organization", &org_slug]
-    };
+    let mut args = vec!["search_by_organization".to_string(), org_slug];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -95,14 +85,12 @@ pub async fn hdx_search_by_topic(
     topic: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["search_by_topic", &topic, l]
-    } else {
-        vec!["search_by_topic", &topic]
-    };
+    let mut args = vec!["search_by_topic".to_string(), topic];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -111,14 +99,12 @@ pub async fn hdx_search_by_dataseries(
     series_name: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["search_by_dataseries", &series_name, l]
-    } else {
-        vec!["search_by_dataseries", &series_name]
-    };
+    let mut args = vec!["search_by_dataseries".to_string(), series_name];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -126,14 +112,12 @@ pub async fn hdx_list_countries(
     app: tauri::AppHandle,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["list_countries", l]
-    } else {
-        vec!["list_countries"]
-    };
+    let mut args = vec!["list_countries".to_string()];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -141,14 +125,12 @@ pub async fn hdx_list_organizations(
     app: tauri::AppHandle,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["list_organizations", l]
-    } else {
-        vec!["list_organizations"]
-    };
+    let mut args = vec!["list_organizations".to_string()];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -156,14 +138,12 @@ pub async fn hdx_list_topics(
     app: tauri::AppHandle,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let limit_str = limit.map(|l| l.to_string());
-    let args: Vec<&str> = if let Some(ref l) = limit_str {
-        vec!["list_topics", l]
-    } else {
-        vec!["list_topics"]
-    };
+    let mut args = vec!["list_topics".to_string()];
+    if let Some(l) = limit {
+        args.push(l.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -172,14 +152,12 @@ pub async fn hdx_get_resource_url(
     dataset_id: String,
     resource_index: Option<i32>,
 ) -> Result<String, String> {
-    let index_str = resource_index.map(|i| i.to_string());
-    let args: Vec<&str> = if let Some(ref idx) = index_str {
-        vec!["get_resource_download_url", &dataset_id, idx]
-    } else {
-        vec!["get_resource_download_url", &dataset_id]
-    };
+    let mut args = vec!["get_resource_download_url".to_string(), dataset_id];
+    if let Some(idx) = resource_index {
+        args.push(idx.to_string());
+    }
 
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
@@ -187,22 +165,18 @@ pub async fn hdx_advanced_search(
     app: tauri::AppHandle,
     filters: String,
 ) -> Result<String, String> {
-    // Build args vector with owned strings
-    let mut args_owned = vec!["advanced_search".to_string()];
+    let mut args = vec!["advanced_search".to_string()];
 
     // Parse filters string and add as arguments
     // Expected format: "country:ukr organization:ocha limit:20"
     for filter in filters.split_whitespace() {
-        args_owned.push(filter.to_string());
+        args.push(filter.to_string());
     }
 
-    // Convert to borrowed references
-    let args: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
-
-    execute_python_script_simple(&app, "hdx_data.py", &args)
+    python::execute_sync(&app, "hdx_data.py", args)
 }
 
 #[command]
 pub async fn hdx_test_connection(app: tauri::AppHandle) -> Result<String, String> {
-    execute_python_script_simple(&app, "hdx_data.py", &["test_connection"])
+    python::execute_sync(&app, "hdx_data.py", vec!["test_connection".to_string()])
 }

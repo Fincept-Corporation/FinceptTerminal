@@ -5,21 +5,27 @@ import React, { useState, useEffect } from 'react';
 import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare } from 'lucide-react';
 import { mcpManager, MCPServerWithStats } from '../../../services/mcp/mcpManager';
 import { sqliteService } from '../../../services/core/sqliteService';
+import { useBrokerContext } from '../../../contexts/BrokerContext';
+import { brokerMCPBridge } from '../../../services/mcp/internal/BrokerMCPBridge';
 import MCPMarketplace from './marketplace/MCPMarketplace';
 import MCPAddServerModal from './MCPAddServerModal';
+import MCPToolsManagement from './MCPToolsManagement';
 
 interface MCPTabProps {
   onNavigateToTab?: (tabName: string) => void;
 }
 
 const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
-  const [view, setView] = useState<'marketplace' | 'installed'>('marketplace');
+  const [view, setView] = useState<'marketplace' | 'installed' | 'tools'>('marketplace');
   const [servers, setServers] = useState<MCPServerWithStats[]>([]);
   const [tools, setTools] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Initializing...');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Broker context for MCP bridge
+  const { activeAdapter, tradingMode, activeBroker } = useBrokerContext();
 
   // Fincept colors
   const ORANGE = '#FFA500';
@@ -32,11 +38,31 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   const RED = '#ef4444';
   const YELLOW = '#f59e0b';
 
+  // Connect broker to MCP bridge
+  useEffect(() => {
+    if (activeAdapter) {
+      brokerMCPBridge.connect({
+        activeAdapter,
+        tradingMode,
+        activeBroker,
+      });
+      console.log(`[MCP] Connected to ${activeBroker} in ${tradingMode} mode`);
+    }
+
+    return () => {
+      brokerMCPBridge.disconnect();
+    };
+  }, [activeAdapter, tradingMode, activeBroker]);
+
   useEffect(() => {
     const initializeServers = async () => {
       try {
         // Ensure database is initialized first
         await sqliteService.initialize();
+
+        // Initialize MCP tool service to load internal tools
+        const { mcpToolService } = await import('../../../services/mcp/mcpToolService');
+        await mcpToolService.initialize();
 
         // Don't auto-start here - DashboardScreen already handles it
         // Just load the data
@@ -63,11 +89,15 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
       const serversData = await mcpManager.getServersWithStats();
       setServers(serversData);
 
-      const toolsData = await sqliteService.getMCPTools();
+      // Load all tools (internal + external)
+      const { mcpToolService } = await import('../../../services/mcp/mcpToolService');
+      const toolsData = await mcpToolService.getAllTools();
       setTools(toolsData);
 
       const runningCount = serversData.filter(s => s.status === 'running').length;
-      setStatusMessage(`${runningCount} running | ${toolsData.length} tools available`);
+      const internalToolsCount = toolsData.filter(t => t.serverId === 'fincept-terminal').length;
+      const externalToolsCount = toolsData.length - internalToolsCount;
+      setStatusMessage(`${runningCount} servers running | ${internalToolsCount} internal + ${externalToolsCount} external tools`);
     } catch (error) {
       console.error('Failed to load MCP data:', error);
       setStatusMessage('Error loading data');
@@ -201,7 +231,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
             </span>
             <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
             <span style={{ color: GRAY, fontSize: '11px' }}>
-              {servers.length} Installed | {runningServers} Running | {tools.length} Tools
+              {servers.length} Servers | {runningServers} Running | {tools.filter(t => t.serverId === 'fincept-terminal').length} Internal + {tools.filter(t => t.serverId !== 'fincept-terminal').length} External Tools
             </span>
           </div>
 
@@ -282,6 +312,22 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
             </button>
 
             <button
+              onClick={() => setView('tools')}
+              style={{
+                backgroundColor: view === 'tools' ? ORANGE : 'transparent',
+                color: view === 'tools' ? 'black' : WHITE,
+                border: `1px solid ${view === 'tools' ? ORANGE : BORDER}`,
+                padding: '6px 12px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                fontWeight: 'bold'
+              }}
+            >
+              ALL TOOLS ({tools.length})
+            </button>
+
+            <button
               onClick={() => setIsAddModalOpen(true)}
               style={{
                 backgroundColor: GREEN,
@@ -357,6 +403,9 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
         {view === 'marketplace' ? (
           /* Marketplace View */
           <MCPMarketplace onInstall={handleInstallServer} installedServers={servers} />
+        ) : view === 'tools' ? (
+          /* Tools Management View */
+          <MCPToolsManagement />
         ) : (
           /* Installed Servers View */
           <div>
@@ -397,6 +446,104 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
                 gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
                 gap: '16px',
               }}>
+                {/* Internal Tools Card - Always show first */}
+                <div
+                  style={{
+                    backgroundColor: PANEL_BG,
+                    border: `2px solid ${ORANGE}`,
+                    borderRadius: '6px',
+                    padding: '16px',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = `0 0 16px ${ORANGE}60`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  {/* Server Header */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '28px' }}>⚡</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <h3 style={{
+                          color: WHITE,
+                          fontSize: '13px',
+                          fontWeight: 'bold',
+                        }}>
+                          Fincept Terminal (Internal)
+                        </h3>
+                        <CheckCircle size={14} color={GREEN} />
+                      </div>
+                      <div style={{
+                        display: 'inline-block',
+                        backgroundColor: `${GREEN}20`,
+                        color: GREEN,
+                        padding: '2px 8px',
+                        fontSize: '9px',
+                        borderRadius: '3px',
+                        textTransform: 'uppercase',
+                        fontWeight: 'bold',
+                      }}>
+                        BUILT-IN
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <p style={{
+                    color: GRAY,
+                    fontSize: '10px',
+                    lineHeight: '1.5',
+                    marginBottom: '12px',
+                  }}>
+                    Built-in tools for terminal control, trading, portfolio management, backtesting, and more. Always available.
+                  </p>
+
+                  {/* Stats */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '16px',
+                    marginBottom: '12px',
+                    fontSize: '10px',
+                    color: GRAY,
+                  }}>
+                    <div>
+                      <span style={{ color: WHITE, fontWeight: 'bold' }}>
+                        {tools.filter(t => t.serverId === 'fincept-terminal').length}
+                      </span> tools
+                    </div>
+                    <div>
+                      <span style={{ color: GREEN }}>●</span> Always Active
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => setView('tools')}
+                      style={{
+                        backgroundColor: ORANGE,
+                        color: 'black',
+                        border: 'none',
+                        padding: '6px 10px',
+                        fontSize: '9px',
+                        cursor: 'pointer',
+                        borderRadius: '3px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      <Settings size={10} />
+                      MANAGE TOOLS
+                    </button>
+                  </div>
+                </div>
+
+                {/* External Server Cards */}
                 {filteredServers.map(server => {
                   const healthInfo = mcpManager.getServerHealthInfo(server.id);
                   return (
@@ -602,34 +749,49 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
         msOverflowStyle: 'none',
       }}>
         <div style={{
-          color: ORANGE,
-          fontSize: '11px',
-          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
           marginBottom: '8px',
-          letterSpacing: '0.5px'
         }}>
-          AVAILABLE TOOLS ({tools.length})
+          <div style={{
+            color: ORANGE,
+            fontSize: '11px',
+            fontWeight: 'bold',
+            letterSpacing: '0.5px'
+          }}>
+            AVAILABLE TOOLS ({tools.length})
+          </div>
+          <div style={{ fontSize: '9px', color: GRAY }}>
+            <span style={{ color: GREEN }}>⚡ {tools.filter(t => t.serverId === 'fincept-terminal').length} Internal</span>
+            {' | '}
+            <span style={{ color: ORANGE }}>{tools.filter(t => t.serverId !== 'fincept-terminal').length} External</span>
+          </div>
         </div>
 
         {tools.length === 0 ? (
           <div style={{ color: GRAY, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
-            No tools available. Start an MCP server to see its tools.
+            No tools available. The internal tools will appear when the application initializes.
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
-            {tools.map(tool => (
+            {tools.map((tool, index) => (
               <div
-                key={tool.id}
+                key={`${tool.serverId}__${tool.name}__${index}`}
                 style={{
                   backgroundColor: DARK_BG,
-                  border: `1px solid ${BORDER}`,
+                  border: `1px solid ${tool.serverId === 'fincept-terminal' ? GREEN + '40' : BORDER}`,
                   padding: '6px 8px',
                   fontSize: '9px',
                   borderRadius: '3px',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                  <Settings size={10} style={{ color: ORANGE }} />
+                  {tool.serverId === 'fincept-terminal' ? (
+                    <span style={{ color: GREEN }}>⚡</span>
+                  ) : (
+                    <Settings size={10} style={{ color: ORANGE }} />
+                  )}
                   <span style={{ color: WHITE, fontWeight: 'bold' }}>{tool.name}</span>
                 </div>
                 {tool.description && (
@@ -637,6 +799,9 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
                     {tool.description.substring(0, 50)}{tool.description.length > 50 ? '...' : ''}
                   </div>
                 )}
+                <div style={{ color: GRAY, fontSize: '7px', marginLeft: '16px', marginTop: '2px' }}>
+                  {tool.serverName}
+                </div>
               </div>
             ))}
           </div>

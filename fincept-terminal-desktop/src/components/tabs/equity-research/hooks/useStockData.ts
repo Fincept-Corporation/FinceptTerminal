@@ -1,14 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { cacheService, CacheService, TTL } from '../../../../services/cache/cacheService';
 import type { StockInfo, HistoricalData, QuoteData, FinancialsData, ChartPeriod, TechnicalsData } from '../types';
-
-interface DataCache {
-  stockInfo: StockInfo;
-  quoteData: QuoteData;
-  historicalData: Record<string, HistoricalData[]>;
-  financials: FinancialsData;
-  timestamp: number;
-}
 
 interface UseStockDataReturn {
   stockInfo: StockInfo | null;
@@ -22,7 +15,9 @@ interface UseStockDataReturn {
   computeTechnicals: (historical: HistoricalData[]) => Promise<void>;
 }
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_CATEGORY = 'market-quotes';
+const HISTORICAL_CATEGORY = 'market-historical';
+const REFERENCE_CATEGORY = 'reference';
 
 export function useStockData(): UseStockDataReturn {
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null);
@@ -33,28 +28,37 @@ export function useStockData(): UseStockDataReturn {
   const [loading, setLoading] = useState(false);
   const [technicalsLoading, setTechnicalsLoading] = useState(false);
 
-  const dataCache = useRef<Record<string, DataCache>>({});
-
   const fetchStockData = useCallback(async (symbol: string, period: ChartPeriod, forceRefresh = false) => {
     setLoading(true);
     console.log('Fetching data for:', symbol, '| Force refresh:', forceRefresh);
 
+    const quoteKey = CacheService.key(CACHE_CATEGORY, 'quote', symbol);
+    const infoKey = CacheService.key(REFERENCE_CATEGORY, 'stock-info', symbol);
+    const historicalKey = CacheService.key(HISTORICAL_CATEGORY, 'historical', symbol, period);
+    const financialsKey = CacheService.key(REFERENCE_CATEGORY, 'financials', symbol);
+
     try {
-      // Check cache first
-      const cached = dataCache.current[symbol];
-      const now = Date.now();
+      // Check cache first (unless force refresh)
+      if (!forceRefresh) {
+        const [cachedQuote, cachedInfo, cachedHistorical, cachedFinancials] = await Promise.all([
+          cacheService.get<QuoteData>(quoteKey),
+          cacheService.get<StockInfo>(infoKey),
+          cacheService.get<HistoricalData[]>(historicalKey),
+          cacheService.get<FinancialsData>(financialsKey),
+        ]);
 
-      if (cached && !forceRefresh && (now - cached.timestamp < CACHE_DURATION)) {
-        console.log('Using cached data for', symbol);
-        setStockInfo(cached.stockInfo);
-        setQuoteData(cached.quoteData);
-        setFinancials(cached.financials);
+        // If all core data is cached and fresh, use it
+        if (cachedQuote && cachedInfo && cachedFinancials) {
+          console.log('Using cached data for', symbol);
+          setQuoteData(cachedQuote.data);
+          setStockInfo(cachedInfo.data);
+          setFinancials(cachedFinancials.data);
 
-        // Check if we have historical data for this period
-        if (cached.historicalData[period]) {
-          setHistoricalData(cached.historicalData[period]);
-          setLoading(false);
-          return;
+          if (cachedHistorical) {
+            setHistoricalData(cachedHistorical.data);
+            setLoading(false);
+            return;
+          }
         }
       }
 
@@ -67,6 +71,7 @@ export function useStockData(): UseStockDataReturn {
       if (quoteResponse.success && quoteResponse.data) {
         setQuoteData(quoteResponse.data);
         newQuote = quoteResponse.data;
+        await cacheService.set(quoteKey, quoteResponse.data, CACHE_CATEGORY, TTL['5m']);
       }
 
       // Fetch stock info
@@ -75,6 +80,7 @@ export function useStockData(): UseStockDataReturn {
       if (infoResponse.success && infoResponse.data) {
         setStockInfo(infoResponse.data);
         newInfo = infoResponse.data;
+        await cacheService.set(infoKey, infoResponse.data, REFERENCE_CATEGORY, TTL['24h']);
       }
 
       // Fetch historical data
@@ -93,32 +99,16 @@ export function useStockData(): UseStockDataReturn {
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0],
       });
-      let newHistorical: HistoricalData[] = [];
       if (historicalResponse.success && historicalResponse.data) {
         setHistoricalData(historicalResponse.data);
-        newHistorical = historicalResponse.data;
+        await cacheService.set(historicalKey, historicalResponse.data, HISTORICAL_CATEGORY, TTL['1h']);
       }
 
       // Fetch financials
       const financialsResponse: any = await invoke('get_financials', { symbol });
-      let newFinancials: FinancialsData | null = null;
       if (financialsResponse.success && financialsResponse.data) {
         setFinancials(financialsResponse.data);
-        newFinancials = financialsResponse.data;
-      }
-
-      // Update cache
-      if (newInfo && newQuote && newFinancials) {
-        dataCache.current[symbol] = {
-          stockInfo: newInfo,
-          quoteData: newQuote,
-          historicalData: {
-            ...((cached?.historicalData) || {}),
-            [period]: newHistorical,
-          },
-          financials: newFinancials,
-          timestamp: now,
-        };
+        await cacheService.set(financialsKey, financialsResponse.data, REFERENCE_CATEGORY, TTL['24h']);
       }
     } catch (error) {
       console.error('Error fetching stock data:', error);
@@ -134,6 +124,15 @@ export function useStockData(): UseStockDataReturn {
       if (!historical || !Array.isArray(historical) || historical.length === 0) {
         console.error('Invalid historical data for technicals computation');
         setTechnicalsData(null);
+        return;
+      }
+
+      // Check cache for technicals
+      const techKey = CacheService.keyWithHash('market-quotes', 'technicals', historical.map(d => String(d.timestamp)));
+      const cached = await cacheService.get<TechnicalsData>(techKey);
+      if (cached) {
+        console.log('Using cached technicals data');
+        setTechnicalsData(cached.data);
         return;
       }
 
@@ -155,24 +154,30 @@ export function useStockData(): UseStockDataReturn {
 
       console.log('Technicals response:', response);
 
+      let parsedData: TechnicalsData | null = null;
+
       if (typeof response === 'string') {
         try {
           const parsed = JSON.parse(response);
           if (parsed.success && parsed.data && Array.isArray(parsed.data) && parsed.data.length > 0) {
-            setTechnicalsData(parsed);
+            parsedData = parsed;
           } else {
             console.error('Error computing technicals:', parsed.error || 'Invalid data structure');
-            setTechnicalsData(null);
           }
         } catch (parseError) {
           console.error('Error parsing technicals response:', parseError);
-          setTechnicalsData(null);
         }
       } else if (response && response.success && response.data && Array.isArray(response.data) && response.data.length > 0) {
-        setTechnicalsData(response);
+        parsedData = response;
       } else {
         console.error('Invalid technicals response structure');
-        setTechnicalsData(null);
+      }
+
+      setTechnicalsData(parsedData);
+
+      // Cache the result
+      if (parsedData) {
+        await cacheService.set(techKey, parsedData, CACHE_CATEGORY, TTL['15m']);
       }
     } catch (error) {
       console.error('Error computing technicals:', error);

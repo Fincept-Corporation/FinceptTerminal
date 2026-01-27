@@ -17,10 +17,8 @@ mod commands;
 mod utils;
 mod setup;
 mod database;
-mod python_runtime;
-mod worker_pool;
+mod python;
 mod websocket;
-mod barter_integration;
 mod services;
 mod paper_trading;
 
@@ -83,7 +81,7 @@ fn spawn_mcp_server(
     // Determine if we should use bundled Bun (for npx/bunx commands)
     let (fixed_command, fixed_args) = if command == "npx" || command == "bunx" {
         // Try to get bundled Bun path
-        match utils::python::get_bundled_bun_path(&app) {
+        match python::get_bun_path(&app) {
             Ok(bun_path) => {
                 // Use 'bun x' which is equivalent to 'bunx' or 'npx'
                 let mut new_args = vec!["x".to_string()];
@@ -606,21 +604,9 @@ async fn execute_python_script(
     app: tauri::AppHandle,
     script_name: String,
     args: Vec<String>,
-    env: std::collections::HashMap<String, String>,
+    _env: std::collections::HashMap<String, String>,
 ) -> Result<String, String> {
-    let script_path = utils::python::get_script_path(&app, &script_name)?;
-
-    if !script_path.exists() {
-        return Err(format!("Script not found at: {:?}", script_path));
-    }
-
-    // Use worker pool (persistent Python processes) - no new subprocess per call
-    worker_pool::execute_python_script_with_priority(
-        script_path,
-        args,
-        "venv-numpy2",
-        1, // NORMAL priority
-    ).await
+    python::execute(&app, &script_name, args).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -659,11 +645,6 @@ pub fn run() {
         services: services.clone(),
     };
 
-    // Initialize Barter trading system (Paper mode by default)
-    let barter_state = barter_integration::commands::BarterState::new(
-        barter_integration::types::TradingMode::Paper
-    );
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -677,7 +658,6 @@ pub fn run() {
             processes: Mutex::new(HashMap::new()),
         })
         .manage(ws_state)
-        .manage(barter_state)
         .setup(move |app| {
             // CRITICAL: Set app handle for router to emit WebSocket events to frontend
             let app_handle = app.handle().clone();
@@ -1374,6 +1354,7 @@ pub fn run() {
             commands::portfolio_management::portfolio_add_asset,
             commands::portfolio_management::portfolio_sell_asset,
             commands::portfolio_management::portfolio_get_assets,
+            commands::portfolio_management::portfolio_update_asset_symbol,
             commands::portfolio_management::portfolio_get_transactions,
             // Portfolio Analytics
             commands::portfolio::calculate_portfolio_metrics,
@@ -1396,7 +1377,6 @@ pub fn run() {
             commands::skfolio::skfolio_generate_report,
             commands::skfolio::skfolio_export_weights,
             commands::skfolio::skfolio_scenario_analysis,
-            // PyPortfolioOpt - Portfolio Optimization with PyO3
             commands::pyportfolioopt::pyportfolioopt_optimize,
             commands::pyportfolioopt::pyportfolioopt_efficient_frontier,
             commands::pyportfolioopt::pyportfolioopt_discrete_allocation,
@@ -1548,31 +1528,6 @@ pub fn run() {
             commands::backtesting::create_directory,
             commands::backtesting::write_file,
             commands::backtesting::read_file,
-            // Barter Trading Commands
-            barter_integration::start_market_stream,
-            barter_integration::stop_market_stream,
-            barter_integration::get_active_streams,
-            barter_integration::subscribe_symbols,
-            barter_integration::unsubscribe_symbols,
-            barter_integration::submit_order,
-            barter_integration::cancel_order,
-            barter_integration::get_order,
-            barter_integration::get_all_orders,
-            barter_integration::get_open_orders,
-            barter_integration::get_positions,
-            barter_integration::get_position,
-            barter_integration::get_balances,
-            barter_integration::close_all_positions,
-            barter_integration::list_strategies,
-            barter_integration::get_strategy_parameters,
-            barter_integration::update_strategy_parameters,
-            barter_integration::run_backtest,
-            barter_integration::optimize_strategy,
-            barter_integration::get_supported_exchanges,
-            barter_integration::get_trading_modes,
-            barter_integration::parse_databento_dataset,
-            barter_integration::map_custom_dataset,
-            barter_integration::map_tick_dataset,
             // Company News Commands
             commands::company_news::fetch_company_news,
             commands::company_news::fetch_news_by_topic,
@@ -1725,6 +1680,9 @@ pub fn run() {
             commands::database::db_add_mcp_server,
             commands::database::db_get_mcp_servers,
             commands::database::db_delete_mcp_server,
+            commands::database::db_get_internal_tool_settings,
+            commands::database::db_set_internal_tool_enabled,
+            commands::database::db_is_internal_tool_enabled,
             commands::database::db_save_backtesting_provider,
             commands::database::db_get_backtesting_providers,
             commands::database::db_save_backtesting_strategy,
@@ -1789,7 +1747,6 @@ pub fn run() {
             commands::alpha_arena_bridge::paper_trading_get_orders,
             commands::alpha_arena_bridge::paper_trading_get_trades,
             commands::alpha_arena_bridge::alpha_arena_record_decision,
-            // Financial Statement Analysis - CFA-compliant analysis via PyO3
             commands::financial_analysis::analyze_income_statement,
             commands::financial_analysis::analyze_balance_sheet,
             commands::financial_analysis::analyze_cash_flow,

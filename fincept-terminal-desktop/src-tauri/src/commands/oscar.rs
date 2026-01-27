@@ -1,4 +1,4 @@
-use crate::utils::python::execute_python_script_simple;
+use crate::python;
 use tauri::command;
 
 // ==================== INSTRUMENTS ENDPOINTS ====================
@@ -16,28 +16,24 @@ pub async fn oscar_get_instruments(
     let sort_str = sort.unwrap_or_else(|| "id".to_string());
     let order_str = order.unwrap_or_else(|| "asc".to_string());
 
-    let mut args = vec!["instruments", &page_str, &sort_str, &order_str];
+    let mut args = vec!["instruments".to_string(), page_str, sort_str, order_str];
 
-    let filter_on_str;
-    let filter_value_str;
     if let Some(fo) = filter_on {
-        filter_on_str = fo;
-        args.push("--filter-on");
-        args.push(&filter_on_str);
+        args.push("--filter-on".to_string());
+        args.push(fo);
     }
 
     if let Some(fv) = filter_value {
-        filter_value_str = fv;
-        args.push("--filter-value");
-        args.push(&filter_value_str);
+        args.push("--filter-value".to_string());
+        args.push(fv);
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
 pub async fn oscar_get_instrument_by_slug(app: tauri::AppHandle, slug: String) -> Result<String, String> {
-    execute_python_script_simple(&app, "oscar_data.py", &["instrument", &slug])
+    python::execute_sync(&app, "oscar_data.py", vec!["instrument".to_string(), slug])
 }
 
 #[command]
@@ -46,15 +42,13 @@ pub async fn oscar_search_instruments_by_type(
     instrument_type: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut args = vec!["search_instruments_type", &instrument_type];
+    let mut args = vec!["search_instruments_type".to_string(), instrument_type];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
@@ -63,15 +57,13 @@ pub async fn oscar_search_instruments_by_agency(
     agency: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut args = vec!["search_instruments_agency", &agency];
+    let mut args = vec!["search_instruments_agency".to_string(), agency];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
@@ -81,22 +73,18 @@ pub async fn oscar_search_instruments_by_year_range(
     end_year: i32,
     page: Option<i32>
 ) -> Result<String, String> {
-    let start_year_str = start_year.to_string();
-    let end_year_str = end_year.to_string();
-    let mut args = vec!["search_instruments_year", &start_year_str, &end_year_str];
+    let mut args = vec!["search_instruments_year".to_string(), start_year.to_string(), end_year.to_string()];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
 pub async fn oscar_get_instrument_classifications(app: tauri::AppHandle) -> Result<String, String> {
-    execute_python_script_simple(&app, "oscar_data.py", &["instrument_classifications"])
+    python::execute_sync(&app, "oscar_data.py", vec!["instrument_classifications".to_string()])
 }
 
 // ==================== SATELLITES ENDPOINTS ====================
@@ -114,28 +102,24 @@ pub async fn oscar_get_satellites(
     let sort_str = sort.unwrap_or_else(|| "id".to_string());
     let order_str = order.unwrap_or_else(|| "asc".to_string());
 
-    let mut args = vec!["satellites", &page_str, &sort_str, &order_str];
+    let mut args = vec!["satellites".to_string(), page_str, sort_str, order_str];
 
-    let filter_on_str;
-    let filter_value_str;
     if let Some(fo) = filter_on {
-        filter_on_str = fo;
-        args.push("--filter-on");
-        args.push(&filter_on_str);
+        args.push("--filter-on".to_string());
+        args.push(fo);
     }
 
     if let Some(fv) = filter_value {
-        filter_value_str = fv;
-        args.push("--filter-value");
-        args.push(&filter_value_str);
+        args.push("--filter-value".to_string());
+        args.push(fv);
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
 pub async fn oscar_get_satellite_by_slug(app: tauri::AppHandle, slug: String) -> Result<String, String> {
-    execute_python_script_simple(&app, "oscar_data.py", &["satellite", &slug])
+    python::execute_sync(&app, "oscar_data.py", vec!["satellite".to_string(), slug])
 }
 
 #[command]
@@ -144,15 +128,13 @@ pub async fn oscar_search_satellites_by_orbit(
     orbit_type: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut args = vec!["search_satellites_orbit", &orbit_type];
+    let mut args = vec!["search_satellites_orbit".to_string(), orbit_type];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
@@ -161,15 +143,13 @@ pub async fn oscar_search_satellites_by_agency(
     agency: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut args = vec!["search_satellites_agency", &agency];
+    let mut args = vec!["search_satellites_agency".to_string(), agency];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 // ==================== VARIABLES ENDPOINTS ====================
@@ -187,28 +167,24 @@ pub async fn oscar_get_variables(
     let sort_str = sort.unwrap_or_else(|| "id".to_string());
     let order_str = order.unwrap_or_else(|| "asc".to_string());
 
-    let mut args = vec!["variables", &page_str, &sort_str, &order_str];
+    let mut args = vec!["variables".to_string(), page_str, sort_str, order_str];
 
-    let filter_on_str;
-    let filter_value_str;
     if let Some(fo) = filter_on {
-        filter_on_str = fo;
-        args.push("--filter-on");
-        args.push(&filter_on_str);
+        args.push("--filter-on".to_string());
+        args.push(fo);
     }
 
     if let Some(fv) = filter_value {
-        filter_value_str = fv;
-        args.push("--filter-value");
-        args.push(&filter_value_str);
+        args.push("--filter-value".to_string());
+        args.push(fv);
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
 pub async fn oscar_get_variable_by_slug(app: tauri::AppHandle, slug: String) -> Result<String, String> {
-    execute_python_script_simple(&app, "oscar_data.py", &["variable", &slug])
+    python::execute_sync(&app, "oscar_data.py", vec!["variable".to_string(), slug])
 }
 
 #[command]
@@ -217,69 +193,61 @@ pub async fn oscar_search_variables_by_instrument(
     instrument: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut args = vec!["search_variables_instrument", &instrument];
+    let mut args = vec!["search_variables_instrument".to_string(), instrument];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
 pub async fn oscar_get_ecv_variables(app: tauri::AppHandle, page: Option<i32>) -> Result<String, String> {
-    let mut args = vec!["ecv_variables"];
+    let mut args = vec!["ecv_variables".to_string()];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 // ==================== CONVENIENCE METHODS ====================
 
 #[command]
 pub async fn oscar_get_space_agencies(app: tauri::AppHandle) -> Result<String, String> {
-    execute_python_script_simple(&app, "oscar_data.py", &["space_agencies"])
+    python::execute_sync(&app, "oscar_data.py", vec!["space_agencies".to_string()])
 }
 
 #[command]
 pub async fn oscar_get_instrument_types(app: tauri::AppHandle) -> Result<String, String> {
-    execute_python_script_simple(&app, "oscar_data.py", &["instrument_types"])
+    python::execute_sync(&app, "oscar_data.py", vec!["instrument_types".to_string()])
 }
 
 #[command]
 pub async fn oscar_search_weather_instruments(app: tauri::AppHandle, page: Option<i32>) -> Result<String, String> {
-    let mut args = vec!["weather_instruments"];
+    let mut args = vec!["weather_instruments".to_string()];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
 pub async fn oscar_get_climate_monitoring_instruments(app: tauri::AppHandle, page: Option<i32>) -> Result<String, String> {
-    let mut args = vec!["climate_instruments"];
+    let mut args = vec!["climate_instruments".to_string()];
 
-    let page_str;
     if let Some(p) = page {
-        page_str = p.to_string();
-        args.push(&page_str);
+        args.push(p.to_string());
     }
 
-    execute_python_script_simple(&app, "oscar_data.py", &args)
+    python::execute_sync(&app, "oscar_data.py", args)
 }
 
 #[command]
 pub async fn oscar_get_overview_statistics(app: tauri::AppHandle) -> Result<String, String> {
-    execute_python_script_simple(&app, "oscar_data.py", &["overview_statistics"])
+    python::execute_sync(&app, "oscar_data.py", vec!["overview_statistics".to_string()])
 }

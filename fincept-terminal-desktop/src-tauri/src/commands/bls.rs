@@ -1,8 +1,7 @@
 // BLS (Bureau of Labor Statistics) data commands based on OpenBB bls provider
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
-/// Execute BLS Python script command with PyO3
+
 #[tauri::command]
 pub async fn execute_bls_command(
     app: tauri::AppHandle,
@@ -13,9 +12,8 @@ pub async fn execute_bls_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with PyO3
-    let script_path = get_script_path(&app, "bls_data.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+
+    python::execute(&app, "bls_data.py", cmd_args).await
 }
 
 // SERIES DATA COMMANDS

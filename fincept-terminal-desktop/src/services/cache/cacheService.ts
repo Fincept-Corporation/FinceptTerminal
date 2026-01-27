@@ -108,7 +108,7 @@ function parseTTL(ttl: number | TTLPreset): number {
 // Cache Service Class
 // ============================================================================
 
-class CacheService {
+export class CacheService {
   private initialized = false;
   private initializing = false;
   private initPromise: Promise<boolean> | null = null;

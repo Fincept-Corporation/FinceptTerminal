@@ -511,8 +511,27 @@ export const getMCPServers = async (): Promise<MCPServer[]> => {
   return await invoke<MCPServer[]>('db_get_mcp_servers');
 };
 
+export interface InternalMCPToolSetting {
+  tool_name: string;
+  category: string;
+  is_enabled: boolean;
+  updated_at: string;
+}
+
 export const deleteMCPServer = async (id: string): Promise<void> => {
   await invoke('db_delete_mcp_server', { id });
+};
+
+export const getInternalToolSettings = async (): Promise<InternalMCPToolSetting[]> => {
+  return await invoke<InternalMCPToolSetting[]>('db_get_internal_tool_settings');
+};
+
+export const setInternalToolEnabled = async (toolName: string, category: string, isEnabled: boolean): Promise<void> => {
+  await invoke('db_set_internal_tool_enabled', { toolName, category, isEnabled });
+};
+
+export const isInternalToolEnabled = async (toolName: string): Promise<boolean> => {
+  return await invoke<boolean>('db_is_internal_tool_enabled', { toolName });
 };
 
 // ==================== BACKTESTING ====================

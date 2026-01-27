@@ -1,21 +1,21 @@
-use crate::utils::python::execute_python_script_simple;
+use crate::python;
 use tauri::command;
 
 // ==================== METADATA COMMANDS ====================
 
 #[command]
 pub async fn bea_get_dataset_list(app: tauri::AppHandle) -> Result<String, String> {
-    execute_python_script_simple(&app, "bea_data.py", &["dataset_list"])
+    python::execute_sync(&app, "bea_data.py", vec!["dataset_list".to_string()])
 }
 
 #[command]
 pub async fn bea_get_parameter_list(app: tauri::AppHandle, dataset_name: String) -> Result<String, String> {
-    execute_python_script_simple(&app, "bea_data.py", &["parameter_list", &dataset_name])
+    python::execute_sync(&app, "bea_data.py", vec!["parameter_list".to_string(), dataset_name])
 }
 
 #[command]
 pub async fn bea_get_parameter_values(app: tauri::AppHandle, dataset_name: String, parameter_name: String) -> Result<String, String> {
-    execute_python_script_simple(&app, "bea_data.py", &["parameter_values", &dataset_name, &parameter_name])
+    python::execute_sync(&app, "bea_data.py", vec!["parameter_values".to_string(), dataset_name, parameter_name])
 }
 
 #[command]
@@ -25,7 +25,7 @@ pub async fn bea_get_parameter_values_filtered(
     parameter_name: String,
     target_parameter: String
 ) -> Result<String, String> {
-    execute_python_script_simple(&app, "bea_data.py", &["parameter_values_filtered", &dataset_name, &parameter_name, &target_parameter])
+    python::execute_sync(&app, "bea_data.py", vec!["parameter_values_filtered".to_string(), dataset_name, parameter_name, target_parameter])
 }
 
 // ==================== DATA RETRIEVAL COMMANDS ====================
@@ -33,15 +33,13 @@ pub async fn bea_get_parameter_values_filtered(
 #[command]
 pub async fn bea_get_nipa_data(app: tauri::AppHandle, table_name: String, frequency: Option<String>, year: Option<String>) -> Result<String, String> {
     let freq = frequency.unwrap_or_else(|| "A".to_string());
-    let mut args = vec!["nipa", &table_name, &freq];
+    let mut args = vec!["nipa".to_string(), table_name, freq];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -52,28 +50,24 @@ pub async fn bea_get_ni_underlying_detail(
     year: Option<String>
 ) -> Result<String, String> {
     let freq = frequency.unwrap_or_else(|| "A".to_string());
-    let mut args = vec!["ni_underlying", &table_name, &freq];
+    let mut args = vec!["ni_underlying".to_string(), table_name, freq];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
 pub async fn bea_get_fixed_assets(app: tauri::AppHandle, table_name: String, year: Option<String>) -> Result<String, String> {
-    let mut args = vec!["fixed_assets", &table_name];
+    let mut args = vec!["fixed_assets".to_string(), table_name];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -92,43 +86,30 @@ pub async fn bea_get_mne_data(
     let class = classification.unwrap_or_else(|| "Country".to_string());
     let footnotes = get_footnotes.unwrap_or_else(|| "No".to_string());
 
-    let mut args = vec!["mne", &direction, &class];
-
-    let year_str;
-    let country_str;
-    let industry_str;
-    let state_str;
-    let ownership_str;
-    let nonbank_str;
+    let mut args = vec!["mne".to_string(), direction, class];
 
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
     if let Some(cnt) = country {
-        country_str = cnt;
-        args.push(&country_str);
+        args.push(cnt);
     }
     if let Some(ind) = industry {
-        industry_str = ind;
-        args.push(&industry_str);
+        args.push(ind);
     }
     if let Some(st) = state {
-        state_str = st;
-        args.push(&state_str);
+        args.push(st);
     }
     if let Some(ol) = ownership_level {
-        ownership_str = ol;
-        args.push(&ownership_str);
+        args.push(ol);
     }
     if let Some(nba) = nonbank_affiliates_only {
-        nonbank_str = nba;
-        args.push(&nonbank_str);
+        args.push(nba);
     }
 
-    args.push(&footnotes);
+    args.push(footnotes);
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -142,18 +123,16 @@ pub async fn bea_get_gdp_by_industry(
     let freq = frequency.unwrap_or_else(|| "A".to_string());
     let ind = industry.unwrap_or_else(|| "ALL".to_string());
 
-    let mut args = vec!["gdp_by_industry", &table_id];
+    let mut args = vec!["gdp_by_industry".to_string(), table_id];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    args.push(&freq);
-    args.push(&ind);
+    args.push(freq);
+    args.push(ind);
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -167,25 +146,20 @@ pub async fn bea_get_international_transactions(
     let aoc = area_or_country.unwrap_or_else(|| "AllCountries".to_string());
     let freq = frequency.unwrap_or_else(|| "A".to_string());
 
-    let mut args = vec!["international_transactions"];
-
-    let indicator_str;
-    let year_str;
+    let mut args = vec!["international_transactions".to_string()];
 
     if let Some(ind) = indicator {
-        indicator_str = ind;
-        args.push(&indicator_str);
+        args.push(ind);
     }
 
-    args.push(&aoc);
-    args.push(&freq);
+    args.push(aoc);
+    args.push(freq);
 
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -198,43 +172,34 @@ pub async fn bea_get_international_investment_position(
 ) -> Result<String, String> {
     let freq = frequency.unwrap_or_else(|| "A".to_string());
 
-    let mut args = vec!["international_investment"];
-
-    let toi_str;
-    let comp_str;
-    let year_str;
+    let mut args = vec!["international_investment".to_string()];
 
     if let Some(toi) = type_of_investment {
-        toi_str = toi;
-        args.push(&toi_str);
+        args.push(toi);
     }
 
     if let Some(comp) = component {
-        comp_str = comp;
-        args.push(&comp_str);
+        args.push(comp);
     }
 
-    args.push(&freq);
+    args.push(freq);
 
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
 pub async fn bea_get_input_output(app: tauri::AppHandle, table_id: String, year: Option<String>) -> Result<String, String> {
-    let mut args = vec!["input_output", &table_id];
+    let mut args = vec!["input_output".to_string(), table_id];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -248,18 +213,16 @@ pub async fn bea_get_underlying_gdp_by_industry(
     let freq = frequency.unwrap_or_else(|| "A".to_string());
     let ind = industry.unwrap_or_else(|| "ALL".to_string());
 
-    let mut args = vec!["underlying_gdp_industry", &table_id];
+    let mut args = vec!["underlying_gdp_industry".to_string(), table_id];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    args.push(&freq);
-    args.push(&ind);
+    args.push(freq);
+    args.push(ind);
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -273,36 +236,27 @@ pub async fn bea_get_international_services_trade(
 ) -> Result<String, String> {
     let aoc = area_or_country.unwrap_or_else(|| "AllCountries".to_string());
 
-    let mut args = vec!["international_services"];
-
-    let tos_str;
-    let td_str;
-    let aff_str;
-    let year_str;
+    let mut args = vec!["international_services".to_string()];
 
     if let Some(tos) = type_of_service {
-        tos_str = tos;
-        args.push(&tos_str);
+        args.push(tos);
     }
 
     if let Some(td) = trade_direction {
-        td_str = td;
-        args.push(&td_str);
+        args.push(td);
     }
 
     if let Some(aff) = affiliation {
-        aff_str = aff;
-        args.push(&aff_str);
+        args.push(aff);
     }
 
-    args.push(&aoc);
+    args.push(aoc);
 
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -316,30 +270,26 @@ pub async fn bea_get_regional_data(
     let lc = line_code.unwrap_or_else(|| "ALL".to_string());
     let gf = geo_fips.unwrap_or_else(|| "STATE".to_string());
 
-    let mut args = vec!["regional", &table_name, &lc, &gf];
+    let mut args = vec!["regional".to_string(), table_name, lc, gf];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 // ==================== COMPOSITE COMMANDS ====================
 
 #[command]
 pub async fn bea_get_economic_overview(app: tauri::AppHandle, year: Option<String>) -> Result<String, String> {
-    let mut args = vec!["economic_overview"];
+    let mut args = vec!["economic_overview".to_string()];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }
 
 #[command]
@@ -350,13 +300,11 @@ pub async fn bea_get_regional_snapshot(
 ) -> Result<String, String> {
     let gf = geo_fips.unwrap_or_else(|| "STATE".to_string());
 
-    let mut args = vec!["regional_snapshot", &gf];
+    let mut args = vec!["regional_snapshot".to_string(), gf];
 
-    let year_str;
     if let Some(yr) = year {
-        year_str = yr;
-        args.push(&year_str);
+        args.push(yr);
     }
 
-    execute_python_script_simple(&app, "bea_data.py", &args)
+    python::execute_sync(&app, "bea_data.py", args)
 }

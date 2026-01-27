@@ -1,6 +1,7 @@
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 use tauri::command;
+
+// FinancePy uses NumPy 1.x venv - must use subprocess execution with library hint
 
 // ==================== UTILITIES ====================
 
@@ -10,8 +11,7 @@ pub async fn financepy_create_date(
     date_str: String,
 ) -> Result<String, String> {
     let args = vec!["utils_create_date".to_string(), date_str];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 #[command]
@@ -22,8 +22,7 @@ pub async fn financepy_date_range(
     freq: String,
 ) -> Result<String, String> {
     let args = vec!["utils_date_range".to_string(), start_date, end_date, freq];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 // ==================== BONDS ====================
@@ -47,8 +46,7 @@ pub async fn financepy_bond_price(
         ytm.to_string(),
         freq.to_string(),
     ];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 #[command]
@@ -70,8 +68,7 @@ pub async fn financepy_bond_ytm(
         clean_price.to_string(),
         freq.to_string(),
     ];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 // ==================== EQUITY OPTIONS ====================
@@ -99,8 +96,7 @@ pub async fn financepy_equity_option_price(
         dividend_yield.to_string(),
         option_type,
     ];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 #[command]
@@ -126,8 +122,7 @@ pub async fn financepy_equity_option_implied_vol(
         dividend_yield.to_string(),
         option_type,
     ];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 // ==================== FX OPTIONS ====================
@@ -157,8 +152,7 @@ pub async fn financepy_fx_option_price(
         option_type,
         notional.to_string(),
     ];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 // ==================== INTEREST RATE SWAPS ====================
@@ -182,8 +176,7 @@ pub async fn financepy_ibor_swap_price(
         notional.to_string(),
         discount_rate.to_string(),
     ];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }
 
 // ==================== CREDIT DERIVATIVES ====================
@@ -205,6 +198,5 @@ pub async fn financepy_cds_spread(
         notional.to_string(),
         spread_bps.to_string(),
     ];
-    let script_path = get_script_path(&app, "financepy_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute_sync(&app, "financepy_wrapper.py", args)
 }

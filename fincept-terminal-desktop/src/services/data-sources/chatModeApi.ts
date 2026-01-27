@@ -326,6 +326,253 @@ class ChatModeApiService {
       };
     }
   }
+
+  /**
+   * Bulk delete sessions (registered users only)
+   */
+  async bulkDeleteSessions(sessionUuids: string[]): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/sessions/bulk-delete`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        },
+        body: JSON.stringify({ session_uuids: sessionUuids })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to bulk delete: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to bulk delete sessions'
+      };
+    }
+  }
+
+  /**
+   * Activate a specific session (deactivates others)
+   */
+  async activateSession(sessionUuid: string): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/sessions/${sessionUuid}/activate`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to activate session: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Activate session error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to activate session'
+      };
+    }
+  }
+
+  /**
+   * Search messages across all sessions
+   */
+  async searchMessages(query: string, limit: number = 20): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/search?query=${encodeURIComponent(query)}&limit=${limit}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to search: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Search messages error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to search messages'
+      };
+    }
+  }
+
+  /**
+   * Get chat usage statistics
+   */
+  async getStats(): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/stats`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get stats: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Get stats error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get stats'
+      };
+    }
+  }
+
+  /**
+   * Export sessions to JSON (registered users only)
+   */
+  async exportSessions(sessionUuids?: string[]): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        },
+        body: JSON.stringify({ session_uuids: sessionUuids || [] })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to export: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Export sessions error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export sessions'
+      };
+    }
+  }
+
+  /**
+   * Get conversation templates (registered users)
+   */
+  async getTemplates(): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/templates`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get templates: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Get templates error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get templates'
+      };
+    }
+  }
+
+  /**
+   * Start session from template
+   */
+  async startFromTemplate(templateId: string): Promise<ChatModeResponse> {
+    try {
+      await this.initialize();
+
+      const response = await fetch(`${this.baseUrl}/chat/templates/${templateId}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey && { 'X-API-Key': this.apiKey })
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to start from template: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return { success: true, data: result.data };
+      }
+
+      throw new Error(result.message || 'Unknown error');
+    } catch (error) {
+      console.error('Start from template error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to start from template'
+      };
+    }
+  }
 }
 
 export const chatModeApiService = new ChatModeApiService();

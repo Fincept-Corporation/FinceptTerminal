@@ -1,6 +1,5 @@
 // FMP (Financial Modeling Prep) data commands based on OpenBB fmp provider
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 use crate::database::operations;
 
 /// Execute FMP Python script command
@@ -41,9 +40,7 @@ pub async fn execute_fmp_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with PyO3
-    let script_path = get_script_path(&app, "fmp_data.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    python::execute(&app, "fmp_data.py", cmd_args).await
 }
 
 // EQUITY DATA COMMANDS

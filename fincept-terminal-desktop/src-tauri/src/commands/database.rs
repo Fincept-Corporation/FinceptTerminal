@@ -198,6 +198,22 @@ pub async fn db_delete_mcp_server(id: String) -> Result<String, String> {
     Ok("MCP server deleted successfully".to_string())
 }
 
+#[tauri::command]
+pub async fn db_get_internal_tool_settings() -> Result<Vec<InternalMCPToolSetting>, String> {
+    queries::get_internal_tool_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_set_internal_tool_enabled(tool_name: String, category: String, is_enabled: bool) -> Result<String, String> {
+    queries::set_internal_tool_enabled(&tool_name, &category, is_enabled).map_err(|e| e.to_string())?;
+    Ok("Internal tool setting updated".to_string())
+}
+
+#[tauri::command]
+pub async fn db_is_internal_tool_enabled(tool_name: String) -> Result<bool, String> {
+    queries::is_internal_tool_enabled(&tool_name).map_err(|e| e.to_string())
+}
+
 // ============================================================================
 // Backtesting Commands
 // ============================================================================

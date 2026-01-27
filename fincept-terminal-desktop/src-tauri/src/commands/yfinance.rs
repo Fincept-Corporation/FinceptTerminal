@@ -1,5 +1,5 @@
 // Yahoo Finance data commands
-use crate::utils::python::execute_python_subprocess;
+use crate::python;
 
 /// Execute Yahoo Finance Python script command via subprocess
 /// Uses direct subprocess instead of worker pool to avoid deadlocks on Windows
@@ -14,10 +14,5 @@ pub async fn execute_yfinance_command(
     cmd_args.extend(args);
 
     // Execute Python script via subprocess (avoids worker pool deadlocks)
-    execute_python_subprocess(
-        &app,
-        "yfinance_data.py",
-        &cmd_args,
-        None,  // Uses default venv (venv-numpy2)
-    )
+    python::execute_sync(&app, "yfinance_data.py", cmd_args)
 }

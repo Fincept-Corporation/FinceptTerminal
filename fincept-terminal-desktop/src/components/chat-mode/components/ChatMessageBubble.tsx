@@ -2,21 +2,39 @@
 // Fincept-style message bubble component
 
 import React from 'react';
-import { Terminal, User } from 'lucide-react';
-import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { Terminal, User, Clock } from 'lucide-react';
 import { ChatModeMessage } from '@/services/data-sources/chatModeApi';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
+
+// Fincept Terminal Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
 
 interface ChatMessageBubbleProps {
   message: ChatModeMessage;
 }
 
 const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ message }) => {
-  const { colors } = useTerminalTheme();
   const isUser = message.role === 'user';
 
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString('en-US', {
+      hour12: false,
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
@@ -24,146 +42,66 @@ const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ message }) => {
   };
 
   return (
-    <div
-      style={{
-        marginBottom: '12px',
+    <div style={{ marginBottom: '12px' }}>
+      <div style={{
         display: 'flex',
-        flexDirection: 'column',
-        gap: '4px'
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontSize: '10px',
-          color: '#666',
-          fontFamily: 'Consolas, "Courier New", monospace'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        justifyContent: isUser ? 'flex-end' : 'flex-start',
+        marginBottom: '4px'
+      }}>
+        <div style={{
+          maxWidth: '85%',
+          minWidth: '120px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${isUser ? FINCEPT.YELLOW : FINCEPT.ORANGE}`,
+          borderRadius: '2px',
+          padding: '10px'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            marginBottom: '8px',
+            paddingBottom: '6px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`
+          }}>
+            {isUser ? (
+              <User size={12} color={FINCEPT.YELLOW} />
+            ) : (
+              <Terminal size={12} color={FINCEPT.ORANGE} />
+            )}
+            <span style={{
+              color: isUser ? FINCEPT.YELLOW : FINCEPT.ORANGE,
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px'
+            }}>
+              {isUser ? 'YOU' : 'FINCEPT AI'}
+            </span>
+            <Clock size={10} color={FINCEPT.GRAY} />
+            <span style={{
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              letterSpacing: '0.5px',
+              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+            }}>
+              {formatTime(message.timestamp)}
+            </span>
+          </div>
           {isUser ? (
-            <User size={12} style={{ color: '#06b6d4' }} />
+            <div style={{
+              color: FINCEPT.WHITE,
+              fontSize: '11px',
+              lineHeight: '1.6',
+              whiteSpace: 'pre-wrap',
+              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+            }}>
+              {message.content}
+            </div>
           ) : (
-            <Terminal size={12} style={{ color: '#ea580c' }} />
-          )}
-          <span style={{ color: isUser ? '#06b6d4' : '#ea580c', fontWeight: 'bold' }}>
-            {isUser ? 'USER' : 'FINCEPT AI'}
-          </span>
-        </div>
-        <span style={{ color: '#333' }}>|</span>
-        <span>{formatTime(message.timestamp)}</span>
-      </div>
-
-      {/* Message Content */}
-      <div
-        style={{
-          background: isUser ? '#0a0a0a' : '#000000',
-          border: `1px solid ${isUser ? '#333' : '#1a1a1a'}`,
-          borderLeft: `3px solid ${isUser ? '#06b6d4' : '#ea580c'}`,
-          padding: '12px 14px',
-          fontSize: '12px',
-          lineHeight: '1.6',
-          fontFamily: 'Consolas, "Courier New", monospace',
-          color: colors.text
-        }}
-      >
-        {isUser ? (
-          <div style={{ whiteSpace: 'pre-wrap' }}>
-            {message.content}
-          </div>
-        ) : (
-          <div className="terminal-markdown">
             <MarkdownRenderer content={message.content} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
-      <style>{`
-        .terminal-markdown h1,
-        .terminal-markdown h2,
-        .terminal-markdown h3 {
-          color: #ea580c;
-          font-weight: bold;
-          margin: 8px 0 6px 0;
-        }
-        .terminal-markdown h1 { font-size: 14px; }
-        .terminal-markdown h2 { font-size: 13px; }
-        .terminal-markdown h3 { font-size: 12px; }
-        .terminal-markdown p {
-          margin: 6px 0;
-        }
-        .terminal-markdown ul,
-        .terminal-markdown ol {
-          margin: 6px 0 6px 20px;
-        }
-        .terminal-markdown li {
-          margin: 3px 0;
-        }
-        .terminal-markdown strong {
-          color: #ea580c;
-          font-weight: bold;
-        }
-        .terminal-markdown code {
-          background: #1a1a1a;
-          padding: 2px 6px;
-          border-radius: 2px;
-          color: #22c55e;
-          font-family: 'Consolas', 'Courier New', monospace;
-          font-size: 11px;
-        }
-        .terminal-markdown pre {
-          background: #0a0a0a;
-          border: 1px solid #333;
-          border-left: 3px solid #22c55e;
-          padding: 10px;
-          margin: 8px 0;
-          overflow-x: auto;
-          border-radius: 2px;
-        }
-        .terminal-markdown pre code {
-          background: transparent;
-          padding: 0;
-        }
-        .terminal-markdown a {
-          color: #06b6d4;
-          text-decoration: none;
-          border-bottom: 1px dotted #06b6d4;
-        }
-        .terminal-markdown a:hover {
-          color: #22d3ee;
-          border-bottom-color: #22d3ee;
-        }
-        .terminal-markdown blockquote {
-          border-left: 3px solid #fbbf24;
-          padding-left: 12px;
-          margin: 8px 0;
-          color: #999;
-        }
-        .terminal-markdown table {
-          border-collapse: collapse;
-          margin: 8px 0;
-          width: 100%;
-        }
-        .terminal-markdown th,
-        .terminal-markdown td {
-          border: 1px solid #333;
-          padding: 6px 10px;
-          text-align: left;
-        }
-        .terminal-markdown th {
-          background: #1a1a1a;
-          color: #ea580c;
-          font-weight: bold;
-        }
-        .terminal-markdown hr {
-          border: none;
-          border-top: 1px solid #333;
-          margin: 12px 0;
-        }
-      `}</style>
     </div>
   );
 };

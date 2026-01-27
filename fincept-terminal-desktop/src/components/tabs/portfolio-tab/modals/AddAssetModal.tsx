@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { marketDataService } from '../../../../services/markets/marketDataService';
 import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../finceptStyles';
 
@@ -27,21 +28,48 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
 }) => {
   const [fetchingPrice, setFetchingPrice] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [resolvedExchange, setResolvedExchange] = useState<string>('');
 
-  // Auto-fetch price when symbol changes
+  // Auto-resolve symbol and fetch price when symbol changes
   useEffect(() => {
-    const fetchPrice = async () => {
-      const symbol = formState.symbol.trim().toUpperCase();
+    const resolveAndFetch = async () => {
+      const rawSymbol = formState.symbol.trim().toUpperCase();
 
-      if (!symbol || symbol.length < 2) {
+      if (!rawSymbol || rawSymbol.length < 2) {
+        setResolvedExchange('');
         return;
       }
 
       setFetchingPrice(true);
       setPriceError(null);
+      setResolvedExchange('');
 
       try {
-        const quote = await marketDataService.getQuote(symbol);
+        // Step 1: Resolve the symbol to its correct yfinance form
+        // e.g. "PIDILITIND" → "PIDILITIND.NS", "AAPL" → "AAPL"
+        let symbolToUse = rawSymbol;
+        try {
+          const resolveOutput = await invoke<string>('execute_yfinance_command', {
+            command: 'resolve_symbol',
+            args: [rawSymbol],
+          });
+          const resolved = JSON.parse(resolveOutput);
+          if (resolved.found && resolved.resolved_symbol) {
+            symbolToUse = resolved.resolved_symbol;
+            // Update the symbol field to the resolved form so it gets stored correctly
+            if (symbolToUse !== rawSymbol) {
+              onSymbolChange(symbolToUse);
+            }
+            if (resolved.exchange) {
+              setResolvedExchange(resolved.exchange);
+            }
+          }
+        } catch (resolveErr) {
+          console.warn('[AddAsset] Symbol resolution failed, using as-is:', resolveErr);
+        }
+
+        // Step 2: Fetch the quote using the resolved symbol
+        const quote = await marketDataService.getQuote(symbolToUse);
 
         if (quote && quote.price) {
           onPriceChange(quote.price.toFixed(2));
@@ -58,7 +86,7 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
     };
 
     // Debounce: wait 800ms after user stops typing
-    const timer = setTimeout(fetchPrice, 800);
+    const timer = setTimeout(resolveAndFetch, 800);
     return () => clearTimeout(timer);
   }, [formState.symbol]);
 
@@ -144,7 +172,7 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
             )}
             {!fetchingPrice && !priceError && formState.price && formState.symbol && (
               <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.TINY }}>
-                ✓ Auto-fetched
+                {resolvedExchange ? `✓ ${resolvedExchange}` : '✓ Auto-fetched'}
               </span>
             )}
           </div>

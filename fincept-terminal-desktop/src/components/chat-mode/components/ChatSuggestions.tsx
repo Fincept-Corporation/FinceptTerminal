@@ -3,14 +3,31 @@
 
 import React from 'react';
 import { TrendingUp, Newspaper, PieChart, Calculator, DollarSign, BarChart3 } from 'lucide-react';
-import { useTerminalTheme } from '@/contexts/ThemeContext';
+
+// Fincept Terminal Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
 
 interface ChatSuggestionsProps {
   onSuggestionClick: (suggestion: string) => void;
 }
 
 const ChatSuggestions: React.FC<ChatSuggestionsProps> = ({ onSuggestionClick }) => {
-  const { colors, fontSize } = useTerminalTheme();
 
   const suggestions = [
     {
@@ -48,20 +65,25 @@ const ChatSuggestions: React.FC<ChatSuggestionsProps> = ({ onSuggestionClick }) 
   return (
     <div
       style={{
-        padding: '0 24px 20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px'
+        padding: '12px 16px 16px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`
       }}
     >
-      <h3 style={{ color: colors.textMuted, fontSize: fontSize.small, fontWeight: 'bold', margin: 0 }}>
+      <div style={{
+        fontSize: '9px',
+        fontWeight: 700,
+        color: FINCEPT.GRAY,
+        letterSpacing: '0.5px',
+        marginBottom: '12px'
+      }}>
         TRY ASKING:
-      </h3>
+      </div>
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '10px'
+          gap: '8px'
         }}
       >
         {suggestions.map((suggestion, idx) => (
@@ -69,36 +91,41 @@ const ChatSuggestions: React.FC<ChatSuggestionsProps> = ({ onSuggestionClick }) 
             key={idx}
             onClick={() => onSuggestionClick(suggestion.text)}
             style={{
-              background: colors.panel,
-              border: `1px solid ${colors.primary}33`,
-              borderRadius: '8px',
-              padding: '12px 14px',
+              padding: '10px 12px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '2px',
               cursor: 'pointer',
               textAlign: 'left',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '8px',
               transition: 'all 0.2s',
-              color: colors.text,
-              fontSize: fontSize.small
+              color: FINCEPT.WHITE,
+              fontSize: '10px',
+              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = `${colors.primary}11`;
-              e.currentTarget.style.borderColor = colors.primary;
-              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = colors.panel;
-              e.currentTarget.style.borderColor = `${colors.primary}33`;
-              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
             }}
           >
-            <div style={{ color: colors.primary }}>{suggestion.icon}</div>
+            <div style={{ color: FINCEPT.ORANGE }}>{suggestion.icon}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: fontSize.tiny, color: colors.textMuted, marginBottom: '2px' }}>
-                {suggestion.category}
+              <div style={{
+                fontSize: '8px',
+                color: FINCEPT.GRAY,
+                marginBottom: '2px',
+                letterSpacing: '0.5px',
+                fontWeight: 700
+              }}>
+                {suggestion.category.toUpperCase()}
               </div>
-              <div>{suggestion.text}</div>
+              <div style={{ fontSize: '10px', lineHeight: '1.4' }}>{suggestion.text}</div>
             </div>
           </button>
         ))}

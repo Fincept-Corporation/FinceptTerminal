@@ -1,7 +1,6 @@
 // RSS Feed Settings Modal - Allows users to manage their RSS news sources
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Check, X, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
-import { useTerminalTheme } from '@/contexts/ThemeContext';
 import {
   getUserRSSFeeds,
   getDefaultFeeds,
@@ -23,6 +22,27 @@ import {
   type RSSFeed,
 } from '@/services/news/rssFeedService';
 
+// FINCEPT Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
+
 interface RSSFeedSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -34,16 +54,12 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
   onClose,
   onFeedsUpdated,
 }) => {
-  const { colors } = useTerminalTheme();
-
-  // State
   const [activeTab, setActiveTab] = useState<'user' | 'default'>('user');
   const [userFeeds, setUserFeeds] = useState<UserRSSFeed[]>([]);
   const [defaultFeeds, setDefaultFeeds] = useState<RSSFeed[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Add/Edit form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingFeed, setEditingFeed] = useState<UserRSSFeed | null>(null);
   const [formData, setFormData] = useState({
@@ -59,7 +75,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [deletedDefaultCount, setDeletedDefaultCount] = useState(0);
 
-  // Load feeds
   useEffect(() => {
     if (isOpen) {
       loadFeeds();
@@ -86,7 +101,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Test URL
   const handleTestUrl = async () => {
     if (!isValidRSSUrl(formData.url)) {
       setFormError('Please enter a valid URL');
@@ -110,7 +124,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Add feed
   const handleAddFeed = async () => {
     if (!formData.name.trim()) {
       setFormError('Name is required');
@@ -145,7 +158,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Update feed
   const handleUpdateFeed = async () => {
     if (!editingFeed) return;
     if (!formData.name.trim()) {
@@ -182,7 +194,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Delete feed
   const handleDeleteFeed = async (id: string) => {
     if (!confirm('Are you sure you want to delete this RSS feed?')) return;
     try {
@@ -194,7 +205,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Toggle user feed
   const handleToggleFeed = async (id: string, enabled: boolean) => {
     try {
       await toggleUserRSSFeed(id, enabled);
@@ -207,7 +217,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Toggle default feed
   const handleToggleDefaultFeed = async (feedId: string, enabled: boolean) => {
     try {
       await toggleDefaultRSSFeed(feedId, enabled);
@@ -220,7 +229,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Delete default feed
   const handleDeleteDefaultFeed = async (feedId: string) => {
     try {
       await deleteDefaultRSSFeed(feedId);
@@ -232,7 +240,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Restore all default feeds
   const handleRestoreAllDefaults = async () => {
     try {
       await restoreAllDefaultFeeds();
@@ -243,7 +250,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     }
   };
 
-  // Edit feed
   const handleEditFeed = (feed: UserRSSFeed) => {
     setEditingFeed(feed);
     setFormData({
@@ -258,7 +264,6 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
     setTestResult(null);
   };
 
-  // Reset form
   const resetForm = () => {
     setShowAddForm(false);
     setEditingFeed(null);
@@ -288,51 +293,51 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 10000,
+        fontFamily: FONT_FAMILY,
       }}
       onClick={onClose}
     >
       <div
         style={{
-          backgroundColor: colors.panel,
-          border: `2px solid ${colors.primary}`,
-          borderRadius: '4px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.ORANGE}`,
+          borderRadius: '2px',
           width: '800px',
           maxWidth: '95vw',
           maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: 'none',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div
           style={{
-            backgroundColor: colors.background,
-            borderBottom: `2px solid ${colors.primary}`,
-            padding: '12px 16px',
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+            padding: '10px 16px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '14px' }}>
+            <span style={{ color: FINCEPT.ORANGE, fontWeight: 700, fontSize: '11px', letterSpacing: '0.5px' }}>
               RSS FEED SETTINGS
             </span>
-            <span style={{ color: colors.textMuted, fontSize: '11px' }}>
-              Manage your news sources
+            <span style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>
+              MANAGE YOUR NEWS SOURCES
             </span>
           </div>
           <button
             onClick={onClose}
             style={{
-              backgroundColor: colors.alert,
-              color: colors.text,
+              padding: '4px 10px',
+              backgroundColor: FINCEPT.RED,
+              color: FINCEPT.WHITE,
               border: 'none',
-              padding: '6px 12px',
-              fontSize: '11px',
-              fontWeight: 'bold',
+              fontSize: '9px',
+              fontWeight: 700,
               cursor: 'pointer',
               borderRadius: '2px',
               display: 'flex',
@@ -340,7 +345,7 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
               gap: '4px',
             }}
           >
-            <X size={14} /> CLOSE
+            <X size={12} /> CLOSE
           </button>
         </div>
 
@@ -348,21 +353,21 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
         <div
           style={{
             display: 'flex',
-            borderBottom: `1px solid ${colors.textMuted}`,
-            backgroundColor: colors.background,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            backgroundColor: FINCEPT.HEADER_BG,
           }}
         >
           <button
             onClick={() => setActiveTab('user')}
             style={{
-              padding: '10px 20px',
-              backgroundColor: activeTab === 'user' ? colors.panel : 'transparent',
-              color: activeTab === 'user' ? colors.primary : colors.textMuted,
+              padding: '8px 16px',
+              backgroundColor: activeTab === 'user' ? FINCEPT.ORANGE : 'transparent',
+              color: activeTab === 'user' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
               border: 'none',
-              borderBottom: activeTab === 'user' ? `2px solid ${colors.primary}` : 'none',
               cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 'bold',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
             }}
           >
             MY FEEDS ({userFeeds.length})
@@ -370,14 +375,14 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
           <button
             onClick={() => setActiveTab('default')}
             style={{
-              padding: '10px 20px',
-              backgroundColor: activeTab === 'default' ? colors.panel : 'transparent',
-              color: activeTab === 'default' ? colors.primary : colors.textMuted,
+              padding: '8px 16px',
+              backgroundColor: activeTab === 'default' ? FINCEPT.ORANGE : 'transparent',
+              color: activeTab === 'default' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
               border: 'none',
-              borderBottom: activeTab === 'default' ? `2px solid ${colors.primary}` : 'none',
               cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 'bold',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
             }}
           >
             DEFAULT FEEDS ({defaultFeeds.length})
@@ -387,12 +392,34 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
         {/* Content */}
         <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: colors.textMuted }}>
-              Loading feeds...
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: FINCEPT.MUTED,
+              fontSize: '10px',
+              textAlign: 'center',
+              padding: '40px',
+            }}>
+              <RefreshCw size={20} style={{ marginBottom: '8px', opacity: 0.5 }} className="animate-spin" />
+              <span>Loading feeds...</span>
             </div>
           ) : error ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: colors.alert }}>
-              {error}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: FINCEPT.RED,
+              fontSize: '10px',
+              textAlign: 'center',
+              padding: '40px',
+            }}>
+              <AlertCircle size={20} style={{ marginBottom: '8px', opacity: 0.5 }} />
+              <span>{error}</span>
             </div>
           ) : activeTab === 'user' ? (
             <>
@@ -402,55 +429,55 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                   style={{
                     textAlign: 'center',
                     padding: '40px 20px',
-                    backgroundColor: 'rgba(255, 200, 0, 0.05)',
-                    border: `1px dashed ${colors.warning}`,
-                    borderRadius: '4px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.YELLOW}`,
+                    borderRadius: '2px',
                     marginBottom: '16px',
                   }}
                 >
-                  <AlertCircle size={32} style={{ color: colors.warning, marginBottom: '12px' }} />
-                  <div style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    No RSS Feeds Available
+                  <AlertCircle size={24} style={{ color: FINCEPT.YELLOW, marginBottom: '12px' }} />
+                  <div style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                    NO RSS FEEDS AVAILABLE
                   </div>
-                  <div style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '16px' }}>
-                    All feeds have been deleted. Add a new feed or restore defaults to see news.
+                  <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '16px' }}>
+                    All feeds have been deleted. Add a new feed or restore defaults.
                   </div>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                     <button
                       onClick={() => setShowAddForm(true)}
                       style={{
-                        padding: '10px 20px',
-                        backgroundColor: colors.secondary,
-                        color: colors.background,
+                        padding: '8px 16px',
+                        backgroundColor: FINCEPT.ORANGE,
+                        color: FINCEPT.DARK_BG,
                         border: 'none',
-                        borderRadius: '4px',
+                        borderRadius: '2px',
                         cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
+                        fontSize: '9px',
+                        fontWeight: 700,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '4px',
                       }}
                     >
-                      <Plus size={14} /> ADD NEW FEED
+                      <Plus size={12} /> ADD NEW FEED
                     </button>
                     <button
                       onClick={handleRestoreAllDefaults}
                       style={{
-                        padding: '10px 20px',
-                        backgroundColor: colors.info,
-                        color: colors.text,
-                        border: 'none',
-                        borderRadius: '4px',
+                        padding: '8px 16px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.GRAY,
+                        borderRadius: '2px',
                         cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
+                        fontSize: '9px',
+                        fontWeight: 700,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '4px',
                       }}
                     >
-                      <RefreshCw size={14} /> RESTORE DEFAULTS
+                      <RefreshCw size={12} /> RESTORE DEFAULTS
                     </button>
                   </div>
                 </div>
@@ -462,22 +489,24 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                   onClick={() => setShowAddForm(true)}
                   style={{
                     width: '100%',
-                    padding: '12px',
-                    backgroundColor: 'rgba(0, 255, 0, 0.1)',
-                    border: `1px dashed ${colors.secondary}`,
-                    borderRadius: '4px',
-                    color: colors.secondary,
+                    padding: '10px',
+                    backgroundColor: 'transparent',
+                    border: `1px dashed ${FINCEPT.BORDER}`,
+                    borderRadius: '2px',
+                    color: FINCEPT.GRAY,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    marginBottom: '16px',
+                    gap: '6px',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    marginBottom: '12px',
+                    transition: 'all 0.2s',
+                    letterSpacing: '0.5px',
                   }}
                 >
-                  <Plus size={16} /> ADD NEW RSS FEED
+                  <Plus size={12} /> ADD NEW RSS FEED
                 </button>
               )}
 
@@ -485,15 +514,15 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
               {showAddForm && (
                 <div
                   style={{
-                    padding: '16px',
-                    backgroundColor: colors.background,
-                    border: `1px solid ${colors.primary}`,
-                    borderRadius: '4px',
-                    marginBottom: '16px',
+                    padding: '12px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.ORANGE}`,
+                    borderRadius: '2px',
+                    marginBottom: '12px',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '12px' }}>
+                    <span style={{ color: FINCEPT.ORANGE, fontWeight: 700, fontSize: '9px', letterSpacing: '0.5px' }}>
                       {editingFeed ? 'EDIT RSS FEED' : 'ADD NEW RSS FEED'}
                     </span>
                     <button
@@ -501,37 +530,37 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: colors.textMuted,
+                        color: FINCEPT.GRAY,
                         cursor: 'pointer',
                       }}
                     >
-                      <X size={16} />
+                      <X size={14} />
                     </button>
                   </div>
 
                   {formError && (
                     <div
                       style={{
-                        padding: '8px 12px',
-                        backgroundColor: 'rgba(255, 0, 0, 0.1)',
-                        border: `1px solid ${colors.alert}`,
+                        padding: '6px 10px',
+                        backgroundColor: `${FINCEPT.RED}20`,
+                        color: FINCEPT.RED,
+                        fontSize: '9px',
+                        fontWeight: 700,
                         borderRadius: '2px',
-                        color: colors.alert,
-                        fontSize: '11px',
                         marginBottom: '12px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: '6px',
                       }}
                     >
-                      <AlertCircle size={14} /> {formError}
+                      <AlertCircle size={12} /> {formError}
                     </div>
                   )}
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     {/* Name */}
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
                         DISPLAY NAME *
                       </label>
                       <input
@@ -541,19 +570,20 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                         placeholder="e.g., Bloomberg Markets"
                         style={{
                           width: '100%',
-                          padding: '8px',
-                          backgroundColor: colors.panel,
-                          border: `1px solid ${colors.textMuted}`,
+                          padding: '8px 10px',
+                          backgroundColor: FINCEPT.DARK_BG,
+                          color: FINCEPT.WHITE,
+                          border: `1px solid ${FINCEPT.BORDER}`,
                           borderRadius: '2px',
-                          color: colors.text,
-                          fontSize: '12px',
+                          fontSize: '10px',
+                          fontFamily: FONT_FAMILY,
                         }}
                       />
                     </div>
 
                     {/* Source Name */}
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
                         SOURCE NAME (SHORT) *
                       </label>
                       <input
@@ -563,12 +593,13 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                         placeholder="e.g., BLOOMBERG"
                         style={{
                           width: '100%',
-                          padding: '8px',
-                          backgroundColor: colors.panel,
-                          border: `1px solid ${colors.textMuted}`,
+                          padding: '8px 10px',
+                          backgroundColor: FINCEPT.DARK_BG,
+                          color: FINCEPT.WHITE,
+                          border: `1px solid ${FINCEPT.BORDER}`,
                           borderRadius: '2px',
-                          color: colors.text,
-                          fontSize: '12px',
+                          fontSize: '10px',
+                          fontFamily: FONT_FAMILY,
                           textTransform: 'uppercase',
                         }}
                       />
@@ -576,7 +607,7 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
 
                     {/* URL */}
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ color: colors.textMuted, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
                         RSS FEED URL *
                       </label>
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -590,32 +621,33 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                           placeholder="https://example.com/rss/feed"
                           style={{
                             flex: 1,
-                            padding: '8px',
-                            backgroundColor: colors.panel,
-                            border: `1px solid ${testResult === true ? colors.secondary : testResult === false ? colors.alert : colors.textMuted}`,
+                            padding: '8px 10px',
+                            backgroundColor: FINCEPT.DARK_BG,
+                            color: FINCEPT.WHITE,
+                            border: `1px solid ${testResult === true ? FINCEPT.GREEN : testResult === false ? FINCEPT.RED : FINCEPT.BORDER}`,
                             borderRadius: '2px',
-                            color: colors.text,
-                            fontSize: '12px',
+                            fontSize: '10px',
+                            fontFamily: FONT_FAMILY,
                           }}
                         />
                         <button
                           onClick={handleTestUrl}
                           disabled={testing || !formData.url}
                           style={{
-                            padding: '8px 12px',
-                            backgroundColor: testing ? colors.textMuted : colors.info,
-                            color: colors.text,
+                            padding: '8px 16px',
+                            backgroundColor: testing ? FINCEPT.MUTED : FINCEPT.BLUE,
+                            color: FINCEPT.WHITE,
                             border: 'none',
                             borderRadius: '2px',
                             cursor: testing || !formData.url ? 'not-allowed' : 'pointer',
-                            fontSize: '11px',
-                            fontWeight: 'bold',
+                            fontSize: '9px',
+                            fontWeight: 700,
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px',
                           }}
                         >
-                          {testing ? <RefreshCw size={14} className="animate-spin" /> : testResult === true ? <Check size={14} /> : <ExternalLink size={14} />}
+                          {testing ? <RefreshCw size={12} className="animate-spin" /> : testResult === true ? <Check size={12} /> : <ExternalLink size={12} />}
                           {testing ? 'TESTING...' : testResult === true ? 'VALID' : 'TEST URL'}
                         </button>
                       </div>
@@ -623,7 +655,7 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
 
                     {/* Category */}
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
                         CATEGORY
                       </label>
                       <select
@@ -631,12 +663,13 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                         onChange={e => setFormData(prev => ({ ...prev, category: e.target.value }))}
                         style={{
                           width: '100%',
-                          padding: '8px',
-                          backgroundColor: colors.panel,
-                          border: `1px solid ${colors.textMuted}`,
+                          padding: '8px 10px',
+                          backgroundColor: FINCEPT.DARK_BG,
+                          color: FINCEPT.WHITE,
+                          border: `1px solid ${FINCEPT.BORDER}`,
                           borderRadius: '2px',
-                          color: colors.text,
-                          fontSize: '12px',
+                          fontSize: '10px',
+                          fontFamily: FONT_FAMILY,
                         }}
                       >
                         {RSS_CATEGORIES.map(cat => (
@@ -649,7 +682,7 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
 
                     {/* Region */}
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '4px', letterSpacing: '0.5px' }}>
                         REGION
                       </label>
                       <select
@@ -657,12 +690,13 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                         onChange={e => setFormData(prev => ({ ...prev, region: e.target.value }))}
                         style={{
                           width: '100%',
-                          padding: '8px',
-                          backgroundColor: colors.panel,
-                          border: `1px solid ${colors.textMuted}`,
+                          padding: '8px 10px',
+                          backgroundColor: FINCEPT.DARK_BG,
+                          color: FINCEPT.WHITE,
+                          border: `1px solid ${FINCEPT.BORDER}`,
                           borderRadius: '2px',
-                          color: colors.text,
-                          fontSize: '12px',
+                          fontSize: '10px',
+                          fontFamily: FONT_FAMILY,
                         }}
                       >
                         {RSS_REGIONS.map(reg => (
@@ -675,18 +709,18 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                   </div>
 
                   {/* Submit Buttons */}
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
                     <button
                       onClick={resetForm}
                       style={{
-                        padding: '8px 16px',
-                        backgroundColor: colors.textMuted,
-                        color: colors.text,
-                        border: 'none',
+                        padding: '6px 12px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        color: FINCEPT.GRAY,
                         borderRadius: '2px',
                         cursor: 'pointer',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
+                        fontSize: '9px',
+                        fontWeight: 700,
                       }}
                     >
                       CANCEL
@@ -695,14 +729,14 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                       onClick={editingFeed ? handleUpdateFeed : handleAddFeed}
                       disabled={submitting}
                       style={{
-                        padding: '8px 16px',
-                        backgroundColor: submitting ? colors.textMuted : colors.secondary,
-                        color: colors.background,
+                        padding: '6px 12px',
+                        backgroundColor: submitting ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                        color: submitting ? FINCEPT.GRAY : FINCEPT.DARK_BG,
                         border: 'none',
                         borderRadius: '2px',
                         cursor: submitting ? 'not-allowed' : 'pointer',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
+                        fontSize: '9px',
+                        fontWeight: 700,
                       }}
                     >
                       {submitting ? 'SAVING...' : editingFeed ? 'UPDATE FEED' : 'ADD FEED'}
@@ -715,72 +749,53 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
               {userFeeds.length === 0 ? (
                 <div
                   style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    color: FINCEPT.MUTED,
+                    fontSize: '10px',
                     textAlign: 'center',
                     padding: '40px',
-                    color: colors.textMuted,
-                    fontSize: '12px',
                   }}
                 >
-                  No custom feeds yet. Add your first RSS feed above!
+                  <span>No custom feeds yet. Add your first RSS feed above.</span>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {userFeeds.map(feed => (
                     <div
                       key={feed.id}
                       style={{
-                        padding: '12px',
-                        backgroundColor: feed.enabled ? colors.background : 'rgba(0,0,0,0.3)',
-                        border: `1px solid ${feed.enabled ? colors.textMuted : 'rgba(100,100,100,0.3)'}`,
-                        borderRadius: '4px',
-                        opacity: feed.enabled ? 1 : 0.6,
+                        padding: '10px 12px',
+                        backgroundColor: feed.enabled ? FINCEPT.DARK_BG : `${FINCEPT.MUTED}10`,
+                        border: `1px solid ${feed.enabled ? FINCEPT.BORDER : FINCEPT.MUTED}`,
+                        borderRadius: '2px',
+                        opacity: feed.enabled ? 1 : 0.7,
+                        transition: 'all 0.2s',
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <span style={{ color: colors.text, fontWeight: 'bold', fontSize: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                            <span style={{ color: FINCEPT.WHITE, fontWeight: 700, fontSize: '10px' }}>
                               {feed.name}
                             </span>
-                            <span
-                              style={{
-                                padding: '2px 6px',
-                                backgroundColor: colors.info,
-                                color: colors.text,
-                                fontSize: '9px',
-                                fontWeight: 'bold',
-                                borderRadius: '2px',
-                              }}
-                            >
+                            <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.CYAN}20`, color: FINCEPT.CYAN, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                               {feed.source_name}
                             </span>
-                            <span
-                              style={{
-                                padding: '2px 6px',
-                                backgroundColor: colors.purple,
-                                color: colors.text,
-                                fontSize: '9px',
-                                borderRadius: '2px',
-                              }}
-                            >
+                            <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.PURPLE}20`, color: FINCEPT.PURPLE, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                               {getCategoryLabel(feed.category)}
                             </span>
-                            <span
-                              style={{
-                                padding: '2px 6px',
-                                backgroundColor: colors.warning,
-                                color: colors.background,
-                                fontSize: '9px',
-                                borderRadius: '2px',
-                              }}
-                            >
+                            <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.YELLOW}20`, color: FINCEPT.YELLOW, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                               {getRegionLabel(feed.region)}
                             </span>
                           </div>
                           <div
                             style={{
-                              color: colors.textMuted,
-                              fontSize: '10px',
+                              color: FINCEPT.MUTED,
+                              fontSize: '9px',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
@@ -790,50 +805,47 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                             {feed.url}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          {/* Toggle */}
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           <button
                             onClick={() => handleToggleFeed(feed.id, !feed.enabled)}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: feed.enabled ? colors.secondary : colors.textMuted,
-                              color: feed.enabled ? colors.background : colors.text,
+                              backgroundColor: feed.enabled ? FINCEPT.GREEN : FINCEPT.MUTED,
+                              color: feed.enabled ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                               border: 'none',
                               borderRadius: '2px',
                               cursor: 'pointer',
-                              fontSize: '10px',
-                              fontWeight: 'bold',
+                              fontSize: '9px',
+                              fontWeight: 700,
                             }}
                           >
                             {feed.enabled ? 'ON' : 'OFF'}
                           </button>
-                          {/* Edit */}
                           <button
                             onClick={() => handleEditFeed(feed)}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: colors.info,
-                              color: colors.text,
-                              border: 'none',
+                              backgroundColor: 'transparent',
+                              border: `1px solid ${FINCEPT.BORDER}`,
+                              color: FINCEPT.GRAY,
                               borderRadius: '2px',
                               cursor: 'pointer',
                             }}
                           >
-                            <Edit2 size={14} />
+                            <Edit2 size={12} />
                           </button>
-                          {/* Delete */}
                           <button
                             onClick={() => handleDeleteFeed(feed.id)}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: colors.alert,
-                              color: colors.text,
+                              backgroundColor: FINCEPT.RED,
+                              color: FINCEPT.WHITE,
                               border: 'none',
                               borderRadius: '2px',
                               cursor: 'pointer',
                             }}
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       </div>
@@ -847,40 +859,40 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
             <div>
               <div
                 style={{
-                  padding: '12px',
-                  backgroundColor: 'rgba(0, 255, 0, 0.05)',
-                  border: `1px solid ${colors.secondary}`,
-                  borderRadius: '4px',
-                  marginBottom: '16px',
-                  color: colors.textMuted,
-                  fontSize: '11px',
+                  padding: '8px 12px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  marginBottom: '12px',
+                  color: FINCEPT.GRAY,
+                  fontSize: '9px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                 }}
               >
                 <span>
-                  These are the default RSS feeds that come with Fincept Terminal. You can enable, disable, or delete them.
+                  Default RSS feeds included with Fincept Terminal. Toggle or remove as needed.
                 </span>
                 {deletedDefaultCount > 0 && (
                   <button
                     onClick={handleRestoreAllDefaults}
                     style={{
-                      padding: '6px 12px',
-                      backgroundColor: colors.info,
-                      color: colors.text,
+                      padding: '4px 10px',
+                      backgroundColor: FINCEPT.ORANGE,
+                      color: FINCEPT.DARK_BG,
                       border: 'none',
                       borderRadius: '2px',
                       cursor: 'pointer',
-                      fontSize: '10px',
-                      fontWeight: 'bold',
+                      fontSize: '9px',
+                      fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    <RefreshCw size={12} /> RESTORE ALL ({deletedDefaultCount})
+                    <RefreshCw size={10} /> RESTORE ALL ({deletedDefaultCount})
                   </button>
                 )}
               </div>
@@ -891,110 +903,77 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                   style={{
                     textAlign: 'center',
                     padding: '40px 20px',
-                    backgroundColor: 'rgba(255, 200, 0, 0.05)',
-                    border: `1px dashed ${colors.warning}`,
-                    borderRadius: '4px',
-                    marginBottom: '16px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.YELLOW}`,
+                    borderRadius: '2px',
+                    marginBottom: '12px',
                   }}
                 >
-                  <AlertCircle size={32} style={{ color: colors.warning, marginBottom: '12px' }} />
-                  <div style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    All Default Feeds Deleted
+                  <AlertCircle size={24} style={{ color: FINCEPT.YELLOW, marginBottom: '12px' }} />
+                  <div style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                    ALL DEFAULT FEEDS DELETED
                   </div>
-                  <div style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '16px' }}>
+                  <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '16px' }}>
                     You have deleted all {deletedDefaultCount} default feeds. Click below to restore them.
                   </div>
                   <button
                     onClick={handleRestoreAllDefaults}
                     style={{
-                      padding: '10px 20px',
-                      backgroundColor: colors.info,
-                      color: colors.text,
+                      padding: '8px 16px',
+                      backgroundColor: FINCEPT.ORANGE,
+                      color: FINCEPT.DARK_BG,
                       border: 'none',
-                      borderRadius: '4px',
+                      borderRadius: '2px',
                       cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
+                      fontSize: '9px',
+                      fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
                       margin: '0 auto',
                     }}
                   >
-                    <RefreshCw size={14} /> RESTORE ALL DEFAULT FEEDS
+                    <RefreshCw size={12} /> RESTORE ALL DEFAULT FEEDS
                   </button>
                 </div>
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {defaultFeeds.map(feed => (
                   <div
                     key={feed.id || feed.url}
                     style={{
-                      padding: '12px',
-                      backgroundColor: feed.enabled ? colors.background : 'rgba(0,0,0,0.3)',
-                      border: `1px solid ${feed.enabled ? colors.textMuted : 'rgba(100,100,100,0.3)'}`,
-                      borderRadius: '4px',
-                      opacity: feed.enabled ? 1 : 0.6,
+                      padding: '10px 12px',
+                      backgroundColor: feed.enabled ? FINCEPT.DARK_BG : `${FINCEPT.MUTED}10`,
+                      border: `1px solid ${feed.enabled ? FINCEPT.BORDER : FINCEPT.MUTED}`,
+                      borderRadius: '2px',
+                      opacity: feed.enabled ? 1 : 0.7,
+                      transition: 'all 0.2s',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span style={{ color: colors.text, fontWeight: 'bold', fontSize: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                          <span style={{ color: FINCEPT.WHITE, fontWeight: 700, fontSize: '10px' }}>
                             {feed.name}
                           </span>
-                          <span
-                            style={{
-                              padding: '2px 6px',
-                              backgroundColor: colors.secondary,
-                              color: colors.background,
-                              fontSize: '9px',
-                              fontWeight: 'bold',
-                              borderRadius: '2px',
-                            }}
-                          >
+                          <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.GREEN}20`, color: FINCEPT.GREEN, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                             DEFAULT
                           </span>
-                          <span
-                            style={{
-                              padding: '2px 6px',
-                              backgroundColor: colors.info,
-                              color: colors.text,
-                              fontSize: '9px',
-                              fontWeight: 'bold',
-                              borderRadius: '2px',
-                            }}
-                          >
+                          <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.CYAN}20`, color: FINCEPT.CYAN, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                             {feed.source}
                           </span>
-                          <span
-                            style={{
-                              padding: '2px 6px',
-                              backgroundColor: colors.purple,
-                              color: colors.text,
-                              fontSize: '9px',
-                              borderRadius: '2px',
-                            }}
-                          >
+                          <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.PURPLE}20`, color: FINCEPT.PURPLE, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                             {getCategoryLabel(feed.category)}
                           </span>
-                          <span
-                            style={{
-                              padding: '2px 6px',
-                              backgroundColor: colors.warning,
-                              color: colors.background,
-                              fontSize: '9px',
-                              borderRadius: '2px',
-                            }}
-                          >
+                          <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.YELLOW}20`, color: FINCEPT.YELLOW, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                             {getRegionLabel(feed.region)}
                           </span>
                         </div>
                         <div
                           style={{
-                            color: colors.textMuted,
-                            fontSize: '10px',
+                            color: FINCEPT.MUTED,
+                            fontSize: '9px',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -1004,36 +983,34 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
                           {feed.url}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {/* Toggle */}
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <button
                           onClick={() => feed.id && handleToggleDefaultFeed(feed.id, !feed.enabled)}
                           style={{
                             padding: '4px 8px',
-                            backgroundColor: feed.enabled ? colors.secondary : colors.textMuted,
-                            color: feed.enabled ? colors.background : colors.text,
+                            backgroundColor: feed.enabled ? FINCEPT.GREEN : FINCEPT.MUTED,
+                            color: feed.enabled ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                             border: 'none',
                             borderRadius: '2px',
                             cursor: 'pointer',
-                            fontSize: '10px',
-                            fontWeight: 'bold',
+                            fontSize: '9px',
+                            fontWeight: 700,
                           }}
                         >
                           {feed.enabled ? 'ON' : 'OFF'}
                         </button>
-                        {/* Delete */}
                         <button
                           onClick={() => feed.id && handleDeleteDefaultFeed(feed.id)}
                           style={{
                             padding: '4px 8px',
-                            backgroundColor: colors.alert,
-                            color: colors.text,
+                            backgroundColor: FINCEPT.RED,
+                            color: FINCEPT.WHITE,
                             border: 'none',
                             borderRadius: '2px',
                             cursor: 'pointer',
                           }}
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={12} />
                         </button>
                       </div>
                     </div>
@@ -1044,38 +1021,43 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer / Status Bar */}
         <div
           style={{
-            borderTop: `1px solid ${colors.textMuted}`,
-            padding: '10px 16px',
-            backgroundColor: colors.background,
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
+            padding: '6px 16px',
+            backgroundColor: FINCEPT.HEADER_BG,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            fontSize: '10px',
-            color: colors.textMuted,
+            fontSize: '9px',
+            color: FINCEPT.GRAY,
           }}
         >
           <span>
-            Total Sources: {defaultFeeds.length + userFeeds.filter(f => f.enabled).length} active ({defaultFeeds.length} default + {userFeeds.filter(f => f.enabled).length} custom)
+            TOTAL: <span style={{ color: FINCEPT.CYAN }}>{defaultFeeds.length + userFeeds.filter(f => f.enabled).length}</span> ACTIVE
+            <span style={{ color: FINCEPT.BORDER }}> | </span>
+            <span style={{ color: FINCEPT.CYAN }}>{defaultFeeds.length}</span> DEFAULT
+            <span style={{ color: FINCEPT.BORDER }}> | </span>
+            <span style={{ color: FINCEPT.CYAN }}>{userFeeds.filter(f => f.enabled).length}</span> CUSTOM
           </span>
           <button
             onClick={loadFeeds}
             style={{
-              padding: '4px 8px',
-              backgroundColor: colors.info,
-              color: colors.text,
-              border: 'none',
+              padding: '4px 10px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
               borderRadius: '2px',
               cursor: 'pointer',
-              fontSize: '10px',
+              fontSize: '9px',
+              fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
             }}
           >
-            <RefreshCw size={12} /> REFRESH
+            <RefreshCw size={10} /> REFRESH
           </button>
         </div>
       </div>

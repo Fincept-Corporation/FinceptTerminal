@@ -1,8 +1,7 @@
 // Geocoding commands using geopy Python library
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
-/// Execute geocoding Python script command with PyO3
+
 #[tauri::command]
 pub async fn execute_geocoding_command(
     app: tauri::AppHandle,
@@ -13,9 +12,8 @@ pub async fn execute_geocoding_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with PyO3
-    let script_path = get_script_path(&app, "geocoding_service.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+
+    python::execute(&app, "geocoding_service.py", cmd_args).await
 }
 
 /// Search for locations with autocomplete

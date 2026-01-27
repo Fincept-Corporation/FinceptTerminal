@@ -287,7 +287,7 @@ class ECBDataWrapper:
             return {"success": False, "error": str(e)}
 
 def main(args=None):
-    # Support both PyO3 and subprocess
+    
     if args is None:
         args = sys.argv[1:]
     """Main function for CLI interface"""

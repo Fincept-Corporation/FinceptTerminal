@@ -1109,7 +1109,7 @@ def main(args=None):
     """CLI entry point for Tauri integration"""
     import sys
 
-    # Support both PyO3 call (args passed as parameter) and CLI call (sys.argv)
+    # Support both function call and CLI execution
     if args is None:
         args = sys.argv[1:]  # Skip script name
 
@@ -1149,7 +1149,7 @@ def main(args=None):
             engine.load_data(prices)
             results = engine.optimize_portfolio()
 
-            # Return JSON as string (for PyO3) or print (for CLI)
+            # Return JSON as string
             output = json.dumps(results, default=str)
             return output
 

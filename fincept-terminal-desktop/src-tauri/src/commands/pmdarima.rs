@@ -4,41 +4,20 @@
  * Auto-ARIMA, ARIMA modeling, preprocessing, and diagnostics
  */
 
-use std::process::Command;
-
-/// Execute Python script and return JSON result
-fn execute_python_script(script_name: &str, function: &str, args: &str) -> Result<String, String> {
-    let script_path = format!("resources/scripts/Analytics/pmdarima_wrapper/{}", script_name);
-
-    let output = Command::new("python")
-        .arg(&script_path)
-        .arg("--function")
-        .arg(function)
-        .arg("--args")
-        .arg(args)
-        .output()
-        .map_err(|e| format!("Failed to execute Python: {}", e))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script error: {}", error));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
-}
+use crate::python;
 
 // ==================== ARIMA COMMANDS ====================
 
 #[tauri::command]
 pub async fn pmdarima_fit_auto_arima(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     seasonal: Option<bool>,
     m: Option<i32>,
     max_p: Option<i32>,
     max_q: Option<i32>
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data,
         "seasonal": seasonal.unwrap_or(false),
         "m": m.unwrap_or(1),
@@ -46,18 +25,23 @@ pub async fn pmdarima_fit_auto_arima(
         "max_q": max_q.unwrap_or(5)
     }).to_string();
 
-    execute_python_script("arima.py", "fit_auto_arima", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/arima.py",
+        vec!["--function".to_string(), "fit_auto_arima".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 #[tauri::command]
 pub async fn pmdarima_forecast_auto_arima(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     n_periods: i32,
     seasonal: Option<bool>,
     return_conf_int: Option<bool>,
     alpha: Option<f64>
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data,
         "n_periods": n_periods,
         "seasonal": seasonal.unwrap_or(false),
@@ -65,11 +49,16 @@ pub async fn pmdarima_forecast_auto_arima(
         "alpha": alpha.unwrap_or(0.05)
     }).to_string();
 
-    execute_python_script("arima.py", "forecast_auto_arima", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/arima.py",
+        vec!["--function".to_string(), "forecast_auto_arima".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 #[tauri::command]
 pub async fn pmdarima_forecast_arima(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     p: i32,
     d: i32,
@@ -78,7 +67,7 @@ pub async fn pmdarima_forecast_arima(
     return_conf_int: Option<bool>,
     alpha: Option<f64>
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data,
         "order": [p, d, q],
         "n_periods": n_periods,
@@ -86,93 +75,127 @@ pub async fn pmdarima_forecast_arima(
         "alpha": alpha.unwrap_or(0.05)
     }).to_string();
 
-    execute_python_script("arima.py", "forecast_arima", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/arima.py",
+        vec!["--function".to_string(), "forecast_arima".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 // ==================== PREPROCESSING COMMANDS ====================
 
 #[tauri::command]
 pub async fn pmdarima_boxcox_transform(
+    app: tauri::AppHandle,
     data: Vec<f64>
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data
     }).to_string();
 
-    execute_python_script("preprocessing.py", "apply_boxcox_transform", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/preprocessing.py",
+        vec!["--function".to_string(), "apply_boxcox_transform".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 #[tauri::command]
 pub async fn pmdarima_inverse_boxcox(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     lambda: f64
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "transformed": data,
         "lambda": lambda
     }).to_string();
 
-    execute_python_script("preprocessing.py", "inverse_boxcox_transform", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/preprocessing.py",
+        vec!["--function".to_string(), "inverse_boxcox_transform".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 // ==================== DIAGNOSTICS COMMANDS ====================
 
 #[tauri::command]
 pub async fn pmdarima_calculate_acf(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     nlags: Option<i32>
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data,
         "nlags": nlags.unwrap_or(40)
     }).to_string();
 
-    execute_python_script("utils.py", "calculate_acf", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/utils.py",
+        vec!["--function".to_string(), "calculate_acf".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 #[tauri::command]
 pub async fn pmdarima_calculate_pacf(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     nlags: Option<i32>
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data,
         "nlags": nlags.unwrap_or(40)
     }).to_string();
 
-    execute_python_script("utils.py", "calculate_pacf", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/utils.py",
+        vec!["--function".to_string(), "calculate_pacf".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 #[tauri::command]
 pub async fn pmdarima_decompose_timeseries(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     decomp_type: String,
     period: i32
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data,
         "type": decomp_type,
         "m": period
     }).to_string();
 
-    execute_python_script("utils.py", "decompose_timeseries", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/utils.py",
+        vec!["--function".to_string(), "decompose_timeseries".to_string(), "--args".to_string(), args_json]
+    )
 }
 
 // ==================== MODEL SELECTION COMMANDS ====================
 
 #[tauri::command]
 pub async fn pmdarima_cross_validate(
+    app: tauri::AppHandle,
     data: Vec<f64>,
     p: i32,
     d: i32,
     q: i32,
     cv_splits: i32
 ) -> Result<String, String> {
-    let args = serde_json::json!({
+    let args_json = serde_json::json!({
         "y": data,
         "order": [p, d, q],
         "cv_splits": cv_splits
     }).to_string();
 
-    execute_python_script("model_selection.py", "cross_validate_arima", &args)
+    python::execute_sync(
+        &app,
+        "Analytics/pmdarima_wrapper/model_selection.py",
+        vec!["--function".to_string(), "cross_validate_arima".to_string(), "--args".to_string(), args_json]
+    )
 }

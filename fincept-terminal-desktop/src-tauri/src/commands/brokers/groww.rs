@@ -72,8 +72,10 @@ fn base32_decode(input: &str) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     for chunk in bits.as_bytes().chunks(8) {
         if chunk.len() == 8 {
-            let byte_str = std::str::from_utf8(chunk).unwrap();
-            let byte = u8::from_str_radix(byte_str, 2).unwrap();
+            let byte_str = std::str::from_utf8(chunk)
+                .map_err(|e| format!("Invalid UTF-8 in base32 decode: {}", e))?;
+            let byte = u8::from_str_radix(byte_str, 2)
+                .map_err(|e| format!("Invalid binary digit in base32 decode: {}", e))?;
             bytes.push(byte);
         }
     }

@@ -74,7 +74,6 @@ pub mod portfolio_management;
 // skfolio - Advanced Portfolio Optimization
 pub mod skfolio;
 
-// PyPortfolioOpt - Portfolio Optimization with PyO3
 pub mod pyportfolioopt;
 
 // Technical Analysis

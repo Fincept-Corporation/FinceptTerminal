@@ -11,6 +11,7 @@ import { backtestingTools } from './tools/backtesting';
 import { marketDataTools } from './tools/market-data';
 import { workflowTools } from './tools/workflow';
 import { notesTools } from './tools/notes';
+import { cryptoTradingTools } from './tools/crypto-trading';
 
 // Register all tool modules
 terminalMCPProvider.registerTools(navigationTools);
@@ -23,7 +24,10 @@ terminalMCPProvider.registerTools(backtestingTools);
 terminalMCPProvider.registerTools(marketDataTools);
 terminalMCPProvider.registerTools(workflowTools);
 terminalMCPProvider.registerTools(notesTools);
+terminalMCPProvider.registerTools(cryptoTradingTools);
 
 export { terminalMCPProvider } from './TerminalMCPProvider';
+export { brokerMCPBridge } from './BrokerMCPBridge';
+export { notesMCPBridge } from './NotesMCPBridge';
 export { INTERNAL_SERVER_ID, INTERNAL_SERVER_NAME } from './types';
 export type { TerminalContexts, InternalTool, InternalToolResult } from './types';

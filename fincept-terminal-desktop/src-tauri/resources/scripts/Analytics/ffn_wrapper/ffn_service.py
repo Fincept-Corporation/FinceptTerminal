@@ -1,5 +1,5 @@
 """
-FFN Service - Python backend for FFN analytics via PyO3
+FFN Service - Python backend for analytics
 ========================================================
 
 Provides JSON-RPC interface for Rust/Tauri to call FFN analytics functions.
@@ -861,7 +861,7 @@ COMMANDS = {
 
 
 def main(args: list) -> str:
-    """Main entry point called by Rust via PyO3"""
+    """Main entry point called by Rust via subprocess"""
     try:
         if len(args) < 1:
             return serialize_result({"success": False, "error": "No command specified"})

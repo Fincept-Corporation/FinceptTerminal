@@ -110,6 +110,15 @@ pub async fn portfolio_get_assets(portfolio_id: String) -> Result<Vec<Value>, St
 }
 
 #[tauri::command]
+pub async fn portfolio_update_asset_symbol(
+    asset_id: String,
+    new_symbol: String,
+) -> Result<(), String> {
+    operations::update_portfolio_asset_symbol(&asset_id, &new_symbol)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn portfolio_get_transactions(
     portfolio_id: String,
     limit: Option<i32>,

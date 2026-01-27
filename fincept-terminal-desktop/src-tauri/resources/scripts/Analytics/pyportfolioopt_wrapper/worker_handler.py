@@ -2,7 +2,7 @@
 """
 PyPortfolioOpt Worker Handler
 Provides a main() function interface for worker pool execution
-All PyO3 logic migrated here
+
 """
 
 import json

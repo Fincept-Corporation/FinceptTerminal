@@ -552,7 +552,7 @@ def search_datasets(keyword: str) -> Dict[str, Any]:
 # --- CLI INTERFACE ---
 
 def main(args=None):
-    # Support both PyO3 and subprocess
+    
     if args is None:
         args = sys.argv[1:]
     """Main CLI entry point for ADB KIDB Data Fetcher"""

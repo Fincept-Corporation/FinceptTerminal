@@ -1,5 +1,5 @@
 """
-Functime Service - Python backend for functime analytics via PyO3
+Functime Service - Python backend for analytics
 =================================================================
 
 Provides JSON-RPC interface for Rust/Tauri to call functime forecasting functions.
@@ -1327,7 +1327,7 @@ COMMANDS = {
 
 
 def main(args: list) -> str:
-    """Main entry point called by Rust via PyO3"""
+    """Main entry point called by Rust via subprocess"""
     try:
         if len(args) < 1:
             return serialize_result({"success": False, "error": "No command specified"})

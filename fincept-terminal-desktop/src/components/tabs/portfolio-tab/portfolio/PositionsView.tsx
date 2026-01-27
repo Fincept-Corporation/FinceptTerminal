@@ -1,7 +1,7 @@
 import React from 'react';
 import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatNumber, formatPercent } from './utils';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES } from '../finceptStyles';
 
 interface PositionsViewProps {
   portfolioSummary: PortfolioSummary;
@@ -16,13 +16,13 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: FINCEPT.DARK_BG,
-      padding: SPACING.DEFAULT,
-      overflow: 'hidden'
+      overflow: 'hidden',
+      fontFamily: TYPOGRAPHY.MONO,
     }}>
       {/* Section Header */}
       <div style={{
         ...COMMON_STYLES.sectionHeader,
-        marginBottom: SPACING.MEDIUM
+        marginBottom: '0px',
       }}>
         CURRENT POSITIONS
       </div>
@@ -33,15 +33,16 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr 1fr 1.2fr 1fr',
-          gap: SPACING.MEDIUM,
-          padding: SPACING.MEDIUM,
+          gap: '8px',
+          padding: '8px 12px',
           backgroundColor: FINCEPT.HEADER_BG,
-          fontSize: TYPOGRAPHY.BODY,
-          fontWeight: TYPOGRAPHY.BOLD,
-          borderBottom: BORDERS.ORANGE,
+          fontSize: '9px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          borderBottom: `1px solid ${FINCEPT.ORANGE}`,
           position: 'sticky',
           top: 0,
-          zIndex: 1
+          zIndex: 1,
         }}>
           <div style={{ color: FINCEPT.ORANGE }}>SYMBOL</div>
           <div style={{ color: FINCEPT.ORANGE, textAlign: 'right' }}>QTY</div>
@@ -57,11 +58,9 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
         {/* Position Rows */}
         {portfolioSummary.holdings.length === 0 ? (
           <div style={{
-            padding: SPACING.XLARGE,
-            textAlign: 'center',
-            color: FINCEPT.GRAY,
-            fontSize: TYPOGRAPHY.DEFAULT,
-            fontFamily: TYPOGRAPHY.MONO
+            ...COMMON_STYLES.emptyState,
+            padding: '24px',
+            height: 'auto',
           }}>
             No positions yet. Click BUY to add your first position.
           </div>
@@ -72,35 +71,38 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr 1fr 1.2fr 1fr',
-                gap: SPACING.MEDIUM,
-                padding: SPACING.MEDIUM,
+                gap: '8px',
+                padding: '8px 12px',
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
                 borderLeft: `3px solid ${holding.unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED}`,
-                fontSize: TYPOGRAPHY.BODY,
+                fontSize: '10px',
                 marginBottom: '1px',
                 fontFamily: TYPOGRAPHY.MONO,
                 minHeight: '32px',
-                alignItems: 'center'
+                alignItems: 'center',
+                transition: EFFECTS.TRANSITION_STANDARD,
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = FINCEPT.HOVER; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent'; }}
             >
-              <div style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{holding.symbol}</div>
-              <div style={{ color: FINCEPT.WHITE, textAlign: 'right' }}>{formatNumber(holding.quantity, 4)}</div>
+              <div style={{ color: FINCEPT.CYAN, fontWeight: 700 }}>{holding.symbol}</div>
+              <div style={{ color: FINCEPT.CYAN, textAlign: 'right' }}>{formatNumber(holding.quantity, 4)}</div>
               <div style={{ color: FINCEPT.GRAY, textAlign: 'right' }}>{formatCurrency(holding.avg_buy_price, currency)}</div>
-              <div style={{ color: FINCEPT.WHITE, textAlign: 'right' }}>{formatCurrency(holding.current_price, currency)}</div>
-              <div style={{ color: FINCEPT.WHITE, textAlign: 'right', fontWeight: TYPOGRAPHY.SEMIBOLD }}>
+              <div style={{ color: FINCEPT.CYAN, textAlign: 'right' }}>{formatCurrency(holding.current_price, currency)}</div>
+              <div style={{ color: FINCEPT.WHITE, textAlign: 'right', fontWeight: 600 }}>
                 {formatCurrency(holding.market_value, currency)}
               </div>
               <div style={{ color: FINCEPT.GRAY, textAlign: 'right' }}>{formatCurrency(holding.cost_basis, currency)}</div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{
                   color: holding.unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                  fontWeight: TYPOGRAPHY.SEMIBOLD
+                  fontWeight: 600,
                 }}>
                   {holding.unrealized_pnl >= 0 ? '+' : ''}{formatCurrency(holding.unrealized_pnl, currency)}
                 </div>
                 <div style={{
                   color: holding.unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                  fontSize: TYPOGRAPHY.SMALL
+                  fontSize: '9px',
                 }}>
                   {formatPercent(holding.unrealized_pnl_percent)}
                 </div>
@@ -108,18 +110,17 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
               <div style={{ textAlign: 'right' }}>
                 <div style={{
                   color: holding.day_change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                  fontWeight: TYPOGRAPHY.REGULAR
                 }}>
                   {holding.day_change >= 0 ? '+' : ''}{formatCurrency(holding.day_change, currency)}
                 </div>
                 <div style={{
                   color: holding.day_change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                  fontSize: TYPOGRAPHY.SMALL
+                  fontSize: '9px',
                 }}>
                   {formatPercent(holding.day_change_percent)}
                 </div>
               </div>
-              <div style={{ color: FINCEPT.YELLOW, textAlign: 'right', fontWeight: TYPOGRAPHY.SEMIBOLD }}>
+              <div style={{ color: FINCEPT.YELLOW, textAlign: 'right', fontWeight: 600 }}>
                 {formatNumber(holding.weight)}%
               </div>
             </div>
@@ -131,16 +132,16 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr 1fr 1.2fr 1fr',
-            gap: SPACING.MEDIUM,
-            padding: SPACING.MEDIUM,
+            gap: '8px',
+            padding: '8px 12px',
             backgroundColor: FINCEPT.PANEL_BG,
-            borderTop: BORDERS.ORANGE_THICK,
-            fontSize: TYPOGRAPHY.BODY,
-            fontWeight: TYPOGRAPHY.BOLD,
-            marginTop: SPACING.MEDIUM,
+            borderTop: `2px solid ${FINCEPT.ORANGE}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            marginTop: '8px',
             fontFamily: TYPOGRAPHY.MONO,
             minHeight: '36px',
-            alignItems: 'center'
+            alignItems: 'center',
           }}>
             <div style={{ color: FINCEPT.ORANGE }}>TOTAL</div>
             <div></div>
@@ -154,26 +155,26 @@ const PositionsView: React.FC<PositionsViewProps> = ({ portfolioSummary }) => {
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{
-                color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED
+                color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
               }}>
                 {portfolioSummary.total_unrealized_pnl >= 0 ? '+' : ''}{formatCurrency(portfolioSummary.total_unrealized_pnl, currency)}
               </div>
               <div style={{
                 color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                fontSize: TYPOGRAPHY.SMALL
+                fontSize: '9px',
               }}>
                 {formatPercent(portfolioSummary.total_unrealized_pnl_percent)}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{
-                color: portfolioSummary.total_day_change >= 0 ? FINCEPT.GREEN : FINCEPT.RED
+                color: portfolioSummary.total_day_change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
               }}>
                 {portfolioSummary.total_day_change >= 0 ? '+' : ''}{formatCurrency(portfolioSummary.total_day_change, currency)}
               </div>
               <div style={{
                 color: portfolioSummary.total_day_change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                fontSize: TYPOGRAPHY.SMALL
+                fontSize: '9px',
               }}>
                 {formatPercent(portfolioSummary.total_day_change_percent)}
               </div>

@@ -1,6 +1,5 @@
 // Trading Economics data commands
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
 /// Execute Trading Economics Python script command
 #[tauri::command]
@@ -13,9 +12,8 @@ pub async fn execute_trading_economics_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with PyO3
-    let script_path = get_script_path(&app, "trading_economics_data.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+
+    python::execute(&app, "trading_economics_data.py", cmd_args).await
 }
 
 /// Get economic indicators for a country

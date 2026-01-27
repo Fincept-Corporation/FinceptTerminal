@@ -20,7 +20,7 @@ import json
 import os
 from datetime import date
 
-# Add parent directory to path for imports when running via PyO3
+
 script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
@@ -150,7 +150,7 @@ def get_key_metrics(json_data: str) -> str:
 
 
 def main(args: list) -> str:
-    """Main entry point for PyO3 execution"""
+    """Main entry point for script execution"""
     if len(args) < 2:
         return json.dumps({
             "success": False,

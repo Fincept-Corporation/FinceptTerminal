@@ -82,6 +82,7 @@ export interface PortfolioSummary {
 
 class PortfolioService {
   private isInitialized = false;
+  private symbolsMigrated = false;
 
   /**
    * Initialize database connection
@@ -91,6 +92,63 @@ class PortfolioService {
     if (this.isInitialized) return;
     this.isInitialized = true;
     portfolioLogger.info('Using Rust SQLite backend - no initialization needed');
+
+    // Run one-time symbol migration (resolves bare symbols like "PIDILITIND" → "PIDILITIND.NS")
+    if (!this.symbolsMigrated) {
+      this.symbolsMigrated = true;
+      this.migrateSymbols().catch(err =>
+        portfolioLogger.warn(`Symbol migration skipped: ${err}`)
+      );
+    }
+  }
+
+  /**
+   * One-time migration: resolve bare symbols to yfinance-compatible forms.
+   * e.g. "PIDILITIND" → "PIDILITIND.NS", "AAPL" stays "AAPL"
+   * Only touches symbols that have no '.' in them (not yet resolved).
+   */
+  private async migrateSymbols(): Promise<void> {
+    try {
+      const portfolios = await invoke<Portfolio[]>('portfolio_get_all');
+      for (const portfolio of portfolios) {
+        const assets = await invoke<PortfolioAsset[]>('portfolio_get_assets', {
+          portfolioId: portfolio.id,
+        });
+
+        for (const asset of assets) {
+          // Skip symbols that already have an exchange suffix
+          if (asset.symbol.includes('.') || asset.symbol.includes('-') ||
+              asset.symbol.includes('=') || asset.symbol.startsWith('^')) {
+            continue;
+          }
+
+          try {
+            const resolveOutput = await invoke<string>('execute_yfinance_command', {
+              command: 'resolve_symbol',
+              args: [asset.symbol],
+            });
+            const resolved = JSON.parse(resolveOutput);
+
+            if (resolved.found && resolved.resolved_symbol &&
+                resolved.resolved_symbol !== asset.symbol) {
+              await invoke('portfolio_update_asset_symbol', {
+                assetId: asset.id,
+                newSymbol: resolved.resolved_symbol,
+              });
+              portfolioLogger.info(
+                `Migrated symbol: ${asset.symbol} → ${resolved.resolved_symbol}`
+              );
+            }
+          } catch (resolveErr) {
+            portfolioLogger.warn(
+              `Failed to resolve symbol ${asset.symbol}: ${resolveErr}`
+            );
+          }
+        }
+      }
+    } catch (err) {
+      portfolioLogger.warn(`Symbol migration error: ${err}`);
+    }
   }
 
   async createPortfolio(name: string, owner: string, currency: string = 'USD', description?: string): Promise<Portfolio> {

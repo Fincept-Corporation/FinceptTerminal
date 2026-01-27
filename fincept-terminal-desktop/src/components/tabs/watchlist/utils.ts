@@ -1,25 +1,30 @@
 // Watchlist Utilities - Shared constants, formatting, and helper functions
-import { terminalThemeService } from '@/services/core/terminalThemeService';
 
-// Fincept Color Scheme
-export const getFinceptColors = () => {
-  const theme = terminalThemeService.getTheme();
-  return {
-    ORANGE: theme.colors.primary,
-    WHITE: theme.colors.text,
-    RED: theme.colors.alert,
-    GREEN: theme.colors.secondary,
-    YELLOW: theme.colors.warning,
-    GRAY: theme.colors.textMuted,
-    BLUE: theme.colors.info,
-    PURPLE: theme.colors.purple,
-    CYAN: theme.colors.accent,
-    DARK_BG: theme.colors.background,
-    PANEL_BG: theme.colors.panel
-  };
+// Fincept Design System Color Palette
+export const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
 };
 
-export const FINCEPT_COLORS = getFinceptColors();
+// Legacy export for backwards compat
+export const FINCEPT_COLORS = FINCEPT;
+export const getFinceptColors = () => FINCEPT;
+
+// Font family constant
+export const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
 
 // Format currency values
 export const formatCurrency = (value: number | undefined | null): string => {
@@ -58,8 +63,8 @@ export const formatVolume = (value: number | undefined | null): string => {
 
 // Get color based on value (positive/negative)
 export const getChangeColor = (value: number | undefined | null): string => {
-  if (value === undefined || value === null) return FINCEPT_COLORS.GRAY;
-  return value >= 0 ? FINCEPT_COLORS.GREEN : FINCEPT_COLORS.RED;
+  if (value === undefined || value === null) return FINCEPT.GRAY;
+  return value >= 0 ? FINCEPT.GREEN : FINCEPT.RED;
 };
 
 // Sort stocks by different criteria
@@ -104,13 +109,13 @@ export const sortStocks = <T extends { symbol: string; quote: any }>(
 
 // Default watchlist colors
 export const WATCHLIST_COLORS = [
-  '#FFA500', // Orange
-  '#6496FA', // Blue
-  '#00C800', // Green
-  '#00FFFF', // Cyan
-  '#C864FF', // Purple
-  '#FFFF00', // Yellow
-  '#FF0000', // Red
+  '#FF8800', // Orange
+  '#0088FF', // Blue
+  '#00D66F', // Green
+  '#00E5FF', // Cyan
+  '#9D4EDD', // Purple
+  '#FFD700', // Yellow
+  '#FF3B3B', // Red
   '#FFFFFF', // White
 ];
 
@@ -121,5 +126,5 @@ export const getNextWatchlistColor = (existingColors: string[]): string => {
       return color;
     }
   }
-  return WATCHLIST_COLORS[0]; // Fallback to orange
+  return WATCHLIST_COLORS[0];
 };

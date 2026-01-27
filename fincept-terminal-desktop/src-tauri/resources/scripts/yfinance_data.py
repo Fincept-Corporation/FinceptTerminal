@@ -355,6 +355,61 @@ def search_symbols(query, limit=50):
     except Exception as e:
         return {"error": str(e), "query": query, "results": []}
 
+def resolve_symbol(symbol):
+    """
+    Resolve a bare stock symbol to its correct yfinance-compatible form.
+
+    Tries the symbol as-is first, then with common exchange suffixes
+    (.NS for NSE India, .BO for BSE India).
+
+    Returns a dict with:
+      - resolved_symbol: the working yfinance symbol (e.g., "PIDILITIND.NS")
+      - original_symbol: what the user typed (e.g., "PIDILITIND")
+      - exchange: detected exchange name (if available)
+      - found: bool indicating if any variant returned data
+    """
+    symbol = symbol.strip().upper()
+    if not symbol:
+        return {"resolved_symbol": symbol, "original_symbol": symbol, "exchange": "", "found": False}
+
+    # If it already has a suffix, verify it works and return as-is
+    if '.' in symbol or symbol.startswith('^') or '-' in symbol or '=' in symbol:
+        try:
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="5d")
+            exchange = ticker.info.get("exchange", "") if hasattr(ticker, 'info') else ""
+            if not hist.empty:
+                return {"resolved_symbol": symbol, "original_symbol": symbol, "exchange": exchange, "found": True}
+        except Exception:
+            pass
+        return {"resolved_symbol": symbol, "original_symbol": symbol, "exchange": "", "found": False}
+
+    # Try bare symbol first (US stocks, crypto, etc.)
+    suffixes_to_try = ["", ".NS", ".BO"]
+    for suffix in suffixes_to_try:
+        candidate = symbol + suffix
+        try:
+            ticker = yf.Ticker(candidate)
+            hist = ticker.history(period="5d")
+            if hist is not None and not hist.empty and len(hist) >= 1:
+                exchange = ""
+                try:
+                    exchange = ticker.info.get("exchange", "")
+                except Exception:
+                    pass
+                return {
+                    "resolved_symbol": candidate,
+                    "original_symbol": symbol,
+                    "exchange": exchange,
+                    "found": True
+                }
+        except Exception:
+            continue
+
+    # Nothing worked — return original
+    return {"resolved_symbol": symbol, "original_symbol": symbol, "exchange": "", "found": False}
+
+
 def main(args=None):
     # Support both worker pool (args parameter) and subprocess/CLI (sys.argv)
     if args is None:
@@ -438,6 +493,13 @@ def main(args=None):
             query = args[1]
             limit = int(args[2]) if len(args) > 2 else 50
             result = search_symbols(query, limit)
+
+    elif command == "resolve_symbol":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py resolve_symbol <symbol>"}
+        else:
+            symbol = args[1]
+            result = resolve_symbol(symbol)
 
     else:
         result = {"error": f"Unknown command: {command}"}

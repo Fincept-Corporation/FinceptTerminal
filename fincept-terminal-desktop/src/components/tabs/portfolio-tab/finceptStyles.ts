@@ -158,10 +158,11 @@ export const COMMON_STYLES = {
     flexDirection: 'column' as const,
   },
 
-  // Panel
+  // Panel (per design system: 2px radius)
   panel: {
     backgroundColor: FINCEPT.PANEL_BG,
     border: BORDERS.STANDARD,
+    borderRadius: '2px',
     padding: SPACING.DEFAULT,
   },
 
@@ -177,87 +178,155 @@ export const COMMON_STYLES = {
     boxShadow: EFFECTS.PANEL_SHADOW,
   },
 
-  // Section Header
+  // Section Header (panel-style with background per design system)
   sectionHeader: {
+    padding: SPACING.DEFAULT,
+    backgroundColor: FINCEPT.HEADER_BG,
+    borderBottom: `1px solid ${FINCEPT.BORDER}`,
     color: FINCEPT.ORANGE,
-    fontSize: TYPOGRAPHY.SUBHEADING,
+    fontSize: '11px',
     fontWeight: TYPOGRAPHY.BOLD,
     letterSpacing: TYPOGRAPHY.WIDE,
     textTransform: 'uppercase' as const,
     marginBottom: SPACING.MEDIUM,
   },
 
-  // Data Label
+  // Data Label (per design system: 9px, bold, GRAY, letter-spacing, UPPERCASE)
   dataLabel: {
     color: FINCEPT.GRAY,
-    fontSize: TYPOGRAPHY.SMALL,
-    fontWeight: TYPOGRAPHY.SEMIBOLD,
+    fontSize: '9px',
+    fontWeight: TYPOGRAPHY.BOLD,
+    letterSpacing: '0.5px',
     textTransform: 'uppercase' as const,
   },
 
-  // Data Value
+  // Data Value (per design system: 10px, CYAN, monospace)
   dataValue: {
-    color: FINCEPT.WHITE,
-    fontSize: TYPOGRAPHY.DEFAULT,
+    color: FINCEPT.CYAN,
+    fontSize: '10px',
     fontWeight: TYPOGRAPHY.REGULAR,
     fontFamily: TYPOGRAPHY.MONO,
   },
 
-  // Metric Card
+  // Metric Card (per design system: panel bg, 2px radius, border)
   metricCard: {
     backgroundColor: FINCEPT.PANEL_BG,
     border: BORDERS.STANDARD,
+    borderRadius: '2px',
     padding: SPACING.DEFAULT,
     display: 'flex',
     flexDirection: 'column' as const,
     gap: SPACING.SMALL,
   },
 
-  // Button Primary
+  // Button Primary (per design system: 8px 16px, orange bg, dark text, 9px bold, 2px radius)
   buttonPrimary: {
-    padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+    padding: '8px 16px',
     backgroundColor: FINCEPT.ORANGE,
-    border: BORDERS.ORANGE,
     color: FINCEPT.DARK_BG,
-    fontSize: TYPOGRAPHY.BODY,
+    border: 'none',
+    borderRadius: '2px',
+    fontSize: '9px',
     fontWeight: TYPOGRAPHY.BOLD,
     cursor: 'pointer',
     transition: EFFECTS.TRANSITION_STANDARD,
     textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
   },
 
-  // Button Secondary
+  // Button Secondary / Outline (per design system: 6px 10px, transparent, border, 9px bold)
   buttonSecondary: {
-    padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+    padding: '6px 10px',
     backgroundColor: 'transparent',
     border: BORDERS.STANDARD,
-    color: FINCEPT.WHITE,
-    fontSize: TYPOGRAPHY.BODY,
-    fontWeight: TYPOGRAPHY.SEMIBOLD,
+    color: FINCEPT.GRAY,
+    borderRadius: '2px',
+    fontSize: '9px',
+    fontWeight: TYPOGRAPHY.BOLD,
     cursor: 'pointer',
     transition: EFFECTS.TRANSITION_STANDARD,
     textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
   },
 
-  // Input Field
+  // Input Field (per design system: dark bg, 8px 10px padding, 10px, 2px radius)
   inputField: {
     width: '100%',
-    padding: SPACING.MEDIUM,
+    padding: '8px 10px',
     backgroundColor: FINCEPT.DARK_BG,
-    border: BORDERS.STANDARD,
     color: FINCEPT.WHITE,
-    fontSize: TYPOGRAPHY.BODY,
-    fontFamily: TYPOGRAPHY.MONO,
+    border: BORDERS.STANDARD,
+    borderRadius: '2px',
+    fontSize: '10px',
+    fontFamily: '"IBM Plex Mono", monospace',
     outline: 'none',
   },
 
-  // Table Header
+  // Tab Button (per design system: 6px 12px, 9px bold, letter-spacing)
+  tabButton: (isActive: boolean) => ({
+    padding: '6px 12px',
+    backgroundColor: isActive ? FINCEPT.ORANGE : 'transparent',
+    color: isActive ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+    border: 'none',
+    borderRadius: '2px',
+    fontSize: '9px',
+    fontWeight: TYPOGRAPHY.BOLD,
+    letterSpacing: '0.5px',
+    cursor: 'pointer',
+    transition: EFFECTS.TRANSITION_FAST,
+    textTransform: 'uppercase' as const,
+  }),
+
+  // Status Badge Success
+  badgeSuccess: {
+    padding: '2px 6px',
+    backgroundColor: `${FINCEPT.GREEN}20`,
+    color: FINCEPT.GREEN,
+    fontSize: '8px',
+    fontWeight: TYPOGRAPHY.BOLD,
+    borderRadius: '2px',
+  },
+
+  // Status Badge Error
+  badgeError: {
+    padding: '2px 6px',
+    backgroundColor: `${FINCEPT.RED}20`,
+    color: FINCEPT.RED,
+    fontSize: '8px',
+    fontWeight: TYPOGRAPHY.BOLD,
+    borderRadius: '2px',
+  },
+
+  // Status Badge Info
+  badgeInfo: {
+    padding: '2px 6px',
+    backgroundColor: `${FINCEPT.CYAN}20`,
+    color: FINCEPT.CYAN,
+    fontSize: '8px',
+    fontWeight: TYPOGRAPHY.BOLD,
+    borderRadius: '2px',
+  },
+
+  // Empty State (per design system)
+  emptyState: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    color: FINCEPT.MUTED,
+    fontSize: '10px',
+    textAlign: 'center' as const,
+  },
+
+  // Table Header (per design system: HEADER_BG, ORANGE text, 9px bold, UPPERCASE)
   tableHeader: {
     backgroundColor: FINCEPT.HEADER_BG,
     color: FINCEPT.ORANGE,
-    fontSize: TYPOGRAPHY.BODY,
+    fontSize: '9px',
     fontWeight: TYPOGRAPHY.BOLD,
-    padding: SPACING.SMALL,
+    letterSpacing: '0.5px',
+    padding: '8px 12px',
     textAlign: 'left' as const,
     borderBottom: BORDERS.ORANGE,
     textTransform: 'uppercase' as const,

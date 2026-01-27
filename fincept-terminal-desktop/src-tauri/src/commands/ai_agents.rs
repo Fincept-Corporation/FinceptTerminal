@@ -1,7 +1,6 @@
 // AI Agents Commands - Economic, Geopolitical, Hedge Fund, and Investor agents
 #![allow(dead_code)]
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
 // ECONOMIC AGENTS
 
@@ -16,8 +15,7 @@ pub async fn execute_economic_agent(
     let script_name = format!("agents/EconomicAgents/{}_agent_cli.py", agent_type);
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    let script_path = get_script_path(&app, &script_name)?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    python::execute(&app, &script_name, cmd_args).await
 }
 
 #[tauri::command]
@@ -30,8 +28,7 @@ pub async fn run_capitalism_agent(
     if let Some(p) = parameters {
         args.push(p);
     }
-    let script_path = get_script_path(&app, "agents/EconomicAgents/capitalism_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/EconomicAgents/capitalism_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -44,8 +41,7 @@ pub async fn run_keynesian_agent(
     if let Some(p) = parameters {
         args.push(p);
     }
-    let script_path = get_script_path(&app, "agents/EconomicAgents/keynesian_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/EconomicAgents/keynesian_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -58,8 +54,7 @@ pub async fn run_neoliberal_agent(
     if let Some(p) = parameters {
         args.push(p);
     }
-    let script_path = get_script_path(&app, "agents/EconomicAgents/neoliberal_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/EconomicAgents/neoliberal_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -72,8 +67,7 @@ pub async fn run_socialism_agent(
     if let Some(p) = parameters {
         args.push(p);
     }
-    let script_path = get_script_path(&app, "agents/EconomicAgents/socialism_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/EconomicAgents/socialism_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -86,8 +80,7 @@ pub async fn run_mercantilist_agent(
     if let Some(p) = parameters {
         args.push(p);
     }
-    let script_path = get_script_path(&app, "agents/EconomicAgents/mercantilist_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/EconomicAgents/mercantilist_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -100,8 +93,7 @@ pub async fn run_mixed_economy_agent(
     if let Some(p) = parameters {
         args.push(p);
     }
-    let script_path = get_script_path(&app, "agents/EconomicAgents/mixed_economy_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/EconomicAgents/mixed_economy_agent_cli.py", args).await
 }
 
 // GEOPOLITICS AGENTS
@@ -114,8 +106,7 @@ pub async fn execute_geopolitics_agent(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    let script_path = get_script_path(&app, "agents/GeopoliticsAgents/geopolitics_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    python::execute(&app, "agents/GeopoliticsAgents/geopolitics_agent_cli.py", cmd_args).await
 }
 
 // Grand Chessboard Agents
@@ -129,8 +120,7 @@ pub async fn run_eurasian_chessboard_agent(
     if let Some(at) = analysis_type {
         args.push(at);
     }
-    let script_path = get_script_path(&app, "agents/GeopoliticsAgents/GrandChessboardAgents/chessboard_agents/eurasian_chessboard_master_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/GeopoliticsAgents/GrandChessboardAgents/chessboard_agents/eurasian_chessboard_master_agent.py", args).await
 }
 
 #[tauri::command]
@@ -143,8 +133,7 @@ pub async fn run_geostrategic_players_agent(
     if let Some(sp) = strategy_params {
         args.push(sp);
     }
-    let script_path = get_script_path(&app, "agents/GeopoliticsAgents/GrandChessboardAgents/chessboard_agents/geostrategic_players_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/GeopoliticsAgents/GrandChessboardAgents/chessboard_agents/geostrategic_players_agent.py", args).await
 }
 
 #[tauri::command]
@@ -157,8 +146,7 @@ pub async fn run_eurasian_balkans_agent(
     if let Some(ap) = analysis_params {
         args.push(ap);
     }
-    let script_path = get_script_path(&app, "agents/GeopoliticsAgents/GrandChessboardAgents/chessboard_agents/eurasian_balkans_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/GeopoliticsAgents/GrandChessboardAgents/chessboard_agents/eurasian_balkans_agent.py", args).await
 }
 
 // Prisoners of Geography Agents
@@ -174,8 +162,7 @@ pub async fn run_geography_agent(
     if let Some(at) = analysis_type {
         args.push(at);
     }
-    let script_path = get_script_path(&app, &script_name)?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, &script_name, args).await
 }
 
 // World Order Agents
@@ -191,8 +178,7 @@ pub async fn run_world_order_agent(
     if let Some(ap) = analysis_params {
         args.push(ap);
     }
-    let script_path = get_script_path(&app, &script_name)?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, &script_name, args).await
 }
 
 #[tauri::command]
@@ -205,8 +191,7 @@ pub async fn run_westphalian_europe_agent(
     if let Some(dp) = diplomatic_params {
         args.push(dp);
     }
-    let script_path = get_script_path(&app, "agents/GeopoliticsAgents/World_Order_Agents/civilization_agents/westphalian_europe_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/GeopoliticsAgents/World_Order_Agents/civilization_agents/westphalian_europe_agent.py", args).await
 }
 
 #[tauri::command]
@@ -219,8 +204,7 @@ pub async fn run_balance_power_agent(
     if let Some(bp) = balance_params {
         args.push(bp);
     }
-    let script_path = get_script_path(&app, "agents/GeopoliticsAgents/World_Order_Agents/civilization_agents/balance_power_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/GeopoliticsAgents/World_Order_Agents/civilization_agents/balance_power_agent.py", args).await
 }
 
 // HEDGE FUND AGENTS
@@ -233,8 +217,7 @@ pub async fn execute_hedge_fund_agent(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/hedge_fund_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
+    python::execute(&app, "agents/hedgeFundAgents/hedge_fund_agent_cli.py", cmd_args).await
 }
 
 #[tauri::command]
@@ -247,8 +230,7 @@ pub async fn run_bridgewater_agent(
     if let Some(sp) = strategy_params {
         args.push(sp);
     }
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/bridgewater_associates_hedge_fund_agent/bridgewater_associates_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/hedgeFundAgents/bridgewater_associates_hedge_fund_agent/bridgewater_associates_agent.py", args).await
 }
 
 #[tauri::command]
@@ -261,8 +243,7 @@ pub async fn run_citadel_agent(
     if let Some(tp) = trading_params {
         args.push(tp);
     }
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/citadel_hedge_fund_agent/citadel_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/hedgeFundAgents/citadel_hedge_fund_agent/citadel_agent.py", args).await
 }
 
 #[tauri::command]
@@ -275,8 +256,7 @@ pub async fn run_renaissance_agent(
     if let Some(qp) = quant_params {
         args.push(qp);
     }
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/renaissance_technologies_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/renaissance_technologies_agent.py", args).await
 }
 
 #[tauri::command]
@@ -289,8 +269,7 @@ pub async fn run_de_shaw_agent(
     if let Some(cp) = computational_params {
         args.push(cp);
     }
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/de_shaw_hedge_fund_agent/de_shaw_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/hedgeFundAgents/de_shaw_hedge_fund_agent/de_shaw_agent.py", args).await
 }
 
 #[tauri::command]
@@ -303,8 +282,7 @@ pub async fn run_two_sigma_agent(
     if let Some(mlp) = ml_params {
         args.push(mlp);
     }
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/two_sigma_hedge_fund_agent/two_sigma_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/hedgeFundAgents/two_sigma_hedge_fund_agent/two_sigma_agent.py", args).await
 }
 
 #[tauri::command]
@@ -317,8 +295,7 @@ pub async fn run_elliott_management_agent(
     if let Some(ap) = activist_params {
         args.push(ap);
     }
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/elliott_management_hedge_fund_agent/elliott_management_agent.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/hedgeFundAgents/elliott_management_hedge_fund_agent/elliott_management_agent.py", args).await
 }
 
 #[tauri::command]
@@ -331,8 +308,7 @@ pub async fn run_fincept_hedge_fund_orchestrator(
     if let Some(op) = orchestration_params {
         args.push(op);
     }
-    let script_path = get_script_path(&app, "agents/hedgeFundAgents/fincept_hedge_fund/agent_orchestrator.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/hedgeFundAgents/fincept_hedge_fund/agent_orchestrator.py", args).await
 }
 
 // TRADER/INVESTOR AGENTS
@@ -347,8 +323,7 @@ pub async fn run_warren_buffett_agent(
     if let Some(vp) = value_params {
         args.push(vp);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/warren_buffett_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/warren_buffett_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -361,8 +336,7 @@ pub async fn run_benjamin_graham_agent(
     if let Some(vp) = value_params {
         args.push(vp);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/benjamin_graham_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/benjamin_graham_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -375,8 +349,7 @@ pub async fn run_charlie_munger_agent(
     if let Some(mm) = mental_models {
         args.push(mm);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/charlie_munger_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/charlie_munger_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -389,8 +362,7 @@ pub async fn run_seth_klarman_agent(
     if let Some(mos) = margin_of_safety {
         args.push(mos);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/seth_klarman_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/seth_klarman_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -403,8 +375,7 @@ pub async fn run_howard_marks_agent(
     if let Some(cp) = cycle_params {
         args.push(cp);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/howard_marks_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/howard_marks_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -417,8 +388,7 @@ pub async fn run_joel_greenblatt_agent(
     if let Some(mfp) = magic_formula_params {
         args.push(mfp);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/joel_greenblatt_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/joel_greenblatt_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -431,8 +401,7 @@ pub async fn run_david_einhorn_agent(
     if let Some(sp) = short_params {
         args.push(sp);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/david_einhorn_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/david_einhorn_agent_cli.py", args).await
 }
 
 #[tauri::command]
@@ -445,6 +414,5 @@ pub async fn run_bill_miller_agent(
     if let Some(cp) = contrarian_params {
         args.push(cp);
     }
-    let script_path = get_script_path(&app, "agents/TraderInvestorsAgent/bill_miller_agent_cli.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "agents/TraderInvestorsAgent/bill_miller_agent_cli.py", args).await
 }

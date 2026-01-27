@@ -38,7 +38,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional
 
-from . import vbt_indicators as ind
+import vbt_indicators as ind
 
 
 def build_strategy_signals(

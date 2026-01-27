@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { MessageSquarePlus, Mail, Newspaper, X, Star, Send, Check } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   submitContactForm,
   submitFeedback,
@@ -219,14 +220,15 @@ const SubmitButton: React.FC<{
 
 // Main component
 export const HeaderSupportButtons: React.FC = () => {
+  const { session } = useAuth();
+  const apiKey = session?.api_key || '';
+
   // Modal states
   const [showFeedback, setShowFeedback] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showNewsletter, setShowNewsletter] = useState(false);
 
   // Feedback form state
-  const [feedbackName, setFeedbackName] = useState('');
-  const [feedbackEmail, setFeedbackEmail] = useState('');
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackCategory, setFeedbackCategory] = useState('general');
@@ -251,8 +253,6 @@ export const HeaderSupportButtons: React.FC = () => {
 
   // Reset functions
   const resetFeedback = () => {
-    setFeedbackName('');
-    setFeedbackEmail('');
     setFeedbackRating(0);
     setFeedbackText('');
     setFeedbackCategory('general');
@@ -282,18 +282,21 @@ export const HeaderSupportButtons: React.FC = () => {
       return;
     }
 
+    if (!apiKey) {
+      setFeedbackError('Please login to submit feedback');
+      return;
+    }
+
     setFeedbackLoading(true);
     setFeedbackError('');
 
     const data: FeedbackFormData = {
-      name: feedbackName || undefined,
-      email: feedbackEmail || undefined,
       rating: feedbackRating,
       feedback_text: feedbackText,
       category: feedbackCategory,
     };
 
-    const result = await submitFeedback(data);
+    const result = await submitFeedback(data, apiKey);
     setFeedbackLoading(false);
 
     if (result.success) {
@@ -441,19 +444,6 @@ export const HeaderSupportButtons: React.FC = () => {
 
       {/* Feedback Modal */}
       <Modal isOpen={showFeedback} onClose={() => { setShowFeedback(false); resetFeedback(); }} title="SEND FEEDBACK">
-        <InputField
-          label="Name"
-          value={feedbackName}
-          onChange={setFeedbackName}
-          placeholder="Your name (optional)"
-        />
-        <InputField
-          label="Email"
-          value={feedbackEmail}
-          onChange={setFeedbackEmail}
-          placeholder="Your email (optional)"
-          type="email"
-        />
         <StarRating rating={feedbackRating} onChange={setFeedbackRating} />
         <div style={{ marginBottom: '12px' }}>
           <label style={{ color: COLORS.TEXT, fontSize: '11px', display: 'block', marginBottom: '4px' }}>

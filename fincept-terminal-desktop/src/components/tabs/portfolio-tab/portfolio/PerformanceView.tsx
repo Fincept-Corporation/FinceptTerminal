@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PortfolioSummary, portfolioService, PortfolioSnapshot } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent } from './utils';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../finceptStyles';
+import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES } from '../finceptStyles';
 
 interface PerformanceViewProps {
   portfolioSummary: PortfolioSummary;
@@ -14,10 +14,13 @@ interface PerformanceDataPoint {
   changePercent: number;
 }
 
+const FONT_FAMILY = TYPOGRAPHY.MONO;
+
 const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) => {
   const currency = portfolioSummary.portfolio.currency;
   const [performanceData, setPerformanceData] = useState<PerformanceDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
 
   useEffect(() => {
     const loadPerformanceData = async () => {
@@ -86,12 +89,12 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         backgroundColor: FINCEPT.DARK_BG,
         padding: SPACING.XLARGE,
         textAlign: 'center',
-        fontFamily: TYPOGRAPHY.MONO
+        fontFamily: FONT_FAMILY
       }}>
-        <div style={{ color: FINCEPT.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
+        <div style={{ color: FINCEPT.ORANGE, fontSize: '11px', fontWeight: 700, marginBottom: SPACING.SMALL }}>
           Loading performance data...
         </div>
-        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
           Fetching portfolio snapshots from database
         </div>
       </div>
@@ -105,12 +108,12 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         backgroundColor: FINCEPT.DARK_BG,
         padding: SPACING.XLARGE,
         textAlign: 'center',
-        fontFamily: TYPOGRAPHY.MONO
+        fontFamily: FONT_FAMILY
       }}>
-        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: '11px', fontWeight: 700, marginBottom: SPACING.SMALL }}>
           No performance data available
         </div>
-        <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY }}>
+        <div style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
           Portfolio snapshots will be created automatically as you use the application
         </div>
       </div>
@@ -167,7 +170,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
       backgroundColor: FINCEPT.DARK_BG,
       padding: SPACING.DEFAULT,
       overflow: 'auto',
-      fontFamily: TYPOGRAPHY.MONO
+      fontFamily: FONT_FAMILY
     }}>
       <div style={{
         ...COMMON_STYLES.sectionHeader,
@@ -185,13 +188,20 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
       }}>
         <div style={{
           ...COMMON_STYLES.metricCard,
+          borderRadius: '2px',
           border: periodReturn >= 0 ? BORDERS.GREEN : BORDERS.RED
         }}>
-          <div style={COMMON_STYLES.dataLabel}>PERIOD RETURN</div>
+          <div style={{
+            color: FINCEPT.GRAY,
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const
+          }}>PERIOD RETURN</div>
           <div style={{
             color: periodReturn >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-            fontSize: TYPOGRAPHY.SUBHEADING,
-            fontWeight: TYPOGRAPHY.BOLD
+            fontSize: '10px',
+            fontWeight: 700
           }}>
             {formatPercent(periodReturn)}
           </div>
@@ -199,13 +209,20 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
         <div style={{
           ...COMMON_STYLES.metricCard,
+          borderRadius: '2px',
           border: periodGain >= 0 ? BORDERS.GREEN : BORDERS.RED
         }}>
-          <div style={COMMON_STYLES.dataLabel}>PERIOD GAIN</div>
+          <div style={{
+            color: FINCEPT.GRAY,
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const
+          }}>PERIOD GAIN</div>
           <div style={{
             color: periodGain >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-            fontSize: TYPOGRAPHY.SUBHEADING,
-            fontWeight: TYPOGRAPHY.BOLD
+            fontSize: '10px',
+            fontWeight: 700
           }}>
             {formatCurrency(periodGain, currency)}
           </div>
@@ -213,13 +230,20 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
         <div style={{
           ...COMMON_STYLES.metricCard,
+          borderRadius: '2px',
           border: `1px solid ${FINCEPT.YELLOW}`
         }}>
-          <div style={COMMON_STYLES.dataLabel}>CURRENT VALUE</div>
           <div style={{
-            color: FINCEPT.YELLOW,
-            fontSize: TYPOGRAPHY.SUBHEADING,
-            fontWeight: TYPOGRAPHY.BOLD
+            color: FINCEPT.GRAY,
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const
+          }}>CURRENT VALUE</div>
+          <div style={{
+            color: FINCEPT.CYAN,
+            fontSize: '10px',
+            fontWeight: 700
           }}>
             {formatCurrency(latestValue, currency)}
           </div>
@@ -227,13 +251,20 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
         <div style={{
           ...COMMON_STYLES.metricCard,
+          borderRadius: '2px',
           border: BORDERS.CYAN
         }}>
-          <div style={COMMON_STYLES.dataLabel}>START VALUE</div>
+          <div style={{
+            color: FINCEPT.GRAY,
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const
+          }}>START VALUE</div>
           <div style={{
             color: FINCEPT.CYAN,
-            fontSize: TYPOGRAPHY.SUBHEADING,
-            fontWeight: TYPOGRAPHY.BOLD
+            fontSize: '10px',
+            fontWeight: 700
           }}>
             {formatCurrency(earliestValue, currency)}
           </div>
@@ -241,13 +272,20 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
         <div style={{
           ...COMMON_STYLES.metricCard,
+          borderRadius: '2px',
           border: BORDERS.ORANGE
         }}>
-          <div style={COMMON_STYLES.dataLabel}>VOLATILITY</div>
+          <div style={{
+            color: FINCEPT.GRAY,
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const
+          }}>VOLATILITY</div>
           <div style={{
             color: FINCEPT.ORANGE,
-            fontSize: TYPOGRAPHY.SUBHEADING,
-            fontWeight: TYPOGRAPHY.BOLD
+            fontSize: '10px',
+            fontWeight: 700
           }}>
             {((valueRange / earliestValue) * 100).toFixed(2)}%
           </div>
@@ -256,8 +294,9 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
       {/* Chart */}
       <div style={{
-        backgroundColor: 'rgba(0,0,0,0.3)',
+        backgroundColor: FINCEPT.PANEL_BG,
         border: BORDERS.STANDARD,
+        borderRadius: '2px',
         padding: SPACING.DEFAULT,
         marginBottom: SPACING.LARGE
       }}>
@@ -284,7 +323,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                   textAnchor="end"
                   fill={FINCEPT.GRAY}
                   fontSize="9"
-                  fontFamily={TYPOGRAPHY.MONO}
+                  fontFamily={FONT_FAMILY}
                 >
                   {formatCurrency(value, currency)}
                 </text>
@@ -304,7 +343,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                 textAnchor="middle"
                 fill={FINCEPT.GRAY}
                 fontSize="8"
-                fontFamily={TYPOGRAPHY.MONO}
+                fontFamily={FONT_FAMILY}
               >
                 {d.date.substring(5)}
               </text>
@@ -356,7 +395,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             fill={FINCEPT.YELLOW}
             fontSize="10"
             fontWeight="bold"
-            fontFamily={TYPOGRAPHY.MONO}
+            fontFamily={FONT_FAMILY}
           >
             COST BASIS
           </text>
@@ -369,7 +408,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             fill={FINCEPT.ORANGE}
             fontSize="12"
             fontWeight="bold"
-            fontFamily={TYPOGRAPHY.MONO}
+            fontFamily={FONT_FAMILY}
           >
             PORTFOLIO VALUE OVER TIME
           </text>
@@ -379,8 +418,10 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
       {/* Performance Table */}
       <div style={{
         color: FINCEPT.ORANGE,
-        fontSize: TYPOGRAPHY.DEFAULT,
-        fontWeight: TYPOGRAPHY.BOLD,
+        fontSize: '9px',
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        textTransform: 'uppercase' as const,
         marginBottom: SPACING.SMALL,
         paddingBottom: SPACING.SMALL,
         borderBottom: BORDERS.ORANGE
@@ -396,8 +437,9 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           gap: SPACING.SMALL,
           padding: SPACING.SMALL,
           backgroundColor: FINCEPT.HEADER_BG,
-          fontSize: TYPOGRAPHY.BODY,
-          fontWeight: TYPOGRAPHY.BOLD,
+          fontSize: '9px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
           position: 'sticky',
           top: 0,
           zIndex: 1,
@@ -413,32 +455,40 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         {performanceData.slice().reverse().map((d, index) => (
           <div
             key={d.date}
+            onMouseEnter={() => setHoveredRow(index)}
+            onMouseLeave={() => setHoveredRow(null)}
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1.2fr 1fr 1fr',
               gap: SPACING.SMALL,
               padding: SPACING.SMALL,
-              backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+              backgroundColor: hoveredRow === index
+                ? FINCEPT.HOVER
+                : index % 2 === 0
+                  ? 'rgba(255,255,255,0.03)'
+                  : 'transparent',
               borderLeft: `3px solid ${d.changePercent >= 0 ? FINCEPT.GREEN : FINCEPT.RED}`,
-              fontSize: TYPOGRAPHY.BODY,
-              marginBottom: '2px'
+              fontSize: '10px',
+              marginBottom: '2px',
+              transition: EFFECTS.TRANSITION_STANDARD,
+              cursor: 'default'
             }}
           >
             <div style={{ color: FINCEPT.GRAY }}>{d.date}</div>
-            <div style={{ color: FINCEPT.WHITE, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
+            <div style={{ color: FINCEPT.CYAN, textAlign: 'right', fontWeight: 700 }}>
               {formatCurrency(d.value, currency)}
             </div>
             <div style={{
               color: d.change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
               textAlign: 'right',
-              fontWeight: TYPOGRAPHY.BOLD
+              fontWeight: 700
             }}>
               {formatCurrency(d.change, currency)}
             </div>
             <div style={{
               color: d.changePercent >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
               textAlign: 'right',
-              fontWeight: TYPOGRAPHY.BOLD
+              fontWeight: 700
             }}>
               {formatPercent(d.changePercent)}
             </div>
@@ -453,7 +503,8 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           padding: SPACING.MEDIUM,
           backgroundColor: 'rgba(255,136,0,0.05)',
           border: BORDERS.ORANGE,
-          fontSize: TYPOGRAPHY.SMALL,
+          borderRadius: '2px',
+          fontSize: '10px',
           color: FINCEPT.GRAY
         }}>
           <strong style={{ color: FINCEPT.ORANGE }}>TIP:</strong> Portfolio snapshots are created automatically.

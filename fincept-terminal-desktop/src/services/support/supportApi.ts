@@ -11,8 +11,6 @@ export interface ContactFormData {
 }
 
 export interface FeedbackFormData {
-  name?: string;
-  email?: string;
   rating: number;
   feedback_text: string;
   category?: string;
@@ -69,16 +67,21 @@ export async function submitContactForm(data: ContactFormData): Promise<ApiRespo
 }
 
 /**
- * Submit feedback (public endpoint)
+ * Submit feedback (requires authentication)
  */
-export async function submitFeedback(data: FeedbackFormData): Promise<ApiResponse> {
+export async function submitFeedback(data: FeedbackFormData, apiKey: string): Promise<ApiResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/support/feedback`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        rating: data.rating,
+        feedback_text: data.feedback_text,
+        category: data.category || 'general',
+      }),
     });
 
     const result = await response.json();

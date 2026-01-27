@@ -1,6 +1,7 @@
 // Service for calculating and parsing momentum indicators
 
 import { invoke } from '@tauri-apps/api/core';
+import { cacheService, CacheService, TTL } from '../../../../services/cache/cacheService';
 import {
   MomentumIndicatorParams,
   MomentumIndicatorResult,
@@ -8,6 +9,9 @@ import {
   CandleData,
 } from '../types';
 import * as SignalAnalyzer from '../utils/signalAnalyzer';
+
+const INDICATOR_CATEGORY = 'market-quotes';
+const HISTORICAL_CATEGORY = 'market-historical';
 
 /**
  * Fetches historical price data for a symbol
@@ -17,6 +21,15 @@ export async function fetchHistoricalData(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<CandleData[]> {
+  const cacheKey = CacheService.key(HISTORICAL_CATEGORY, 'momentum-historical', symbol, period, interval);
+
+  // Check cache
+  const cached = await cacheService.get<CandleData[]>(cacheKey);
+  if (cached) {
+    console.log('Using cached historical data for', symbol);
+    return cached.data;
+  }
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/equityInvestment/get_historical_data.py',
@@ -29,14 +42,17 @@ export async function fetchHistoricalData(
       throw new Error('Invalid historical data format');
     }
 
-    return data.map((item: any) => ({
-      time: new Date(item.Date || item.timestamp).getTime() / 1000, // Convert to Unix timestamp in seconds
+    const candles: CandleData[] = data.map((item: any) => ({
+      time: new Date(item.Date || item.timestamp).getTime() / 1000,
       open: parseFloat(item.Open),
       high: parseFloat(item.High),
       low: parseFloat(item.Low),
       close: parseFloat(item.Close),
       volume: parseInt(item.Volume),
     }));
+
+    await cacheService.set(cacheKey, candles, HISTORICAL_CATEGORY, TTL['1h']);
+    return candles;
   } catch (error) {
     console.error('Error fetching historical data:', error);
     throw error;
@@ -52,6 +68,11 @@ export async function calculateRSI(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['rsi']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'rsi', symbol, period, interval, String(params?.period || 14));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['rsi']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -76,12 +97,15 @@ export async function calculateRSI(
     const currentValue = values[values.length - 1]?.value || 0;
     const signal = SignalAnalyzer.analyzeRSI(values, params!);
 
-    return {
+    const rsiResult = {
       values,
       signal: signal.signal,
       current_value: currentValue,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, rsiResult, INDICATOR_CATEGORY, TTL['15m']);
+    return rsiResult;
   } catch (error) {
     console.error('Error calculating RSI:', error);
     throw error;
@@ -97,6 +121,12 @@ export async function calculateMACD(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['macd']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'macd', symbol, period, interval,
+    String(params?.fast_period || 12), String(params?.slow_period || 26), String(params?.signal_period || 9));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['macd']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -136,7 +166,7 @@ export async function calculateMACD(
 
     const signal = SignalAnalyzer.analyzeMACD(macdLine, signalLine, histogram);
 
-    return {
+    const macdResult = {
       macd_line: macdLine,
       signal_line: signalLine,
       histogram,
@@ -146,6 +176,9 @@ export async function calculateMACD(
       current_histogram: currentHistogram,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, macdResult, INDICATOR_CATEGORY, TTL['15m']);
+    return macdResult;
   } catch (error) {
     console.error('Error calculating MACD:', error);
     throw error;
@@ -161,6 +194,12 @@ export async function calculateStochastic(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['stochastic']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'stochastic', symbol, period, interval,
+    String(params?.k_period || 14), String(params?.d_period || 3));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['stochastic']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -193,7 +232,7 @@ export async function calculateStochastic(
 
     const signal = SignalAnalyzer.analyzeStochastic(kValues, dValues, params!);
 
-    return {
+    const stochasticResult = {
       k_values: kValues,
       d_values: dValues,
       signal: signal.signal,
@@ -201,6 +240,9 @@ export async function calculateStochastic(
       current_d: currentD,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, stochasticResult, INDICATOR_CATEGORY, TTL['15m']);
+    return stochasticResult;
   } catch (error) {
     console.error('Error calculating Stochastic:', error);
     throw error;
@@ -216,6 +258,11 @@ export async function calculateCCI(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['cci']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'cci', symbol, period, interval, String(params?.period || 20));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['cci']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -240,12 +287,15 @@ export async function calculateCCI(
     const currentValue = values[values.length - 1]?.value || 0;
     const signal = SignalAnalyzer.analyzeCCI(values, params!);
 
-    return {
+    const cciResult = {
       values,
       signal: signal.signal,
       current_value: currentValue,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, cciResult, INDICATOR_CATEGORY, TTL['15m']);
+    return cciResult;
   } catch (error) {
     console.error('Error calculating CCI:', error);
     throw error;
@@ -261,6 +311,11 @@ export async function calculateROC(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['roc']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'roc', symbol, period, interval, String(params?.period || 12));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['roc']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -285,12 +340,15 @@ export async function calculateROC(
     const currentValue = values[values.length - 1]?.value || 0;
     const signal = SignalAnalyzer.analyzeROC(values);
 
-    return {
+    const rocResult = {
       values,
       signal: signal.signal,
       current_value: currentValue,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, rocResult, INDICATOR_CATEGORY, TTL['15m']);
+    return rocResult;
   } catch (error) {
     console.error('Error calculating ROC:', error);
     throw error;
@@ -306,6 +364,11 @@ export async function calculateWilliamsR(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['williams_r']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'williams-r', symbol, period, interval, String(params?.period || 14));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['williams_r']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -330,12 +393,15 @@ export async function calculateWilliamsR(
     const currentValue = values[values.length - 1]?.value || 0;
     const signal = SignalAnalyzer.analyzeWilliamsR(values, params!);
 
-    return {
+    const williamsResult = {
       values,
       signal: signal.signal,
       current_value: currentValue,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, williamsResult, INDICATOR_CATEGORY, TTL['15m']);
+    return williamsResult;
   } catch (error) {
     console.error('Error calculating Williams %R:', error);
     throw error;
@@ -351,6 +417,12 @@ export async function calculateAwesomeOscillator(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['awesome_oscillator']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'awesome-osc', symbol, period, interval,
+    String(params?.fast_period || 5), String(params?.slow_period || 34));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['awesome_oscillator']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -376,12 +448,15 @@ export async function calculateAwesomeOscillator(
     const currentValue = values[values.length - 1]?.value || 0;
     const signal = SignalAnalyzer.analyzeAwesomeOscillator(values);
 
-    return {
+    const aoResult = {
       values,
       signal: signal.signal,
       current_value: currentValue,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, aoResult, INDICATOR_CATEGORY, TTL['15m']);
+    return aoResult;
   } catch (error) {
     console.error('Error calculating Awesome Oscillator:', error);
     throw error;
@@ -397,6 +472,12 @@ export async function calculateTSI(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['tsi']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'tsi', symbol, period, interval,
+    String(params?.long_period || 25), String(params?.short_period || 13), String(params?.signal_period || 13));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['tsi']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -430,7 +511,7 @@ export async function calculateTSI(
 
     const signal = SignalAnalyzer.analyzeTSI(values, signalLine);
 
-    return {
+    const tsiResult = {
       values,
       signal_line: signalLine,
       signal: signal.signal,
@@ -438,6 +519,9 @@ export async function calculateTSI(
       current_signal: currentSignal,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, tsiResult, INDICATOR_CATEGORY, TTL['15m']);
+    return tsiResult;
   } catch (error) {
     console.error('Error calculating TSI:', error);
     throw error;
@@ -453,6 +537,12 @@ export async function calculateUltimateOscillator(
   period: string = '1y',
   interval: string = '1d'
 ): Promise<MomentumIndicatorResult['ultimate_oscillator']> {
+  const cacheKey = CacheService.key(INDICATOR_CATEGORY, 'ultimate-osc', symbol, period, interval,
+    String(params?.period1 || 7), String(params?.period2 || 14), String(params?.period3 || 28));
+
+  const cached = await cacheService.get<MomentumIndicatorResult['ultimate_oscillator']>(cacheKey);
+  if (cached) return cached.data;
+
   try {
     const result = await invoke<string>('run_python_script', {
       scriptName: 'Analytics/technical_analysis/momentum_indicators.py',
@@ -482,12 +572,15 @@ export async function calculateUltimateOscillator(
     const currentValue = values[values.length - 1]?.value || 0;
     const signal = SignalAnalyzer.analyzeUltimateOscillator(values);
 
-    return {
+    const uoResult = {
       values,
       signal: signal.signal,
       current_value: currentValue,
       params: params!,
     };
+
+    await cacheService.set(cacheKey, uoResult, INDICATOR_CATEGORY, TTL['15m']);
+    return uoResult;
   } catch (error) {
     console.error('Error calculating Ultimate Oscillator:', error);
     throw error;

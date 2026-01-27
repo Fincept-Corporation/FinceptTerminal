@@ -1,5 +1,4 @@
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 use tauri::AppHandle;
 
 /// Execute technical analysis Python script
@@ -35,21 +34,8 @@ pub async fn execute_technical_analysis_command(
     let mut cmd_args = vec![command.clone()];
     cmd_args.extend(args);
 
-    // Get script path
-    let script_name = "technicals/technical_analysis.py";
-    let script_path = get_script_path(&app, script_name)
-        .map_err(|e| format!("Failed to locate script: {}", e))?;
-
-    // Verify script exists
-    if !script_path.exists() {
-        return Err(format!(
-            "Technical analysis script not found at: {}",
-            script_path.display()
-        ));
-    }
-
-    // Execute Python command with PyO3
-    match python_runtime::execute_python_script(&script_path, cmd_args) {
+    // Execute Python script
+    match python::execute(&app, "technicals/technical_analysis.py", cmd_args).await {
         Ok(output) => {
             // Check if output contains error JSON
             if output.contains("\"error\"") {
@@ -117,22 +103,9 @@ pub async fn compute_all_technicals(
     app: AppHandle,
     historical_data: String,
 ) -> Result<String, String> {
-    // Get script path for compute_technicals.py
-    let script_name = "compute_technicals.py";
-    let script_path = get_script_path(&app, script_name)
-        .map_err(|e| format!("Failed to locate script: {}", e))?;
-
-    // Verify script exists
-    if !script_path.exists() {
-        return Err(format!(
-            "Compute technicals script not found at: {}",
-            script_path.display()
-        ));
-    }
-
-    // Execute Python command with historical data as argument with PyO3
+    // Execute Python script for compute_technicals.py
     let cmd_args = vec![historical_data];
-    match python_runtime::execute_python_script(&script_path, cmd_args) {
+    match python::execute(&app, "compute_technicals.py", cmd_args).await {
         Ok(output) => {
             // Check if output contains error JSON
             if output.contains("\"success\":false") || output.contains("\"error\"") {

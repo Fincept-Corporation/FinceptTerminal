@@ -38,6 +38,30 @@ class MCPToolService {
   private toolCache: MCPTool[] = [];
   private cacheTimestamp: number = 0;
   private cacheTTL: number = 5000; // 5 seconds cache
+  private initialized: boolean = false;
+
+  /**
+   * Initialize the service by loading disabled tool settings
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    try {
+      const { getInternalToolSettings } = await import('../core/sqliteService');
+      const settings = await getInternalToolSettings();
+
+      // Apply settings to internal provider
+      for (const setting of settings) {
+        terminalMCPProvider.setToolEnabled(setting.tool_name, setting.is_enabled);
+      }
+
+      this.initialized = true;
+    } catch (error) {
+      mcpLogger.error('Failed to initialize MCP tool service:', error);
+      // Continue anyway - all tools will be enabled by default
+      this.initialized = true;
+    }
+  }
 
   /**
    * Get all available MCP tools from running servers
@@ -45,6 +69,9 @@ class MCPToolService {
    */
   async getAllTools(): Promise<MCPTool[]> {
     try {
+      // Ensure initialized
+      await this.initialize();
+
       const now = Date.now();
 
       // Return cached tools if still valid
@@ -70,6 +97,24 @@ class MCPToolService {
       // Return cached tools as fallback
       return this.toolCache;
     }
+  }
+
+  /**
+   * Get all internal tools including disabled ones (for management UI)
+   */
+  async getAllInternalTools(): Promise<MCPTool[]> {
+    await this.initialize();
+    return terminalMCPProvider.listAllTools();
+  }
+
+  /**
+   * Set whether an internal tool is enabled
+   */
+  async setInternalToolEnabled(toolName: string, category: string, enabled: boolean): Promise<void> {
+    const { setInternalToolEnabled } = await import('../core/sqliteService');
+    await setInternalToolEnabled(toolName, category, enabled);
+    terminalMCPProvider.setToolEnabled(toolName, enabled);
+    this.clearCache(); // Clear cache to force refresh
   }
 
   /**

@@ -1,7 +1,7 @@
 import React from 'react';
 import { WatchlistStockWithQuote } from '../../../services/core/watchlistService';
-import { FINCEPT_COLORS, formatCurrency, formatPercent, formatVolume, getChangeColor, SortCriteria } from './utils';
-import { Trash2 } from 'lucide-react';
+import { FINCEPT, FONT_FAMILY, formatCurrency, formatPercent, formatVolume, getChangeColor, SortCriteria } from './utils';
+import { Trash2, ArrowUpDown, Inbox } from 'lucide-react';
 
 interface StockListViewProps {
   stocks: WatchlistStockWithQuote[];
@@ -11,7 +11,15 @@ interface StockListViewProps {
   onStockClick: (stock: WatchlistStockWithQuote) => void;
   onRemoveStock: (symbol: string) => void;
   selectedSymbol?: string;
+  isLoading?: boolean;
 }
+
+const SORT_OPTIONS: { key: SortCriteria; label: string }[] = [
+  { key: 'TICKER', label: 'TICKER' },
+  { key: 'CHANGE', label: 'CHANGE' },
+  { key: 'VOLUME', label: 'VOLUME' },
+  { key: 'PRICE', label: 'PRICE' },
+];
 
 const StockListView: React.FC<StockListViewProps> = ({
   stocks,
@@ -20,10 +28,9 @@ const StockListView: React.FC<StockListViewProps> = ({
   onSortChange,
   onStockClick,
   onRemoveStock,
-  selectedSymbol
+  selectedSymbol,
+  isLoading
 }) => {
-  const { ORANGE, WHITE, GRAY, GREEN, RED, YELLOW, CYAN, DARK_BG, PANEL_BG } = FINCEPT_COLORS;
-
   const handleRemove = (e: React.MouseEvent, symbol: string) => {
     e.stopPropagation();
     if (confirm(`Remove ${symbol} from watchlist?`)) {
@@ -34,125 +41,113 @@ const StockListView: React.FC<StockListViewProps> = ({
   return (
     <div style={{
       flex: 1,
-      backgroundColor: PANEL_BG,
-      border: `1px solid ${GRAY}`,
-      padding: '4px',
-      overflow: 'auto'
+      backgroundColor: FINCEPT.PANEL_BG,
+      borderRight: `1px solid ${FINCEPT.BORDER}`,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: FONT_FAMILY
     }}>
+      {/* Section Header */}
       <div style={{
+        padding: '12px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '4px'
+        alignItems: 'center'
       }}>
-        <div style={{
-          color: ORANGE,
-          fontSize: '11px',
-          fontWeight: 'bold'
-        }}>
-          WATCHLIST: {watchlistName}
-        </div>
-        <div style={{
-          display: 'flex',
-          gap: '4px',
-          fontSize: '9px'
-        }}>
-          <button
-            onClick={() => onSortChange('TICKER')}
-            style={{
-              padding: '2px 6px',
-              backgroundColor: sortBy === 'TICKER' ? ORANGE : DARK_BG,
-              color: sortBy === 'TICKER' ? DARK_BG : WHITE,
-              border: `1px solid ${GRAY}`,
-              cursor: 'pointer',
-              fontFamily: 'Consolas, monospace',
-              fontWeight: sortBy === 'TICKER' ? 'bold' : 'normal'
-            }}
-          >
-            TICKER
-          </button>
-          <button
-            onClick={() => onSortChange('CHANGE')}
-            style={{
-              padding: '2px 6px',
-              backgroundColor: sortBy === 'CHANGE' ? ORANGE : DARK_BG,
-              color: sortBy === 'CHANGE' ? DARK_BG : WHITE,
-              border: `1px solid ${GRAY}`,
-              cursor: 'pointer',
-              fontFamily: 'Consolas, monospace',
-              fontWeight: sortBy === 'CHANGE' ? 'bold' : 'normal'
-            }}
-          >
-            CHANGE
-          </button>
-          <button
-            onClick={() => onSortChange('VOLUME')}
-            style={{
-              padding: '2px 6px',
-              backgroundColor: sortBy === 'VOLUME' ? ORANGE : DARK_BG,
-              color: sortBy === 'VOLUME' ? DARK_BG : WHITE,
-              border: `1px solid ${GRAY}`,
-              cursor: 'pointer',
-              fontFamily: 'Consolas, monospace',
-              fontWeight: sortBy === 'VOLUME' ? 'bold' : 'normal'
-            }}
-          >
-            VOLUME
-          </button>
-          <button
-            onClick={() => onSortChange('PRICE')}
-            style={{
-              padding: '2px 6px',
-              backgroundColor: sortBy === 'PRICE' ? ORANGE : DARK_BG,
-              color: sortBy === 'PRICE' ? DARK_BG : WHITE,
-              border: `1px solid ${GRAY}`,
-              cursor: 'pointer',
-              fontFamily: 'Consolas, monospace',
-              fontWeight: sortBy === 'PRICE' ? 'bold' : 'normal'
-            }}
-          >
-            PRICE
-          </button>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+          {watchlistName.toUpperCase()} ({stocks.length})
+        </span>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          {SORT_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => onSortChange(opt.key)}
+              style={{
+                padding: '4px 8px',
+                backgroundColor: sortBy === opt.key ? FINCEPT.ORANGE : 'transparent',
+                color: sortBy === opt.key ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: sortBy === opt.key ? 'none' : `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '8px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                fontFamily: FONT_FAMILY,
+                transition: 'all 0.2s'
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
-      <div style={{ borderBottom: `1px solid ${GRAY}`, marginBottom: '8px' }}></div>
 
-      {stocks.length === 0 ? (
+      {/* Table */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Table Header */}
         <div style={{
-          padding: '32px',
-          textAlign: 'center',
-          color: GRAY,
-          fontSize: '11px'
+          display: 'grid',
+          gridTemplateColumns: '1fr 90px 100px 90px 36px',
+          gap: '4px',
+          padding: '8px 12px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          position: 'sticky',
+          top: 0,
+          zIndex: 1
         }}>
-          <div style={{ marginBottom: '8px', fontSize: '12px' }}>
-            No stocks in this watchlist yet
-          </div>
-          <div>
-            Click "ADD STOCK" to add stocks
-          </div>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>SYMBOL</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', textAlign: 'right' }}>PRICE</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', textAlign: 'right' }}>CHANGE</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', textAlign: 'right' }}>VOLUME</span>
+          <span />
         </div>
-      ) : (
-        <>
-          {/* Table Header */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '100px 90px 90px 90px 50px',
-            gap: '4px',
-            padding: '4px',
-            backgroundColor: 'rgba(255,255,255,0.05)',
-            fontSize: '9px',
-            fontWeight: 'bold',
-            marginBottom: '2px'
-          }}>
-            <div style={{ color: GRAY }}>SYMBOL</div>
-            <div style={{ color: GRAY }}>PRICE</div>
-            <div style={{ color: GRAY }}>CHANGE</div>
-            <div style={{ color: GRAY }}>VOLUME</div>
-            <div style={{ color: GRAY }}>ACTION</div>
-          </div>
 
-          {/* Stock Rows */}
-          {stocks.map((stock) => {
+        {isLoading && stocks.length === 0 ? (
+          // Skeleton loading
+          <div style={{ padding: '8px 12px' }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 90px 100px 90px 36px',
+                gap: '4px',
+                padding: '10px 0',
+                borderBottom: `1px solid ${FINCEPT.BORDER}`
+              }}>
+                {[0, 1, 2, 3].map(j => (
+                  <div key={j} style={{
+                    backgroundColor: FINCEPT.BORDER,
+                    height: '10px',
+                    borderRadius: '2px',
+                    opacity: 0.5,
+                    width: j === 0 ? '60%' : '70%',
+                    marginLeft: j > 0 ? 'auto' : undefined
+                  }} />
+                ))}
+                <div />
+              </div>
+            ))}
+          </div>
+        ) : stocks.length === 0 ? (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '200px',
+            color: FINCEPT.MUTED,
+            fontSize: '10px',
+            textAlign: 'center'
+          }}>
+            <Inbox size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+            <span>NO STOCKS IN THIS WATCHLIST</span>
+            <span style={{ fontSize: '9px', marginTop: '4px' }}>CLICK "ADD STOCK" TO GET STARTED</span>
+          </div>
+        ) : (
+          stocks.map((stock) => {
             const quote = stock.quote;
             const isSelected = selectedSymbol === stock.symbol;
 
@@ -162,32 +157,32 @@ const StockListView: React.FC<StockListViewProps> = ({
                 onClick={() => onStockClick(stock)}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '100px 90px 90px 90px 50px',
+                  gridTemplateColumns: '1fr 90px 100px 90px 36px',
                   gap: '4px',
-                  padding: '8px 4px',
-                  backgroundColor: isSelected
-                    ? 'rgba(255,165,0,0.1)'
-                    : 'rgba(255,255,255,0.02)',
-                  borderLeft: `3px solid ${quote ? getChangeColor(quote.change) : GRAY}`,
-                  fontSize: '10px',
-                  marginBottom: '1px',
+                  padding: '10px 12px',
+                  backgroundColor: isSelected ? `${FINCEPT.ORANGE}15` : 'transparent',
+                  borderLeft: isSelected ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
                   cursor: 'pointer',
-                  transition: 'background-color 0.2s'
+                  transition: 'all 0.2s',
+                  alignItems: 'center'
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)';
+                    e.currentTarget.style.backgroundColor = 'transparent';
                   }
                 }}
               >
+                {/* Symbol */}
                 <div style={{
-                  color: CYAN,
-                  fontWeight: 'bold',
+                  color: FINCEPT.CYAN,
+                  fontWeight: 700,
+                  fontSize: '10px',
                   letterSpacing: '0.5px'
                 }}>
                   {stock.symbol}
@@ -195,62 +190,60 @@ const StockListView: React.FC<StockListViewProps> = ({
 
                 {quote ? (
                   <>
-                    <div style={{
-                      color: WHITE,
-                      fontWeight: 'bold'
-                    }}>
+                    {/* Price */}
+                    <div style={{ color: FINCEPT.WHITE, fontWeight: 700, fontSize: '10px', textAlign: 'right' }}>
                       {formatCurrency(quote.price)}
                     </div>
-                    <div>
-                      <div style={{
-                        color: getChangeColor(quote.change)
-                      }}>
+
+                    {/* Change */}
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: getChangeColor(quote.change), fontSize: '10px', fontWeight: 700 }}>
+                        {formatPercent(quote.change_percent)}
+                      </div>
+                      <div style={{ color: getChangeColor(quote.change), fontSize: '8px' }}>
                         {formatCurrency(quote.change)}
                       </div>
-                      <div style={{
-                        color: getChangeColor(quote.change_percent),
-                        fontSize: '8px'
-                      }}>
-                        ({formatPercent(quote.change_percent)})
-                      </div>
                     </div>
-                    <div style={{
-                      color: YELLOW
-                    }}>
+
+                    {/* Volume */}
+                    <div style={{ color: FINCEPT.YELLOW, fontSize: '10px', textAlign: 'right' }}>
                       {formatVolume(quote.volume)}
                     </div>
                   </>
                 ) : (
                   <>
-                    <div style={{ color: GRAY }}>N/A</div>
-                    <div style={{ color: GRAY }}>N/A</div>
-                    <div style={{ color: GRAY }}>N/A</div>
+                    <div style={{ color: FINCEPT.MUTED, fontSize: '10px', textAlign: 'right' }}>--</div>
+                    <div style={{ color: FINCEPT.MUTED, fontSize: '10px', textAlign: 'right' }}>--</div>
+                    <div style={{ color: FINCEPT.MUTED, fontSize: '10px', textAlign: 'right' }}>--</div>
                   </>
                 )}
 
-                <div>
+                {/* Remove */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <button
                     onClick={(e) => handleRemove(e, stock.symbol)}
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: RED,
+                      color: FINCEPT.MUTED,
                       cursor: 'pointer',
-                      padding: '2px',
+                      padding: '4px',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+                      borderRadius: '2px',
+                      transition: 'all 0.2s'
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = FINCEPT.RED; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = FINCEPT.MUTED; }}
                     title={`Remove ${stock.symbol}`}
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={12} />
                   </button>
                 </div>
               </div>
             );
-          })}
-        </>
-      )}
+          })
+        )}
+      </div>
     </div>
   );
 };

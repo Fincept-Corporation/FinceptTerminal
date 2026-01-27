@@ -31,11 +31,11 @@ const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ equity, initialCapi
 
   const hasBenchmark = data.some(d => d.benchmark != null && d.benchmark > 0);
 
-  // Scale benchmark to initial capital
+  // Benchmark is already in absolute equity scale from Python
   const chartData = data.map(d => ({
     date: d.date.split('T')[0],
     equity: d.equity,
-    benchmark: hasBenchmark && d.benchmark ? d.benchmark * initialCapital : undefined,
+    benchmark: hasBenchmark && d.benchmark ? d.benchmark : undefined,
   }));
 
   return (

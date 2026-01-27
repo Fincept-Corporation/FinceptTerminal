@@ -479,15 +479,32 @@ class LLMApiService {
     const url = config.baseUrl || 'https://finceptbackend.share.zrok.io/research/llm';
 
     try {
-      const userMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
+      // Build full prompt including system message and conversation history
       const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+      const conversationParts: string[] = [];
+
+      if (systemPrompt) {
+        conversationParts.push(`System: ${systemPrompt}`);
+      }
+
+      // Add conversation history
+      for (const msg of messages) {
+        if (msg.role === 'user') {
+          conversationParts.push(`User: ${msg.content}`);
+        } else if (msg.role === 'assistant') {
+          conversationParts.push(`Assistant: ${msg.content}`);
+        }
+      }
+
+      const fullPrompt = conversationParts.join('\n\n');
 
       const requestBody = {
-        prompt: userMessage,
-        system_prompt: systemPrompt,
+        prompt: fullPrompt,
         temperature: config.temperature,
         max_tokens: config.maxTokens
       };
+
+      llmLogger.debug('Fincept API request:', { url, bodyKeys: Object.keys(requestBody) });
 
       const response = await fetch(url, {
         method: 'POST',
@@ -500,10 +517,12 @@ class LLMApiService {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
+        llmLogger.error('Fincept API error response:', error);
         throw new Error(error.detail || error.message || `Fincept API error: ${response.status}`);
       }
 
       const data = await response.json();
+      llmLogger.debug('Fincept API response:', data);
 
       // Response can be nested in data.data.response or directly in data.response
       const responseData = data.data || data;
@@ -526,6 +545,7 @@ class LLMApiService {
         }
       };
     } catch (error) {
+      llmLogger.error('Fincept API Error:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Fincept API error'
@@ -930,7 +950,7 @@ class LLMApiService {
     }
   }
 
-  // Fincept with tools support (OpenAI-compatible)
+  // Fincept with tools support - falls back to regular call since tools not supported
   private async callFinceptWithTools(
     messages: ChatMessage[],
     config: LLMConfig,
@@ -938,89 +958,9 @@ class LLMApiService {
     onStream?: StreamCallback,
     onToolCall?: (toolName: string, args: any, result?: any) => void
   ): Promise<LLMResponse> {
-    const url = config.baseUrl || 'https://finceptbackend.share.zrok.io/research/llm';
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': config.apiKey || ''
-        },
-        body: JSON.stringify({
-          messages: messages,
-          tools: tools,
-          temperature: config.temperature,
-          max_tokens: config.maxTokens
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.message || `Fincept error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Check for tool calls
-      if (data.tool_calls && data.tool_calls.length > 0) {
-        let toolResults = '';
-
-        for (const toolCall of data.tool_calls) {
-          const functionName = toolCall.function?.name || toolCall.name;
-          const args = typeof toolCall.function?.arguments === 'string'
-            ? JSON.parse(toolCall.function.arguments)
-            : toolCall.args || {};
-
-          const parts = functionName.split('__');
-          if (parts.length === 2) {
-            const [serverId, toolName] = parts;
-            onToolCall?.(toolName, args);
-
-            try {
-              const { mcpManager } = await import('../mcp/mcpManager');
-              const result = await mcpManager.callTool(serverId, toolName, args);
-              onToolCall?.(toolName, args, result);
-              toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
-            } catch (toolError) {
-              toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
-            }
-          }
-        }
-
-        if (toolResults) {
-          const followUpMessages: ChatMessage[] = [
-            ...messages,
-            { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
-            { role: 'user', content: 'Please provide a summary based on the tool results above.' }
-          ];
-
-          return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
-        }
-      }
-
-      const content = data.response || data.content || data.choices?.[0]?.message?.content || '';
-
-      if (onStream && content) {
-        onStream(content, false);
-        onStream('', true);
-      }
-
-      return {
-        content,
-        usage: {
-          promptTokens: data.usage?.prompt_tokens || 0,
-          completionTokens: data.usage?.completion_tokens || 0,
-          totalTokens: data.usage?.total_tokens || 0
-        }
-      };
-    } catch (error) {
-      llmLogger.error('Fincept with tools error:', error);
-      return {
-        content: '',
-        error: error instanceof Error ? error.message : 'Fincept API error'
-      };
-    }
+    // Fincept LLM API doesn't support tools, fall back to regular call
+    llmLogger.warn('Fincept API does not support tools, falling back to regular chat');
+    return this.callFincept(messages, config, onStream);
   }
 
   // OpenRouter with tools support

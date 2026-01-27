@@ -89,6 +89,7 @@ export default function MaritimeTab() {
           onTogglePlanes={mapControls.togglePlanes}
           onToggleSatellites={mapControls.toggleSatellites}
           onClearMarkers={mapControls.clearMarkers}
+          onLoadVessels={maritimeData.loadRealVessels}
         />
 
         {/* Center - Globe/Map */}

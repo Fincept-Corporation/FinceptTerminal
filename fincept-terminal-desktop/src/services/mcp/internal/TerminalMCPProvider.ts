@@ -6,6 +6,7 @@ import { InternalTool, InternalToolResult, TerminalContexts, INTERNAL_SERVER_ID,
 class TerminalMCPProvider {
   private tools = new Map<string, InternalTool>();
   private contexts: TerminalContexts = {};
+  private disabledTools = new Set<string>();
 
   registerTool(tool: InternalTool): void {
     this.tools.set(tool.name, tool);
@@ -21,11 +22,36 @@ class TerminalMCPProvider {
     this.tools.delete(name);
   }
 
+  setToolEnabled(name: string, enabled: boolean): void {
+    if (enabled) {
+      this.disabledTools.delete(name);
+    } else {
+      this.disabledTools.add(name);
+    }
+  }
+
+  isToolEnabled(name: string): boolean {
+    return !this.disabledTools.has(name);
+  }
+
   setContexts(contexts: Partial<TerminalContexts>): void {
     this.contexts = { ...this.contexts, ...contexts };
   }
 
   listTools(): MCPTool[] {
+    return Array.from(this.tools.values())
+      .filter(tool => !this.disabledTools.has(tool.name))
+      .map(tool => ({
+        serverId: INTERNAL_SERVER_ID,
+        serverName: INTERNAL_SERVER_NAME,
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      }));
+  }
+
+  listAllTools(): MCPTool[] {
+    // List all tools including disabled ones (for management UI)
     return Array.from(this.tools.values()).map(tool => ({
       serverId: INTERNAL_SERVER_ID,
       serverName: INTERNAL_SERVER_NAME,
@@ -43,6 +69,15 @@ class TerminalMCPProvider {
       return {
         success: false,
         error: `Tool not found: ${name}`,
+        toolName: name,
+        serverId: INTERNAL_SERVER_ID,
+      };
+    }
+
+    if (this.disabledTools.has(name)) {
+      return {
+        success: false,
+        error: `Tool is disabled: ${name}`,
         toolName: name,
         serverId: INTERNAL_SERVER_ID,
       };

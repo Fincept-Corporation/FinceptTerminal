@@ -1,36 +1,43 @@
 import React from 'react';
 import { WatchlistStockWithQuote } from '../../../services/core/watchlistService';
-import { FINCEPT_COLORS, formatCurrency, formatPercent, formatVolume, getChangeColor } from './utils';
+import { FINCEPT, FONT_FAMILY, formatCurrency, formatPercent, formatVolume, getChangeColor } from './utils';
+import { Eye, StickyNote, Clock } from 'lucide-react';
 
 interface StockDetailPanelProps {
   stock: WatchlistStockWithQuote | null;
 }
 
-const StockDetailPanel: React.FC<StockDetailPanelProps> = ({ stock }) => {
-  const { ORANGE, WHITE, GRAY, GREEN, RED, YELLOW, CYAN, PANEL_BG } = FINCEPT_COLORS;
+const StatRow: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color }) => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '6px 0',
+    borderBottom: `1px solid ${FINCEPT.BORDER}`
+  }}>
+    <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>{label}</span>
+    <span style={{ fontSize: '10px', color: color || FINCEPT.CYAN, fontWeight: 700 }}>{value}</span>
+  </div>
+);
 
+const StockDetailPanel: React.FC<StockDetailPanelProps> = ({ stock }) => {
   if (!stock) {
     return (
       <div style={{
-        width: '320px',
-        backgroundColor: PANEL_BG,
-        border: `1px solid ${GRAY}`,
-        padding: '12px',
+        width: '300px',
+        backgroundColor: FINCEPT.PANEL_BG,
         overflow: 'auto',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        color: GRAY,
-        fontSize: '11px',
-        textAlign: 'center'
+        color: FINCEPT.MUTED,
+        fontSize: '10px',
+        textAlign: 'center',
+        fontFamily: FONT_FAMILY,
+        flexShrink: 0
       }}>
-        <div style={{ marginBottom: '8px', fontSize: '12px' }}>
-          NO STOCK SELECTED
-        </div>
-        <div>
-          Click on a stock to view details
-        </div>
+        <Eye size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+        <span>SELECT A STOCK TO VIEW DETAILS</span>
       </div>
     );
   }
@@ -39,158 +46,179 @@ const StockDetailPanel: React.FC<StockDetailPanelProps> = ({ stock }) => {
 
   return (
     <div style={{
-      width: '320px',
-      backgroundColor: PANEL_BG,
-      border: `1px solid ${GRAY}`,
-      padding: '4px',
-      overflow: 'auto'
+      width: '300px',
+      backgroundColor: FINCEPT.PANEL_BG,
+      overflow: 'auto',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: FONT_FAMILY,
+      flexShrink: 0
     }}>
+      {/* Section Header */}
       <div style={{
-        color: ORANGE,
-        fontSize: '11px',
-        fontWeight: 'bold',
-        marginBottom: '4px'
+        padding: '12px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`
       }}>
-        STOCK DETAIL: {stock.symbol}
+        <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+          STOCK DETAIL
+        </span>
       </div>
-      <div style={{ borderBottom: `1px solid ${GRAY}`, marginBottom: '8px' }}></div>
 
-      {!quote ? (
+      {/* Symbol & Price Hero */}
+      <div style={{
+        padding: '16px 12px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`
+      }}>
         <div style={{
-          padding: '16px',
-          textAlign: 'center',
-          color: RED,
-          fontSize: '10px'
+          color: FINCEPT.CYAN,
+          fontSize: '14px',
+          fontWeight: 700,
+          letterSpacing: '1px',
+          marginBottom: '8px'
         }}>
-          Failed to load market data
+          {stock.symbol}
         </div>
-      ) : (
-        <>
-          {/* Price Info */}
-          <div style={{ marginBottom: '12px' }}>
+
+        {!quote ? (
+          <div style={{
+            padding: '12px',
+            backgroundColor: `${FINCEPT.RED}20`,
+            color: FINCEPT.RED,
+            fontSize: '9px',
+            fontWeight: 700,
+            borderRadius: '2px',
+            textAlign: 'center'
+          }}>
+            FAILED TO LOAD MARKET DATA
+          </div>
+        ) : (
+          <>
             <div style={{
-              padding: '6px',
-              backgroundColor: 'rgba(255,165,0,0.1)',
+              color: FINCEPT.WHITE,
+              fontSize: '24px',
+              fontWeight: 700,
               marginBottom: '4px'
             }}>
-              <div style={{
-                color: GRAY,
-                fontSize: '9px',
-                marginBottom: '2px'
-              }}>
-                LAST PRICE
-              </div>
-              <div style={{
-                color: WHITE,
-                fontSize: '20px',
-                fontWeight: 'bold'
-              }}>
-                {formatCurrency(quote.price)}
-              </div>
-              <div style={{
+              {formatCurrency(quote.price)}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                padding: '2px 6px',
+                backgroundColor: `${getChangeColor(quote.change)}20`,
                 color: getChangeColor(quote.change),
-                fontSize: '12px'
-              }}>
-                {formatCurrency(quote.change)} ({formatPercent(quote.change_percent)})
-              </div>
-            </div>
-          </div>
-
-          {/* Trading Stats */}
-          <div style={{
-            fontSize: '9px',
-            lineHeight: '1.5',
-            marginBottom: '12px'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '2px'
-            }}>
-              <span style={{ color: GRAY }}>Open:</span>
-              <span style={{ color: WHITE }}>{formatCurrency(quote.open)}</span>
-            </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '2px'
-            }}>
-              <span style={{ color: GRAY }}>Prev Close:</span>
-              <span style={{ color: WHITE }}>{formatCurrency(quote.previous_close)}</span>
-            </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '2px'
-            }}>
-              <span style={{ color: GRAY }}>Day High:</span>
-              <span style={{ color: GREEN }}>{formatCurrency(quote.high)}</span>
-            </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '2px'
-            }}>
-              <span style={{ color: GRAY }}>Day Low:</span>
-              <span style={{ color: RED }}>{formatCurrency(quote.low)}</span>
-            </div>
-            <div style={{
-              borderTop: `1px solid ${GRAY}`,
-              marginTop: '4px',
-              paddingTop: '4px'
-            }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '2px'
-              }}>
-                <span style={{ color: GRAY }}>Volume:</span>
-                <span style={{ color: YELLOW }}>{formatVolume(quote.volume)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Notes Section */}
-          {stock.notes && (
-            <div style={{
-              borderTop: `1px solid ${GRAY}`,
-              paddingTop: '8px',
-              marginTop: '8px'
-            }}>
-              <div style={{
-                color: YELLOW,
                 fontSize: '10px',
-                fontWeight: 'bold',
-                marginBottom: '4px'
+                fontWeight: 700,
+                borderRadius: '2px'
               }}>
-                NOTES
+                {formatPercent(quote.change_percent)}
+              </span>
+              <span style={{
+                color: getChangeColor(quote.change),
+                fontSize: '10px'
+              }}>
+                {formatCurrency(quote.change)}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Trading Stats */}
+      {quote && (
+        <div style={{ padding: '12px' }}>
+          <StatRow label="OPEN" value={formatCurrency(quote.open)} color={FINCEPT.WHITE} />
+          <StatRow label="PREV CLOSE" value={formatCurrency(quote.previous_close)} color={FINCEPT.WHITE} />
+          <StatRow label="DAY HIGH" value={formatCurrency(quote.high)} color={FINCEPT.GREEN} />
+          <StatRow label="DAY LOW" value={formatCurrency(quote.low)} color={FINCEPT.RED} />
+          <StatRow label="VOLUME" value={formatVolume(quote.volume)} color={FINCEPT.YELLOW} />
+
+          {/* Day Range Visual */}
+          {quote.high && quote.low && quote.price && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '6px' }}>
+                DAY RANGE
               </div>
-              <div style={{
-                fontSize: '9px',
-                color: WHITE,
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                padding: '6px',
-                borderLeft: `2px solid ${CYAN}`,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word'
-              }}>
-                {stock.notes}
+              <div style={{ position: 'relative', height: '4px', backgroundColor: FINCEPT.BORDER, borderRadius: '2px' }}>
+                <div style={{
+                  position: 'absolute',
+                  left: '0',
+                  right: '0',
+                  height: '100%',
+                  background: `linear-gradient(to right, ${FINCEPT.RED}, ${FINCEPT.GREEN})`,
+                  borderRadius: '2px',
+                  opacity: 0.5
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  left: `${Math.min(100, Math.max(0, ((quote.price - quote.low) / (quote.high - quote.low)) * 100))}%`,
+                  top: '-3px',
+                  width: '10px',
+                  height: '10px',
+                  backgroundColor: FINCEPT.ORANGE,
+                  borderRadius: '50%',
+                  transform: 'translateX(-5px)',
+                  boxShadow: `0 0 4px ${FINCEPT.ORANGE}80`
+                }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                <span style={{ fontSize: '8px', color: FINCEPT.RED }}>{formatCurrency(quote.low)}</span>
+                <span style={{ fontSize: '8px', color: FINCEPT.GREEN }}>{formatCurrency(quote.high)}</span>
               </div>
             </div>
           )}
+        </div>
+      )}
 
-          {/* Timestamp */}
+      {/* Notes Section */}
+      {stock.notes && (
+        <div style={{
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          padding: '12px'
+        }}>
           <div style={{
-            borderTop: `1px solid ${GRAY}`,
-            paddingTop: '8px',
-            marginTop: '12px',
-            fontSize: '8px',
-            color: GRAY,
-            textAlign: 'center'
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            marginBottom: '8px'
           }}>
-            Last Updated: {new Date(quote.timestamp * 1000).toLocaleString()}
+            <StickyNote size={10} style={{ color: FINCEPT.YELLOW }} />
+            <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+              NOTES
+            </span>
           </div>
-        </>
+          <div style={{
+            fontSize: '10px',
+            color: FINCEPT.WHITE,
+            backgroundColor: FINCEPT.DARK_BG,
+            padding: '8px',
+            borderLeft: `2px solid ${FINCEPT.CYAN}`,
+            borderRadius: '2px',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            lineHeight: '1.5'
+          }}>
+            {stock.notes}
+          </div>
+        </div>
+      )}
+
+      {/* Timestamp */}
+      {quote && (
+        <div style={{
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          padding: '8px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+          marginTop: 'auto'
+        }}>
+          <Clock size={10} style={{ color: FINCEPT.MUTED }} />
+          <span style={{ fontSize: '8px', color: FINCEPT.MUTED }}>
+            {new Date(quote.timestamp * 1000).toLocaleString()}
+          </span>
+        </div>
       )}
     </div>
   );

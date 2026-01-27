@@ -29,11 +29,11 @@ const useMarketCategory = (
   return useCache<QuoteData[]>({
     key: `markets:global:${category}:${tickerHash}`,
     category: 'market-quotes',
-    fetcher: () => marketDataService.getEnhancedQuotes(tickers),
+    fetcher: () => marketDataService.getQuotes(tickers),
     ttl: '10m',
     enabled: enabled && tickers.length > 0,
     refetchInterval,
-    staleWhileRevalidate: false // Fetch fresh data, don't use stale
+    staleWhileRevalidate: true
   });
 };
 
@@ -55,11 +55,11 @@ const useRegionalMarket = (
   return useCache<QuoteData[]>({
     key: `markets:regional:${region}:${tickerHash}`,
     category: 'market-quotes',
-    fetcher: () => marketDataService.getEnhancedQuotes(symbols),
+    fetcher: () => marketDataService.getQuotes(symbols),
     ttl: '10m',
     enabled: enabled && symbols.length > 0,
     refetchInterval,
-    staleWhileRevalidate: false // Fetch fresh data, don't use stale
+    staleWhileRevalidate: true
   });
 };
 

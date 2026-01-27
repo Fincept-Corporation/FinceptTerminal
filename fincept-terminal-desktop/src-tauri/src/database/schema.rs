@@ -355,6 +355,14 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- Internal MCP tool settings (for fincept-terminal built-in tools)
+        CREATE TABLE IF NOT EXISTS internal_mcp_tool_settings (
+            tool_name TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            is_enabled INTEGER DEFAULT 1,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
         -- OLD: market_data_cache table REMOVED - Use unified cache (fincept_cache.db)
 
         -- Data source connections table

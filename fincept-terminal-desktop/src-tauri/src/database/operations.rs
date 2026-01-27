@@ -843,6 +843,18 @@ pub fn get_portfolio_assets(portfolio_id: &str) -> Result<Vec<serde_json::Value>
     Ok(assets)
 }
 
+pub fn update_portfolio_asset_symbol(asset_id: &str, new_symbol: &str) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    conn.execute(
+        "UPDATE portfolio_assets SET symbol = ?1, last_updated = CURRENT_TIMESTAMP WHERE id = ?2",
+        params![new_symbol, asset_id],
+    )?;
+
+    Ok(())
+}
+
 pub fn get_portfolio_transactions(portfolio_id: &str, limit: Option<i32>) -> Result<Vec<serde_json::Value>> {
     let pool = get_pool()?;
     let conn = pool.get()?;

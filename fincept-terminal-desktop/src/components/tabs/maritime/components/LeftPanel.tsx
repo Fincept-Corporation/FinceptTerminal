@@ -20,6 +20,7 @@ interface LeftPanelProps {
   onTogglePlanes: () => void;
   onToggleSatellites: () => void;
   onClearMarkers: () => void;
+  onLoadVessels: () => void;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -38,7 +39,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   onToggleShips,
   onTogglePlanes,
   onToggleSatellites,
-  onClearMarkers
+  onClearMarkers,
+  onLoadVessels
 }) => {
   return (
     <div style={{
@@ -81,6 +83,25 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             ⚠ {vesselLoadError}
           </div>
         )}
+
+        {/* Load Vessels Button */}
+        <button
+          onClick={onLoadVessels}
+          disabled={isLoadingVessels}
+          style={{
+            width: '100%',
+            background: isLoadingVessels ? '#1a1a1a' : '#0a0a0a',
+            color: isLoadingVessels ? '#888' : '#0ff',
+            border: '1px solid #0ff',
+            padding: '8px',
+            fontSize: '10px',
+            cursor: isLoadingVessels ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold',
+            marginBottom: '8px'
+          }}
+        >
+          {isLoadingVessels ? '⏳ LOADING...' : realVesselsCount > 0 ? '🔄 REFRESH VESSELS' : '📡 LOAD VESSEL DATA'}
+        </button>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <StatBox label="TOTAL VESSELS" value={intelligence.active_vessels} color="#0ff" />

@@ -39,10 +39,10 @@ def calculate_ma(
     vbt, close: np.ndarray, period: int, ewm: bool = False
 ) -> np.ndarray:
     """
-    Calculate Moving Average using VBT.
+    Calculate Moving Average.
 
     Args:
-        vbt: vectorbt module
+        vbt: vectorbt module (unused, kept for API compatibility)
         close: Price array
         period: MA window
         ewm: If True, use exponential weighting (EMA)
@@ -50,18 +50,20 @@ def calculate_ma(
     Returns:
         MA values array
     """
-    result = vbt.MA.run(close, period, ewm=ewm)
-    return result.ma.values.flatten()
+    s = pd.Series(close)
+    if ewm:
+        return s.ewm(span=period, adjust=False).mean().values
+    return s.rolling(window=period).mean().values
 
 
 def calculate_mstd(
     vbt, close: np.ndarray, period: int, ewm: bool = False
 ) -> np.ndarray:
     """
-    Calculate Moving Standard Deviation using VBT.
+    Calculate Moving Standard Deviation.
 
     Args:
-        vbt: vectorbt module
+        vbt: vectorbt module (unused, kept for API compatibility)
         close: Price array
         period: Window size
         ewm: Use exponential weighting
@@ -69,22 +71,25 @@ def calculate_mstd(
     Returns:
         MSTD values array
     """
-    result = vbt.MSTD.run(close, period, ewm=ewm)
-    return result.mstd.values.flatten()
+    s = pd.Series(close)
+    if ewm:
+        return s.ewm(span=period, adjust=False).std().values
+    return s.rolling(window=period).std().values
 
 
 def calculate_bbands(
     vbt, close: np.ndarray, period: int = 20, alpha: float = 2.0
 ) -> Dict[str, np.ndarray]:
     """
-    Calculate Bollinger Bands using VBT.
+    Calculate Bollinger Bands.
 
     Returns dict with: upper, middle, lower, bandwidth, percent_b
     """
-    bb = vbt.BBANDS.run(close, window=period, alpha=alpha)
-    upper = bb.upper.values.flatten()
-    middle = bb.middle.values.flatten()
-    lower = bb.lower.values.flatten()
+    s = pd.Series(close)
+    middle = s.rolling(window=period).mean().values
+    std = s.rolling(window=period).std().values
+    upper = middle + alpha * std
+    lower = middle - alpha * std
 
     # Bandwidth = (upper - lower) / middle
     bandwidth = np.where(middle > 0, (upper - lower) / middle, 0)
@@ -105,9 +110,16 @@ def calculate_bbands(
 def calculate_rsi(
     vbt, close: np.ndarray, period: int = 14
 ) -> np.ndarray:
-    """Calculate RSI using VBT."""
-    result = vbt.RSI.run(close, period)
-    return result.rsi.values.flatten()
+    """Calculate RSI (Relative Strength Index)."""
+    s = pd.Series(close)
+    delta = s.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta).where(delta < 0, 0.0)
+    avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    return rsi.fillna(50.0).values
 
 
 def calculate_stoch(
@@ -115,14 +127,22 @@ def calculate_stoch(
     k_period: int = 14, d_period: int = 3
 ) -> Dict[str, np.ndarray]:
     """
-    Calculate Stochastic Oscillator using VBT.
+    Calculate Stochastic Oscillator.
 
     Returns dict with: k (fast), d (slow)
     """
-    result = vbt.STOCH.run(high, low, close, k_window=k_period, d_window=d_period)
+    h = pd.Series(high)
+    l = pd.Series(low)
+    c = pd.Series(close)
+    lowest_low = l.rolling(window=k_period).min()
+    highest_high = h.rolling(window=k_period).max()
+    denom = highest_high - lowest_low
+    denom = denom.replace(0, np.nan)
+    percent_k = ((c - lowest_low) / denom * 100).fillna(50.0)
+    percent_d = percent_k.rolling(window=d_period).mean().fillna(50.0)
     return {
-        'k': result.percent_k.values.flatten(),
-        'd': result.percent_d.values.flatten(),
+        'k': percent_k.values,
+        'd': percent_d.values,
     }
 
 
@@ -131,18 +151,17 @@ def calculate_macd(
     fast_period: int = 12, slow_period: int = 26, signal_period: int = 9
 ) -> Dict[str, np.ndarray]:
     """
-    Calculate MACD using VBT.
+    Calculate MACD.
 
     Returns dict with: macd, signal, histogram
     """
-    result = vbt.MACD.run(
-        close,
-        fast_window=fast_period,
-        slow_window=slow_period,
-        signal_window=signal_period,
-    )
-    macd_vals = result.macd.values.flatten()
-    signal_vals = result.signal.values.flatten()
+    s = pd.Series(close)
+    fast_ema = s.ewm(span=fast_period, adjust=False).mean()
+    slow_ema = s.ewm(span=slow_period, adjust=False).mean()
+    macd_line = fast_ema - slow_ema
+    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
+    macd_vals = macd_line.values
+    signal_vals = signal_line.values
     histogram = macd_vals - signal_vals
 
     return {
@@ -157,31 +176,38 @@ def calculate_atr(
     period: int = 14
 ) -> np.ndarray:
     """
-    Calculate Average True Range using VBT.
+    Calculate Average True Range.
 
-    Note: VBT's ATR requires OHLC. If only close available,
-    we approximate high/low from close.
+    Note: If only close available, caller should approximate high/low from close.
     """
-    result = vbt.ATR.run(high, low, close, window=period)
-    return result.atr.values.flatten()
+    h = pd.Series(high)
+    l = pd.Series(low)
+    c = pd.Series(close)
+    prev_close = c.shift(1)
+    tr = pd.concat([
+        h - l,
+        (h - prev_close).abs(),
+        (l - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    return tr.ewm(span=period, adjust=False).mean().values
 
 
 def calculate_obv(
     vbt, close: np.ndarray, volume: np.ndarray
 ) -> np.ndarray:
     """
-    Calculate On-Balance Volume using VBT.
+    Calculate On-Balance Volume.
 
     Args:
-        vbt: vectorbt module
+        vbt: vectorbt module (unused, kept for API compatibility)
         close: Price array
         volume: Volume array
 
     Returns:
         OBV values array
     """
-    result = vbt.OBV.run(close, volume)
-    return result.obv.values.flatten()
+    direction = np.sign(np.diff(close, prepend=close[0]))
+    return np.cumsum(direction * volume)
 
 
 # ============================================================================
@@ -379,11 +405,20 @@ def generate_crossover_signals(
     """
     Generate entry/exit signals from indicator crossover.
 
-    Entry: fast crosses above slow
-    Exit: fast crosses below slow
+    Entry: fast crosses above slow (was below, now above)
+    Exit: fast crosses below slow (was above, now below)
     """
-    entries = pd.Series(fast > slow, index=index)
-    exits = pd.Series(fast < slow, index=index)
+    above = fast > slow
+    # Detect edges: cross-up where previous bar was not above and current is
+    cross_up = np.zeros(len(above), dtype=bool)
+    cross_down = np.zeros(len(above), dtype=bool)
+    for i in range(1, len(above)):
+        if above[i] and not above[i - 1]:
+            cross_up[i] = True
+        elif not above[i] and above[i - 1]:
+            cross_down[i] = True
+    entries = pd.Series(cross_up, index=index)
+    exits = pd.Series(cross_down, index=index)
     return entries, exits
 
 
@@ -394,11 +429,20 @@ def generate_threshold_signals(
     """
     Generate entry/exit signals from threshold crossings.
 
-    Entry: indicator < lower threshold
-    Exit: indicator > upper threshold
+    Entry: indicator crosses below lower threshold
+    Exit: indicator crosses above upper threshold
     """
-    entries = pd.Series(indicator < lower, index=index)
-    exits = pd.Series(indicator > upper, index=index)
+    below_lower = indicator < lower
+    above_upper = indicator > upper
+    cross_below = np.zeros(len(indicator), dtype=bool)
+    cross_above = np.zeros(len(indicator), dtype=bool)
+    for i in range(1, len(indicator)):
+        if below_lower[i] and not below_lower[i - 1]:
+            cross_below[i] = True
+        if above_upper[i] and not above_upper[i - 1]:
+            cross_above[i] = True
+    entries = pd.Series(cross_below, index=index)
+    exits = pd.Series(cross_above, index=index)
     return entries, exits
 
 
@@ -427,11 +471,20 @@ def generate_mean_reversion_signals(
     """
     Generate mean-reversion signals from Z-score.
 
-    Entry: Z-score < -z_entry (oversold)
-    Exit: Z-score > z_exit (mean reversion complete)
+    Entry: Z-score crosses below -z_entry (oversold)
+    Exit: Z-score crosses above z_exit (mean reversion complete)
     """
-    entries = pd.Series(zscore < -z_entry, index=index)
-    exits = pd.Series(zscore > z_exit, index=index)
+    below_entry = zscore < -z_entry
+    above_exit = zscore > z_exit
+    cross_below = np.zeros(len(zscore), dtype=bool)
+    cross_above = np.zeros(len(zscore), dtype=bool)
+    for i in range(1, len(zscore)):
+        if below_entry[i] and not below_entry[i - 1]:
+            cross_below[i] = True
+        if above_exit[i] and not above_exit[i - 1]:
+            cross_above[i] = True
+    entries = pd.Series(cross_below, index=index)
+    exits = pd.Series(cross_above, index=index)
     return entries, exits
 
 

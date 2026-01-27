@@ -11,6 +11,21 @@ import TradeListView from './TradeListView';
 
 type ResultTab = 'summary' | 'trades' | 'analysis';
 
+/** Convert nanosecond duration (pandas Timedelta) or bar count to human-readable string */
+function _formatDuration(v: any): string {
+  const n = typeof v === 'number' && isFinite(v) ? v : 0;
+  if (n === 0) return '-';
+  // If value > 1e12, it's nanoseconds from pandas Timedelta
+  if (Math.abs(n) > 1e12) {
+    const days = Math.round(n / 8.64e13); // ns -> days
+    if (days >= 365) return `${(days / 365).toFixed(1)} yrs`;
+    if (days >= 30) return `${(days / 30).toFixed(1)} mo`;
+    return `${days} days`;
+  }
+  // Otherwise treat as bar count
+  return `${n.toFixed(0)} bars`;
+}
+
 interface ResultsPanelProps {
   performance: Record<string, number>;
   statistics: Record<string, number | string>;
@@ -145,10 +160,10 @@ const AnalysisView: React.FC<{
       title: 'TRADE ANALYSIS',
       rows: [
         { label: 'Payoff Ratio', value: fmtNum(ta.payoffRatio || ta.payoff_ratio, 2), description: 'Avg win / avg loss' },
-        { label: 'Avg Trade Duration', value: `${fmtNum(ta.avgDuration || ta.avg_duration, 1)} bars`, description: 'Mean holding period' },
+        { label: 'Avg Trade Duration', value: _formatDuration(ta.avgDuration || ta.avg_duration), description: 'Mean holding period' },
         { label: 'Position Coverage', value: `${(safeNum(ta.positionCoverage || ta.position_coverage) * 100).toFixed(1)}%`, description: 'Time in market' },
-        { label: 'Max Consec. Wins', value: String(ta.maxConsecWins || ta.max_consec_wins || statistics.consecutiveWins || 0), description: 'Longest winning streak' },
-        { label: 'Max Consec. Losses', value: String(ta.maxConsecLosses || ta.max_consec_losses || statistics.consecutiveLosses || 0), description: 'Longest losing streak' },
+        { label: 'Max Consec. Wins', value: String(ta.winningStreak || ta.maxConsecWins || ta.max_consec_wins || statistics.consecutiveWins || 0), description: 'Longest winning streak' },
+        { label: 'Max Consec. Losses', value: String(ta.losingStreak || ta.maxConsecLosses || ta.max_consec_losses || statistics.consecutiveLosses || 0), description: 'Longest losing streak' },
         { label: 'SQN', value: fmtNum(ta.sqn, 2), description: 'System Quality Number (>2 good, >3 excellent)' },
       ],
     },
@@ -168,8 +183,8 @@ const AnalysisView: React.FC<{
         { label: 'Max Drawdown Duration', value: `${da.maxDuration || da.max_duration || '-'} bars`, description: 'Longest peak-to-recovery' },
         { label: 'Avg Drawdown', value: fmtPct(da.avgDrawdown || da.avg_drawdown), description: 'Average drawdown depth' },
         { label: 'Avg Duration', value: `${fmtNum(da.avgDuration || da.avg_duration, 0)} bars`, description: 'Average drawdown length' },
-        { label: 'Drawdown Periods', value: String(da.numPeriods || da.num_periods || '-'), description: 'Total number of drawdown periods' },
-        { label: 'Recovery Factor', value: fmtNum(da.recoveryFactor || da.recovery_factor, 2), description: 'Total return / max drawdown' },
+        { label: 'Drawdown Periods', value: String(da.drawdownCount || da.numPeriods || da.num_periods || '-'), description: 'Total number of drawdown periods' },
+        { label: 'Recovery Ratio', value: fmtNum(da.recoveryRatio || da.recoveryFactor || da.recovery_factor, 2), description: 'Avg recovery / avg decline duration' },
       ],
     },
   ];

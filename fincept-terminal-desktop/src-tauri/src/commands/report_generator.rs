@@ -81,7 +81,8 @@ pub async fn generate_report_pdf(
                 file_size: None,
                 error: Some(format!("Failed to parse template: {}", e)),
             };
-            return Ok(serde_json::to_string(&result).unwrap());
+            return serde_json::to_string(&result)
+                .map_err(|e| format!("Serialization error: {}", e));
         }
     };
 
@@ -94,7 +95,8 @@ pub async fn generate_report_pdf(
                 file_size: Some(file_size),
                 error: None,
             };
-            Ok(serde_json::to_string(&result).unwrap())
+            serde_json::to_string(&result)
+                .map_err(|e| format!("Serialization error: {}", e))
         }
         Err(e) => {
             let result = ReportGenerationResult {
@@ -103,7 +105,8 @@ pub async fn generate_report_pdf(
                 file_size: None,
                 error: Some(e),
             };
-            Ok(serde_json::to_string(&result).unwrap())
+            serde_json::to_string(&result)
+                .map_err(|e| format!("Serialization error: {}", e))
         }
     }
 }
@@ -429,7 +432,8 @@ pub async fn generate_report_html(
         "error": null
     });
 
-    Ok(serde_json::to_string(&result).unwrap())
+    serde_json::to_string(&result)
+        .map_err(|e| format!("Serialization error: {}", e))
 }
 
 fn html_escape(s: &str) -> String {
@@ -448,7 +452,8 @@ pub async fn create_default_report_template() -> Result<String, String> {
         "message": "Using built-in Rust PDF generator",
         "template_path": null
     });
-    Ok(serde_json::to_string(&result).unwrap())
+    serde_json::to_string(&result)
+        .map_err(|e| format!("Serialization error: {}", e))
 }
 
 /// Open folder in file explorer

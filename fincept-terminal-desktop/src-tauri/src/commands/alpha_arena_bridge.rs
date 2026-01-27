@@ -34,24 +34,24 @@ pub async fn paper_trading_create_portfolio(
     fee_rate: f64,
 ) -> Result<serde_json::Value, String> {
     paper_trading::create_portfolio(&name, initial_balance, &currency, leverage, &margin_mode, fee_rate)
-        .map(|p| serde_json::to_value(p).unwrap())
         .map_err(|e| e.to_string())
+        .and_then(|p| serde_json::to_value(p).map_err(|e| format!("Serialization error: {}", e)))
 }
 
 /// Get paper trading portfolio
 #[command]
 pub async fn paper_trading_get_portfolio(id: String) -> Result<serde_json::Value, String> {
     paper_trading::get_portfolio(&id)
-        .map(|p| serde_json::to_value(p).unwrap())
         .map_err(|e| e.to_string())
+        .and_then(|p| serde_json::to_value(p).map_err(|e| format!("Serialization error: {}", e)))
 }
 
 /// Get positions for portfolio
 #[command]
 pub async fn paper_trading_get_positions(portfolio_id: String) -> Result<serde_json::Value, String> {
     paper_trading::get_positions(&portfolio_id)
-        .map(|p| serde_json::to_value(p).unwrap())
         .map_err(|e| e.to_string())
+        .and_then(|p| serde_json::to_value(p).map_err(|e| format!("Serialization error: {}", e)))
 }
 
 /// Place order
@@ -65,8 +65,8 @@ pub async fn paper_trading_place_order(
     price: Option<f64>,
 ) -> Result<serde_json::Value, String> {
     paper_trading::place_order(&portfolio_id, &symbol, &side, &order_type, quantity, price, None, false)
-        .map(|o| serde_json::to_value(o).unwrap())
         .map_err(|e| e.to_string())
+        .and_then(|o| serde_json::to_value(o).map_err(|e| format!("Serialization error: {}", e)))
 }
 
 /// Fill order at price
@@ -76,8 +76,8 @@ pub async fn paper_trading_fill_order(
     fill_price: f64,
 ) -> Result<serde_json::Value, String> {
     paper_trading::fill_order(&order_id, fill_price, None)
-        .map(|t| serde_json::to_value(t).unwrap())
         .map_err(|e| e.to_string())
+        .and_then(|t| serde_json::to_value(t).map_err(|e| format!("Serialization error: {}", e)))
 }
 
 /// Get portfolio orders
@@ -87,8 +87,8 @@ pub async fn paper_trading_get_orders(
     status: Option<String>,
 ) -> Result<serde_json::Value, String> {
     paper_trading::get_orders(&portfolio_id, status.as_deref())
-        .map(|o| serde_json::to_value(o).unwrap())
         .map_err(|e| e.to_string())
+        .and_then(|o| serde_json::to_value(o).map_err(|e| format!("Serialization error: {}", e)))
 }
 
 /// Get portfolio trades
@@ -98,8 +98,8 @@ pub async fn paper_trading_get_trades(
     limit: Option<i64>,
 ) -> Result<serde_json::Value, String> {
     paper_trading::get_trades(&portfolio_id, limit.unwrap_or(100))
-        .map(|t| serde_json::to_value(t).unwrap())
         .map_err(|e| e.to_string())
+        .and_then(|t| serde_json::to_value(t).map_err(|e| format!("Serialization error: {}", e)))
 }
 
 /// Record Alpha Arena decision (stores in SQLite for UI display)

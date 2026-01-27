@@ -267,8 +267,8 @@ def _run_vectorized_optimization(
     - For indicator-based strategies, compute indicators once with broadcast parameters
     - For each combination, build portfolio and extract objective metric
     """
-    from . import vbt_strategies as strat
-    from . import vbt_portfolio as pf
+    import vbt_strategies as strat
+    import vbt_portfolio as pf
 
     results = []
 
@@ -363,8 +363,8 @@ def _evaluate_params(
     initial_capital, request
 ) -> Dict[str, float]:
     """Evaluate a single parameter set and return performance metrics."""
-    from . import vbt_strategies as strat
-    from . import vbt_portfolio as pf
+    import vbt_strategies as strat
+    import vbt_portfolio as pf
 
     try:
         entries, exits = strat.build_strategy_signals(

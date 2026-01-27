@@ -1,6 +1,5 @@
 // skfolio Portfolio Optimization Commands
-use crate::utils::python::get_script_path;
-use crate::python_runtime;
+use crate::python;
 
 /// Optimize portfolio using skfolio
 #[tauri::command]
@@ -43,11 +42,8 @@ pub async fn skfolio_optimize_portfolio(
 
     println!("[skfolio] All args: {:?}", args);
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    println!("[skfolio] Script path: {:?}", script_path);
-
     println!("[skfolio] Executing Python script...");
-    let result = python_runtime::execute_python_script(&script_path, args);
+    let result = python::execute(&app, "Analytics/skfolio_wrapper.py", args).await;
 
     match &result {
         Ok(output) => {
@@ -92,8 +88,7 @@ pub async fn skfolio_hyperparameter_tuning(
         args.push("walk_forward".to_string());
     }
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }
 
 /// Run portfolio backtest
@@ -117,8 +112,7 @@ pub async fn skfolio_backtest_strategy(
         args.push(cfg);
     }
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }
 
 /// Perform stress testing
@@ -144,8 +138,7 @@ pub async fn skfolio_stress_test(
 
     args.push(n_simulations.unwrap_or(10000).to_string());
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }
 
 /// Generate efficient frontier
@@ -177,11 +170,8 @@ pub async fn skfolio_efficient_frontier(
 
     println!("[skfolio] All args: {:?}", args);
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    println!("[skfolio] Script path: {:?}", script_path);
-
     println!("[skfolio] Executing Python script...");
-    let result = python_runtime::execute_python_script(&script_path, args);
+    let result = python::execute(&app, "Analytics/skfolio_wrapper.py", args).await;
 
     match &result {
         Ok(output) => {
@@ -214,8 +204,7 @@ pub async fn skfolio_risk_attribution(
         weights,
     ];
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }
 
 /// Compare multiple strategies
@@ -234,8 +223,7 @@ pub async fn skfolio_compare_strategies(
 
     args.push(metric.unwrap_or_else(|| "sharpe_ratio".to_string()));
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }
 
 /// Generate comprehensive portfolio report
@@ -256,8 +244,7 @@ pub async fn skfolio_generate_report(
         args.push(cfg);
     }
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }
 
 /// Export portfolio weights
@@ -278,8 +265,7 @@ pub async fn skfolio_export_weights(
         args.push(fname);
     }
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }
 
 /// Scenario analysis
@@ -297,6 +283,5 @@ pub async fn skfolio_scenario_analysis(
         scenarios,
     ];
 
-    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
 }

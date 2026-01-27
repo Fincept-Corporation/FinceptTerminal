@@ -76,6 +76,68 @@ pub fn delete_mcp_server(id: &str) -> Result<()> {
 }
 
 // ============================================================================
+// Internal MCP Tool Settings Operations
+// ============================================================================
+
+pub fn get_internal_tool_settings() -> Result<Vec<InternalMCPToolSetting>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT tool_name, category, is_enabled, updated_at
+         FROM internal_mcp_tool_settings ORDER BY category, tool_name"
+    )?;
+
+    let settings = stmt
+        .query_map([], |row| {
+            Ok(InternalMCPToolSetting {
+                tool_name: row.get(0)?,
+                category: row.get(1)?,
+                is_enabled: row.get::<_, i32>(2)? != 0,
+                updated_at: row.get(3)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(settings)
+}
+
+pub fn set_internal_tool_enabled(tool_name: &str, category: &str, is_enabled: bool) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO internal_mcp_tool_settings
+         (tool_name, category, is_enabled, updated_at)
+         VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)",
+        params![
+            tool_name,
+            category,
+            if is_enabled { 1 } else { 0 },
+        ],
+    )?;
+
+    Ok(())
+}
+
+pub fn is_internal_tool_enabled(tool_name: &str) -> Result<bool> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let result: Result<i32, rusqlite::Error> = conn.query_row(
+        "SELECT is_enabled FROM internal_mcp_tool_settings WHERE tool_name = ?1",
+        params![tool_name],
+        |row| row.get(0),
+    );
+
+    match result {
+        Ok(enabled) => Ok(enabled != 0),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(true), // Default to enabled if not in table
+        Err(e) => Err(e.into()),
+    }
+}
+
+// ============================================================================
 // Backtesting Operations
 // ============================================================================
 

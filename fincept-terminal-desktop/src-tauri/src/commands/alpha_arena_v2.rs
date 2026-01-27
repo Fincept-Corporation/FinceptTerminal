@@ -1,9 +1,20 @@
 //! Alpha Arena V2 Commands
 //!
 //! Tauri commands for the refactored Alpha Arena system.
+//! Refactored to use unified python module API.
 
-use std::process::Command;
 use tauri::AppHandle;
+use crate::python;
+
+/// Extract JSON from output that may contain log lines
+fn extract_json(output: &str) -> Option<String> {
+    if let Some(json_start) = output.find('{') {
+        if let Some(json_end) = output.rfind('}') {
+            return Some(output[json_start..=json_end].to_string());
+        }
+    }
+    None
+}
 
 /// Execute an Alpha Arena action
 ///
@@ -16,44 +27,12 @@ pub async fn alpha_arena_action(
     app: AppHandle,
     payload: String,
 ) -> Result<String, String> {
-    // Get the Python executable path
-    let python_path = get_python_path(&app)?;
-
-    // Get the script path
-    let script_path = get_script_path(&app)?;
-
-    // Execute Python script
-    let output = Command::new(&python_path)
-        .arg(&script_path)
-        .arg(&payload)
-        .current_dir(script_path.parent().unwrap_or(&script_path))
-        .output()
-        .map_err(|e| format!("Failed to execute Python script: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // Try to extract JSON error from stderr
-        if let Some(json_start) = stderr.find('{') {
-            if let Some(json_end) = stderr.rfind('}') {
-                return Ok(stderr[json_start..=json_end].to_string());
-            }
-        }
-        return Err(format!(
-            "Python script failed: {}",
-            stderr
-        ));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Use the unified python module API
+    let output = python::execute_sync(&app, "alpha_arena/main.py", vec![payload])?;
 
     // Find JSON in output
-    if let Some(json_start) = stdout.find('{') {
-        if let Some(json_end) = stdout.rfind('}') {
-            return Ok(stdout[json_start..=json_end].to_string());
-        }
-    }
-
-    Err("No JSON output from Python script".to_string())
+    extract_json(&output)
+        .ok_or_else(|| "No JSON output from Python script".to_string())
 }
 
 /// Get API keys from database
@@ -126,40 +105,4 @@ pub async fn save_api_keys(app: AppHandle, keys: String) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-// Helper functions
-fn get_python_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    // Check for bundled Python first
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let bundled_python = if cfg!(windows) {
-            resource_dir.join("python").join("python.exe")
-        } else {
-            resource_dir.join("python").join("bin").join("python3")
-        };
-
-        if bundled_python.exists() {
-            return Ok(bundled_python);
-        }
-    }
-
-    // Fall back to system Python
-    let python_name = if cfg!(windows) { "python" } else { "python3" };
-
-    Ok(std::path::PathBuf::from(python_name))
-}
-
-fn get_script_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let script = resource_dir
-            .join("scripts")
-            .join("alpha_arena")
-            .join("main.py");
-
-        if script.exists() {
-            return Ok(script);
-        }
-    }
-
-    Err("Alpha Arena script not found".to_string())
 }

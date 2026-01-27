@@ -124,17 +124,12 @@ async fn execute_pyportfolioopt_operation(
     operation: &str,
     data: serde_json::Value,
 ) -> Result<String, String> {
-    let script_path = crate::utils::python::get_script_path(
-        &app,
-        "Analytics/pyportfolioopt_wrapper/worker_handler.py"
-    )?;
-
     let data_json = serde_json::to_string(&data)
         .map_err(|e| format!("Failed to serialize data: {}", e))?;
 
     let args = vec![operation.to_string(), data_json];
 
-    crate::python_runtime::execute_python_script(&script_path, args)
+    crate::python::execute(&app, "Analytics/pyportfolioopt_wrapper/worker_handler.py", args).await
 }
 
 /// Optimize portfolio using PyPortfolioOpt

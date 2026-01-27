@@ -393,7 +393,7 @@ def cds_spread(args: List[str]) -> Dict[str, Any]:
 # ================== MAIN COMMAND ROUTER ==================
 
 def main(args=None):
-    """Main entry point supporting both PyO3 and subprocess execution"""
+    """Main entry point for script execution"""
     if args is None:
         args = sys.argv[1:]
 

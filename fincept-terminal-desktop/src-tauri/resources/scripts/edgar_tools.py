@@ -1861,8 +1861,8 @@ class EdgarToolsWrapper:
 
 
 def main(args=None):
-    """Main CLI interface - supports both PyO3 and subprocess execution"""
-    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    """Main CLI interface"""
+    # Support both function call and CLI execution
     if args is None:
         args = sys.argv[1:]
 
@@ -2108,7 +2108,7 @@ def main(args=None):
         else:
             result = {"error": EdgarError(command, f"Unknown command: {command}").to_dict()}
 
-        # Return JSON for PyO3, print for subprocess
+        # Return JSON or print based on execution mode
         # IMPORTANT: Do NOT use indent=2 here. The Rust subprocess fallback parser
         # looks for the last line starting with '{' or '[' to extract JSON.
         # Pretty-printed JSON breaks this parsing logic.

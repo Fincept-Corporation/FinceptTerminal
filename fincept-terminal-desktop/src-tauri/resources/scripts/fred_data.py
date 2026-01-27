@@ -259,7 +259,7 @@ def get_multiple_series(series_ids: List[str], start_date: Optional[str] = None,
 
 
 def main(args=None):
-    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    # Support both function call and CLI execution
     if args is None:
         args = sys.argv[1:]
 

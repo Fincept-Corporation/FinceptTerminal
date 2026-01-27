@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use crate::utils::python::execute_python_subprocess;
+use crate::python;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LLMProvider {
@@ -43,11 +43,10 @@ pub struct TopProvider {
 /// Get all available LLM providers from embedded model data
 #[tauri::command]
 pub fn get_llm_providers(app: AppHandle) -> Result<Vec<LLMProvider>, String> {
-    let output = execute_python_subprocess(
+    let output = python::execute_sync(
         &app,
         "litellm_models.py",
-        &["providers".to_string()],
-        None, // No special library required - uses embedded JSON
+        vec!["providers".to_string()],
     )?;
 
     let providers: Vec<LLMProvider> = serde_json::from_str(&output)
@@ -68,11 +67,10 @@ pub fn get_llm_providers(app: AppHandle) -> Result<Vec<LLMProvider>, String> {
 /// Get all models for a specific provider from embedded model data
 #[tauri::command]
 pub fn get_llm_models_by_provider(app: AppHandle, provider: String) -> Result<Vec<LLMModel>, String> {
-    let output = execute_python_subprocess(
+    let output = python::execute_sync(
         &app,
         "litellm_models.py",
-        &["models".to_string(), provider.clone()],
-        None,
+        vec!["models".to_string(), provider.clone()],
     )?;
 
     let models: Vec<LLMModel> = serde_json::from_str(&output)
@@ -84,11 +82,10 @@ pub fn get_llm_models_by_provider(app: AppHandle, provider: String) -> Result<Ve
 /// Get all models from all providers
 #[tauri::command]
 pub fn get_all_llm_models(app: AppHandle) -> Result<Vec<LLMModel>, String> {
-    let output = execute_python_subprocess(
+    let output = python::execute_sync(
         &app,
         "litellm_models.py",
-        &["models".to_string()],
-        None,
+        vec!["models".to_string()],
     )?;
 
     let models: Vec<LLMModel> = serde_json::from_str(&output)
@@ -100,11 +97,10 @@ pub fn get_all_llm_models(app: AppHandle) -> Result<Vec<LLMModel>, String> {
 /// Get LLM provider statistics
 #[tauri::command]
 pub fn get_llm_stats(app: AppHandle) -> Result<LLMStats, String> {
-    let output = execute_python_subprocess(
+    let output = python::execute_sync(
         &app,
         "litellm_models.py",
-        &["stats".to_string()],
-        None,
+        vec!["stats".to_string()],
     )?;
 
     let stats: LLMStats = serde_json::from_str(&output)
@@ -116,11 +112,10 @@ pub fn get_llm_stats(app: AppHandle) -> Result<LLMStats, String> {
 /// Search models by name or provider
 #[tauri::command]
 pub fn search_llm_models(app: AppHandle, query: String) -> Result<Vec<LLMModel>, String> {
-    let output = execute_python_subprocess(
+    let output = python::execute_sync(
         &app,
         "litellm_models.py",
-        &["search".to_string(), query.clone()],
-        None,
+        vec!["search".to_string(), query.clone()],
     )?;
 
     let models: Vec<LLMModel> = serde_json::from_str(&output)

@@ -459,7 +459,7 @@ def calculate_all_indicators(df: pd.DataFrame,
 
 def main(args):
     """
-    Main entry point for PyO3 execution
+    Main entry point for script execution
 
     Args:
         args: List of arguments [command, ...additional_args]

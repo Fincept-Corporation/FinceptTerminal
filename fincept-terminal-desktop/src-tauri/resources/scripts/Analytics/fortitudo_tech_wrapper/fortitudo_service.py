@@ -1,5 +1,5 @@
 """
-Fortitudo.tech Service - Python backend for portfolio risk analytics via PyO3
+Fortitudo.tech Service - Python backend for analytics
 ===============================================================================
 
 Provides JSON-RPC interface for Rust/Tauri to call fortitudo.tech analytics functions.

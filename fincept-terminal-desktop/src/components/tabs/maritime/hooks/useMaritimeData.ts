@@ -130,12 +130,8 @@ export function useMaritimeData({ apiKey, onVesselsUpdate }: UseMaritimeDataProp
     }
   }, [apiKey, searchImo]);
 
-  // Load vessels on mount and refresh periodically
-  useEffect(() => {
-    loadRealVessels();
-    const interval = setInterval(loadRealVessels, VESSEL_REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [loadRealVessels]);
+  // NOTE: Auto-fetch removed - vessels are only loaded when explicitly requested
+  // Call loadRealVessels() manually from the component when the tab is opened
 
   // Update timestamp periodically
   useEffect(() => {
