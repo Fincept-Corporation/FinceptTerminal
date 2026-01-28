@@ -167,7 +167,6 @@ impl FyersAdapter {
             return result;
         }
 
-        eprintln!("[Fyers HSM] Fetching fytokens for {} symbols: {:?}", symbols.len(), symbols);
 
         let client = reqwest::Client::new();
         let body = serde_json::json!({
@@ -184,30 +183,25 @@ impl FyersAdapter {
         {
             Ok(response) => {
                 if let Ok(json) = response.json::<Value>().await {
-                    eprintln!("[Fyers HSM] Symbol-token API response: {}", json);
 
                     if json.get("s").and_then(|s| s.as_str()) == Some("ok") {
                         if let Some(valid_symbols) = json.get("validSymbol").and_then(|v| v.as_object()) {
                             for (symbol, fytoken) in valid_symbols {
                                 if let Some(fytoken_str) = fytoken.as_str() {
                                     result.insert(symbol.clone(), fytoken_str.to_string());
-                                    eprintln!("[Fyers HSM] ✓ {} -> {}", symbol, fytoken_str);
                                 }
                             }
                         }
                         if let Some(invalid) = json.get("invalidSymbol").and_then(|v| v.as_array()) {
                             for sym in invalid {
-                                eprintln!("[Fyers HSM] ✗ Invalid symbol: {:?}", sym);
                             }
                         }
                     } else {
                         let msg = json.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
-                        eprintln!("[Fyers HSM] API error: {}", msg);
                     }
                 }
             }
             Err(e) => {
-                eprintln!("[Fyers HSM] Failed to fetch fytokens: {}", e);
             }
         }
 
@@ -220,7 +214,6 @@ impl FyersAdapter {
     /// - Last 10 digits: token suffix for HSM
     fn fytoken_to_hsm_token(fytoken: &str, data_type: &FyersDataType, is_index: bool) -> Option<String> {
         if fytoken.len() < 10 {
-            eprintln!("[Fyers HSM] Invalid fytoken length: {} ({})", fytoken.len(), fytoken);
             return None;
         }
 
@@ -235,7 +228,6 @@ impl FyersAdapter {
             "1012" => "cde_fo",    // CDE F&O
             "1020" => "nse_com",   // NSE Commodity
             _ => {
-                eprintln!("[Fyers HSM] Unknown exchange segment: {}", ex_sg);
                 return None;
             }
         };
@@ -271,7 +263,6 @@ impl FyersAdapter {
         // JWT format: header.payload.signature
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() != 3 {
-            eprintln!("[Fyers HSM] Invalid JWT format: expected 3 parts, got {}", parts.len());
             return None;
         }
 
@@ -292,12 +283,10 @@ impl FyersAdapter {
         if let Some(exp) = payload.get("exp").and_then(|e| e.as_i64()) {
             let now = chrono::Utc::now().timestamp();
             if exp < now {
-                eprintln!("[Fyers HSM] Access token has expired");
                 return None;
             }
         }
 
-        eprintln!("[Fyers HSM] HSM key extracted successfully (length: {})", hsm_key.len());
         Some(hsm_key)
     }
 
@@ -340,7 +329,6 @@ impl FyersAdapter {
         buffer.extend_from_slice(&(source.len() as u16).to_be_bytes());
         buffer.extend_from_slice(source.as_bytes());
 
-        eprintln!("[Fyers HSM] Created auth message: {} bytes", buffer.len());
         buffer
     }
 
@@ -385,7 +373,6 @@ impl FyersAdapter {
         buffer.extend_from_slice(&(1u16).to_be_bytes());
         buffer.push(channel);
 
-        eprintln!("[Fyers HSM] Created subscription message for {} symbols: {} bytes", hsm_symbols.len(), buffer.len());
         buffer
     }
 
@@ -465,11 +452,9 @@ impl FyersAdapter {
         match msg_type {
             1 => {
                 // Authentication response
-                eprintln!("[Fyers HSM] Authentication successful");
             }
             4 => {
                 // Subscription acknowledgment
-                eprintln!("[Fyers HSM] Subscription acknowledged");
             }
             6 => {
                 // Data feed message
@@ -477,10 +462,8 @@ impl FyersAdapter {
             }
             13 => {
                 // Master data (usually large message on connect)
-                eprintln!("[Fyers HSM] Received master data: {} bytes", data.len());
             }
             _ => {
-                eprintln!("[Fyers HSM] Unknown message type: {}, length: {} bytes", msg_type, data.len());
             }
         }
     }
@@ -520,7 +503,6 @@ impl FyersAdapter {
                     offset = Self::parse_update_data(data, offset, topic_mappings, scrips_cache, symbol_mappings, callback);
                 }
                 _ => {
-                    eprintln!("[Fyers HSM] Unknown data type: {}", data_type);
                     break;
                 }
             }
@@ -1075,7 +1057,6 @@ impl FyersAdapter {
         symbol_mappings: Arc<RwLock<HashMap<String, String>>>,
         callback: Arc<std::sync::RwLock<Option<Box<dyn Fn(MarketMessage) + Send + Sync>>>>,
     ) {
-        eprintln!("[Fyers HSM] Message loop started");
         let mut msg_count: u64 = 0;
 
         loop {
@@ -1084,7 +1065,6 @@ impl FyersAdapter {
                 if let Some(stream) = stream_lock.as_mut() {
                     stream.next().await
                 } else {
-                    eprintln!("[Fyers HSM] Stream is None, exiting loop");
                     break;
                 }
             };
@@ -1110,12 +1090,10 @@ impl FyersAdapter {
                     if msg_count == 1 && data.len() >= 3 && data[2] == 1 {
                         let mut auth = is_authenticated.write().await;
                         *auth = true;
-                        eprintln!("[Fyers HSM] Authenticated via binary response");
                     }
                 }
                 Some(Ok(Message::Text(text))) => {
                     // Unexpected text message
-                    eprintln!("[Fyers HSM] Unexpected text message: {}", &text[..text.len().min(200)]);
                 }
                 Some(Ok(Message::Ping(data))) => {
                     let mut stream_lock = ws_stream.write().await;
@@ -1127,18 +1105,15 @@ impl FyersAdapter {
                     // Pong received, connection is alive
                 }
                 Some(Ok(Message::Close(frame))) => {
-                    eprintln!("[Fyers HSM] Close received: {:?}", frame);
                     break;
                 }
                 Some(Ok(Message::Frame(_))) => {
                     // Raw frame, ignore
                 }
                 Some(Err(e)) => {
-                    eprintln!("[Fyers HSM] Stream error: {}", e);
                     break;
                 }
                 None => {
-                    eprintln!("[Fyers HSM] Stream ended");
                     break;
                 }
             }
@@ -1149,7 +1124,6 @@ impl FyersAdapter {
         *connected = false;
         let mut auth = is_authenticated.write().await;
         *auth = false;
-        eprintln!("[Fyers HSM] Message loop ended, disconnected");
     }
 }
 
@@ -1166,11 +1140,6 @@ impl WebSocketAdapter for FyersAdapter {
             return Err(anyhow::anyhow!("Failed to extract HSM key from access token"));
         }
 
-        eprintln!("[Fyers HSM] ========================================");
-        eprintln!("[Fyers HSM] CONNECTING TO FYERS HSM WEBSOCKET");
-        eprintln!("[Fyers HSM] URL: {}", FYERS_HSM_WS_URL);
-        eprintln!("[Fyers HSM] Token length: {} chars", self.access_token.len());
-        eprintln!("[Fyers HSM] ========================================");
 
         // Connect to WebSocket with Authorization header
         let url = url::Url::parse(FYERS_HSM_WS_URL)?;
@@ -1189,10 +1158,6 @@ impl WebSocketAdapter for FyersAdapter {
         let (ws_stream, response) = connect_async(request).await
             .map_err(|e| anyhow::anyhow!("WebSocket connection failed: {}", e))?;
 
-        eprintln!("[Fyers HSM] ========================================");
-        eprintln!("[Fyers HSM] CONNECTION SUCCESSFUL!");
-        eprintln!("[Fyers HSM] Response Status: {:?}", response.status());
-        eprintln!("[Fyers HSM] ========================================");
 
         // Store stream
         {
@@ -1215,7 +1180,6 @@ impl WebSocketAdapter for FyersAdapter {
             if let Some(stream) = stream_lock.as_mut() {
                 stream.send(Message::Binary(auth_msg)).await
                     .map_err(|e| anyhow::anyhow!("Failed to send auth message: {}", e))?;
-                eprintln!("[Fyers HSM] Authentication message sent");
             }
         }
 
@@ -1271,7 +1235,6 @@ impl WebSocketAdapter for FyersAdapter {
         let mut symbols = self.symbol_mappings.write().await;
         symbols.clear();
 
-        eprintln!("[Fyers HSM] Disconnected and cleaned up");
         Ok(())
     }
 
@@ -1281,11 +1244,6 @@ impl WebSocketAdapter for FyersAdapter {
         channel: &str,
         _params: Option<Value>,
     ) -> anyhow::Result<()> {
-        eprintln!("[Fyers HSM] ========================================");
-        eprintln!("[Fyers HSM] SUBSCRIBE REQUEST");
-        eprintln!("[Fyers HSM] Symbol: {}", symbol);
-        eprintln!("[Fyers HSM] Channel: {}", channel);
-        eprintln!("[Fyers HSM] ========================================");
 
         // Determine data type from channel
         let data_type = match channel {
@@ -1304,7 +1262,6 @@ impl WebSocketAdapter for FyersAdapter {
             fytoken
         } else {
             // Fetch fytoken from API
-            eprintln!("[Fyers HSM] Fytoken not cached, fetching from API...");
             let fytokens = self.fetch_fytokens(&[symbol.to_string()]).await;
 
             if let Some(fytoken) = fytokens.get(symbol) {
@@ -1316,7 +1273,6 @@ impl WebSocketAdapter for FyersAdapter {
                 fytoken.clone()
             } else {
                 // No fytoken available
-                eprintln!("[Fyers HSM] WARNING: API lookup failed, cannot subscribe");
                 return Err(anyhow::anyhow!("Failed to get fytoken for symbol"));
             }
         };
@@ -1339,11 +1295,9 @@ impl WebSocketAdapter for FyersAdapter {
         }
 
         if hsm_tokens.is_empty() {
-            eprintln!("[Fyers HSM] Failed to convert fytoken to HSM tokens");
             return Err(anyhow::anyhow!("Failed to convert fytoken"));
         }
 
-        eprintln!("[Fyers HSM] HSM tokens: {:?}", hsm_tokens);
 
         // Store symbol mappings (HSM token -> original symbol)
         {
@@ -1367,10 +1321,8 @@ impl WebSocketAdapter for FyersAdapter {
             let mut subs = self.subscriptions.write().await;
             subs.insert(symbol.to_string(), data_type);
 
-            eprintln!("[Fyers HSM] ✓ Subscribed to {} (HSM tokens: {:?})", symbol, hsm_tokens);
             Ok(())
         } else {
-            eprintln!("[Fyers HSM] ERROR: Not connected to WebSocket!");
             Err(anyhow::anyhow!("Not connected to WebSocket"))
         }
     }
@@ -1385,7 +1337,6 @@ impl WebSocketAdapter for FyersAdapter {
         // Remove all mappings for this symbol
         symbols.retain(|_, v| v != symbol);
 
-        eprintln!("[Fyers HSM] Unsubscribed from {} (local only - HSM doesn't support selective unsub)", symbol);
         Ok(())
     }
 
@@ -1416,15 +1367,11 @@ impl FyersAdapter {
             return Ok(());
         }
 
-        eprintln!("[Fyers HSM] ========================================");
-        eprintln!("[Fyers HSM] BATCH SUBSCRIBE: {} symbols", symbols.len());
-        eprintln!("[Fyers HSM] ========================================");
 
         let start_time = std::time::Instant::now();
 
         // Step 1: Batch fetch ALL fytokens in one API call (FAST!)
         let fytokens = self.fetch_fytokens(symbols).await;
-        eprintln!("[Fyers HSM] Fetched {} fytokens in {:?}", fytokens.len(), start_time.elapsed());
 
         if fytokens.is_empty() {
             return Err(anyhow::anyhow!("Failed to fetch any fytokens from API"));
@@ -1458,11 +1405,9 @@ impl FyersAdapter {
                     }
                 }
             } else {
-                eprintln!("[Fyers HSM] Warning: No fytoken for {}", symbol);
             }
         }
 
-        eprintln!("[Fyers HSM] Generated {} HSM tokens", hsm_tokens.len());
 
         // Step 3: Store symbol mappings
         {
@@ -1483,7 +1428,6 @@ impl FyersAdapter {
                 stream.send(Message::Binary(sub_msg)).await
                     .map_err(|e| anyhow::anyhow!("Failed to send batch subscription: {}", e))?;
 
-                eprintln!("[Fyers HSM] Sent subscription for {} tokens", chunk.len());
             } else {
                 return Err(anyhow::anyhow!("Not connected to WebSocket"));
             }
@@ -1503,7 +1447,6 @@ impl FyersAdapter {
             }
         }
 
-        eprintln!("[Fyers HSM] ✓ Batch subscription complete in {:?}", start_time.elapsed());
         Ok(())
     }
 
@@ -1518,7 +1461,6 @@ impl FyersAdapter {
             symbol_map.retain(|_, v| v != symbol);
         }
 
-        eprintln!("[Fyers HSM] Batch unsubscribed from {} symbols (local only)", symbols.len());
         Ok(())
     }
 

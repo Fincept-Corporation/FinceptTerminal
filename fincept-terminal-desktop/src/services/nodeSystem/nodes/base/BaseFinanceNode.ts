@@ -99,7 +99,6 @@ export const dataProviderParameter: INodeProperties = {
   default: 'yahoo',
   options: [
     { name: 'Yahoo Finance', value: 'yahoo', description: 'Free market data' },
-    { name: 'Polygon.io', value: 'polygon', description: 'Real-time US market data' },
     { name: 'Alpha Vantage', value: 'alphavantage', description: 'Free API with limits' },
     { name: 'Binance', value: 'binance', description: 'Crypto market data' },
     { name: 'CoinGecko', value: 'coingecko', description: 'Crypto prices and data' },

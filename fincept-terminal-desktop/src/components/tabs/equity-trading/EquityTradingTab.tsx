@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { APP_VERSION } from '@/constants/version';
 import {
   TrendingUp, TrendingDown, Activity, DollarSign, BarChart3,
   Settings as SettingsIcon, Globe, Wifi, WifiOff, Bell,
@@ -2105,7 +2106,7 @@ function EquityTradingContent() {
         alignItems: 'center',
         flexShrink: 0
       }}>
-        <span>Fincept Terminal v3.1.4 | Equity Trading Platform</span>
+        <span>Fincept Terminal v{APP_VERSION} | Equity Trading Platform</span>
         <span>
           Broker: <span style={{ color: FINCEPT.ORANGE }}>{activeBrokerMetadata?.displayName?.toUpperCase() || 'NONE'}</span> |
           Mode: <span style={{ color: isPaper ? FINCEPT.GREEN : FINCEPT.RED }}>

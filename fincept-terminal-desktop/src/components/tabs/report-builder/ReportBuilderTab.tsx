@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   FolderOpen,
   Settings as SettingsIcon,
@@ -14,6 +14,7 @@ import { ComponentTemplate, brandKitService, BrandKit, HeaderFooterTemplate, Par
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { TabFooter } from '@/components/common/TabFooter';
+import { reportBuilderMCPBridge } from '@/services/mcp/internal';
 
 // Import sub-components
 import { ReportHeader } from './ReportHeader';
@@ -149,18 +150,73 @@ const ReportBuilderTab: React.FC = () => {
     'ctrl+shift+/': () => setShowShortcuts(true),
   });
 
-  // Sync template with undo/redo history
+  // Sync template when undo/redo changes history (only when user triggers undo/redo)
+  const prevHistoryRef = useRef(templateHistory);
   useEffect(() => {
-    if (JSON.stringify(templateHistory) !== JSON.stringify(template)) {
+    // Only sync if templateHistory changed (undo/redo action), not if template changed (direct edit)
+    if (prevHistoryRef.current !== templateHistory) {
+      prevHistoryRef.current = templateHistory;
       setTemplate(templateHistory);
     }
-  }, [templateHistory, template, setTemplate]);
+  }, [templateHistory, setTemplate]);
 
   // Update time
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Register MCP bridge handlers on mount
+  useEffect(() => {
+    const registerBridge = async () => {
+      try {
+        console.log('[ReportBuilder] Registering MCP bridge handlers');
+        await reportBuilderMCPBridge.registerHandlers({
+          template,
+          setTemplate,
+          addComponent,
+          updateComponent,
+          deleteComponent,
+          updateMetadata,
+          saveTemplate,
+          loadTemplate: async (path: string) => {
+            await loadTemplate();
+          },
+          exportReport: async (format: string) => {
+            // Export logic would be handled by export dialog
+            return generatedPdfPath || '';
+          },
+          setPageTheme: (theme: string) => setPageTheme(theme as PageTheme),
+        });
+      } catch (error) {
+        console.error('[ReportBuilder] Error registering MCP bridge:', error);
+      }
+    };
+
+    registerBridge();
+
+    return () => {
+      try {
+        console.log('[ReportBuilder] Unregistering MCP bridge handlers');
+        reportBuilderMCPBridge.unregisterHandlers();
+      } catch (error) {
+        console.error('[ReportBuilder] Error unregistering MCP bridge:', error);
+      }
+    };
+    // Only register once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update template in bridge when it changes
+  useEffect(() => {
+    try {
+      if (reportBuilderMCPBridge && reportBuilderMCPBridge.updateTemplate) {
+        reportBuilderMCPBridge.updateTemplate(template);
+      }
+    } catch (error) {
+      console.error('[ReportBuilder] Error updating template in MCP bridge:', error);
+    }
+  }, [template]);
 
   // Handle brand kit change (with font update)
   const handleBrandKitChange = useCallback((brandKit: BrandKit) => {
@@ -230,8 +286,15 @@ const ReportBuilderTab: React.FC = () => {
 
   // Handle add component with history
   const handleAddComponent = useCallback((type: ReportComponent['type']) => {
-    addComponent(type);
-    setTemplateWithHistory(template);
+    const newComp = addComponent(type);
+    // addComponent returns the new component and updates template via setTemplate
+    // We need to build the updated template for undo/redo history
+    if (newComp) {
+      setTemplateWithHistory({
+        ...template,
+        components: [...template.components, newComp],
+      });
+    }
   }, [addComponent, template, setTemplateWithHistory]);
 
   return (
@@ -286,6 +349,7 @@ const ReportBuilderTab: React.FC = () => {
           template={template}
           selectedComponent={selectedComponent}
           onSelectComponent={setSelectedComponent}
+          onUpdateComponent={updateComponent}
           pageTheme={pageTheme}
           customBgColor={customBgColor}
           fontFamily={fontFamily}

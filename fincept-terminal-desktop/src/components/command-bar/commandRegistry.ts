@@ -200,15 +200,6 @@ export const COMMANDS: Command[] = [
     keywords: ['maritime', 'shipping', 'vessels', 'ports']
   },
   {
-    id: 'polygon',
-    name: 'Polygon.io',
-    description: 'Polygon market data',
-    aliases: ['polygon', 'poly'],
-    category: 'navigation',
-    action: 'polygon',
-    keywords: ['polygon', 'data', 'market', 'api']
-  },
-  {
     id: 'relmap',
     name: 'Relationship Map',
     description: 'Entity relationship mapping',

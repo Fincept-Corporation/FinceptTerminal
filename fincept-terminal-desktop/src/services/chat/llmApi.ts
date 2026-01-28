@@ -41,6 +41,31 @@ export interface LLMResponse {
 export type StreamCallback = (chunk: string, done: boolean) => void;
 
 class LLMApiService {
+  // Execute MCP tool (internal or external)
+  private async executeMCPTool(serverId: string, toolName: string, args: any): Promise<any> {
+    if (serverId === 'fincept-terminal') {
+      // Internal tool - use terminalMCPProvider directly
+      const { terminalMCPProvider, isInternalMCPInitialized } = await import('../mcp/internal');
+
+      // Check if MCP system is initialized
+      if (!isInternalMCPInitialized()) {
+        throw new Error('Internal MCP system not initialized. Please restart the application.');
+      }
+
+      const result = await terminalMCPProvider.callTool(toolName, args);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Tool execution failed');
+      }
+
+      return result.data;
+    } else {
+      // External MCP server - use mcpManager
+      const { mcpManager } = await import('../mcp/mcpManager');
+      return await mcpManager.callTool(serverId, toolName, args);
+    }
+  }
+
   // Normalize model ID for native provider APIs
   // OpenRouter uses "provider/model" format, but native APIs need just the model name
   private normalizeModelId(provider: string, modelId: string): string {
@@ -707,6 +732,9 @@ class LLMApiService {
         }
       }));
 
+      llmLogger.debug(`[chatWithTools] Formatted ${formattedTools.length} tools for LLM`,
+        formattedTools.map(t => t.function.name));
+
       // Build messages array
       const messages: ChatMessage[] = [
         { role: 'system', content: config.systemPrompt || 'You are a helpful assistant with access to tools. Use them when appropriate to help the user.' },
@@ -769,17 +797,11 @@ class LLMApiService {
             if (parts.length === 2) {
               const [serverId, toolName] = parts;
 
-              // Notify about tool call
               onToolCall?.(toolName, args);
 
               try {
-                // Execute the tool via MCP
-                const { mcpManager } = await import('../mcp/mcpManager');
-                const result = await mcpManager.callTool(serverId, toolName, args);
-
-                // Notify about tool result
+                const result = await this.executeMCPTool(serverId, toolName, args);
                 onToolCall?.(toolName, args, result);
-
                 toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
               } catch (toolError) {
                 toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
@@ -787,15 +809,14 @@ class LLMApiService {
             }
           }
 
-          // If we have tool results, make a follow-up call to get the final response
+          // Return tool results directly for speed
           if (toolResults) {
-            const followUpMessages: ChatMessage[] = [
-              ...messages,
-              { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
-              { role: 'user', content: 'Please provide a summary based on the tool results above.' }
-            ];
-
-            return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
+            const content = toolResults.trim();
+            if (onStream) {
+              onStream(content, false);
+              onStream('', true);
+            }
+            return { content };
           }
         }
 
@@ -837,8 +858,7 @@ class LLMApiService {
               onToolCall?.(toolName, args);
 
               try {
-                const { mcpManager } = await import('../mcp/mcpManager');
-                const result = await mcpManager.callTool(serverId, toolName, args);
+                const result = await this.executeMCPTool(serverId, toolName, args);
                 onToolCall?.(toolName, args, result);
                 toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
               } catch (toolError) {
@@ -896,8 +916,7 @@ class LLMApiService {
               onToolCall?.(toolName, args);
 
               try {
-                const { mcpManager } = await import('../mcp/mcpManager');
-                const result = await mcpManager.callTool(serverId, toolName, args);
+                const result = await this.executeMCPTool(serverId, toolName, args);
                 onToolCall?.(toolName, args, result);
                 toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
               } catch (toolError) {
@@ -950,7 +969,7 @@ class LLMApiService {
     }
   }
 
-  // Fincept with tools support - falls back to regular call since tools not supported
+  // Fincept with tools support
   private async callFinceptWithTools(
     messages: ChatMessage[],
     config: LLMConfig,
@@ -958,9 +977,176 @@ class LLMApiService {
     onStream?: StreamCallback,
     onToolCall?: (toolName: string, args: any, result?: any) => void
   ): Promise<LLMResponse> {
-    // Fincept LLM API doesn't support tools, fall back to regular call
-    llmLogger.warn('Fincept API does not support tools, falling back to regular chat');
-    return this.callFincept(messages, config, onStream);
+    const url = config.baseUrl || 'https://finceptbackend.share.zrok.io/research/llm';
+
+    try {
+      // Build full prompt
+      const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+      const conversationParts: string[] = [];
+
+      if (systemPrompt) {
+        conversationParts.push(`System: ${systemPrompt}`);
+      }
+
+      for (const msg of messages) {
+        if (msg.role === 'user') {
+          conversationParts.push(`User: ${msg.content}`);
+        } else if (msg.role === 'assistant') {
+          conversationParts.push(`Assistant: ${msg.content}`);
+        }
+      }
+
+      const fullPrompt = conversationParts.join('\n\n');
+
+      const requestBody: any = {
+        prompt: fullPrompt,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
+        tools: tools.map(t => t.function) // Send tools in OpenAI format
+      };
+
+      // Only add tool_choice if tools are present
+      if (tools.length > 0) {
+        requestBody.tool_choice = { type: 'auto' };
+      }
+
+      console.log('[Fincept Tools] Request body:', JSON.stringify(requestBody, null, 2));
+      llmLogger.debug('Fincept API with tools request:', { url, tools: tools.length });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': config.apiKey || ''
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('[Fincept Tools] Response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        console.error('[Fincept Tools] Error response:', error);
+        llmLogger.error('Fincept API error response:', error);
+        throw new Error(error.detail || error.message || `Fincept API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[Fincept Tools] Response data:', JSON.stringify(data, null, 2));
+      llmLogger.debug('Fincept API response:', data);
+
+      // Response structure: { success: true, data: { response, tool_calls, ... } }
+      if (!data.success) {
+        throw new Error(data.error || 'API request failed');
+      }
+
+      const responseData = data.data;
+
+      // Check for tool calls in response
+      console.log('[Fincept Tools] Checking for tool_calls:', responseData?.tool_calls);
+
+      if (responseData.tool_calls && Array.isArray(responseData.tool_calls) && responseData.tool_calls.length > 0) {
+        console.log('[Fincept Tools] Found tool calls:', responseData.tool_calls.length);
+        let toolResults = '';
+
+        for (const toolCall of responseData.tool_calls) {
+          const functionName = toolCall.function?.name || toolCall.name;
+          const argsRaw = toolCall.function?.arguments || toolCall.arguments;
+
+          // Parse arguments if it's a string
+          const args = typeof argsRaw === 'string' ? JSON.parse(argsRaw) : argsRaw;
+
+          console.log('[Fincept Tools] Executing tool:', functionName, 'with args:', args);
+
+          // Parse function name (format: serverId__toolName)
+          const parts = functionName.split('__');
+          if (parts.length === 2) {
+            const [serverId, toolName] = parts;
+            onToolCall?.(toolName, args);
+
+            try {
+              const result = await this.executeMCPTool(serverId, toolName, args);
+              console.log('[Fincept Tools] Tool result:', result);
+              onToolCall?.(toolName, args, result);
+              toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
+            } catch (toolError) {
+              console.error('[Fincept Tools] Tool error:', toolError);
+              toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
+            }
+          }
+        }
+
+        // If we have tool results, send them back to LLM for final formatting
+        if (toolResults) {
+          console.log('[Fincept Tools] Sending tool results back to LLM for formatting');
+
+          // Build new prompt with tool results
+          const newPrompt = `${fullPrompt}\n\nAssistant: I used the following tools:\n${toolResults}\n\nNow I'll provide a natural language summary based on these results.`;
+
+          const followUpBody = {
+            prompt: newPrompt,
+            temperature: config.temperature,
+            max_tokens: config.maxTokens
+          };
+
+          const followUpResponse = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': config.apiKey || ''
+            },
+            body: JSON.stringify(followUpBody)
+          });
+
+          if (!followUpResponse.ok) {
+            throw new Error(`Follow-up call failed: ${followUpResponse.status}`);
+          }
+
+          const followUpData = await followUpResponse.json();
+          const followUpContent = followUpData.data?.response || followUpData.data?.content || '';
+
+          if (onStream && followUpContent) {
+            onStream(followUpContent, false);
+            onStream('', true);
+          }
+
+          return {
+            content: followUpContent,
+            usage: followUpData.data?.usage ? {
+              promptTokens: (responseData.usage?.input_tokens || 0) + (followUpData.data.usage.input_tokens || 0),
+              completionTokens: (responseData.usage?.output_tokens || 0) + (followUpData.data.usage.output_tokens || 0),
+              totalTokens: (responseData.usage?.total_tokens || 0) + (followUpData.data.usage.total_tokens || 0)
+            } : undefined
+          };
+        }
+      }
+
+      // No tool calls, return the response content
+      const content = responseData.response || responseData.content || responseData.answer || responseData.text || '';
+      console.log('[Fincept Tools] No tool calls, returning content:', content?.substring(0, 100));
+
+      if (onStream && content) {
+        onStream(content, false);
+        onStream('', true);
+      }
+
+      const usage = responseData.usage || data.usage || {};
+
+      return {
+        content,
+        usage: {
+          promptTokens: usage.input_tokens || usage.prompt_tokens || 0,
+          completionTokens: usage.output_tokens || usage.completion_tokens || 0,
+          totalTokens: usage.total_tokens || 0
+        }
+      };
+    } catch (error) {
+      llmLogger.error('Fincept API with tools error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Fincept API error'
+      };
+    }
   }
 
   // OpenRouter with tools support
@@ -1024,13 +1210,12 @@ class LLMApiService {
         }
 
         if (toolResults) {
-          const followUpMessages: ChatMessage[] = [
-            ...messages,
-            { role: 'assistant', content: `I used the following tools:\n${toolResults}` },
-            { role: 'user', content: 'Please provide a summary based on the tool results above.' }
-          ];
-
-          return this.chat(followUpMessages[followUpMessages.length - 1].content, followUpMessages.slice(0, -1), onStream);
+          const content = toolResults.trim();
+          if (onStream) {
+            onStream(content, false);
+            onStream('', true);
+          }
+          return { content };
         }
       }
 

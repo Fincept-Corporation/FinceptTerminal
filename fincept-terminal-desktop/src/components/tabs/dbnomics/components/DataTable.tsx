@@ -1,12 +1,28 @@
 import React, { memo, useMemo } from 'react';
 import type { DataPoint } from '../types';
 
+// Fincept Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+};
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
+
 interface DataTableProps {
   seriesArray: DataPoint[];
-  colors: any;
 }
 
-function DataTable({ seriesArray, colors }: DataTableProps) {
+function DataTable({ seriesArray }: DataTableProps) {
   // Memoize unique periods across all series
   const allPeriods = useMemo(() => {
     return Array.from(
@@ -25,29 +41,43 @@ function DataTable({ seriesArray, colors }: DataTableProps) {
     });
   }, [allPeriods, seriesArray]);
 
-  const containerStyle = useMemo(() => ({
-    overflowX: 'auto' as const,
-    overflowY: 'auto' as const,
-    maxHeight: '300px',
-    border: `1px solid ${colors.textMuted}`,
-    backgroundColor: colors.panel,
-  }), [colors.textMuted, colors.panel]);
-
   return (
-    <div style={{ marginTop: '24px' }}>
-      <div style={{ color: colors.primary, fontSize: '11px', marginBottom: '8px' }}>DATA TABLE</div>
-      <div style={containerStyle}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
-          <thead style={{ position: 'sticky', top: 0, backgroundColor: '#1a1a1a', zIndex: 1 }}>
-            <tr style={{ borderBottom: `2px solid ${colors.textMuted}` }}>
+    <div style={{ marginTop: '12px' }}>
+      {/* Section Header */}
+      <div style={{
+        padding: '12px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderRadius: '2px 2px 0 0',
+      }}>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+          DATA TABLE
+        </span>
+      </div>
+
+      <div style={{
+        overflowX: 'auto',
+        overflowY: 'auto',
+        maxHeight: '300px',
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderTop: 'none',
+        borderRadius: '0 0 2px 2px',
+        backgroundColor: FINCEPT.PANEL_BG,
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: FONT_FAMILY }}>
+          <thead style={{ position: 'sticky', top: 0, backgroundColor: FINCEPT.HEADER_BG, zIndex: 1 }}>
+            <tr style={{ borderBottom: `2px solid ${FINCEPT.BORDER}` }}>
               <th style={{
                 padding: '8px 12px',
                 textAlign: 'left',
-                color: colors.primary,
-                fontWeight: 'bold',
+                color: FINCEPT.ORANGE,
+                fontWeight: 700,
                 whiteSpace: 'nowrap',
+                fontSize: '9px',
+                letterSpacing: '0.5px',
               }}>
-                Period
+                PERIOD
               </th>
               {seriesArray.map((series, idx) => (
                 <th
@@ -55,8 +85,10 @@ function DataTable({ seriesArray, colors }: DataTableProps) {
                   style={{
                     padding: '8px 12px',
                     textAlign: 'right',
-                    fontWeight: 'bold',
+                    fontWeight: 700,
                     whiteSpace: 'nowrap',
+                    fontSize: '9px',
+                    letterSpacing: '0.5px',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
@@ -74,12 +106,25 @@ function DataTable({ seriesArray, colors }: DataTableProps) {
           </thead>
           <tbody>
             {tableRows.map((row, idx) => (
-              <tr key={idx} style={{ borderBottom: '1px solid #1a1a1a' }}>
+              <tr
+                key={idx}
+                style={{
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
                 <td style={{
                   padding: '6px 12px',
-                  color: colors.text,
+                  color: FINCEPT.WHITE,
                   whiteSpace: 'nowrap',
-                  fontWeight: 'bold',
+                  fontWeight: 700,
+                  fontSize: '10px',
                 }}>
                   {row.period}
                 </td>
@@ -89,8 +134,9 @@ function DataTable({ seriesArray, colors }: DataTableProps) {
                     style={{
                       padding: '6px 12px',
                       textAlign: 'right',
-                      color: value !== null ? '#a3a3a3' : colors.textMuted,
+                      color: value !== null ? FINCEPT.CYAN : FINCEPT.MUTED,
                       whiteSpace: 'nowrap',
+                      fontSize: '10px',
                     }}
                   >
                     {value !== null && !isNaN(value) ? value.toFixed(4) : '—'}
@@ -101,8 +147,15 @@ function DataTable({ seriesArray, colors }: DataTableProps) {
           </tbody>
         </table>
       </div>
-      <div style={{ color: colors.textMuted, fontSize: '9px', marginTop: '6px', textAlign: 'right' }}>
-        Showing latest 50 periods
+      <div style={{
+        color: FINCEPT.GRAY,
+        fontSize: '9px',
+        marginTop: '6px',
+        textAlign: 'right',
+        fontFamily: FONT_FAMILY,
+        letterSpacing: '0.5px',
+      }}>
+        SHOWING LATEST 50 PERIODS
       </div>
     </div>
   );

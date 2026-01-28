@@ -100,7 +100,6 @@ export class GetFundamentalsNode implements INodeType {
           { name: 'Yahoo Finance', value: 'yahoo' },
           { name: 'Alpha Vantage', value: 'alphavantage' },
           { name: 'Financial Modeling Prep', value: 'fmp' },
-          { name: 'Polygon.io', value: 'polygon' },
           { name: 'IEX Cloud', value: 'iex' },
           { name: 'Finnhub', value: 'finnhub' },
           { name: 'SEC EDGAR', value: 'sec' },

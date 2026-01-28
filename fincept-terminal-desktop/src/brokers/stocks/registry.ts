@@ -977,17 +977,19 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
   },
 
   // ============================================================================
-  // PAPER TRADING (YFinance Data)
+  // PAPER TRADING / DATA PROVIDERS (No Real Broker - Free Data + Paper Trading)
   // ============================================================================
+  // NOTE: yfinance is categorized under 'us' region but supports global markets
+  // It's free, requires NO credentials, and is ONLY for paper trading
 
   yfinance: {
     id: 'yfinance',
     name: 'yfinance',
-    displayName: 'YFinance (Paper Trading)',
+    displayName: 'YFinance (Free Paper Trading)',
     logo: 'https://fincept.in/brokers/yfinance.png',
     website: 'https://finance.yahoo.com',
 
-    region: 'us',
+    region: 'us', // Primary region, but supports global markets
     country: 'US',
     currency: 'USD',
     exchanges: ['NYSE', 'NASDAQ', 'AMEX', 'NSE', 'BSE', 'LSE', 'XETRA', 'TSX', 'ASX', 'HKEX'],
@@ -1002,14 +1004,14 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
     },
 
     features: {
-      webSocket: false,
+      webSocket: false, // No real-time streaming - poll-based quotes
       amo: false,
       gtt: false,
       bracketOrder: false,
       coverOrder: false,
       marginCalculator: false,
       optionsChain: false,
-      paperTrading: true,
+      paperTrading: true, // ONLY paper trading - no live trading support
     },
 
     tradingFeatures: {
@@ -1022,7 +1024,7 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
 
     productTypes: ['CASH'],
 
-    authType: 'api_key',
+    authType: 'api_key', // NOTE: This is a placeholder - no actual credentials needed
 
     rateLimit: {
       ordersPerSecond: 10,

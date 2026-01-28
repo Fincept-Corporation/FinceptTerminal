@@ -53,7 +53,6 @@ export class StreamQuotesNode implements INodeType {
           { name: 'Binance', value: 'binance' },
           { name: 'Kraken', value: 'kraken' },
           { name: 'Coinbase', value: 'coinbase' },
-          { name: 'Polygon.io', value: 'polygon' },
           { name: 'Finnhub', value: 'finnhub' },
           { name: 'Alpaca', value: 'alpaca' },
           { name: 'Zerodha', value: 'zerodha' },
@@ -219,8 +218,6 @@ export class StreamQuotesNode implements INodeType {
         return 'wss://ws.kraken.com';
       case 'coinbase':
         return 'wss://ws-feed.exchange.coinbase.com';
-      case 'polygon':
-        return 'wss://socket.polygon.io/stocks';
       case 'finnhub':
         return 'wss://ws.finnhub.io';
       case 'alpaca':

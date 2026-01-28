@@ -339,4 +339,224 @@ export class VectorBTAdapter extends BaseBacktestingAdapter {
   async getHealth(): Promise<HealthStatus> {
     return { status: 'healthy', message: 'VectorBT operational' };
   }
+
+  // ============================================================================
+  // Extended VectorBT Operations
+  // ============================================================================
+
+  /**
+   * Get the full strategy catalog from Python
+   */
+  async getStrategyCatalog(): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'get_strategies',
+        args: JSON.stringify({}),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Failed to get strategy catalog');
+      return result.data;
+    } catch (error) {
+      throw new Error(`Failed to get strategy catalog: ${error}`);
+    }
+  }
+
+  /**
+   * Download historical data from various sources (yfinance, binance, ccxt, alpaca, gbm)
+   */
+  async downloadHistoricalData(request: {
+    symbols: string[];
+    startDate: string;
+    endDate: string;
+    timeframe?: string;
+    source?: string;
+    sourceConfig?: Record<string, any>;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'get_historical_data',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Failed to download data');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Failed to download data: ${error}`);
+    }
+  }
+
+  /**
+   * Generate trading signals using vbt_signals module
+   */
+  async generateSignals(request: {
+    generatorType: string;
+    symbols: string[];
+    startDate: string;
+    endDate: string;
+    params: Record<string, any>;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'generate_signals',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Failed to generate signals');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Failed to generate signals: ${error}`);
+    }
+  }
+
+  /**
+   * Generate ML labels using vbt_labels module
+   */
+  async generateLabels(request: {
+    labelType: string;
+    symbols: string[];
+    startDate: string;
+    endDate: string;
+    params: Record<string, any>;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'generate_labels',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Failed to generate labels');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Failed to generate labels: ${error}`);
+    }
+  }
+
+  /**
+   * Generate cross-validation splits using vbt_splitters module
+   */
+  async generateSplits(request: {
+    splitterType: string;
+    symbols?: string[];
+    startDate?: string;
+    endDate?: string;
+    totalBars?: number;
+    params: Record<string, any>;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'generate_splits',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Failed to generate splits');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Failed to generate splits: ${error}`);
+    }
+  }
+
+  /**
+   * Analyze returns using vbt_returns (ReturnsAccessor) + vbt_generic (Drawdowns, Ranges)
+   */
+  async analyzeReturns(request: {
+    analysisType: string;
+    symbols: string[];
+    startDate: string;
+    endDate: string;
+    benchmark?: string;
+    params: Record<string, any>;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'analyze_returns',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Returns analysis failed');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Returns analysis failed: ${error}`);
+    }
+  }
+
+  /**
+   * Generate indicator-based signals (crossover, threshold, breakout, mean reversion, filter)
+   */
+  async indicatorSignals(request: {
+    mode: string;
+    symbols: string[];
+    startDate: string;
+    endDate: string;
+    indicator?: string;
+    params: Record<string, any>;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'indicator_signals',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Indicator signal generation failed');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Indicator signal generation failed: ${error}`);
+    }
+  }
+
+  /**
+   * Run indicator parameter sweep using IndicatorFactory.run_combs()
+   */
+  async indicatorParamSweep(request: {
+    indicator: string;
+    symbols: string[];
+    startDate: string;
+    endDate: string;
+    paramRanges: Record<string, { min: number; max: number; step: number }>;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'indicator_param_sweep',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Parameter sweep failed');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Parameter sweep failed: ${error}`);
+    }
+  }
+
+  /**
+   * Convert ML labels to trading signals using labels_to_signals()
+   */
+  async labelsToSignals(request: {
+    labelType: string;
+    symbols: string[];
+    startDate: string;
+    endDate: string;
+    params: Record<string, any>;
+    entryLabel?: number;
+    exitLabel?: number;
+  }): Promise<any> {
+    try {
+      const stdout = await invoke<string>('execute_python_backtest', {
+        provider: 'vectorbt',
+        command: 'labels_to_signals',
+        args: JSON.stringify(request),
+      });
+      const result = this.extractJSON(stdout);
+      if (!result.success) throw new Error(result.error || 'Labels-to-signals conversion failed');
+      return result.data || result;
+    } catch (error) {
+      throw new Error(`Labels-to-signals conversion failed: ${error}`);
+    }
+  }
 }

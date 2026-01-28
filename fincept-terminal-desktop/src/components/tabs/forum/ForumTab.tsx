@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { APP_VERSION } from '@/constants/version';
 import { TabFooter } from '@/components/common/TabFooter';
 
 // Local imports
@@ -187,7 +188,7 @@ const ForumTab: React.FC = () => {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '16px' }}>
-            <span>Fincept Global Forum v2.4.1 | Professional trading community</span>
+            <span>Fincept Global Forum v{APP_VERSION} | Professional trading community</span>
             <span>Posts: {forum.totalPosts.toLocaleString()} | Users: {(forum.forumStats?.total_comments || 47832).toLocaleString()} | Active: {forum.onlineUsers}</span>
           </div>
           <div style={{ display: 'flex', gap: '16px' }}>

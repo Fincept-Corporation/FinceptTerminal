@@ -30,6 +30,9 @@ import {
   sqliteService,
 } from '@/services/core/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
+import MarkdownRenderer from '@/components/common/MarkdownRenderer';
+import { useTabSession } from '@/hooks/useTabSession';
+import { cacheService, TTL } from '@/services/cache/cacheService';
 import agentService, {
   type AgentConfig as ServiceAgentConfig,
   type SystemInfo,
@@ -130,19 +133,120 @@ const OUTPUT_MODELS = [
 
 // Use LLM_PROVIDERS from sqliteService - includes fincept-llm and all configured providers
 
+// Cache keys and TTLs for agent data
+const AGENT_CACHE_KEYS = {
+  DISCOVERED_AGENTS: 'agents:discovered-agents',
+  SYSTEM_INFO: 'agents:system-info',
+  TOOLS_INFO: 'agents:tools-info',
+} as const;
+
+const AGENT_CACHE_TTL = TTL['10m']; // 10 minutes for agent discovery
+const SYSTEM_CACHE_TTL = TTL['30m']; // 30 minutes for system info/tools
+
+// Tab session default state
+interface AgentTabSessionState {
+  viewMode: ViewMode;
+  selectedCategory: string;
+  testQuery: string;
+  useAutoRouting: boolean;
+  teamMode: 'coordinate' | 'route' | 'collaborate';
+  workflowSymbol: string;
+  selectedOutputModel: string;
+}
+
+const DEFAULT_TAB_SESSION: AgentTabSessionState = {
+  viewMode: 'agents',
+  selectedCategory: 'all',
+  testQuery: 'Analyze AAPL stock and provide your investment thesis.',
+  useAutoRouting: true,
+  teamMode: 'coordinate',
+  workflowSymbol: 'AAPL',
+  selectedOutputModel: '',
+};
+
+/**
+ * Extract the actual readable text from an agent response string.
+ * The backend may return a stringified Python dict like:
+ *   "{'success': True, 'data': {'response': 'actual markdown...'}}"
+ * or a raw JSON string with nested response fields.
+ */
+function extractAgentResponseText(raw: string): string {
+  if (!raw || typeof raw !== 'string') return raw || '';
+
+  // Try parsing as JSON first
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null) {
+      // Case: { data: { response: "..." } }
+      if (parsed.data?.response && typeof parsed.data.response === 'string') {
+        return parsed.data.response;
+      }
+      // Case: { response: "..." } (top-level)
+      if (parsed.response && typeof parsed.response === 'string') {
+        // The response field itself might be a stringified dict
+        return extractAgentResponseText(parsed.response);
+      }
+      // Case: { result: "..." }
+      if (parsed.result && typeof parsed.result === 'string') {
+        return parsed.result;
+      }
+    }
+  } catch {
+    // Not valid JSON — may be a Python-style dict string
+  }
+
+  // Try converting Python-style dict string to JSON (True/False/None → true/false/null, single→double quotes)
+  try {
+    const jsonified = raw
+      .replace(/'/g, '"')
+      .replace(/\bTrue\b/g, 'true')
+      .replace(/\bFalse\b/g, 'false')
+      .replace(/\bNone\b/g, 'null');
+    const parsed = JSON.parse(jsonified);
+    if (typeof parsed === 'object' && parsed !== null) {
+      if (parsed.data?.response && typeof parsed.data.response === 'string') {
+        return parsed.data.response;
+      }
+      if (parsed.response && typeof parsed.response === 'string') {
+        return parsed.response;
+      }
+    }
+  } catch {
+    // Not parseable — return as-is
+  }
+
+  return raw;
+}
+
 // =============================================================================
 // Component
 // =============================================================================
 
 const AgentConfigTab: React.FC = () => {
-  // View state
-  const [viewMode, setViewMode] = useState<ViewMode>('agents');
+  // Tab session persistence - restore UI state across navigation
+  const { state: tabSession, updateState: updateTabSession, isRestored: isSessionRestored } = useTabSession<AgentTabSessionState>({
+    tabId: 'agent-config',
+    tabName: 'Agent Studio',
+    defaultState: DEFAULT_TAB_SESSION,
+    debounceMs: 800,
+  });
+
+  // View state - synced with tab session
+  const [viewMode, setViewModeInternal] = useState<ViewMode>(tabSession.viewMode);
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setViewModeInternal(mode);
+    updateTabSession({ viewMode: mode });
+  }, [updateTabSession]);
 
   // Agent state - now using dynamic discovery
   const [discoveredAgents, setDiscoveredAgents] = useState<AgentCard[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentCard | null>(null);
   const [agentsByCategory, setAgentsByCategory] = useState<Record<string, AgentCard[]>>({});
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategoryInternal] = useState<string>(tabSession.selectedCategory);
+  const setSelectedCategory = useCallback((cat: string) => {
+    setSelectedCategoryInternal(cat);
+    updateTabSession({ selectedCategory: cat });
+  }, [updateTabSession]);
   const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,20 +280,36 @@ const AgentConfigTab: React.FC = () => {
   const [configuredLLMs, setConfiguredLLMs] = useState<DbLLMConfig[]>([]);
   const [llmProvidersList, setLlmProvidersList] = useState(DB_LLM_PROVIDERS);
 
-  // Query & execution state
-  const [testQuery, setTestQuery] = useState('Analyze AAPL stock and provide your investment thesis.');
+  // Query & execution state - synced with tab session
+  const [testQuery, setTestQueryInternal] = useState(tabSession.testQuery);
+  const setTestQuery = useCallback((q: string) => {
+    setTestQueryInternal(q);
+    updateTabSession({ testQuery: q });
+  }, [updateTabSession]);
   const [testResult, setTestResult] = useState<any>(null);
-  const [selectedOutputModel, setSelectedOutputModel] = useState('');
+  const [selectedOutputModel, setSelectedOutputModelInternal] = useState(tabSession.selectedOutputModel);
+  const setSelectedOutputModel = useCallback((m: string) => {
+    setSelectedOutputModelInternal(m);
+    updateTabSession({ selectedOutputModel: m });
+  }, [updateTabSession]);
   const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [jsonText, setJsonText] = useState('');
 
-  // SuperAgent routing state
-  const [useAutoRouting, setUseAutoRouting] = useState(true);
+  // SuperAgent routing state - synced with tab session
+  const [useAutoRouting, setUseAutoRoutingInternal] = useState(tabSession.useAutoRouting);
+  const setUseAutoRouting = useCallback((v: boolean) => {
+    setUseAutoRoutingInternal(v);
+    updateTabSession({ useAutoRouting: v });
+  }, [updateTabSession]);
   const [lastRoutingResult, setLastRoutingResult] = useState<RoutingResult | null>(null);
 
-  // Team state
+  // Team state - synced with tab session
   const [teamMembers, setTeamMembers] = useState<AgentCard[]>([]);
-  const [teamMode, setTeamMode] = useState<'coordinate' | 'route' | 'collaborate'>('coordinate');
+  const [teamMode, setTeamModeInternal] = useState<'coordinate' | 'route' | 'collaborate'>(tabSession.teamMode);
+  const setTeamMode = useCallback((m: 'coordinate' | 'route' | 'collaborate') => {
+    setTeamModeInternal(m);
+    updateTabSession({ teamMode: m });
+  }, [updateTabSession]);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -202,10 +322,27 @@ const AgentConfigTab: React.FC = () => {
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [copiedTool, setCopiedTool] = useState<string | null>(null);
 
-  // Workflow/Planner state
-  const [workflowSymbol, setWorkflowSymbol] = useState('AAPL');
+  // Workflow/Planner state - synced with tab session
+  const [workflowSymbol, setWorkflowSymbolInternal] = useState(tabSession.workflowSymbol);
+  const setWorkflowSymbol = useCallback((s: string) => {
+    setWorkflowSymbolInternal(s);
+    updateTabSession({ workflowSymbol: s });
+  }, [updateTabSession]);
   const [currentPlan, setCurrentPlan] = useState<ExecutionPlan | null>(null);
   const [planExecuting, setPlanExecuting] = useState(false);
+
+  // Restore session state when tab session loads
+  useEffect(() => {
+    if (isSessionRestored) {
+      setViewModeInternal(tabSession.viewMode);
+      setSelectedCategoryInternal(tabSession.selectedCategory);
+      setTestQueryInternal(tabSession.testQuery);
+      setUseAutoRoutingInternal(tabSession.useAutoRouting);
+      setTeamModeInternal(tabSession.teamMode);
+      setWorkflowSymbolInternal(tabSession.workflowSymbol);
+      setSelectedOutputModelInternal(tabSession.selectedOutputModel);
+    }
+  }, [isSessionRestored]);
 
   // =============================================================================
   // Effects
@@ -281,6 +418,23 @@ const AgentConfigTab: React.FC = () => {
   };
 
   const loadSystemData = async () => {
+    // Check cache first
+    try {
+      const [cachedSysInfo, cachedTools] = await Promise.all([
+        cacheService.get<SystemInfo>(AGENT_CACHE_KEYS.SYSTEM_INFO),
+        cacheService.get<ToolsInfo>(AGENT_CACHE_KEYS.TOOLS_INFO),
+      ]);
+
+      if (cachedSysInfo?.data && cachedTools?.data) {
+        console.log('[AgentConfigTab] Loaded system data from cache');
+        setSystemInfo(cachedSysInfo.data);
+        setToolsInfo(cachedTools.data);
+        return;
+      }
+    } catch (cacheErr) {
+      console.warn('[AgentConfigTab] System data cache read failed:', cacheErr);
+    }
+
     try {
       // Load system info and tools with generous timeout (Python subprocess startup can be slow)
       const timeoutPromise = new Promise<never>((_, reject) =>
@@ -294,8 +448,14 @@ const AgentConfigTab: React.FC = () => {
 
       const [sysInfo, tools] = await Promise.race([dataPromise, timeoutPromise]);
 
-      if (sysInfo) setSystemInfo(sysInfo);
-      if (tools) setToolsInfo(tools);
+      if (sysInfo) {
+        setSystemInfo(sysInfo);
+        await cacheService.set(AGENT_CACHE_KEYS.SYSTEM_INFO, sysInfo, 'api-response', SYSTEM_CACHE_TTL).catch(() => {});
+      }
+      if (tools) {
+        setToolsInfo(tools);
+        await cacheService.set(AGENT_CACHE_KEYS.TOOLS_INFO, tools, 'api-response', SYSTEM_CACHE_TTL).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to load system data:', err);
       // Non-critical - UI works without system data
@@ -305,6 +465,18 @@ const AgentConfigTab: React.FC = () => {
   };
 
   const loadDiscoveredAgents = async () => {
+    // Check cache first for instant load
+    try {
+      const cached = await cacheService.get<AgentCard[]>(AGENT_CACHE_KEYS.DISCOVERED_AGENTS);
+      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+        console.log(`[AgentConfigTab] Loaded ${cached.data.length} agents from cache`);
+        setAgentsFromList(cached.data);
+        return;
+      }
+    } catch (cacheErr) {
+      console.warn('[AgentConfigTab] Cache read failed:', cacheErr);
+    }
+
     // Strategy: Use fast Rust-based discovery first (list_available_agents)
     // Only fall back to Python-based discovery if Rust fails
 
@@ -316,6 +488,8 @@ const AgentConfigTab: React.FC = () => {
       if (Array.isArray(agents) && agents.length > 0) {
         console.log(`[AgentConfigTab] Loaded ${agents.length} agents via Rust (fast path)`);
         setAgentsFromList(agents);
+        // Cache the discovery result
+        await cacheService.set(AGENT_CACHE_KEYS.DISCOVERED_AGENTS, agents, 'api-response', AGENT_CACHE_TTL).catch(() => {});
         return;
       }
     } catch (rustErr) {
@@ -334,6 +508,8 @@ const AgentConfigTab: React.FC = () => {
       if (Array.isArray(agents) && agents.length > 0) {
         console.log(`[AgentConfigTab] Loaded ${agents.length} agents via Python discovery`);
         setAgentsFromList(agents);
+        // Cache the discovery result
+        await cacheService.set(AGENT_CACHE_KEYS.DISCOVERED_AGENTS, agents, 'api-response', AGENT_CACHE_TTL).catch(() => {});
         return;
       }
     } catch (pythonErr) {
@@ -459,7 +635,7 @@ const AgentConfigTab: React.FC = () => {
           { role: 'user', content: testQuery, timestamp: new Date() },
           {
             role: 'assistant',
-            content: result.response || result.error || JSON.stringify(result, null, 2),
+            content: extractAgentResponseText(result.response || result.error || JSON.stringify(result, null, 2)),
             timestamp: new Date(),
             agentName: routingResult.agent_id,
           },
@@ -493,7 +669,7 @@ const AgentConfigTab: React.FC = () => {
           { role: 'user', content: testQuery, timestamp: new Date() },
           {
             role: 'assistant',
-            content: result.response || result.error || JSON.stringify(result, null, 2),
+            content: extractAgentResponseText(result.response || result.error || JSON.stringify(result, null, 2)),
             timestamp: new Date(),
             agentName: selectedAgent?.name || 'Agent',
           },
@@ -539,7 +715,7 @@ const AgentConfigTab: React.FC = () => {
         { role: 'user', content: testQuery, timestamp: new Date() },
         {
           role: 'assistant',
-          content: result.response || result.error || JSON.stringify(result, null, 2),
+          content: extractAgentResponseText(result.response || result.error || JSON.stringify(result, null, 2)),
           timestamp: new Date(),
           agentName: `Team (${teamMembers.length} agents)`,
         },
@@ -1040,7 +1216,10 @@ const AgentConfigTab: React.FC = () => {
               AGENTS ({discoveredAgents.length})
             </span>
             <button
-              onClick={loadDiscoveredAgents}
+              onClick={async () => {
+                await cacheService.delete(AGENT_CACHE_KEYS.DISCOVERED_AGENTS).catch(() => {});
+                loadDiscoveredAgents();
+              }}
               disabled={loading}
               style={{
                 padding: '4px',
@@ -1600,16 +1779,11 @@ const AgentConfigTab: React.FC = () => {
             padding: '12px',
           }}>
             {testResult ? (
-              <pre style={{
-                fontSize: '10px',
-                color: FINCEPT.WHITE,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                margin: 0,
-                fontFamily: '"IBM Plex Mono", monospace',
-              }}>
-                {typeof testResult === 'string' ? testResult : JSON.stringify(testResult, null, 2)}
-              </pre>
+              <MarkdownRenderer
+                content={extractAgentResponseText(
+                  typeof testResult === 'string' ? testResult : (testResult.response || JSON.stringify(testResult, null, 2))
+                )}
+              />
             ) : (
               <div style={{
                 display: 'flex',
@@ -1892,16 +2066,11 @@ const AgentConfigTab: React.FC = () => {
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
             {testResult ? (
-              <pre style={{
-                fontSize: '10px',
-                color: FINCEPT.WHITE,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                margin: 0,
-                fontFamily: '"IBM Plex Mono", monospace',
-              }}>
-                {JSON.stringify(testResult, null, 2)}
-              </pre>
+              <MarkdownRenderer
+                content={extractAgentResponseText(
+                  typeof testResult === 'string' ? testResult : (testResult.response || JSON.stringify(testResult, null, 2))
+                )}
+              />
             ) : (
               <div style={{
                 display: 'flex',
@@ -2118,16 +2287,11 @@ const AgentConfigTab: React.FC = () => {
         </div>
         <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
           {testResult ? (
-            <pre style={{
-              fontSize: '10px',
-              color: FINCEPT.WHITE,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              margin: 0,
-              fontFamily: '"IBM Plex Mono", monospace',
-            }}>
-              {JSON.stringify(testResult, null, 2)}
-            </pre>
+            <MarkdownRenderer
+              content={extractAgentResponseText(
+                typeof testResult === 'string' ? testResult : (testResult.response || JSON.stringify(testResult, null, 2))
+              )}
+            />
           ) : (
             <div style={{
               display: 'flex',
@@ -2732,7 +2896,7 @@ const AgentConfigTab: React.FC = () => {
           ...prev,
           {
             role: 'assistant',
-            content: result.response || result.error || 'No response',
+            content: extractAgentResponseText(result.response || result.error || 'No response'),
             timestamp: new Date(),
             agentName: routingResult.agent_id,
           },
@@ -2744,7 +2908,7 @@ const AgentConfigTab: React.FC = () => {
           ...prev,
           {
             role: 'assistant',
-            content: result.response || result.error || 'No response',
+            content: extractAgentResponseText(result.response || result.error || 'No response'),
             timestamp: new Date(),
             agentName: selectedAgent?.name || 'Agent',
           },
@@ -2866,13 +3030,17 @@ const AgentConfigTab: React.FC = () => {
                     {msg.agentName.toUpperCase()}
                   </div>
                 )}
-                <div style={{
-                  fontSize: '11px',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.5,
-                }}>
-                  {msg.content}
-                </div>
+                {msg.role === 'assistant' ? (
+                  <MarkdownRenderer content={msg.content} />
+                ) : (
+                  <div style={{
+                    fontSize: '11px',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.5,
+                  }}>
+                    {msg.content}
+                  </div>
+                )}
                 <div style={{
                   fontSize: '9px',
                   marginTop: '8px',
@@ -2973,7 +3141,13 @@ const AgentConfigTab: React.FC = () => {
             </span>
           </div>
           <button
-            onClick={() => loadSystemData()}
+            onClick={async () => {
+              await Promise.all([
+                cacheService.delete(AGENT_CACHE_KEYS.SYSTEM_INFO),
+                cacheService.delete(AGENT_CACHE_KEYS.TOOLS_INFO),
+              ]).catch(() => {});
+              loadSystemData();
+            }}
             style={{
               padding: '6px 10px',
               backgroundColor: 'transparent',
@@ -3413,7 +3587,10 @@ const AgentConfigTab: React.FC = () => {
         {/* Right: Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
-            onClick={loadDiscoveredAgents}
+            onClick={async () => {
+              await cacheService.delete(AGENT_CACHE_KEYS.DISCOVERED_AGENTS).catch(() => {});
+              loadDiscoveredAgents();
+            }}
             disabled={loading}
             style={{
               padding: '4px 8px',

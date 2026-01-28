@@ -1,11 +1,6 @@
 /**
- * Backtesting Shared Styles & Types
- *
- * FINCEPT UI Design System constants, reusable style factories,
- * and extended types for the institutional-grade backtesting system.
+ * Backtesting Shared Types & Constants
  */
-
-import React from 'react';
 
 // ============================================================================
 // FINCEPT Design System Colors
@@ -30,113 +25,7 @@ export const F = {
 } as const;
 
 // ============================================================================
-// Reusable Style Factories
-// ============================================================================
-
-export const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  backgroundColor: F.DARK_BG,
-  color: F.WHITE,
-  border: `1px solid ${F.BORDER}`,
-  borderRadius: '2px',
-  fontSize: '10px',
-  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-  outline: 'none',
-};
-
-export const labelStyle: React.CSSProperties = {
-  fontSize: '9px',
-  fontWeight: 700,
-  color: F.GRAY,
-  letterSpacing: '0.5px',
-  textTransform: 'uppercase',
-  marginBottom: '6px',
-  display: 'block',
-};
-
-export const sectionHeaderStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  backgroundColor: F.HEADER_BG,
-  borderBottom: `1px solid ${F.BORDER}`,
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  cursor: 'pointer',
-  userSelect: 'none',
-};
-
-export const panelStyle: React.CSSProperties = {
-  backgroundColor: F.PANEL_BG,
-  border: `1px solid ${F.BORDER}`,
-  borderRadius: '2px',
-};
-
-export const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: 'none',
-  cursor: 'pointer',
-  paddingRight: '28px',
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23787878'/%3E%3C/svg%3E")`,
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 10px center',
-};
-
-export const buttonStyle: React.CSSProperties = {
-  padding: '8px 14px',
-  fontSize: '10px',
-  fontWeight: 700,
-  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  border: 'none',
-  borderRadius: '2px',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-};
-
-export const tabStyle = (active: boolean): React.CSSProperties => ({
-  padding: '6px 12px',
-  fontSize: '9px',
-  fontWeight: 700,
-  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  color: active ? F.ORANGE : F.GRAY,
-  backgroundColor: active ? F.HEADER_BG : 'transparent',
-  border: 'none',
-  borderBottom: active ? `2px solid ${F.ORANGE}` : '2px solid transparent',
-  cursor: 'pointer',
-  transition: 'color 0.15s',
-});
-
-export const metricValueStyle = (value: number): React.CSSProperties => ({
-  fontSize: '12px',
-  fontWeight: 700,
-  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-  color: value > 0 ? F.GREEN : value < 0 ? F.RED : F.WHITE,
-});
-
-export const cellStyle: React.CSSProperties = {
-  padding: '6px 8px',
-  fontSize: '10px',
-  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-  borderBottom: `1px solid ${F.BORDER}`,
-};
-
-export const headerCellStyle: React.CSSProperties = {
-  ...cellStyle,
-  color: F.GRAY,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  fontSize: '9px',
-  letterSpacing: '0.5px',
-};
-
-// ============================================================================
-// Extended Types
+// Types
 // ============================================================================
 
 export type StrategyType =
@@ -179,88 +68,11 @@ export interface BacktestConfigExtended {
   benchmark: string;
   positionSizing: PositionSizing;
   positionSizeValue: number;
-  stopLoss: number;       // Stop-loss as decimal (0.05 = 5%), 0 = disabled
-  takeProfit: number;     // Take-profit as decimal (0.10 = 10%), 0 = disabled
-  trailingStop: number;   // Trailing stop as decimal (0.03 = 3%), 0 = disabled
-  allowShort: boolean;    // Allow short selling
-  compareRandom: boolean; // Compare vs random portfolio (stat significance)
-}
-
-export interface MonthlyReturnsData {
-  year: number;
-  months: (number | null)[];  // 12 months, null = no data
-  yearTotal: number;
-}
-
-export interface RollingMetric {
-  date: string;
-  value: number;
-}
-
-export interface AdvancedMetrics {
-  var95: number;
-  var99: number;
-  cvar95: number;
-  cvar99: number;
-  ulcerIndex: number;
-  omegaRatio: number;
-  tailRatio: number;
-  kurtosis: number;
-  skewness: number;
-  avgDailyReturn: number;
-  dailyReturnStd: number;
-  dailyReturnP5: number;
-  dailyReturnP25: number;
-  dailyReturnP75: number;
-  dailyReturnP95: number;
-  returnsHistogram: { bin: number; count: number }[];
-  monthlyReturns: MonthlyReturnsData[];
-  rollingSharpe: RollingMetric[];
-  rollingVolatility: RollingMetric[];
-  rollingDrawdown: RollingMetric[];
-  benchmarkAlpha: number;
-  benchmarkBeta: number;
-  informationRatio: number;
-  trackingError: number;
-  rSquared: number;
-  benchmarkCorrelation: number;
-}
-
-export interface ExtendedBacktestResult {
-  id: string;
-  status: 'completed' | 'failed';
-  performance: Record<string, number>;
-  trades: ExtendedTrade[];
-  equity: ExtendedEquityPoint[];
-  statistics: Record<string, number | string>;
-  advancedMetrics?: AdvancedMetrics;
-  logs: string[];
-  usingSyntheticData?: boolean;
-}
-
-export interface ExtendedTrade {
-  id: string;
-  symbol: string;
-  entryDate: string;
-  exitDate: string;
-  side: 'long' | 'short';
-  quantity: number;
-  entryPrice: number;
-  exitPrice: number;
-  pnl: number;
-  pnlPercent: number;
-  holdingPeriod: number;
-  commission: number;
-  slippage: number;
-  exitReason: string;
-}
-
-export interface ExtendedEquityPoint {
-  date: string;
-  equity: number;
-  returns: number;
-  drawdown: number;
-  benchmark?: number;
+  stopLoss: number;
+  takeProfit: number;
+  trailingStop: number;
+  allowShort: boolean;
+  compareRandom: boolean;
 }
 
 // ============================================================================
@@ -482,26 +294,6 @@ export const STRATEGY_DEFINITIONS: StrategyDefinition[] = [
 // Utility Functions
 // ============================================================================
 
-export function formatPercent(value: number, decimals = 2): string {
-  return `${(value * 100).toFixed(decimals)}%`;
-}
-
-export function formatNumber(value: number, decimals = 2): string {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
-export function formatCurrency(value: number): string {
-  return value.toLocaleString(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-}
-
 export function getDefaultParameters(strategyType: StrategyType): Record<string, number> {
   const def = STRATEGY_DEFINITIONS.find(s => s.type === strategyType);
   if (!def) return {};
@@ -511,3 +303,490 @@ export function getDefaultParameters(strategyType: StrategyType): Record<string,
   }
   return params;
 }
+
+// ============================================================================
+// Sub-Tab Types
+// ============================================================================
+
+export type BacktestingSubTab =
+  | 'backtest' | 'optimize' | 'data' | 'indicators'
+  | 'signals' | 'labels' | 'splitters' | 'catalog' | 'returns';
+
+export type OptimizationObjective = 'sharpe' | 'sortino' | 'return' | 'calmar' | 'profit_factor' | 'sqn';
+
+export type DataSourceType = 'yfinance' | 'binance' | 'ccxt' | 'alpaca' | 'gbm';
+
+export type SignalGeneratorType =
+  | 'RAND' | 'RANDX' | 'RANDNX' | 'RPROB' | 'RPROBX'
+  | 'RPROBCX' | 'RPROBNX' | 'STX' | 'STCX' | 'OHLCSTX' | 'OHLCSTCX';
+
+export type LabelGeneratorType = 'FIXLB' | 'MEANLB' | 'LEXLB' | 'TRENDLB' | 'BOLB';
+
+export type SplitterType = 'RollingSplitter' | 'ExpandingSplitter' | 'PurgedKFoldSplitter' | 'RangeSplitter';
+
+// ============================================================================
+// Param Definition (generic, reusable across tabs)
+// ============================================================================
+
+export interface ParamDef {
+  key: string;
+  label: string;
+  type: 'int' | 'float' | 'string';
+  default: number | string;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
+}
+
+// ============================================================================
+// Signal Generator Definitions
+// ============================================================================
+
+export const SIGNAL_GENERATOR_DEFINITIONS: Record<SignalGeneratorType, {
+  label: string;
+  description: string;
+  params: ParamDef[];
+}> = {
+  RAND: {
+    label: 'Random Entries',
+    description: 'Generate n random entry signals',
+    params: [
+      { key: 'n', label: 'Count', type: 'int', default: 10, min: 1, max: 500, step: 1 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+    ],
+  },
+  RANDX: {
+    label: 'Random Entry/Exit',
+    description: 'Generate n random entry/exit pairs',
+    params: [
+      { key: 'n', label: 'Count', type: 'int', default: 10, min: 1, max: 500, step: 1 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+    ],
+  },
+  RANDNX: {
+    label: 'Random Entry/Exit (Hold)',
+    description: 'Random entry/exit with min/max hold period',
+    params: [
+      { key: 'n', label: 'Count', type: 'int', default: 10, min: 1, max: 500, step: 1 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+      { key: 'min_hold', label: 'Min Hold', type: 'int', default: 1, min: 1, max: 100, step: 1 },
+      { key: 'max_hold', label: 'Max Hold', type: 'int', default: 20, min: 1, max: 500, step: 1 },
+    ],
+  },
+  RPROB: {
+    label: 'Prob. Entries',
+    description: 'Entries with fixed probability per bar',
+    params: [
+      { key: 'entry_prob', label: 'Entry Prob', type: 'float', default: 0.1, min: 0.01, max: 1.0, step: 0.01 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+    ],
+  },
+  RPROBX: {
+    label: 'Prob. Entry/Exit',
+    description: 'Entry and exit with independent probabilities',
+    params: [
+      { key: 'entry_prob', label: 'Entry Prob', type: 'float', default: 0.1, min: 0.01, max: 1.0, step: 0.01 },
+      { key: 'exit_prob', label: 'Exit Prob', type: 'float', default: 0.1, min: 0.01, max: 1.0, step: 0.01 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+    ],
+  },
+  RPROBCX: {
+    label: 'Prob. Entry/Exit (Cooldown)',
+    description: 'Probabilistic with cooldown between trades',
+    params: [
+      { key: 'entry_prob', label: 'Entry Prob', type: 'float', default: 0.1, min: 0.01, max: 1.0, step: 0.01 },
+      { key: 'exit_prob', label: 'Exit Prob', type: 'float', default: 0.1, min: 0.01, max: 1.0, step: 0.01 },
+      { key: 'cooldown', label: 'Cooldown', type: 'int', default: 5, min: 0, max: 100, step: 1 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+    ],
+  },
+  RPROBNX: {
+    label: 'Prob. Entry/Exit (N)',
+    description: 'N probabilistic entry/exit pairs',
+    params: [
+      { key: 'n', label: 'Count', type: 'int', default: 10, min: 1, max: 500, step: 1 },
+      { key: 'entry_prob', label: 'Entry Prob', type: 'float', default: 0.1, min: 0.01, max: 1.0, step: 0.01 },
+      { key: 'exit_prob', label: 'Exit Prob', type: 'float', default: 0.2, min: 0.01, max: 1.0, step: 0.01 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+    ],
+  },
+  STX: {
+    label: 'Stop/TP Exit',
+    description: 'Stop-loss and take-profit exit signals',
+    params: [
+      { key: 'stop_loss', label: 'Stop Loss', type: 'float', default: 0.05, min: 0.001, max: 0.5, step: 0.005 },
+      { key: 'take_profit', label: 'Take Profit', type: 'float', default: 0.1, min: 0.001, max: 1.0, step: 0.005 },
+    ],
+  },
+  STCX: {
+    label: 'Stop/TP/Trail Exit',
+    description: 'Stop-loss, take-profit, and trailing stop exits',
+    params: [
+      { key: 'stop_loss', label: 'Stop Loss', type: 'float', default: 0.05, min: 0.001, max: 0.5, step: 0.005 },
+      { key: 'take_profit', label: 'Take Profit', type: 'float', default: 0.1, min: 0.001, max: 1.0, step: 0.005 },
+      { key: 'trailing_stop', label: 'Trail Stop', type: 'float', default: 0.03, min: 0.001, max: 0.5, step: 0.005 },
+    ],
+  },
+  OHLCSTX: {
+    label: 'OHLC Stop/TP',
+    description: 'OHLC-aware stop-loss and take-profit',
+    params: [
+      { key: 'stop_loss', label: 'Stop Loss', type: 'float', default: 0.05, min: 0.001, max: 0.5, step: 0.005 },
+      { key: 'take_profit', label: 'Take Profit', type: 'float', default: 0.1, min: 0.001, max: 1.0, step: 0.005 },
+    ],
+  },
+  OHLCSTCX: {
+    label: 'OHLC Stop/TP/Trail',
+    description: 'OHLC-aware stop, take-profit, trailing stop',
+    params: [
+      { key: 'stop_loss', label: 'Stop Loss', type: 'float', default: 0.05, min: 0.001, max: 0.5, step: 0.005 },
+      { key: 'take_profit', label: 'Take Profit', type: 'float', default: 0.1, min: 0.001, max: 1.0, step: 0.005 },
+      { key: 'trailing_stop', label: 'Trail Stop', type: 'float', default: 0.03, min: 0.001, max: 0.5, step: 0.005 },
+    ],
+  },
+};
+
+// ============================================================================
+// Label Generator Definitions
+// ============================================================================
+
+export const LABEL_GENERATOR_DEFINITIONS: Record<LabelGeneratorType, {
+  label: string;
+  description: string;
+  params: ParamDef[];
+}> = {
+  FIXLB: {
+    label: 'Fixed Horizon',
+    description: 'Label based on return over a fixed horizon',
+    params: [
+      { key: 'horizon', label: 'Horizon', type: 'int', default: 5, min: 1, max: 100, step: 1 },
+      { key: 'threshold', label: 'Threshold', type: 'float', default: 0.0, min: -0.1, max: 0.1, step: 0.001 },
+    ],
+  },
+  MEANLB: {
+    label: 'Mean Reversion',
+    description: 'Label based on z-score from rolling mean',
+    params: [
+      { key: 'window', label: 'Window', type: 'int', default: 20, min: 5, max: 200, step: 1 },
+      { key: 'threshold', label: 'Threshold', type: 'float', default: 1.0, min: 0.1, max: 4.0, step: 0.1 },
+    ],
+  },
+  LEXLB: {
+    label: 'Local Extrema',
+    description: 'Label local minima (+1) and maxima (-1)',
+    params: [
+      { key: 'window', label: 'Window', type: 'int', default: 5, min: 1, max: 50, step: 1 },
+    ],
+  },
+  TRENDLB: {
+    label: 'Trend',
+    description: 'Label uptrend (+1), downtrend (-1), sideways (0)',
+    params: [
+      { key: 'window', label: 'Window', type: 'int', default: 20, min: 5, max: 200, step: 1 },
+      { key: 'threshold', label: 'Threshold', type: 'float', default: 0.0, min: -0.1, max: 0.1, step: 0.001 },
+    ],
+  },
+  BOLB: {
+    label: 'Bollinger Labels',
+    description: 'Label by position within Bollinger Bands (-2 to +2)',
+    params: [
+      { key: 'window', label: 'Window', type: 'int', default: 20, min: 5, max: 200, step: 1 },
+      { key: 'alpha', label: 'Alpha (Std)', type: 'float', default: 2.0, min: 0.5, max: 4.0, step: 0.1 },
+    ],
+  },
+};
+
+// ============================================================================
+// Splitter Definitions
+// ============================================================================
+
+export const SPLITTER_DEFINITIONS: Record<SplitterType, {
+  label: string;
+  description: string;
+  params: ParamDef[];
+}> = {
+  RollingSplitter: {
+    label: 'Rolling Window',
+    description: 'Fixed-size rolling train/test windows',
+    params: [
+      { key: 'window_len', label: 'Window Length', type: 'int', default: 252, min: 10, max: 2000, step: 1 },
+      { key: 'test_len', label: 'Test Length', type: 'int', default: 63, min: 5, max: 500, step: 1 },
+      { key: 'step', label: 'Step', type: 'int', default: 21, min: 1, max: 252, step: 1 },
+    ],
+  },
+  ExpandingSplitter: {
+    label: 'Expanding Window',
+    description: 'Growing train window with fixed test window',
+    params: [
+      { key: 'min_len', label: 'Min Train Length', type: 'int', default: 252, min: 10, max: 2000, step: 1 },
+      { key: 'test_len', label: 'Test Length', type: 'int', default: 63, min: 5, max: 500, step: 1 },
+      { key: 'step', label: 'Step', type: 'int', default: 21, min: 1, max: 252, step: 1 },
+    ],
+  },
+  PurgedKFoldSplitter: {
+    label: 'Purged K-Fold',
+    description: 'K-fold with purge & embargo for time series',
+    params: [
+      { key: 'n_splits', label: 'N Splits', type: 'int', default: 5, min: 2, max: 20, step: 1 },
+      { key: 'purge_len', label: 'Purge Length', type: 'int', default: 5, min: 0, max: 50, step: 1 },
+      { key: 'embargo_len', label: 'Embargo Length', type: 'int', default: 5, min: 0, max: 50, step: 1 },
+    ],
+  },
+  RangeSplitter: {
+    label: 'Custom Ranges',
+    description: 'Manually defined train/test date ranges',
+    params: [],
+  },
+};
+
+// ============================================================================
+// Data Source Definitions
+// ============================================================================
+
+export const DATA_SOURCE_DEFINITIONS: Record<DataSourceType, {
+  label: string;
+  description: string;
+  extraParams: ParamDef[];
+}> = {
+  yfinance: {
+    label: 'Yahoo Finance',
+    description: 'Free stock/ETF/crypto data via yfinance',
+    extraParams: [],
+  },
+  binance: {
+    label: 'Binance',
+    description: 'Crypto OHLCV data from Binance',
+    extraParams: [
+      { key: 'limit', label: 'Limit', type: 'int', default: 1000, min: 100, max: 10000, step: 100 },
+    ],
+  },
+  ccxt: {
+    label: 'CCXT (Multi-Exchange)',
+    description: 'Crypto data via CCXT from any exchange',
+    extraParams: [
+      { key: 'exchange_id', label: 'Exchange', type: 'string', default: 'binance' },
+      { key: 'limit', label: 'Limit', type: 'int', default: 1000, min: 100, max: 10000, step: 100 },
+    ],
+  },
+  alpaca: {
+    label: 'Alpaca',
+    description: 'US equity data via Alpaca Markets API',
+    extraParams: [
+      { key: 'api_key', label: 'API Key', type: 'string', default: '' },
+      { key: 'api_secret', label: 'API Secret', type: 'string', default: '' },
+    ],
+  },
+  gbm: {
+    label: 'Synthetic (GBM)',
+    description: 'Geometric Brownian Motion synthetic data',
+    extraParams: [
+      { key: 's0', label: 'Start Price', type: 'float', default: 100, min: 1, max: 10000, step: 1 },
+      { key: 'mu', label: 'Drift (mu)', type: 'float', default: 0.1, min: -1.0, max: 2.0, step: 0.01 },
+      { key: 'sigma', label: 'Vol (sigma)', type: 'float', default: 0.2, min: 0.01, max: 2.0, step: 0.01 },
+      { key: 'seed', label: 'Seed', type: 'int', default: 42, min: 0, max: 99999, step: 1 },
+    ],
+  },
+};
+
+// ============================================================================
+// Indicator Definitions
+// ============================================================================
+
+export interface IndicatorDef {
+  id: string;
+  label: string;
+  category: string;
+  params: ParamDef[];
+}
+
+export const INDICATOR_DEFINITIONS: IndicatorDef[] = [
+  // Trend
+  { id: 'ma', label: 'Moving Average (SMA)', category: 'Trend', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 20, min: 2, max: 500, step: 1 },
+  ]},
+  { id: 'ema', label: 'EMA', category: 'Trend', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 20, min: 2, max: 500, step: 1 },
+  ]},
+  { id: 'bbands', label: 'Bollinger Bands', category: 'Trend', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 20, min: 5, max: 100, step: 1 },
+    { key: 'alpha', label: 'Std Dev', type: 'float', default: 2.0, min: 0.5, max: 4.0, step: 0.1 },
+  ]},
+  { id: 'keltner', label: 'Keltner Channel', category: 'Trend', params: [
+    { key: 'ema_period', label: 'EMA Period', type: 'int', default: 20, min: 5, max: 100, step: 1 },
+    { key: 'atr_period', label: 'ATR Period', type: 'int', default: 10, min: 5, max: 50, step: 1 },
+    { key: 'multiplier', label: 'Multiplier', type: 'float', default: 2.0, min: 0.5, max: 5.0, step: 0.1 },
+  ]},
+  { id: 'donchian', label: 'Donchian Channel', category: 'Trend', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 20, min: 5, max: 200, step: 1 },
+  ]},
+  // Momentum
+  { id: 'rsi', label: 'RSI', category: 'Momentum', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 14, min: 2, max: 100, step: 1 },
+  ]},
+  { id: 'macd', label: 'MACD', category: 'Momentum', params: [
+    { key: 'fast_period', label: 'Fast', type: 'int', default: 12, min: 2, max: 100, step: 1 },
+    { key: 'slow_period', label: 'Slow', type: 'int', default: 26, min: 5, max: 200, step: 1 },
+    { key: 'signal_period', label: 'Signal', type: 'int', default: 9, min: 2, max: 50, step: 1 },
+  ]},
+  { id: 'stoch', label: 'Stochastic', category: 'Momentum', params: [
+    { key: 'k_period', label: '%K', type: 'int', default: 14, min: 5, max: 50, step: 1 },
+    { key: 'd_period', label: '%D', type: 'int', default: 3, min: 2, max: 20, step: 1 },
+  ]},
+  { id: 'momentum', label: 'Momentum', category: 'Momentum', params: [
+    { key: 'lookback', label: 'Lookback', type: 'int', default: 20, min: 1, max: 200, step: 1 },
+  ]},
+  { id: 'williams_r', label: 'Williams %R', category: 'Momentum', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 14, min: 5, max: 50, step: 1 },
+  ]},
+  { id: 'cci', label: 'CCI', category: 'Momentum', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 20, min: 5, max: 100, step: 1 },
+  ]},
+  // Volatility
+  { id: 'atr', label: 'ATR', category: 'Volatility', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 14, min: 2, max: 100, step: 1 },
+  ]},
+  { id: 'mstd', label: 'Moving Std Dev', category: 'Volatility', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 20, min: 2, max: 200, step: 1 },
+  ]},
+  { id: 'zscore', label: 'Z-Score', category: 'Volatility', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 20, min: 5, max: 200, step: 1 },
+  ]},
+  // Volume
+  { id: 'obv', label: 'On-Balance Volume', category: 'Volume', params: [] },
+  { id: 'vwap', label: 'VWAP', category: 'Volume', params: [] },
+  // Trend Strength
+  { id: 'adx', label: 'ADX', category: 'Trend Strength', params: [
+    { key: 'period', label: 'Period', type: 'int', default: 14, min: 5, max: 50, step: 1 },
+  ]},
+];
+
+// ============================================================================
+// Returns Analysis Types (vbt_returns + vbt_generic)
+// ============================================================================
+
+export type ReturnsAnalysisType = 'returns_stats' | 'drawdowns' | 'ranges' | 'rolling';
+
+export type RollingMetric =
+  | 'total' | 'annualized' | 'volatility' | 'sharpe' | 'sortino'
+  | 'calmar' | 'omega' | 'info_ratio' | 'downside_risk';
+
+export const RETURNS_ANALYSIS_DEFINITIONS: Record<ReturnsAnalysisType, {
+  label: string;
+  description: string;
+  params: ParamDef[];
+}> = {
+  returns_stats: {
+    label: 'Returns Stats',
+    description: 'Full returns statistics: ratios, capture, volatility, skew/kurtosis',
+    params: [
+      { key: 'risk_free', label: 'Risk-Free Rate', type: 'float', default: 0.0, min: 0, max: 0.2, step: 0.001 },
+      { key: 'n_trials', label: 'N Trials (Deflated Sharpe)', type: 'int', default: 1, min: 1, max: 1000, step: 1 },
+      { key: 'omega_threshold', label: 'Omega Threshold', type: 'float', default: 0.0, min: -0.1, max: 0.1, step: 0.001 },
+    ],
+  },
+  drawdowns: {
+    label: 'Drawdowns',
+    description: 'Drawdown analysis: max/avg depth, durations, recovery, active drawdown',
+    params: [],
+  },
+  ranges: {
+    label: 'Ranges',
+    description: 'Range analysis: contiguous positive/negative return periods',
+    params: [
+      { key: 'threshold', label: 'Threshold', type: 'float', default: 0.0, min: -1.0, max: 1.0, step: 0.01 },
+    ],
+  },
+  rolling: {
+    label: 'Rolling Metrics',
+    description: 'Rolling window risk/return metrics over time',
+    params: [
+      { key: 'window', label: 'Window', type: 'int', default: 252, min: 5, max: 2000, step: 1 },
+      { key: 'risk_free', label: 'Risk-Free Rate', type: 'float', default: 0.0, min: 0, max: 0.2, step: 0.001 },
+    ],
+  },
+};
+
+export const ROLLING_METRIC_OPTIONS: { value: RollingMetric; label: string }[] = [
+  { value: 'total', label: 'Rolling Total Return' },
+  { value: 'annualized', label: 'Rolling Annualized Return' },
+  { value: 'volatility', label: 'Rolling Volatility' },
+  { value: 'sharpe', label: 'Rolling Sharpe Ratio' },
+  { value: 'sortino', label: 'Rolling Sortino Ratio' },
+  { value: 'calmar', label: 'Rolling Calmar Ratio' },
+  { value: 'omega', label: 'Rolling Omega Ratio' },
+  { value: 'info_ratio', label: 'Rolling Information Ratio' },
+  { value: 'downside_risk', label: 'Rolling Downside Risk' },
+];
+
+// ============================================================================
+// Indicator Mode (extended: calculate + signal generation + param sweep)
+// ============================================================================
+
+export type IndicatorMode =
+  | 'calculate' | 'crossover_signals' | 'threshold_signals'
+  | 'breakout_signals' | 'mean_reversion_signals' | 'signal_filter' | 'param_sweep';
+
+export const INDICATOR_MODE_DEFINITIONS: Record<IndicatorMode, {
+  label: string;
+  description: string;
+  params: ParamDef[];
+}> = {
+  calculate: {
+    label: 'Calculate Indicator',
+    description: 'Calculate a single indicator and return values',
+    params: [],
+  },
+  crossover_signals: {
+    label: 'Crossover Signals',
+    description: 'Entry when fast crosses above slow, exit when fast crosses below',
+    params: [
+      { key: 'fast_indicator', label: 'Fast Indicator', type: 'string', default: 'ma', options: ['ma', 'ema'] },
+      { key: 'fast_period', label: 'Fast Period', type: 'int', default: 10, min: 2, max: 500, step: 1 },
+      { key: 'slow_indicator', label: 'Slow Indicator', type: 'string', default: 'ma', options: ['ma', 'ema'] },
+      { key: 'slow_period', label: 'Slow Period', type: 'int', default: 20, min: 2, max: 500, step: 1 },
+    ],
+  },
+  threshold_signals: {
+    label: 'Threshold Signals',
+    description: 'Entry when indicator crosses below lower, exit above upper (oscillator)',
+    params: [
+      { key: 'lower', label: 'Lower Threshold', type: 'float', default: 30, min: 0, max: 100, step: 1 },
+      { key: 'upper', label: 'Upper Threshold', type: 'float', default: 70, min: 0, max: 100, step: 1 },
+    ],
+  },
+  breakout_signals: {
+    label: 'Breakout Signals',
+    description: 'Entry on upper channel break, exit on lower channel break',
+    params: [
+      { key: 'channel', label: 'Channel', type: 'string', default: 'donchian', options: ['donchian', 'keltner', 'bbands'] },
+      { key: 'period', label: 'Period', type: 'int', default: 20, min: 5, max: 200, step: 1 },
+    ],
+  },
+  mean_reversion_signals: {
+    label: 'Mean Reversion Signals',
+    description: 'Entry when Z-score < -entry, exit when Z-score > exit',
+    params: [
+      { key: 'period', label: 'Z-Score Period', type: 'int', default: 20, min: 5, max: 200, step: 1 },
+      { key: 'z_entry', label: 'Z Entry', type: 'float', default: 2.0, min: 0.5, max: 4.0, step: 0.1 },
+      { key: 'z_exit', label: 'Z Exit', type: 'float', default: 0.0, min: -2.0, max: 2.0, step: 0.1 },
+    ],
+  },
+  signal_filter: {
+    label: 'Signal Filter',
+    description: 'Apply indicator filter to entry signals (e.g., only trade when ADX > 25)',
+    params: [
+      { key: 'base_indicator', label: 'Base Indicator', type: 'string', default: 'rsi', options: ['rsi', 'macd', 'stoch', 'cci', 'williams_r', 'momentum'] },
+      { key: 'base_period', label: 'Base Period', type: 'int', default: 14, min: 2, max: 200, step: 1 },
+      { key: 'filter_indicator', label: 'Filter Indicator', type: 'string', default: 'adx', options: ['adx', 'atr', 'mstd', 'zscore', 'rsi'] },
+      { key: 'filter_period', label: 'Filter Period', type: 'int', default: 14, min: 2, max: 200, step: 1 },
+      { key: 'filter_threshold', label: 'Filter Threshold', type: 'float', default: 25, min: 0, max: 200, step: 1 },
+      { key: 'filter_type', label: 'Filter Type', type: 'string', default: 'above', options: ['above', 'below'] },
+    ],
+  },
+  param_sweep: {
+    label: 'Parameter Sweep',
+    description: 'Run indicator across all parameter combinations (IndicatorFactory.run_combs)',
+    params: [],
+  },
+};

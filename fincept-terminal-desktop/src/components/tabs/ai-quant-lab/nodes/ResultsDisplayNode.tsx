@@ -201,7 +201,7 @@ const ResultsDisplayNode: React.FC<ResultsDisplayNodeProps> = ({ data, selected 
         return;
       }
 
-      elements.push(<div key={i} style={style}>{line || '\u00A0'}</div>);
+      elements.push(<div key={i} style={style}>{typeof line === 'object' ? JSON.stringify(line) : (line || '\u00A0')}</div>);
     });
 
     return <>{elements}</>;
@@ -254,7 +254,9 @@ const ResultsDisplayNode: React.FC<ResultsDisplayNodeProps> = ({ data, selected 
                   fontFamily: 'monospace'
                 }}>
                   {value.map((item, i) => (
-                    <div key={i} style={{ marginBottom: '2px' }}>• {item}</div>
+                    <div key={i} style={{ marginBottom: '2px' }}>
+                      • {typeof item === 'object' && item !== null ? JSON.stringify(item) : String(item)}
+                    </div>
                   ))}
                 </div>
               ) : (

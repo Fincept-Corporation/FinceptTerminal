@@ -32,8 +32,7 @@ export const DEFAULT_TABS: TabDefinition[] = [
   { id: 'notes', label: 'Notes', value: 'notes', shortcut: 'F11', component: 'NotesTab' },
   { id: 'settings', label: 'Settings', value: 'settings', component: 'SettingsTab' },
   { id: 'profile', label: 'Profile', value: 'profile', shortcut: 'F12', component: 'ProfileTab' },
-  { id: 'polygon', label: 'Polygon Data', value: 'polygon', component: 'PolygonEqTab' },
-  { id: 'economics', label: 'Economics', value: 'economics', component: 'EconomicsTab' },
+{ id: 'economics', label: 'Economics', value: 'economics', component: 'EconomicsTab' },
   { id: 'dbnomics', label: 'DBnomics', value: 'dbnomics', component: 'DBnomicsTab' },
   { id: 'akshare', label: 'AKShare Data', value: 'akshare', component: 'AkShareDataTab' },
   { id: 'geopolitics', label: 'Geopolitics', value: 'geopolitics', component: 'GeopoliticsTab' },
@@ -58,7 +57,7 @@ export const DEFAULT_TABS: TabDefinition[] = [
 export const DEFAULT_TAB_CONFIG: TabConfiguration = {
   headerTabs: ['dashboard', 'markets', 'news', 'portfolio', 'backtesting', 'watchlist', 'research', 'screener', 'trading', 'chat', 'notes', 'agents', 'settings', 'profile'],
   menuSections: [
-    { id: 'markets-menu', label: 'Markets', tabs: ['polygon', 'economics', 'dbnomics', 'akshare'] },
+    { id: 'markets-menu', label: 'Markets', tabs: ['economics', 'dbnomics', 'akshare'] },
     { id: 'research-menu', label: 'Research', tabs: ['geopolitics', 'maritime'] },
     { id: 'trading-menu', label: 'Trading', tabs: ['fyers', 'alpha-arena', 'ai-quant-lab'] },
     { id: 'tools-menu', label: 'Tools', tabs: ['mcp', 'nodes', 'code', 'datasources', 'datamapping', 'reportbuilder', 'contexts'] },

@@ -273,7 +273,6 @@ impl WebSocketAdapter for BinanceAdapter {
                         break;
                     }
                     Err(e) => {
-                        eprintln!("[Binance] WebSocket error: {}", e);
                         *connected.write().await = false;
                         break;
                     }

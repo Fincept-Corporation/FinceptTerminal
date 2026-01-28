@@ -69,7 +69,6 @@ export class GetMarketDepthNode implements INodeType {
           { name: 'Binance', value: 'binance' },
           { name: 'Kraken', value: 'kraken' },
           { name: 'Coinbase', value: 'coinbase' },
-          { name: 'Polygon.io', value: 'polygon' },
           { name: 'IEX Cloud', value: 'iex' },
           { name: 'Zerodha', value: 'zerodha' },
           { name: 'Fyers', value: 'fyers' },

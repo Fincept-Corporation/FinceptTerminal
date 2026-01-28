@@ -150,7 +150,6 @@ export class NewsEventTriggerNode implements INodeType {
           { name: 'Benzinga', value: 'benzinga' },
           { name: 'Alpha Vantage', value: 'alphavantage' },
           { name: 'Finnhub', value: 'finnhub' },
-          { name: 'Polygon.io', value: 'polygon' },
           { name: 'SEC EDGAR', value: 'sec' },
           { name: 'Twitter/X', value: 'twitter' },
           { name: 'Reddit', value: 'reddit' },

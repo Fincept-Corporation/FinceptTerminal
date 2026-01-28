@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   FileText,
   BarChart3,
@@ -80,30 +80,158 @@ export const getThemeBackground = (pageTheme: PageTheme, customBgColor: string):
   }
 };
 
+// Inline editable text component
+const InlineEdit: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  isEditing: boolean;
+  onStartEdit: () => void;
+  onStopEdit: () => void;
+  className?: string;
+  style?: React.CSSProperties;
+  tag?: 'h1' | 'h2' | 'h3' | 'p' | 'span';
+  multiline?: boolean;
+  placeholder?: string;
+}> = ({ value, onChange, isEditing, onStartEdit, onStopEdit, className = '', style, tag: Tag = 'p', multiline = false, placeholder = '' }) => {
+  const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      // Select all text
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  if (isEditing) {
+    if (multiline) {
+      return (
+        <textarea
+          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onStopEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onStopEdit();
+          }}
+          className={`w-full bg-transparent outline-none resize-none border border-orange-400 rounded px-1 ${className}`}
+          style={{ ...style, minHeight: '2em' }}
+          rows={Math.max(2, value.split('\n').length)}
+          placeholder={placeholder}
+        />
+      );
+    }
+    return (
+      <input
+        ref={inputRef as React.RefObject<HTMLInputElement>}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onStopEdit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === 'Escape') onStopEdit();
+        }}
+        className={`w-full bg-transparent outline-none border border-orange-400 rounded px-1 ${className}`}
+        style={style}
+        placeholder={placeholder}
+      />
+    );
+  }
+
+  return (
+    <Tag
+      onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+      className={`${className} cursor-text`}
+      style={style}
+      title="Double-click to edit"
+    >
+      {value || placeholder || '\u00A0'}
+    </Tag>
+  );
+};
+
 // Render individual component based on type
 const RenderComponent: React.FC<{
   component: ReportComponent;
   isSelected: boolean;
   onClick: () => void;
+  onUpdate: (id: string, updates: Partial<ReportComponent>) => void;
   template: any;
   tocItems: any[];
-}> = ({ component, isSelected, onClick, template, tocItems }) => {
+}> = ({ component, isSelected, onClick, onUpdate, template, tocItems }) => {
+  const [editingField, setEditingField] = useState<string | null>(null);
+
+  const startEdit = useCallback((field: string) => {
+    setEditingField(field);
+  }, []);
+
+  const stopEdit = useCallback(() => {
+    setEditingField(null);
+  }, []);
+
+  const updateContent = useCallback((value: string) => {
+    onUpdate(component.id, { content: value });
+  }, [component.id, onUpdate]);
+
+  const updateConfig = useCallback((key: string, value: any) => {
+    onUpdate(component.id, { config: { ...component.config, [key]: value } });
+  }, [component.id, component.config, onUpdate]);
+
   return (
     <div
       onClick={onClick}
-      className={`cursor-pointer transition-all ${
-        isSelected ? 'ring-2 ring-orange-500 ring-offset-2' : 'hover:ring-1 hover:ring-gray-300'
+      className={`group relative cursor-pointer transition-all rounded ${
+        isSelected
+          ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-white'
+          : 'hover:ring-1 hover:ring-orange-300 hover:ring-offset-1 hover:ring-offset-white'
       }`}
+      style={{ padding: '2px' }}
     >
+      {/* Floating toolbar on hover/select */}
+      {isSelected && (
+        <div className="absolute -top-3 right-2 z-10 flex items-center gap-1 bg-[#1a1a1a] rounded shadow-lg border border-[#333] px-1 py-0.5">
+          <span className="text-[9px] text-orange-400 font-semibold px-1 capitalize">{component.type}</span>
+        </div>
+      )}
+
       {component.type === 'heading' && (
-        <h2 className={`font-bold text-2xl text-${component.config.alignment || 'left'}`}>
-          {component.content || 'Heading'}
-        </h2>
+        <InlineEdit
+          value={String(component.content || '')}
+          onChange={updateContent}
+          isEditing={editingField === 'content'}
+          onStartEdit={() => startEdit('content')}
+          onStopEdit={stopEdit}
+          className={`font-bold text-2xl`}
+          style={{ textAlign: (component.config.alignment as any) || 'left' }}
+          tag="h2"
+          placeholder="New Heading"
+        />
+      )}
+      {component.type === 'subheading' && (
+        <InlineEdit
+          value={String(component.content || '')}
+          onChange={updateContent}
+          isEditing={editingField === 'content'}
+          onStartEdit={() => startEdit('content')}
+          onStopEdit={stopEdit}
+          className={`font-semibold text-xl`}
+          style={{ textAlign: (component.config.alignment as any) || 'left' }}
+          tag="h3"
+          placeholder="New Subheading"
+        />
       )}
       {component.type === 'text' && (
-        <p className={`text-${component.config.alignment || 'left'}`}>
-          {component.content || 'Text content'}
-        </p>
+        <InlineEdit
+          value={String(component.content || '')}
+          onChange={updateContent}
+          isEditing={editingField === 'content'}
+          onStartEdit={() => startEdit('content')}
+          onStopEdit={stopEdit}
+          style={{ textAlign: (component.config.alignment as any) || 'left' }}
+          tag="p"
+          multiline
+          placeholder="Enter text here..."
+        />
       )}
       {component.type === 'chart' && (
         <div className="border border-gray-300 rounded p-8 bg-gray-50 text-center">
@@ -142,28 +270,55 @@ const RenderComponent: React.FC<{
           ) : (
             <div className="text-center py-8 text-gray-400">
               <ImageIcon className="w-12 h-12 mx-auto mb-2" />
-              <p className="text-sm">No image selected</p>
+              <p className="text-sm">No image selected — use Properties panel to upload</p>
             </div>
           )}
         </div>
       )}
       {component.type === 'code' && (
-        <pre className="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto text-sm font-mono">
-          <code>{component.content || '// Code block'}</code>
-        </pre>
+        <div className="relative">
+          {editingField === 'content' ? (
+            <textarea
+              autoFocus
+              value={String(component.content || '')}
+              onChange={(e) => updateContent(e.target.value)}
+              onBlur={stopEdit}
+              onKeyDown={(e) => { if (e.key === 'Escape') stopEdit(); }}
+              className="w-full bg-gray-900 text-green-400 p-4 rounded text-sm font-mono border border-orange-400 outline-none resize-none"
+              rows={Math.max(4, String(component.content || '').split('\n').length)}
+              placeholder="// Enter code here..."
+            />
+          ) : (
+            <pre
+              className="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto text-sm font-mono cursor-text"
+              onDoubleClick={(e) => { e.stopPropagation(); startEdit('content'); }}
+              title="Double-click to edit"
+            >
+              <code>{component.content || '// Code block'}</code>
+            </pre>
+          )}
+        </div>
       )}
       {component.type === 'divider' && (
-        <hr className="border-t-2 border-gray-300 my-4" />
+        <hr className="border-t-2 my-4" style={{ borderColor: component.config.color || '#333333' }} />
       )}
       {component.type === 'section' && (
         <div className="border-l-4 p-4 my-4" style={{
           borderColor: component.config.borderColor || '#FFA500',
           backgroundColor: component.config.backgroundColor || '#f8f9fa'
         }}>
-          <h3 className="font-bold text-lg mb-2" style={{ color: component.config.borderColor || '#FFA500' }}>
-            {component.config.sectionTitle || 'SECTION'}
-          </h3>
-          <p className="text-sm text-gray-600">Section content area - add child components here</p>
+          <InlineEdit
+            value={String(component.config.sectionTitle || '')}
+            onChange={(val) => updateConfig('sectionTitle', val)}
+            isEditing={editingField === 'sectionTitle'}
+            onStartEdit={() => startEdit('sectionTitle')}
+            onStopEdit={stopEdit}
+            className="font-bold text-lg mb-2"
+            style={{ color: component.config.borderColor || '#FFA500' }}
+            tag="h3"
+            placeholder="Section Title"
+          />
+          <p className="text-sm text-gray-600">Section content area</p>
         </div>
       )}
       {component.type === 'columns' && (
@@ -176,17 +331,40 @@ const RenderComponent: React.FC<{
         </div>
       )}
       {component.type === 'coverpage' && (
-        <div className="min-h-[400px] flex flex-col items-center justify-center text-center p-12" style={{
+        <div className="min-h-[400px] flex flex-col items-center justify-center text-center p-12 rounded" style={{
           backgroundColor: component.config.backgroundColor || '#0a0a0a',
           color: '#FFA500'
         }}>
-          <h1 className="text-4xl font-bold mb-4">{template.metadata.title}</h1>
-          {component.config.subtitle && (
-            <p className="text-xl mb-8">{component.config.subtitle}</p>
+          {component.config.logo && (
+            <img
+              src={`file://${component.config.logo}`}
+              alt="Logo"
+              className="max-w-[200px] h-auto mb-8"
+            />
           )}
+          <InlineEdit
+            value={String(component.content || template.metadata.title || '')}
+            onChange={updateContent}
+            isEditing={editingField === 'content'}
+            onStartEdit={() => startEdit('content')}
+            onStopEdit={stopEdit}
+            className="text-4xl font-bold mb-4"
+            tag="h1"
+            placeholder="Report Title"
+          />
+          <InlineEdit
+            value={String(component.config.subtitle || '')}
+            onChange={(val) => updateConfig('subtitle', val)}
+            isEditing={editingField === 'subtitle'}
+            onStartEdit={() => startEdit('subtitle')}
+            onStopEdit={stopEdit}
+            className="text-xl mb-8"
+            tag="p"
+            placeholder="Subtitle"
+          />
           <div className="text-sm text-gray-400 mt-auto">
-            {template.metadata.company}<br />
-            {template.metadata.author}<br />
+            {template.metadata.company && <>{template.metadata.company}<br /></>}
+            {template.metadata.author && <>{template.metadata.author}<br /></>}
             {template.metadata.date}
           </div>
         </div>
@@ -196,13 +374,29 @@ const RenderComponent: React.FC<{
           <span className="text-xs text-gray-400 bg-white px-3 py-1 rounded-full">Page Break</span>
         </div>
       )}
-      {/* New component types */}
       {component.type === 'quote' && (
-        <QuoteBox
-          content={String(component.content || '')}
-          author={component.config.author}
-          type={component.config.quoteType || 'quote'}
-        />
+        <div onDoubleClick={(e) => { e.stopPropagation(); startEdit('content'); }}>
+          {editingField === 'content' ? (
+            <div className="p-4 rounded-r-lg my-4 bg-gray-50 border-l-4 border-gray-500">
+              <textarea
+                autoFocus
+                value={String(component.content || '')}
+                onChange={(e) => updateContent(e.target.value)}
+                onBlur={stopEdit}
+                onKeyDown={(e) => { if (e.key === 'Escape') stopEdit(); }}
+                className="w-full bg-transparent text-sm text-gray-700 italic outline-none resize-none border border-orange-400 rounded p-1"
+                rows={3}
+                placeholder="Enter quote text..."
+              />
+            </div>
+          ) : (
+            <QuoteBox
+              content={String(component.content || 'Enter quote text here...')}
+              author={component.config.author}
+              type={component.config.quoteType || 'quote'}
+            />
+          )}
+        </div>
       )}
       {component.type === 'list' && (
         <ListComponent
@@ -222,11 +416,12 @@ const RenderComponent: React.FC<{
             title: k.label,
             value: k.value,
             change: k.change,
+            trend: k.trend,
           }))}
         />
       )}
       {component.type === 'sparkline' && (
-        <div className="inline-block">
+        <div className="inline-block" style={{ minWidth: '200px', minHeight: '50px' }}>
           <Sparkline
             config={{
               data: component.config.data as number[] || [10, 20, 15, 25],
@@ -249,23 +444,69 @@ const RenderComponent: React.FC<{
           config={{
             type: (component.config.chartType || 'line') as 'line' | 'bar' | 'area' | 'pie',
             data: component.config.data as Array<{ name: string; value: number }> || [],
+            xKey: 'name',
+            yKey: 'value',
             height: 250,
           }}
         />
       )}
       {component.type === 'signature' && (
-        <SignatureBlock
-          name={component.config.name || 'Name'}
-          title={component.config.title}
-          date={template.metadata.date}
-          showLine={component.config.showLine}
-        />
+        <div onDoubleClick={(e) => { e.stopPropagation(); startEdit('name'); }}>
+          {editingField === 'name' ? (
+            <div className="mt-8 inline-block min-w-[200px]">
+              {component.config.showLine !== false && <div className="border-b border-gray-400 h-8 mb-2" />}
+              <input
+                autoFocus
+                type="text"
+                value={component.config.name || ''}
+                onChange={(e) => updateConfig('name', e.target.value)}
+                onBlur={stopEdit}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') stopEdit(); }}
+                className="text-sm font-semibold text-gray-800 bg-transparent outline-none border border-orange-400 rounded px-1 w-full"
+                placeholder="Name"
+              />
+              <input
+                type="text"
+                value={component.config.title || ''}
+                onChange={(e) => updateConfig('title', e.target.value)}
+                onBlur={stopEdit}
+                className="text-xs text-gray-600 bg-transparent outline-none border border-orange-400 rounded px-1 w-full mt-1"
+                placeholder="Title"
+              />
+            </div>
+          ) : (
+            <SignatureBlock
+              name={component.config.name || 'Name'}
+              title={component.config.title}
+              date={template.metadata.date}
+              showLine={component.config.showLine}
+            />
+          )}
+        </div>
       )}
       {component.type === 'disclaimer' && (
-        <DisclaimerSection
-          content={String(component.content || '')}
-          type={component.config.disclaimerType || 'standard'}
-        />
+        <div onDoubleClick={(e) => { e.stopPropagation(); startEdit('content'); }}>
+          {editingField === 'content' ? (
+            <div className="mt-8 p-4 rounded text-xs bg-gray-100 border border-gray-200">
+              <h4 className="font-bold text-gray-700 mb-2 uppercase text-[10px]">Disclaimer</h4>
+              <textarea
+                autoFocus
+                value={String(component.content || '')}
+                onChange={(e) => updateContent(e.target.value)}
+                onBlur={stopEdit}
+                onKeyDown={(e) => { if (e.key === 'Escape') stopEdit(); }}
+                className="w-full bg-transparent text-xs text-gray-600 outline-none resize-none border border-orange-400 rounded p-1"
+                rows={4}
+                placeholder="Enter disclaimer text..."
+              />
+            </div>
+          ) : (
+            <DisclaimerSection
+              content={String(component.content || 'This report is for informational purposes only.')}
+              type={component.config.disclaimerType || 'standard'}
+            />
+          )}
+        </div>
       )}
       {component.type === 'qrcode' && (
         <QRCodeComponent
@@ -289,6 +530,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   template,
   selectedComponent,
   onSelectComponent,
+  onUpdateComponent,
   pageTheme,
   customBgColor,
   fontFamily,
@@ -377,6 +619,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 component={component}
                 isSelected={selectedComponent === component.id}
                 onClick={() => onSelectComponent(component.id)}
+                onUpdate={onUpdateComponent}
                 template={template}
                 tocItems={tocItems}
               />

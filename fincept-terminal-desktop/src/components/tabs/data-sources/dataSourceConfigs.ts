@@ -1071,20 +1071,6 @@ export const DATA_SOURCE_CONFIGS: DataSourceConfig[] = [
     ],
   },
   {
-    id: 'polygon-io',
-    name: 'Polygon.io',
-    type: 'polygon-io',
-    category: 'market-data',
-    icon: '🔷',
-    color: '#7C3AED',
-    description: 'Real-time and historical market data',
-    testable: true,
-    requiresAuth: true,
-    fields: [
-      { name: 'apiKey', label: 'API Key', type: 'password', placeholder: 'your-api-key', required: true },
-    ],
-  },
-  {
     id: 'finnhub',
     name: 'Finnhub',
     type: 'finnhub',

@@ -135,7 +135,6 @@ export const watchlistLogger = createLogger({ namespace: 'Watchlist' });
 export const portfolioLogger = createLogger({ namespace: 'Portfolio' });
 export const llmLogger = createLogger({ namespace: 'LLM' });
 export const nodeLogger = createLogger({ namespace: 'NodeExecution' });
-export const polygonLogger = createLogger({ namespace: 'Polygon' });
 export const pythonAgentLogger = createLogger({ namespace: 'PythonAgent' });
 export const marketDataLogger = createLogger({ namespace: 'MarketData' });
 export const fyersLogger = createLogger({ namespace: 'Fyers' });

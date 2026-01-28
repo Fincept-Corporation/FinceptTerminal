@@ -24,11 +24,18 @@ Custom Indicators:
 - Williams %R
 - CCI (Commodity Channel Index)
 - Keltner Channels
+
+IndicatorFactory:
+- from_talib: TA-Lib wrapper
+- from_pandas_ta: pandas-ta wrapper
+- from_ta: ta-lib wrapper
+- run_combs: Combinatorial indicator runs
 """
 
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List, Callable
+from itertools import product
 
 
 # ============================================================================
@@ -571,3 +578,242 @@ def get_indicator_catalog() -> Dict[str, Any]:
             },
         ]
     }
+
+
+# ============================================================================
+# Indicator Factory (mimics vbt.IndicatorFactory)
+# ============================================================================
+
+class IndicatorFactory:
+    """
+    Factory for creating custom indicators and wrapping external TA libraries.
+
+    Mimics vectorbt's IndicatorFactory with:
+    - from_custom_func: Create indicator from a custom function
+    - from_apply_func: Create indicator from an apply function
+    - from_talib: Wrap TA-Lib indicators
+    - from_pandas_ta: Wrap pandas-ta indicators
+    - from_ta: Wrap ta library indicators
+    - run_combs: Run combinatorial parameter sweeps
+    """
+
+    def __init__(
+        self,
+        input_names: List[str] = None,
+        param_names: List[str] = None,
+        output_names: List[str] = None,
+        short_name: str = 'custom',
+    ):
+        self._input_names = input_names or ['close']
+        self._param_names = param_names or []
+        self._output_names = output_names or ['output']
+        self._short_name = short_name
+        self._custom_func = None
+        self._apply_func = None
+
+    @property
+    def short_name(self) -> str:
+        return self._short_name
+
+    @property
+    def input_names(self) -> List[str]:
+        return self._input_names
+
+    @property
+    def param_names(self) -> List[str]:
+        return self._param_names
+
+    @property
+    def output_names(self) -> List[str]:
+        return self._output_names
+
+    @classmethod
+    def from_custom_func(
+        cls,
+        custom_func: Callable,
+        input_names: List[str] = None,
+        param_names: List[str] = None,
+        output_names: List[str] = None,
+        short_name: str = 'custom',
+    ) -> 'IndicatorFactory':
+        """
+        Create indicator from a custom function.
+
+        custom_func(*inputs, *params) -> tuple of output arrays
+        """
+        factory = cls(input_names, param_names, output_names, short_name)
+        factory._custom_func = custom_func
+        return factory
+
+    @classmethod
+    def from_apply_func(
+        cls,
+        apply_func: Callable,
+        input_names: List[str] = None,
+        param_names: List[str] = None,
+        output_names: List[str] = None,
+        short_name: str = 'custom',
+    ) -> 'IndicatorFactory':
+        """
+        Create indicator from an apply function.
+
+        apply_func(close, *params) -> output array or tuple
+        """
+        factory = cls(input_names, param_names, output_names, short_name)
+        factory._apply_func = apply_func
+        return factory
+
+    def run(self, *inputs, **params) -> Dict[str, np.ndarray]:
+        """Run indicator with given inputs and parameters."""
+        func = self._custom_func or self._apply_func
+        if func is None:
+            raise ValueError("No function defined. Use from_custom_func or from_apply_func.")
+
+        param_vals = [params.get(p, None) for p in self._param_names]
+        result = func(*inputs, *param_vals)
+
+        if isinstance(result, tuple):
+            return {name: arr for name, arr in zip(self._output_names, result)}
+        elif isinstance(result, dict):
+            return result
+        else:
+            return {self._output_names[0]: result}
+
+    def run_combs(
+        self,
+        *inputs,
+        param_ranges: Dict[str, List] = None,
+        **kwargs,
+    ) -> List[Dict[str, Any]]:
+        """
+        Run indicator across all parameter combinations.
+
+        Args:
+            *inputs: Input arrays
+            param_ranges: Dict of param_name -> list of values
+                e.g. {'period': [10, 20, 30], 'alpha': [1.5, 2.0, 2.5]}
+
+        Returns:
+            List of dicts with 'params' and 'output' keys
+        """
+        if param_ranges is None:
+            return [{'params': {}, 'output': self.run(*inputs)}]
+
+        names = list(param_ranges.keys())
+        values = list(param_ranges.values())
+        results = []
+
+        for combo in product(*values):
+            params = dict(zip(names, combo))
+            try:
+                output = self.run(*inputs, **params)
+                results.append({'params': params, 'output': output})
+            except Exception:
+                continue
+
+        return results
+
+    # ------------------------------------------------------------------
+    # TA Library Wrappers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def from_talib(func_name: str, **kwargs) -> 'IndicatorFactory':
+        """
+        Wrap a TA-Lib indicator function.
+
+        Requires talib to be installed.
+        Usage: factory = IndicatorFactory.from_talib('RSI')
+        """
+        try:
+            import talib
+            func = getattr(talib, func_name.upper())
+        except (ImportError, AttributeError) as e:
+            raise ImportError(f"TA-Lib not available or function '{func_name}' not found: {e}")
+
+        def wrapper(*inputs, **params):
+            return func(*inputs, **params)
+
+        return IndicatorFactory.from_custom_func(
+            wrapper,
+            short_name=f'talib_{func_name}',
+            output_names=[func_name.lower()],
+            **kwargs,
+        )
+
+    @staticmethod
+    def from_pandas_ta(func_name: str, **kwargs) -> 'IndicatorFactory':
+        """
+        Wrap a pandas-ta indicator.
+
+        Requires pandas_ta to be installed.
+        Usage: factory = IndicatorFactory.from_pandas_ta('rsi')
+        """
+        try:
+            import pandas_ta
+        except ImportError:
+            raise ImportError("pandas_ta is not installed")
+
+        def wrapper(close, **params):
+            s = pd.Series(close) if not isinstance(close, pd.Series) else close
+            result = getattr(pandas_ta, func_name)(s, **params)
+            if isinstance(result, pd.DataFrame):
+                return tuple(result[col].values for col in result.columns)
+            return result.values if isinstance(result, pd.Series) else result
+
+        return IndicatorFactory.from_apply_func(
+            wrapper,
+            short_name=f'pta_{func_name}',
+            output_names=[func_name],
+            **kwargs,
+        )
+
+    @staticmethod
+    def from_ta(indicator_class, **kwargs) -> 'IndicatorFactory':
+        """
+        Wrap a ta library indicator class.
+
+        Requires ta to be installed.
+        Usage: factory = IndicatorFactory.from_ta(ta.momentum.RSIIndicator)
+        """
+        def wrapper(close, **params):
+            s = pd.Series(close) if not isinstance(close, pd.Series) else close
+            df = pd.DataFrame({'Close': s})
+            ind = indicator_class(close=s, **params)
+            # Get all public methods that return series
+            outputs = {}
+            for attr in dir(ind):
+                if not attr.startswith('_') and callable(getattr(ind, attr)):
+                    try:
+                        val = getattr(ind, attr)()
+                        if isinstance(val, pd.Series):
+                            outputs[attr] = val.values
+                    except Exception:
+                        pass
+            if outputs:
+                return outputs
+            return np.zeros(len(close))
+
+        return IndicatorFactory.from_apply_func(
+            wrapper,
+            short_name=kwargs.get('short_name', 'ta_indicator'),
+            **kwargs,
+        )
+
+    @staticmethod
+    def get_talib_indicators() -> List[str]:
+        """List all available TA-Lib functions."""
+        try:
+            import talib
+            return talib.get_function_groups()
+        except ImportError:
+            return []
+
+    @staticmethod
+    def get_pandas_ta_indicators() -> List[str]:
+        """List all available pandas-ta indicators."""
+        try:
+            import pandas_ta
+            return list(pandas_ta.Category.keys()) if hasattr(pandas_ta, 'Category') else []
+        except ImportError:
+            return []

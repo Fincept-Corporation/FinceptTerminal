@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { AKShareAPI, AKShareResponse } from '@/services/akshareApi';
+import { APP_VERSION } from '@/constants/version';
 import { invoke } from '@tauri-apps/api/core';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
@@ -1319,7 +1320,7 @@ const AsiaMarketsTab: React.FC = () => {
         flexShrink: 0
       }}>
         <span>
-          Fincept Terminal v3.1.4 | Asia Markets Data Platform | 398+ Stock Endpoints
+          Fincept Terminal v{APP_VERSION} | Asia Markets Data Platform | 398+ Stock Endpoints
         </span>
         <span>
           Category: <span style={{ color: activeCategory.color }}>{activeCategory.name}</span> |

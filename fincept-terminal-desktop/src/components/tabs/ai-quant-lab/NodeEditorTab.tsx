@@ -38,6 +38,7 @@ import {
   NodeEditorToolbar,
   DeployDialog,
   NodeConfigPanel,
+  TemplateGallery,
 } from './components';
 
 // Local hooks
@@ -65,6 +66,7 @@ import { BUILTIN_NODE_CONFIGS, DEFAULT_EDGE_OPTIONS, FLOW_BACKGROUND_CONFIG } fr
 
 // Types
 import type { INodeTypeDescription, NodeParameterValue } from './types';
+import type { WorkflowTemplate } from './workflowTemplates';
 
 // Services
 import { pythonAgentService, AgentMetadata } from '@/services/chat/pythonAgentService';
@@ -122,6 +124,7 @@ export default function NodeEditorTab() {
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [resultsData, setResultsData] = useState<any>(null);
   const [resultsWorkflowName, setResultsWorkflowName] = useState<string>('');
+  const [showTemplateGallery, setShowTemplateGallery] = useState(false);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
@@ -687,6 +690,47 @@ export default function NodeEditorTab() {
     }
   }, [selectedNodes, nodes, setNodes]);
 
+  // Import workflow template
+  const handleImportTemplate = useCallback(
+    async (template: WorkflowTemplate) => {
+      // Clear existing workflow first to avoid stale auto-saved data
+      setNodes([]);
+      setEdges([]);
+
+      // Deep clone nodes and re-attach callbacks that can't be serialized
+      const templateNodes = template.nodes.map((node) => {
+        const cloned = JSON.parse(JSON.stringify(node));
+        // Re-attach callback functions based on node type
+        if (cloned.type === 'data-source') {
+          cloned.data.onConnectionChange = () => {};
+          cloned.data.onQueryChange = () => {};
+          cloned.data.onExecute = () => {};
+        } else if (cloned.type === 'technical-indicator') {
+          cloned.data.onExecute = () => {};
+          cloned.data.onParameterChange = () => {};
+        } else if (cloned.type === 'agent-mediator') {
+          cloned.data.onExecute = () => {};
+          cloned.data.onConfigChange = () => {};
+        } else if (cloned.type === 'custom') {
+          cloned.data.onLabelChange = handleLabelChange;
+        }
+        return cloned;
+      });
+      const templateEdges = JSON.parse(JSON.stringify(template.edges));
+
+      // Use requestAnimationFrame to ensure the clear has taken effect before setting new nodes
+      requestAnimationFrame(() => {
+        setNodes(templateNodes);
+        setEdges(templateEdges);
+      });
+
+      setWorkflowMode('new');
+      setWorkflowName(template.name);
+      setWorkflowDescription(template.description);
+    },
+    [setNodes, setEdges, setWorkflowMode, setWorkflowName, setWorkflowDescription, handleLabelChange]
+  );
+
   // Get selected node for config panel
   const selectedNode = selectedNodes.length === 1 ? nodes.find((n) => n.id === selectedNodes[0]) : null;
 
@@ -722,6 +766,7 @@ export default function NodeEditorTab() {
         onDeleteSelectedNodes={deleteSelectedNodes}
         onShowDeployDialog={() => setShowDeployDialog(true)}
         onQuickSaveDraft={handleQuickSaveDraft}
+        onShowTemplates={() => setShowTemplateGallery(true)}
       />
 
       {/* Node Menu */}
@@ -1018,6 +1063,13 @@ export default function NodeEditorTab() {
           }}
         />
       )}
+
+      {/* Template Gallery */}
+      <TemplateGallery
+        isOpen={showTemplateGallery}
+        onClose={() => setShowTemplateGallery(false)}
+        onImportTemplate={handleImportTemplate}
+      />
     </div>
   );
 }

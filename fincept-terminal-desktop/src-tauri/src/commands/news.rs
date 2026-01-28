@@ -6,6 +6,7 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::timeout;
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, TimeZone};
 use crate::database::pool::get_db;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +26,9 @@ pub struct NewsArticle {
     pub link: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pub_date: Option<String>,
+    /// Unix timestamp (seconds) for reliable cross-feed sorting
+    #[serde(default)]
+    pub sort_ts: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,16 +102,17 @@ fn get_default_rss_feeds() -> Vec<RSSFeed> {
     let prefs = get_default_feed_preferences();
 
     let default_feeds = vec![
-        ("default-yahoo", "Yahoo Finance", "https://finance.yahoo.com/news/rssindex", "MARKETS", "US", "YAHOO"),
-        ("default-investing", "Investing.com", "https://www.investing.com/rss/news.rss", "MARKETS", "GLOBAL", "INVESTING.COM"),
+        ("default-nytimes-world", "NYT World News", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "GEOPOLITICS", "GLOBAL", "NYT"),
+        ("default-cnbc-finance", "CNBC Finance", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "MARKETS", "US", "CNBC"),
+        ("default-cnbc-world", "CNBC World", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362", "MARKETS", "GLOBAL", "CNBC"),
+        ("default-diplomat", "The Diplomat", "https://thediplomat.com/feed/", "GEOPOLITICS", "ASIA", "THE DIPLOMAT"),
+        ("default-spglobal-oil", "S&P Global Oil & Crude", "https://www.spglobal.com/content/spglobal/energy/us/en/rss/oil-crude.xml", "ENERGY", "GLOBAL", "S&P GLOBAL"),
+        // Regulatory feeds
+        ("default-sec-press", "SEC Press Releases", "https://www.sec.gov/news/pressreleases.rss", "REGULATORY", "US", "SEC"),
+        ("default-fed-press", "Federal Reserve Press", "https://www.federalreserve.gov/feeds/press_all.xml", "REGULATORY", "US", "FEDERAL RESERVE"),
+        // Crypto feeds
         ("default-coindesk", "CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "CRYPTO", "GLOBAL", "COINDESK"),
-        ("default-cointelegraph", "CoinTelegraph", "https://cointelegraph.com/rss", "CRYPTO", "GLOBAL", "COINTELEGRAPH"),
-        ("default-decrypt", "Decrypt", "https://decrypt.co/feed", "CRYPTO", "GLOBAL", "DECRYPT"),
-        ("default-techcrunch", "TechCrunch", "https://techcrunch.com/feed/", "TECH", "US", "TECHCRUNCH"),
-        ("default-verge", "The Verge", "https://www.theverge.com/rss/index.xml", "TECH", "US", "THE VERGE"),
-        ("default-arstechnica", "Ars Technica", "https://feeds.arstechnica.com/arstechnica/index", "TECH", "US", "ARS TECHNICA"),
-        ("default-oilprice", "Oil Price", "https://oilprice.com/rss/main", "ENERGY", "GLOBAL", "OILPRICE"),
-        ("default-sec", "SEC Press Releases", "https://www.sec.gov/news/pressreleases.rss", "REGULATORY", "US", "SEC"),
+        ("default-cointelegraph", "Cointelegraph", "https://cointelegraph.com/rss", "CRYPTO", "GLOBAL", "COINTELEGRAPH"),
     ];
 
     default_feeds.into_iter()
@@ -189,6 +194,47 @@ fn get_rss_feeds() -> Vec<RSSFeed> {
     all_feeds
 }
 
+/// Try to parse a date string into a DateTime using multiple common RSS date formats.
+fn parse_date_flexible(date_str: &str) -> Option<DateTime<FixedOffset>> {
+    let s = date_str.trim();
+
+    // RFC 2822  (most RSS feeds)
+    if let Ok(dt) = DateTime::parse_from_rfc2822(s) {
+        return Some(dt);
+    }
+    // RFC 3339 / ISO 8601 with offset  (Atom feeds)
+    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+        return Some(dt);
+    }
+
+    // Common variants that chrono's strict parsers miss
+    let extra_formats = [
+        "%Y-%m-%dT%H:%M:%S%.f%:z",   // 2026-01-27T16:45:00.000+00:00
+        "%Y-%m-%dT%H:%M:%S%:z",       // 2026-01-27T16:45:00+00:00
+        "%Y-%m-%dT%H:%M:%SZ",         // 2026-01-27T16:45:00Z  (no offset)
+        "%Y-%m-%dT%H:%M:%S%.fZ",      // 2026-01-27T16:45:00.000Z
+        "%a, %d %b %Y %H:%M:%S %Z",   // Tue, 27 Jan 2026 16:45:00 GMT
+        "%d %b %Y %H:%M:%S %z",       // 27 Jan 2026 16:45:00 +0000
+        "%Y-%m-%d %H:%M:%S",          // 2026-01-27 16:45:00 (naive)
+        "%B %d, %Y %H:%M:%S",         // January 27, 2026 16:45:00
+        "%b %d, %Y %H:%M:%S",         // Jan 27, 2026 16:45:00
+    ];
+
+    for fmt in &extra_formats {
+        // Try with offset
+        if let Ok(dt) = DateTime::parse_from_str(s, fmt) {
+            return Some(dt);
+        }
+        // Try as naive (assume UTC)
+        if let Ok(naive) = NaiveDateTime::parse_from_str(s, fmt) {
+            return Some(Utc.from_utc_datetime(&naive).fixed_offset());
+        }
+    }
+
+    None
+}
+
+
 // Parse RSS XML to articles
 fn parse_rss_feed(xml_text: &str, feed: &RSSFeed) -> Vec<NewsArticle> {
     let mut articles = Vec::new();
@@ -203,6 +249,7 @@ fn parse_rss_feed(xml_text: &str, feed: &RSSFeed) -> Vec<NewsArticle> {
     let mut current_item: Option<NewsArticle> = None;
     let mut current_tag = String::new();
     let mut buf = Vec::new();
+    let mut item_index: u32 = 0;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -216,8 +263,9 @@ fn parse_rss_feed(xml_text: &str, feed: &RSSFeed) -> Vec<NewsArticle> {
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_millis();
+                    item_index += 1;
                     current_item = Some(NewsArticle {
-                        id: format!("{}-{}", feed.source, timestamp),
+                        id: format!("{}-{}-{}", feed.source, timestamp, item_index),
                         time: String::new(),
                         priority: "ROUTINE".to_string(),
                         category: feed.category.clone(),
@@ -231,43 +279,52 @@ fn parse_rss_feed(xml_text: &str, feed: &RSSFeed) -> Vec<NewsArticle> {
                         classification: "PUBLIC".to_string(),
                         link: None,
                         pub_date: None,
+                        sort_ts: 0,
                     });
                 }
             }
             Ok(Event::Text(e)) => {
                 if let Some(ref mut item) = current_item {
-                    let text = e.unescape().unwrap_or_default().to_string();
-
-                    match current_tag.as_str() {
-                        "title" => {
-                            if item.headline.is_empty() {
-                                item.headline = text.chars().take(200).collect();
-                            }
-                        }
-                        "description" | "summary" | "content:encoded" => {
-                            if item.summary.is_empty() {
-                                // Strip HTML tags
-                                let stripped = strip_html_tags(&text);
-                                item.summary = stripped.chars().take(300).collect();
-                            }
-                        }
-                        "link" => {
-                            if item.link.is_none() {
-                                item.link = Some(text);
-                            }
-                        }
-                        "pubDate" | "published" | "updated" => {
-                            if item.pub_date.is_none() {
-                                item.pub_date = Some(text.clone());
-                                // Extract time
-                                if let Ok(dt) = chrono::DateTime::parse_from_rfc2822(&text) {
-                                    item.time = dt.format("%H:%M:%S").to_string();
-                                } else if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&text) {
-                                    item.time = dt.format("%H:%M:%S").to_string();
+                    let text = e.unescape().unwrap_or_default().trim().to_string();
+                    if text.is_empty() {
+                        // skip empty text nodes
+                    } else {
+                        // Strip namespace prefix for tag matching (e.g. "dc:date" -> "dc:date", "content:encoded" stays)
+                        let tag = current_tag.as_str();
+                        match tag {
+                            "title" => {
+                                if item.headline.is_empty() {
+                                    item.headline = text.chars().take(200).collect();
                                 }
                             }
+                            "description" | "summary" | "content:encoded" => {
+                                if item.summary.is_empty() {
+                                    let stripped = strip_html_tags(&text);
+                                    item.summary = stripped.chars().take(300).collect();
+                                }
+                            }
+                            "link" => {
+                                if item.link.is_none() {
+                                    item.link = Some(text);
+                                }
+                            }
+                            "pubDate" | "published" | "updated" | "dc:date" | "date" => {
+                                if item.pub_date.is_none() {
+                                    // Trim aggressively — some feeds have \n or extra spaces
+                                    let clean = text.replace('\n', " ").trim().to_string();
+                                    item.pub_date = Some(clean.clone());
+                                    if let Some(dt) = parse_date_flexible(&clean) {
+                                        let ts = dt.timestamp();
+                                        item.sort_ts = ts;
+                                        item.time = dt.format("%b %d, %H:%M").to_string();
+                                    } else {
+                                        // Fallback: show raw date string truncated
+                                        item.time = clean.chars().take(22).collect();
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }
@@ -283,9 +340,13 @@ fn parse_rss_feed(xml_text: &str, feed: &RSSFeed) -> Vec<NewsArticle> {
                         continue;
                     }
 
-                    // Set default time if not parsed
+                    // Set default time if no date tag was found at all
                     if item.time.is_empty() {
-                        item.time = chrono::Local::now().format("%H:%M:%S").to_string();
+                        item.time = chrono::Local::now().format("%b %d, %H:%M").to_string();
+                    }
+                    // Assign current timestamp if no pub_date was parsed (so it still sorts)
+                    if item.sort_ts == 0 {
+                        item.sort_ts = Utc::now().timestamp();
                     }
 
                     // Analyze and enrich the article
@@ -323,35 +384,88 @@ fn enrich_article(article: &mut NewsArticle) {
         article.priority = "BREAKING".to_string();
     }
 
-    // Comprehensive sentiment analysis
-    let bullish_words = vec![
-        "surge", "rally", "gain", "rise", "jump", "soar", "climb", "spike", "advance", "rebound",
-        "boost", "beat", "exceed", "outpace", "tops", "strong", "stellar", "robust", "record",
-        "growth", "expand", "upgrade", "buy", "profit", "optimistic", "positive", "breakthrough",
-        "success", "win", "approval", "deal", "partnership", "dividend increase", "confidence",
+    // Weighted sentiment analysis — covers finance, geopolitics, and general news
+    // (word, weight): higher weight = stronger signal
+    let positive_words: Vec<(&str, i32)> = vec![
+        // Strong positive (weight 3)
+        ("surge", 3), ("soar", 3), ("skyrocket", 3), ("breakthrough", 3), ("boom", 3),
+        ("landslide victory", 3), ("historic deal", 3), ("record high", 3), ("blockbuster", 3),
+        // Medium positive (weight 2)
+        ("rally", 2), ("gain", 2), ("rise", 2), ("jump", 2), ("climb", 2), ("spike", 2),
+        ("advance", 2), ("rebound", 2), ("boost", 2), ("beat", 2), ("exceed", 2),
+        ("outpace", 2), ("tops", 2), ("upgrade", 2), ("profit", 2), ("growth", 2),
+        ("expand", 2), ("recover", 2), ("victory", 2), ("triumph", 2), ("liberate", 2),
+        ("peace deal", 2), ("ceasefire", 2), ("treaty", 2), ("alliance", 2), ("reform", 2),
+        ("innovate", 2), ("milestone", 2), ("optimism", 2),
+        // Mild positive (weight 1)
+        ("strong", 1), ("robust", 1), ("stellar", 1), ("record", 1), ("buy", 1),
+        ("optimistic", 1), ("positive", 1), ("success", 1), ("win", 1), ("approval", 1),
+        ("deal", 1), ("partnership", 1), ("confidence", 1), ("dividend", 1), ("agree", 1),
+        ("support", 1), ("progress", 1), ("improve", 1), ("hope", 1), ("promise", 1),
+        ("cooperat", 1), ("stabil", 1), ("prosper", 1), ("thrive", 1), ("upbeat", 1),
+        ("welcome", 1), ("resolve", 1), ("aid", 1), ("relief", 1), ("ease", 1),
+        ("secure", 1), ("bolster", 1), ("strengthen", 1), ("uplift", 1), ("endorse", 1),
+        ("acclaim", 1), ("celebrate", 1), ("achieve", 1), ("launch", 1), ("unveil", 1),
+        ("recommend", 1), ("embrace", 1), ("momentum", 1), ("recover", 1), ("upturn", 1),
+        ("outperform", 1), ("bullish", 1), ("upside", 1), ("favorable", 1),
     ];
 
-    let bearish_words = vec![
-        "fall", "drop", "decline", "plunge", "crash", "tumble", "slide", "sink", "slump", "dip",
-        "tank", "collapse", "miss", "disappoint", "fail", "worst", "lowest", "poor", "weak",
-        "loss", "deficit", "trouble", "concern", "worry", "fear", "risk", "threat", "warning",
-        "layoff", "cut", "downgrade", "sell", "bankruptcy", "debt", "lawsuit", "scandal",
-        "recession", "inflation", "slowdown", "unemployment", "bearish", "negative",
+    let negative_words: Vec<(&str, i32)> = vec![
+        // Strong negative (weight 3)
+        ("crash", 3), ("plunge", 3), ("collapse", 3), ("devastat", 3), ("catastroph", 3),
+        ("massacre", 3), ("genocide", 3), ("invasion", 3), ("war crime", 3), ("nuclear", 3),
+        ("pandemic", 3), ("bankruptcy", 3), ("meltdown", 3), ("freefall", 3),
+        // Medium negative (weight 2)
+        ("fall", 2), ("drop", 2), ("decline", 2), ("tumble", 2), ("slide", 2), ("sink", 2),
+        ("slump", 2), ("tank", 2), ("miss", 2), ("disappoint", 2), ("fail", 2),
+        ("recession", 2), ("crisis", 2), ("conflict", 2), ("attack", 2), ("strike", 2),
+        ("bomb", 2), ("kill", 2), ("dead", 2), ("death", 2), ("casualt", 2),
+        ("sanction", 2), ("tariff", 2), ("embargo", 2), ("escalat", 2), ("tension", 2),
+        ("layoff", 2), ("downgrade", 2), ("default", 2), ("fraud", 2), ("indict", 2),
+        ("scandal", 2), ("resign", 2), ("impeach", 2), ("coup", 2), ("revolt", 2),
+        ("protest", 2), ("riot", 2), ("flee", 2), ("refugee", 2), ("disaster", 2),
+        // Mild negative (weight 1)
+        ("dip", 1), ("worst", 1), ("lowest", 1), ("poor", 1), ("weak", 1), ("loss", 1),
+        ("deficit", 1), ("trouble", 1), ("concern", 1), ("worry", 1), ("fear", 1),
+        ("risk", 1), ("threat", 1), ("warning", 1), ("cut", 1), ("sell", 1),
+        ("debt", 1), ("lawsuit", 1), ("inflation", 1), ("slowdown", 1), ("unemployment", 1),
+        ("bearish", 1), ("negative", 1), ("volatile", 1), ("uncertain", 1), ("stall", 1),
+        ("delay", 1), ("setback", 1), ("obstacle", 1), ("challenge", 1), ("oppose", 1),
+        ("reject", 1), ("ban", 1), ("block", 1), ("suspend", 1), ("revoke", 1),
+        ("accuse", 1), ("allege", 1), ("investigat", 1), ("probe", 1), ("penalt", 1),
+        ("fine", 1), ("violat", 1), ("breach", 1), ("hack", 1), ("leak", 1),
+        ("contamin", 1), ("pollut", 1), ("drought", 1), ("flood", 1), ("earthquake", 1),
+        ("storm", 1), ("shortage", 1), ("disrupt", 1), ("strain", 1), ("divide", 1),
+        ("downside", 1), ("headwind", 1), ("erode", 1), ("shrink", 1), ("retreat", 1),
     ];
 
-    let bullish_count = bullish_words.iter().filter(|w| text_lower.contains(*w)).count();
-    let bearish_count = bearish_words.iter().filter(|w| text_lower.contains(*w)).count();
+    let pos_score: i32 = positive_words.iter()
+        .filter(|(w, _)| text_lower.contains(w))
+        .map(|(_, weight)| weight)
+        .sum();
+    let neg_score: i32 = negative_words.iter()
+        .filter(|(w, _)| text_lower.contains(w))
+        .map(|(_, weight)| weight)
+        .sum();
 
-    if bullish_count > bearish_count && bullish_count > 0 {
+    let net = pos_score - neg_score;
+    if net >= 2 {
         article.sentiment = "BULLISH".to_string();
-    } else if bearish_count > bullish_count && bearish_count > 0 {
+    } else if net <= -2 {
+        article.sentiment = "BEARISH".to_string();
+    } else if net == 1 {
+        // Mild positive — still classify if there's any signal
+        article.sentiment = "BULLISH".to_string();
+    } else if net == -1 {
         article.sentiment = "BEARISH".to_string();
     }
+    // net == 0 stays NEUTRAL
 
-    // Determine impact
-    if article.priority == "FLASH" || article.priority == "URGENT" {
+    // Determine impact — based on priority + sentiment strength
+    let sentiment_strength = net.unsigned_abs();
+    if article.priority == "FLASH" || article.priority == "URGENT" || sentiment_strength >= 6 {
         article.impact = "HIGH".to_string();
-    } else if article.priority == "BREAKING" {
+    } else if article.priority == "BREAKING" || sentiment_strength >= 3 {
         article.impact = "MEDIUM".to_string();
     }
 
@@ -438,26 +552,8 @@ pub async fn fetch_all_rss_news() -> Result<Vec<NewsArticle>, String> {
         }
     }
 
-    // Sort by publication date (newest first)
-    all_articles.sort_by(|a, b| {
-        let date_a = a.pub_date.as_ref().and_then(|d| {
-            chrono::DateTime::parse_from_rfc2822(d)
-                .or_else(|_| chrono::DateTime::parse_from_rfc3339(d))
-                .ok()
-        });
-        let date_b = b.pub_date.as_ref().and_then(|d| {
-            chrono::DateTime::parse_from_rfc2822(d)
-                .or_else(|_| chrono::DateTime::parse_from_rfc3339(d))
-                .ok()
-        });
-
-        match (date_b, date_a) {
-            (Some(db), Some(da)) => db.cmp(&da),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => std::cmp::Ordering::Equal,
-        }
-    });
+    // Sort by sort_ts descending (newest first) — interleaves all feeds by actual publish time
+    all_articles.sort_by(|a, b| b.sort_ts.cmp(&a.sort_ts));
 
     Ok(all_articles)
 }

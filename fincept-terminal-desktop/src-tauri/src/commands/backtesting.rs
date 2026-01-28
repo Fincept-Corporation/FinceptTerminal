@@ -98,6 +98,7 @@ pub async fn execute_command(command: String) -> Result<CommandResult, String> {
  * Execute Python backtesting provider
  *
  * Runs a Python provider script with given command and arguments.
+ * For commands with large marketData, uses stdin to pass the JSON payload.
  * Automatically selects the correct Python venv based on provider.
  */
 #[tauri::command]
@@ -107,6 +108,9 @@ pub async fn execute_python_backtest(
     args: String,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
+    eprintln!("[RUST] execute_python_backtest: provider={}, command={}", provider, command);
+    eprintln!("[RUST] args length: {} bytes", args.len());
+
     // Build script name - handle both dev and production
     let script_name = format!(
         "Analytics/backtesting/{}/{}",
@@ -114,11 +118,36 @@ pub async fn execute_python_backtest(
         format!("{}_provider.py", provider.to_lowercase())
     );
 
-    // Build arguments for Python script
-    let script_args = vec![command, args];
+    // Check if args contains large JSON (>4KB suggests marketData present)
+    let output = if args.len() > 4096 {
+        eprintln!("[RUST] Large payload detected, using stdin for data transfer");
 
-    // Execute Python script using new API
-    let output = python::execute(&app, &script_name, script_args).await?;
+        // Execute in blocking thread since execute_with_stdin is sync
+        let app_clone = app.clone();
+        let script_name_clone = script_name.clone();
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+
+        tokio::task::spawn_blocking(move || {
+            // Build arguments for Python script (without the large JSON)
+            let script_args = vec![command_clone];
+
+            // Pass the full args JSON via stdin
+            python::execute_with_stdin(&app_clone, &script_name_clone, script_args, &args_clone)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {}", e))??
+    } else {
+        eprintln!("[RUST] Small payload, using standard execution");
+
+        // Build arguments for Python script
+        let script_args = vec![command, args];
+
+        // Execute Python script using standard API
+        python::execute(&app, &script_name, script_args).await?
+    };
+
+    eprintln!("[RUST] vectorbt output (first 500 chars): {}", &output.chars().take(500).collect::<String>());
 
     Ok(output)
 }
@@ -188,6 +217,16 @@ fn validate_backtesting_path(path: &str) -> Result<std::path::PathBuf, String> {
     }
 
     Ok(resolved)
+}
+
+/**
+ * Get home directory path
+ */
+#[tauri::command]
+pub async fn get_home_dir() -> Result<String, String> {
+    dirs::home_dir()
+        .and_then(|p| p.to_str().map(String::from))
+        .ok_or_else(|| "Failed to get home directory".to_string())
 }
 
 /**

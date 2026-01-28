@@ -47,11 +47,6 @@ export class StockDataNode implements INodeType {
             description: 'Professional market data (API key required)',
           },
           {
-            name: 'Polygon.io',
-            value: 'polygon',
-            description: 'Real-time and historical market data',
-          },
-          {
             name: 'Local Database',
             value: 'database',
             description: 'Fetch from local SQLite database',
@@ -113,7 +108,7 @@ export class StockDataNode implements INodeType {
         },
         displayOptions: {
           show: {
-            source: ['alphavantage', 'polygon'],
+            source: ['alphavantage'],
           },
         },
         default: '',
@@ -151,19 +146,6 @@ export class StockDataNode implements INodeType {
               throw new NodeOperationError(
                 this.getNode(),
                 'API Key is required for Alpha Vantage',
-                undefined,
-                itemIndex
-              );
-            }
-            marketData = generateSampleData(symbol, 30);
-            break;
-
-          case 'polygon':
-            const polygonApiKey = this.getNodeParameter('apiKey', itemIndex) as string;
-            if (!polygonApiKey) {
-              throw new NodeOperationError(
-                this.getNode(),
-                'API Key is required for Polygon.io',
                 undefined,
                 itemIndex
               );

@@ -121,36 +121,60 @@ export const useReportTemplate = () => {
       ...(type === 'columns' || type === 'section' ? { children: [] } : {}),
     };
 
-    setTemplate(prev => ({
-      ...prev,
-      components: [...prev.components, newComponent],
-    }));
+    const updatedTemplate = {
+      ...template,
+      components: [...template.components, newComponent],
+    };
+
+    setTemplate(updatedTemplate);
     setSelectedComponent(newComponent.id);
-    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} added`);
+
+    // Save to service so MCP bridge can access it
+    reportService.saveTemplate(updatedTemplate).catch(err => {
+      console.error('[ReportBuilder] Failed to save template after adding component:', err);
+    });
 
     return newComponent;
-  }, []);
+  }, [template]);
 
   // Update component
   const updateComponent = useCallback((id: string, updates: Partial<ReportComponent>) => {
-    setTemplate(prev => ({
-      ...prev,
-      components: prev.components.map(comp =>
-        comp.id === id ? { ...comp, ...updates } : comp
-      ),
-    }));
+    setTemplate(prev => {
+      const updated = {
+        ...prev,
+        components: prev.components.map(comp =>
+          comp.id === id ? { ...comp, ...updates } : comp
+        ),
+      };
+
+      // Save to service
+      reportService.saveTemplate(updated).catch(err => {
+        console.error('[ReportBuilder] Failed to save after component update:', err);
+      });
+
+      return updated;
+    });
   }, []);
 
   // Delete component
   const deleteComponent = useCallback((id: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      components: prev.components.filter(comp => comp.id !== id),
-    }));
+    setTemplate(prev => {
+      const updated = {
+        ...prev,
+        components: prev.components.filter(comp => comp.id !== id),
+      };
+
+      // Save to service
+      reportService.saveTemplate(updated).catch(err => {
+        console.error('[ReportBuilder] Failed to save after component delete:', err);
+      });
+
+      return updated;
+    });
+
     if (selectedComponent === id) {
       setSelectedComponent(null);
     }
-    toast.success('Component deleted');
   }, [selectedComponent]);
 
   // Duplicate component
@@ -165,7 +189,6 @@ export const useReportTemplate = () => {
         ...prev,
         components: [...prev.components, newComponent],
       }));
-      toast.success('Component duplicated');
     }
   }, [template.components]);
 
@@ -522,8 +545,10 @@ export const useImageUpload = (
       });
 
       if (selected && typeof selected === 'string' && selectedComp) {
+        // Use 'logo' field for coverpage, 'imageUrl' for everything else
+        const imageField = selectedComp.type === 'coverpage' ? 'logo' : 'imageUrl';
         updateComponent(selectedComp.id, {
-          config: { ...selectedComp.config, imageUrl: selected }
+          config: { ...selectedComp.config, [imageField]: selected }
         });
         toast.success('Image uploaded');
       }

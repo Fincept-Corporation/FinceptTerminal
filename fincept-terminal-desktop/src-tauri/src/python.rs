@@ -170,6 +170,11 @@ fn run_subprocess(
     let output = cmd.output().map_err(|e| format!("Failed to execute: {}", e))?;
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Forward Python stderr to Rust stderr for debugging
+    if !stderr.is_empty() {
+        eprintln!("{}", stderr);
+    }
+
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         extract_json(&stdout).map_err(|e| {
@@ -214,6 +219,11 @@ fn run_subprocess_with_stdin(
     let output = child.wait_with_output()
         .map_err(|e| format!("Failed to wait: {}", e))?;
     let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // Forward Python stderr to Rust stderr for debugging
+    if !stderr.is_empty() {
+        eprintln!("{}", stderr);
+    }
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);

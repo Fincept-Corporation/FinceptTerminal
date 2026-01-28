@@ -112,6 +112,34 @@ export class YFinancePaperTradingAdapter extends BaseStockBrokerAdapter {
   }
 
   // ============================================================================
+  // CREDENTIAL MANAGEMENT (Override to skip database - no credentials needed)
+  // ============================================================================
+
+  /**
+   * Override loadCredentials to skip database check
+   * YFinance is free and requires no credentials
+   */
+  protected async loadCredentials(): Promise<null> {
+    console.log('[YFinance] Skipping credential load - no credentials required for paper trading');
+    return null;
+  }
+
+  /**
+   * Override storeCredentials to skip database storage
+   * YFinance doesn't need to store any credentials
+   */
+  protected async storeCredentials(_credentials: BrokerCredentials): Promise<void> {
+    console.log('[YFinance] Skipping credential storage - no credentials needed');
+  }
+
+  /**
+   * Override clearCredentials to skip database operation
+   */
+  protected async clearCredentials(): Promise<void> {
+    console.log('[YFinance] Skipping credential clear - no credentials stored');
+  }
+
+  // ============================================================================
   // AUTHENTICATION (Paper Trading - Creates/loads portfolio)
   // ============================================================================
 

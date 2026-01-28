@@ -107,17 +107,17 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onExecuteCommand }) => {
   }, []);
 
   return (
-    <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+    <div style={{ position: 'relative', width: '200px', flexShrink: 0 }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
         backgroundColor: '#1a1a1a',
         border: '1px solid #404040',
         borderRadius: '2px',
-        padding: '0 8px',
-        height: '24px'
+        padding: '0 6px',
+        height: '20px'
       }}>
-        <Terminal size={12} color="#ea580c" style={{ marginRight: '6px', flexShrink: 0 }} />
+        <Terminal size={10} color="#ea580c" style={{ marginRight: '4px', flexShrink: 0 }} />
         <input
           ref={inputRef}
           type="text"
@@ -136,9 +136,10 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onExecuteCommand }) => {
             border: 'none',
             outline: 'none',
             color: '#ffffff',
-            fontSize: '11px',
+            fontSize: '10px',
             fontFamily: 'Consolas, "Courier New", monospace',
-            padding: '0'
+            padding: '0',
+            minWidth: 0
           }}
         />
       </div>

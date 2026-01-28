@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
+import { APP_VERSION } from '@/constants/version';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -59,7 +60,7 @@ export function StatusBar({ qlibStatus, rdAgentStatus }: StatusBarProps) {
         </div>
       </div>
       <div style={{ color: FINCEPT.GRAY }}>
-        AI Quant Lab v1.0.0 | Microsoft Qlib + RD-Agent Integration
+        AI Quant Lab v{APP_VERSION} | Microsoft Qlib + RD-Agent Integration
       </div>
     </div>
   );

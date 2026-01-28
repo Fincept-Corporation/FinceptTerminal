@@ -3,9 +3,9 @@ import { InternalTool } from '../types';
 const AVAILABLE_TABS = [
   'dashboard', 'markets', 'news', 'watchlist', 'portfolio', 'analytics',
   'economics', 'dbnomics', 'economic-calendar', 'geopolitics', 'maritime',
-  'options', 'equity-research', 'screener', 'kraken', 'polygon',
+  'options', 'equity-research', 'screener', 'kraken',
   'chat', 'docs', 'node-editor', 'code-editor', 'forum', 'marketplace',
-  'profile', 'support', 'settings', 'backtesting', 'mcp', 'trading'
+  'profile', 'support', 'settings', 'backtesting', 'mcp', 'trading', 'report-builder'
 ];
 
 const AVAILABLE_SCREENS = ['pricing', 'dashboard', 'profile', 'login'];

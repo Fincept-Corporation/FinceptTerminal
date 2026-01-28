@@ -210,7 +210,6 @@ impl WebSocketManager {
                 Err(e) => {
                     last_error = Some(e);
                     attempt += 1;
-                    eprintln!("[WebSocketManager] Reconnect attempt {} failed for {}", attempt, provider);
                 }
             }
         }

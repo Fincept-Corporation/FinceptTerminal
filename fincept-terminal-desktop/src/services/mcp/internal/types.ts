@@ -92,6 +92,17 @@ export interface TerminalContexts {
   listNotes?: () => Promise<any[]>;
   deleteNote?: (id: string) => Promise<void>;
   generateReport?: (params: any) => Promise<any>;
+
+  // Report Builder
+  createReportTemplate?: (params: { title: string; description: string; author?: string; company?: string }) => Promise<any>;
+  addReportComponent?: (params: { type: string; content?: string; config?: any }) => Promise<any>;
+  updateReportMetadata?: (metadata: Record<string, any>) => Promise<void>;
+  saveReportTemplate?: (filename?: string) => Promise<any>;
+  loadReportTemplate?: (path: string) => Promise<any>;
+  exportReport?: (params: { format: string; filename?: string }) => Promise<any>;
+  listReportComponents?: () => Promise<any[]>;
+  deleteReportComponent?: (id: string) => Promise<void>;
+  applyReportTheme?: (theme: string) => Promise<void>;
 }
 
 export const INTERNAL_SERVER_ID = 'fincept-terminal';

@@ -693,7 +693,6 @@ Signal Generator:
 • Yahoo Finance - Free market data
 • Alpha Vantage - Stock data API
 • IEX Cloud - Real-time market data
-• Polygon.io - Market data
 • Twelve Data - Financial API
 • PostgreSQL - Database
 • MongoDB - NoSQL database

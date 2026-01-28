@@ -13,6 +13,7 @@ import {
   Upload,
   Trash2,
   Rocket,
+  LayoutTemplate,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NodeEditorToolbarProps } from '../types';
@@ -36,6 +37,7 @@ const NodeEditorToolbar: React.FC<NodeEditorToolbarProps> = ({
   onDeleteSelectedNodes,
   onShowDeployDialog,
   onQuickSaveDraft,
+  onShowTemplates,
 }) => {
   const { t } = useTranslation('nodeEditor');
 
@@ -121,6 +123,35 @@ const NodeEditorToolbar: React.FC<NodeEditorToolbarProps> = ({
           >
             <Plus size={14} />
             ADD NODE
+          </button>
+
+          <button
+            onClick={onShowTemplates}
+            style={{
+              backgroundColor: 'transparent',
+              color: '#8b5cf6',
+              border: '1px solid #8b5cf6',
+              padding: '6px 12px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              borderRadius: '3px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 'bold',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#8b5cf6';
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#8b5cf6';
+            }}
+            title="Browse predefined workflow templates"
+          >
+            <LayoutTemplate size={14} />
+            TEMPLATES
           </button>
 
           <button

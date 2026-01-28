@@ -10,170 +10,225 @@ import {
   Info, FileText, Scale, Award, Shield, ExternalLink, Mail, Globe, Github
 } from 'lucide-react';
 
-const COLORS = {
-  ORANGE: '#ea580c',
-  WHITE: '#ffffff',
-  GREEN: '#10b981',
-  GRAY: '#6b7280',
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
   DARK_BG: '#000000',
-  PANEL_BG: '#0a0a0a',
-  HEADER_BG: '#1a1a1a',
-  CYAN: '#06b6d4',
-  BORDER: '#262626',
-  MUTED: '#737373'
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
 };
+
+const sectionHeaderStyle: React.CSSProperties = {
+  padding: '12px',
+  backgroundColor: FINCEPT.HEADER_BG,
+  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+};
+
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: '9px',
+  fontWeight: 700,
+  color: FINCEPT.GRAY,
+  letterSpacing: '0.5px',
+  textTransform: 'uppercase' as const,
+  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+};
+
+const panelStyle: React.CSSProperties = {
+  backgroundColor: FINCEPT.PANEL_BG,
+  border: `1px solid ${FINCEPT.BORDER}`,
+  borderRadius: '2px',
+};
+
+const bodyTextStyle: React.CSSProperties = {
+  fontSize: '10px',
+  color: FINCEPT.WHITE,
+  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+};
+
+const mutedTextStyle: React.CSSProperties = {
+  fontSize: '10px',
+  color: FINCEPT.MUTED,
+  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+};
+
+const bulletStyle: React.CSSProperties = {
+  fontSize: '10px',
+  color: FINCEPT.GRAY,
+  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+};
+
+const linkStyle: React.CSSProperties = {
+  color: FINCEPT.CYAN,
+  fontSize: '10px',
+  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+  textDecoration: 'none',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  transition: 'all 0.2s',
+};
+
+const resourceLinkStyle: React.CSSProperties = {
+  backgroundColor: FINCEPT.HEADER_BG,
+  border: `1px solid ${FINCEPT.BORDER}`,
+  borderRadius: '2px',
+  padding: '8px 12px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  color: FINCEPT.CYAN,
+  fontSize: '10px',
+  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+  textDecoration: 'none',
+  transition: 'all 0.2s',
+  cursor: 'pointer',
+};
+
+const BulletItem: React.FC<{ text: string }> = ({ text }) => (
+  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+    <span style={{ color: FINCEPT.ORANGE, fontSize: '10px', lineHeight: '16px' }}>&#x25A0;</span>
+    <span style={bulletStyle}>{text}</span>
+  </div>
+);
 
 const AboutTab: React.FC = () => {
   const { t } = useTranslation('about');
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: COLORS.DARK_BG }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.DARK_BG }}>
       <TabHeader
         title={t('title')}
         subtitle={t('subtitle')}
       />
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-6xl mx-auto space-y-4">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div style={{ maxWidth: '960px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-          {/* Version Info - Compact */}
-          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }} className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <Info className="w-5 h-5" style={{ color: COLORS.ORANGE }} />
-                <div>
-                  <div className="text-lg font-bold font-mono" style={{ color: COLORS.WHITE }}>
-                    {VERSION_INFO.name}
-                  </div>
-                  <div className="text-xs font-mono" style={{ color: COLORS.MUTED }}>
-                    {t('version.subtitle')}
-                  </div>
+          {/* Version Info Panel */}
+          <div style={panelStyle}>
+            <div style={sectionHeaderStyle}>
+              <Info size={12} style={{ color: FINCEPT.ORANGE }} />
+              <span style={sectionLabelStyle}>VERSION INFORMATION</span>
+            </div>
+            <div style={{ padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: FINCEPT.WHITE, fontFamily: '"IBM Plex Mono", "Consolas", monospace' }}>
+                  {VERSION_INFO.name}
+                </div>
+                <div style={{ fontSize: '9px', color: FINCEPT.MUTED, fontFamily: '"IBM Plex Mono", "Consolas", monospace', marginTop: '4px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                  {t('version.subtitle')}
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-xl font-mono font-bold" style={{ color: COLORS.ORANGE }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: FINCEPT.ORANGE, fontFamily: '"IBM Plex Mono", "Consolas", monospace' }}>
                   v{VERSION_INFO.version}
                 </div>
-                <div className="text-xs font-mono" style={{ color: COLORS.MUTED }}>
+                <div style={{ fontSize: '9px', color: FINCEPT.MUTED, fontFamily: '"IBM Plex Mono", "Consolas", monospace', marginTop: '4px' }}>
                   {VERSION_INFO.buildDate}
                 </div>
               </div>
             </div>
-            <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${COLORS.BORDER}` }}>
-              <div className="text-xs font-mono" style={{ color: COLORS.MUTED }}>
+            <div style={{ padding: '8px 12px', borderTop: `1px solid ${FINCEPT.BORDER}`, backgroundColor: FINCEPT.HEADER_BG }}>
+              <span style={{ fontSize: '9px', color: FINCEPT.MUTED, fontFamily: '"IBM Plex Mono", "Consolas", monospace' }}>
                 {VERSION_INFO.copyright}
-              </div>
+              </span>
             </div>
           </div>
 
           {/* License Information - Two Column */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             {/* Open Source */}
-            <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }} className="p-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <FileText className="w-4 h-4" style={{ color: COLORS.GREEN }} />
-                <h3 className="font-bold font-mono text-sm" style={{ color: COLORS.WHITE }}>{t('openSource.title')}</h3>
+            <div style={panelStyle}>
+              <div style={sectionHeaderStyle}>
+                <FileText size={12} style={{ color: FINCEPT.GREEN }} />
+                <span style={sectionLabelStyle}>{t('openSource.title')}</span>
               </div>
-              <div className="space-y-2 text-xs font-mono" style={{ color: COLORS.GRAY }}>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('openSource.license')}</span>
-                </div>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('openSource.personal')}</span>
-                </div>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('openSource.sharing')}</span>
-                </div>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('openSource.network')}</span>
-                </div>
+              <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <BulletItem text={t('openSource.license')} />
+                <BulletItem text={t('openSource.personal')} />
+                <BulletItem text={t('openSource.sharing')} />
+                <BulletItem text={t('openSource.network')} />
               </div>
-              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${COLORS.BORDER}` }}>
+              <div style={{ padding: '8px 12px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
                 <a
                   href="https://www.gnu.org/licenses/agpl-3.0.html"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center space-x-1 text-xs font-mono hover:underline"
-                  style={{ color: COLORS.CYAN }}
+                  style={linkStyle}
                 >
                   <span>gnu.org/licenses/agpl-3.0</span>
-                  <ExternalLink className="w-3 h-3" />
+                  <ExternalLink size={10} />
                 </a>
               </div>
             </div>
 
             {/* Commercial */}
-            <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }} className="p-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <Award className="w-4 h-4" style={{ color: COLORS.ORANGE }} />
-                <h3 className="font-bold font-mono text-sm" style={{ color: COLORS.WHITE }}>{t('commercial.title')}</h3>
+            <div style={panelStyle}>
+              <div style={sectionHeaderStyle}>
+                <Award size={12} style={{ color: FINCEPT.ORANGE }} />
+                <span style={sectionLabelStyle}>{t('commercial.title')}</span>
               </div>
-              <div className="space-y-2 text-xs font-mono" style={{ color: COLORS.GRAY }}>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('commercial.required')}</span>
-                </div>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('commercial.noSharing')}</span>
-                </div>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('commercial.support')}</span>
-                </div>
-                <div className="flex items-start">
-                  <span style={{ color: COLORS.ORANGE }} className="mr-2">•</span>
-                  <span>{t('commercial.custom')}</span>
-                </div>
+              <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <BulletItem text={t('commercial.required')} />
+                <BulletItem text={t('commercial.noSharing')} />
+                <BulletItem text={t('commercial.support')} />
+                <BulletItem text={t('commercial.custom')} />
               </div>
-              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${COLORS.BORDER}` }}>
+              <div style={{ padding: '8px 12px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
                 <a
                   href="mailto:support@fincept.in?subject=Commercial License Inquiry"
-                  className="inline-flex items-center space-x-1 text-xs font-mono hover:underline"
-                  style={{ color: COLORS.CYAN }}
+                  style={linkStyle}
                 >
-                  <Mail className="w-3 h-3" />
+                  <Mail size={10} />
                   <span>support@fincept.in</span>
                 </a>
               </div>
             </div>
           </div>
 
-          {/* Trademarks - Compact */}
-          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }} className="p-4">
-            <div className="flex items-start space-x-3">
-              <Shield className="w-4 h-4 mt-0.5" style={{ color: COLORS.ORANGE }} />
-              <div className="flex-1">
-                <h3 className="font-bold font-mono text-sm mb-2" style={{ color: COLORS.WHITE }}>{t('trademarks.title')}</h3>
-                <p className="text-xs font-mono mb-2" style={{ color: COLORS.GRAY }}>
-                  {t('trademarks.description')}
-                </p>
-                <p className="text-xs font-mono" style={{ color: COLORS.MUTED }}>
-                  {t('trademarks.permission')}
-                </p>
-              </div>
+          {/* Trademarks */}
+          <div style={panelStyle}>
+            <div style={sectionHeaderStyle}>
+              <Shield size={12} style={{ color: FINCEPT.ORANGE }} />
+              <span style={sectionLabelStyle}>{t('trademarks.title')}</span>
+            </div>
+            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={bodyTextStyle}>
+                {t('trademarks.description')}
+              </p>
+              <p style={mutedTextStyle}>
+                {t('trademarks.permission')}
+              </p>
             </div>
           </div>
 
-          {/* Links Grid - Compact */}
-          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }} className="p-4">
-            <div className="flex items-center space-x-2 mb-3">
-              <Globe className="w-4 h-4" style={{ color: COLORS.ORANGE }} />
-              <h3 className="font-bold font-mono text-sm" style={{ color: COLORS.WHITE }}>{t('resources.title')}</h3>
+          {/* Resources Links */}
+          <div style={panelStyle}>
+            <div style={sectionHeaderStyle}>
+              <Globe size={12} style={{ color: FINCEPT.ORANGE }} />
+              <span style={sectionLabelStyle}>{t('resources.title')}</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
               <a
                 href="https://github.com/Fincept-Corporation/FinceptTerminal"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center space-x-2 p-2 hover:bg-opacity-50 transition-colors text-xs font-mono"
-                style={{ backgroundColor: COLORS.HEADER_BG, color: COLORS.CYAN, border: `1px solid ${COLORS.BORDER}` }}
+                style={resourceLinkStyle}
               >
-                <Github className="w-3 h-3" />
+                <Github size={12} />
                 <span>{t('resources.repository')}</span>
               </a>
 
@@ -181,10 +236,9 @@ const AboutTab: React.FC = () => {
                 href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center space-x-2 p-2 hover:bg-opacity-50 transition-colors text-xs font-mono"
-                style={{ backgroundColor: COLORS.HEADER_BG, color: COLORS.CYAN, border: `1px solid ${COLORS.BORDER}` }}
+                style={resourceLinkStyle}
               >
-                <FileText className="w-3 h-3" />
+                <FileText size={12} />
                 <span>{t('resources.license')}</span>
               </a>
 
@@ -192,10 +246,9 @@ const AboutTab: React.FC = () => {
                 href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center space-x-2 p-2 hover:bg-opacity-50 transition-colors text-xs font-mono"
-                style={{ backgroundColor: COLORS.HEADER_BG, color: COLORS.CYAN, border: `1px solid ${COLORS.BORDER}` }}
+                style={resourceLinkStyle}
               >
-                <Award className="w-3 h-3" />
+                <Award size={12} />
                 <span>{t('resources.commercial')}</span>
               </a>
 
@@ -203,10 +256,9 @@ const AboutTab: React.FC = () => {
                 href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center space-x-2 p-2 hover:bg-opacity-50 transition-colors text-xs font-mono"
-                style={{ backgroundColor: COLORS.HEADER_BG, color: COLORS.CYAN, border: `1px solid ${COLORS.BORDER}` }}
+                style={resourceLinkStyle}
               >
-                <Shield className="w-3 h-3" />
+                <Shield size={12} />
                 <span>{t('resources.trademarks')}</span>
               </a>
 
@@ -214,10 +266,9 @@ const AboutTab: React.FC = () => {
                 href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center space-x-2 p-2 hover:bg-opacity-50 transition-colors text-xs font-mono"
-                style={{ backgroundColor: COLORS.HEADER_BG, color: COLORS.CYAN, border: `1px solid ${COLORS.BORDER}` }}
+                style={resourceLinkStyle}
               >
-                <FileText className="w-3 h-3" />
+                <FileText size={12} />
                 <span>{t('resources.cla')}</span>
               </a>
 
@@ -225,43 +276,42 @@ const AboutTab: React.FC = () => {
                 href="https://fincept.in"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center space-x-2 p-2 hover:bg-opacity-50 transition-colors text-xs font-mono"
-                style={{ backgroundColor: COLORS.HEADER_BG, color: COLORS.CYAN, border: `1px solid ${COLORS.BORDER}` }}
+                style={resourceLinkStyle}
               >
-                <Globe className="w-3 h-3" />
+                <Globe size={12} />
                 <span>{t('resources.website')}</span>
               </a>
             </div>
           </div>
 
-          {/* Contact - Compact Grid */}
-          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }} className="p-4">
-            <div className="flex items-center space-x-2 mb-3">
-              <Mail className="w-4 h-4" style={{ color: COLORS.ORANGE }} />
-              <h3 className="font-bold font-mono text-sm" style={{ color: COLORS.WHITE }}>{t('contact.title')}</h3>
+          {/* Contact Grid */}
+          <div style={panelStyle}>
+            <div style={sectionHeaderStyle}>
+              <Mail size={12} style={{ color: FINCEPT.ORANGE }} />
+              <span style={sectionLabelStyle}>{t('contact.title')}</span>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+            <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <div className="font-semibold mb-1" style={{ color: COLORS.GRAY }}>{t('contact.general')}</div>
-                <a href="mailto:support@fincept.in" style={{ color: COLORS.CYAN }} className="hover:underline">
+                <div style={{ ...sectionLabelStyle, marginBottom: '4px' }}>{t('contact.general')}</div>
+                <a href="mailto:support@fincept.in" style={linkStyle}>
                   support@fincept.in
                 </a>
               </div>
               <div>
-                <div className="font-semibold mb-1" style={{ color: COLORS.GRAY }}>{t('contact.commercial')}</div>
-                <a href="mailto:support@fincept.in" style={{ color: COLORS.CYAN }} className="hover:underline">
+                <div style={{ ...sectionLabelStyle, marginBottom: '4px' }}>{t('contact.commercial')}</div>
+                <a href="mailto:support@fincept.in" style={linkStyle}>
                   support@fincept.in
                 </a>
               </div>
               <div>
-                <div className="font-semibold mb-1" style={{ color: COLORS.GRAY }}>{t('contact.security')}</div>
-                <a href="mailto:support@fincept.in" style={{ color: COLORS.CYAN }} className="hover:underline">
+                <div style={{ ...sectionLabelStyle, marginBottom: '4px' }}>{t('contact.security')}</div>
+                <a href="mailto:support@fincept.in" style={linkStyle}>
                   support@fincept.in
                 </a>
               </div>
               <div>
-                <div className="font-semibold mb-1" style={{ color: COLORS.GRAY }}>{t('contact.legal')}</div>
-                <a href="mailto:support@fincept.in" style={{ color: COLORS.CYAN }} className="hover:underline">
+                <div style={{ ...sectionLabelStyle, marginBottom: '4px' }}>{t('contact.legal')}</div>
+                <a href="mailto:support@fincept.in" style={linkStyle}>
                   support@fincept.in
                 </a>
               </div>

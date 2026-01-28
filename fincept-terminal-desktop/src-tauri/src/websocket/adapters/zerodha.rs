@@ -151,7 +151,6 @@ impl ZerodhaAdapter {
                 ws_lock.send(Message::Text(sub_msg.to_string())).await?;
             }
 
-            eprintln!("[Zerodha] Subscribed to {} tokens", chunk_vec.len());
 
             // Wait a bit for subscription to process
             tokio::time::sleep(Duration::from_secs(1)).await;
@@ -167,7 +166,6 @@ impl ZerodhaAdapter {
                 ws_lock.send(Message::Text(mode_msg.to_string())).await?;
             }
 
-            eprintln!("[Zerodha] Set mode {} for {} tokens", mode, chunk_vec.len());
 
             // Update subscribed tokens
             {
@@ -212,7 +210,6 @@ impl ZerodhaAdapter {
             }
         }
 
-        eprintln!("[Zerodha] Unsubscribed from {} tokens", tokens.len());
 
         Ok(())
     }
@@ -265,7 +262,6 @@ impl ZerodhaAdapter {
                                             .and_then(|d| d.as_str())
                                             .unwrap_or("Unknown error")
                                             .to_string();
-                                        eprintln!("[Zerodha] Error: {}", error_msg);
 
                                         callback(MarketMessage::Status(StatusData {
                                             provider: "zerodha".to_string(),
@@ -283,7 +279,6 @@ impl ZerodhaAdapter {
                             let _ = ws_lock.send(Message::Pong(data)).await;
                         }
                         Message::Close(_) => {
-                            eprintln!("[Zerodha] Connection closed by server");
                             break;
                         }
                         _ => {}
@@ -291,7 +286,6 @@ impl ZerodhaAdapter {
                 }
                 Some(Err(e)) => {
                     let error_msg = format!("WebSocket error: {}", e);
-                    eprintln!("[Zerodha] {}", error_msg);
                     connected.store(false, Ordering::SeqCst);
 
                     callback(MarketMessage::Status(StatusData {
@@ -308,7 +302,6 @@ impl ZerodhaAdapter {
                 }
                 None => {
                     let error_msg = "WebSocket connection closed unexpectedly".to_string();
-                    eprintln!("[Zerodha] {}", error_msg);
                     connected.store(false, Ordering::SeqCst);
 
                     callback(MarketMessage::Status(StatusData {
@@ -469,7 +462,6 @@ impl WebSocketAdapter for ZerodhaAdapter {
         }
 
         let url = self.build_ws_url();
-        eprintln!("[Zerodha] Connecting to WebSocket...");
 
         // Connect with timeout
         let (ws_stream, _response) = tokio::time::timeout(
@@ -480,7 +472,6 @@ impl WebSocketAdapter for ZerodhaAdapter {
         .map_err(|_| anyhow::anyhow!("Connection timeout"))?
         .map_err(|e| anyhow::anyhow!("Connection failed: {}", e))?;
 
-        eprintln!("[Zerodha] WebSocket connected successfully");
 
         let ws = Arc::new(RwLock::new(ws_stream));
         self.ws = Some(ws.clone());
@@ -543,7 +534,6 @@ impl WebSocketAdapter for ZerodhaAdapter {
             }));
         }
 
-        eprintln!("[Zerodha] WebSocket disconnected");
         Ok(())
     }
 

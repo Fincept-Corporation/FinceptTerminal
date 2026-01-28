@@ -1,6 +1,7 @@
 // CryptoStatusBar.tsx - Bottom Status Bar for Crypto Trading
 import React from 'react';
 import { FINCEPT } from '../constants';
+import { APP_VERSION } from '@/constants/version';
 
 interface CryptoStatusBarProps {
   activeBroker: string | null;
@@ -25,7 +26,7 @@ export function CryptoStatusBar({
       alignItems: 'center',
       flexShrink: 0
     }}>
-      <span>Fincept Terminal v3.1.4 | Professional Crypto Trading Platform</span>
+      <span>Fincept Terminal v{APP_VERSION} | Professional Crypto Trading Platform</span>
       <span>
         Broker: <span style={{ color: FINCEPT.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
         Mode: <span style={{ color: tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.RED }}>

@@ -85,6 +85,40 @@ from base.base_provider import (
     parse_json_input
 )
 
+# Import fast-trade wrapper modules
+from .ft_backtest import (
+    run_backtest as ft_run,
+    validate_backtest as ft_validate,
+    run_multiple_backtests,
+)
+from .ft_data import (
+    generate_synthetic_ohlcv,
+    load_basic_df_from_csv,
+    standardize_df,
+)
+from .ft_summary import (
+    build_summary,
+    calculate_drawdown_metrics,
+    calculate_trade_quality,
+    calculate_trade_streaks,
+    create_trade_log,
+)
+from .ft_indicators import (
+    list_available_indicators,
+    get_transformer_map,
+)
+from .ft_strategies import (
+    sma_crossover as sma_crossover_config,
+    ema_crossover as ema_crossover_config,
+    rsi_strategy as rsi_config,
+    macd_strategy as macd_config,
+    bollinger_bands_strategy as bb_config,
+    build_custom_strategy,
+    list_strategies,
+)
+from .ft_evaluate import evaluate_rules
+from .ft_utils import resample, trending_up, trending_down
+
 
 class FastTradeProvider(BacktestingProviderBase):
     """
@@ -256,33 +290,21 @@ class FastTradeProvider(BacktestingProviderBase):
         if assets and len(assets) > 0:
             symbol = assets[0].get('symbol', 'SPY')
 
-        # Generate synthetic OHLCV data
+        # Generate synthetic OHLCV data using ft_data module
         # In production, this would fetch from APIs or database
-        dates = pd.date_range(
-            start=start_date or '2023-01-01',
-            end=end_date or '2024-01-01',
-            freq='1H'
+        data = generate_synthetic_ohlcv(
+            periods=len(pd.date_range(
+                start=start_date or '2023-01-01',
+                end=end_date or '2024-01-01',
+                freq='1H'
+            )),
+            start_date=start_date or '2023-01-01',
+            freq='1H',
+            initial_price=100.0,
+            volatility=0.02,
+            drift=0.0002,
+            seed=42,
         )
-
-        np.random.seed(42)
-
-        # Generate realistic price data
-        num_periods = len(dates)
-        returns = np.random.normal(0.0002, 0.02, num_periods)
-        price = 100 * np.exp(np.cumsum(returns))
-
-        data = pd.DataFrame({
-            'date': dates,
-            'open': price * (1 + np.random.uniform(-0.01, 0.01, num_periods)),
-            'high': price * (1 + np.random.uniform(0, 0.02, num_periods)),
-            'low': price * (1 - np.random.uniform(0, 0.02, num_periods)),
-            'close': price,
-            'volume': np.random.uniform(1000000, 5000000, num_periods),
-        })
-
-        # Ensure high >= open, close and low <= open, close
-        data['high'] = data[['open', 'high', 'close']].max(axis=1)
-        data['low'] = data[['open', 'low', 'close']].min(axis=1)
 
         self._log(f'Generated {len(data)} periods of data for {symbol}')
 
@@ -305,157 +327,55 @@ class FastTradeProvider(BacktestingProviderBase):
         Converts our standard strategy format to fast-trade's JSON format.
         """
         strategy_type = strategy_def.get('type', 'sma_crossover')
+        trailing = parameters.get('trailingStopLoss', 0.05)
 
-        # Default strategy: SMA Crossover
+        # Use ft_strategies module for pre-built configs
         if strategy_type == 'sma_crossover':
-            fast_period = parameters.get('fastPeriod', 9)
-            slow_period = parameters.get('slowPeriod', 21)
-
-            config = {
-                'base_balance': initial_capital,
-                'freq': '1H',
-                'comission': 0.001,  # 0.1% commission
-                'datapoints': [
-                    {
-                        'name': 'sma_fast',
-                        'transformer': 'sma',
-                        'args': [fast_period]
-                    },
-                    {
-                        'name': 'sma_slow',
-                        'transformer': 'sma',
-                        'args': [slow_period]
-                    }
-                ],
-                'enter': [
-                    ['sma_fast', '>', 'sma_slow']
-                ],
-                'exit': [
-                    ['sma_fast', '<', 'sma_slow']
-                ],
-                'trailing_stop_loss': parameters.get('trailingStopLoss', 0.05),
-                'data': data
-            }
+            config = sma_crossover_config(
+                fast_period=parameters.get('fastPeriod', 9),
+                slow_period=parameters.get('slowPeriod', 21),
+                initial_capital=initial_capital,
+                trailing_stop=trailing,
+            )
 
         elif strategy_type == 'rsi':
-            period = parameters.get('period', 14)
-            oversold = parameters.get('oversold', 30)
-            overbought = parameters.get('overbought', 70)
-
-            config = {
-                'base_balance': initial_capital,
-                'freq': '1H',
-                'comission': 0.001,
-                'datapoints': [
-                    {
-                        'name': 'rsi',
-                        'transformer': 'rsi',
-                        'args': [period]
-                    }
-                ],
-                'enter': [
-                    ['rsi', '<', oversold]
-                ],
-                'exit': [
-                    ['rsi', '>', overbought]
-                ],
-                'trailing_stop_loss': parameters.get('trailingStopLoss', 0.05),
-                'data': data
-            }
+            config = rsi_config(
+                period=parameters.get('period', 14),
+                oversold=parameters.get('oversold', 30),
+                overbought=parameters.get('overbought', 70),
+                initial_capital=initial_capital,
+                trailing_stop=trailing,
+            )
 
         elif strategy_type == 'ema_crossover':
-            fast_period = parameters.get('fastPeriod', 12)
-            slow_period = parameters.get('slowPeriod', 26)
-
-            config = {
-                'base_balance': initial_capital,
-                'freq': '1H',
-                'comission': 0.001,
-                'datapoints': [
-                    {
-                        'name': 'ema_fast',
-                        'transformer': 'ema',
-                        'args': [fast_period]
-                    },
-                    {
-                        'name': 'ema_slow',
-                        'transformer': 'ema',
-                        'args': [slow_period]
-                    }
-                ],
-                'enter': [
-                    ['ema_fast', '>', 'ema_slow']
-                ],
-                'exit': [
-                    ['ema_fast', '<', 'ema_slow']
-                ],
-                'trailing_stop_loss': parameters.get('trailingStopLoss', 0.05),
-                'data': data
-            }
+            config = ema_crossover_config(
+                fast_period=parameters.get('fastPeriod', 12),
+                slow_period=parameters.get('slowPeriod', 26),
+                initial_capital=initial_capital,
+                trailing_stop=trailing,
+            )
 
         elif strategy_type == 'macd':
-            fast_period = parameters.get('fastPeriod', 12)
-            slow_period = parameters.get('slowPeriod', 26)
-            signal_period = parameters.get('signalPeriod', 9)
-
-            config = {
-                'base_balance': initial_capital,
-                'freq': '1H',
-                'comission': 0.001,
-                'datapoints': [
-                    {
-                        'name': 'macd',
-                        'transformer': 'macd',
-                        'args': [fast_period, slow_period, signal_period]
-                    }
-                ],
-                'enter': [
-                    ['macd', '>', 0]  # MACD line crosses above zero
-                ],
-                'exit': [
-                    ['macd', '<', 0]  # MACD line crosses below zero
-                ],
-                'trailing_stop_loss': parameters.get('trailingStopLoss', 0.05),
-                'data': data
-            }
+            config = macd_config(
+                fast=parameters.get('fastPeriod', 12),
+                slow=parameters.get('slowPeriod', 26),
+                signal=parameters.get('signalPeriod', 9),
+                initial_capital=initial_capital,
+                trailing_stop=trailing,
+            )
 
         elif strategy_type == 'bollinger_bands':
-            period = parameters.get('period', 20)
-            std_dev = parameters.get('stdDev', 2)
-
-            config = {
-                'base_balance': initial_capital,
-                'freq': '1H',
-                'comission': 0.001,
-                'datapoints': [
-                    {
-                        'name': 'bb_upper',
-                        'transformer': 'bbands',
-                        'args': [period, std_dev],
-                        'column': 'upper'
-                    },
-                    {
-                        'name': 'bb_lower',
-                        'transformer': 'bbands',
-                        'args': [period, std_dev],
-                        'column': 'lower'
-                    }
-                ],
-                'enter': [
-                    ['close', '<', 'bb_lower']  # Price below lower band (oversold)
-                ],
-                'exit': [
-                    ['close', '>', 'bb_upper']  # Price above upper band (overbought)
-                ],
-                'trailing_stop_loss': parameters.get('trailingStopLoss', 0.05),
-                'data': data
-            }
+            config = bb_config(
+                period=parameters.get('period', 20),
+                std_dev=parameters.get('stdDev', 2),
+                initial_capital=initial_capital,
+                trailing_stop=trailing,
+            )
 
         elif strategy_type == 'custom' and 'fastTradeConfig' in strategy_def:
             # User provided raw fast-trade configuration
             config = strategy_def['fastTradeConfig']
             config['base_balance'] = initial_capital
-            config['data'] = data
 
         else:
             # Default to simple buy and hold
@@ -464,15 +384,11 @@ class FastTradeProvider(BacktestingProviderBase):
                 'freq': '1H',
                 'comission': 0.001,
                 'datapoints': [],
-                'enter': [
-                    ['close', '>', 0]  # Always enter (buy and hold)
-                ],
-                'exit': [
-                    ['close', '<', 0]  # Never exit
-                ],
-                'data': data
+                'enter': [['close', '>', 0]],
+                'exit': [['close', '<', 0]],
             }
 
+        config['data'] = data
         return config
 
     # ========================================================================

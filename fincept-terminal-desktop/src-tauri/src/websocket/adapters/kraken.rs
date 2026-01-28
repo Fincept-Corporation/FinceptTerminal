@@ -88,7 +88,6 @@ impl KrakenAdapter {
                 }
                 Some(Err(e)) => {
                     let error_msg = format!("WebSocket error: {}", e);
-                    eprintln!("[Kraken] {}", error_msg);
                     connected.store(false, Ordering::SeqCst);
 
                     // Emit error status via message callback
@@ -107,7 +106,6 @@ impl KrakenAdapter {
                 }
                 None => {
                     let error_msg = "WebSocket connection closed unexpectedly".to_string();
-                    eprintln!("[Kraken] {}", error_msg);
                     connected.store(false, Ordering::SeqCst);
 
                     // Emit disconnected status
@@ -286,21 +284,17 @@ impl WebSocketAdapter for KrakenAdapter {
         let url = self.config.url.clone();
         let connect_url = if url.is_empty() { KRAKEN_WS_URL } else { &url };
 
-        eprintln!("[Kraken::connect] Connecting to: {}", connect_url);
 
         let (ws_stream, _) = connect_async(connect_url).await
             .map_err(|e| {
-                eprintln!("[Kraken::connect] ✗ Failed to connect: {}", e);
                 e
             })?;
 
-        eprintln!("[Kraken::connect] ✓ WebSocket connection established");
 
         let ws = Arc::new(RwLock::new(ws_stream));
         self.ws = Some(ws.clone());
         self.connected.store(true, Ordering::SeqCst);
 
-        eprintln!("[Kraken::connect] Starting receive loop...");
 
         // Start receive loop with error callback
         if let Some(callback) = self.message_callback.clone() {
@@ -310,12 +304,9 @@ impl WebSocketAdapter for KrakenAdapter {
             tokio::spawn(async move {
                 Self::receive_loop(ws, callback, error_callback, connected, last_message_time).await;
             });
-            eprintln!("[Kraken::connect] ✓ Receive loop started");
         } else {
-            eprintln!("[Kraken::connect] ⚠ No message callback set!");
         }
 
-        eprintln!("[Kraken::connect] ✓ Connection complete");
         Ok(())
     }
 
@@ -336,11 +327,9 @@ impl WebSocketAdapter for KrakenAdapter {
         channel: &str,
         params: Option<Value>,
     ) -> anyhow::Result<()> {
-        eprintln!("[Kraken::subscribe] symbol={}, channel={}", symbol, channel);
 
         let ws = self.ws.as_ref()
             .ok_or_else(|| {
-                eprintln!("[Kraken::subscribe] ✗ Not connected");
                 anyhow::anyhow!("Not connected")
             })?;
 
@@ -367,15 +356,12 @@ impl WebSocketAdapter for KrakenAdapter {
         }
 
         let msg_str = serde_json::to_string(&sub_msg)?;
-        eprintln!("[Kraken::subscribe] Sending subscription message: {}", msg_str);
 
         ws.write().await.send(Message::Text(msg_str)).await
             .map_err(|e| {
-                eprintln!("[Kraken::subscribe] ✗ Failed to send: {}", e);
                 anyhow::anyhow!("Failed to send subscription: {}", e)
             })?;
 
-        eprintln!("[Kraken::subscribe] ✓ Subscription message sent");
         Ok(())
     }
 

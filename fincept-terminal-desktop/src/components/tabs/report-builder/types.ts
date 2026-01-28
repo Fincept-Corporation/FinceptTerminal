@@ -98,6 +98,7 @@ export interface DocumentCanvasProps {
   template: ReportTemplate;
   selectedComponent: string | null;
   onSelectComponent: (id: string | null) => void;
+  onUpdateComponent: (id: string, updates: Partial<ReportComponent>) => void;
   pageTheme: PageTheme;
   customBgColor: string;
   fontFamily: string;

@@ -64,6 +64,7 @@ export interface NodeEditorToolbarProps {
   onDeleteSelectedNodes: () => void;
   onShowDeployDialog: () => void;
   onQuickSaveDraft: () => Promise<void>;
+  onShowTemplates: () => void;
 }
 
 // Deploy dialog props

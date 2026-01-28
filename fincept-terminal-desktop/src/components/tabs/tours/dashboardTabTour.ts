@@ -186,7 +186,7 @@ export const dashboardTabTourSteps: DriveStep[] = [
     element: '.widget-data-source',
     popover: {
       title: 'Data Source Widget',
-      description: 'Connect to 100+ data sources including Bloomberg, Reuters, Alpha Vantage, Polygon.io, and custom APIs. Configure data feeds for each widget.',
+      description: 'Connect to 100+ data sources including Bloomberg, Reuters, Alpha Vantage, and custom APIs. Configure data feeds for each widget.',
       side: 'top',
       align: 'start'
     }

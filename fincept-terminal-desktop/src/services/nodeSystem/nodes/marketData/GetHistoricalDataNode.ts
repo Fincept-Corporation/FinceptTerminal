@@ -137,7 +137,6 @@ export class GetHistoricalDataNode implements INodeType {
         default: 'yahoo',
         options: [
           { name: 'Yahoo Finance', value: 'yahoo' },
-          { name: 'Polygon.io', value: 'polygon' },
           { name: 'Alpha Vantage', value: 'alphavantage' },
           { name: 'Twelve Data', value: 'twelvedata' },
           { name: 'Binance', value: 'binance' },

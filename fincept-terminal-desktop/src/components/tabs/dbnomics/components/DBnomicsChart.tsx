@@ -1,14 +1,30 @@
 import React, { memo, useMemo } from 'react';
 import type { DataPoint, ChartType } from '../types';
 
+// Fincept Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+};
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
+
 interface DBnomicsChartProps {
   seriesArray: DataPoint[];
   chartType: ChartType;
   compact?: boolean;
-  colors: any;
 }
 
-function DBnomicsChart({ seriesArray, chartType, compact = false, colors }: DBnomicsChartProps) {
+function DBnomicsChart({ seriesArray, chartType, compact = false }: DBnomicsChartProps) {
   // Memoize all chart calculations
   const chartData = useMemo(() => {
     if (seriesArray.length === 0) return null;
@@ -90,21 +106,21 @@ function DBnomicsChart({ seriesArray, chartType, compact = false, colors }: DBno
       viewBox={`0 0 ${actualWidth} ${h}`}
       preserveAspectRatio="xMidYMid meet"
       style={{
-        backgroundColor: colors.panel,
+        backgroundColor: FINCEPT.PANEL_BG,
         width: '100%',
         height: 'auto',
         maxHeight: compact ? '240px' : '400px',
       }}
     >
       {/* Axes */}
-      <line x1={ml} y1={mt} x2={ml} y2={h - mb} stroke={colors.textMuted} strokeWidth="1" />
-      <line x1={ml} y1={h - mb} x2={actualWidth - mr} y2={h - mb} stroke={colors.textMuted} strokeWidth="1" />
+      <line x1={ml} y1={mt} x2={ml} y2={h - mb} stroke={FINCEPT.BORDER} strokeWidth="1" />
+      <line x1={ml} y1={h - mb} x2={actualWidth - mr} y2={h - mb} stroke={FINCEPT.BORDER} strokeWidth="1" />
 
       {/* Y-axis grid and labels */}
       {yAxisData.map((item, i) => (
         <g key={i}>
-          <line x1={ml} y1={item.y} x2={actualWidth - mr} y2={item.y} stroke="#1a1a1a" strokeDasharray="2,2" />
-          <text x={ml - 8} y={item.y + 3} textAnchor="end" fill={colors.textMuted} fontSize="9" fontFamily="monospace">
+          <line x1={ml} y1={item.y} x2={actualWidth - mr} y2={item.y} stroke={FINCEPT.HEADER_BG} strokeDasharray="2,2" />
+          <text x={ml - 8} y={item.y + 3} textAnchor="end" fill={FINCEPT.GRAY} fontSize="9" fontFamily={FONT_FAMILY}>
             {item.val.toFixed(1)}
           </text>
         </g>
@@ -189,7 +205,7 @@ function DBnomicsChart({ seriesArray, chartType, compact = false, colors }: DBno
                       y={Math.min(yOpen, yClose)}
                       width={6}
                       height={Math.abs(yClose - yOpen) || 1}
-                      fill={close >= open ? colors.secondary : colors.alert}
+                      fill={close >= open ? FINCEPT.GREEN : FINCEPT.RED}
                     />
                   </g>
                 );
@@ -208,9 +224,9 @@ function DBnomicsChart({ seriesArray, chartType, compact = false, colors }: DBno
             x={item.x}
             y={item.y}
             textAnchor="middle"
-            fill={colors.textMuted}
+            fill={FINCEPT.GRAY}
             fontSize="8"
-            fontFamily="monospace"
+            fontFamily={FONT_FAMILY}
           >
             {item.label}
           </text>
@@ -220,8 +236,8 @@ function DBnomicsChart({ seriesArray, chartType, compact = false, colors }: DBno
       {/* Legend */}
       {sortedSeries.map((series, idx) => (
         <g key={idx}>
-          <rect x={ml + idx * 120} y={5} width={10} height={10} fill={series.color} />
-          <text x={ml + idx * 120 + 15} y={13} fill={colors.text} fontSize="9" fontFamily="monospace">
+          <rect x={ml + idx * 120} y={5} width={10} height={10} fill={series.color} rx="1" />
+          <text x={ml + idx * 120 + 15} y={13} fill={FINCEPT.WHITE} fontSize="9" fontFamily={FONT_FAMILY}>
             {series.series_name.substring(0, 12)}
           </text>
         </g>

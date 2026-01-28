@@ -54,8 +54,6 @@ pub async fn save_broker_credentials(
     refresh_token: Option<String>,
     additional_data: Option<String>,
 ) -> Result<(), String> {
-    eprintln!("[save_broker_credentials] Saving credentials for: {}", broker_id);
-
     let pool = pool::get_pool().map_err(|e| e.to_string())?;
     let conn = pool.get().map_err(|e| e.to_string())?;
 
@@ -72,68 +70,42 @@ pub async fn save_broker_credentials(
         updated_at: 0, // Will be set by save_credentials
     };
 
-    broker_credentials::save_credentials(&conn, &creds).map_err(|e| {
-        eprintln!("[save_broker_credentials] Error: {}", e);
-        e.to_string()
-    })?;
+    broker_credentials::save_credentials(&conn, &creds).map_err(|e| e.to_string())?;
 
-    eprintln!("[save_broker_credentials] Successfully saved credentials for: {}", creds.broker_id);
     Ok(())
 }
 
 /// Get broker credentials by broker_id
 #[tauri::command]
 pub async fn get_broker_credentials(broker_id: String) -> Result<CredentialsResponse, String> {
-    eprintln!("[get_broker_credentials] Retrieving credentials for: {}", broker_id);
-
     let pool = pool::get_pool().map_err(|e| e.to_string())?;
     let conn = pool.get().map_err(|e| e.to_string())?;
 
     let creds = broker_credentials::get_credentials(&conn, &broker_id)
-        .map_err(|e| {
-            eprintln!("[get_broker_credentials] Error: {}", e);
-            e.to_string()
-        })?
-        .ok_or_else(|| {
-            let msg = format!("No credentials found for broker: {}", broker_id);
-            eprintln!("[get_broker_credentials] {}", msg);
-            msg
-        })?;
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("No credentials found for broker: {}", broker_id))?;
 
-    eprintln!("[get_broker_credentials] Successfully retrieved credentials for: {}", broker_id);
     Ok(creds.into())
 }
 
 /// Delete broker credentials
 #[tauri::command]
 pub async fn delete_broker_credentials(broker_id: String) -> Result<(), String> {
-    eprintln!("[delete_broker_credentials] Deleting credentials for: {}", broker_id);
-
     let pool = pool::get_pool().map_err(|e| e.to_string())?;
     let conn = pool.get().map_err(|e| e.to_string())?;
 
-    broker_credentials::delete_credentials(&conn, &broker_id).map_err(|e| {
-        eprintln!("[delete_broker_credentials] Error: {}", e);
-        e.to_string()
-    })?;
+    broker_credentials::delete_credentials(&conn, &broker_id).map_err(|e| e.to_string())?;
 
-    eprintln!("[delete_broker_credentials] Successfully deleted credentials for: {}", broker_id);
     Ok(())
 }
 
 /// List all saved broker IDs
 #[tauri::command]
 pub async fn list_broker_credentials() -> Result<Vec<String>, String> {
-    eprintln!("[list_broker_credentials] Listing all broker credentials");
-
     let pool = pool::get_pool().map_err(|e| e.to_string())?;
     let conn = pool.get().map_err(|e| e.to_string())?;
 
-    let broker_ids = broker_credentials::list_all_credentials(&conn).map_err(|e| {
-        eprintln!("[list_broker_credentials] Error: {}", e);
-        e.to_string()
-    })?;
+    let broker_ids = broker_credentials::list_all_credentials(&conn).map_err(|e| e.to_string())?;
 
-    eprintln!("[list_broker_credentials] Found {} brokers", broker_ids.len());
     Ok(broker_ids)
 }

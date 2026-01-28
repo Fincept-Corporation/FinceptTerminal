@@ -34,6 +34,16 @@ import { VectorBTAdapter } from './services/backtesting/adapters/vectorbt/Vector
 import { BacktestingPyAdapter } from './services/backtesting/adapters/backtestingpy'
 import { FastTradeAdapter } from './services/backtesting/adapters/fasttrade'
 
+// Initialize Internal MCP System
+import { initializeInternalMCP } from './services/mcp/internal'
+
+// Initialize Internal MCP (tools + bridges)
+try {
+  initializeInternalMCP();
+} catch (error) {
+  console.error('[App] Failed to initialize Internal MCP:', error);
+}
+
 // Register default backtesting providers
 try {
   const vectorbtAdapter = new VectorBTAdapter();

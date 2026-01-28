@@ -14,7 +14,6 @@ import { InfluxDBAdapter } from './InfluxDBAdapter';
 import { QuestDBAdapter } from './QuestDBAdapter';
 import { TimescaleDBAdapter } from './TimescaleDBAdapter';
 import { AlphaVantageAdapter } from './AlphaVantageAdapter';
-import { PolygonAdapter } from './PolygonAdapter';
 import { ElasticsearchAdapter } from './ElasticsearchAdapter';
 import { CassandraAdapter } from './CassandraAdapter';
 import { SnowflakeAdapter } from './SnowflakeAdapter';
@@ -187,7 +186,6 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   // Market Data APIs
   'yahoo-finance': YahooFinanceAdapter,
   'alpha-vantage': AlphaVantageAdapter,
-  'polygon-io': PolygonAdapter,
   finnhub: FinnhubAdapter,
   coingecko: CoinGeckoAdapter,
   binance: BinanceAdapter,
@@ -286,7 +284,6 @@ export {
   QuestDBAdapter,
   TimescaleDBAdapter,
   AlphaVantageAdapter,
-  PolygonAdapter,
   ElasticsearchAdapter,
   CassandraAdapter,
   SnowflakeAdapter,

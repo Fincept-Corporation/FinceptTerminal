@@ -49,7 +49,6 @@ const GeopoliticsTab = React.lazy(() => import('@/components/tabs/geopolitics'))
 const AIQuantLabTab = React.lazy(() => import('@/components/tabs/ai-quant-lab'));
 const CodeEditorTab = React.lazy(() => import('@/components/tabs/code-editor'));
 const NodeEditorTab = React.lazy(() => import('@/components/tabs/node-editor'));
-const PolygonEqTab = React.lazy(() => import('@/components/tabs/polygon-eq'));
 const DerivativesTab = React.lazy(() => import('@/components/tabs/derivatives').then(m => ({ default: m.DerivativesTab })));
 const CryptoTradingTab = React.lazy(() => import('@/components/tabs/crypto-trading').then(m => ({ default: m.CryptoTradingTab })));
 const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading'));
@@ -99,7 +98,7 @@ const TabLoadingFallback = () => (
   </div>
 );
 
-// Dropdown Menu Component
+// Dropdown Menu Component with section header support
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -131,48 +130,71 @@ const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any
           backgroundColor: '#2d2d2d',
           border: '1px solid #404040',
           borderRadius: '2px',
-          minWidth: '150px',
+          minWidth: '180px',
+          maxHeight: '70vh',
+          overflowY: 'auto',
           zIndex: 1000,
           boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
         }}>
-          {items.map((item: any, index: number) => (
-            <div
-              key={index}
-              style={{
-                padding: '6px 12px',
-                cursor: item.disabled ? 'not-allowed' : 'pointer',
-                color: item.disabled ? '#666' : '#a3a3a3',
-                fontSize: '11px',
-                borderBottom: item.separator ? '1px solid #404040' : 'none'
-              }}
-              onMouseEnter={(e) => {
-                if (!item.disabled) {
-                  (e.target as HTMLDivElement).style.backgroundColor = '#404040';
-                  (e.target as HTMLDivElement).style.color = '#fff';
-                }
-              }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLDivElement).style.backgroundColor = 'transparent';
-                (e.target as HTMLDivElement).style.color = item.disabled ? '#666' : '#a3a3a3';
-              }}
-              onClick={() => {
-                if (!item.disabled && onItemClick) {
-                  onItemClick(item);
-                  setIsOpen(false);
-                }
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {item.icon}
-                <span>{item.label}</span>
-                {item.shortcut && (
-                  <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#666' }}>
-                    {item.shortcut}
-                  </span>
-                )}
+          {items.map((item: any, index: number) => {
+            if (item.header) {
+              return (
+                <div
+                  key={index}
+                  style={{
+                    padding: '6px 12px 3px',
+                    color: '#ea580c',
+                    fontSize: '9px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    borderTop: index > 0 ? '1px solid #404040' : 'none',
+                    marginTop: index > 0 ? '2px' : '0'
+                  }}
+                >
+                  {item.label}
+                </div>
+              );
+            }
+            return (
+              <div
+                key={index}
+                style={{
+                  padding: '5px 12px 5px 20px',
+                  cursor: item.disabled ? 'not-allowed' : 'pointer',
+                  color: item.disabled ? '#666' : '#a3a3a3',
+                  fontSize: '11px',
+                  borderBottom: item.separator ? '1px solid #404040' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (!item.disabled) {
+                    (e.target as HTMLDivElement).style.backgroundColor = '#404040';
+                    (e.target as HTMLDivElement).style.color = '#fff';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLDivElement).style.backgroundColor = 'transparent';
+                  (e.target as HTMLDivElement).style.color = item.disabled ? '#666' : '#a3a3a3';
+                }}
+                onClick={() => {
+                  if (!item.disabled && onItemClick) {
+                    onItemClick(item);
+                    setIsOpen(false);
+                  }
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {item.icon}
+                  <span>{item.label}</span>
+                  {item.shortcut && (
+                    <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#666' }}>
+                      {item.shortcut}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -215,7 +237,6 @@ function FinxeptTerminalContent() {
   const { mode, toggleMode } = useInterfaceMode();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
   const [workspaceDialogMode, setWorkspaceDialogMode] = useState<'save' | 'open' | 'new' | 'export' | 'import' | null>(null);
   const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
 
@@ -376,12 +397,8 @@ function FinxeptTerminalContent() {
     // If action is a function (tab navigation), execute it directly
     if (typeof item.action === 'function') {
       item.action();
-      setStatusMessage(`Navigated to ${item.label}`);
-      setTimeout(() => setStatusMessage(''), 2000);
       return;
     }
-
-    setStatusMessage(`${item.label} clicked`);
 
     // Handle specific string actions
     switch (item.action) {
@@ -390,17 +407,12 @@ function FinxeptTerminalContent() {
         break;
       case 'refresh':
       case 'refresh_all':
-        setStatusMessage("Refreshing all data...");
         window.location.reload();
         break;
       case 'export':
       case 'export_portfolio':
-        setStatusMessage("Export Portfolio - Feature coming soon");
-        setTimeout(() => setStatusMessage(''), 3000);
         break;
       case 'import_data':
-        setStatusMessage("Import Data - Feature coming soon");
-        setTimeout(() => setStatusMessage(''), 3000);
         break;
       case 'new_workspace':
         setWorkspaceDialogMode('new');
@@ -418,44 +430,25 @@ function FinxeptTerminalContent() {
         setWorkspaceDialogMode('import');
         break;
       case 'zoom_in':
-        setStatusMessage("Zoom In - Use Ctrl++ in browser");
-        setTimeout(() => setStatusMessage(''), 3000);
         break;
       case 'zoom_out':
-        setStatusMessage("Zoom Out - Use Ctrl+- in browser");
-        setTimeout(() => setStatusMessage(''), 3000);
         break;
       case 'zoom_reset':
-        setStatusMessage("Reset Zoom - Use Ctrl+0 in browser");
-        setTimeout(() => setStatusMessage(''), 3000);
         break;
       case 'toggle_theme':
-        setStatusMessage("Toggle Theme - Feature coming soon");
-        setTimeout(() => setStatusMessage(''), 3000);
-        break;
-      case 'show_shortcuts':
-        setStatusMessage("Keyboard Shortcuts - Press F1-F12 to navigate tabs");
-        setTimeout(() => setStatusMessage(''), 5000);
         break;
       case 'show_about':
-        setStatusMessage(`Fincept Terminal v${APP_VERSION} - Professional Financial Platform`);
-        setTimeout(() => setStatusMessage(''), 3000);
         break;
       case 'check_updates':
-        setStatusMessage("Checking for updates...");
-        setTimeout(() => setStatusMessage("You are running the latest version"), 3000);
         break;
       case 'logout':
-        setStatusMessage("Logging out...");
         await logout();
         window.location.href = '/';
         break;
       case 'exit':
-        setStatusMessage("Use Alt+F4 to close the application");
-        setTimeout(() => setStatusMessage(''), 3000);
         break;
       default:
-        setTimeout(() => setStatusMessage(''), 3000);
+        break;
     }
   };
 
@@ -477,62 +470,42 @@ function FinxeptTerminalContent() {
         case 'F1':
           event.preventDefault();
           setActiveTab('dashboard');
-          setStatusMessage('Navigated to Dashboard (F1)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F2':
           event.preventDefault();
           setActiveTab('markets');
-          setStatusMessage('Navigated to Markets (F2)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F3':
           event.preventDefault();
           setActiveTab('news');
-          setStatusMessage('Navigated to News (F3)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F4':
           event.preventDefault();
           setActiveTab('portfolio');
-          setStatusMessage('Navigated to Portfolio (F4)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F5':
           event.preventDefault();
           setActiveTab('backtesting');
-          setStatusMessage('Navigated to Backtesting (F5)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F6':
           event.preventDefault();
           setActiveTab('watchlist');
-          setStatusMessage('Navigated to Watchlist (F6)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F7':
           event.preventDefault();
           setActiveTab('research');
-          setStatusMessage('Navigated to Equity Research (F7)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F8':
           event.preventDefault();
           setActiveTab('screener');
-          setStatusMessage('Navigated to Screener (F8)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F9':
           event.preventDefault();
           setActiveTab('trading');
-          setStatusMessage('Navigated to Crypto Trading (F9)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F10':
           event.preventDefault();
           setActiveTab('chat');
-          setStatusMessage('Navigated to AI Chat (F10)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F11':
           // Let browser handle F11 for fullscreen
@@ -540,8 +513,6 @@ function FinxeptTerminalContent() {
         case 'F12':
           event.preventDefault();
           setActiveTab('profile');
-          setStatusMessage('Navigated to Profile (F12)');
-          setTimeout(() => setStatusMessage(''), 2000);
           break;
       }
     };
@@ -550,7 +521,7 @@ function FinxeptTerminalContent() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
-  // Menu configurations with tab navigation
+  // Menu configurations - Bloomberg-style with 4 menus
   const fileMenuItems = [
     { label: 'New Workspace', shortcut: 'Ctrl+N', icon: null, action: 'new_workspace' },
     { label: 'Open Workspace', shortcut: 'Ctrl+O', icon: null, action: 'open_workspace' },
@@ -560,57 +531,47 @@ function FinxeptTerminalContent() {
     { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit', separator: true }
   ];
 
-  const marketsMenuItems = [
-    { label: 'Live Markets', shortcut: 'F2', action: () => setActiveTab('markets') },
-    { label: 'Relationship Map', action: () => setActiveTab('relationship-map') },
-    { label: 'Stock Screener', shortcut: 'F8', action: () => setActiveTab('screener') },
-    { label: 'Polygon Data', action: () => setActiveTab('polygon'), separator: true },
+  const navigateMenuItems = [
+    // Markets & Data
+    { label: 'Markets & Data', header: true },
+    { label: 'Stock Screener', action: () => setActiveTab('screener') },
     { label: 'Economics', action: () => setActiveTab('economics') },
     { label: 'DBnomics', action: () => setActiveTab('dbnomics') },
-    { label: 'AKShare Data', action: () => setActiveTab('akshare') }
-  ];
-
-  const researchMenuItems = [
-    { label: 'Equity Research', shortcut: 'F7', action: () => setActiveTab('research') },
+    { label: 'AKShare Data', action: () => setActiveTab('akshare') },
     { label: 'Asia Markets', action: () => setActiveTab('asia-markets') },
-    { label: '3D Visualization', action: () => setActiveTab('3d-viz') },
-    { label: 'AI Quant Lab', action: () => setActiveTab('ai-quant-lab') },
-    { label: 'Geopolitics', action: () => setActiveTab('geopolitics') },
-    { label: 'Maritime Intelligence', action: () => setActiveTab('maritime') },
-    { label: 'News Feed', shortcut: 'F3', action: () => setActiveTab('news') }
-  ];
-
-  const tradingMenuItems = [
-    { label: 'Crypto Trading', shortcut: 'F9', action: () => setActiveTab('trading') },
+    { label: 'Relationship Map', action: () => setActiveTab('relationship-map') },
+    // Trading & Portfolio
+    { label: 'Trading & Portfolio', header: true },
     { label: 'Equity Trading', action: () => setActiveTab('equity-trading') },
     { label: 'Alpha Arena', action: () => setActiveTab('alpha-arena') },
     { label: 'Polymarket', action: () => setActiveTab('polymarket') },
     { label: 'Derivatives Pricing', action: () => setActiveTab('derivatives') },
-    { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
-    { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
-    { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist') }
-  ];
-
-  const toolsMenuItems = [
-    { label: 'AI Assistant', shortcut: 'F10', action: () => setActiveTab('chat') },
+    { label: 'Watchlist', action: () => setActiveTab('watchlist') },
+    // Research & Intelligence
+    { label: 'Research & Intelligence', header: true },
+    { label: 'Equity Research', action: () => setActiveTab('research') },
+    { label: 'AI Quant Lab', action: () => setActiveTab('ai-quant-lab') },
+    { label: 'Geopolitics', action: () => setActiveTab('geopolitics') },
+    { label: 'Maritime Intelligence', action: () => setActiveTab('maritime') },
+    { label: '3D Visualization', action: () => setActiveTab('3d-viz') },
+    // Tools
+    { label: 'Tools', header: true },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
-    { label: 'MCP Servers', action: () => setActiveTab('mcp'), separator: true },
-    { label: 'Monitoring', action: () => setActiveTab('monitoring') },
-    { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
-    { label: 'Excel Workbook', action: () => setActiveTab('excel') },
-    { label: 'Node Editor', action: () => setActiveTab('nodes') },
-    { label: 'Code Editor', action: () => setActiveTab('code') },
-    { label: 'Data Sources', action: () => setActiveTab('datasources'), separator: true },
+    { label: 'MCP Servers', action: () => setActiveTab('mcp') },
+    { label: 'Data Sources', action: () => setActiveTab('datasources') },
     { label: 'Data Mapping', action: () => setActiveTab('datamapping') },
     { label: 'Report Builder', action: () => setActiveTab('reportbuilder') },
-    { label: 'Recorded Contexts', action: () => setActiveTab('contexts') },
-    { label: 'Settings', action: () => setActiveTab('settings'), separator: true }
-  ];
-
-  const communityMenuItems = [
+    { label: 'Excel Workbook', action: () => setActiveTab('excel') },
+    { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
+    { label: 'Monitoring', action: () => setActiveTab('monitoring') },
+    { label: 'Notes', action: () => setActiveTab('notes') },
+    { label: 'Settings', action: () => setActiveTab('settings') },
+    // Community & Support
+    { label: 'Community & Support', header: true },
     { label: 'Forum', action: () => setActiveTab('forum') },
     { label: 'Marketplace', action: () => setActiveTab('marketplace') },
-    { label: 'Documentation', action: () => setActiveTab('docs') }
+    { label: 'Documentation', action: () => setActiveTab('docs') },
+    { label: 'Support Tickets', action: () => setActiveTab('support') },
   ];
 
   const viewMenuItems = [
@@ -622,10 +583,7 @@ function FinxeptTerminalContent() {
   ];
 
   const helpMenuItems = [
-    { label: 'Documentation', action: () => setActiveTab('docs') },
-    { label: 'Support Tickets', action: () => setActiveTab('support') },
-    { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', action: 'show_shortcuts', separator: true },
-    { label: 'About Fincept', action: () => setActiveTab('about') },
+    { label: 'About Fincept', action: () => setActiveTab('about'), separator: true },
     { label: 'Check for Updates', action: 'check_updates' },
     { label: 'Logout', icon: <LogOut size={12} />, action: 'logout', separator: true }
   ];
@@ -672,54 +630,41 @@ function FinxeptTerminalContent() {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Top Menu Bar with Functional Dropdowns */}
+      {/* Top Menu Bar */}
       <div style={{
         backgroundColor: '#2d2d2d',
         color: '#a3a3a3',
         fontSize: '11px',
         borderBottom: '1px solid #404040',
-        padding: '2px 8px',
+        padding: '0 8px',
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        height: '20px'
+        minHeight: '28px'
       }}>
-        <div style={{ display: 'flex', gap: '16px' }}>
+        {/* Left: Menus */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
           <DropdownMenu label="File" items={fileMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Markets" items={marketsMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Research" items={researchMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Trading" items={tradingMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Tools" items={toolsMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Community" items={communityMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Navigate" items={navigateMenuItems} onItemClick={handleMenuAction} />
           <DropdownMenu label="View" items={viewMenuItems} onItemClick={handleMenuAction} />
           <DropdownMenu label="Help" items={helpMenuItems} onItemClick={handleMenuAction} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px' }}>FINCEPT PROFESSIONAL</span>
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-          <button
-            onClick={toggleFullscreen}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#a3a3a3',
-              cursor: 'pointer',
-              padding: '2px',
-              borderRadius: '2px'
-            }}
-            onMouseEnter={(e) => {
-              (e.target as HTMLButtonElement).style.backgroundColor = '#404040';
-              (e.target as HTMLButtonElement).style.color = '#fff';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
-              (e.target as HTMLButtonElement).style.color = '#a3a3a3';
-            }}
-            title={isFullscreen ? 'Exit Fullscreen (F11)' : 'Enter Fullscreen (F11)'}
-          >
-            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
-          </button>
+
+        {/* Center: Command Bar + Info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, justifyContent: 'center', minWidth: 0 }}>
+          <CommandBar onExecuteCommand={setActiveTab} />
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
+          <HeaderTimeDisplay />
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
+          <span style={{ color: '#10b981', fontSize: '10px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>v{APP_VERSION}</span>
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
+          <span style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>FINCEPT PROFESSIONAL</span>
+        </div>
+
+        {/* Right: Session + Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          {getClickableSessionDisplay()}
           <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
           <button
             onClick={toggleMode}
@@ -735,39 +680,62 @@ function FinxeptTerminalContent() {
               gap: '4px',
               fontSize: '10px',
               fontWeight: 'bold',
+              whiteSpace: 'nowrap' as const,
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
               if (mode === 'terminal') {
-                (e.target as HTMLButtonElement).style.backgroundColor = '#404040';
-                (e.target as HTMLButtonElement).style.color = '#fff';
+                e.currentTarget.style.backgroundColor = '#404040';
+                e.currentTarget.style.color = '#fff';
               }
             }}
             onMouseLeave={(e) => {
               if (mode === 'terminal') {
-                (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
-                (e.target as HTMLButtonElement).style.color = '#a3a3a3';
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#a3a3a3';
               }
             }}
             title={mode === 'terminal' ? 'Switch to Chat Mode' : 'Switch to Terminal Mode'}
           >
             {mode === 'chat' ? (
               <>
-                <Terminal size={14} />
+                <Terminal size={12} />
                 <span>TERMINAL</span>
               </>
             ) : (
               <>
-                <MessageSquare size={14} />
-                <span>CHAT MODE</span>
+                <MessageSquare size={12} />
+                <span>CHAT</span>
               </>
             )}
           </button>
-          {getClickableSessionDisplay()}
+          <button
+            onClick={toggleFullscreen}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#a3a3a3',
+              cursor: 'pointer',
+              padding: '2px',
+              borderRadius: '2px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#404040';
+              e.currentTarget.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#a3a3a3';
+            }}
+            title={isFullscreen ? 'Exit Fullscreen (F11)' : 'Enter Fullscreen (F11)'}
+          >
+            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+          </button>
           <HeaderSupportButtons />
           <button
             onClick={async () => {
-              setStatusMessage("Logging out...");
               await logout();
               window.location.href = '/';
             }}
@@ -782,7 +750,8 @@ function FinxeptTerminalContent() {
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap' as const
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = '#ff6b6b';
@@ -797,26 +766,9 @@ function FinxeptTerminalContent() {
             <LogOut size={12} />
             LOGOUT
           </button>
-          <span style={{ color: '#737373', cursor: 'pointer' }} title="Help">?</span>
         </div>
       </div>
 
-      {/* Status Message Bar */}
-      {statusMessage && (
-        <div style={{
-          backgroundColor: '#ea580c',
-          color: 'white',
-          fontSize: '10px',
-          padding: '2px 8px',
-          borderBottom: '1px solid #404040',
-          height: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          flexShrink: 0
-        }}>
-          {statusMessage}
-        </div>
-      )}
 
       {/* Main Navigation Bar with Tabs - Hidden in Chat Mode */}
       {mode !== 'chat' && (
@@ -859,7 +811,7 @@ function FinxeptTerminalContent() {
                 width: 'max-content',
                 minWidth: '100%'
               }}>
-                {/* PRIMARY TABS - F1 to F12 */}
+                {/* PRIMARY TABS */}
                 <TabsTrigger
                   value="dashboard"
                   style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
@@ -875,11 +827,11 @@ function FinxeptTerminalContent() {
                   {t('navigation.markets')}
                 </TabsTrigger>
                 <TabsTrigger
-                  value="news"
-                  style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
-                  title="News (F3)"
+                  value="trading"
+                  style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
+                  title="Crypto Trading (F9)"
                 >
-                  {t('navigation.news')}
+                  Crypto Trading
                 </TabsTrigger>
                 <TabsTrigger
                   value="portfolio"
@@ -889,46 +841,11 @@ function FinxeptTerminalContent() {
                   {t('navigation.portfolio')}
                 </TabsTrigger>
                 <TabsTrigger
-                  value="backtesting"
-                  style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
-                  title="Backtesting (F5)"
+                  value="news"
+                  style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
+                  title="News (F3)"
                 >
-                  {t('navigation.backtesting')}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="watchlist"
-                  style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
-                  title="Watchlist (F6)"
-                >
-                  {t('navigation.watchlist')}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="research"
-                  style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
-                  title="Equity Research (F7)"
-                >
-                  {t('navigation.research')}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="screener"
-                  style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
-                  title="Screener (F8)"
-                >
-                  {t('navigation.screener')}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="trading"
-                  style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
-                  title="Crypto Trading (F9)"
-                >
-                  Crypto Trading
-                </TabsTrigger>
-                <TabsTrigger
-                  value="equity-trading"
-                  style={activeTab === 'equity-trading' ? tabStyles.active : tabStyles.default}
-                  title="Equity Trading"
-                >
-                  Equity Trading
+                  {t('navigation.news')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="chat"
@@ -938,18 +855,25 @@ function FinxeptTerminalContent() {
                   {t('navigation.chat')}
                 </TabsTrigger>
                 <TabsTrigger
-                  value="agents"
-                  style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
-                  title="Agent Config"
+                  value="backtesting"
+                  style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
+                  title="Backtesting (F5)"
                 >
-                  {t('navigation.agents')}
+                  {t('navigation.backtesting')}
                 </TabsTrigger>
                 <TabsTrigger
-                  value="settings"
-                  style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
-                  title="Settings"
+                  value="nodes"
+                  style={activeTab === 'nodes' ? tabStyles.active : tabStyles.default}
+                  title="Node Editor"
                 >
-                  {t('navigation.settings')}
+                  Node Editor
+                </TabsTrigger>
+                <TabsTrigger
+                  value="code"
+                  style={activeTab === 'code' ? tabStyles.active : tabStyles.default}
+                  title="Code Editor"
+                >
+                  Code Editor
                 </TabsTrigger>
                 <TabsTrigger
                   value="profile"
@@ -960,58 +884,6 @@ function FinxeptTerminalContent() {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
-          </div>
-        </div>
-      )}
-
-      {/* Command Bar - Hidden in Chat Mode */}
-      {/* Merged Status & Function Keys Bar - Single Line */}
-      {mode !== 'chat' && (
-        <div style={{
-          backgroundColor: '#1a1a1a',
-          borderBottom: '1px solid #404040',
-          padding: '3px 8px',
-          height: '22px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          flexShrink: 0,
-          fontSize: '9px'
-        }}>
-          {/* Left: Branding & Status Info */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 5px', fontSize: '8px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
-            <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-            <CommandBar onExecuteCommand={setActiveTab} />
-            <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-            <HeaderTimeDisplay />
-            <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-            <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 'bold' }}>v{APP_VERSION}</span>
-            {isFullscreen && (
-              <>
-                <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-                <span style={{ color: '#fbbf24', fontSize: '9px' }}>FULLSCREEN</span>
-              </>
-            )}
-          </div>
-
-          {/* Right: Function Keys */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:{t('functionKeys.f1')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:{t('functionKeys.f2')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:{t('functionKeys.f3')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:{t('functionKeys.f4')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:{t('functionKeys.f5')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:{t('functionKeys.f6')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:{t('functionKeys.f7')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:{t('functionKeys.f8')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:{t('functionKeys.f9')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:{t('functionKeys.f10')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:{t('functionKeys.f11')}</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:{t('functionKeys.f12')}</span>
-            <span style={{ color: '#666', marginLeft: '4px' }}>|</span>
-            <span style={{ color: '#10b981', fontSize: '9px' }}>{t('labels.moreTabs')}</span>
           </div>
         </div>
       )}
@@ -1097,11 +969,6 @@ function FinxeptTerminalContent() {
             <TabsContent value="asia-markets" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <AsiaMarketsTab />
-              </React.Suspense>
-            </TabsContent>
-            <TabsContent value="polygon" className="h-full m-0 p-0">
-              <React.Suspense fallback={<TabLoadingFallback />}>
-                <PolygonEqTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="screener" className="h-full m-0 p-0">
@@ -1316,7 +1183,6 @@ function FinxeptTerminalContent() {
           activeTab={activeTab}
           onClose={() => setWorkspaceDialogMode(null)}
           onLoadWorkspace={(tab) => setActiveTab(tab)}
-          onStatusMessage={(msg) => { setStatusMessage(msg); setTimeout(() => setStatusMessage(''), 3000); }}
         />
       )}
     </div>

@@ -78,7 +78,6 @@ export class GetQuoteNode implements INodeType {
         default: 'yahoo',
         options: [
           { name: 'Yahoo Finance', value: 'yahoo' },
-          { name: 'Polygon.io', value: 'polygon' },
           { name: 'Alpha Vantage', value: 'alphavantage' },
           { name: 'Finnhub', value: 'finnhub' },
           { name: 'IEX Cloud', value: 'iex' },

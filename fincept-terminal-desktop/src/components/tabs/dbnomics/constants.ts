@@ -13,8 +13,19 @@ export const STATE_CACHE_DURATION = 24 * 60 * 60 * 1000;
 // Debounce delay for state saving
 export const STATE_SAVE_DEBOUNCE_MS = 1000;
 
+// Search debounce delay
+export const SEARCH_DEBOUNCE_MS = 400;
+
 // Chart types
 export const CHART_TYPES: ChartType[] = ['line', 'bar', 'area', 'scatter', 'candlestick'];
+
+// Pagination defaults
+export const DATASETS_PAGE_SIZE = 50;
+export const DATASETS_MAX_LIMIT = 500;
+export const SERIES_PAGE_SIZE = 50;
+export const SERIES_MAX_LIMIT = 1000;
+export const SEARCH_PAGE_SIZE = 20;
+export const SEARCH_MAX_LIMIT = 100;
 
 // Default chart colors (will be overridden by theme)
 export const DEFAULT_CHART_COLORS = [

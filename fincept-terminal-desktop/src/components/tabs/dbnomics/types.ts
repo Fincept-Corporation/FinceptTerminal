@@ -48,3 +48,20 @@ export interface CachedData<T> {
 export type ProvidersCache = CachedData<Provider[]>;
 export type DatasetsCache = Map<string, CachedData<Dataset[]>>;
 export type SeriesCache = Map<string, CachedData<Series[]>>;
+
+// Pagination types
+export interface PaginationState {
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}
+
+// Search result from global /search endpoint
+export interface SearchResult {
+  provider_code: string;
+  provider_name: string;
+  dataset_code: string;
+  dataset_name: string;
+  nb_series: number;
+}

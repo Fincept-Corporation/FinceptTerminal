@@ -27,7 +27,6 @@ export type { ExcelFile, ExcelSnapshot } from './excelService';
 
 export interface ApiKeys {
   FRED_API_KEY?: string;
-  POLYGON_API_KEY?: string;
   ALPHA_VANTAGE_API_KEY?: string;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
@@ -41,7 +40,6 @@ export interface ApiKeys {
 // Data API Keys (non-LLM providers)
 export const PREDEFINED_API_KEYS = [
   { key: 'FRED_API_KEY', label: 'FRED API Key', description: 'Federal Reserve Economic Data' },
-  { key: 'POLYGON_API_KEY', label: 'Polygon.io API Key', description: 'Stock market data' },
   { key: 'ALPHA_VANTAGE_API_KEY', label: 'Alpha Vantage API Key', description: 'Stock & crypto data' },
   { key: 'COINGECKO_API_KEY', label: 'CoinGecko API Key', description: 'Cryptocurrency data' },
   { key: 'NASDAQ_API_KEY', label: 'NASDAQ API Key', description: 'NASDAQ market data' },

@@ -506,6 +506,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     } else {
       console.log(`[Tool Result] ${toolName}`, result);
       setSystemStatus('STATUS: Processing response...');
+
+      // Check if a report was created and schedule navigation after completion
+      if (toolName === 'create_report_template' && result?.id) {
+        // Store the flag to navigate after response is complete
+        (window as any).__navigateToReportBuilder = true;
+      }
     }
   };
 
@@ -576,6 +582,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
       // Get MCP tools
       const mcpTools = await getMCPTools();
+      console.log(`[Chat] MCP Tools available: ${mcpTools.length}`, mcpTools.map(t => t.name));
 
       // Reset streaming reference
       streamedContentRef.current = '';
@@ -615,6 +622,15 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         loadStatistics(),
         auth.refreshUserData()
       ]);
+
+      // Check if we should navigate to report builder (after everything is done)
+      if ((window as any).__navigateToReportBuilder && onNavigateToTab) {
+        (window as any).__navigateToReportBuilder = false;
+        // Small delay to ensure message is saved and UI is stable
+        setTimeout(() => {
+          onNavigateToTab('report-builder');
+        }, 500);
+      }
 
     } catch (error) {
       console.error('[ChatTab] Send message error:', error);

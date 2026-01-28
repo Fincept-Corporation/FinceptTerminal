@@ -39,6 +39,7 @@ export interface KPICardConfig {
   prefix?: string;
   suffix?: string;
   color?: string;
+  trend?: 'up' | 'down';
 }
 
 export interface SparklineConfig {
@@ -148,22 +149,23 @@ interface KPICardProps {
 }
 
 export const KPICard: React.FC<KPICardProps> = ({ config }) => {
-  const { title, value, change, changeType = 'percent', prefix = '', suffix = '', color = '#FFA500' } = config;
+  const { title, value, change, changeType = 'percent', prefix = '', suffix = '', color = '#FFA500', trend } = config;
 
-  const isPositive = (change || 0) >= 0;
+  // Use explicit trend if provided, otherwise infer from change value
+  const isPositive = trend ? trend === 'up' : (change || 0) >= 0;
   const TrendIcon = change === 0 ? Minus : isPositive ? TrendingUp : TrendingDown;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-      <p className="text-xs text-gray-500 mb-1">{title}</p>
-      <div className="flex items-end justify-between">
-        <p className="text-2xl font-bold" style={{ color }}>
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm min-w-0 flex flex-col">
+      <p className="text-xs text-gray-500 mb-1 truncate" title={title}>{title}</p>
+      <div className="flex items-end justify-between gap-2 min-w-0">
+        <p className="text-xl sm:text-2xl font-bold truncate" style={{ color }} title={`${prefix}${value}${suffix}`}>
           {prefix}{typeof value === 'number' ? value.toLocaleString() : value}{suffix}
         </p>
-        {change !== undefined && (
-          <div className={`flex items-center gap-1 text-xs ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+        {change !== undefined && change !== null && (
+          <div className={`flex items-center gap-1 text-xs flex-shrink-0 ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
             <TrendIcon size={14} />
-            <span>{isPositive ? '+' : ''}{change}{changeType === 'percent' ? '%' : ''}</span>
+            <span>{isPositive && change > 0 ? '+' : ''}{change}{changeType === 'percent' ? '%' : ''}</span>
           </div>
         )}
       </div>
@@ -184,8 +186,11 @@ export const KPICardsRow: React.FC<KPICardsRowProps> = ({ cards }) => {
     { title: 'Positions', value: 12, change: 0 },
   ];
 
+  const cardCount = defaultCards.length;
+  const gridClass = cardCount <= 2 ? 'grid-cols-2' : cardCount === 3 ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-4';
+
   return (
-    <div className="grid grid-cols-4 gap-3">
+    <div className={`grid ${gridClass} gap-3 mb-4`}>
       {defaultCards.map((card, idx) => (
         <KPICard key={idx} config={card} />
       ))}

@@ -2,7 +2,6 @@
 pub mod news;
 pub mod market_data;
 pub mod alpha_arena_bridge;
-pub mod polygon;
 pub mod yfinance;
 pub mod alphavantage;
 pub mod pmdarima;

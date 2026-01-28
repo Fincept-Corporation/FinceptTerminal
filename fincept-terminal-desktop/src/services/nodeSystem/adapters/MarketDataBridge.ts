@@ -78,7 +78,6 @@ export interface FundamentalData {
 
 export type DataProvider =
   | 'yahoo'
-  | 'polygon'
   | 'alphavantage'
   | 'binance'
   | 'coingecko'
@@ -256,7 +255,7 @@ class MarketDataBridgeClass {
    */
   async searchSymbols(
     query: string,
-    provider: DataProvider = 'polygon'
+    provider: DataProvider = 'yahoo'
   ): Promise<Array<{ symbol: string; name: string; type: string }>> {
     try {
       const adapter = await this.getAdapter(provider);
@@ -338,7 +337,6 @@ class MarketDataBridgeClass {
   private getAdapterPath(provider: DataProvider): string {
     const paths: Record<DataProvider, string> = {
       yahoo: '@/components/tabs/data-sources/adapters/YahooFinanceAdapter',
-      polygon: '@/components/tabs/data-sources/adapters/PolygonAdapter',
       alphavantage: '@/components/tabs/data-sources/adapters/AlphaVantageAdapter',
       binance: '@/components/tabs/data-sources/adapters/BinanceAdapter',
       coingecko: '@/components/tabs/data-sources/adapters/CoinGeckoAdapter',

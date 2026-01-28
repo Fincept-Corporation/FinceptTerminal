@@ -4,7 +4,7 @@
  * Re-exports all type definitions for easy importing.
  * 
  * Usage:
- *   import { TickerData, PolygonQuote, ForumPost } from '@/types';
+ *   import { TickerData, ForumPost } from '@/types';
  */
 
 // WebSocket message types

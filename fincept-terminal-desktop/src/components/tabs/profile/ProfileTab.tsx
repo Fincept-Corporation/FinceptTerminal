@@ -66,10 +66,13 @@ interface PaymentHistoryItem {
   completed_at: string | null;
 }
 
+// GET /user/usage → { success, data: { period, total_requests, total_credits_used, current_balance, endpoint_usage } }
 interface UsageData {
+  period?: string;
   total_requests?: number;
-  month_requests?: number;
-  week_requests?: number;
+  total_credits_used?: number;
+  current_balance?: number;
+  endpoint_usage?: Record<string, { count: number; credits: number }>;
 }
 
 type Section = 'overview' | 'usage' | 'security' | 'billing' | 'support';
@@ -96,8 +99,13 @@ const ProfileTab: React.FC = () => {
         const result = session.user_type === 'guest'
           ? await UserApiService.getGuestUsage(session.api_key)
           : await UserApiService.getUserUsage(session.api_key);
-        if (result.success) setUsageData(result.data);
-        else setError(result.error || 'Failed to load usage data');
+        if (result.success && result.data) {
+          // API wraps in { success, message, data: { ... } }
+          const raw = result.data as any;
+          setUsageData(raw?.data || raw);
+        } else {
+          setError(result.error || 'Failed to load usage data');
+        }
       } else if (activeSection === 'billing') {
         // /payment/subscription returns account-level data
         // /payment/payments returns actual payment history (NOT /payment/history which is 404)
@@ -376,13 +384,54 @@ const UsageSection: React.FC<{ usageData: UsageData | null; loading: boolean; se
       {loading ? (
         <LoadingState message="Loading usage data..." />
       ) : usageData ? (
-        <Panel title="USAGE STATISTICS" icon={<BarChart size={14} />}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', padding: '12px 0' }}>
-            <StatBox label="TOTAL REQUESTS" value={usageData.total_requests || 0} />
-            <StatBox label="THIS MONTH" value={usageData.month_requests || 0} />
-            <StatBox label="THIS WEEK" value={usageData.week_requests || 0} />
-          </div>
-        </Panel>
+        <>
+          <Panel title="USAGE STATISTICS" icon={<BarChart size={14} />}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', padding: '12px 0' }}>
+              <StatBox label="TOTAL REQUESTS" value={usageData.total_requests || 0} />
+              <StatBox label="CREDITS USED" value={usageData.total_credits_used || 0} color={F.YELLOW} />
+              <StatBox label="BALANCE" value={usageData.current_balance || 0} />
+            </div>
+            {usageData.period && (
+              <div style={{ fontSize: '9px', color: F.MUTED, textAlign: 'center', marginTop: '8px' }}>
+                Period: {usageData.period.replace(/_/g, ' ').toUpperCase()}
+              </div>
+            )}
+          </Panel>
+
+          {/* Top Endpoints Breakdown */}
+          {usageData.endpoint_usage && Object.keys(usageData.endpoint_usage).length > 0 && (
+            <Panel title="ENDPOINT USAGE" icon={<Activity size={14} />}>
+              <table style={{ width: '100%', fontSize: '10px', fontFamily: FONT, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+                    {['ENDPOINT', 'REQUESTS', 'CREDITS'].map(h => (
+                      <th key={h} style={{
+                        padding: '6px 8px',
+                        textAlign: h === 'ENDPOINT' ? 'left' : 'right',
+                        color: F.GRAY,
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        letterSpacing: '0.5px',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(usageData.endpoint_usage)
+                    .sort(([, a], [, b]) => b.count - a.count)
+                    .slice(0, 15)
+                    .map(([endpoint, stats]) => (
+                      <tr key={endpoint} style={{ borderBottom: `1px solid ${F.BORDER}` }}>
+                        <td style={{ padding: '6px 8px', color: F.WHITE, fontSize: '9px' }}>{endpoint}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', color: F.CYAN, fontWeight: 700 }}>{stats.count}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', color: stats.credits > 0 ? F.YELLOW : F.MUTED, fontWeight: 700 }}>{stats.credits}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </Panel>
+          )}
+        </>
       ) : null}
     </div>
   );

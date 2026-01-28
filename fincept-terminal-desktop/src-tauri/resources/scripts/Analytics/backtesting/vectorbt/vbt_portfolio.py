@@ -2,30 +2,35 @@
 VBT Portfolio Construction Module
 
 Pure numpy/pandas portfolio simulator that produces objects compatible
-with the metrics module's expected interface (value(), total_return(),
-stats(), trades, final_value(), total_fees(), close).
+with the metrics module's expected interface and covering the full
+vectorbt Portfolio API surface.
 
 Covers:
 - from_signals: Entry/exit boolean arrays
 - from_orders: Direct order arrays (size, direction)
 - from_holding: Buy-and-hold benchmark
 - from_random_signals: Random entry/exit for statistical benchmarking
+- from_order_func: Custom order function per bar
 
 Also handles:
-- Stop-loss / Take-profit
+- Stop-loss / Take-profit / Trailing stop
 - Position sizing (fixed, kelly, volatility-targeted, fractional)
 - Multi-asset portfolio construction
 - Short selling support
+- Cash sharing across assets
+- Per-bar tracking: cash, assets, flows, exposure
+- Benchmark comparison
+- Entry trades / Exit trades / Positions views
 """
 
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, Callable, List
 from dataclasses import dataclass, field
 
 
 # ============================================================================
-# Simple Portfolio Object (compatible with vbt_metrics expectations)
+# Trade Record Accessors (mimics vbt.Portfolio.trades / entry_trades / etc.)
 # ============================================================================
 
 class _TradesAccessor:
@@ -42,11 +47,109 @@ class _TradesAccessor:
     def records(self):
         return self._records
 
+    @property
+    def count(self) -> int:
+        return len(self._records)
+
+    def winning(self) -> pd.DataFrame:
+        if 'PnL' in self._records.columns:
+            return self._records[self._records['PnL'] > 0]
+        return pd.DataFrame()
+
+    def losing(self) -> pd.DataFrame:
+        if 'PnL' in self._records.columns:
+            return self._records[self._records['PnL'] <= 0]
+        return pd.DataFrame()
+
+    def win_rate(self) -> float:
+        if len(self._records) == 0 or 'PnL' not in self._records.columns:
+            return 0.0
+        pnl = self._records['PnL'].values.astype(float)
+        return float(np.sum(pnl > 0) / len(pnl))
+
+    def profit_factor(self) -> float:
+        if len(self._records) == 0 or 'PnL' not in self._records.columns:
+            return 0.0
+        pnl = self._records['PnL'].values.astype(float)
+        wins = np.sum(pnl[pnl > 0])
+        losses = np.sum(np.abs(pnl[pnl <= 0]))
+        return float(wins / losses) if losses > 0 else 0.0
+
+    def expectancy(self) -> float:
+        if len(self._records) == 0 or 'PnL' not in self._records.columns:
+            return 0.0
+        return float(np.mean(self._records['PnL'].values.astype(float)))
+
+    def sqn(self) -> float:
+        if len(self._records) < 2 or 'PnL' not in self._records.columns:
+            return 0.0
+        pnl = self._records['PnL'].values.astype(float)
+        std = np.std(pnl, ddof=1)
+        if std < 1e-10:
+            return 0.0
+        return float(np.sqrt(len(pnl)) * np.mean(pnl) / std)
+
+    def winning_streak(self) -> int:
+        if len(self._records) == 0 or 'PnL' not in self._records.columns:
+            return 0
+        pnl = self._records['PnL'].values.astype(float)
+        max_s, cur = 0, 0
+        for v in pnl:
+            if v > 0:
+                cur += 1
+                max_s = max(max_s, cur)
+            else:
+                cur = 0
+        return max_s
+
+    def losing_streak(self) -> int:
+        if len(self._records) == 0 or 'PnL' not in self._records.columns:
+            return 0
+        pnl = self._records['PnL'].values.astype(float)
+        max_s, cur = 0, 0
+        for v in pnl:
+            if v <= 0:
+                cur += 1
+                max_s = max(max_s, cur)
+            else:
+                cur = 0
+        return max_s
+
+
+class _EntryTradesAccessor(_TradesAccessor):
+    """Entry-based trade view: groups by entry signal."""
+    pass
+
+
+class _ExitTradesAccessor(_TradesAccessor):
+    """Exit-based trade view: groups by exit signal."""
+    pass
+
+
+class _PositionsAccessor(_TradesAccessor):
+    """Position view: aggregates consecutive same-direction trades."""
+    pass
+
+
+# ============================================================================
+# Simple Portfolio Object (full vbt.Portfolio API coverage)
+# ============================================================================
 
 class SimplePortfolio:
     """
-    Lightweight portfolio object that exposes the same interface
-    consumed by vbt_metrics.py and vectorbt_provider.py.
+    Lightweight portfolio object that exposes the full interface
+    matching vectorbt's Portfolio class.
+
+    Covers:
+    - value(), close, total_return(), final_value(), total_fees(), stats()
+    - asset_flow(), assets(), cash_flow(), cash(), init_cash
+    - gross_exposure(), net_exposure()
+    - returns(), asset_returns(), returns_acc
+    - benchmark_value(), benchmark_returns(), total_benchmark_return()
+    - trades, entry_trades, exit_trades, positions
+    - drawdowns()
+    - position_mask(), position_coverage()
+    - total_profit(), order_records, orders
     """
 
     def __init__(
@@ -57,6 +160,13 @@ class SimplePortfolio:
         init_cash: float,
         total_fees_value: float = 0.0,
         freq: str = '1D',
+        cash_series: Optional[pd.Series] = None,
+        asset_series: Optional[pd.Series] = None,
+        cash_flow_series: Optional[pd.Series] = None,
+        asset_flow_series: Optional[pd.Series] = None,
+        order_records_df: Optional[pd.DataFrame] = None,
+        benchmark_close: Optional[pd.Series] = None,
+        cash_sharing_flag: bool = False,
     ):
         self._equity = equity_series
         self._close = close_series
@@ -67,7 +177,24 @@ class SimplePortfolio:
         self._trades_accessor = _TradesAccessor(trade_records)
         self._stats_cache = None
 
-    # --- Public interface expected by metrics / provider ---
+        # Per-bar tracking series
+        self._cash_series = cash_series
+        self._asset_series = asset_series
+        self._cash_flow_series = cash_flow_series
+        self._asset_flow_series = asset_flow_series
+        self._order_records = order_records_df
+        self._benchmark_close = benchmark_close
+        self._cash_sharing_flag = cash_sharing_flag
+
+        # Lazily built accessors
+        self._entry_trades_accessor = None
+        self._exit_trades_accessor = None
+        self._positions_accessor = None
+        self._returns_accessor_obj = None
+
+    # ------------------------------------------------------------------
+    # Core value / return methods (existing)
+    # ------------------------------------------------------------------
 
     def value(self) -> pd.Series:
         return self._equity
@@ -87,9 +214,328 @@ class SimplePortfolio:
     def total_fees(self) -> float:
         return self._total_fees
 
+    def total_profit(self) -> float:
+        return float(self.final_value() - self._init_cash)
+
     @property
     def trades(self):
         return self._trades_accessor
+
+    # ------------------------------------------------------------------
+    # Cash & Asset tracking (NEW)
+    # ------------------------------------------------------------------
+
+    @property
+    def init_cash(self) -> float:
+        return self._init_cash
+
+    def get_init_cash(self) -> float:
+        return self._init_cash
+
+    def cash(self) -> pd.Series:
+        """Per-bar cash balance series."""
+        if self._cash_series is not None:
+            return self._cash_series
+        # Derive: cash = equity - asset_value
+        asset_val = self.asset_value()
+        return pd.Series(
+            self._equity.values - asset_val.values,
+            index=self._equity.index, name='Cash'
+        )
+
+    def cash_flow(self) -> pd.Series:
+        """Per-bar cash flow series (positive = cash in, negative = cash out)."""
+        if self._cash_flow_series is not None:
+            return self._cash_flow_series
+        c = self.cash()
+        flow = c.diff().fillna(0.0)
+        flow.name = 'Cash Flow'
+        return flow
+
+    def asset_flow(self, direction: str = 'both') -> pd.Series:
+        """Per-bar asset flow (change in position size)."""
+        if self._asset_flow_series is not None:
+            return self._asset_flow_series
+        a = self.assets()
+        flow = a.diff().fillna(0.0)
+        flow.name = 'Asset Flow'
+        if direction == 'long':
+            return flow.clip(lower=0)
+        elif direction == 'short':
+            return flow.clip(upper=0)
+        return flow
+
+    def assets(self, direction: str = 'both') -> pd.Series:
+        """Per-bar number of shares/units held."""
+        if self._asset_series is not None:
+            s = self._asset_series
+        else:
+            # Derive from equity and close
+            close_vals = self._close.values.astype(float)
+            cash_vals = self.cash().values.astype(float)
+            equity_vals = self._equity.values.astype(float)
+            assets_vals = np.where(
+                close_vals > 0,
+                (equity_vals - cash_vals) / close_vals,
+                0.0
+            )
+            s = pd.Series(assets_vals, index=self._equity.index, name='Assets')
+
+        if direction == 'long':
+            return s.clip(lower=0)
+        elif direction == 'short':
+            return (-s).clip(lower=0)
+        return s
+
+    def asset_value(self, direction: str = 'both') -> pd.Series:
+        """Per-bar market value of held assets."""
+        a = self.assets(direction)
+        val = a * self._close
+        val.name = 'Asset Value'
+        return val
+
+    @property
+    def cash_sharing(self) -> bool:
+        return self._cash_sharing_flag
+
+    # ------------------------------------------------------------------
+    # Exposure (NEW)
+    # ------------------------------------------------------------------
+
+    def gross_exposure(self, direction: str = 'both') -> pd.Series:
+        """Gross exposure = |asset_value| / equity."""
+        av = self.asset_value(direction).abs()
+        eq = self._equity.replace(0, np.nan)
+        exp = (av / eq).fillna(0.0)
+        exp.name = 'Gross Exposure'
+        return exp
+
+    def net_exposure(self) -> pd.Series:
+        """Net exposure = asset_value / equity (signed)."""
+        av = self.asset_value()
+        eq = self._equity.replace(0, np.nan)
+        exp = (av / eq).fillna(0.0)
+        exp.name = 'Net Exposure'
+        return exp
+
+    # ------------------------------------------------------------------
+    # Position mask & coverage (NEW)
+    # ------------------------------------------------------------------
+
+    def position_mask(self, direction: str = 'both') -> pd.Series:
+        """Boolean series: True when in a position."""
+        a = self.assets(direction)
+        mask = a.abs() > 1e-10
+        mask.name = 'Position Mask'
+        return mask
+
+    def position_coverage(self, direction: str = 'both') -> float:
+        """Fraction of bars in a position."""
+        mask = self.position_mask(direction)
+        return float(mask.sum() / len(mask)) if len(mask) > 0 else 0.0
+
+    # ------------------------------------------------------------------
+    # Returns (NEW)
+    # ------------------------------------------------------------------
+
+    def returns(self) -> pd.Series:
+        """Per-bar return series based on portfolio value."""
+        eq = self._equity.values.astype(float)
+        ret = np.zeros(len(eq))
+        if len(eq) > 1:
+            ret[1:] = np.diff(eq) / np.where(eq[:-1] != 0, eq[:-1], 1.0)
+        s = pd.Series(ret, index=self._equity.index, name='Returns')
+        return s
+
+    def asset_returns(self) -> pd.Series:
+        """Per-bar return series based on close price."""
+        c = self._close.values.astype(float)
+        ret = np.zeros(len(c))
+        if len(c) > 1:
+            ret[1:] = np.diff(c) / np.where(c[:-1] != 0, c[:-1], 1.0)
+        return pd.Series(ret, index=self._close.index, name='Asset Returns')
+
+    @property
+    def returns_acc(self):
+        """Returns accessor (lazy import to avoid circular deps)."""
+        if self._returns_accessor_obj is None:
+            try:
+                from vbt_returns import ReturnsAccessor
+                self._returns_accessor_obj = ReturnsAccessor(
+                    self.returns(),
+                    benchmark_rets=self.benchmark_returns() if self._benchmark_close is not None else None,
+                    freq=self._freq,
+                )
+            except ImportError:
+                self._returns_accessor_obj = None
+        return self._returns_accessor_obj
+
+    def get_returns_acc(self, benchmark_rets=None, freq=None):
+        """Get returns accessor with custom benchmark."""
+        try:
+            from vbt_returns import ReturnsAccessor
+            return ReturnsAccessor(
+                self.returns(),
+                benchmark_rets=benchmark_rets,
+                freq=freq or self._freq,
+            )
+        except ImportError:
+            return None
+
+    # ------------------------------------------------------------------
+    # Benchmark (NEW)
+    # ------------------------------------------------------------------
+
+    def benchmark_value(self) -> pd.Series:
+        """Benchmark portfolio value (buy-and-hold on benchmark_close)."""
+        if self._benchmark_close is None:
+            return self._equity.copy()  # fallback: use own close
+        bc = self._benchmark_close.values.astype(float)
+        if bc[0] > 0:
+            shares = self._init_cash / bc[0]
+        else:
+            shares = 0.0
+        vals = shares * bc
+        return pd.Series(vals, index=self._benchmark_close.index, name='Benchmark Value')
+
+    def benchmark_returns(self) -> pd.Series:
+        """Benchmark return series."""
+        bv = self.benchmark_value().values.astype(float)
+        ret = np.zeros(len(bv))
+        if len(bv) > 1:
+            ret[1:] = np.diff(bv) / np.where(bv[:-1] != 0, bv[:-1], 1.0)
+        idx = self._benchmark_close.index if self._benchmark_close is not None else self._equity.index
+        return pd.Series(ret, index=idx, name='Benchmark Returns')
+
+    def total_benchmark_return(self) -> float:
+        """Total benchmark return."""
+        bv = self.benchmark_value()
+        if len(bv) < 2 or self._init_cash == 0:
+            return 0.0
+        return float(bv.iloc[-1] / self._init_cash - 1.0)
+
+    # ------------------------------------------------------------------
+    # Trade views (NEW): entry_trades, exit_trades, positions
+    # ------------------------------------------------------------------
+
+    @property
+    def entry_trades(self):
+        """Entry-based trade records (grouped by entry signal)."""
+        if self._entry_trades_accessor is None:
+            self._entry_trades_accessor = _EntryTradesAccessor(self._trade_records)
+        return self._entry_trades_accessor
+
+    @property
+    def exit_trades(self):
+        """Exit-based trade records (grouped by exit signal)."""
+        if self._exit_trades_accessor is None:
+            self._exit_trades_accessor = _ExitTradesAccessor(self._trade_records)
+        return self._exit_trades_accessor
+
+    @property
+    def positions(self):
+        """Position records (aggregated consecutive same-direction trades)."""
+        if self._positions_accessor is None:
+            pos_records = _aggregate_positions(self._trade_records)
+            self._positions_accessor = _PositionsAccessor(pos_records)
+        return self._positions_accessor
+
+    # ------------------------------------------------------------------
+    # Order records (NEW)
+    # ------------------------------------------------------------------
+
+    @property
+    def order_records(self) -> pd.DataFrame:
+        """Raw order records."""
+        if self._order_records is not None:
+            return self._order_records
+        # Derive from trade records: each trade = 1 buy order + 1 sell order
+        orders = []
+        for idx, row in self._trade_records.iterrows():
+            orders.append({
+                'Idx': int(row.get('Entry Idx', 0)),
+                'Side': 'Buy',
+                'Price': float(row.get('Entry Price', 0)),
+                'Size': float(row.get('Size', 0)),
+                'Fees': float(row.get('Entry Fees', 0)),
+            })
+            orders.append({
+                'Idx': int(row.get('Exit Idx', 0)),
+                'Side': 'Sell',
+                'Price': float(row.get('Exit Price', 0)),
+                'Size': float(row.get('Size', 0)),
+                'Fees': float(row.get('Exit Fees', 0)),
+            })
+        return pd.DataFrame(orders) if orders else pd.DataFrame(
+            columns=['Idx', 'Side', 'Price', 'Size', 'Fees']
+        )
+
+    @property
+    def orders(self):
+        """Order accessor (same as order_records for compatibility)."""
+        return _TradesAccessor(self.order_records)
+
+    # ------------------------------------------------------------------
+    # Drawdowns (NEW)
+    # ------------------------------------------------------------------
+
+    def drawdowns(self) -> Dict[str, Any]:
+        """Get drawdown records from equity series."""
+        equity = self._equity.values.astype(float)
+        peak = np.maximum.accumulate(equity)
+        dd_pct = (equity - peak) / np.where(peak > 0, peak, 1.0)
+
+        records = []
+        in_dd = False
+        start_idx = 0
+        valley_idx = 0
+        max_depth = 0.0
+
+        for i in range(len(dd_pct)):
+            if dd_pct[i] < 0:
+                if not in_dd:
+                    in_dd = True
+                    start_idx = i
+                    valley_idx = i
+                    max_depth = abs(dd_pct[i])
+                else:
+                    if abs(dd_pct[i]) > max_depth:
+                        max_depth = abs(dd_pct[i])
+                        valley_idx = i
+            else:
+                if in_dd:
+                    records.append({
+                        'peak_idx': max(0, start_idx - 1),
+                        'valley_idx': valley_idx,
+                        'recovery_idx': i,
+                        'depth': max_depth,
+                        'duration': i - start_idx + 1,
+                        'decline_duration': valley_idx - start_idx + 1,
+                        'recovery_duration': i - valley_idx,
+                    })
+                    in_dd = False
+
+        if in_dd:
+            records.append({
+                'peak_idx': max(0, start_idx - 1),
+                'valley_idx': valley_idx,
+                'recovery_idx': -1,
+                'depth': max_depth,
+                'duration': len(dd_pct) - start_idx,
+                'decline_duration': valley_idx - start_idx + 1,
+                'recovery_duration': 0,
+            })
+
+        return {
+            'records': records,
+            'dd_series': pd.Series(dd_pct, index=self._equity.index, name='Drawdown'),
+            'max_drawdown': float(abs(np.min(dd_pct))) if len(dd_pct) > 0 else 0.0,
+            'avg_drawdown': float(np.mean(dd_pct[dd_pct < 0])) if np.any(dd_pct < 0) else 0.0,
+        }
+
+    # ------------------------------------------------------------------
+    # Stats (existing, unchanged)
+    # ------------------------------------------------------------------
 
     def stats(self) -> Dict[str, Any]:
         """Return a dict mimicking vbt.Portfolio.stats() keys."""
@@ -246,13 +692,14 @@ def build_portfolio(
     )
 
     # Simulate
-    equity, trade_records, total_fees = _simulate_signals(
+    equity, trade_records, total_fees, per_bar = _simulate_signals(
         close_series, entries, exits,
         initial_capital=initial_capital,
         commission=commission,
         slippage=slippage,
         size_series=size_series,
         allow_short=allow_short,
+        track_per_bar=True,
     )
 
     return SimplePortfolio(
@@ -261,6 +708,10 @@ def build_portfolio(
         trade_records=trade_records,
         init_cash=initial_capital,
         total_fees_value=total_fees,
+        cash_series=per_bar['cash'] if per_bar else None,
+        asset_series=per_bar['assets'] if per_bar else None,
+        cash_flow_series=per_bar['cash_flow'] if per_bar else None,
+        asset_flow_series=per_bar['asset_flow'] if per_bar else None,
     )
 
 
@@ -391,7 +842,7 @@ def build_random_portfolio(
         rand_entries = pd.Series(np.random.random(n) < entry_prob, index=close_series.index)
         rand_exits = pd.Series(np.random.random(n) < exit_prob, index=close_series.index)
 
-        equity, trade_records, total_fees = _simulate_signals(
+        equity, trade_records, total_fees, _ = _simulate_signals(
             close_series, rand_entries, rand_exits,
             initial_capital=initial_capital,
         )
@@ -461,12 +912,13 @@ def _simulate_signals(
     slippage: float = 0.0,
     size_series: Optional[pd.Series] = None,
     allow_short: bool = False,
-) -> Tuple[pd.Series, pd.DataFrame, float]:
+    track_per_bar: bool = False,
+) -> Tuple[pd.Series, pd.DataFrame, float, Optional[Dict]]:
     """
     Simulate a long-only (or long/short) portfolio from boolean signals.
 
     Returns:
-        (equity_series, trade_records_df, total_fees)
+        (equity_series, trade_records_df, total_fees, per_bar_data_or_None)
     """
     close_vals = close_series.values.astype(float)
     entry_mask = entries.values.astype(bool)
@@ -479,12 +931,20 @@ def _simulate_signals(
     total_fees = 0.0
     trades = []
 
+    # Per-bar tracking arrays
+    cash_vals = np.zeros(n) if track_per_bar else None
+    asset_vals = np.zeros(n) if track_per_bar else None
+    cash_flow_vals = np.zeros(n) if track_per_bar else None
+    asset_flow_vals = np.zeros(n) if track_per_bar else None
+
     entry_price = 0.0
     entry_idx = 0
     in_position = False
+    prev_position = 0.0
 
     for i in range(n):
         price = close_vals[i]
+        prev_position = position
 
         # Apply slippage
         buy_price = price * (1 + slippage)
@@ -530,6 +990,13 @@ def _simulate_signals(
 
         equity_vals[i] = cash + position * price
 
+        # Track per-bar data
+        if track_per_bar:
+            cash_vals[i] = cash
+            asset_vals[i] = position
+            cash_flow_vals[i] = cash - (cash_vals[i - 1] if i > 0 else initial_capital)
+            asset_flow_vals[i] = position - prev_position
+
     # Close any open position at end
     if in_position and position > 0:
         final_price = close_vals[-1]
@@ -545,11 +1012,24 @@ def _simulate_signals(
         ))
         cash += position * final_price - fee
         equity_vals[-1] = cash
+        if track_per_bar:
+            cash_vals[-1] = cash
+            asset_vals[-1] = 0.0
 
     equity = pd.Series(equity_vals, index=close_series.index, name='Equity')
     trade_df = pd.DataFrame(trades) if trades else _empty_trade_df()
 
-    return equity, trade_df, total_fees
+    per_bar = None
+    if track_per_bar:
+        idx = close_series.index
+        per_bar = {
+            'cash': pd.Series(cash_vals, index=idx, name='Cash'),
+            'assets': pd.Series(asset_vals, index=idx, name='Assets'),
+            'cash_flow': pd.Series(cash_flow_vals, index=idx, name='Cash Flow'),
+            'asset_flow': pd.Series(asset_flow_vals, index=idx, name='Asset Flow'),
+        }
+
+    return equity, trade_df, total_fees, per_bar
 
 
 # ============================================================================
@@ -717,3 +1197,185 @@ def _calculate_position_size(
         return shares.where(entries, 0)
 
     return None
+
+
+# ============================================================================
+# from_order_func Builder (NEW)
+# ============================================================================
+
+def build_portfolio_from_order_func(
+    vbt,
+    close_series: pd.Series,
+    order_func: Callable,
+    initial_capital: float = 100000,
+    commission: float = 0.0,
+    **kwargs,
+) -> SimplePortfolio:
+    """
+    Build portfolio from a custom order function (mimics vbt.Portfolio.from_order_func).
+
+    The order_func is called on each bar with signature:
+        order_func(bar_idx, price, cash, position, **kwargs) -> order_size
+            - positive size = buy that many shares
+            - negative size = sell that many shares
+            - 0 = do nothing
+
+    Args:
+        vbt: vectorbt module (unused, API compat)
+        close_series: Price series
+        order_func: Callable(bar_idx, price, cash, position, **kwargs) -> float
+        initial_capital: Starting capital
+        commission: Commission rate (0.001 = 0.1%)
+
+    Returns:
+        SimplePortfolio instance
+    """
+    close_vals = close_series.values.astype(float)
+    n = len(close_vals)
+
+    cash = initial_capital
+    position = 0.0
+    equity_vals = np.zeros(n)
+    cash_vals = np.zeros(n)
+    asset_vals = np.zeros(n)
+    total_fees = 0.0
+    trades = []
+
+    entry_price = 0.0
+    entry_idx = 0
+
+    for i in range(n):
+        price = close_vals[i]
+
+        # Call user's order function
+        order_size = order_func(i, price, cash, position, **kwargs)
+
+        if order_size != 0:
+            cost = abs(order_size) * price
+            fee = cost * commission
+            total_fees += fee
+
+            if order_size > 0:
+                # Buy
+                total_cost = order_size * price + fee
+                if total_cost <= cash:
+                    if position <= 0 and position != 0:
+                        # Close short first
+                        pnl = (entry_price - price) * abs(position) - fee
+                        trades.append(_make_trade_record(
+                            entry_idx, i, entry_price, price, abs(position), pnl, fee
+                        ))
+                    cash -= total_cost
+                    if position <= 0:
+                        entry_price = price
+                        entry_idx = i
+                    position += order_size
+            elif order_size < 0:
+                # Sell
+                sell_amount = min(abs(order_size), position) if position > 0 else abs(order_size)
+                if position > 0:
+                    pnl = (price - entry_price) * sell_amount - fee
+                    trades.append(_make_trade_record(
+                        entry_idx, i, entry_price, price, sell_amount, pnl, fee
+                    ))
+                    cash += sell_amount * price - fee
+                    position -= sell_amount
+
+        equity_vals[i] = cash + position * price
+        cash_vals[i] = cash
+        asset_vals[i] = position
+
+    idx = close_series.index
+    equity = pd.Series(equity_vals, index=idx, name='Equity')
+    trade_df = pd.DataFrame(trades) if trades else _empty_trade_df()
+
+    return SimplePortfolio(
+        equity_series=equity,
+        close_series=close_series,
+        trade_records=trade_df,
+        init_cash=initial_capital,
+        total_fees_value=total_fees,
+        cash_series=pd.Series(cash_vals, index=idx, name='Cash'),
+        asset_series=pd.Series(asset_vals, index=idx, name='Assets'),
+    )
+
+
+# ============================================================================
+# Position Aggregation Helper (NEW)
+# ============================================================================
+
+def _aggregate_positions(trade_records: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate consecutive same-direction trades into positions.
+
+    A position starts with the first entry and ends when the position
+    is fully closed. Multiple partial fills are merged.
+    """
+    if len(trade_records) == 0:
+        return _empty_trade_df()
+
+    positions = []
+    current_pos = None
+
+    for _, row in trade_records.iterrows():
+        if current_pos is None:
+            current_pos = {
+                'Entry Idx': int(row.get('Entry Idx', 0)),
+                'Entry Price': float(row.get('Entry Price', 0)),
+                'Size': float(row.get('Size', 0)),
+                'PnL': float(row.get('PnL', 0)),
+                'Entry Fees': float(row.get('Entry Fees', 0)),
+                'Exit Fees': float(row.get('Exit Fees', 0)),
+                'Exit Idx': int(row.get('Exit Idx', 0)),
+                'Exit Price': float(row.get('Exit Price', 0)),
+            }
+        else:
+            # Check if this trade is contiguous (entry follows previous exit)
+            prev_exit = current_pos['Exit Idx']
+            cur_entry = int(row.get('Entry Idx', 0))
+            if cur_entry <= prev_exit + 1:
+                # Merge into current position
+                new_size = float(row.get('Size', 0))
+                old_size = current_pos['Size']
+                total_size = old_size + new_size
+                # Weighted average entry price
+                current_pos['Entry Price'] = (
+                    (current_pos['Entry Price'] * old_size + float(row.get('Entry Price', 0)) * new_size) / total_size
+                ) if total_size > 0 else current_pos['Entry Price']
+                current_pos['Size'] = total_size
+                current_pos['PnL'] += float(row.get('PnL', 0))
+                current_pos['Entry Fees'] += float(row.get('Entry Fees', 0))
+                current_pos['Exit Fees'] += float(row.get('Exit Fees', 0))
+                current_pos['Exit Idx'] = int(row.get('Exit Idx', 0))
+                current_pos['Exit Price'] = float(row.get('Exit Price', 0))
+            else:
+                # Close current position, start new one
+                current_pos['Duration'] = max(1, current_pos['Exit Idx'] - current_pos['Entry Idx'])
+                current_pos['Return'] = (
+                    (current_pos['Exit Price'] / current_pos['Entry Price'] - 1.0)
+                    if current_pos['Entry Price'] > 0 else 0.0
+                )
+                current_pos['Status'] = 'Closed'
+                positions.append(current_pos)
+                current_pos = {
+                    'Entry Idx': int(row.get('Entry Idx', 0)),
+                    'Entry Price': float(row.get('Entry Price', 0)),
+                    'Size': float(row.get('Size', 0)),
+                    'PnL': float(row.get('PnL', 0)),
+                    'Entry Fees': float(row.get('Entry Fees', 0)),
+                    'Exit Fees': float(row.get('Exit Fees', 0)),
+                    'Exit Idx': int(row.get('Exit Idx', 0)),
+                    'Exit Price': float(row.get('Exit Price', 0)),
+                }
+
+    # Finalize last position
+    if current_pos is not None:
+        current_pos['Duration'] = max(1, current_pos['Exit Idx'] - current_pos['Entry Idx'])
+        current_pos['Return'] = (
+            (current_pos['Exit Price'] / current_pos['Entry Price'] - 1.0)
+            if current_pos['Entry Price'] > 0 else 0.0
+        )
+        current_pos['Status'] = 'Closed'
+        positions.append(current_pos)
+
+    return pd.DataFrame(positions) if positions else _empty_trade_df()
