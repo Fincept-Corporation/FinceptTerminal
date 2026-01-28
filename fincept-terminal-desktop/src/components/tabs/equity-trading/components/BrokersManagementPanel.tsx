@@ -234,10 +234,26 @@ export function BrokersManagementPanel() {
         const storedCreds = await (tempAdapter as any).loadCredentials?.();
 
         if (storedCreds) {
-          setConfig({
+          const restoredConfig: any = {
             apiKey: storedCreds.apiKey || '',
             apiSecret: storedCreds.apiSecret || '',
-          });
+            userId: storedCreds.userId || '',
+          };
+
+          // Restore AngelOne-specific fields from apiSecret (stored as JSON)
+          if (selectedBrokerId === 'angelone' && storedCreds.apiSecret) {
+            try {
+              const secretData = JSON.parse(storedCreds.apiSecret);
+              if (secretData.password) restoredConfig.pin = secretData.password;
+              if (secretData.totpSecret) restoredConfig.totpSecret = secretData.totpSecret;
+              // Don't show the JSON blob as apiSecret in the UI
+              restoredConfig.apiSecret = '';
+            } catch {
+              // apiSecret is not JSON, keep as-is
+            }
+          }
+
+          setConfig(restoredConfig);
         } else {
           setConfig({ apiKey: '', apiSecret: '' });
         }
@@ -316,8 +332,9 @@ export function BrokersManagementPanel() {
         if ((config as any).dob) additionalData.dob = (config as any).dob;
       }
 
-      if (selectedBroker.id === 'angelone' && (config as any).pin) {
-        additionalData.pin = (config as any).pin;
+      if (selectedBroker.id === 'angelone') {
+        if ((config as any).pin) additionalData.pin = (config as any).pin;
+        if ((config as any).totpSecret) additionalData.totpSecret = (config as any).totpSecret;
       }
 
       if (selectedBroker.id === 'shoonya' && (config as any).password) {
@@ -379,16 +396,20 @@ export function BrokersManagementPanel() {
         return;
       }
 
-      // AngelOne-specific: Authenticate immediately with Client ID, PIN, TOTP
+      // AngelOne-specific: Authenticate immediately with Client ID, PIN, TOTP Secret
       if (selectedBroker.id === 'angelone') {
         const angeloneCredentials: any = {
           apiKey: config.apiKey,
           userId: config.userId || '',
           password: (config as any).pin || '', // Adapter expects 'password' field
-          pin: (config as any).totpCode || '', // Adapter expects TOTP in 'pin' field
+          totpSecret: (config as any).totpSecret || '', // TOTP secret for automated code generation
         };
 
-        const authResult = await tempAdapter.authenticate(angeloneCredentials);
+        // Set this as the active broker BEFORE authenticating via context
+        setActiveBroker(selectedBroker.id);
+
+        // Use the context's authenticate() so the global state is updated
+        const authResult = await authenticate(angeloneCredentials);
 
         if (!authResult.success) {
           setConfigError(authResult.message || 'Angel One authentication failed');
@@ -1220,16 +1241,16 @@ export function BrokersManagementPanel() {
                     {/* AngelOne-specific fields: Client ID, PIN, TOTP */}
                     {selectedBroker.id === 'angelone' && (
                       <>
-                        {/* Client ID */}
+                        {/* Client ID (Trading Account) */}
                         <div style={{ marginBottom: '12px' }}>
                           <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
-                            CLIENT ID <span style={{ color: COLORS.RED }}>*</span>
+                            CLIENT ID (TRADING ACCOUNT) <span style={{ color: COLORS.RED }}>*</span>
                           </label>
                           <input
                             type="text"
                             value={config.userId || ''}
-                            onChange={(e) => setConfig({ ...config, userId: e.target.value })}
-                            placeholder="Enter your Angel One Client ID"
+                            onChange={(e) => setConfig({ ...config, userId: e.target.value.toUpperCase() })}
+                            placeholder="e.g. T55289 (your Angel One login ID)"
                             style={{
                               width: '100%',
                               padding: '10px 12px',
@@ -1243,7 +1264,7 @@ export function BrokersManagementPanel() {
                             }}
                           />
                           <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
-                            Your Angel One trading account Client ID
+                            Your Angel One trading account login ID (NOT the API secret UUID)
                           </p>
                         </div>
 
@@ -1293,33 +1314,48 @@ export function BrokersManagementPanel() {
                           </p>
                         </div>
 
-                        {/* TOTP */}
+                        {/* TOTP Secret */}
                         <div style={{ marginBottom: '12px' }}>
                           <label style={{ display: 'block', color: COLORS.GRAY, fontSize: '10px', fontWeight: 600, marginBottom: '6px' }}>
-                            TOTP CODE <span style={{ color: COLORS.RED }}>*</span>
+                            TOTP SECRET <span style={{ color: COLORS.RED }}>*</span>
                           </label>
-                          <input
-                            type="text"
-                            value={(config as any).totpCode || ''}
-                            onChange={(e) => setConfig({ ...config, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) } as any)}
-                            placeholder="Enter 6-digit TOTP"
-                            maxLength={6}
-                            style={{
-                              width: '100%',
-                              padding: '10px 12px',
-                              backgroundColor: COLORS.PANEL_BG,
-                              border: `1px solid ${COLORS.BORDER}`,
-                              color: COLORS.WHITE,
-                              fontSize: '16px',
-                              fontFamily: 'monospace',
-                              textAlign: 'center',
-                              letterSpacing: '4px',
-                              outline: 'none',
-                              boxSizing: 'border-box',
-                            }}
-                          />
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type={showSecret ? 'text' : 'password'}
+                              value={(config as any).totpSecret || ''}
+                              onChange={(e) => setConfig({ ...config, totpSecret: e.target.value.trim() } as any)}
+                              placeholder="Enter your TOTP secret string"
+                              style={{
+                                width: '100%',
+                                padding: '10px 40px 10px 12px',
+                                backgroundColor: COLORS.PANEL_BG,
+                                border: `1px solid ${COLORS.BORDER}`,
+                                color: COLORS.WHITE,
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowSecret(!showSecret)}
+                              style={{
+                                position: 'absolute',
+                                right: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: COLORS.GRAY,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
                           <p style={{ color: COLORS.MUTED, fontSize: '9px', marginTop: '4px', margin: '4px 0 0 0' }}>
-                            6-digit code from your authenticator app
+                            Base32 secret key from Angel One TOTP setup. Enables automated login.
                           </p>
                         </div>
                       </>

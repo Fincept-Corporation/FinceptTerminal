@@ -47,6 +47,7 @@ export interface UseForumReturn {
   handleCreatePost: (title: string, content: string) => Promise<boolean>;
   handleViewPost: (post: ForumPost) => Promise<void>;
   handleAddComment: (comment: string) => Promise<boolean>;
+  handleVote: (itemId: string, voteType: 'up' | 'down', itemType: 'post' | 'comment') => Promise<void>;
   handleVotePost: (postId: string, voteType: 'up' | 'down') => Promise<void>;
   handleVoteComment: (commentId: string, voteType: 'up' | 'down') => Promise<void>;
   handleSearch: (query: string) => Promise<void>;
@@ -76,7 +77,7 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
   // UI states
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [sortBy, setSortBy] = useState('latest');
-  const [onlineUsers, setOnlineUsers] = useState(1247);
+  const [onlineUsers, setOnlineUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
@@ -378,6 +379,15 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     }
   }, [getApiCredentials, selectedPost, handleViewPost]);
 
+  // Unified vote handler (delegates to post or comment)
+  const handleVote = useCallback(async (itemId: string, voteType: 'up' | 'down', itemType: 'post' | 'comment') => {
+    if (itemType === 'post') {
+      await handleVotePost(itemId, voteType);
+    } else {
+      await handleVoteComment(itemId, voteType);
+    }
+  }, [handleVotePost, handleVoteComment]);
+
   // Search forum
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) return;
@@ -502,9 +512,9 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     const trending = Object.entries(topicsMap)
       .map(([topic, data]) => ({
         topic,
-        mentions: data.count * 100,
+        mentions: data.count,
         sentiment: data.sentiment,
-        change: `+${Math.floor(Math.random() * 200 + 50)}%`
+        change: ''
       }))
       .sort((a, b) => b.mentions - a.mentions)
       .slice(0, 6);
@@ -514,12 +524,34 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
 
   // Generate recent activity from posts
   const generateRecentActivity = useCallback(() => {
-    const activities = forumPosts.slice(0, 5).map((post, index) => ({
-      user: post.author,
-      action: index % 3 === 0 ? 'posted' : index % 3 === 1 ? 'replied to' : 'liked',
-      target: post.title.substring(0, 30) + '...',
-      time: `${(index + 1) * 3} min ago`
-    }));
+    const activities = forumPosts.slice(0, 5).map((post) => {
+      const postDate = new Date();
+      const timeStr = post.time;
+
+      // Calculate time ago from post time
+      const now = new Date();
+      const timeParts = timeStr.split(':');
+      if (timeParts.length >= 2) {
+        const postHour = parseInt(timeParts[0], 10);
+        const postMinute = parseInt(timeParts[1], 10);
+        postDate.setHours(postHour, postMinute, 0, 0);
+      }
+
+      const diffMs = now.getTime() - postDate.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const timeAgo = diffMins < 60
+        ? `${diffMins} min ago`
+        : diffMins < 1440
+        ? `${Math.floor(diffMins / 60)} hr ago`
+        : `${Math.floor(diffMins / 1440)} day ago`;
+
+      return {
+        user: post.author,
+        action: 'posted',
+        target: post.title.substring(0, 30) + (post.title.length > 30 ? '...' : ''),
+        time: timeAgo
+      };
+    });
 
     setRecentActivity(activities);
   }, [forumPosts]);
@@ -573,13 +605,7 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     }
   }, [forumPosts, generateTrendingTopics, generateRecentActivity]);
 
-  // Update online users periodically
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setOnlineUsers(prev => Math.max(1000, prev + Math.floor(Math.random() * 10) - 5));
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
+  // Online users are updated from API stats only (removed fake random updates)
 
   // Auto-refresh every 5 minutes
   useEffect(() => {
@@ -602,7 +628,7 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     : forumPosts.filter(post => post.category === activeCategory);
 
   const totalPosts = forumStats?.total_posts || categories.find(c => c.name === 'ALL')?.count || 0;
-  const postsToday = Math.floor(totalPosts * 0.003);
+  const postsToday = forumStats?.posts_today || 0;
 
   return {
     categories,
@@ -633,6 +659,7 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     handleCreatePost,
     handleViewPost,
     handleAddComment,
+    handleVote,
     handleVotePost,
     handleVoteComment,
     handleSearch,

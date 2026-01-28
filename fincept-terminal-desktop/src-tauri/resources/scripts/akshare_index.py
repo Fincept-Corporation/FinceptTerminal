@@ -109,6 +109,10 @@ def get_index_analysis_monthly_sw(symbol="801010"):
     """Get Shenwan index monthly analysis"""
     return safe_call(ak.index_analysis_monthly_sw, symbol=symbol)
 
+def get_index_analysis_week_month_sw(symbol="801010"):
+    """Get Shenwan index week/month analysis"""
+    return safe_call(ak.index_analysis_week_month_sw, symbol=symbol)
+
 def get_index_realtime_fund_sw():
     """Get Shenwan fund index realtime"""
     return safe_call(ak.index_realtime_fund_sw)
@@ -136,6 +140,10 @@ def get_index_detail_hist_cni(symbol="399001", start_date="20200101", end_date="
     """Get CNI index historical details"""
     return safe_call(ak.index_detail_hist_cni, symbol=symbol, date=start_date)
 
+def get_index_detail_hist_adjust_cni(symbol="399001", start_date="20200101"):
+    """Get CNI index adjusted historical details"""
+    return safe_call(ak.index_detail_hist_adjust_cni, symbol=symbol, date=start_date)
+
 
 # ==================== GLOBAL INDEX ====================
 
@@ -154,6 +162,14 @@ def get_index_global_name_table():
 def get_index_us_stock_sina():
     """Get US stock indices from Sina"""
     return safe_call(ak.index_us_stock_sina)
+
+def get_index_global_hist_sina(symbol="DJI"):
+    """Get global index historical data from Sina"""
+    return safe_call(ak.index_global_hist_sina, symbol=symbol)
+
+def get_index_stock_cons_sina(symbol="000300"):
+    """Get index constituent stocks from Sina"""
+    return safe_call(ak.index_stock_cons_sina, symbol=symbol)
 
 
 # ==================== CS INDEX ====================
@@ -204,6 +220,38 @@ def get_index_option_500etf_min_qvix():
 def get_index_option_1000index_qvix():
     """Get CSI 1000 Index option QVIX"""
     return safe_call(ak.index_option_1000index_qvix)
+
+def get_index_option_50etf_min_qvix():
+    """Get 50ETF option QVIX minute data"""
+    return safe_call(ak.index_option_50etf_min_qvix)
+
+def get_index_option_100etf_min_qvix():
+    """Get 100ETF option QVIX minute data"""
+    return safe_call(ak.index_option_100etf_min_qvix)
+
+def get_index_option_300etf_min_qvix():
+    """Get 300ETF option QVIX minute data"""
+    return safe_call(ak.index_option_300etf_min_qvix)
+
+def get_index_option_50index_min_qvix():
+    """Get SSE 50 Index option QVIX minute data"""
+    return safe_call(ak.index_option_50index_min_qvix)
+
+def get_index_option_300index_min_qvix():
+    """Get CSI 300 Index option QVIX minute data"""
+    return safe_call(ak.index_option_300index_min_qvix)
+
+def get_index_option_1000index_min_qvix():
+    """Get CSI 1000 Index option QVIX minute data"""
+    return safe_call(ak.index_option_1000index_min_qvix)
+
+def get_index_option_cyb_min_qvix():
+    """Get ChiNext option QVIX minute data"""
+    return safe_call(ak.index_option_cyb_min_qvix)
+
+def get_index_option_kcb_min_qvix():
+    """Get STAR Market option QVIX minute data"""
+    return safe_call(ak.index_option_kcb_min_qvix)
 
 
 # ==================== ECONOMIC INDICES (CX) ====================
@@ -363,6 +411,7 @@ ENDPOINTS = {
     "index_analysis_daily_sw": {"func": get_index_analysis_daily_sw, "desc": "Shenwan daily analysis", "category": "Shenwan Index"},
     "index_analysis_weekly_sw": {"func": get_index_analysis_weekly_sw, "desc": "Shenwan weekly analysis", "category": "Shenwan Index"},
     "index_analysis_monthly_sw": {"func": get_index_analysis_monthly_sw, "desc": "Shenwan monthly analysis", "category": "Shenwan Index"},
+    "index_analysis_week_month_sw": {"func": get_index_analysis_week_month_sw, "desc": "Shenwan week/month analysis", "category": "Shenwan Index"},
     "index_realtime_fund_sw": {"func": get_index_realtime_fund_sw, "desc": "Shenwan fund index realtime", "category": "Shenwan Index"},
     "index_hist_fund_sw": {"func": get_index_hist_fund_sw, "desc": "Shenwan fund index historical", "category": "Shenwan Index"},
 
@@ -371,12 +420,15 @@ ENDPOINTS = {
     "index_hist_cni": {"func": get_index_hist_cni, "desc": "CNI index historical", "category": "CNI Index"},
     "index_detail_cni": {"func": get_index_detail_cni, "desc": "CNI index details", "category": "CNI Index"},
     "index_detail_hist_cni": {"func": get_index_detail_hist_cni, "desc": "CNI index historical details", "category": "CNI Index"},
+    "index_detail_hist_adjust_cni": {"func": get_index_detail_hist_adjust_cni, "desc": "CNI adjusted hist details", "category": "CNI Index"},
 
     # Global Index
     "index_global_spot": {"func": get_index_global_spot, "desc": "Global index spot data", "category": "Global Index"},
     "index_global_hist": {"func": get_index_global_hist, "desc": "Global index historical (DJI, IXIC, etc.)", "category": "Global Index"},
     "index_global_name_table": {"func": get_index_global_name_table, "desc": "Global index name table", "category": "Global Index"},
     "index_us_stock": {"func": get_index_us_stock_sina, "desc": "US stock indices", "category": "Global Index"},
+    "index_global_hist_sina": {"func": get_index_global_hist_sina, "desc": "Global index hist (Sina)", "category": "Global Index"},
+    "index_stock_cons_sina": {"func": get_index_stock_cons_sina, "desc": "Index constituents (Sina)", "category": "Global Index"},
     "index_csindex_all": {"func": get_index_csindex_all, "desc": "All CS indices", "category": "Global Index"},
 
     # Option QVIX
@@ -389,6 +441,14 @@ ENDPOINTS = {
     "index_qvix_50index": {"func": get_index_option_50index_qvix, "desc": "SSE 50 Index QVIX", "category": "Option QVIX"},
     "index_qvix_300index": {"func": get_index_option_300index_qvix, "desc": "CSI 300 Index QVIX", "category": "Option QVIX"},
     "index_qvix_1000index": {"func": get_index_option_1000index_qvix, "desc": "CSI 1000 Index QVIX", "category": "Option QVIX"},
+    "index_qvix_50etf_min": {"func": get_index_option_50etf_min_qvix, "desc": "50ETF QVIX minute", "category": "Option QVIX"},
+    "index_qvix_100etf_min": {"func": get_index_option_100etf_min_qvix, "desc": "100ETF QVIX minute", "category": "Option QVIX"},
+    "index_qvix_300etf_min": {"func": get_index_option_300etf_min_qvix, "desc": "300ETF QVIX minute", "category": "Option QVIX"},
+    "index_qvix_50index_min": {"func": get_index_option_50index_min_qvix, "desc": "SSE 50 QVIX minute", "category": "Option QVIX"},
+    "index_qvix_300index_min": {"func": get_index_option_300index_min_qvix, "desc": "CSI 300 QVIX minute", "category": "Option QVIX"},
+    "index_qvix_1000index_min": {"func": get_index_option_1000index_min_qvix, "desc": "CSI 1000 QVIX minute", "category": "Option QVIX"},
+    "index_qvix_cyb_min": {"func": get_index_option_cyb_min_qvix, "desc": "ChiNext QVIX minute", "category": "Option QVIX"},
+    "index_qvix_kcb_min": {"func": get_index_option_kcb_min_qvix, "desc": "STAR QVIX minute", "category": "Option QVIX"},
 
     # Economic Indices (Caixin)
     "index_pmi_composite": {"func": get_index_pmi_com_cx, "desc": "Composite PMI (Caixin)", "category": "Economic Index"},

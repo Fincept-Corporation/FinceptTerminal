@@ -57,7 +57,7 @@ export interface TrendingTopic {
   topic: string;
   mentions: number;
   sentiment: string;
-  change: string;
+  change?: string;
 }
 
 export interface RecentActivity {
@@ -86,4 +86,8 @@ export interface ForumColors {
   CYAN: string;
   DARK_BG: string;
   PANEL_BG: string;
+  HEADER_BG: string;
+  BORDER: string;
+  HOVER: string;
+  MUTED: string;
 }

@@ -93,29 +93,38 @@ class VectorBTProvider(BacktestingProviderBase):
         """Run backtest using VectorBT with full feature support."""
         import pandas as pd
         import numpy as np
+        import sys
 
         backtest_id = self._generate_id()
         logs = []
 
-        # Debug: confirm run_backtest is entered
-        print(f'[PYTHON] === run_backtest entered ===', file=sys.stderr)
-        print(f'[PYTHON] Request keys: {list(request.keys())}', file=sys.stderr)
-        print(f'[PYTHON] marketData present: {"marketData" in request and request["marketData"] is not None}', file=sys.stderr)
-        if 'marketData' in request and request['marketData']:
-            md = request['marketData']
-            print(f'[PYTHON] marketData keys: {list(md.keys()) if isinstance(md, dict) else type(md)}', file=sys.stderr)
-            for k, v in md.items():
-                print(f'[PYTHON]   {k}: {len(v)} bars', file=sys.stderr)
+        # === COMPREHENSIVE DEBUG LOGGING ===
+        print(f'[PY-BT] === run_backtest START ===', file=sys.stderr)
+        print(f'[PY-BT] Request keys: {sorted(request.keys())}', file=sys.stderr)
+        print(f'[PY-BT] strategy: {request.get("strategy")}', file=sys.stderr)
+        print(f'[PY-BT] startDate: {request.get("startDate")}', file=sys.stderr)
+        print(f'[PY-BT] endDate: {request.get("endDate")}', file=sys.stderr)
+        print(f'[PY-BT] initialCapital: {request.get("initialCapital")}', file=sys.stderr)
+        print(f'[PY-BT] assets: {request.get("assets")}', file=sys.stderr)
+        print(f'[PY-BT] commission: {request.get("commission")}', file=sys.stderr)
+        print(f'[PY-BT] slippage: {request.get("slippage")}', file=sys.stderr)
+        print(f'[PY-BT] positionSizing: {request.get("positionSizing")}', file=sys.stderr)
+        print(f'[PY-BT] positionSizeValue: {request.get("positionSizeValue")}', file=sys.stderr)
+        print(f'[PY-BT] stopLoss: {request.get("stopLoss")}', file=sys.stderr)
+        print(f'[PY-BT] takeProfit: {request.get("takeProfit")}', file=sys.stderr)
+        print(f'[PY-BT] trailingStop: {request.get("trailingStop")}', file=sys.stderr)
 
         try:
             vbt = self._import_vbt()
         except Exception as e:
+            print(f'[PY-BT] FAILED to import vbt: {e}', file=sys.stderr)
             return self._create_error_result(str(e))
 
         try:
             import vbt_strategies as strat
             import vbt_portfolio as pf
             import vbt_metrics as metrics
+            print(f'[PY-BT] Imports OK: strat, pf, metrics', file=sys.stderr)
 
             logs.append(f'{self._current_timestamp()}: Starting VectorBT backtest {backtest_id}')
 
@@ -128,19 +137,26 @@ class VectorBTProvider(BacktestingProviderBase):
             parameters = strategy.get('parameters', {})
             strategy_type = strategy.get('type', 'sma_crossover')
 
-            # --- Download market data ---
-            symbols = [asset['symbol'] for asset in assets]
-            market_data = request.get('marketData')  # Pre-fetched data from our yfinance script (via stdin for large payloads)
+            print(f'[PY-BT] Extracted: strategy_type={strategy_type}, params={parameters}', file=sys.stderr)
+            print(f'[PY-BT] Date range: {start_date} to {end_date}, capital={initial_capital}', file=sys.stderr)
 
-            if market_data:
-                logs.append(f'{self._current_timestamp()}: Using pre-fetched market data for {symbols}')
-            else:
-                logs.append(f'{self._current_timestamp()}: Downloading data for {symbols}')
-                logs.append(f'{self._current_timestamp()}: Normalized symbols: {self._normalize_symbols(symbols)}')
+            # --- Download market data via yfinance ---
+            symbols = [asset['symbol'] for asset in assets]
+            print(f'[PY-BT] Symbols: {symbols}', file=sys.stderr)
+            logs.append(f'{self._current_timestamp()}: Downloading data for {symbols}')
+            logs.append(f'{self._current_timestamp()}: Normalized symbols: {self._normalize_symbols(symbols)}')
 
             close_series, using_synthetic = self._load_market_data(
-                symbols, start_date, end_date, market_data
+                symbols, start_date, end_date
             )
+
+            print(f'[PY-BT] Data loaded: {len(close_series)} bars, synthetic={using_synthetic}', file=sys.stderr)
+            print(f'[PY-BT] Data range: {close_series.index[0]} to {close_series.index[-1]}', file=sys.stderr)
+            print(f'[PY-BT] Price range: {close_series.min():.2f} - {close_series.max():.2f}', file=sys.stderr)
+            print(f'[PY-BT] First 5 prices: {close_series.head().tolist()}', file=sys.stderr)
+            print(f'[PY-BT] Last 5 prices: {close_series.tail().tolist()}', file=sys.stderr)
+            print(f'[PY-BT] close_series dtype: {close_series.dtype}, index dtype: {close_series.index.dtype}', file=sys.stderr)
+
             logs.append(f'{self._current_timestamp()}: Data: {len(close_series)} bars, '
                         f'range: {close_series.index[0]} to {close_series.index[-1]}, '
                         f'price range: {close_series.min():.2f} - {close_series.max():.2f}, '
@@ -154,8 +170,6 @@ class VectorBTProvider(BacktestingProviderBase):
             else:
                 # --- Build strategy signals ---
                 logs.append(f'{self._current_timestamp()}: Building signals for strategy: {strategy_type}, params: {parameters}')
-                print(f'[PYTHON] Strategy: {strategy_type}, params: {parameters}', file=sys.stderr)
-                print(f'[PYTHON] close_series: len={len(close_series)}, dtype={close_series.dtype}, first5={close_series.head().tolist()}, last5={close_series.tail().tolist()}', file=sys.stderr)
 
                 entries, exits = strat.build_strategy_signals(
                     vbt, strategy_type, close_series, parameters
@@ -163,22 +177,48 @@ class VectorBTProvider(BacktestingProviderBase):
 
                 n_entries = int(entries.sum()) if hasattr(entries, 'sum') else 0
                 n_exits = int(exits.sum()) if hasattr(exits, 'sum') else 0
+
+                print(f'[PY-BT] Signals: entries={n_entries}, exits={n_exits}', file=sys.stderr)
+                print(f'[PY-BT] entries dtype: {entries.dtype}, exits dtype: {exits.dtype}', file=sys.stderr)
+                print(f'[PY-BT] entries index dtype: {entries.index.dtype}', file=sys.stderr)
+                print(f'[PY-BT] entries index equals close index: {entries.index.equals(close_series.index)}', file=sys.stderr)
+                if n_entries > 0:
+                    entry_bars = entries[entries].index.tolist()
+                    print(f'[PY-BT] Entry signal bars (first 10): {entry_bars[:10]}', file=sys.stderr)
+                if n_exits > 0:
+                    exit_bars = exits[exits].index.tolist()
+                    print(f'[PY-BT] Exit signal bars (first 10): {exit_bars[:10]}', file=sys.stderr)
+
                 logs.append(f'{self._current_timestamp()}: Signals generated: {n_entries} entries, {n_exits} exits')
-                print(f'[PYTHON] Signals: {n_entries} entries, {n_exits} exits', file=sys.stderr)
 
                 if n_entries == 0:
                     logs.append(f'{self._current_timestamp()}: WARNING: No entry signals generated! '
                                 f'Check strategy parameters or data length ({len(close_series)} bars)')
-                    print(f'[PYTHON] WARNING: No entry signals! Data len={len(close_series)}, strategy={strategy_type}', file=sys.stderr)
 
                 # --- Build portfolio with all features ---
+                print(f'[PY-BT] === Calling build_portfolio ===', file=sys.stderr)
+                print(f'[PY-BT] close_series len: {len(close_series)}, entries len: {len(entries)}, exits len: {len(exits)}', file=sys.stderr)
+                print(f'[PY-BT] initial_capital: {initial_capital}', file=sys.stderr)
+                print(f'[PY-BT] request commission: {request.get("commission")}, slippage: {request.get("slippage")}', file=sys.stderr)
+
                 portfolio = pf.build_portfolio(
                     vbt, close_series, entries, exits,
                     initial_capital, request
                 )
 
             n_trades = len(portfolio.trades.records_readable) if hasattr(portfolio.trades, 'records_readable') else 0
-            print(f'[PYTHON] Portfolio built: trades={n_trades}, final_value={portfolio.final_value():.2f}, total_return={portfolio.total_return():.6f}', file=sys.stderr)
+            print(f'[PY-BT] === Portfolio result ===', file=sys.stderr)
+            print(f'[PY-BT] n_trades: {n_trades}', file=sys.stderr)
+            print(f'[PY-BT] final_value: {portfolio.final_value():.2f}', file=sys.stderr)
+            print(f'[PY-BT] total_return: {portfolio.total_return():.6f}', file=sys.stderr)
+            equity = portfolio.value()
+            print(f'[PY-BT] equity first 5: {equity.head().tolist()}', file=sys.stderr)
+            print(f'[PY-BT] equity last 5: {equity.tail().tolist()}', file=sys.stderr)
+            if n_trades > 0:
+                trades_df = portfolio.trades.records_readable
+                print(f'[PY-BT] trades columns: {list(trades_df.columns)}', file=sys.stderr)
+                print(f'[PY-BT] first trade: {trades_df.iloc[0].to_dict()}', file=sys.stderr)
+
             logs.append(f'{self._current_timestamp()}: Backtest completed: {n_trades} trades, '
                         f'final value: {portfolio.final_value():.2f}, '
                         f'return: {portfolio.total_return() * 100:.2f}%')
@@ -306,7 +346,7 @@ class VectorBTProvider(BacktestingProviderBase):
             max_iterations = request.get('maxIterations', 500)
 
             symbols = [asset['symbol'] for asset in assets]
-            close_series, _ = self._load_market_data(symbols, start_date, end_date, request.get("marketData"))
+            close_series, _ = self._load_market_data(symbols, start_date, end_date)
 
             result = opt.optimize(
                 vbt, close_series, strategy_type, parameters,
@@ -341,7 +381,7 @@ class VectorBTProvider(BacktestingProviderBase):
             train_ratio = request.get('trainRatio', 0.7)
 
             symbols = [asset['symbol'] for asset in assets]
-            close_series, _ = self._load_market_data(symbols, start_date, end_date, request.get("marketData"))
+            close_series, _ = self._load_market_data(symbols, start_date, end_date)
 
             result = opt.walk_forward_optimize(
                 vbt, close_series, strategy_type, parameters,
@@ -1067,15 +1107,14 @@ class VectorBTProvider(BacktestingProviderBase):
             stub = types.SimpleNamespace(__version__='pure-numpy')
             return stub
 
-    def _load_market_data(self, symbols: list, start_date: str, end_date: str, market_data: dict = None):
+    def _load_market_data(self, symbols: list, start_date: str, end_date: str):
         """
-        Load market data, falling back to synthetic if unavailable.
+        Load market data via yfinance, falling back to synthetic if unavailable.
 
         Args:
             symbols: List of ticker symbols
             start_date: Start date string
             end_date: End date string
-            market_data: Optional dict of pre-fetched data {symbol: [{datetime, open, high, low, close, volume}, ...]}
 
         Returns:
             (close_series, using_synthetic) tuple
@@ -1084,42 +1123,6 @@ class VectorBTProvider(BacktestingProviderBase):
         import numpy as np
 
         using_synthetic = False
-
-        # --- Use pre-fetched market data if available ---
-        if market_data:
-            try:
-                import sys
-                symbol = symbols[0] if symbols else 'SPY'
-                data_list = market_data.get(symbol, [])
-
-                print(f'[PYTHON] _load_market_data: market_data keys = {list(market_data.keys())}', file=sys.stderr)
-                print(f'[PYTHON] _load_market_data: Looking for symbol = {symbol}', file=sys.stderr)
-                print(f'[PYTHON] _load_market_data: data_list length = {len(data_list) if data_list else 0}', file=sys.stderr)
-
-                if not data_list:
-                    raise ValueError(f'No pre-fetched data for {symbol}')
-
-                # yfinance_data.py format: [{timestamp, open, high, low, close, volume, ...}, ...]
-                if data_list:
-                    print(f'[PYTHON] First data point: {data_list[0]}', file=sys.stderr)
-
-                dates = [pd.to_datetime(bar['timestamp'], unit='s') for bar in data_list]
-                closes = [bar['close'] for bar in data_list]
-
-                print(f'[PYTHON] Parsed {len(closes)} closes, date range: {dates[0]} to {dates[-1]}', file=sys.stderr)
-
-                close_series = pd.Series(closes, index=dates, name='Close')
-
-                if len(close_series) < 5:
-                    raise ValueError(f'Insufficient data: only {len(close_series)} bars')
-
-                print(f'[PYTHON] Using pre-fetched data: {len(close_series)} bars', file=sys.stderr)
-                return close_series, using_synthetic
-
-            except Exception as e:
-                print(f'[PYTHON] Failed to use pre-fetched data: {e}', file=sys.stderr)
-                self._error(f'Failed to use pre-fetched data: {e}', e)
-                # Fall through to yfinance download
 
         # --- Normalize symbols for yfinance compatibility ---
         normalized_symbols = self._normalize_symbols(symbols)
@@ -1480,31 +1483,19 @@ def main():
     warnings.filterwarnings('ignore')
     os.environ['PYTHONWARNINGS'] = 'ignore'
 
-    # Check if we're receiving data via stdin (--stdin flag)
+    # Support both stdin (--stdin flag) and argv modes
     use_stdin = '--stdin' in sys.argv
 
     if use_stdin:
-        # stdin mode: command is argv[1], JSON comes from stdin
         if len(sys.argv) < 2:
-            print(json_response({
-                'success': False,
-                'error': 'Usage: python vectorbt_provider.py <command> --stdin < data.json'
-            }))
+            print(json_response({'success': False, 'error': 'Usage: vectorbt_provider.py <command> --stdin'}))
             return
-
         command = sys.argv[1]
-        # Read JSON from stdin
         json_args = sys.stdin.read()
-        print(f'[PYTHON] Received {len(json_args)} bytes from stdin', file=sys.stderr)
     else:
-        # Standard mode: command and JSON both from argv
         if len(sys.argv) < 3:
-            print(json_response({
-                'success': False,
-                'error': 'Usage: python vectorbt_provider.py <command> <json_args>'
-            }))
+            print(json_response({'success': False, 'error': 'Usage: vectorbt_provider.py <command> <json_args>'}))
             return
-
         command = sys.argv[1]
         json_args = sys.argv[2]
 
@@ -1517,7 +1508,9 @@ def main():
 
     try:
         sys.stdout = captured
+        print(f'[PY-MAIN] command={command}, args_len={len(json_args)}', file=sys.stderr)
         args = parse_json_input(json_args)
+        print(f'[PY-MAIN] parsed args keys: {sorted(args.keys()) if isinstance(args, dict) else type(args)}', file=sys.stderr)
         provider = VectorBTProvider()
 
         if command == 'test_import':
@@ -1530,8 +1523,16 @@ def main():
             result = provider.initialize(args)
             result_str = json_response(result)
         elif command == 'run_backtest':
+            print(f'[PY-MAIN] Calling run_backtest...', file=sys.stderr)
             result = provider.run_backtest(args)
+            print(f'[PY-MAIN] run_backtest returned, success={result.get("success")}', file=sys.stderr)
+            if result.get('data'):
+                perf = result['data'].get('performance') if isinstance(result.get('data'), dict) else None
+                if perf:
+                    print(f'[PY-MAIN] result performance (BEFORE json_response): {perf}', file=sys.stderr)
             result_str = json_response(result)
+            print(f'[PY-MAIN] json_response length: {len(result_str)}', file=sys.stderr)
+            print(f'[PY-MAIN] json_response (first 500): {result_str[:500]}', file=sys.stderr)
         elif command == 'optimize':
             result = provider.optimize(args)
             result_str = json_response(result)

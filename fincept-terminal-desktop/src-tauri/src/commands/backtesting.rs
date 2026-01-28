@@ -108,46 +108,26 @@ pub async fn execute_python_backtest(
     args: String,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    eprintln!("[RUST] execute_python_backtest: provider={}, command={}", provider, command);
-    eprintln!("[RUST] args length: {} bytes", args.len());
+    eprintln!("[RUST-BT] === execute_python_backtest ===");
+    eprintln!("[RUST-BT] provider={}, command={}", provider, command);
+    eprintln!("[RUST-BT] args length: {} bytes", args.len());
+    eprintln!("[RUST-BT] args (first 500): {}", &args[..args.len().min(500)]);
 
-    // Build script name - handle both dev and production
+    // Build script path
     let script_name = format!(
-        "Analytics/backtesting/{}/{}",
+        "Analytics/backtesting/{}/{}_provider.py",
         provider.to_lowercase(),
-        format!("{}_provider.py", provider.to_lowercase())
+        provider.to_lowercase()
     );
+    eprintln!("[RUST-BT] script: {}", script_name);
 
-    // Check if args contains large JSON (>4KB suggests marketData present)
-    let output = if args.len() > 4096 {
-        eprintln!("[RUST] Large payload detected, using stdin for data transfer");
+    // Execute Python script with command and args
+    let script_args = vec![command, args];
+    let output = python::execute(&app, &script_name, script_args).await?;
 
-        // Execute in blocking thread since execute_with_stdin is sync
-        let app_clone = app.clone();
-        let script_name_clone = script_name.clone();
-        let command_clone = command.clone();
-        let args_clone = args.clone();
-
-        tokio::task::spawn_blocking(move || {
-            // Build arguments for Python script (without the large JSON)
-            let script_args = vec![command_clone];
-
-            // Pass the full args JSON via stdin
-            python::execute_with_stdin(&app_clone, &script_name_clone, script_args, &args_clone)
-        })
-        .await
-        .map_err(|e| format!("Task join error: {}", e))??
-    } else {
-        eprintln!("[RUST] Small payload, using standard execution");
-
-        // Build arguments for Python script
-        let script_args = vec![command, args];
-
-        // Execute Python script using standard API
-        python::execute(&app, &script_name, script_args).await?
-    };
-
-    eprintln!("[RUST] vectorbt output (first 500 chars): {}", &output.chars().take(500).collect::<String>());
+    eprintln!("[RUST-BT] === Python output ===");
+    eprintln!("[RUST-BT] output length: {} bytes", output.len());
+    eprintln!("[RUST-BT] output (first 1000): {}", &output.chars().take(1000).collect::<String>());
 
     Ok(output)
 }

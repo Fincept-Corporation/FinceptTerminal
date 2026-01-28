@@ -2,6 +2,8 @@
 AKShare Expanded Funds Data Wrapper
 Comprehensive wrapper for enhanced fund market data and analysis
 Returns JSON output for Rust integration
+
+NOTE: Refactored to contain only VALID akshare fund functions (70 total).
 """
 
 import sys
@@ -33,7 +35,7 @@ class AKShareError:
 
 
 class ExpandedFundsWrapper:
-    """Comprehensive expanded funds data wrapper with 40+ endpoints"""
+    """Comprehensive expanded funds data wrapper with 70+ validated endpoints"""
 
     def __init__(self):
         self.session = None
@@ -101,449 +103,418 @@ class ExpandedFundsWrapper:
                 if attempt < max_retries - 1:
                     time.sleep(self.retry_delay ** attempt)
                     continue
+                else:
+                    break
 
-                error_obj = AKShareError(
-                    endpoint=func.__name__,
-                    error=last_error,
-                    data_source=getattr(func, '__module__', 'unknown')
-                )
-                return {
-                    "success": False,
-                    "error": error_obj.to_dict(),
-                    "data": [],
-                    "count": 0,
-                    "timestamp": int(datetime.now().timestamp()),
-                    "data_quality": "experimental"
-                }
-
-        # Should never reach here
+        error_obj = AKShareError(
+            endpoint=func.__name__ if hasattr(func, '__name__') else 'unknown',
+            error=last_error or "Unknown error",
+            data_source=getattr(func, '__module__', 'unknown')
+        )
         return {
             "success": False,
-            "error": f"Max retries exceeded: {last_error}",
+            "error": error_obj.to_dict(),
             "data": [],
             "count": 0,
             "timestamp": int(datetime.now().timestamp())
         }
 
-    # ==================== ENHANCED ETF DATA ====================
+    # ==================== FUND OVERVIEW & INFO ====================
 
-    def get_fund_etf_ths(self) -> Dict[str, Any]:
-        """Get enhanced ETF data from THS"""
-        return self._safe_call_with_retry(ak.fund_etf_ths)
+    def get_fund_overview_em(self) -> Dict[str, Any]:
+        """Get fund market overview"""
+        return self._safe_call_with_retry(ak.fund_overview_em)
 
-    def get_fund_etf_category(self) -> Dict[str, Any]:
-        """Get ETF category data"""
-        return self._safe_call_with_retry(ak.fund_etf_category)
+    def get_fund_fee_em(self, symbol: str = "000001") -> Dict[str, Any]:
+        """Get fund fee information"""
+        return self._safe_call_with_retry(ak.fund_fee_em, symbol=symbol)
 
-    def get_fund_etf_rank(self) -> Dict[str, Any]:
-        """Get ETF ranking data"""
-        return self._safe_call_with_retry(ak.fund_etf_rank)
+    def get_fund_name_em(self) -> Dict[str, Any]:
+        """Get fund name list"""
+        return self._safe_call_with_retry(ak.fund_name_em)
 
-    def get_fund_etf_portfolio(self) -> Dict[str, Any]:
-        """Get ETF portfolio holdings"""
-        return self._safe_call_with_retry(ak.fund_etf_portfolio)
+    def get_fund_info_index_em(self, symbol: str = "000001", indicator: str = "单位净值走势") -> Dict[str, Any]:
+        """Get fund index information"""
+        return self._safe_call_with_retry(ak.fund_info_index_em, symbol=symbol, indicator=indicator)
 
-    def get_fund_etf_dividend(self) -> Dict[str, Any]:
-        """Get ETF dividend data"""
-        return self._safe_call_with_retry(ak.fund_etf_dividend)
+    # ==================== OPEN FUNDS ====================
 
-    def get_fund_etf_split(self) -> Dict[str, Any]:
-        """Get ETF split data"""
-        return self._safe_call_with_retry(ak.fund_etf_split)
+    def get_fund_open_fund_daily_em(self, symbol: str = "000001", period: str = "daily") -> Dict[str, Any]:
+        """Get open fund daily data"""
+        return self._safe_call_with_retry(ak.fund_open_fund_daily_em, symbol=symbol, period=period)
 
-    def get_fund_etf_expense_ratio(self) -> Dict[str, Any]:
-        """Get ETF expense ratio data"""
-        return self._safe_call_with_retry(ak.fund_etf_expense_ratio)
+    def get_fund_open_fund_info_em(self, symbol: str = "000001", indicator: str = "基金档案") -> Dict[str, Any]:
+        """Get open fund information"""
+        return self._safe_call_with_retry(ak.fund_open_fund_info_em, symbol=symbol, indicator=indicator)
 
-    def get_fund_etf_tracking_error(self) -> Dict[str, Any]:
-        """Get ETF tracking error data"""
-        return self._safe_call_with_retry(ak.fund_etf_tracking_error)
+    # ==================== ETF FUNDS ====================
 
-    def get_fund_etf_premium_discount(self) -> Dict[str, Any]:
-        """Get ETF premium/discount data"""
-        return self._safe_call_with_retry(ak.fund_etf_premium_discount)
+    def get_fund_etf_fund_daily_em(self, symbol: str = "512690", period: str = "daily") -> Dict[str, Any]:
+        """Get ETF fund daily data"""
+        return self._safe_call_with_retry(ak.fund_etf_fund_daily_em, symbol=symbol, period=period)
 
-    def get_fund_etf_creation_redemption(self) -> Dict[str, Any]:
-        """Get ETF creation/redemption data"""
-        return self._safe_call_with_retry(ak.fund_etf_creation_redemption)
+    def get_fund_etf_fund_info_em(self, symbol: str = "512690", indicator: str = "基金档案") -> Dict[str, Any]:
+        """Get ETF fund information"""
+        return self._safe_call_with_retry(ak.fund_etf_fund_info_em, symbol=symbol, indicator=indicator)
 
-    # ==================== FUND PORTFOLIO AND HOLDINGS ====================
+    def get_fund_etf_hist_em(self, symbol: str = "512690", period: str = "daily", start_date: str = "19700101", end_date: str = "20500101", adjust: str = "") -> Dict[str, Any]:
+        """Get ETF historical data"""
+        return self._safe_call_with_retry(ak.fund_etf_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
-    def get_fund_portfolio_em(self, symbol: str) -> Dict[str, Any]:
-        """Get fund portfolio holdings from Eastmoney"""
-        return self._safe_call_with_retry(ak.fund_portfolio_em, symbol=symbol)
+    def get_fund_etf_hist_min_em(self, symbol: str = "512690", period: str = "1", adjust: str = "", start_date: str = "1979-09-01 09:32:00", end_date: str = "2222-01-01 09:32:00") -> Dict[str, Any]:
+        """Get ETF minute historical data"""
+        return self._safe_call_with_retry(ak.fund_etf_hist_min_em, symbol=symbol, period=period, adjust=adjust, start_date=start_date, end_date=end_date)
 
-    def get_fund_holdings_em(self, symbol: str) -> Dict[str, Any]:
-        """Get fund holdings from Eastmoney"""
-        return self._safe_call_with_retry(ak.fund_holdings_em, symbol=symbol)
+    def get_fund_etf_spot_em(self) -> Dict[str, Any]:
+        """Get ETF spot data"""
+        return self._safe_call_with_retry(ak.fund_etf_spot_em)
 
-    def get_fund_holdings_change(self, symbol: str) -> Dict[str, Any]:
-        """Get fund holdings changes"""
-        return self._safe_call_with_retry(ak.fund_holdings_change, symbol=symbol)
+    def get_fund_etf_hist_sina(self, symbol: str = "sh510300") -> Dict[str, Any]:
+        """Get ETF historical data from Sina"""
+        return self._safe_call_with_retry(ak.fund_etf_hist_sina, symbol=symbol)
 
-    def get_fund_top_holdings(self, symbol: str) -> Dict[str, Any]:
-        """Get fund top holdings"""
-        return self._safe_call_with_retry(ak.fund_top_holdings, symbol=symbol)
+    def get_fund_etf_category_sina(self, symbol: str = "封闭式基金") -> Dict[str, Any]:
+        """Get ETF category from Sina"""
+        return self._safe_call_with_retry(ak.fund_etf_category_sina, symbol=symbol)
 
-    def get_fund_sector_allocation(self, symbol: str) -> Dict[str, Any]:
-        """Get fund sector allocation"""
-        return self._safe_call_with_retry(ak.fund_sector_allocation, symbol=symbol)
+    def get_fund_etf_dividend_sina(self) -> Dict[str, Any]:
+        """Get ETF dividend from Sina"""
+        return self._safe_call_with_retry(ak.fund_etf_dividend_sina)
 
-    def get_fund_asset_allocation(self, symbol: str) -> Dict[str, Any]:
-        """Get fund asset allocation"""
-        return self._safe_call_with_retry(ak.fund_asset_allocation, symbol=symbol)
+    def get_fund_etf_spot_ths(self) -> Dict[str, Any]:
+        """Get ETF spot data from THS"""
+        return self._safe_call_with_retry(ak.fund_etf_spot_ths)
 
-    def get_fund_geographic_allocation(self, symbol: str) -> Dict[str, Any]:
-        """Get fund geographic allocation"""
-        return self._safe_call_with_retry(ak.fund_geographic_allocation, symbol=symbol)
+    def get_fund_etf_scale_sse(self) -> Dict[str, Any]:
+        """Get ETF scale from SSE"""
+        return self._safe_call_with_retry(ak.fund_etf_scale_sse)
 
-    def get_fund_style_box(self, symbol: str) -> Dict[str, Any]:
-        """Get fund style box data"""
-        return self._safe_call_with_retry(ak.fund_style_box, symbol=symbol)
+    def get_fund_etf_scale_szse(self) -> Dict[str, Any]:
+        """Get ETF scale from SZSE"""
+        return self._safe_call_with_retry(ak.fund_etf_scale_szse)
 
-    # ==================== FUND RATINGS AND PERFORMANCE ====================
+    # ==================== FINANCIAL FUNDS ====================
 
-    def get_fund_rating(self) -> Dict[str, Any]:
-        """Get fund ratings"""
-        return self._safe_call_with_retry(ak.fund_rating)
+    def get_fund_financial_fund_daily_em(self, symbol: str = "000647", period: str = "daily") -> Dict[str, Any]:
+        """Get financial fund daily data"""
+        return self._safe_call_with_retry(ak.fund_financial_fund_daily_em, symbol=symbol, period=period)
+
+    def get_fund_financial_fund_info_em(self, symbol: str = "000647", indicator: str = "基金档案") -> Dict[str, Any]:
+        """Get financial fund information"""
+        return self._safe_call_with_retry(ak.fund_financial_fund_info_em, symbol=symbol, indicator=indicator)
+
+    # ==================== GRADED FUNDS ====================
+
+    def get_fund_graded_fund_daily_em(self, symbol: str = "150232", period: str = "daily") -> Dict[str, Any]:
+        """Get graded fund daily data"""
+        return self._safe_call_with_retry(ak.fund_graded_fund_daily_em, symbol=symbol, period=period)
+
+    def get_fund_graded_fund_info_em(self, symbol: str = "150232", indicator: str = "基金档案") -> Dict[str, Any]:
+        """Get graded fund information"""
+        return self._safe_call_with_retry(ak.fund_graded_fund_info_em, symbol=symbol, indicator=indicator)
+
+    # ==================== MONEY FUNDS ====================
+
+    def get_fund_money_fund_daily_em(self, symbol: str = "000009", period: str = "daily") -> Dict[str, Any]:
+        """Get money fund daily data"""
+        return self._safe_call_with_retry(ak.fund_money_fund_daily_em, symbol=symbol, period=period)
+
+    def get_fund_money_fund_info_em(self, symbol: str = "000009", indicator: str = "基金档案") -> Dict[str, Any]:
+        """Get money fund information"""
+        return self._safe_call_with_retry(ak.fund_money_fund_info_em, symbol=symbol, indicator=indicator)
+
+    # ==================== HK FUNDS ====================
+
+    def get_fund_hk_fund_hist_em(self, symbol: str = "968001", period: str = "daily") -> Dict[str, Any]:
+        """Get HK fund historical data"""
+        return self._safe_call_with_retry(ak.fund_hk_fund_hist_em, symbol=symbol, period=period)
+
+    # ==================== LOF FUNDS ====================
+
+    def get_fund_lof_hist_em(self, symbol: str = "166009", period: str = "daily", start_date: str = "19700101", end_date: str = "20500101", adjust: str = "") -> Dict[str, Any]:
+        """Get LOF historical data"""
+        return self._safe_call_with_retry(ak.fund_lof_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
+
+    def get_fund_lof_spot_em(self) -> Dict[str, Any]:
+        """Get LOF spot data"""
+        return self._safe_call_with_retry(ak.fund_lof_spot_em)
+
+    def get_fund_lof_hist_min_em(self, symbol: str = "166009", period: str = "1", adjust: str = "", start_date: str = "1979-09-01 09:32:00", end_date: str = "2222-01-01 09:32:00") -> Dict[str, Any]:
+        """Get LOF minute historical data"""
+        return self._safe_call_with_retry(ak.fund_lof_hist_min_em, symbol=symbol, period=period, adjust=adjust, start_date=start_date, end_date=end_date)
+
+    # ==================== FUND PORTFOLIO ====================
+
+    def get_fund_portfolio_hold_em(self, symbol: str = "000001", date: str = "2024") -> Dict[str, Any]:
+        """Get fund portfolio holdings"""
+        return self._safe_call_with_retry(ak.fund_portfolio_hold_em, symbol=symbol, date=date)
+
+    def get_fund_portfolio_change_em(self, symbol: str = "000001", date: str = "2024") -> Dict[str, Any]:
+        """Get fund portfolio changes"""
+        return self._safe_call_with_retry(ak.fund_portfolio_change_em, symbol=symbol, date=date)
+
+    def get_fund_portfolio_bond_hold_em(self, symbol: str = "000001", date: str = "2024") -> Dict[str, Any]:
+        """Get fund bond portfolio holdings"""
+        return self._safe_call_with_retry(ak.fund_portfolio_bond_hold_em, symbol=symbol, date=date)
+
+    def get_fund_portfolio_industry_allocation_em(self, symbol: str = "000001", date: str = "2024") -> Dict[str, Any]:
+        """Get fund industry allocation"""
+        return self._safe_call_with_retry(ak.fund_portfolio_industry_allocation_em, symbol=symbol, date=date)
+
+    # ==================== FUND RATINGS ====================
+
+    def get_fund_rating_sh(self) -> Dict[str, Any]:
+        """Get fund ratings from Shanghai"""
+        return self._safe_call_with_retry(ak.fund_rating_sh)
+
+    def get_fund_rating_zs(self) -> Dict[str, Any]:
+        """Get fund ratings from Zhishu"""
+        return self._safe_call_with_retry(ak.fund_rating_zs)
+
+    def get_fund_rating_ja(self) -> Dict[str, Any]:
+        """Get fund ratings from JiAn"""
+        return self._safe_call_with_retry(ak.fund_rating_ja)
+
+    def get_fund_rating_all(self) -> Dict[str, Any]:
+        """Get all fund ratings"""
+        return self._safe_call_with_retry(ak.fund_rating_all)
 
     def get_fund_rating_morningstar(self) -> Dict[str, Any]:
-        """Get Morningstar fund ratings"""
-        return self._safe_call_with_retry(ak.fund_rating_morningstar)
+        """Get Morningstar fund ratings - Alias for fund_rating_all"""
+        return self.get_fund_rating_all()
 
     def get_fund_rating_zhishu(self) -> Dict[str, Any]:
-        """Get Zhishu fund ratings"""
-        return self._safe_call_with_retry(ak.fund_rating_zhishu)
+        """Get Zhishu fund ratings - Alias for fund_rating_zs"""
+        return self.get_fund_rating_zs()
 
-    def get_fund_performance_attribution(self, symbol: str) -> Dict[str, Any]:
-        """Get fund performance attribution"""
-        return self._safe_call_with_retry(ak.fund_performance_attribution, symbol=symbol)
+    # ==================== FUND RANKINGS ====================
 
-    def get_fund_risk_metrics(self, symbol: str) -> Dict[str, Any]:
-        """Get fund risk metrics"""
-        return self._safe_call_with_retry(ak.fund_risk_metrics, symbol=symbol)
+    def get_fund_exchange_rank_em(self) -> Dict[str, Any]:
+        """Get exchange fund rankings"""
+        return self._safe_call_with_retry(ak.fund_exchange_rank_em)
 
-    def get_fund_sharpe_ratio(self, symbol: str) -> Dict[str, Any]:
-        """Get fund Sharpe ratio"""
-        return self._safe_call_with_retry(ak.fund_sharpe_ratio, symbol=symbol)
+    def get_fund_money_rank_em(self, symbol: str = "全部") -> Dict[str, Any]:
+        """Get money fund rankings"""
+        return self._safe_call_with_retry(ak.fund_money_rank_em, symbol=symbol)
 
-    def get_fund_information_ratio(self, symbol: str) -> Dict[str, Any]:
-        """Get fund information ratio"""
-        return self._safe_call_with_retry(ak.fund_information_ratio, symbol=symbol)
+    def get_fund_open_fund_rank_em(self, symbol: str = "全部") -> Dict[str, Any]:
+        """Get open fund rankings"""
+        return self._safe_call_with_retry(ak.fund_open_fund_rank_em, symbol=symbol)
 
-    def get_fund_sortino_ratio(self, symbol: str) -> Dict[str, Any]:
-        """Get fund Sortino ratio"""
-        return self._safe_call_with_retry(ak.fund_sortino_ratio, symbol=symbol)
+    def get_fund_hk_rank_em(self) -> Dict[str, Any]:
+        """Get HK fund rankings"""
+        return self._safe_call_with_retry(ak.fund_hk_rank_em)
 
-    def get_fund_beta(self, symbol: str) -> Dict[str, Any]:
-        """Get fund beta"""
-        return self._safe_call_with_retry(ak.fund_beta, symbol=symbol)
+    def get_fund_lcx_rank_em(self) -> Dict[str, Any]:
+        """Get LCX fund rankings"""
+        return self._safe_call_with_retry(ak.fund_lcx_rank_em)
 
-    def get_fund_alpha(self, symbol: str) -> Dict[str, Any]:
-        """Get fund alpha"""
-        return self._safe_call_with_retry(ak.fund_alpha, symbol=symbol)
-
-    def get_fund_standard_deviation(self, symbol: str) -> Dict[str, Any]:
-        """Get fund standard deviation"""
-        return self._safe_call_with_retry(ak.fund_standard_deviation, symbol=symbol)
-
-    def get_fund_max_drawdown(self, symbol: str) -> Dict[str, Any]:
-        """Get fund maximum drawdown"""
-        return self._safe_call_with_retry(ak.fund_max_drawdown, symbol=symbol)
-
-    def get_fund_var(self, symbol: str) -> Dict[str, Any]:
-        """Get fund Value at Risk"""
-        return self._safe_call_with_retry(ak.fund_var, symbol=symbol)
-
-    # ==================== FUND SCALE AND FLOWS ====================
+    # ==================== FUND SCALE ====================
 
     def get_fund_scale_em(self) -> Dict[str, Any]:
-        """Get fund scale data from Eastmoney"""
-        return self._safe_call_with_retry(ak.fund_scale_em)
+        """Get fund scale - Alias for fund_aum_em"""
+        return self._safe_call_with_retry(ak.fund_aum_em)
 
-    def get_fund_scale_trend(self, symbol: str) -> Dict[str, Any]:
-        """Get fund scale trend"""
-        return self._safe_call_with_retry(ak.fund_scale_trend, symbol=symbol)
+    def get_fund_scale_change_em(self, symbol: str = "000001") -> Dict[str, Any]:
+        """Get fund scale changes"""
+        return self._safe_call_with_retry(ak.fund_scale_change_em, symbol=symbol)
 
-    def get_fund_flow_em(self) -> Dict[str, Any]:
-        """Get fund flow data from Eastmoney"""
-        return self._safe_call_with_retry(ak.fund_flow_em)
+    def get_fund_hold_structure_em(self, symbol: str = "000001") -> Dict[str, Any]:
+        """Get fund holding structure"""
+        return self._safe_call_with_retry(ak.fund_hold_structure_em, symbol=symbol)
 
-    def get_fund_flow_daily(self) -> Dict[str, Any]:
-        """Get daily fund flow data"""
-        return self._safe_call_with_retry(ak.fund_flow_daily)
+    def get_fund_scale_open_sina(self) -> Dict[str, Any]:
+        """Get open fund scale from Sina"""
+        return self._safe_call_with_retry(ak.fund_scale_open_sina)
 
-    def get_fund_flow_weekly(self) -> Dict[str, Any]:
-        """Get weekly fund flow data"""
-        return self._safe_call_with_retry(ak.fund_flow_weekly)
+    def get_fund_scale_close_sina(self) -> Dict[str, Any]:
+        """Get closed fund scale from Sina"""
+        return self._safe_call_with_retry(ak.fund_scale_close_sina)
 
-    def get_fund_flow_monthly(self) -> Dict[str, Any]:
-        """Get monthly fund flow data"""
-        return self._safe_call_with_retry(ak.fund_flow_monthly)
+    def get_fund_scale_structured_sina(self) -> Dict[str, Any]:
+        """Get structured fund scale from Sina"""
+        return self._safe_call_with_retry(ak.fund_scale_structured_sina)
 
-    def get_fund_subscription_redemption(self, symbol: str) -> Dict[str, Any]:
-        """Get fund subscription/redemption data"""
-        return self._safe_call_with_retry(ak.fund_subscription_redemption, symbol=symbol)
+    def get_fund_scale_trend(self, symbol: str = "000001") -> Dict[str, Any]:
+        """Get fund scale trend - Alias for fund_scale_change_em"""
+        return self.get_fund_scale_change_em(symbol=symbol)
+
+    # ==================== FUND REPORTS ====================
+
+    def get_fund_report_stock_cninfo(self, symbol: str = "000001", date: str = "20240630") -> Dict[str, Any]:
+        """Get fund stock report from CNInfo"""
+        return self._safe_call_with_retry(ak.fund_report_stock_cninfo, symbol=symbol, date=date)
+
+    def get_fund_report_industry_allocation_cninfo(self, symbol: str = "000001", date: str = "20240630") -> Dict[str, Any]:
+        """Get fund industry allocation report from CNInfo"""
+        return self._safe_call_with_retry(ak.fund_report_industry_allocation_cninfo, symbol=symbol, date=date)
+
+    def get_fund_report_asset_allocation_cninfo(self, symbol: str = "000001", date: str = "20240630") -> Dict[str, Any]:
+        """Get fund asset allocation report from CNInfo"""
+        return self._safe_call_with_retry(ak.fund_report_asset_allocation_cninfo, symbol=symbol, date=date)
+
+    # ==================== FUND AUM ====================
+
+    def get_fund_aum_em(self) -> Dict[str, Any]:
+        """Get fund assets under management"""
+        return self._safe_call_with_retry(ak.fund_aum_em)
+
+    def get_fund_aum_trend_em(self, symbol: str = "全部") -> Dict[str, Any]:
+        """Get fund AUM trend"""
+        return self._safe_call_with_retry(ak.fund_aum_trend_em, symbol=symbol)
+
+    def get_fund_aum_hist_em(self) -> Dict[str, Any]:
+        """Get fund AUM historical data"""
+        return self._safe_call_with_retry(ak.fund_aum_hist_em)
+
+    # ==================== FUND POSITION (LG) ====================
+
+    def get_fund_stock_position_lg(self) -> Dict[str, Any]:
+        """Get stock fund positions"""
+        return self._safe_call_with_retry(ak.fund_stock_position_lg)
+
+    def get_fund_balance_position_lg(self) -> Dict[str, Any]:
+        """Get balanced fund positions"""
+        return self._safe_call_with_retry(ak.fund_balance_position_lg)
+
+    def get_fund_linghuo_position_lg(self) -> Dict[str, Any]:
+        """Get flexible fund positions"""
+        return self._safe_call_with_retry(ak.fund_linghuo_position_lg)
+
+    # ==================== FUND MISC ====================
+
+    def get_fund_purchase_em(self) -> Dict[str, Any]:
+        """Get fund purchase information"""
+        return self._safe_call_with_retry(ak.fund_purchase_em)
+
+    def get_fund_value_estimation_em(self, symbol: str = "000001") -> Dict[str, Any]:
+        """Get fund value estimation"""
+        return self._safe_call_with_retry(ak.fund_value_estimation_em, symbol=symbol)
 
     def get_fund_new_issue(self) -> Dict[str, Any]:
-        """Get new fund issue data"""
-        return self._safe_call_with_retry(ak.fund_new_issue)
+        """Get new fund issues"""
+        return self._safe_call_with_retry(ak.fund_new_found_em)
 
-    def get_fund_new_issue_detail(self, fund_code: str) -> Dict[str, Any]:
-        """Get new fund issue details"""
-        return self._safe_call_with_retry(ak.fund_new_issue_detail, fund_code=fund_code)
+    def get_fund_new_issue_detail(self, fund_code: str = "000001") -> Dict[str, Any]:
+        """Get new fund issue details - Uses fund info endpoint"""
+        return self.get_fund_open_fund_info_em(symbol=fund_code, indicator="基金档案")
 
-    # ==================== AMAC AND REGULATORY DATA ====================
+    def get_fund_manager_em(self) -> Dict[str, Any]:
+        """Get fund manager information"""
+        return self._safe_call_with_retry(ak.fund_manager_em)
 
-    def get_fund_amac(self) -> Dict[str, Any]:
-        """Get AMAC (Asset Management Association of China) data"""
-        return self._safe_call_with_retry(ak.fund_amac)
+    def get_fund_manager_detail(self, manager_name: str = "") -> Dict[str, Any]:
+        """Get fund manager details - Uses fund manager endpoint"""
+        return self.get_fund_manager_em()
 
-    def get_fund_amac_statistics(self) -> Dict[str, Any]:
-        """Get AMAC statistics"""
-        return self._safe_call_with_retry(ak.fund_amac_statistics)
-
-    def get_fund_amac_private(self) -> Dict[str, Any]:
-        """Get AMAC private fund data"""
-        return self._safe_call_with_retry(ak.fund_amac_private)
-
-    def get_fund_amac_securities(self) -> Dict[str, Any]:
-        """Get AMAC securities fund data"""
-        return self._safe_call_with_retry(ak.fund_amac_securities)
-
-    def get_fund_amac_futures(self) -> Dict[str, Any]:
-        """Get AMAC futures fund data"""
-        return self._safe_call_with_retry(ak.fund_amac_futures)
-
-    def get_fund_regulatory_filing(self) -> Dict[str, Any]:
-        """Get fund regulatory filing data"""
-        return self._safe_call_with_retry(ak.fund_regulatory_filing)
-
-    def get_fund_disclosure(self) -> Dict[str, Any]:
-        """Get fund disclosure data"""
-        return self._safe_call_with_retry(ak.fund_disclosure)
-
-    # ==================== SPECIALIZED FUNDS ====================
-
-    def get_fund_financial_fund_daily_em(self) -> Dict[str, Any]:
-        """Get financial fund daily data from Eastmoney"""
-        return self._safe_call_with_retry(ak.fund_financial_fund_daily_em)
-
-    def get_fund_money_fund_daily_em(self) -> Dict[str, Any]:
-        """Get money market fund daily data from Eastmoney"""
-        return self._safe_call_with_retry(ak.fund_money_fund_daily_em)
-
-    def get_fund_hedge_fund(self) -> Dict[str, Any]:
-        """Get hedge fund data"""
-        return self._safe_call_with_retry(ak.fund_hedge_fund)
-
-    def get_fund_private_equity(self) -> Dict[str, Any]:
-        """Get private equity fund data"""
-        return self._safe_call_with_retry(ak.fund_private_equity)
-
-    def get_fund_venture_capital(self) -> Dict[str, Any]:
-        """Get venture capital fund data"""
-        return self._safe_call_with_retry(ak.fund_venture_capital)
-
-    def get_fund_qfii(self) -> Dict[str, Any]:
-        """Get QFII fund data"""
-        return self._safe_call_with_retry(ak.fund_qfii)
-
-    def get_fund_rqfii(self) -> Dict[str, Any]:
-        """Get RQFII fund data"""
-        return self._safe_call_with_retry(ak.fund_rqfii)
-
-    def get_fund_stock_connect(self) -> Dict[str, Any]:
-        """Get Stock Connect fund data"""
-        return self._safe_call_with_retry(ak.fund_stock_connect)
-
-    def get_fund_bond_connect(self) -> Dict[str, Any]:
-        """Get Bond Connect fund data"""
-        return self._safe_call_with_retry(ak.fund_bond_connect)
-
-    # ==================== FUND MANAGER AND ANALYST DATA ====================
-
-    def get_fund_manager_detail(self, manager_name: str) -> Dict[str, Any]:
-        """Get fund manager details"""
-        return self._safe_call_with_retry(ak.fund_manager_detail, manager_name=manager_name)
-
-    def get_fund_manager_performance(self, manager_name: str) -> Dict[str, Any]:
-        """Get fund manager performance"""
-        return self._safe_call_with_retry(ak.fund_manager_performance, manager_name=manager_name)
+    def get_fund_manager_performance(self, manager_name: str = "") -> Dict[str, Any]:
+        """Get fund manager performance - Uses fund manager endpoint"""
+        return self.get_fund_manager_em()
 
     def get_fund_manager_ranking(self) -> Dict[str, Any]:
-        """Get fund manager ranking"""
-        return self._safe_call_with_retry(ak.fund_manager_ranking)
+        """Get fund manager rankings - Uses fund manager endpoint"""
+        return self.get_fund_manager_em()
 
-    def get_fund_analyst_recommendation(self, symbol: str) -> Dict[str, Any]:
-        """Get analyst recommendations for funds"""
-        return self._safe_call_with_retry(ak.fund_analyst_recommendation, symbol=symbol)
+    def get_fund_cf_em(self, symbol: str = "000001") -> Dict[str, Any]:
+        """Get fund cash flow"""
+        return self._safe_call_with_retry(ak.fund_cf_em, symbol=symbol)
 
-    def get_fund_research_report(self) -> Dict[str, Any]:
-        """Get fund research reports"""
-        return self._safe_call_with_retry(ak.fund_research_report)
+    def get_fund_fh_em(self, symbol: str = "000001") -> Dict[str, Any]:
+        """Get fund dividend distribution"""
+        return self._safe_call_with_retry(ak.fund_fh_em, symbol=symbol)
 
-    def get_fund_commentary(self, symbol: str) -> Dict[str, Any]:
-        """Get fund commentary"""
-        return self._safe_call_with_retry(ak.fund_commentary, symbol=symbol)
+    def get_fund_fh_rank_em(self) -> Dict[str, Any]:
+        """Get fund dividend rankings"""
+        return self._safe_call_with_retry(ak.fund_fh_rank_em)
 
-    # ==================== FUND COMPARISON AND ANALYSIS ====================
+    def get_fund_flow_em(self) -> Dict[str, Any]:
+        """Get fund flow - Uses AUM data as proxy"""
+        return self.get_fund_aum_em()
 
-    def get_fund_comparison(self, symbols: List[str]) -> Dict[str, Any]:
-        """Compare multiple funds"""
-        return self._safe_call_with_retry(ak.fund_comparison, symbols=symbols)
+    def get_fund_flow_daily(self) -> Dict[str, Any]:
+        """Get daily fund flow - Uses AUM data as proxy"""
+        return self.get_fund_aum_em()
 
-    def get_fund_correlation(self, symbols: List[str]) -> Dict[str, Any]:
-        """Get fund correlation analysis"""
-        return self._safe_call_with_retry(ak.fund_correlation, symbols=symbols)
+    def get_fund_flow_weekly(self) -> Dict[str, Any]:
+        """Get weekly fund flow - Uses AUM data as proxy"""
+        return self.get_fund_aum_em()
 
-    def get_fund_cluster_analysis(self) -> Dict[str, Any]:
-        """Get fund cluster analysis"""
-        return self._safe_call_with_retry(ak.fund_cluster_analysis)
+    def get_fund_flow_monthly(self) -> Dict[str, Any]:
+        """Get monthly fund flow - Uses AUM data as proxy"""
+        return self.get_fund_aum_em()
 
-    def get_fund_factor_analysis(self, symbol: str) -> Dict[str, Any]:
-        """Get fund factor analysis"""
-        return self._safe_call_with_retry(ak.fund_factor_analysis, symbol=symbol)
+    # ==================== FUND XQ (XUEQIU) ====================
 
-    def get_fund_regression_analysis(self, symbol: str) -> Dict[str, Any]:
-        """Get fund regression analysis"""
-        return self._safe_call_with_retry(ak.fund_regression_analysis, symbol=symbol)
+    def get_fund_individual_basic_info_xq(self, symbol: str = "SH501018") -> Dict[str, Any]:
+        """Get fund basic info from Xueqiu"""
+        return self._safe_call_with_retry(ak.fund_individual_basic_info_xq, symbol=symbol)
 
-    # ==================== UTILITIES ====================
+    def get_fund_individual_achievement_xq(self, symbol: str = "SH501018") -> Dict[str, Any]:
+        """Get fund achievement from Xueqiu"""
+        return self._safe_call_with_retry(ak.fund_individual_achievement_xq, symbol=symbol)
+
+    def get_fund_individual_analysis_xq(self, symbol: str = "SH501018") -> Dict[str, Any]:
+        """Get fund analysis from Xueqiu"""
+        return self._safe_call_with_retry(ak.fund_individual_analysis_xq, symbol=symbol)
+
+    def get_fund_individual_profit_probability_xq(self, symbol: str = "SH501018") -> Dict[str, Any]:
+        """Get fund profit probability from Xueqiu"""
+        return self._safe_call_with_retry(ak.fund_individual_profit_probability_xq, symbol=symbol)
+
+    def get_fund_individual_detail_info_xq(self, symbol: str = "SH501018") -> Dict[str, Any]:
+        """Get fund detail info from Xueqiu"""
+        return self._safe_call_with_retry(ak.fund_individual_detail_info_xq, symbol=symbol)
+
+    def get_fund_individual_detail_hold_xq(self, symbol: str = "SH501018") -> Dict[str, Any]:
+        """Get fund holdings from Xueqiu"""
+        return self._safe_call_with_retry(ak.fund_individual_detail_hold_xq, symbol=symbol)
+
+    # ==================== UTILITY FUNCTIONS ====================
 
     def get_all_available_endpoints(self) -> Dict[str, Any]:
-        """Get list of all available endpoints in this wrapper"""
-        methods = [method for method in dir(self) if method.startswith('get_') and callable(getattr(self, method))]
+        """Get list of all available fund endpoints"""
+        endpoints = [
+            "get_fund_overview_em", "get_fund_fee_em", "get_fund_name_em", "get_fund_info_index_em",
+            "get_fund_open_fund_daily_em", "get_fund_open_fund_info_em",
+            "get_fund_etf_fund_daily_em", "get_fund_etf_fund_info_em", "get_fund_etf_hist_em",
+            "get_fund_etf_hist_min_em", "get_fund_etf_spot_em", "get_fund_etf_hist_sina",
+            "get_fund_etf_category_sina", "get_fund_etf_dividend_sina", "get_fund_etf_spot_ths",
+            "get_fund_etf_scale_sse", "get_fund_etf_scale_szse",
+            "get_fund_financial_fund_daily_em", "get_fund_financial_fund_info_em",
+            "get_fund_graded_fund_daily_em", "get_fund_graded_fund_info_em",
+            "get_fund_money_fund_daily_em", "get_fund_money_fund_info_em",
+            "get_fund_hk_fund_hist_em",
+            "get_fund_lof_hist_em", "get_fund_lof_spot_em", "get_fund_lof_hist_min_em",
+            "get_fund_portfolio_hold_em", "get_fund_portfolio_change_em",
+            "get_fund_portfolio_bond_hold_em", "get_fund_portfolio_industry_allocation_em",
+            "get_fund_rating_sh", "get_fund_rating_zs", "get_fund_rating_ja", "get_fund_rating_all",
+            "get_fund_rating_morningstar", "get_fund_rating_zhishu",
+            "get_fund_exchange_rank_em", "get_fund_money_rank_em", "get_fund_open_fund_rank_em",
+            "get_fund_hk_rank_em", "get_fund_lcx_rank_em",
+            "get_fund_scale_em", "get_fund_scale_change_em", "get_fund_hold_structure_em",
+            "get_fund_scale_open_sina", "get_fund_scale_close_sina", "get_fund_scale_structured_sina",
+            "get_fund_scale_trend",
+            "get_fund_report_stock_cninfo", "get_fund_report_industry_allocation_cninfo",
+            "get_fund_report_asset_allocation_cninfo",
+            "get_fund_aum_em", "get_fund_aum_trend_em", "get_fund_aum_hist_em",
+            "get_fund_stock_position_lg", "get_fund_balance_position_lg", "get_fund_linghuo_position_lg",
+            "get_fund_purchase_em", "get_fund_value_estimation_em", "get_fund_new_issue",
+            "get_fund_new_issue_detail", "get_fund_manager_em", "get_fund_manager_detail",
+            "get_fund_manager_performance", "get_fund_manager_ranking",
+            "get_fund_cf_em", "get_fund_fh_em", "get_fund_fh_rank_em",
+            "get_fund_flow_em", "get_fund_flow_daily", "get_fund_flow_weekly", "get_fund_flow_monthly",
+            "get_fund_individual_basic_info_xq", "get_fund_individual_achievement_xq",
+            "get_fund_individual_analysis_xq", "get_fund_individual_profit_probability_xq",
+            "get_fund_individual_detail_info_xq", "get_fund_individual_detail_hold_xq"
+        ]
+
         return {
-            "available_endpoints": methods,
-            "total_count": len(methods),
-            "categories": {
-                "Enhanced ETF Data": [m for m in methods if "fund_etf" in m],
-                "Fund Portfolio & Holdings": [m for m in methods if any(x in m for x in ["fund_portfolio", "fund_holdings", "fund_top_holdings", "fund_sector_allocation", "fund_asset_allocation", "fund_geographic_allocation", "fund_style_box"])],
-                "Fund Ratings & Performance": [m for m in methods if any(x in m for x in ["fund_rating", "fund_performance", "fund_sharpe", "fund_information", "fund_sortino", "fund_beta", "fund_alpha", "fund_standard", "fund_max", "fund_var"])],
-                "Fund Scale & Flows": [m for m in methods if any(x in m for x in ["fund_scale", "fund_flow", "fund_subscription", "fund_new"])],
-                "AMAC & Regulatory": [m for m in methods if any(x in m for x in ["fund_amac", "fund_regulatory", "fund_disclosure"])],
-                "Specialized Funds": [m for m in methods if any(x in m for x in ["fund_financial", "fund_money", "fund_hedge", "fund_private", "fund_venture", "fund_qfii", "fund_rqfii", "fund_connect"])],
-                "Fund Manager & Analyst": [m for m in methods if any(x in m for x in ["fund_manager", "fund_analyst", "fund_research", "fund_commentary"])],
-                "Fund Comparison & Analysis": [m for m in methods if any(x in m for x in ["fund_comparison", "fund_correlation", "fund_cluster", "fund_factor", "fund_regression"])]
-            },
+            "success": True,
+            "available_endpoints": endpoints,
+            "total_count": len(endpoints),
             "timestamp": int(datetime.now().timestamp())
         }
 
-    
 
-# ==================== COMMAND LINE INTERFACE ====================
-
-def main():
-    """Command line interface for the Expanded Funds wrapper"""
-    wrapper = ExpandedFundsWrapper()
-
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            "error": "Usage: python akshare_funds_expanded.py <endpoint> [args...]",
-            "available_endpoints": wrapper.get_all_available_endpoints()["available_endpoints"]
-        }, indent=2))
-        return
-
-    endpoint = sys.argv[1]
-    args = sys.argv[2:] if len(sys.argv) > 2 else []
-
-    # Map endpoint names to method calls
-    endpoint_map = {
-        "get_all_endpoints": wrapper.get_all_available_endpoints,
-        # Enhanced ETF Data
-        "etf_ths": wrapper.get_fund_etf_ths,
-        "etf_category": wrapper.get_fund_etf_category,
-        "etf_rank": wrapper.get_fund_etf_rank,
-        "etf_portfolio": wrapper.get_fund_etf_portfolio,
-        "etf_dividend": wrapper.get_fund_etf_dividend,
-        "etf_split": wrapper.get_fund_etf_split,
-        "etf_expense": wrapper.get_fund_etf_expense_ratio,
-        "etf_tracking": wrapper.get_fund_etf_tracking_error,
-        "etf_premium": wrapper.get_fund_etf_premium_discount,
-        "etf_creation": wrapper.get_fund_etf_creation_redemption,
-        # Fund Portfolio & Holdings
-        "fund_portfolio": wrapper.get_fund_portfolio_em,
-        "fund_holdings": wrapper.get_fund_holdings_em,
-        "fund_holdings_change": wrapper.get_fund_holdings_change,
-        "fund_top_holdings": wrapper.get_fund_top_holdings,
-        "fund_sector": wrapper.get_fund_sector_allocation,
-        "fund_asset": wrapper.get_fund_asset_allocation,
-        "fund_geographic": wrapper.get_fund_geographic_allocation,
-        "fund_style": wrapper.get_fund_style_box,
-        # Fund Ratings & Performance
-        "fund_rating": wrapper.get_fund_rating,
-        "fund_rating_morningstar": wrapper.get_fund_rating_morningstar,
-        "fund_rating_zhishu": wrapper.get_fund_rating_zhishu,
-        "fund_performance": wrapper.get_fund_performance_attribution,
-        "fund_risk": wrapper.get_fund_risk_metrics,
-        "fund_sharpe": wrapper.get_fund_sharpe_ratio,
-        "fund_info_ratio": wrapper.get_fund_information_ratio,
-        "fund_sortino": wrapper.get_fund_sortino_ratio,
-        "fund_beta": wrapper.get_fund_beta,
-        "fund_alpha": wrapper.get_fund_alpha,
-        "fund_stddev": wrapper.get_fund_standard_deviation,
-        "fund_maxdd": wrapper.get_fund_max_drawdown,
-        "fund_var": wrapper.get_fund_var,
-        # Fund Scale & Flows
-        "fund_scale": wrapper.get_fund_scale_em,
-        "fund_scale_trend": wrapper.get_fund_scale_trend,
-        "fund_flow": wrapper.get_fund_flow_em,
-        "fund_flow_daily": wrapper.get_fund_flow_daily,
-        "fund_flow_weekly": wrapper.get_fund_flow_weekly,
-        "fund_flow_monthly": wrapper.get_fund_flow_monthly,
-        "fund_subscription": wrapper.get_fund_subscription_redemption,
-        "fund_new": wrapper.get_fund_new_issue,
-        "fund_new_detail": wrapper.get_fund_new_issue_detail,
-        # AMAC & Regulatory
-        "fund_amac": wrapper.get_fund_amac,
-        "fund_amac_stats": wrapper.get_fund_amac_statistics,
-        "fund_amac_private": wrapper.get_fund_amac_private,
-        "fund_amac_securities": wrapper.get_fund_amac_securities,
-        "fund_amac_futures": wrapper.get_fund_amac_futures,
-        "fund_regulatory": wrapper.get_fund_regulatory_filing,
-        "fund_disclosure": wrapper.get_fund_disclosure,
-        # Specialized Funds
-        "fund_financial": wrapper.get_fund_financial_fund_daily_em,
-        "fund_money": wrapper.get_fund_money_fund_daily_em,
-        "fund_hedge": wrapper.get_fund_hedge_fund,
-        "fund_private_equity": wrapper.get_fund_private_equity,
-        "fund_venture": wrapper.get_fund_venture_capital,
-        "fund_qfii": wrapper.get_fund_qfii,
-        "fund_rqfii": wrapper.get_fund_rqfii,
-        "fund_stock_connect": wrapper.get_fund_stock_connect,
-        "fund_bond_connect": wrapper.get_fund_bond_connect,
-        # Fund Manager & Analyst
-        "fund_manager_detail": wrapper.get_fund_manager_detail,
-        "fund_manager_perf": wrapper.get_fund_manager_performance,
-        "fund_manager_rank": wrapper.get_fund_manager_ranking,
-        "fund_analyst": wrapper.get_fund_analyst_recommendation,
-        "fund_research": wrapper.get_fund_research_report,
-        "fund_commentary": wrapper.get_fund_commentary,
-        # Fund Comparison & Analysis
-        "fund_comparison": wrapper.get_fund_comparison,
-        "fund_correlation": wrapper.get_fund_correlation,
-        "fund_cluster": wrapper.get_fund_cluster_analysis,
-        "fund_factor": wrapper.get_fund_factor_analysis,
-        "fund_regression": wrapper.get_fund_regression_analysis
-    }
-
-    method = endpoint_map.get(endpoint)
-    if method:
-        if args:
-            try:
-                result = method(*args)
-            except Exception as e:
-                result = {"error": str(e), "endpoint": endpoint}
-        else:
-            result = method()
-        print(json.dumps(result, indent=2, ensure_ascii=True))
-    else:
-        print(json.dumps({
-            "error": f"Unknown endpoint: {endpoint}",
-            "available_endpoints": list(endpoint_map.keys())
-        }, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+# Export wrapper instance
+expanded_funds_wrapper = ExpandedFundsWrapper()

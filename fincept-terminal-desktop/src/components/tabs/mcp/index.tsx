@@ -1,8 +1,8 @@
 // MCP Integrations Tab - Main Component
-// Manage MCP servers and tools in Fincept-style interface
+// Three-panel terminal layout per Fincept UI Design System
 
 import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare } from 'lucide-react';
+import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare, Server, Wrench, ShoppingBag, ChevronRight } from 'lucide-react';
 import { mcpManager, MCPServerWithStats } from '../../../services/mcp/mcpManager';
 import { sqliteService } from '../../../services/core/sqliteService';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
@@ -15,6 +15,27 @@ interface MCPTabProps {
   onNavigateToTab?: (tabName: string) => void;
 }
 
+// Fincept Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
+
 const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   const [view, setView] = useState<'marketplace' | 'installed' | 'tools'>('marketplace');
   const [servers, setServers] = useState<MCPServerWithStats[]>([]);
@@ -23,20 +44,10 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Initializing...');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
 
   // Broker context for MCP bridge
   const { activeAdapter, tradingMode, activeBroker } = useBrokerContext();
-
-  // Fincept colors
-  const ORANGE = '#FFA500';
-  const WHITE = '#FFFFFF';
-  const GRAY = '#787878';
-  const DARK_BG = '#0a0a0a';
-  const PANEL_BG = '#1a1a1a';
-  const BORDER = '#2d2d2d';
-  const GREEN = '#10b981';
-  const RED = '#ef4444';
-  const YELLOW = '#f59e0b';
 
   // Connect broker to MCP bridge
   useEffect(() => {
@@ -57,15 +68,9 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   useEffect(() => {
     const initializeServers = async () => {
       try {
-        // Ensure database is initialized first
         await sqliteService.initialize();
-
-        // Initialize MCP tool service to load internal tools
         const { mcpToolService } = await import('../../../services/mcp/mcpToolService');
         await mcpToolService.initialize();
-
-        // Don't auto-start here - DashboardScreen already handles it
-        // Just load the data
         await loadData();
       } catch (error) {
         console.error('Failed to initialize MCP tab:', error);
@@ -89,13 +94,12 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
       const serversData = await mcpManager.getServersWithStats();
       setServers(serversData);
 
-      // Load all tools (internal + external)
       const { mcpToolService } = await import('../../../services/mcp/mcpToolService');
       const toolsData = await mcpToolService.getAllTools();
       setTools(toolsData);
 
       const runningCount = serversData.filter(s => s.status === 'running').length;
-      const internalToolsCount = toolsData.filter(t => t.serverId === 'fincept-terminal').length;
+      const internalToolsCount = toolsData.filter((t: any) => t.serverId === 'fincept-terminal').length;
       const externalToolsCount = toolsData.length - internalToolsCount;
       setStatusMessage(`${runningCount} servers running | ${internalToolsCount} internal + ${externalToolsCount} external tools`);
     } catch (error) {
@@ -153,6 +157,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
     try {
       setStatusMessage('Removing server...');
       await mcpManager.removeServer(serverId);
+      if (selectedServerId === serverId) setSelectedServerId(null);
       await loadData();
       setStatusMessage('Server removed');
     } catch (error) {
@@ -175,22 +180,19 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'running':
-        return <CheckCircle size={14} color={GREEN} />;
+        return <CheckCircle size={10} color={FINCEPT.GREEN} />;
       case 'error':
-        return <XCircle size={14} color={RED} />;
+        return <XCircle size={10} color={FINCEPT.RED} />;
       default:
-        return <AlertCircle size={14} color={GRAY} />;
+        return <AlertCircle size={10} color={FINCEPT.GRAY} />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'running':
-        return GREEN;
-      case 'error':
-        return RED;
-      default:
-        return GRAY;
+      case 'running': return FINCEPT.GREEN;
+      case 'error': return FINCEPT.RED;
+      default: return FINCEPT.GRAY;
     }
   };
 
@@ -200,628 +202,745 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
     s.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const selectedServer = selectedServerId
+    ? servers.find(s => s.id === selectedServerId) || null
+    : null;
+
+  const internalToolCount = tools.filter((t: any) => t.serverId === 'fincept-terminal').length;
+  const externalToolCount = tools.length - internalToolCount;
+
+  // Get tools for the selected server
+  const selectedServerTools = selectedServerId === 'internal'
+    ? tools.filter((t: any) => t.serverId === 'fincept-terminal')
+    : selectedServer
+      ? tools.filter((t: any) => t.serverId === selectedServer.id)
+      : [];
+
   return (
     <div style={{
       width: '100%',
       height: '100%',
-      backgroundColor: DARK_BG,
-      color: WHITE,
-      fontFamily: 'Consolas, monospace',
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
+      fontFamily: FONT_FAMILY,
       display: 'flex',
       flexDirection: 'column',
       fontSize: '11px',
-      overflow: 'hidden'
+      overflow: 'hidden',
     }}>
-      {/* Header */}
+      <style>{`
+        .mcp-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .mcp-scroll::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
+        .mcp-scroll::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; border-radius: 3px; }
+        .mcp-scroll::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Top Navigation Bar */}
       <div style={{
-        backgroundColor: PANEL_BG,
-        borderBottom: `1px solid ${BORDER}`,
-        padding: '12px 16px',
-        flexShrink: 0
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`,
+        flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{
-              color: ORANGE,
-              fontSize: '14px',
-              fontWeight: 'bold',
-              letterSpacing: '0.5px'
-            }}>
-              MCP MARKETPLACE
-            </span>
-            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
-            <span style={{ color: GRAY, fontSize: '11px' }}>
-              {servers.length} Servers | {runningServers} Running | {tools.filter(t => t.serverId === 'fincept-terminal').length} Internal + {tools.filter(t => t.serverId !== 'fincept-terminal').length} External Tools
-            </span>
-          </div>
-
-          {/* View Switcher */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              onClick={() => onNavigateToTab?.('chat')}
-              style={{
-                backgroundColor: 'transparent',
-                border: `1px solid ${ORANGE}`,
-                color: ORANGE,
-                padding: '6px 12px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 'bold'
-              }}
-              title="Go back to AI Chat"
-            >
-              <MessageSquare size={12} />
-              AI CHAT
-            </button>
-
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              style={{
-                backgroundColor: 'transparent',
-                border: `1px solid ${BORDER}`,
-                color: WHITE,
-                padding: '6px 12px',
-                fontSize: '10px',
-                cursor: isRefreshing ? 'not-allowed' : 'pointer',
-                borderRadius: '3px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                opacity: isRefreshing ? 0.5 : 1,
-                fontWeight: 'bold'
-              }}
-            >
-              <RefreshCw size={12} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
-              REFRESH
-            </button>
-
-            <button
-              onClick={() => setView('marketplace')}
-              style={{
-                backgroundColor: view === 'marketplace' ? ORANGE : 'transparent',
-                color: view === 'marketplace' ? 'black' : WHITE,
-                border: `1px solid ${view === 'marketplace' ? ORANGE : BORDER}`,
-                padding: '6px 12px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold'
-              }}
-            >
-              MARKETPLACE
-            </button>
-            <button
-              onClick={() => setView('installed')}
-              style={{
-                backgroundColor: view === 'installed' ? ORANGE : 'transparent',
-                color: view === 'installed' ? 'black' : WHITE,
-                border: `1px solid ${view === 'installed' ? ORANGE : BORDER}`,
-                padding: '6px 12px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold'
-              }}
-            >
-              MY SERVERS ({servers.length})
-            </button>
-
-            <button
-              onClick={() => setView('tools')}
-              style={{
-                backgroundColor: view === 'tools' ? ORANGE : 'transparent',
-                color: view === 'tools' ? 'black' : WHITE,
-                border: `1px solid ${view === 'tools' ? ORANGE : BORDER}`,
-                padding: '6px 12px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold'
-              }}
-            >
-              ALL TOOLS ({tools.length})
-            </button>
-
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              style={{
-                backgroundColor: GREEN,
-                color: 'black',
-                border: 'none',
-                padding: '6px 12px',
-                fontSize: '10px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              <Plus size={12} />
-              CUSTOM
-            </button>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Zap size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{
+            color: FINCEPT.ORANGE,
+            fontSize: '12px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+          }}>
+            MCP SERVERS
+          </span>
+          <div style={{ width: '1px', height: '16px', backgroundColor: FINCEPT.BORDER }} />
+          <span style={{ color: FINCEPT.GRAY, fontSize: '9px', letterSpacing: '0.5px' }}>
+            {servers.length} SERVERS | {runningServers} RUNNING | {tools.length} TOOLS
+          </span>
         </div>
 
-        {/* Search Bar (only for installed view) */}
-        {view === 'installed' && servers.length > 0 && (
-          <div style={{ position: 'relative' }}>
-            <Search
-              size={14}
-              style={{
-                position: 'absolute',
-                left: '10px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: GRAY,
-              }}
-            />
-            <input
-              type="text"
-              placeholder="Search installed servers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                backgroundColor: DARK_BG,
-                border: `1px solid ${BORDER}`,
-                color: WHITE,
-                padding: '8px 12px 8px 36px',
-                fontSize: '11px',
-                borderRadius: '4px',
-                outline: 'none',
-              }}
-            />
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {/* Tab Buttons */}
+          {(['installed', 'marketplace', 'tools'] as const).map((tab) => {
+            const labels: Record<string, string> = {
+              installed: 'MY SERVERS',
+              marketplace: 'MARKETPLACE',
+              tools: 'ALL TOOLS',
+            };
+            return (
+              <button
+                key={tab}
+                onClick={() => setView(tab)}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: view === tab ? FINCEPT.ORANGE : 'transparent',
+                  color: view === tab ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  border: 'none',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  cursor: 'pointer',
+                  borderRadius: '2px',
+                  transition: 'all 0.2s',
+                  fontFamily: FONT_FAMILY,
+                }}
+              >
+                {labels[tab]}
+              </button>
+            );
+          })}
+
+          <div style={{ width: '1px', height: '16px', backgroundColor: FINCEPT.BORDER }} />
+
+          {/* Action Buttons */}
+          <button
+            onClick={() => onNavigateToTab?.('chat')}
+            style={{
+              padding: '6px 10px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              fontWeight: 700,
+              borderRadius: '2px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.2s',
+              fontFamily: FONT_FAMILY,
+            }}
+          >
+            <MessageSquare size={10} />
+            AI CHAT
+          </button>
+
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            style={{
+              padding: '6px 10px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              fontWeight: 700,
+              borderRadius: '2px',
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: isRefreshing ? 0.5 : 1,
+              transition: 'all 0.2s',
+              fontFamily: FONT_FAMILY,
+            }}
+          >
+            <RefreshCw size={10} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+            REFRESH
+          </button>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: FINCEPT.ORANGE,
+              color: FINCEPT.DARK_BG,
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontFamily: FONT_FAMILY,
+            }}
+          >
+            <Plus size={10} />
+            ADD SERVER
+          </button>
+        </div>
       </div>
 
-      {/* Content Area */}
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: '16px',
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none',
-      }}>
-        <style>{`
-          div::-webkit-scrollbar {
-            display: none;
-          }
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+      {/* Main Content - Three Panel Layout for installed view, full-width for marketplace/tools */}
+      {view === 'installed' ? (
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* Left Panel - Server List (280px) */}
+          <div style={{
+            width: '280px',
+            flexShrink: 0,
+            borderRight: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            {/* Left Panel Header */}
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+                INSTALLED SERVERS
+              </span>
+            </div>
 
-        {view === 'marketplace' ? (
-          /* Marketplace View */
-          <MCPMarketplace onInstall={handleInstallServer} installedServers={servers} />
-        ) : view === 'tools' ? (
-          /* Tools Management View */
-          <MCPToolsManagement />
-        ) : (
-          /* Installed Servers View */
-          <div>
-            {filteredServers.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '60px 20px',
-                color: GRAY,
-              }}>
-                <Zap size={48} style={{ marginBottom: '16px', opacity: 0.3, color: ORANGE }} />
-                <h3 style={{ fontSize: '14px', marginBottom: '8px', color: WHITE }}>
-                  {searchTerm ? 'No servers found' : 'No MCP servers installed'}
-                </h3>
-                <p style={{ fontSize: '11px', marginBottom: '16px' }}>
-                  {searchTerm ? 'Try a different search term' : 'Install your first MCP server from the marketplace'}
-                </p>
-                {!searchTerm && (
-                  <button
-                    onClick={() => setView('marketplace')}
+            {/* Search */}
+            <div style={{ padding: '8px 12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={10} style={{
+                  position: 'absolute',
+                  left: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: FINCEPT.GRAY,
+                }} />
+                <input
+                  type="text"
+                  placeholder="Search servers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px 8px 28px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderRadius: '2px',
+                    fontSize: '10px',
+                    fontFamily: FONT_FAMILY,
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
+                />
+              </div>
+            </div>
+
+            {/* Server List */}
+            <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto' }}>
+              {/* Internal Tools Entry */}
+              <div
+                onClick={() => setSelectedServerId('internal')}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: selectedServerId === 'internal' ? `${FINCEPT.ORANGE}15` : 'transparent',
+                  borderLeft: selectedServerId === 'internal' ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedServerId !== 'internal') e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedServerId !== 'internal') e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <Zap size={12} style={{ color: FINCEPT.ORANGE }} />
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.WHITE }}>
+                    Fincept Terminal
+                  </span>
+                  <CheckCircle size={10} color={FINCEPT.GREEN} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '20px' }}>
+                  <span style={{
+                    padding: '2px 6px',
+                    backgroundColor: `${FINCEPT.GREEN}20`,
+                    color: FINCEPT.GREEN,
+                    fontSize: '8px',
+                    fontWeight: 700,
+                    borderRadius: '2px',
+                  }}>BUILT-IN</span>
+                  <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                    {internalToolCount} tools
+                  </span>
+                </div>
+              </div>
+
+              {/* External Servers */}
+              {filteredServers.length === 0 && !searchTerm ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '32px 16px',
+                  color: FINCEPT.MUTED,
+                  fontSize: '10px',
+                  textAlign: 'center',
+                }}>
+                  <Server size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+                  <span>No external servers</span>
+                  <span style={{ fontSize: '9px', marginTop: '4px' }}>Install from marketplace</span>
+                </div>
+              ) : (
+                filteredServers.map(server => (
+                  <div
+                    key={server.id}
+                    onClick={() => setSelectedServerId(server.id)}
                     style={{
-                      backgroundColor: ORANGE,
-                      color: 'black',
-                      border: 'none',
-                      padding: '8px 16px',
-                      fontSize: '11px',
+                      padding: '10px 12px',
+                      backgroundColor: selectedServerId === server.id ? `${FINCEPT.ORANGE}15` : 'transparent',
+                      borderLeft: selectedServerId === server.id ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
                       cursor: 'pointer',
-                      borderRadius: '4px',
-                      fontWeight: 'bold',
+                      transition: 'all 0.2s',
+                      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedServerId !== server.id) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedServerId !== server.id) e.currentTarget.style.backgroundColor = 'transparent';
                     }}
                   >
-                    BROWSE MARKETPLACE
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: '16px',
-              }}>
-                {/* Internal Tools Card - Always show first */}
-                <div
-                  style={{
-                    backgroundColor: PANEL_BG,
-                    border: `2px solid ${ORANGE}`,
-                    borderRadius: '6px',
-                    padding: '16px',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = `0 0 16px ${ORANGE}60`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  {/* Server Header */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '28px' }}>⚡</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <h3 style={{
-                          color: WHITE,
-                          fontSize: '13px',
-                          fontWeight: 'bold',
-                        }}>
-                          Fincept Terminal (Internal)
-                        </h3>
-                        <CheckCircle size={14} color={GREEN} />
-                      </div>
-                      <div style={{
-                        display: 'inline-block',
-                        backgroundColor: `${GREEN}20`,
-                        color: GREEN,
-                        padding: '2px 8px',
-                        fontSize: '9px',
-                        borderRadius: '3px',
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '14px' }}>{server.icon}</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.WHITE, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {server.name}
+                      </span>
+                      {getStatusIcon(server.status)}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '22px' }}>
+                      <span style={{
+                        padding: '2px 6px',
+                        backgroundColor: `${getStatusColor(server.status)}20`,
+                        color: getStatusColor(server.status),
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
                         textTransform: 'uppercase',
-                        fontWeight: 'bold',
-                      }}>
-                        BUILT-IN
+                      }}>{server.status}</span>
+                      <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                        {server.toolCount} tools
+                      </span>
+                      {server.auto_start && (
+                        <Zap size={8} style={{ color: FINCEPT.ORANGE }} />
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Center Panel - Server Detail / Default View */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Center Panel Header */}
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+                {selectedServerId === 'internal'
+                  ? 'FINCEPT TERMINAL (INTERNAL)'
+                  : selectedServer
+                    ? selectedServer.name.toUpperCase()
+                    : 'SERVER DETAILS'}
+              </span>
+              {(selectedServer || selectedServerId === 'internal') && (
+                <span style={{ fontSize: '9px', color: FINCEPT.CYAN }}>
+                  {selectedServerTools.length} TOOLS AVAILABLE
+                </span>
+              )}
+            </div>
+
+            {/* Center Content */}
+            <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+              {selectedServerId === 'internal' ? (
+                // Internal server detail
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                    <Zap size={20} style={{ color: FINCEPT.ORANGE }} />
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: FINCEPT.WHITE }}>
+                        Fincept Terminal
+                      </div>
+                      <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginTop: '2px' }}>
+                        Built-in tools for terminal control, trading, portfolio management, backtesting, and more.
                       </div>
                     </div>
                   </div>
 
-                  {/* Description */}
-                  <p style={{
-                    color: GRAY,
-                    fontSize: '10px',
-                    lineHeight: '1.5',
-                    marginBottom: '12px',
-                  }}>
-                    Built-in tools for terminal control, trading, portfolio management, backtesting, and more. Always available.
-                  </p>
-
-                  {/* Stats */}
+                  {/* Stats Row */}
                   <div style={{
                     display: 'flex',
                     gap: '16px',
-                    marginBottom: '12px',
-                    fontSize: '10px',
-                    color: GRAY,
+                    marginBottom: '16px',
+                    padding: '12px',
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderRadius: '2px',
                   }}>
                     <div>
-                      <span style={{ color: WHITE, fontWeight: 'bold' }}>
-                        {tools.filter(t => t.serverId === 'fincept-terminal').length}
-                      </span> tools
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '4px' }}>STATUS</div>
+                      <span style={{ padding: '2px 6px', backgroundColor: `${FINCEPT.GREEN}20`, color: FINCEPT.GREEN, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>ACTIVE</span>
                     </div>
                     <div>
-                      <span style={{ color: GREEN }}>●</span> Always Active
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '4px' }}>TOOLS</div>
+                      <span style={{ fontSize: '10px', color: FINCEPT.CYAN }}>{internalToolCount}</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '4px' }}>TYPE</div>
+                      <span style={{ fontSize: '10px', color: FINCEPT.WHITE }}>Internal</span>
                     </div>
                   </div>
 
+                  {/* Action */}
+                  <button
+                    onClick={() => setView('tools')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: FINCEPT.ORANGE,
+                      color: FINCEPT.DARK_BG,
+                      border: 'none',
+                      borderRadius: '2px',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontFamily: FONT_FAMILY,
+                    }}
+                  >
+                    <Settings size={10} />
+                    MANAGE TOOLS
+                  </button>
+                </div>
+              ) : selectedServer ? (
+                // External server detail
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '24px' }}>{selectedServer.icon}</span>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: FINCEPT.WHITE }}>
+                        {selectedServer.name}
+                      </div>
+                      <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginTop: '2px', lineHeight: '1.5' }}>
+                        {selectedServer.description}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stats Row */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '16px',
+                    marginBottom: '16px',
+                    padding: '12px',
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderRadius: '2px',
+                    flexWrap: 'wrap',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '4px' }}>STATUS</div>
+                      <span style={{
+                        padding: '2px 6px',
+                        backgroundColor: `${getStatusColor(selectedServer.status)}20`,
+                        color: getStatusColor(selectedServer.status),
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        textTransform: 'uppercase',
+                      }}>{selectedServer.status}</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '4px' }}>TOOLS</div>
+                      <span style={{ fontSize: '10px', color: FINCEPT.CYAN }}>{selectedServer.toolCount}</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '4px' }}>CALLS TODAY</div>
+                      <span style={{ fontSize: '10px', color: FINCEPT.CYAN }}>{selectedServer.callsToday}</span>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px', marginBottom: '4px' }}>AUTO-START</div>
+                      <span style={{ fontSize: '10px', color: selectedServer.auto_start ? FINCEPT.GREEN : FINCEPT.GRAY }}>
+                        {selectedServer.auto_start ? 'ENABLED' : 'DISABLED'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Error Info */}
+                  {(() => {
+                    const healthInfo = mcpManager.getServerHealthInfo(selectedServer.id);
+                    if (healthInfo && healthInfo.errorCount > 0) {
+                      return (
+                        <div style={{
+                          padding: '8px 12px',
+                          backgroundColor: `${FINCEPT.RED}20`,
+                          border: `1px solid ${FINCEPT.RED}`,
+                          borderRadius: '2px',
+                          fontSize: '9px',
+                          color: FINCEPT.RED,
+                          marginBottom: '16px',
+                        }}>
+                          <strong>ERRORS: {healthInfo.errorCount}</strong>
+                          {healthInfo.lastError && (
+                            <div style={{ marginTop: '4px', color: FINCEPT.WHITE, opacity: 0.8 }}>{healthInfo.lastError}</div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   {/* Actions */}
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {selectedServer.status === 'running' ? (
+                      <button
+                        onClick={() => handleStopServer(selectedServer.id)}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${FINCEPT.YELLOW}`,
+                          color: FINCEPT.YELLOW,
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          borderRadius: '2px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontFamily: FONT_FAMILY,
+                        }}
+                      >
+                        <Square size={10} />
+                        STOP
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleStartServer(selectedServer.id)}
+                        style={{
+                          padding: '8px 16px',
+                          backgroundColor: FINCEPT.ORANGE,
+                          color: FINCEPT.DARK_BG,
+                          border: 'none',
+                          borderRadius: '2px',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontFamily: FONT_FAMILY,
+                        }}
+                      >
+                        <Play size={10} />
+                        START
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => setView('tools')}
+                      onClick={() => handleToggleAutoStart(selectedServer.id, !selectedServer.auto_start)}
                       style={{
-                        backgroundColor: ORANGE,
-                        color: 'black',
-                        border: 'none',
                         padding: '6px 10px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${selectedServer.auto_start ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                        color: selectedServer.auto_start ? FINCEPT.ORANGE : FINCEPT.GRAY,
                         fontSize: '9px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
                         cursor: 'pointer',
-                        borderRadius: '3px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        fontWeight: 'bold',
+                        fontFamily: FONT_FAMILY,
                       }}
                     >
-                      <Settings size={10} />
-                      MANAGE TOOLS
+                      <Zap size={10} />
+                      AUTO-START
+                    </button>
+
+                    <button
+                      onClick={() => handleRemoveServer(selectedServer.id)}
+                      style={{
+                        padding: '6px 10px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${FINCEPT.RED}`,
+                        color: FINCEPT.RED,
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontFamily: FONT_FAMILY,
+                      }}
+                    >
+                      <Trash2 size={10} />
+                      REMOVE
                     </button>
                   </div>
                 </div>
-
-                {/* External Server Cards */}
-                {filteredServers.map(server => {
-                  const healthInfo = mcpManager.getServerHealthInfo(server.id);
-                  return (
-                    <div
-                      key={server.id}
-                      style={{
-                        backgroundColor: PANEL_BG,
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: '6px',
-                        padding: '16px',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = ORANGE;
-                        e.currentTarget.style.boxShadow = `0 0 12px ${ORANGE}40`;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = BORDER;
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                    >
-                      {/* Server Header */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
-                        <span style={{ fontSize: '28px' }}>{server.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <h3 style={{
-                              color: WHITE,
-                              fontSize: '13px',
-                              fontWeight: 'bold',
-                            }}>
-                              {server.name}
-                            </h3>
-                            {getStatusIcon(server.status)}
-                          </div>
-                          <div style={{
-                            display: 'inline-block',
-                            backgroundColor: `${getStatusColor(server.status)}20`,
-                            color: getStatusColor(server.status),
-                            padding: '2px 8px',
-                            fontSize: '9px',
-                            borderRadius: '3px',
-                            textTransform: 'uppercase',
-                            fontWeight: 'bold',
-                          }}>
-                            {server.status}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      <p style={{
-                        color: GRAY,
-                        fontSize: '10px',
-                        lineHeight: '1.5',
-                        marginBottom: '12px',
-                      }}>
-                        {server.description}
-                      </p>
-
-                      {/* Stats */}
-                      <div style={{
-                        display: 'flex',
-                        gap: '16px',
-                        marginBottom: '12px',
-                        fontSize: '10px',
-                        color: GRAY,
-                      }}>
-                        <div>
-                          <span style={{ color: WHITE, fontWeight: 'bold' }}>{server.toolCount}</span> tools
-                        </div>
-                        <div>
-                          <span style={{ color: WHITE, fontWeight: 'bold' }}>{server.callsToday}</span> calls today
-                        </div>
-                        {server.auto_start && (
-                          <div style={{ color: GREEN }}>
-                            <Zap size={10} style={{ display: 'inline', marginRight: '4px' }} />
-                            Auto-start
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Error Message */}
-                      {healthInfo && healthInfo.errorCount > 0 && (
-                        <div style={{
-                          padding: '8px',
-                          backgroundColor: `${RED}20`,
-                          border: `1px solid ${RED}`,
-                          borderRadius: '4px',
-                          fontSize: '9px',
-                          color: RED,
-                          marginBottom: '12px',
-                        }}>
-                          <strong>Errors: {healthInfo.errorCount}</strong>
-                          {healthInfo.lastError && (
-                            <div style={{ marginTop: '4px' }}>{healthInfo.lastError}</div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Actions */}
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        {server.status === 'running' ? (
-                          <button
-                            onClick={() => handleStopServer(server.id)}
-                            style={{
-                              backgroundColor: 'transparent',
-                              color: YELLOW,
-                              border: `1px solid ${YELLOW}`,
-                              padding: '6px 10px',
-                              fontSize: '9px',
-                              cursor: 'pointer',
-                              borderRadius: '3px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontWeight: 'bold',
-                            }}
-                          >
-                            <Square size={10} />
-                            STOP
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleStartServer(server.id)}
-                            style={{
-                              backgroundColor: 'transparent',
-                              color: GREEN,
-                              border: `1px solid ${GREEN}`,
-                              padding: '6px 10px',
-                              fontSize: '9px',
-                              cursor: 'pointer',
-                              borderRadius: '3px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontWeight: 'bold',
-                            }}
-                          >
-                            <Play size={10} />
-                            START
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => handleToggleAutoStart(server.id, !server.auto_start)}
-                          style={{
-                            backgroundColor: 'transparent',
-                            color: server.auto_start ? ORANGE : GRAY,
-                            border: `1px solid ${server.auto_start ? ORANGE : '#404040'}`,
-                            padding: '6px 10px',
-                            fontSize: '9px',
-                            cursor: 'pointer',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          <Zap size={10} />
-                          AUTO
-                        </button>
-
-                        <button
-                          onClick={() => handleRemoveServer(server.id)}
-                          style={{
-                            backgroundColor: 'transparent',
-                            color: RED,
-                            border: `1px solid ${RED}`,
-                            padding: '6px 10px',
-                            fontSize: '9px',
-                            cursor: 'pointer',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          <Trash2 size={10} />
-                          REMOVE
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              ) : (
+                // No server selected - empty state
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  color: FINCEPT.MUTED,
+                  fontSize: '10px',
+                  textAlign: 'center',
+                }}>
+                  <Server size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+                  <span>Select a server to view details</span>
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* Tools Footer */}
-      <div style={{
-        height: '120px',
-        borderTop: `1px solid ${BORDER}`,
-        backgroundColor: PANEL_BG,
-        overflow: 'auto',
-        padding: '12px 16px',
-        flexShrink: 0,
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none',
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          marginBottom: '8px',
-        }}>
+          {/* Right Panel - Tools for selected server (300px) */}
           <div style={{
-            color: ORANGE,
-            fontSize: '11px',
-            fontWeight: 'bold',
-            letterSpacing: '0.5px'
+            width: '300px',
+            flexShrink: 0,
+            borderLeft: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
           }}>
-            AVAILABLE TOOLS ({tools.length})
-          </div>
-          <div style={{ fontSize: '9px', color: GRAY }}>
-            <span style={{ color: GREEN }}>⚡ {tools.filter(t => t.serverId === 'fincept-terminal').length} Internal</span>
-            {' | '}
-            <span style={{ color: ORANGE }}>{tools.filter(t => t.serverId !== 'fincept-terminal').length} External</span>
+            {/* Right Panel Header */}
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+                SERVER TOOLS
+              </span>
+              <span style={{ fontSize: '9px', color: FINCEPT.CYAN }}>
+                {selectedServerTools.length}
+              </span>
+            </div>
+
+            {/* Tools List */}
+            <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto' }}>
+              {selectedServerTools.length === 0 ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  color: FINCEPT.MUTED,
+                  fontSize: '10px',
+                  textAlign: 'center',
+                  padding: '16px',
+                }}>
+                  <Wrench size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+                  <span>Select a server to see its tools</span>
+                </div>
+              ) : (
+                selectedServerTools.map((tool: any, index: number) => (
+                  <div
+                    key={`${tool.serverId}__${tool.name}__${index}`}
+                    style={{
+                      padding: '10px 12px',
+                      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = FINCEPT.HOVER; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                      {tool.serverId === 'fincept-terminal' ? (
+                        <Zap size={10} style={{ color: FINCEPT.GREEN, flexShrink: 0 }} />
+                      ) : (
+                        <Settings size={10} style={{ color: FINCEPT.ORANGE, flexShrink: 0 }} />
+                      )}
+                      <span style={{
+                        color: FINCEPT.WHITE,
+                        fontWeight: 700,
+                        fontSize: '10px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {tool.name}
+                      </span>
+                    </div>
+                    {tool.description && (
+                      <div style={{
+                        color: FINCEPT.GRAY,
+                        fontSize: '9px',
+                        marginLeft: '16px',
+                        lineHeight: '1.4',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {tool.description}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Quick Stats Footer */}
+            <div style={{
+              padding: '8px 12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderTop: `1px solid ${FINCEPT.BORDER}`,
+              display: 'flex',
+              gap: '12px',
+              fontSize: '9px',
+            }}>
+              <span style={{ color: FINCEPT.GREEN }}>
+                {internalToolCount} INTERNAL
+              </span>
+              <span style={{ color: FINCEPT.ORANGE }}>
+                {externalToolCount} EXTERNAL
+              </span>
+            </div>
           </div>
         </div>
+      ) : (
+        /* Marketplace / Tools views - full width */
+        <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+          {view === 'marketplace' ? (
+            <MCPMarketplace onInstall={handleInstallServer} installedServers={servers} />
+          ) : (
+            <MCPToolsManagement />
+          )}
+        </div>
+      )}
 
-        {tools.length === 0 ? (
-          <div style={{ color: GRAY, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
-            No tools available. The internal tools will appear when the application initializes.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
-            {tools.map((tool, index) => (
-              <div
-                key={`${tool.serverId}__${tool.name}__${index}`}
-                style={{
-                  backgroundColor: DARK_BG,
-                  border: `1px solid ${tool.serverId === 'fincept-terminal' ? GREEN + '40' : BORDER}`,
-                  padding: '6px 8px',
-                  fontSize: '9px',
-                  borderRadius: '3px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                  {tool.serverId === 'fincept-terminal' ? (
-                    <span style={{ color: GREEN }}>⚡</span>
-                  ) : (
-                    <Settings size={10} style={{ color: ORANGE }} />
-                  )}
-                  <span style={{ color: WHITE, fontWeight: 'bold' }}>{tool.name}</span>
-                </div>
-                {tool.description && (
-                  <div style={{ color: GRAY, fontSize: '8px', marginLeft: '16px' }}>
-                    {tool.description.substring(0, 50)}{tool.description.length > 50 ? '...' : ''}
-                  </div>
-                )}
-                <div style={{ color: GRAY, fontSize: '7px', marginLeft: '16px', marginTop: '2px' }}>
-                  {tool.serverName}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Status Bar */}
+      {/* Status Bar (Bottom) */}
       <div style={{
-        backgroundColor: DARK_BG,
-        borderTop: `1px solid ${BORDER}`,
-        padding: '6px 16px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        padding: '4px 16px',
         fontSize: '9px',
-        color: GRAY,
+        color: FINCEPT.GRAY,
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: '8px'
+        gap: '8px',
       }}>
-        <span style={{ color: ORANGE }}>●</span>
-        {statusMessage}
+        <span style={{ color: FINCEPT.ORANGE }}>●</span>
+        <span>{statusMessage}</span>
+        <div style={{ flex: 1 }} />
+        <span style={{ color: FINCEPT.CYAN }}>MCP v1.0</span>
       </div>
 
       {/* Add Server Modal */}

@@ -14,7 +14,11 @@ export const getForumColors = (colors: any): ForumColors => ({
   PURPLE: colors.purple,
   CYAN: colors.accent,
   DARK_BG: colors.background,
-  PANEL_BG: colors.panel
+  PANEL_BG: colors.panel,
+  HEADER_BG: colors.headerBg || colors.panel,
+  BORDER: colors.border || '#2A2A2A',
+  HOVER: colors.hover || '#1F1F1F',
+  MUTED: colors.muted || '#4A4A4A'
 });
 
 // Top contributors - static data

@@ -1,9 +1,13 @@
 // Forum Tab Left Panel Component (Categories & Stats)
+// Redesigned to follow Fincept Terminal UI Design System
 
 import React from 'react';
-import type { ForumColors, ForumCategoryUI, ForumUser } from '../types';
+import { BarChart3, Users, MessageSquare } from 'lucide-react';
+import type { ForumColors, ForumCategoryUI } from '../types';
 import { ForumStats } from '@/services/forum/forumApi';
 import { TOP_CONTRIBUTORS } from '../constants';
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
 
 interface LeftPanelProps {
   colors: ForumColors;
@@ -32,78 +36,285 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     <div style={{
       width: '280px',
       backgroundColor: colors.PANEL_BG,
-      border: `1px solid ${colors.GRAY}`,
-      padding: '4px',
-      overflow: 'auto'
+      borderRight: `1px solid ${colors.BORDER}`,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden'
     }}>
-      <div style={{ color: colors.ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-        FORUM CATEGORIES
-      </div>
-      <div style={{ borderBottom: `1px solid ${colors.GRAY}`, marginBottom: '4px' }}></div>
-
-      {categories.map((cat, index) => (
-        <button
-          key={index}
-          onClick={() => onCategoryChange(cat.name)}
-          style={{
-            width: '100%',
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: '4px',
-            marginBottom: '2px',
-            backgroundColor: activeCategory === cat.name ? 'rgba(255,165,0,0.1)' : 'transparent',
-            border: `1px solid ${activeCategory === cat.name ? colors.ORANGE : 'transparent'}`,
-            color: cat.color,
-            fontSize: '10px',
-            cursor: 'pointer',
-            textAlign: 'left'
-          }}
-        >
-          <span>{cat.name}</span>
-          <span style={{ color: colors.CYAN }}>{cat.count}</span>
-        </button>
-      ))}
-
-      <div style={{ borderTop: `1px solid ${colors.GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
-        <div style={{ color: colors.YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-          TOP CONTRIBUTORS
+      {/* Forum Statistics Section */}
+      <div style={{
+        padding: '12px',
+        backgroundColor: colors.HEADER_BG,
+        borderBottom: `1px solid ${colors.BORDER}`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+          <BarChart3 size={12} color={colors.ORANGE} />
+          <span style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            color: colors.GRAY,
+            letterSpacing: '0.5px',
+            fontFamily: FONT_FAMILY
+          }}>
+            STATISTICS
+          </span>
         </div>
-        {TOP_CONTRIBUTORS.map((user, index) => (
-          <div
-            key={index}
-            onClick={() => onViewUserProfile(user.username)}
-            style={{
-              padding: '3px',
-              marginBottom: '2px',
-              backgroundColor: 'rgba(255,255,255,0.02)',
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{
+            padding: '8px',
+            backgroundColor: colors.DARK_BG,
+            border: `1px solid ${colors.BORDER}`,
+            borderRadius: '2px'
+          }}>
+            <div style={{
               fontSize: '9px',
-              cursor: 'pointer'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-              <span style={{ color: colors.WHITE }}>{user.username}</span>
-              <span style={{ color: user.status === 'ONLINE' ? colors.GREEN : colors.GRAY }}>
-                ●
-              </span>
+              color: colors.GRAY,
+              marginBottom: '4px',
+              letterSpacing: '0.5px',
+              fontFamily: FONT_FAMILY
+            }}>
+              TOTAL POSTS
             </div>
-            <div style={{ display: 'flex', gap: '6px', color: colors.GRAY }}>
-              <span>REP: {user.reputation}</span>
-              <span>POSTS: {user.posts}</span>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: 700,
+              color: colors.CYAN,
+              fontFamily: FONT_FAMILY
+            }}>
+              {totalPosts.toLocaleString()}
             </div>
           </div>
-        ))}
+
+          <div style={{
+            padding: '8px',
+            backgroundColor: colors.DARK_BG,
+            border: `1px solid ${colors.BORDER}`,
+            borderRadius: '2px'
+          }}>
+            <div style={{
+              fontSize: '9px',
+              color: colors.GRAY,
+              marginBottom: '4px',
+              letterSpacing: '0.5px',
+              fontFamily: FONT_FAMILY
+            }}>
+              ACTIVE USERS
+            </div>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: 700,
+              color: colors.GREEN,
+              fontFamily: FONT_FAMILY
+            }}>
+              {onlineUsers}
+            </div>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '8px'
+          }}>
+            <div style={{
+              padding: '6px',
+              backgroundColor: colors.DARK_BG,
+              border: `1px solid ${colors.BORDER}`,
+              borderRadius: '2px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                fontSize: '8px',
+                color: colors.GRAY,
+                marginBottom: '2px',
+                letterSpacing: '0.5px',
+                fontFamily: FONT_FAMILY
+              }}>
+                TODAY
+              </div>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: colors.YELLOW,
+                fontFamily: FONT_FAMILY
+              }}>
+                {postsToday}
+              </div>
+            </div>
+            <div style={{
+              padding: '6px',
+              backgroundColor: colors.DARK_BG,
+              border: `1px solid ${colors.BORDER}`,
+              borderRadius: '2px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                fontSize: '8px',
+                color: colors.GRAY,
+                marginBottom: '2px',
+                letterSpacing: '0.5px',
+                fontFamily: FONT_FAMILY
+              }}>
+                USERS
+              </div>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: colors.CYAN,
+                fontFamily: FONT_FAMILY
+              }}>
+                {(forumStats?.total_users || 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div style={{ borderTop: `1px solid ${colors.GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
-        <div style={{ color: colors.YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-          FORUM STATISTICS
+      {/* Top Contributors Section */}
+      <div style={{
+        padding: '12px',
+        backgroundColor: colors.HEADER_BG,
+        borderBottom: `1px solid ${colors.BORDER}`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+          <Users size={12} color={colors.ORANGE} />
+          <span style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            color: colors.GRAY,
+            letterSpacing: '0.5px',
+            fontFamily: FONT_FAMILY
+          }}>
+            TOP CONTRIBUTORS
+          </span>
         </div>
-        <div style={{ fontSize: '9px', lineHeight: '1.4', color: colors.GRAY }}>
-          <div>Total Posts: {totalPosts.toLocaleString()}</div>
-          <div>Total Users: {(forumStats?.total_comments || 47832).toLocaleString()}</div>
-          <div>Posts Today: {postsToday.toLocaleString()}</div>
-          <div>Active Now: {onlineUsers}</div>
-          <div style={{ color: colors.GREEN }}>Avg Response: 12 min</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {TOP_CONTRIBUTORS.map((user, index) => (
+            <div
+              key={index}
+              onClick={() => onViewUserProfile(user.username)}
+              style={{
+                padding: '8px',
+                backgroundColor: colors.DARK_BG,
+                border: `1px solid ${colors.BORDER}`,
+                borderRadius: '2px',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = colors.ORANGE;
+                e.currentTarget.style.backgroundColor = colors.HOVER;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = colors.BORDER;
+                e.currentTarget.style.backgroundColor = colors.DARK_BG;
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: colors.WHITE,
+                  fontFamily: FONT_FAMILY
+                }}>
+                  {user.username}
+                </span>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: user.status === 'ONLINE' ? colors.GREEN : colors.GRAY,
+                  display: 'inline-block'
+                }}></span>
+              </div>
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                fontSize: '8px',
+                color: colors.GRAY,
+                fontFamily: FONT_FAMILY,
+                letterSpacing: '0.5px'
+              }}>
+                <span>REP: <span style={{ color: colors.CYAN }}>{user.reputation}</span></span>
+                <span>POSTS: <span style={{ color: colors.CYAN }}>{user.posts}</span></span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Categories Section */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          padding: '12px',
+          backgroundColor: colors.HEADER_BG,
+          borderBottom: `1px solid ${colors.BORDER}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <MessageSquare size={12} color={colors.ORANGE} />
+            <span style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: colors.GRAY,
+              letterSpacing: '0.5px',
+              fontFamily: FONT_FAMILY
+            }}>
+              CATEGORIES
+            </span>
+          </div>
+        </div>
+
+        <div className="forum-scroll" style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '8px'
+        }}>
+          {categories.map((cat, index) => (
+            <div
+              key={index}
+              onClick={() => onCategoryChange(cat.name)}
+              style={{
+                padding: '8px',
+                marginBottom: '4px',
+                backgroundColor: activeCategory === cat.name ? `${colors.ORANGE}15` : 'transparent',
+                borderLeft: activeCategory === cat.name ? `2px solid ${colors.ORANGE}` : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+              onMouseEnter={(e) => {
+                if (activeCategory !== cat.name) {
+                  e.currentTarget.style.backgroundColor = colors.HOVER;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeCategory !== cat.name) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
+            >
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: activeCategory === cat.name ? colors.WHITE : colors.GRAY,
+                letterSpacing: '0.5px',
+                fontFamily: FONT_FAMILY
+              }}>
+                {cat.name}
+              </span>
+              <span style={{
+                fontSize: '9px',
+                fontWeight: 700,
+                color: activeCategory === cat.name ? colors.CYAN : colors.MUTED,
+                fontFamily: FONT_FAMILY
+              }}>
+                {cat.count}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

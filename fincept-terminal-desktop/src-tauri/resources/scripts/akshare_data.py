@@ -13,8 +13,15 @@ import json
 import pandas as pd
 import akshare as ak
 from typing import Dict, Any, List, Optional, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import traceback
+
+# Custom JSON encoder for date objects
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super().default(obj)
 
 # Import specialized wrappers
 try:
@@ -107,9 +114,14 @@ class AKShareDataWrapper:
         try:
             result = func(*args, **kwargs)
             if result is not None and not result.empty:
+                # Convert date/datetime columns to strings for JSON serialization
+                df_copy = result.copy()
+                for col in df_copy.columns:
+                    if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
+                        df_copy[col] = df_copy[col].astype(str)
                 return {
                     "success": True,
-                    "data": result.to_dict('records'),
+                    "data": df_copy.to_dict('records'),
                     "count": len(result),
                     "timestamp": int(datetime.now().timestamp())
                 }
@@ -215,17 +227,13 @@ class AKShareDataWrapper:
         end = end_date or self.default_end_date
         return self._safe_call(ak.fund_etf_hist_em, symbol=symbol, period="daily", start_date=start, end_date=end, adjust=adjust)
 
-    def get_fund_em(self) -> Dict[str, Any]:
-        """Get mutual fund basic information"""
-        return self._safe_call(ak.fund_em)
-
-    def get_fund_rank_em(self) -> Dict[str, Any]:
-        """Get fund performance rankings"""
-        return self._safe_call(ak.fund_rank_em)
+    def get_fund_open_fund_rank(self) -> Dict[str, Any]:
+        """Get open-end fund performance rankings"""
+        return self._safe_call(ak.fund_open_fund_rank_em)
 
     def get_fund_manager(self) -> Dict[str, Any]:
         """Get fund manager information"""
-        return self._safe_call(ak.fund_manager)
+        return self._safe_call(ak.fund_manager_em)
 
     # ==================== ECONOMIC INDICATORS ====================
 
@@ -307,29 +315,29 @@ class AKShareDataWrapper:
 
     def get_energy_carbon(self) -> Dict[str, Any]:
         """Get carbon emission trading data"""
-        return self._safe_call(ak.energy_carbon)
+        return self._safe_call(ak.energy_carbon_domestic)
 
     def get_energy_oil(self) -> Dict[str, Any]:
         """Get oil price data"""
-        return self._safe_call(ak.energy_oil_em)
+        return self._safe_call(ak.energy_oil_hist)
 
     # ==================== MARKET INDICES & ANALYTICS ====================
 
     def get_stock_industry_pe(self) -> Dict[str, Any]:
         """Get industry PE ratios"""
-        return self._safe_call(ak.stock_industry_pe_cninfo)
+        return self._safe_call(ak.stock_industry_pe_ratio_cninfo)
 
     def get_stock_industry_sw(self) -> Dict[str, Any]:
         """Get SW industry classification"""
-        return self._safe_call(ak.stock_industry_sw)
+        return self._safe_call(ak.stock_industry_clf_hist_sw)
 
     def get_stock_board_concept(self) -> Dict[str, Any]:
         """Get concept board classification"""
-        return self._safe_call(ak.stock_board_concept_em)
+        return self._safe_call(ak.stock_board_concept_name_em)
 
     def get_stock_board_industry(self) -> Dict[str, Any]:
         """Get industry board classification"""
-        return self._safe_call(ak.stock_board_industry_em)
+        return self._safe_call(ak.stock_board_industry_name_em)
 
     def get_stock_hot_rank(self) -> Dict[str, Any]:
         """Get hot stocks ranking"""
@@ -337,7 +345,7 @@ class AKShareDataWrapper:
 
     def get_stock_hsgt(self) -> Dict[str, Any]:
         """Get North-South trading flow data"""
-        return self._safe_call(ak.stock_hsgt_em)
+        return self._safe_call(ak.stock_hsgt_hist_em)
 
     # ==================== UTILITY FUNCTIONS ====================
 
@@ -433,7 +441,7 @@ def main():
                 result = {"error": str(e), "endpoint": endpoint}
         else:
             result = method()
-        print(json.dumps(result, indent=2, ensure_ascii=True))
+        print(json.dumps(result, indent=2, ensure_ascii=True, cls=DateTimeEncoder))
     else:
         print(json.dumps({
             "error": f"Unknown endpoint: {endpoint}",

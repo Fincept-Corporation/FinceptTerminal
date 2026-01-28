@@ -565,6 +565,14 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           // Fetch initial data
           await refreshAllData(adapterToUse);
 
+          // Connect WebSocket for real-time data streaming
+          try {
+            await adapterToUse.connectWebSocket();
+            console.log(`[StockBrokerContext] ✓ WebSocket connected for ${activeBroker}`);
+          } catch (wsErr) {
+            console.warn(`[StockBrokerContext] WebSocket connection failed for ${activeBroker}, will use REST polling:`, wsErr);
+          }
+
           console.log(`[StockBrokerContext] Successfully authenticated with ${activeBroker}`);
         } else {
           setError(response.message || 'Authentication failed');

@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { AKShareAPI, AKSHARE_DATA_SOURCES, AKShareDataSource, AKShareResponse } from '@/services/akshareApi';
+import { parseAKShareResponse, isValidParsedData, getDataSummary } from '@/lib/akshareDataParser';
 import {
   Search, RefreshCw, Download, ChevronRight, ChevronDown, Database,
   Landmark, LineChart, TrendingUp, Globe, PieChart, Layers, BarChart3,
@@ -212,18 +213,38 @@ const AkShareDataTab: React.FC = () => {
     setCategories({});
     try {
       const response = await AKShareAPI.getEndpoints(script);
+      console.log('Endpoints raw response:', response);
+
       if (response.success && response.data) {
-        // Handle nested data structure from Python
-        const endpointData = (response.data as any).data || response.data;
-        setEndpoints(endpointData.available_endpoints || []);
-        setCategories(endpointData.categories || {});
+        // Don't use the parser for endpoints - they have a special structure
+        // Handle nested data structure from Python directly
+        let endpointData = response.data;
+
+        // Handle nested data.data structure (common from Python)
+        if (endpointData.data && typeof endpointData.data === 'object') {
+          console.log('Found nested data.data structure');
+          endpointData = endpointData.data;
+        }
+
+        // Extract endpoints and categories
+        const availableEndpoints = endpointData.available_endpoints || endpointData.endpoints || [];
+        const categoriesData = endpointData.categories || {};
+
+        console.log('Extracted endpoints:', availableEndpoints);
+        console.log('Extracted categories:', categoriesData);
+
+        setEndpoints(Array.isArray(availableEndpoints) ? availableEndpoints : []);
+        setCategories(categoriesData || {});
+
         // Auto-expand first category
-        if (endpointData.categories) {
-          const firstCategory = Object.keys(endpointData.categories)[0];
+        if (Object.keys(categoriesData).length > 0) {
+          const firstCategory = Object.keys(categoriesData)[0];
           if (firstCategory) {
             setExpandedCategories(new Set([firstCategory]));
           }
         }
+      } else {
+        console.error('Failed to load endpoints:', response.error);
       }
     } catch (err) {
       console.error('Failed to load endpoints:', err);
@@ -302,46 +323,89 @@ const AkShareDataTab: React.FC = () => {
     try {
       const response = await AKShareAPI.query(script, endpoint);
 
+      console.log('Raw AKShare response:', response);
+
+      // Use robust parser to handle any JSON structure
+      const parsed = parseAKShareResponse(response);
+
+      console.log('Parsed data:', parsed);
+
+      // Check if parsing was successful
+      if (!isValidParsedData(parsed)) {
+        const errorMsg = parsed.warnings?.join(', ') || 'Failed to parse response data';
+        setError(errorMsg);
+
+        // Still add to history but mark as failed
+        const historyItem: QueryHistoryItem = {
+          id: `${Date.now()}`,
+          script,
+          endpoint,
+          timestamp: Date.now(),
+          success: false,
+          count: 0
+        };
+        const newHistory = [historyItem, ...queryHistory.slice(0, 49)];
+        setQueryHistory(newHistory);
+        localStorage.setItem('akshare_history', JSON.stringify(newHistory));
+
+        setLoading(false);
+        return;
+      }
+
       // Add to history
       const historyItem: QueryHistoryItem = {
         id: `${Date.now()}`,
         script,
         endpoint,
         timestamp: Date.now(),
-        success: response.success,
-        count: response.count
+        success: true,
+        count: parsed.count
       };
       const newHistory = [historyItem, ...queryHistory.slice(0, 49)];
       setQueryHistory(newHistory);
       localStorage.setItem('akshare_history', JSON.stringify(newHistory));
 
-      if (response.success && response.data) {
-        const dataArray = Array.isArray(response.data) ? response.data : [response.data];
-        setData(dataArray);
-        setResponseInfo({
-          count: response.count || dataArray.length,
-          timestamp: response.timestamp || Date.now(),
-          source: response.source
-        });
+      // Set parsed data
+      setData(parsed.data);
+      setResponseInfo({
+        count: parsed.count,
+        timestamp: parsed.metadata?.timestamp || Date.now(),
+        source: parsed.metadata?.source
+      });
 
-        // TRANSLATION LAYER: Only translate column headers initially
-        if (dataArray.length > 0) {
-          const langCode = currentLanguage === 'zh' ? 'zh-CN' : (currentLanguage || 'en');
-          console.log(`Current language: ${currentLanguage}, Target translation: ${langCode}`);
+      // Show warnings if any
+      if (parsed.warnings && parsed.warnings.length > 0) {
+        console.warn('Data parsing warnings:', parsed.warnings);
+      }
 
-          // If English or any non-Chinese language, translate column headers
-          if (langCode !== 'zh-CN') {
-            const columns = Object.keys(dataArray[0]);
-            await translateColumnHeaders(columns, langCode);
-          } else {
-            console.log('Language is Chinese, skipping translation');
-          }
+      // TRANSLATION LAYER: Only translate column headers initially
+      if (parsed.data.length > 0) {
+        const langCode = currentLanguage === 'zh' ? 'zh-CN' : (currentLanguage || 'en');
+        console.log(`Current language: ${currentLanguage}, Target translation: ${langCode}`);
+
+        // If English or any non-Chinese language, translate column headers
+        if (langCode !== 'zh-CN') {
+          await translateColumnHeaders(parsed.columns, langCode);
+        } else {
+          console.log('Language is Chinese, skipping translation');
         }
-      } else {
-        setError(typeof response.error === 'string' ? response.error : JSON.stringify(response.error));
       }
     } catch (err: any) {
+      console.error('Query execution error:', err);
       setError(err.message || 'Query failed');
+
+      // Add failed query to history
+      const historyItem: QueryHistoryItem = {
+        id: `${Date.now()}`,
+        script,
+        endpoint,
+        timestamp: Date.now(),
+        success: false,
+        count: 0
+      };
+      const newHistory = [historyItem, ...queryHistory.slice(0, 49)];
+      setQueryHistory(newHistory);
+      localStorage.setItem('akshare_history', JSON.stringify(newHistory));
     } finally {
       setLoading(false);
     }
@@ -1134,7 +1198,7 @@ const AkShareDataTab: React.FC = () => {
               </div>
             ) : error ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+                <div style={{ textAlign: 'center', maxWidth: '600px', padding: '20px' }}>
                   <AlertCircle size={28} color={FINCEPT.RED} style={{ marginBottom: '12px' }} />
                   <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, marginBottom: '8px' }}>Query Failed</div>
                   <div style={{
@@ -1144,9 +1208,40 @@ const AkShareDataTab: React.FC = () => {
                     fontFamily: '"IBM Plex Mono", monospace',
                     backgroundColor: `${FINCEPT.RED}20`,
                     color: FINCEPT.RED,
+                    marginBottom: '12px',
+                    textAlign: 'left',
+                    maxHeight: '200px',
+                    overflow: 'auto',
                   }}>
                     {error}
                   </div>
+                  <div style={{ fontSize: '9px', color: FINCEPT.MUTED, marginTop: '12px' }}>
+                    <div style={{ marginBottom: '8px' }}>Common issues:</div>
+                    <div style={{ textAlign: 'left', lineHeight: '1.6' }}>
+                      • The endpoint may require additional parameters<br/>
+                      • The data source might be temporarily unavailable<br/>
+                      • The response format may have changed<br/>
+                      • Network connectivity issues
+                    </div>
+                  </div>
+                  {selectedEndpoint && selectedSource && (
+                    <button
+                      onClick={() => executeQuery(selectedSource.script, selectedEndpoint)}
+                      style={{
+                        marginTop: '16px',
+                        padding: '8px 16px',
+                        borderRadius: '2px',
+                        backgroundColor: FINCEPT.ORANGE,
+                        color: FINCEPT.DARK_BG,
+                        border: 'none',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      TRY AGAIN
+                    </button>
+                  )}
                 </div>
               </div>
             ) : data && data.length > 0 ? (

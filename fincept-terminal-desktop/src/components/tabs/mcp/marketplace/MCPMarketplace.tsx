@@ -1,5 +1,5 @@
 // MCP Marketplace Component
-// Browse and install curated MCP servers
+// Browse and install curated MCP servers - Fincept UI Design System
 
 import React, { useState } from 'react';
 import { Search, Download, Zap, CheckCircle } from 'lucide-react';
@@ -14,22 +14,31 @@ interface MCPMarketplaceProps {
   installedServers: MCPServerWithStats[];
 }
 
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
+
 const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedServers }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [configureServer, setConfigureServer] = useState<MCPServerDefinition | null>(null);
 
-  // Fincept colors
-  const ORANGE = '#FFA500';
-  const WHITE = '#FFFFFF';
-  const GRAY = '#787878';
-  const DARK_BG = '#0a0a0a';
-  const PANEL_BG = '#1a1a1a';
-  const BORDER = '#2d2d2d';
-  const GREEN = '#10b981';
-  const YELLOW = '#FFFF00';
-
-  // Check if server is already installed
   const isServerInstalled = (serverId: string) => {
     return installedServers.some(s => s.id === serverId);
   };
@@ -42,12 +51,12 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
   });
 
   const categories = ['all', 'data', 'web', 'productivity', 'dev'];
-  const categoryLabels = {
+  const categoryLabels: Record<string, string> = {
     all: 'ALL',
     data: 'DATA',
     web: 'WEB',
     productivity: 'TOOLS',
-    dev: 'DEV'
+    dev: 'DEV',
   };
 
   const handleInstallClick = (server: MCPServerDefinition) => {
@@ -63,27 +72,26 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
       const serverWithConfig = {
         ...configureServer,
         args: [...configureServer.args, ...config.args],
-        env: config.env
+        env: config.env,
       };
-
       onInstall(serverWithConfig);
       setConfigureServer(null);
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: FONT_FAMILY }}>
       {/* Search and Filters */}
       <div style={{ marginBottom: '16px' }}>
         <div style={{ position: 'relative', marginBottom: '12px' }}>
           <Search
-            size={14}
+            size={10}
             style={{
               position: 'absolute',
               left: '10px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: GRAY,
+              color: FINCEPT.GRAY,
             }}
           />
           <input
@@ -93,59 +101,68 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
               width: '100%',
-              backgroundColor: DARK_BG,
-              border: `1px solid ${BORDER}`,
-              color: WHITE,
-              padding: '8px 12px 8px 36px',
-              fontSize: '11px',
-              borderRadius: '4px',
+              padding: '8px 10px 8px 30px',
+              backgroundColor: FINCEPT.DARK_BG,
+              color: FINCEPT.WHITE,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '2px',
+              fontSize: '10px',
+              fontFamily: FONT_FAMILY,
               outline: 'none',
             }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
           />
         </div>
 
-        {/* Categories */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        {/* Categories - Tab Button Style */}
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           {categories.map(cat => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               style={{
-                backgroundColor: selectedCategory === cat ? BORDER : 'transparent',
-                color: selectedCategory === cat ? ORANGE : GRAY,
-                border: `1px solid ${selectedCategory === cat ? ORANGE : BORDER}`,
                 padding: '6px 12px',
-                fontSize: '10px',
+                backgroundColor: selectedCategory === cat ? FINCEPT.ORANGE : 'transparent',
+                color: selectedCategory === cat ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: 'none',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
                 cursor: 'pointer',
-                borderRadius: '3px',
-                textTransform: 'uppercase',
-                fontWeight: selectedCategory === cat ? 'bold' : 'normal',
+                borderRadius: '2px',
+                transition: 'all 0.2s',
+                fontFamily: FONT_FAMILY,
               }}
             >
-              {categoryLabels[cat as keyof typeof categoryLabels]}
+              {categoryLabels[cat]}
             </button>
           ))}
         </div>
       </div>
 
       {/* Server Grid */}
-      <div style={{ flex: 1, overflow: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto' }}>
         {filteredServers.length === 0 ? (
           <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: FINCEPT.MUTED,
+            fontSize: '10px',
             textAlign: 'center',
-            color: GRAY,
-            padding: '60px 20px',
-            fontSize: '11px'
           }}>
-            <Zap size={48} style={{ marginBottom: '16px', opacity: 0.3, color: ORANGE }} />
-            <div style={{ marginBottom: '8px' }}>No servers found matching your search.</div>
-            <div>Try a different search term or category.</div>
+            <Zap size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+            <span>No servers found</span>
+            <span style={{ fontSize: '9px', marginTop: '4px' }}>Try a different search term or category</span>
           </div>
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '16px',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '12px',
           }}>
             {filteredServers.map(server => {
               const installed = isServerInstalled(server.id);
@@ -153,60 +170,60 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                 <div
                   key={server.id}
                   style={{
-                    backgroundColor: PANEL_BG,
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: '6px',
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderRadius: '2px',
                     padding: '16px',
                     cursor: installed ? 'default' : 'pointer',
                     transition: 'all 0.2s',
                     display: 'flex',
                     flexDirection: 'column',
-                    minHeight: '280px',
+                    minHeight: '240px',
                   }}
                   onMouseEnter={(e) => {
                     if (!installed) {
-                      e.currentTarget.style.borderColor = ORANGE;
-                      e.currentTarget.style.boxShadow = `0 0 12px ${ORANGE}40`;
+                      e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                      e.currentTarget.style.boxShadow = `0 0 12px ${FINCEPT.ORANGE}40`;
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = BORDER;
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
                     e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
                   {/* Server Header */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '32px' }}>{server.icon}</span>
+                    <span style={{ fontSize: '24px' }}>{server.icon}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <h3 style={{
-                          color: WHITE,
-                          fontSize: '13px',
-                          fontWeight: 'bold',
+                        <span style={{
+                          color: FINCEPT.WHITE,
+                          fontSize: '11px',
+                          fontWeight: 700,
                         }}>
                           {server.name}
-                        </h3>
-                        {installed && <CheckCircle size={14} color={GREEN} />}
+                        </span>
+                        {installed && <CheckCircle size={10} color={FINCEPT.GREEN} />}
                       </div>
-                      <div style={{
-                        display: 'inline-block',
-                        backgroundColor: `${ORANGE}20`,
-                        color: ORANGE,
-                        padding: '2px 8px',
-                        fontSize: '9px',
-                        borderRadius: '3px',
+                      <span style={{
+                        padding: '2px 6px',
+                        backgroundColor: `${FINCEPT.ORANGE}20`,
+                        color: FINCEPT.ORANGE,
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
                         textTransform: 'uppercase',
-                        fontWeight: 'bold',
+                        letterSpacing: '0.5px',
                       }}>
                         {server.category}
-                      </div>
+                      </span>
                     </div>
                   </div>
 
                   {/* Description */}
                   <p style={{
-                    color: GRAY,
-                    fontSize: '11px',
+                    color: FINCEPT.GRAY,
+                    fontSize: '10px',
                     lineHeight: '1.5',
                     marginBottom: '12px',
                     flex: 1,
@@ -214,41 +231,44 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                     {server.description}
                   </p>
 
-                  {/* Fixed height container for badges and info */}
-                  <div style={{ marginBottom: '12px', minHeight: '60px' }}>
-                    {/* Requires Config Badge */}
+                  {/* Info Section */}
+                  <div style={{ marginBottom: '12px' }}>
                     {server.requiresConfig && (
-                      <div style={{
-                        backgroundColor: `${YELLOW}20`,
-                        color: YELLOW,
-                        padding: '4px 8px',
-                        fontSize: '9px',
-                        borderRadius: '3px',
-                        marginBottom: '8px',
+                      <span style={{
+                        padding: '2px 6px',
+                        backgroundColor: `${FINCEPT.YELLOW}20`,
+                        color: FINCEPT.YELLOW,
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
                         display: 'inline-block',
+                        marginBottom: '8px',
                       }}>
-                         Requires Configuration
-                      </div>
+                        REQUIRES CONFIG
+                      </span>
                     )}
 
-                    {/* Tools Count */}
                     <div style={{
-                      color: GRAY,
-                      fontSize: '10px',
+                      display: 'flex',
+                      gap: '12px',
+                      fontSize: '9px',
+                      color: FINCEPT.GRAY,
                       marginBottom: '8px',
                     }}>
-                      <span style={{ color: WHITE, fontWeight: 'bold' }}>{server.tools.length}</span> tools available
+                      <span>
+                        <span style={{ color: FINCEPT.CYAN, fontWeight: 700 }}>{server.tools.length}</span> tools
+                      </span>
                     </div>
 
                     {/* Command Preview */}
                     <div style={{
-                      backgroundColor: DARK_BG,
-                      border: `1px solid ${BORDER}`,
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
                       padding: '6px 8px',
                       fontSize: '9px',
-                      borderRadius: '3px',
-                      color: GRAY,
-                      fontFamily: 'monospace',
+                      borderRadius: '2px',
+                      color: FINCEPT.MUTED,
+                      fontFamily: FONT_FAMILY,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -257,27 +277,28 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                     </div>
                   </div>
 
-                  {/* Install Button - Always at bottom */}
+                  {/* Install Button */}
                   {installed ? (
                     <button
                       disabled
                       style={{
                         width: '100%',
-                        backgroundColor: `${GREEN}30`,
-                        color: GREEN,
-                        border: `1px solid ${GREEN}`,
-                        padding: '8px 12px',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
+                        padding: '8px',
+                        backgroundColor: `${FINCEPT.GREEN}20`,
+                        color: FINCEPT.GREEN,
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        border: 'none',
                         cursor: 'not-allowed',
-                        borderRadius: '4px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '6px',
+                        gap: '4px',
+                        fontFamily: FONT_FAMILY,
                       }}
                     >
-                      <CheckCircle size={12} />
+                      <CheckCircle size={10} />
                       INSTALLED
                     </button>
                   ) : (
@@ -285,22 +306,23 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                       onClick={() => handleInstallClick(server)}
                       style={{
                         width: '100%',
-                        backgroundColor: GREEN,
-                        color: 'black',
+                        padding: '8px 16px',
+                        backgroundColor: FINCEPT.ORANGE,
+                        color: FINCEPT.DARK_BG,
                         border: 'none',
-                        padding: '8px 12px',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
+                        borderRadius: '2px',
+                        fontSize: '9px',
+                        fontWeight: 700,
                         cursor: 'pointer',
-                        borderRadius: '4px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '6px',
+                        gap: '4px',
+                        fontFamily: FONT_FAMILY,
                       }}
                     >
-                      <Download size={12} />
-                      {server.requiresConfig ? 'CONFIGURE & INSTALL' : 'INSTALL NOW'}
+                      <Download size={10} />
+                      {server.requiresConfig ? 'CONFIGURE & INSTALL' : 'INSTALL'}
                     </button>
                   )}
 
@@ -312,13 +334,16 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
-                          color: GRAY,
+                          color: FINCEPT.GRAY,
                           fontSize: '9px',
                           textDecoration: 'none',
+                          transition: 'all 0.2s',
                         }}
                         onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = FINCEPT.ORANGE; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = FINCEPT.GRAY; }}
                       >
-                        View Documentation →
+                        View Documentation &rarr;
                       </a>
                     </div>
                   )}
@@ -341,33 +366,39 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000
+          zIndex: 1000,
         }}>
           <div style={{
-            backgroundColor: PANEL_BG,
-            border: `2px solid ${ORANGE}`,
-            borderRadius: '8px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.ORANGE}`,
+            borderRadius: '2px',
             width: '90%',
-            maxWidth: '600px',
+            maxWidth: '560px',
             maxHeight: '80vh',
             overflow: 'auto',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
           }}>
             {/* Modal Header */}
             <div style={{
-              padding: '16px',
-              borderBottom: `1px solid ${BORDER}`,
+              padding: '12px 16px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
             }}>
-              <span style={{ fontSize: '32px' }}>{configureServer.icon}</span>
+              <span style={{ fontSize: '24px' }}>{configureServer.icon}</span>
               <div>
-                <h2 style={{ color: WHITE, fontSize: '16px', fontWeight: 'bold' }}>
-                  Configure {configureServer.name}
-                </h2>
-                <p style={{ color: GRAY, fontSize: '11px' }}>{configureServer.description}</p>
+                <div style={{
+                  color: FINCEPT.ORANGE,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                }}>
+                  CONFIGURE {configureServer.name.toUpperCase()}
+                </div>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                  {configureServer.description}
+                </div>
               </div>
             </div>
 

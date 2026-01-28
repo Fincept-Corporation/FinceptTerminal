@@ -272,6 +272,9 @@ pub async fn angelone_ws_connect(
 ) -> Result<ApiResponse<bool>, String> {
     let timestamp = chrono::Utc::now().timestamp_millis();
 
+    eprintln!("[angelone_ws_connect] Called: client_code={}, auth_token_len={}, api_key_len={}, feed_token_len={}",
+        client_code, auth_token.len(), api_key.len(), feed_token.len());
+
     let mut extra = HashMap::new();
     extra.insert("feed_token".to_string(), serde_json::json!(feed_token));
 
@@ -288,8 +291,11 @@ pub async fn angelone_ws_connect(
     let mut adapter = AngelOneAdapter::new(config);
     adapter.set_message_callback(create_ws_callback(app.clone(), "angelone"));
 
+    eprintln!("[angelone_ws_connect] Attempting WebSocket connection...");
+
     match adapter.connect().await {
         Ok(_) => {
+            eprintln!("[angelone_ws_connect] ✓ WebSocket connected successfully");
             *ANGELONE_WS.write().await = Some(adapter);
             let _ = app.emit("angelone_status", json!({
                 "provider": "angelone",
@@ -299,6 +305,7 @@ pub async fn angelone_ws_connect(
             Ok(ApiResponse { success: true, data: Some(true), error: None, timestamp })
         }
         Err(e) => {
+            eprintln!("[angelone_ws_connect] ✗ WebSocket connection failed: {}", e);
             Ok(ApiResponse { success: false, data: Some(false), error: Some(e.to_string()), timestamp })
         }
     }
@@ -321,6 +328,7 @@ pub async fn angelone_ws_disconnect() -> Result<ApiResponse<bool>, String> {
 #[tauri::command]
 pub async fn angelone_ws_subscribe(symbol: String, mode: String) -> Result<ApiResponse<bool>, String> {
     let timestamp = chrono::Utc::now().timestamp_millis();
+    eprintln!("[angelone_ws_subscribe] symbol={}, mode={}", symbol, mode);
     let mut ws_guard = ANGELONE_WS.write().await;
 
     if let Some(ref mut adapter) = *ws_guard {
@@ -331,10 +339,17 @@ pub async fn angelone_ws_subscribe(symbol: String, mode: String) -> Result<ApiRe
             _ => "ltp",
         };
         match adapter.subscribe(&symbol, channel, None).await {
-            Ok(_) => Ok(ApiResponse { success: true, data: Some(true), error: None, timestamp }),
-            Err(e) => Ok(ApiResponse { success: false, data: Some(false), error: Some(e.to_string()), timestamp }),
+            Ok(_) => {
+                eprintln!("[angelone_ws_subscribe] ✓ Subscribed to {} ({})", symbol, channel);
+                Ok(ApiResponse { success: true, data: Some(true), error: None, timestamp })
+            },
+            Err(e) => {
+                eprintln!("[angelone_ws_subscribe] ✗ Subscribe failed: {}", e);
+                Ok(ApiResponse { success: false, data: Some(false), error: Some(e.to_string()), timestamp })
+            },
         }
     } else {
+        eprintln!("[angelone_ws_subscribe] ✗ Not connected");
         Ok(ApiResponse { success: false, data: Some(false), error: Some("Not connected".to_string()), timestamp })
     }
 }

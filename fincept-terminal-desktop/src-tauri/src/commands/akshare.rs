@@ -62,6 +62,9 @@ pub async fn akshare_query(app: tauri::AppHandle, script: String, endpoint: Stri
         "akshare_stocks_board.py",
         "akshare_stocks_margin.py",
         "akshare_stocks_hot.py",
+        // New comprehensive wrappers (219 functions)
+        "akshare_macro.py",
+        "akshare_misc.py",
     ];
 
     if !valid_scripts.contains(&script.as_str()) {
@@ -107,6 +110,9 @@ pub async fn akshare_get_endpoints(app: tauri::AppHandle, script: String) -> Res
         "akshare_stocks_board.py",
         "akshare_stocks_margin.py",
         "akshare_stocks_hot.py",
+        // New comprehensive wrappers (219 functions)
+        "akshare_macro.py",
+        "akshare_misc.py",
     ];
 
     if !valid_scripts.contains(&script.as_str()) {

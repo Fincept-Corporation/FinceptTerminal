@@ -21,6 +21,7 @@ databento-dbn==0.44.0
 feedparser==6.0.12
 gnews==0.4.2
 geopy>=2.4.0
+akshare>=1.14.0
 aiohappyeyeballs==2.6.1
 aiosignal==1.4.0
 attrs==25.4.0

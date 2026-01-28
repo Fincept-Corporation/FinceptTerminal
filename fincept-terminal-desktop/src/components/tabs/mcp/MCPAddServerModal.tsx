@@ -1,13 +1,30 @@
 // MCP Add Server Modal Component
-// Add custom MCP servers manually
+// Add custom MCP servers manually - Fincept UI Design System
 
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 
 interface MCPAddServerModalProps {
   onClose: () => void;
   onAdd: (serverConfig: any) => void;
 }
+
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+};
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
 
 const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd }) => {
   const [formData, setFormData] = useState({
@@ -17,15 +34,8 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
     args: '',
     envVars: '',
     category: 'custom',
-    icon: '🔧'
+    icon: '🔧',
   });
-
-  const FINCEPT_ORANGE = '#FFA500';
-  const FINCEPT_WHITE = '#FFFFFF';
-  const FINCEPT_GRAY = '#787878';
-  const FINCEPT_DARK_BG = '#000000';
-  const FINCEPT_PANEL_BG = '#0a0a0a';
-  const FINCEPT_RED = '#FF0000';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,13 +45,11 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
       return;
     }
 
-    // Parse args (space or comma separated)
     const args = formData.args
       .trim()
       .split(/[\s,]+/)
       .filter(arg => arg.length > 0);
 
-    // Parse env vars (KEY=VALUE format, one per line)
     const env: Record<string, string> = {};
     if (formData.envVars.trim()) {
       formData.envVars.split('\n').forEach(line => {
@@ -52,7 +60,6 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
       });
     }
 
-    // Generate ID from name
     const id = formData.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
 
     const serverConfig = {
@@ -63,10 +70,31 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
       args,
       env,
       category: formData.category,
-      icon: formData.icon
+      icon: formData.icon,
     };
 
     onAdd(serverConfig);
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 10px',
+    backgroundColor: FINCEPT.DARK_BG,
+    color: FINCEPT.WHITE,
+    border: `1px solid ${FINCEPT.BORDER}`,
+    borderRadius: '2px',
+    fontSize: '10px',
+    fontFamily: FONT_FAMILY,
+    outline: 'none',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: '9px',
+    fontWeight: 700,
+    color: FINCEPT.GRAY,
+    letterSpacing: '0.5px',
+    marginBottom: '6px',
   };
 
   return (
@@ -81,28 +109,33 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      fontFamily: 'Consolas, monospace'
+      fontFamily: FONT_FAMILY,
     }}>
       <div style={{
-        backgroundColor: FINCEPT_PANEL_BG,
-        border: `2px solid ${FINCEPT_ORANGE}`,
-        width: '500px',
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.ORANGE}`,
+        borderRadius: '2px',
+        width: '480px',
         maxHeight: '80vh',
-        overflow: 'auto'
+        overflow: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
       }}>
         {/* Header */}
         <div style={{
-          backgroundColor: FINCEPT_DARK_BG,
-          borderBottom: `1px solid ${FINCEPT_ORANGE}`,
-          padding: '10px 12px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+          padding: '12px 16px',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexShrink: 0,
         }}>
           <span style={{
-            color: FINCEPT_ORANGE,
-            fontSize: '12px',
-            fontWeight: 'bold'
+            color: FINCEPT.ORANGE,
+            fontSize: '11px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
           }}>
             ADD CUSTOM MCP SERVER
           </span>
@@ -111,186 +144,105 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
             style={{
               backgroundColor: 'transparent',
               border: 'none',
-              color: FINCEPT_WHITE,
+              color: FINCEPT.GRAY,
               cursor: 'pointer',
-              padding: '4px'
+              padding: '4px',
+              transition: 'all 0.2s',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = FINCEPT.WHITE; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = FINCEPT.GRAY; }}
           >
-            <X size={16} />
+            <X size={14} />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '12px' }}>
+        <form onSubmit={handleSubmit} style={{ padding: '16px', overflow: 'auto', flex: 1 }}>
           {/* Server Name */}
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{
-              display: 'block',
-              color: FINCEPT_ORANGE,
-              fontSize: '10px',
-              marginBottom: '4px',
-              fontWeight: 'bold'
-            }}>
-              SERVER NAME *
-            </label>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>SERVER NAME *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., My Custom Server"
               required
-              style={{
-                width: '100%',
-                backgroundColor: FINCEPT_DARK_BG,
-                border: `1px solid ${FINCEPT_GRAY}`,
-                color: FINCEPT_WHITE,
-                padding: '6px',
-                fontSize: '10px',
-                fontFamily: 'Consolas, monospace'
-              }}
+              style={inputStyle}
+              onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
             />
           </div>
 
           {/* Description */}
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{
-              display: 'block',
-              color: FINCEPT_ORANGE,
-              fontSize: '10px',
-              marginBottom: '4px',
-              fontWeight: 'bold'
-            }}>
-              DESCRIPTION
-            </label>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>DESCRIPTION</label>
             <input
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="What does this server do?"
-              style={{
-                width: '100%',
-                backgroundColor: FINCEPT_DARK_BG,
-                border: `1px solid ${FINCEPT_GRAY}`,
-                color: FINCEPT_WHITE,
-                padding: '6px',
-                fontSize: '10px',
-                fontFamily: 'Consolas, monospace'
-              }}
+              style={inputStyle}
+              onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
             />
           </div>
 
           {/* Command */}
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{
-              display: 'block',
-              color: FINCEPT_ORANGE,
-              fontSize: '10px',
-              marginBottom: '4px',
-              fontWeight: 'bold'
-            }}>
-              COMMAND *
-            </label>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>COMMAND *</label>
             <input
               type="text"
               value={formData.command}
               onChange={(e) => setFormData({ ...formData, command: e.target.value })}
               placeholder="bunx, node, python, etc."
               required
-              style={{
-                width: '100%',
-                backgroundColor: FINCEPT_DARK_BG,
-                border: `1px solid ${FINCEPT_GRAY}`,
-                color: FINCEPT_WHITE,
-                padding: '6px',
-                fontSize: '10px',
-                fontFamily: 'Consolas, monospace'
-              }}
+              style={inputStyle}
+              onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
             />
           </div>
 
           {/* Arguments */}
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{
-              display: 'block',
-              color: FINCEPT_ORANGE,
-              fontSize: '10px',
-              marginBottom: '4px',
-              fontWeight: 'bold'
-            }}>
-              ARGUMENTS * (space or comma separated)
-            </label>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>ARGUMENTS * (SPACE OR COMMA SEPARATED)</label>
             <input
               type="text"
               value={formData.args}
               onChange={(e) => setFormData({ ...formData, args: e.target.value })}
               placeholder="e.g., -y @modelcontextprotocol/server-example"
               required
-              style={{
-                width: '100%',
-                backgroundColor: FINCEPT_DARK_BG,
-                border: `1px solid ${FINCEPT_GRAY}`,
-                color: FINCEPT_WHITE,
-                padding: '6px',
-                fontSize: '10px',
-                fontFamily: 'Consolas, monospace'
-              }}
+              style={inputStyle}
+              onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
             />
-            <div style={{
-              color: FINCEPT_GRAY,
-              fontSize: '8px',
-              marginTop: '2px'
-            }}>
+            <div style={{ color: FINCEPT.MUTED, fontSize: '9px', marginTop: '4px' }}>
               Example: -y @modelcontextprotocol/server-postgres
             </div>
           </div>
 
           {/* Environment Variables */}
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{
-              display: 'block',
-              color: FINCEPT_ORANGE,
-              fontSize: '10px',
-              marginBottom: '4px',
-              fontWeight: 'bold'
-            }}>
-              ENVIRONMENT VARIABLES (one per line)
-            </label>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>ENVIRONMENT VARIABLES (ONE PER LINE)</label>
             <textarea
               value={formData.envVars}
               onChange={(e) => setFormData({ ...formData, envVars: e.target.value })}
               placeholder={'DATABASE_URL=postgresql://...\nAPI_KEY=your-key-here'}
               rows={3}
               style={{
-                width: '100%',
-                backgroundColor: FINCEPT_DARK_BG,
-                border: `1px solid ${FINCEPT_GRAY}`,
-                color: FINCEPT_WHITE,
-                padding: '6px',
-                fontSize: '10px',
-                fontFamily: 'Consolas, monospace',
-                resize: 'vertical'
+                ...inputStyle,
+                resize: 'vertical',
               }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = FINCEPT.ORANGE; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = FINCEPT.BORDER; }}
             />
-            <div style={{
-              color: FINCEPT_GRAY,
-              fontSize: '8px',
-              marginTop: '2px'
-            }}>
+            <div style={{ color: FINCEPT.MUTED, fontSize: '9px', marginTop: '4px' }}>
               Format: KEY=VALUE (one per line)
             </div>
           </div>
 
           {/* Icon */}
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{
-              display: 'block',
-              color: FINCEPT_ORANGE,
-              fontSize: '10px',
-              marginBottom: '4px',
-              fontWeight: 'bold'
-            }}>
-              ICON (emoji)
-            </label>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>ICON (EMOJI)</label>
             <input
               type="text"
               value={formData.icon}
@@ -298,13 +250,10 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               placeholder="🔧"
               maxLength={2}
               style={{
+                ...inputStyle,
                 width: '60px',
-                backgroundColor: FINCEPT_DARK_BG,
-                border: `1px solid ${FINCEPT_GRAY}`,
-                color: FINCEPT_WHITE,
-                padding: '6px',
                 fontSize: '16px',
-                textAlign: 'center'
+                textAlign: 'center',
               }}
             />
           </div>
@@ -314,20 +263,31 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
             display: 'flex',
             gap: '8px',
             justifyContent: 'flex-end',
-            marginTop: '16px',
             paddingTop: '12px',
-            borderTop: `1px solid ${FINCEPT_GRAY}`
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
           }}>
             <button
               type="button"
               onClick={onClose}
               style={{
-                backgroundColor: FINCEPT_DARK_BG,
-                border: `1px solid ${FINCEPT_GRAY}`,
-                color: FINCEPT_WHITE,
-                padding: '6px 12px',
-                fontSize: '10px',
-                cursor: 'pointer'
+                padding: '6px 10px',
+                backgroundColor: 'transparent',
+                border: `1px solid ${FINCEPT.BORDER}`,
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                borderRadius: '2px',
+                cursor: 'pointer',
+                fontFamily: FONT_FAMILY,
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                e.currentTarget.style.color = FINCEPT.WHITE;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                e.currentTarget.style.color = FINCEPT.GRAY;
               }}
             >
               CANCEL
@@ -335,15 +295,21 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
             <button
               type="submit"
               style={{
-                backgroundColor: FINCEPT_ORANGE,
+                padding: '8px 16px',
+                backgroundColor: FINCEPT.ORANGE,
+                color: FINCEPT.DARK_BG,
                 border: 'none',
-                color: 'black',
-                padding: '6px 12px',
-                fontSize: '10px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
+                borderRadius: '2px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontFamily: FONT_FAMILY,
               }}
             >
+              <Plus size={10} />
               ADD SERVER
             </button>
           </div>

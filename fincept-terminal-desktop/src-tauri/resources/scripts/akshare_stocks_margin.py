@@ -243,9 +243,9 @@ def get_stock_a_gxl_lg():
 
 # ==================== A CODE UTILS ====================
 
-def get_stock_a(symbol="sh"):
+def get_stock_a(symbol="沪A"):
     """Get A-shares list by market"""
-    return safe_call(ak.stock_a, symbol=symbol)
+    return safe_call(ak.stock_zh_a_spot_em)
 
 def get_stock_a_code_to_symbol(symbol="000001"):
     """Get A-share code to symbol"""

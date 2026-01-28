@@ -81,6 +81,7 @@ aes-gcm = "0.10"  # AES-256-GCM encryption for secure credential storage
 base64 = "0.22"  # Base64 encoding/decoding for encrypted data
 csv = "1.3"  # CSV parsing for master contract data
 urlencoding = "2.1"  # URL encoding for API parameters
+totp-rs = { version = "5", features = ["gen_secret"] }  # TOTP generation for AngelOne auto-auth
 
 [target.'cfg(target_os = "windows")'.dependencies]
 [target.'cfg(target_os = "macos")'.dependencies]

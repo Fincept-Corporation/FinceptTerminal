@@ -56,6 +56,7 @@ export interface ForumStats {
   total_votes: number;
   active_users: number;
   total_users: number;
+  posts_today?: number;
 }
 
 export interface PostDetails {

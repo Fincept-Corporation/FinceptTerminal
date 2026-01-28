@@ -84,6 +84,7 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   private quotePollingInterval: NodeJS.Timeout | null = null;
   private pollingSymbols: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
   private usePollingFallback: boolean = false;
+  private pollDebounceTimer: NodeJS.Timeout | null = null;
 
   // Token to symbol mapping
   private tokenSymbolMap: Map<string, { symbol: string; exchange: StockExchange }> = new Map();
@@ -102,7 +103,8 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
 
   /**
    * Authenticate with Angel One
-   * Requires: apiKey, clientCode (userId), password, and TOTP
+   * Requires: apiKey, clientCode (userId), password, and TOTP secret
+   * The TOTP secret is passed to the Rust backend which generates the 6-digit code
    */
   async authenticate(credentials: BrokerCredentials): Promise<AuthResponse> {
     try {
@@ -130,15 +132,19 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
           };
         } else {
           console.error('[AngelOne] Access token validation failed');
-          return {
-            success: false,
-            message: 'Invalid or expired access token',
-            errorCode: 'AUTH_FAILED',
-          };
+          // Token expired - fall through to re-authenticate if we have credentials
+          if (!this.clientCode || !this.password || !this.totpSecret) {
+            return {
+              success: false,
+              message: 'Invalid or expired access token',
+              errorCode: 'AUTH_FAILED',
+            };
+          }
+          console.log('[AngelOne] Token expired, re-authenticating with stored credentials...');
         }
       }
 
-      // Need client code, password, and TOTP for login
+      // Need client code, password, and TOTP secret for login
       if (!this.clientCode || !this.password) {
         return {
           success: false,
@@ -147,22 +153,32 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
         };
       }
 
-      // Perform login via Rust backend
+      if (!this.totpSecret) {
+        return {
+          success: false,
+          message: 'TOTP secret is required for authentication',
+          errorCode: 'AUTH_REQUIRED',
+        };
+      }
+
+      // Perform login via Rust backend (Rust generates 6-digit TOTP from secret)
       const response = await invoke<{
         success: boolean;
-        access_token?: string;
-        refresh_token?: string;
-        feed_token?: string;
-        user_id?: string;
+        data?: {
+          access_token?: string;
+          refresh_token?: string;
+          feed_token?: string;
+          user_id?: string;
+        };
         error?: string;
       }>('angelone_login', {
         apiKey: this.apiKey,
         clientCode: this.clientCode,
         password: this.password,
-        totp: credentials.pin || '', // TOTP can be passed as pin
+        totp: this.totpSecret, // Rust backend generates 6-digit code from this secret
       });
 
-      if (!response.success || !response.access_token) {
+      if (!response.success || !response.data?.access_token) {
         return {
           success: false,
           message: response.error || 'Login failed',
@@ -170,23 +186,24 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
         };
       }
 
-      this.accessToken = response.access_token;
-      this.feedToken = response.feed_token || null;
-      this.userId = response.user_id || this.clientCode;
+      this.accessToken = response.data.access_token;
+      this.feedToken = response.data.feed_token || null;
+      this.userId = response.data.user_id || this.clientCode;
       this._isConnected = true;
 
-      // Store credentials
+      // Store credentials including password, totpSecret, and feedToken for auto-re-auth + WS
       await this.storeCredentials({
         apiKey: this.apiKey!,
+        apiSecret: JSON.stringify({ password: this.password, totpSecret: this.totpSecret, feedToken: this.feedToken }),
         accessToken: this.accessToken,
-        refreshToken: response.refresh_token,
+        refreshToken: response.data.refresh_token,
         userId: this.userId || undefined,
       });
 
       return {
         success: true,
         accessToken: this.accessToken,
-        refreshToken: response.refresh_token,
+        refreshToken: response.data.refresh_token,
         userId: this.userId || undefined,
         message: 'Authentication successful',
       };
@@ -218,7 +235,7 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     try {
       const response = await invoke<{ success: boolean }>('angelone_validate_token', {
         apiKey: this.apiKey,
-        accessToken: token,
+        authToken: token,
       });
       return response.success;
     } catch {
@@ -227,7 +244,8 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   }
 
   /**
-   * Initialize from stored credentials
+   * Initialize from stored credentials.
+   * If token is expired but password + TOTP secret are stored, auto-re-authenticates.
    */
   async initFromStorage(): Promise<boolean> {
     try {
@@ -238,25 +256,88 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
       this.accessToken = credentials.accessToken || null;
       this.userId = credentials.userId || null;
 
+      // Restore password, totpSecret, and feedToken from apiSecret (stored as JSON)
+      if (credentials.apiSecret) {
+        try {
+          const secretData = JSON.parse(credentials.apiSecret);
+          this.password = secretData.password || null;
+          this.totpSecret = secretData.totpSecret || null;
+          this.feedToken = secretData.feedToken || null;
+          this.clientCode = credentials.userId || null;
+        } catch {
+          // apiSecret is not JSON, ignore
+        }
+      }
+
       if (this.accessToken) {
         console.log('[AngelOne] Validating stored access token...');
         const isValid = await this.validateToken(this.accessToken);
 
         if (!isValid) {
-          console.warn('[AngelOne] Access token expired, clearing from storage...');
+          console.warn('[AngelOne] Access token expired.');
 
-          // Clear expired token from database but keep API key
+          // Try auto-re-authentication if we have stored credentials
+          if (this.apiKey && this.clientCode && this.password && this.totpSecret) {
+            console.log('[AngelOne] Auto-re-authenticating with stored TOTP secret...');
+            const authResult = await this.authenticate({
+              apiKey: this.apiKey,
+              userId: this.clientCode,
+              password: this.password,
+              totpSecret: this.totpSecret,
+            });
+
+            if (authResult.success) {
+              console.log('[AngelOne] Auto-re-authentication successful');
+              return true;
+            }
+            console.error('[AngelOne] Auto-re-authentication failed:', authResult.message);
+          }
+
+          // Clear expired token from database but keep API key and secrets
           await this.storeCredentials({
             apiKey: this.apiKey,
+            apiSecret: this.password && this.totpSecret
+              ? JSON.stringify({ password: this.password, totpSecret: this.totpSecret })
+              : undefined,
+            userId: this.userId || undefined,
           });
           this.accessToken = null;
           this._isConnected = false;
           return false;
         }
 
+        // If feedToken is missing (old credentials format), re-authenticate to get it
+        if (!this.feedToken && this.apiKey && this.clientCode && this.password && this.totpSecret) {
+          console.log('[AngelOne] Token valid but feedToken missing — re-authenticating for WebSocket support...');
+          const authResult = await this.authenticate({
+            apiKey: this.apiKey,
+            userId: this.clientCode,
+            password: this.password,
+            totpSecret: this.totpSecret,
+          });
+          if (authResult.success) {
+            console.log('[AngelOne] ✓ Re-authenticated, feedToken now available');
+            return true;
+          }
+          // Fall through — session is still valid for REST even without feedToken
+          console.warn('[AngelOne] Re-auth for feedToken failed, WS will be unavailable');
+        }
+
         console.log('[AngelOne] Token is valid, session restored');
         this._isConnected = true;
         return true;
+      }
+
+      // No access token but have credentials - try to authenticate
+      if (this.apiKey && this.clientCode && this.password && this.totpSecret) {
+        console.log('[AngelOne] No token found, authenticating with stored credentials...');
+        const authResult = await this.authenticate({
+          apiKey: this.apiKey,
+          userId: this.clientCode,
+          password: this.password,
+          totpSecret: this.totpSecret,
+        });
+        return authResult.success;
       }
 
       return false;
@@ -699,11 +780,17 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     const instrument = await this.getInstrument(symbol, exchange);
     const token = instrument?.token || '0';
 
+    if (token === '0' || !token) {
+      throw new Error(`No instrument token found for ${symbol} on ${exchange}. Download master contract first.`);
+    }
+
     // Normalize exchange for index symbols
     let apiExchange = ANGELONE_EXCHANGE_MAP[exchange] || exchange;
     if (exchange === 'NSE_INDEX') apiExchange = 'NSE';
     if (exchange === 'BSE_INDEX') apiExchange = 'BSE';
     if (exchange === 'MCX_INDEX') apiExchange = 'MCX';
+
+    console.log(`[AngelOne] getQuote: ${symbol} exchange=${apiExchange} token=${token}`);
 
     const response = await invoke<{
       success: boolean;
@@ -750,6 +837,11 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
         try {
           const instrument = await this.getInstrument(symbol, exchange);
           const token = instrument?.token || '0';
+
+          if (token === '0' || !token) {
+            results.push({ symbol, exchange, error: 'No instrument token — download master contract first' });
+            continue;
+          }
 
           let apiExchange = ANGELONE_EXCHANGE_MAP[exchange] || exchange;
           if (exchange === 'NSE_INDEX') apiExchange = 'NSE';
@@ -854,8 +946,8 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
           exchange: apiExchange,
           symbolToken: token,
           interval,
-          fromDate: currentStart.toISOString().replace('T', ' ').slice(0, 16),
-          toDate: currentEnd.toISOString().replace('T', ' ').slice(0, 16),
+          fromDate: this.formatDateIST(currentStart),
+          toDate: this.formatDateIST(currentEnd),
         });
 
         if (response.success && response.data) {
@@ -944,20 +1036,31 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
    * Connect to real Angel One WebSocket via Tauri/Rust backend
    */
   private async connectRealWebSocket(): Promise<void> {
+    console.log('[AngelOne WS] connectRealWebSocket called:', {
+      hasAccessToken: !!this.accessToken,
+      hasApiKey: !!this.apiKey,
+      hasFeedToken: !!this.feedToken,
+      hasClientCode: !!this.clientCode,
+    });
+
     if (!this.accessToken || !this.apiKey || !this.feedToken) {
-      throw new Error('Access token, API key, and feed token required');
+      throw new Error(`Missing tokens: accessToken=${!!this.accessToken}, apiKey=${!!this.apiKey}, feedToken=${!!this.feedToken}`);
     }
 
     // Call Rust backend to connect WebSocket
+    console.log('[AngelOne WS] Calling angelone_ws_connect...');
     const result = await invoke<{
       success: boolean;
       data?: boolean;
       error?: string;
     }>('angelone_ws_connect', {
+      authToken: this.accessToken,
       apiKey: this.apiKey,
       clientCode: this.clientCode || this.userId || '',
       feedToken: this.feedToken,
     });
+
+    console.log('[AngelOne WS] angelone_ws_connect result:', result);
 
     if (!result.success) {
       throw new Error(result.error || 'WebSocket connection failed');
@@ -976,8 +1079,9 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     }>('angelone_ticker', (event) => {
       const tick = event.payload;
 
-      // Lookup symbol from token map
-      const symbolInfo = this.tokenSymbolMap.get(tick.symbol);
+      // Lookup symbol from token map: tick.symbol is "NSE:1333" or "1333"
+      const tickToken = tick.symbol.includes(':') ? tick.symbol.split(':')[1] : tick.symbol;
+      const symbolInfo = this.tokenSymbolMap.get(tickToken) || this.tokenSymbolMap.get(tick.symbol);
 
       this.emitTick({
         symbol: symbolInfo?.symbol || tick.symbol,
@@ -1002,12 +1106,11 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     }>('angelone_orderbook', (event) => {
       const data = event.payload;
 
-      // Parse symbol from AngelOne format (e.g., "NSE:RELIANCE-EQ" -> "RELIANCE")
-      const [exchangePart, symbolPart] = data.symbol.includes(':')
-        ? data.symbol.split(':')
-        : ['NSE', data.symbol];
-      const symbol = symbolPart?.replace('-EQ', '') || data.symbol;
-      const exchange = (exchangePart as StockExchange) || 'NSE';
+      // Lookup symbol from token map: data.symbol is "NSE:1333" or just "1333"
+      const tickToken = data.symbol.includes(':') ? data.symbol.split(':')[1] : data.symbol;
+      const symbolInfo = this.tokenSymbolMap.get(tickToken) || this.tokenSymbolMap.get(data.symbol);
+      const symbol = symbolInfo?.symbol || data.symbol;
+      const exchange = symbolInfo?.exchange || ('NSE' as StockExchange);
 
       console.log(`[AngelOne WebSocket] Depth update for ${symbol}:`, {
         bids: data.bids?.length || 0,
@@ -1133,41 +1236,46 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   private async pollQuotesSequentially(): Promise<void> {
     if (this.pollingSymbols.size === 0) return;
 
-    console.log(`[AngelOne] Polling ${this.pollingSymbols.size} symbols...`);
+    console.log(`[AngelOne] Polling ${this.pollingSymbols.size} symbols via batch quote...`);
 
-    for (const [key, { symbol, exchange }] of this.pollingSymbols) {
-      try {
-        const quote = await this.getQuoteInternal(symbol, exchange);
+    try {
+      // Use getMultiQuotes for a single batched API call instead of per-symbol calls
+      const symbolList = Array.from(this.pollingSymbols.values()).map(s => ({
+        symbol: s.symbol,
+        exchange: s.exchange,
+      }));
 
-        const tick: TickData = {
-          symbol,
-          exchange,
-          lastPrice: quote.lastPrice,
-          open: quote.open,
-          high: quote.high,
-          low: quote.low,
-          close: quote.close,
-          volume: quote.volume,
-          change: quote.change,
-          changePercent: quote.changePercent,
-          timestamp: quote.timestamp,
-          bid: quote.bid,
-          bidQty: quote.bidQty,
-          ask: quote.ask,
-          askQty: quote.askQty,
-          mode: 'full',
-        };
+      const results = await this.getMultiQuotes(symbolList);
 
-        this.emitTick(tick);
-      } catch (error) {
-        console.error(`[AngelOne] Poll error for ${symbol}:`, error);
+      for (const result of results) {
+        if (result.quote) {
+          const tick: TickData = {
+            symbol: result.symbol,
+            exchange: result.exchange,
+            lastPrice: result.quote.lastPrice,
+            open: result.quote.open,
+            high: result.quote.high,
+            low: result.quote.low,
+            close: result.quote.close,
+            volume: result.quote.volume,
+            change: result.quote.change,
+            changePercent: result.quote.changePercent,
+            timestamp: result.quote.timestamp,
+            bid: result.quote.bid,
+            bidQty: result.quote.bidQty,
+            ask: result.quote.ask,
+            askQty: result.quote.askQty,
+            mode: 'full',
+          };
+          this.emitTick(tick);
+        } else if (result.error) {
+          console.warn(`[AngelOne] Poll: no quote for ${result.symbol}: ${result.error}`);
+        }
       }
-
-      // Rate limit: 1 second between requests
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log(`[AngelOne] Polling complete: ${results.filter(r => r.quote).length}/${results.length} quotes fetched`);
+    } catch (error) {
+      console.error(`[AngelOne] Batch poll error:`, error);
     }
-
-    console.log(`[AngelOne] Polling complete`);
   }
 
   async disconnectWebSocket(): Promise<void> {
@@ -1195,14 +1303,15 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     if (this.wsConnected && !this.usePollingFallback) {
       try {
         const wsMode = toAngelOneWSMode(mode);
+        const wsExchange = ANGELONE_EXCHANGE_MAP[exchange] || exchange;
 
+        // Rust adapter expects "EXCHANGE:TOKEN" format (e.g. "NSE:2885")
         await invoke('angelone_ws_subscribe', {
-          symbol: token,
-          exchange: ANGELONE_EXCHANGE_MAP[exchange] || exchange,
+          symbol: `${wsExchange}:${token}`,
           mode: wsMode,
         });
 
-        console.log(`[AngelOne] ✓ WebSocket subscribed to ${symbol} (token: ${token}, mode: ${wsMode})`);
+        console.log(`[AngelOne] ✓ WebSocket subscribed to ${symbol} (${wsExchange}:${token}, mode: ${wsMode})`);
       } catch (error) {
         console.error(`[AngelOne] WebSocket subscribe failed:`, error);
         if (!this.usePollingFallback) {
@@ -1213,7 +1322,12 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     } else {
       console.log(`[AngelOne] Added ${key} to polling (${this.pollingSymbols.size} total)`);
       if (this.usePollingFallback) {
-        this.pollQuotesSequentially();
+        // Debounce: wait 2 seconds for more symbols to be added before polling
+        if (this.pollDebounceTimer) clearTimeout(this.pollDebounceTimer);
+        this.pollDebounceTimer = setTimeout(() => {
+          this.pollDebounceTimer = null;
+          this.pollQuotesSequentially();
+        }, 2000);
       }
     }
   }
@@ -1229,9 +1343,9 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
 
     if (this.wsConnected && !this.usePollingFallback) {
       try {
+        const wsExchange = ANGELONE_EXCHANGE_MAP[exchange] || exchange;
         await invoke('angelone_ws_unsubscribe', {
-          symbol: token,
-          exchange: ANGELONE_EXCHANGE_MAP[exchange] || exchange,
+          symbol: `${wsExchange}:${token}`,
         });
         console.log(`[AngelOne] ✓ WebSocket unsubscribed from ${symbol}`);
       } catch (error) {
@@ -1288,6 +1402,16 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
       console.error('[AngelOne] searchSymbols error:', error);
       return [];
     }
+  }
+
+  /**
+   * Format a Date as "yyyy-MM-dd HH:mm" in IST (UTC+5:30).
+   * AngelOne API expects dates in IST, not UTC.
+   */
+  private formatDateIST(date: Date): string {
+    const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in ms
+    const istDate = new Date(date.getTime() + istOffset);
+    return istDate.toISOString().replace('T', ' ').slice(0, 16);
   }
 
   async getInstrument(symbol: string, exchange: StockExchange): Promise<Instrument | null> {

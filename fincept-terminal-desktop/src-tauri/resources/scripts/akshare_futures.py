@@ -171,11 +171,11 @@ def get_futures_shfe_warehouse_receipt():
 
 def get_futures_dce_warehouse_receipt():
     """Get DCE warehouse receipts"""
-    return safe_call(ak.futures_dce_warehouse_receipt)
+    return safe_call(ak.futures_warehouse_receipt_dce)
 
 def get_futures_czce_warehouse_receipt():
     """Get CZCE warehouse receipts"""
-    return safe_call(ak.futures_czce_warehouse_receipt)
+    return safe_call(ak.futures_warehouse_receipt_czce)
 
 def get_futures_gfex_warehouse_receipt():
     """Get GFEX warehouse receipts"""
@@ -284,9 +284,13 @@ def get_futures_index_ccidx():
     """Get CCIDX futures index"""
     return safe_call(ak.futures_index_ccidx)
 
-def get_futures_index_min_ccidx(symbol="CCIDX"):
-    """Get CCIDX futures index minute data"""
-    return safe_call(ak.futures_index_min_ccidx, symbol=symbol)
+def get_futures_contract_detail_em(symbol="A0"):
+    """Get futures contract detail (EastMoney)"""
+    return safe_call(ak.futures_contract_detail_em, symbol=symbol)
+
+def get_futures_derivative(symbol="豆一"):
+    """Get futures derivative data"""
+    return safe_call(ak.futures_derivative, symbol=symbol)
 
 
 # ==================== HOG FUTURES ====================
@@ -389,7 +393,10 @@ ENDPOINTS = {
 
     # Index
     "futures_index_ccidx": {"func": get_futures_index_ccidx, "desc": "CCIDX futures index", "category": "Index"},
-    "futures_index_min": {"func": get_futures_index_min_ccidx, "desc": "CCIDX index minute", "category": "Index"},
+
+    # Additional
+    "futures_contract_detail_em": {"func": get_futures_contract_detail_em, "desc": "Contract detail (EM)", "category": "Contract Info"},
+    "futures_derivative": {"func": get_futures_derivative, "desc": "Futures derivative", "category": "Other"},
 
     # Hog Futures
     "futures_hog_core": {"func": get_futures_hog_core, "desc": "Hog core data", "category": "Hog"},

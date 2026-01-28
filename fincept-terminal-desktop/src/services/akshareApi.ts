@@ -245,6 +245,25 @@ export const AKSHARE_DATA_SOURCES: AKShareDataSource[] = [
     icon: 'Flame',
     color: '#F97316',
     categories: ['Hot Stocks', 'HK Hot Stocks', 'XueQiu Hot', 'News', 'Comments', 'Weibo Sentiment', 'ESG', 'Investor Relations', 'SNS Info', 'Disclosure', 'Special Data', 'Vote', 'Management']
+  },
+  // ==================== NEW WRAPPERS (225 functions) ====================
+  {
+    id: 'macro',
+    name: 'Macro Economics',
+    script: 'akshare_macro.py',
+    description: 'Global macroeconomic data: 96 indicators from Australia, Brazil, Canada, China, Euro, Germany, India, Japan, Russia, Switzerland, UK, USA',
+    icon: 'Globe',
+    color: '#14B8A6',
+    categories: ['Australia', 'Brazil/India/Russia/NZ', 'Canada', 'China', 'Commodities', 'Euro Zone', 'Germany', 'Global', 'Japan', 'China Financial', 'Shipping', 'Switzerland', 'UK', 'USA']
+  },
+  {
+    id: 'misc',
+    name: 'Miscellaneous',
+    script: 'akshare_misc.py',
+    description: 'Additional data sources: futures get functions, spot markets, AMAC, stock analytics, articles, FX, air quality, cars, SW index, QDII, FRED, migration, NLP, and more',
+    icon: 'Layers',
+    color: '#A855F7',
+    categories: ['Get Functions', 'Spot Markets', 'AMAC', 'Stock Functions', 'Academic Articles', 'FX', 'Air Quality', 'Car Market', 'SW Index', 'Fund Announcements', 'Movie Box Office', 'QDII', 'FRED', 'Migration', 'NLP', 'QHKC Tools', 'Repo', 'Realized Volatility', 'Sunrise', 'Video', 'Others']
   }
 ];
 

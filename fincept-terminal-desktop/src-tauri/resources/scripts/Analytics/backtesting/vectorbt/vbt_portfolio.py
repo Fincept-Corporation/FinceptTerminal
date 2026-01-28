@@ -645,11 +645,20 @@ def build_portfolio(
     Returns:
         SimplePortfolio instance
     """
+    import sys as _sys
     request = request or {}
 
     commission = float(request.get('commission', 0.0))
     slippage = float(request.get('slippage', 0.0))
     allow_short = request.get('allowShort', False)
+
+    _sys.stderr.write(f'[PF-BUILD] === build_portfolio START ===\n')
+    _sys.stderr.write(f'[PF-BUILD] commission={commission}, slippage={slippage}, allow_short={allow_short}\n')
+    _sys.stderr.write(f'[PF-BUILD] close_series: len={len(close_series)}, dtype={close_series.dtype}\n')
+    _sys.stderr.write(f'[PF-BUILD] entries: sum={int(entries.sum())}, dtype={entries.dtype}\n')
+    _sys.stderr.write(f'[PF-BUILD] exits: sum={int(exits.sum())}, dtype={exits.dtype}\n')
+    _sys.stderr.write(f'[PF-BUILD] initial_capital={initial_capital}\n')
+    _sys.stderr.write(f'[PF-BUILD] index match: close={close_series.index.dtype}, entries={entries.index.dtype}, equal={close_series.index.equals(entries.index)}\n')
 
     # Position sizing - handle both string ('fixed') and dict ({'mode': 'fixed', ...}) formats
     position_sizing_raw = request.get('positionSizing', 'fixed')
@@ -666,6 +675,9 @@ def build_portfolio(
         size_mode = 'fixed'
         position_sizing_params = {}
 
+    _sys.stderr.write(f'[PF-BUILD] positionSizing raw={position_sizing_raw}, positionSizeValue={request.get("positionSizeValue")}\n')
+    _sys.stderr.write(f'[PF-BUILD] size_mode={size_mode}, position_sizing_params={position_sizing_params}\n')
+
     # Stop-loss / Take-profit (filter out zero values which mean "disabled")
     stop_loss = request.get('stopLoss', None)
     take_profit = request.get('takeProfit', None)
@@ -677,21 +689,32 @@ def build_portfolio(
     if trailing_stop is not None and float(trailing_stop) == 0:
         trailing_stop = None
 
+    _sys.stderr.write(f'[PF-BUILD] stop_loss={stop_loss}, take_profit={take_profit}, trailing_stop={trailing_stop}\n')
+
     # Apply stop-loss/take-profit
     if stop_loss or take_profit or trailing_stop:
+        _sys.stderr.write(f'[PF-BUILD] Applying exit signals for SL/TP/TS\n')
+        entries_before = int(entries.sum())
+        exits_before = int(exits.sum())
         entries, exits = _apply_exit_signals(
             close_series, entries, exits,
             stop_loss=stop_loss,
             take_profit=take_profit,
             trailing_stop=trailing_stop,
         )
+        _sys.stderr.write(f'[PF-BUILD] After SL/TP: entries {entries_before}->{int(entries.sum())}, exits {exits_before}->{int(exits.sum())}\n')
 
     # Calculate position sizes
     size_series = _calculate_position_size(
         close_series, initial_capital, size_mode, position_sizing_params, entries
     )
+    _sys.stderr.write(f'[PF-BUILD] size_series is None: {size_series is None}\n')
+    if size_series is not None:
+        nonzero = (size_series > 0).sum()
+        _sys.stderr.write(f'[PF-BUILD] size_series: len={len(size_series)}, nonzero={nonzero}, min={size_series.min():.4f}, max={size_series.max():.4f}\n')
 
     # Simulate
+    _sys.stderr.write(f'[PF-BUILD] === Calling _simulate_signals ===\n')
     equity, trade_records, total_fees, per_bar = _simulate_signals(
         close_series, entries, exits,
         initial_capital=initial_capital,
@@ -701,6 +724,16 @@ def build_portfolio(
         allow_short=allow_short,
         track_per_bar=True,
     )
+
+    _sys.stderr.write(f'[PF-BUILD] === _simulate_signals returned ===\n')
+    _sys.stderr.write(f'[PF-BUILD] equity: len={len(equity)}, first={equity.iloc[0]:.2f}, last={equity.iloc[-1]:.2f}\n')
+    _sys.stderr.write(f'[PF-BUILD] trade_records: {len(trade_records)} trades\n')
+    _sys.stderr.write(f'[PF-BUILD] total_fees: {total_fees:.4f}\n')
+    if len(trade_records) > 0:
+        _sys.stderr.write(f'[PF-BUILD] trade_records columns: {list(trade_records.columns)}\n')
+        _sys.stderr.write(f'[PF-BUILD] first trade: {trade_records.iloc[0].to_dict()}\n')
+    else:
+        _sys.stderr.write(f'[PF-BUILD] WARNING: ZERO TRADES produced!\n')
 
     return SimplePortfolio(
         equity_series=equity,
@@ -920,10 +953,26 @@ def _simulate_signals(
     Returns:
         (equity_series, trade_records_df, total_fees, per_bar_data_or_None)
     """
+    import sys as _sys
+
     close_vals = close_series.values.astype(float)
     entry_mask = entries.values.astype(bool)
     exit_mask = exits.values.astype(bool)
     n = len(close_vals)
+
+    _sys.stderr.write(f'[SIMULATE] === _simulate_signals START ===\n')
+    _sys.stderr.write(f'[SIMULATE] n={n}, entry_mask sum={int(entry_mask.sum())}, exit_mask sum={int(exit_mask.sum())}\n')
+    _sys.stderr.write(f'[SIMULATE] initial_capital={initial_capital}, commission={commission}, slippage={slippage}\n')
+    _sys.stderr.write(f'[SIMULATE] size_series is None: {size_series is None}, allow_short={allow_short}\n')
+    _sys.stderr.write(f'[SIMULATE] close_vals: dtype={close_vals.dtype}, first5={close_vals[:5].tolist()}, last5={close_vals[-5:].tolist()}\n')
+    _sys.stderr.write(f'[SIMULATE] entry_mask: dtype={entry_mask.dtype}, first20={entry_mask[:20].tolist()}\n')
+    _sys.stderr.write(f'[SIMULATE] exit_mask: dtype={exit_mask.dtype}, first20={exit_mask[:20].tolist()}\n')
+
+    # Find first entry and exit indices
+    entry_indices = [i for i in range(min(n, 50)) if entry_mask[i]]
+    exit_indices = [i for i in range(min(n, 50)) if exit_mask[i]]
+    _sys.stderr.write(f'[SIMULATE] First entry indices (up to bar 50): {entry_indices}\n')
+    _sys.stderr.write(f'[SIMULATE] First exit indices (up to bar 50): {exit_indices}\n')
 
     cash = initial_capital
     position = 0.0
@@ -942,6 +991,10 @@ def _simulate_signals(
     in_position = False
     prev_position = 0.0
 
+    n_entries_triggered = 0
+    n_exits_triggered = 0
+    n_entries_skipped = 0
+
     for i in range(n):
         price = close_vals[i]
         prev_position = position
@@ -953,6 +1006,7 @@ def _simulate_signals(
         if in_position:
             # Check exit
             if exit_mask[i]:
+                n_exits_triggered += 1
                 # Close position
                 fee = abs(position) * sell_price * commission
                 total_fees += fee
@@ -964,6 +1018,7 @@ def _simulate_signals(
                     entry_idx, i, entry_price, sell_price, position, pnl, fee,
                     duration=duration, ret=ret,
                 ))
+                _sys.stderr.write(f'[SIMULATE] EXIT #{n_exits_triggered} at bar {i}: sell_price={sell_price:.2f}, shares={position:.4f}, pnl={pnl:.2f}\n')
                 cash += position * sell_price - fee
                 position = 0.0
                 in_position = False
@@ -982,11 +1037,19 @@ def _simulate_signals(
                     total_fees += fee
                     cost = shares * buy_price + fee
                     if cost <= cash:
+                        n_entries_triggered += 1
                         cash -= cost
                         position = shares
                         entry_price = buy_price
                         entry_idx = i
                         in_position = True
+                        _sys.stderr.write(f'[SIMULATE] ENTRY #{n_entries_triggered} at bar {i}: buy_price={buy_price:.2f}, shares={shares:.4f}, cost={cost:.2f}, cash_left={cash:.2f}\n')
+                    else:
+                        n_entries_skipped += 1
+                        _sys.stderr.write(f'[SIMULATE] ENTRY SKIPPED at bar {i}: cost={cost:.2f} > cash={cash:.2f}\n')
+                else:
+                    n_entries_skipped += 1
+                    _sys.stderr.write(f'[SIMULATE] ENTRY SKIPPED at bar {i}: shares={shares} <= 0\n')
 
         equity_vals[i] = cash + position * price
 
@@ -1015,6 +1078,13 @@ def _simulate_signals(
         if track_per_bar:
             cash_vals[-1] = cash
             asset_vals[-1] = 0.0
+
+    _sys.stderr.write(f'[SIMULATE] === SIMULATION SUMMARY ===\n')
+    _sys.stderr.write(f'[SIMULATE] entries_triggered={n_entries_triggered}, exits_triggered={n_exits_triggered}, entries_skipped={n_entries_skipped}\n')
+    _sys.stderr.write(f'[SIMULATE] total trades recorded: {len(trades)}\n')
+    _sys.stderr.write(f'[SIMULATE] final cash={cash:.2f}, final position={position:.4f}\n')
+    _sys.stderr.write(f'[SIMULATE] equity[0]={equity_vals[0]:.2f}, equity[-1]={equity_vals[-1]:.2f}\n')
+    _sys.stderr.write(f'[SIMULATE] total_fees={total_fees:.4f}\n')
 
     equity = pd.Series(equity_vals, index=close_series.index, name='Equity')
     trade_df = pd.DataFrame(trades) if trades else _empty_trade_df()

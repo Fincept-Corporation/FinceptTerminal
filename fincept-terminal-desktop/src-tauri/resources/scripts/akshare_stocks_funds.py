@@ -224,7 +224,7 @@ def get_stock_ipo_info(symbol="688981"):
 
 def get_stock_ipo_declare():
     """Get IPO declaration"""
-    return safe_call(ak.stock_ipo_declare)
+    return safe_call(ak.stock_ipo_declare_em)
 
 def get_stock_ipo_summary_cninfo():
     """Get IPO summary (CNINFO)"""
@@ -233,6 +233,14 @@ def get_stock_ipo_summary_cninfo():
 def get_stock_ipo_benefit_ths():
     """Get IPO benefit (THS)"""
     return safe_call(ak.stock_ipo_benefit_ths)
+
+def get_stock_ipo_review_em():
+    """Get IPO review (EastMoney)"""
+    return safe_call(ak.stock_ipo_review_em)
+
+def get_stock_ipo_tutor_em():
+    """Get IPO tutor (EastMoney)"""
+    return safe_call(ak.stock_ipo_tutor_em)
 
 
 # ==================== NEW ISSUES ====================
@@ -256,6 +264,48 @@ def get_stock_xgsr_ths():
 def get_stock_xgsglb_em():
     """Get new stock subscription list (EastMoney)"""
     return safe_call(ak.stock_xgsglb_em)
+
+def get_stock_zh_a_new():
+    """Get new A-share stocks"""
+    return safe_call(ak.stock_zh_a_new)
+
+def get_stock_zh_a_new_em():
+    """Get new A-share stocks (EastMoney)"""
+    return safe_call(ak.stock_zh_a_new_em)
+
+def get_stock_new_a_spot_em():
+    """Get new A-share spot data (EastMoney)"""
+    return safe_call(ak.stock_new_a_spot_em)
+
+def get_stock_zt_pool_sub_new_em():
+    """Get new stock limit-up pool (EastMoney)"""
+    return safe_call(ak.stock_zt_pool_sub_new_em)
+
+
+# ==================== ADDITIONAL FUND FLOW ====================
+
+def get_stock_hsgt_fund_flow_summary_em():
+    """Get HSGT fund flow summary (EastMoney)"""
+    return safe_call(ak.stock_hsgt_fund_flow_summary_em)
+
+def get_stock_sector_fund_flow_hist(symbol="近3日", indicator="行业资金流"):
+    """Get sector fund flow history"""
+    return safe_call(ak.stock_sector_fund_flow_hist, symbol=symbol, indicator=indicator)
+
+def get_stock_sector_fund_flow_rank(indicator="5日排行", sector_type="行业资金流"):
+    """Get sector fund flow ranking"""
+    return safe_call(ak.stock_sector_fund_flow_rank, indicator=indicator, sector_type=sector_type)
+
+def get_stock_sector_fund_flow_summary(symbol="全部"):
+    """Get sector fund flow summary"""
+    return safe_call(ak.stock_sector_fund_flow_summary, symbol=symbol)
+
+
+# ==================== OPTION LHB ====================
+
+def get_option_lhb_em(symbol="沪"):
+    """Get option LHB data (EastMoney)"""
+    return safe_call(ak.option_lhb_em, symbol=symbol)
 
 
 # ==================== ENDPOINT REGISTRY ====================
@@ -318,6 +368,8 @@ ENDPOINTS = {
     "stock_ipo_declare": {"func": get_stock_ipo_declare, "desc": "IPO declaration", "category": "IPO"},
     "stock_ipo_summary_cninfo": {"func": get_stock_ipo_summary_cninfo, "desc": "IPO summary (CNINFO)", "category": "IPO"},
     "stock_ipo_benefit_ths": {"func": get_stock_ipo_benefit_ths, "desc": "IPO benefit (THS)", "category": "IPO"},
+    "stock_ipo_review_em": {"func": get_stock_ipo_review_em, "desc": "IPO review", "category": "IPO"},
+    "stock_ipo_tutor_em": {"func": get_stock_ipo_tutor_em, "desc": "IPO tutor", "category": "IPO"},
 
     # New Issues
     "stock_new_gh_cninfo": {"func": get_stock_new_gh_cninfo, "desc": "New stock subscription", "category": "New Issues"},
@@ -325,6 +377,19 @@ ENDPOINTS = {
     "stock_dxsyl_em": {"func": get_stock_dxsyl_em, "desc": "New stock yield", "category": "New Issues"},
     "stock_xgsr_ths": {"func": get_stock_xgsr_ths, "desc": "New stock return (THS)", "category": "New Issues"},
     "stock_xgsglb_em": {"func": get_stock_xgsglb_em, "desc": "New stock list", "category": "New Issues"},
+    "stock_zh_a_new": {"func": get_stock_zh_a_new, "desc": "New A-share stocks", "category": "New Issues"},
+    "stock_zh_a_new_em": {"func": get_stock_zh_a_new_em, "desc": "New A-share (EastMoney)", "category": "New Issues"},
+    "stock_new_a_spot_em": {"func": get_stock_new_a_spot_em, "desc": "New A-share spot", "category": "New Issues"},
+    "stock_zt_pool_sub_new_em": {"func": get_stock_zt_pool_sub_new_em, "desc": "New stock limit-up pool", "category": "New Issues"},
+
+    # Additional Fund Flow
+    "stock_hsgt_fund_flow_summary_em": {"func": get_stock_hsgt_fund_flow_summary_em, "desc": "HSGT fund flow summary", "category": "Fund Flow Types"},
+    "stock_sector_fund_flow_hist": {"func": get_stock_sector_fund_flow_hist, "desc": "Sector fund flow history", "category": "Fund Flow Types"},
+    "stock_sector_fund_flow_rank": {"func": get_stock_sector_fund_flow_rank, "desc": "Sector fund flow ranking", "category": "Fund Flow Types"},
+    "stock_sector_fund_flow_summary": {"func": get_stock_sector_fund_flow_summary, "desc": "Sector fund flow summary", "category": "Fund Flow Types"},
+
+    # Option LHB
+    "option_lhb_em": {"func": get_option_lhb_em, "desc": "Option LHB data", "category": "LHB"},
 }
 
 

@@ -424,7 +424,7 @@ const BacktestingTabComplete: React.FC = () => {
   const [takeProfit, setTakeProfit] = useState<number | null>(null);
   const [trailingStop, setTrailingStop] = useState<number | null>(null);
   const [positionSizing, setPositionSizing] = useState<string>('percent');
-  const [positionSizeValue, setPositionSizeValue] = useState(100);
+  const [positionSizeValue, setPositionSizeValue] = useState(1.0);
   const [allowShort, setAllowShort] = useState(false);
   const [benchmarkSymbol, setBenchmarkSymbol] = useState('SPY');
   const [enableBenchmark, setEnableBenchmark] = useState(false);
@@ -504,40 +504,12 @@ const BacktestingTabComplete: React.FC = () => {
     try {
       const symbolList = symbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
-      // STEP 1: Fetch market data from OUR yfinance script for commands that need data
-      const needsMarketData = ['backtest', 'optimize', 'walk_forward', 'indicator', 'indicator_signals', 'signals', 'labels', 'returns', 'labels_to_signals'];
-      let marketData: any = null;
-
-      if (needsMarketData.includes(activeCommand)) {
-        // Fetch data for each symbol using our yfinance script
-        console.log('[BACKTEST] Fetching market data for symbols:', symbolList, 'from', startDate, 'to', endDate);
-
-        const dataPromises = symbolList.map(async (symbol) => {
-          const response = await invoke<string>('execute_yfinance_command', {
-            command: 'historical',
-            args: [symbol, startDate, endDate, '1d'],
-          });
-          console.log('[BACKTEST] Raw yfinance response for', symbol, ':', response);
-          const data = JSON.parse(response);
-          console.log('[BACKTEST] Parsed data for', symbol, ':', data);
-          return { symbol, data: data.error ? [] : data };
-        });
-
-        const dataResults = await Promise.all(dataPromises);
-        marketData = dataResults.reduce((acc, { symbol, data }) => {
-          acc[symbol] = data;
-          return acc;
-        }, {} as Record<string, any>);
-
-        console.log('[BACKTEST] Final marketData object:', marketData);
-      }
-
+      // Python will fetch market data directly via yfinance - no need to pre-fetch
       let commandArgs: any = {
         symbols: symbolList,
         startDate,
         endDate,
         initialCapital,
-        marketData, // Pass pre-fetched market data
       };
 
       // Map UI command names to Python command names
@@ -588,7 +560,6 @@ const BacktestingTabComplete: React.FC = () => {
             allowShort,
             benchmarkSymbol: enableBenchmark ? benchmarkSymbol : null,
             randomBenchmark,
-            marketData, // Add pre-fetched market data
           };
           break;
 
@@ -610,7 +581,6 @@ const BacktestingTabComplete: React.FC = () => {
             objective: optimizeObjective,
             method: optimizeMethod,
             maxIterations,
-            marketData,
           };
           break;
 
@@ -631,7 +601,6 @@ const BacktestingTabComplete: React.FC = () => {
             })),
             nSplits: wfSplits,
             trainRatio: wfTrainRatio,
-            marketData,
           };
           break;
 
@@ -652,7 +621,6 @@ const BacktestingTabComplete: React.FC = () => {
             endDate,
             indicator: selectedIndicator,
             parameters: indicatorParams,
-            marketData,
           };
           break;
 
@@ -663,7 +631,6 @@ const BacktestingTabComplete: React.FC = () => {
             endDate,
             indicator: selectedIndicator,
             parameters: indicatorParams,
-            marketData,
           };
           break;
 
@@ -674,7 +641,6 @@ const BacktestingTabComplete: React.FC = () => {
             endDate,
             generator: selectedSignalGen,
             parameters: signalParams,
-            marketData,
           };
           break;
 
@@ -685,7 +651,6 @@ const BacktestingTabComplete: React.FC = () => {
             endDate,
             generator: selectedLabelGen,
             parameters: labelParams,
-            marketData,
           };
           break;
 
@@ -703,7 +668,6 @@ const BacktestingTabComplete: React.FC = () => {
             symbols: symbolList,
             startDate,
             endDate,
-            marketData,
           };
           break;
 
@@ -724,18 +688,16 @@ const BacktestingTabComplete: React.FC = () => {
             params: labelParams,
             entryLabel: 1,
             exitLabel: -1,
-            marketData,
           };
           break;
       }
 
       // Execute Python command via Tauri
-      console.log('[BACKTEST] Sending to vectorbt:', { command: pythonCommand, args: commandArgs });
-
-      // For large payloads (>4KB), Rust will automatically use stdin to pass data
-      // No need for temp files - stdin has no size limits
       const argsJson = JSON.stringify(commandArgs);
-      console.log('[BACKTEST] Args JSON size:', argsJson.length, 'bytes');
+      console.log('[BACKTEST] === SENDING TO PYTHON ===');
+      console.log('[BACKTEST] Command:', pythonCommand);
+      console.log('[BACKTEST] Args JSON length:', argsJson.length, 'bytes');
+      console.log('[BACKTEST] Args object:', JSON.stringify(commandArgs, null, 2));
 
       const response = await invoke<string>('execute_python_backtest', {
         provider: 'vectorbt',
@@ -743,9 +705,35 @@ const BacktestingTabComplete: React.FC = () => {
         args: argsJson,
       });
 
-      console.log('[BACKTEST] Raw vectorbt response:', response);
+      console.log('[BACKTEST] === RAW RESPONSE FROM RUST ===');
+      console.log('[BACKTEST] Response type:', typeof response);
+      console.log('[BACKTEST] Response length:', response?.length ?? 0);
+      console.log('[BACKTEST] Response (first 2000 chars):', response?.substring(0, 2000));
+
       const parsed = JSON.parse(response);
-      console.log('[BACKTEST] Parsed result:', parsed);
+      console.log('[BACKTEST] === PARSED RESULT ===');
+      console.log('[BACKTEST] Top-level keys:', Object.keys(parsed));
+      console.log('[BACKTEST] success:', parsed.success);
+      console.log('[BACKTEST] error:', parsed.error);
+      if (parsed.data) {
+        console.log('[BACKTEST] data keys:', Object.keys(parsed.data));
+        if (parsed.data.performance) {
+          console.log('[BACKTEST] performance keys:', Object.keys(parsed.data.performance));
+          console.log('[BACKTEST] performance:', JSON.stringify(parsed.data.performance));
+        }
+        if (parsed.data.trades) {
+          console.log('[BACKTEST] trades count:', parsed.data.trades?.length);
+          if (parsed.data.trades.length > 0) {
+            console.log('[BACKTEST] first trade:', JSON.stringify(parsed.data.trades[0]));
+          }
+        }
+        if (parsed.data.equity) {
+          console.log('[BACKTEST] equity points:', parsed.data.equity?.length);
+        }
+        if (parsed.data.logs) {
+          console.log('[BACKTEST] Python logs:', parsed.data.logs);
+        }
+      }
       setResult(parsed);
     } catch (err: any) {
       setError(err.toString());

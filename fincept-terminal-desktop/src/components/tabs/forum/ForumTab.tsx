@@ -1,18 +1,14 @@
 // Forum Tab - Main Component
-// Refactored from 1764-line monolith into modular components
+// Redesigned to follow Fincept Terminal UI Design System
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { APP_VERSION } from '@/constants/version';
-import { TabFooter } from '@/components/common/TabFooter';
+import { MessageSquare, Users, TrendingUp, RefreshCw, Plus, Search as SearchIcon, User, Shield } from 'lucide-react';
 
 // Local imports
-import { getForumColors } from './constants';
 import { useForum } from './hooks/useForum';
 import { useForumModals } from './hooks/useForumModals';
 import {
-  Header,
-  FunctionBar,
   LeftPanel,
   CenterPanel,
   RightPanel,
@@ -22,18 +18,35 @@ import {
   ProfileModal
 } from './components';
 
+// Design System Colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
+
+const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
+
 const ForumTab: React.FC = () => {
-  const { colors } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Get forum-specific colors
-  const forumColors = useMemo(() => getForumColors(colors), [colors]);
-
   // Forum data and actions
-  const forum = useForum({ colors: forumColors });
+  const forum = useForum({ colors: FINCEPT });
 
   // Modal states
-  const modals = useForumModals({ colors: forumColors });
+  const modals = useForumModals({ colors: FINCEPT });
 
   // Update time every second
   useEffect(() => {
@@ -69,7 +82,6 @@ const ForumTab: React.FC = () => {
   const handleSearch = async () => {
     if (!modals.searchQuery.trim()) return;
     await forum.handleSearch(modals.searchQuery);
-    // Search results are stored in forum.searchResults
   };
 
   const handleViewProfile = async () => {
@@ -85,11 +97,6 @@ const ForumTab: React.FC = () => {
     modals.setShowProfile(true);
   };
 
-  const handleOpenEditProfile = () => {
-    modals.setShowProfile(false);
-    modals.setShowEditProfile(true);
-  };
-
   const handleSaveProfile = async () => {
     const success = await forum.handleUpdateProfile(modals.profileEdit);
     if (success) {
@@ -98,56 +105,229 @@ const ForumTab: React.FC = () => {
     }
   };
 
-  const handleCloseSearch = () => {
-    modals.setShowSearch(false);
-    modals.resetSearchForm();
-  };
-
-  const handleCloseProfile = () => {
-    modals.setShowProfile(false);
-    forum.setSelectedUsername('');
-  };
-
   return (
     <div style={{
+      width: '100%',
       height: '100%',
-      backgroundColor: forumColors.DARK_BG,
-      color: forumColors.WHITE,
-      fontFamily: 'Consolas, monospace',
-      overflow: 'hidden',
+      backgroundColor: FINCEPT.DARK_BG,
+      color: FINCEPT.WHITE,
+      fontFamily: FONT_FAMILY,
       display: 'flex',
       flexDirection: 'column',
-      fontSize: '12px'
+      overflow: 'hidden'
     }}>
-      {/* Header */}
-      <Header
-        colors={forumColors}
-        currentTime={currentTime}
-        onlineUsers={forum.onlineUsers}
-        postsToday={forum.postsToday}
-        trendingTopics={forum.trendingTopics}
-        isRefreshing={forum.isRefreshing}
-        lastRefreshTime={forum.lastRefreshTime}
-        onRefresh={forum.handleRefresh}
-      />
+      {/* Custom Scrollbar */}
+      <style>{`
+        .forum-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .forum-scroll::-webkit-scrollbar-track { background: ${FINCEPT.DARK_BG}; }
+        .forum-scroll::-webkit-scrollbar-thumb { background: ${FINCEPT.BORDER}; border-radius: 3px; }
+        .forum-scroll::-webkit-scrollbar-thumb:hover { background: ${FINCEPT.MUTED}; }
+      `}</style>
 
-      {/* Function Bar */}
-      <FunctionBar
-        colors={forumColors}
-        activeCategory={forum.activeCategory}
-        categories={forum.categories}
-        onCategoryChange={forum.setActiveCategory}
-        onCreatePost={() => modals.setShowCreatePost(true)}
-        onSearch={() => modals.setShowSearch(true)}
-        onViewProfile={handleViewProfile}
-        onEditProfile={() => modals.setShowEditProfile(true)}
-      />
+      {/* Top Navigation Bar */}
+      <div style={{
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`,
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MessageSquare size={16} color={FINCEPT.ORANGE} />
+            <span style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              color: FINCEPT.ORANGE,
+              letterSpacing: '0.5px'
+            }}>
+              GLOBAL FORUM
+            </span>
+          </div>
+          <span style={{ color: FINCEPT.BORDER }}>|</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <MessageSquare size={12} color={FINCEPT.CYAN} />
+            <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+              {forum.totalPosts.toLocaleString()} POSTS
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Users size={12} color={FINCEPT.GREEN} />
+            <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+              {forum.onlineUsers} ONLINE
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <TrendingUp size={12} color={FINCEPT.YELLOW} />
+            <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+              {forum.postsToday} TODAY
+            </span>
+          </div>
+        </div>
 
-      {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', padding: '4px', gap: '4px' }}>
-        {/* Left Panel - Categories & Stats */}
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={() => modals.setShowCreatePost(true)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: FINCEPT.ORANGE,
+              color: FINCEPT.DARK_BG,
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontFamily: FONT_FAMILY
+            }}
+          >
+            <Plus size={10} />
+            NEW POST
+          </button>
+          <button
+            onClick={() => modals.setShowSearch(true)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontFamily: FONT_FAMILY
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+              e.currentTarget.style.color = FINCEPT.WHITE;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
+              e.currentTarget.style.color = FINCEPT.GRAY;
+            }}
+          >
+            <SearchIcon size={10} />
+            SEARCH
+          </button>
+          <button
+            onClick={handleViewProfile}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontFamily: FONT_FAMILY
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+              e.currentTarget.style.color = FINCEPT.WHITE;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = FINCEPT.BORDER;
+              e.currentTarget.style.color = FINCEPT.GRAY;
+            }}
+          >
+            <User size={10} />
+            PROFILE
+          </button>
+          <button
+            onClick={forum.handleRefresh}
+            disabled={forum.isRefreshing}
+            style={{
+              padding: '6px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              color: forum.isRefreshing ? FINCEPT.MUTED : FINCEPT.GRAY,
+              cursor: forum.isRefreshing ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Refresh"
+          >
+            <RefreshCw size={12} style={{
+              animation: forum.isRefreshing ? 'spin 1s linear infinite' : 'none'
+            }} />
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Category Filter Bar */}
+      <div style={{
+        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        padding: '8px 16px',
+        display: 'flex',
+        gap: '6px',
+        overflowX: 'auto',
+        flexShrink: 0
+      }}>
+        {forum.categories.map((cat) => (
+          <button
+            key={cat.name}
+            onClick={() => forum.setActiveCategory(cat.name)}
+            style={{
+              padding: '4px 12px',
+              backgroundColor: forum.activeCategory === cat.name ? FINCEPT.ORANGE : 'transparent',
+              color: forum.activeCategory === cat.name ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: forum.activeCategory === cat.name ? 'none' : `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '2px',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              fontFamily: FONT_FAMILY,
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (forum.activeCategory !== cat.name) {
+                e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                e.currentTarget.style.color = FINCEPT.WHITE;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (forum.activeCategory !== cat.name) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = FINCEPT.GRAY;
+              }
+            }}
+          >
+            {cat.name} ({cat.count})
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content - Three Panel Layout */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left Panel - Stats & Quick Info */}
         <LeftPanel
-          colors={forumColors}
+          colors={FINCEPT}
           categories={forum.categories}
           activeCategory={forum.activeCategory}
           onCategoryChange={forum.setActiveCategory}
@@ -160,7 +340,7 @@ const ForumTab: React.FC = () => {
 
         {/* Center Panel - Posts List */}
         <CenterPanel
-          colors={forumColors}
+          colors={FINCEPT}
           activeCategory={forum.activeCategory}
           sortBy={forum.sortBy}
           onSortChange={forum.setSortBy}
@@ -171,94 +351,93 @@ const ForumTab: React.FC = () => {
 
         {/* Right Panel - Trending & Activity */}
         <RightPanel
-          colors={forumColors}
+          colors={FINCEPT}
           trendingTopics={forum.trendingTopics}
           recentActivity={forum.recentActivity}
+          forumPosts={forum.forumPosts}
         />
       </div>
 
       {/* Status Bar */}
       <div style={{
-        borderTop: `1px solid ${forumColors.GRAY}`,
-        backgroundColor: forumColors.PANEL_BG,
-        padding: '2px 8px',
-        fontSize: '10px',
-        color: forumColors.GRAY,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        padding: '4px 16px',
+        fontSize: '9px',
+        color: FINCEPT.GRAY,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         flexShrink: 0
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>Fincept Global Forum v{APP_VERSION} | Professional trading community</span>
-            <span>Posts: {forum.totalPosts.toLocaleString()} | Users: {(forum.forumStats?.total_comments || 47832).toLocaleString()} | Active: {forum.onlineUsers}</span>
-          </div>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>Category: {forum.activeCategory}</span>
-            <span>Sort: {forum.sortBy}</span>
-            <span style={{ color: forumColors.GREEN }}>STATUS: LIVE</span>
-          </div>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <span>FORUM v{APP_VERSION}</span>
+          <span>POSTS: <span style={{ color: FINCEPT.CYAN }}>{forum.totalPosts.toLocaleString()}</span></span>
+          <span>USERS: <span style={{ color: FINCEPT.CYAN }}>{(forum.forumStats?.total_users || 0).toLocaleString()}</span></span>
+        </div>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <span>CATEGORY: <span style={{ color: FINCEPT.ORANGE }}>{forum.activeCategory}</span></span>
+          <span>SORT: <span style={{ color: FINCEPT.ORANGE }}>{forum.sortBy.toUpperCase()}</span></span>
+          <span>STATUS: <span style={{ color: FINCEPT.GREEN }}>LIVE</span></span>
+          <Shield size={10} color={FINCEPT.GREEN} />
         </div>
       </div>
 
       {/* Modals */}
       <CreatePostModal
-        colors={forumColors}
         show={modals.showCreatePost}
-        newPostTitle={modals.newPostTitle}
-        newPostContent={modals.newPostContent}
+        colors={FINCEPT}
+        title={modals.newPostTitle}
+        content={modals.newPostContent}
+        tags={modals.newPostTags}
+        category={modals.newPostCategory}
         onTitleChange={modals.setNewPostTitle}
         onContentChange={modals.setNewPostContent}
-        onClose={() => modals.setShowCreatePost(false)}
+        onTagsChange={modals.setNewPostTags}
+        onCategoryChange={modals.setNewPostCategory}
         onSubmit={handleCreatePost}
+        onClose={() => modals.setShowCreatePost(false)}
       />
 
       <PostDetailModal
-        colors={forumColors}
         show={modals.showPostDetail}
-        selectedPost={forum.selectedPost}
-        postComments={forum.postComments}
+        colors={FINCEPT}
+        post={forum.selectedPost}
+        comments={forum.postComments}
         newComment={modals.newComment}
         onCommentChange={modals.setNewComment}
-        onClose={() => modals.setShowPostDetail(false)}
         onAddComment={handleAddComment}
-        onVotePost={(postId, voteType) => forum.handleVotePost(postId, voteType)}
-        onVoteComment={(commentId, voteType) => forum.handleVoteComment(commentId, voteType)}
+        onVote={forum.handleVote}
+        onClose={() => modals.setShowPostDetail(false)}
       />
 
       <SearchModal
-        colors={forumColors}
         show={modals.showSearch}
-        searchQuery={modals.searchQuery}
-        searchResults={forum.searchResults}
-        isLoading={forum.isLoading}
+        colors={FINCEPT}
+        query={modals.searchQuery}
+        results={forum.searchResults}
         onQueryChange={modals.setSearchQuery}
         onSearch={handleSearch}
-        onClose={handleCloseSearch}
+        onClose={() => {
+          modals.setShowSearch(false);
+          modals.resetSearchForm();
+        }}
         onViewPost={handleViewPost}
       />
 
       <ProfileModal
-        colors={forumColors}
-        showProfile={modals.showProfile}
-        showEditProfile={modals.showEditProfile}
-        userProfile={forum.userProfile}
-        profileEdit={modals.profileEdit}
+        show={modals.showProfile}
+        colors={FINCEPT}
+        profile={forum.userProfile}
         isOwnProfile={!forum.selectedUsername}
-        onProfileEditChange={modals.setProfileEdit}
-        onCloseProfile={handleCloseProfile}
-        onCloseEditProfile={() => modals.setShowEditProfile(false)}
-        onOpenEditProfile={handleOpenEditProfile}
-        onSaveProfile={handleSaveProfile}
-      />
-
-      <TabFooter
-        tabName="COMMUNITY FORUM"
-        leftInfo={[
-          { label: `Category: ${forum.activeCategory || 'All'}`, color: colors.textMuted },
-          { label: `Posts: ${forum.forumStats?.total_posts || 0}`, color: colors.textMuted },
-        ]}
-        statusInfo={`Users: ${forum.forumStats?.total_users || 0} | ${forum.isLoading ? 'Loading...' : 'Ready'}`}
-        backgroundColor={colors.panel}
-        borderColor={colors.textMuted}
+        onEdit={() => {
+          modals.setShowProfile(false);
+          modals.setShowEditProfile(true);
+        }}
+        onClose={() => {
+          modals.setShowProfile(false);
+          forum.setSelectedUsername('');
+        }}
       />
     </div>
   );

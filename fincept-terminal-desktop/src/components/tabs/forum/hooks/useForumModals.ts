@@ -18,6 +18,8 @@ export interface UseForumModalsReturn {
   // Form states
   newPostTitle: string;
   newPostContent: string;
+  newPostTags: string;
+  newPostCategory: string;
   newComment: string;
   searchQuery: string;
   profileEdit: ProfileEdit;
@@ -30,6 +32,8 @@ export interface UseForumModalsReturn {
   setShowEditProfile: (show: boolean) => void;
   setNewPostTitle: (title: string) => void;
   setNewPostContent: (content: string) => void;
+  setNewPostTags: (tags: string) => void;
+  setNewPostCategory: (category: string) => void;
   setNewComment: (comment: string) => void;
   setSearchQuery: (query: string) => void;
   setProfileEdit: (edit: ProfileEdit) => void;
@@ -49,6 +53,8 @@ export function useForumModals({ colors }: UseForumModalsProps): UseForumModalsR
   // Form states
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostContent, setNewPostContent] = useState('');
+  const [newPostTags, setNewPostTags] = useState('');
+  const [newPostCategory, setNewPostCategory] = useState('');
   const [newComment, setNewComment] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [profileEdit, setProfileEdit] = useState<ProfileEdit>({
@@ -62,6 +68,8 @@ export function useForumModals({ colors }: UseForumModalsProps): UseForumModalsR
   const resetCreatePostForm = useCallback(() => {
     setNewPostTitle('');
     setNewPostContent('');
+    setNewPostTags('');
+    setNewPostCategory('');
   }, []);
 
   // Reset search form
@@ -87,6 +95,8 @@ export function useForumModals({ colors }: UseForumModalsProps): UseForumModalsR
     showEditProfile,
     newPostTitle,
     newPostContent,
+    newPostTags,
+    newPostCategory,
     newComment,
     searchQuery,
     profileEdit,
@@ -97,6 +107,8 @@ export function useForumModals({ colors }: UseForumModalsProps): UseForumModalsR
     setShowEditProfile,
     setNewPostTitle,
     setNewPostContent,
+    setNewPostTags,
+    setNewPostCategory,
     setNewComment,
     setSearchQuery,
     setProfileEdit,
