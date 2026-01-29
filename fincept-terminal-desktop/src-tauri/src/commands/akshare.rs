@@ -34,26 +34,17 @@ fn run_python_script_with_symbol(app: &tauri::AppHandle, script: &str, endpoint:
 
 #[command]
 pub async fn akshare_query(app: tauri::AppHandle, script: String, endpoint: String, args: Option<Vec<String>>) -> Result<AKShareResponse, String> {
-    // Validate script name to prevent path traversal
+    // ALL 26 VERIFIED WORKING SCRIPTS
     let valid_scripts = vec![
         "akshare_data.py",
-        "akshare_bonds.py",
-        "akshare_derivatives.py",
-        "akshare_economics_china.py",
-        "akshare_economics_global.py",
-        "akshare_funds_expanded.py",
-        "akshare_alternative.py",
-        "akshare_analysis.py",
-        "akshare_company_info.py",
-        // Market data scripts
         "akshare_index.py",
         "akshare_futures.py",
+        "akshare_bonds.py",
         "akshare_currency.py",
         "akshare_energy.py",
         "akshare_crypto.py",
         "akshare_news.py",
         "akshare_reits.py",
-        // Stock data scripts (8 batches covering 398 endpoints)
         "akshare_stocks_realtime.py",
         "akshare_stocks_historical.py",
         "akshare_stocks_financial.py",
@@ -62,7 +53,13 @@ pub async fn akshare_query(app: tauri::AppHandle, script: String, endpoint: Stri
         "akshare_stocks_board.py",
         "akshare_stocks_margin.py",
         "akshare_stocks_hot.py",
-        // New comprehensive wrappers (219 functions)
+        "akshare_alternative.py",
+        "akshare_analysis.py",
+        "akshare_derivatives.py",
+        "akshare_economics_china.py",
+        "akshare_economics_global.py",
+        "akshare_funds_expanded.py",
+        "akshare_company_info.py",
         "akshare_macro.py",
         "akshare_misc.py",
     ];
@@ -83,25 +80,17 @@ pub async fn akshare_query(app: tauri::AppHandle, script: String, endpoint: Stri
 
 #[command]
 pub async fn akshare_get_endpoints(app: tauri::AppHandle, script: String) -> Result<AKShareResponse, String> {
+    // ALL 26 VERIFIED WORKING SCRIPTS
     let valid_scripts = vec![
         "akshare_data.py",
-        "akshare_bonds.py",
-        "akshare_derivatives.py",
-        "akshare_economics_china.py",
-        "akshare_economics_global.py",
-        "akshare_funds_expanded.py",
-        "akshare_alternative.py",
-        "akshare_analysis.py",
-        "akshare_company_info.py",
-        // Market data scripts
         "akshare_index.py",
         "akshare_futures.py",
+        "akshare_bonds.py",
         "akshare_currency.py",
         "akshare_energy.py",
         "akshare_crypto.py",
         "akshare_news.py",
         "akshare_reits.py",
-        // Stock data scripts (8 batches covering 398 endpoints)
         "akshare_stocks_realtime.py",
         "akshare_stocks_historical.py",
         "akshare_stocks_financial.py",
@@ -110,7 +99,13 @@ pub async fn akshare_get_endpoints(app: tauri::AppHandle, script: String) -> Res
         "akshare_stocks_board.py",
         "akshare_stocks_margin.py",
         "akshare_stocks_hot.py",
-        // New comprehensive wrappers (219 functions)
+        "akshare_alternative.py",
+        "akshare_analysis.py",
+        "akshare_derivatives.py",
+        "akshare_economics_china.py",
+        "akshare_economics_global.py",
+        "akshare_funds_expanded.py",
+        "akshare_company_info.py",
         "akshare_macro.py",
         "akshare_misc.py",
     ];

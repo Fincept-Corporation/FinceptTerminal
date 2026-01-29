@@ -68,7 +68,7 @@ const BacktestNode: React.FC<BacktestNodeProps> = ({ data, selected }) => {
   };
 
   const formatPerformance = () => {
-    if (!data.result) return null;
+    if (!data.result || !data.result.performance) return null;
     const perf = data.result.performance;
     return {
       totalReturn: (perf.totalReturn * 100).toFixed(2) + '%',

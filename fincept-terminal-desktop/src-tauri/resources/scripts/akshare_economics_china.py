@@ -386,6 +386,83 @@ class ChinaEconomicsWrapper:
     def get_hk_market_info(self) -> Dict[str, Any]:
         return self._safe_call_with_retry(ak.macro_china_hk_market_info)
 
+    # ==================== UTILITY ====================
 
-# Export wrapper instance
-china_economics_wrapper = ChinaEconomicsWrapper()
+    def get_all_available_endpoints(self) -> Dict[str, Any]:
+        """Get list of all available endpoints"""
+        endpoints = [
+            "gdp", "gdp_yearly", "cpi", "cpi_monthly", "cpi_yearly", "ppi", "ppi_yearly",
+            "pmi", "pmi_yearly", "non_man_pmi", "money_supply", "supply_of_money", "m2_yearly",
+            "shibor_all", "lpr", "swap_rate", "reserve_requirement_ratio", "new_financial_credit",
+            "bank_financing", "central_bank_balance", "trade_balance", "exports_yoy", "imports_yoy",
+            "fdi", "fx_reserves_yearly", "fx_gold", "foreign_exchange_gold", "rmb",
+            "industrial_production_yoy", "construction_index", "construction_price_index",
+            "enterprise_boom_index", "cx_pmi_yearly", "cx_services_pmi_yearly",
+            "real_estate", "new_house_price", "consumer_goods_retail", "retail_price_index",
+            "agricultural_index", "agricultural_product", "vegetable_basket",
+            "daily_energy", "energy_index", "society_electricity", "commodity_price_index", "au_report",
+            "urban_unemployment", "national_tax_receipts", "czsr", "gdzctz", "hgjck",
+            "gyzjz", "qyspjg", "shrzgm", "wbck", "whxd", "xfzxx",
+            "stock_market_cap", "market_margin_sh", "market_margin_sz", "bond_public",
+            "insurance", "insurance_income", "freight_index", "bdti_index", "bsi_index",
+            "lpi_index", "society_traffic_volume", "passenger_load_factor",
+            "postal_telecommunicational", "mobile_number", "international_tourism_fx", "yw_electronic_index",
+            "nbs_nation", "nbs_region",
+            "hk_cpi", "hk_cpi_ratio", "hk_ppi", "hk_gbp", "hk_gbp_ratio",
+            "hk_rate_of_unemployment", "hk_trade_diff_ratio", "hk_building_amount",
+            "hk_building_volume", "hk_market_info"
+        ]
+
+        return {
+            "success": True,
+            "data": {
+                "available_endpoints": endpoints,
+                "total_count": len(endpoints),
+                "categories": {
+                    "Core Indicators": ["gdp", "cpi", "ppi", "pmi", "gdp_yearly", "cpi_yearly", "ppi_yearly"],
+                    "Monetary & Financial": ["money_supply", "m2_yearly", "shibor_all", "lpr", "swap_rate"],
+                    "Trade & FX": ["trade_balance", "exports_yoy", "imports_yoy", "fdi", "fx_reserves_yearly"],
+                    "Industry & Production": ["industrial_production_yoy", "construction_index", "enterprise_boom_index"],
+                    "Real Estate": ["real_estate", "new_house_price"],
+                    "Consumption": ["consumer_goods_retail", "retail_price_index"],
+                    "Agriculture": ["agricultural_index", "agricultural_product", "vegetable_basket"],
+                    "Energy": ["daily_energy", "energy_index", "society_electricity"],
+                    "Employment": ["urban_unemployment"],
+                    "Markets": ["stock_market_cap", "market_margin_sh", "market_margin_sz"],
+                    "Hong Kong": ["hk_cpi", "hk_gdp", "hk_ppi", "hk_market_info"],
+                },
+                "timestamp": int(datetime.now().timestamp())
+            },
+            "count": len(endpoints),
+            "timestamp": int(datetime.now().timestamp())
+        }
+
+
+# ==================== CLI ====================
+def main():
+    wrapper = ChinaEconomicsWrapper()
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_economics_china.py <endpoint>"}))
+        return
+
+    endpoint = sys.argv[1]
+
+    endpoint_map = {
+        "get_all_endpoints": wrapper.get_all_available_endpoints,
+        "gdp": wrapper.get_gdp,
+        "cpi": wrapper.get_cpi,
+        "pmi": wrapper.get_pmi,
+        "money_supply": wrapper.get_money_supply,
+        "trade_balance": wrapper.get_trade_balance,
+    }
+
+    method = endpoint_map.get(endpoint)
+    if method:
+        result = method()
+        print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+    else:
+        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
+
+if __name__ == "__main__":
+    main()

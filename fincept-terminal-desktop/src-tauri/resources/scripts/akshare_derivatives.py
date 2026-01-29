@@ -255,6 +255,72 @@ class DerivativesWrapper:
     def get_option_vol_shfe(self, symbol: str = "cu") -> Dict[str, Any]:
         return self._safe_call_with_retry(ak.option_vol_shfe, symbol=symbol)
 
+    # ==================== UTILITY ====================
 
-# Export wrapper instance
-derivatives_wrapper = DerivativesWrapper()
+    def get_all_available_endpoints(self) -> Dict[str, Any]:
+        """Get list of all available endpoints"""
+        endpoints = [
+            "option_cffex_hs300_daily_sina", "option_cffex_hs300_list_sina", "option_cffex_hs300_spot_sina",
+            "option_cffex_sz50_daily_sina", "option_cffex_sz50_list_sina", "option_cffex_sz50_spot_sina",
+            "option_cffex_zz1000_daily_sina", "option_cffex_zz1000_list_sina", "option_cffex_zz1000_spot_sina",
+            "option_comm_info", "option_comm_symbol", "option_commodity_contract_sina",
+            "option_commodity_contract_table_sina", "option_commodity_hist_sina", "option_contract_info_ctp",
+            "option_current_day_sse", "option_current_day_szse", "option_current_em",
+            "option_daily_stats_sse", "option_daily_stats_szse",
+            "option_finance_board", "option_finance_minute_sina", "option_finance_sse_underlying",
+            "option_hist_czce", "option_hist_dce", "option_hist_gfex", "option_hist_shfe", "option_hist_yearly_czce",
+            "option_lhb_em", "option_margin", "option_margin_symbol",
+            "option_minute_em", "option_premium_analysis_em", "option_risk_analysis_em",
+            "option_risk_indicator_sse", "option_value_analysis_em",
+            "option_sse_codes_sina", "option_sse_daily_sina", "option_sse_expire_day_sina",
+            "option_sse_greeks_sina", "option_sse_list_sina", "option_sse_minute_sina",
+            "option_sse_spot_price_sina", "option_sse_underlying_spot_price_sina",
+            "option_vol_gfex", "option_vol_shfe"
+        ]
+
+        return {
+            "success": True,
+            "data": {
+                "available_endpoints": endpoints,
+                "total_count": len(endpoints),
+                "categories": {
+                    "Contract Info": ["option_comm_info", "option_comm_symbol", "option_contract_info_ctp"],
+                    "Realtime": ["option_current_day_sse", "option_current_day_szse", "option_current_em"],
+                    "Historical": ["option_hist_czce", "option_hist_dce", "option_hist_gfex", "option_hist_shfe"],
+                    "Global": ["option_cffex_hs300_daily_sina", "option_cffex_sz50_daily_sina", "option_cffex_zz1000_daily_sina"],
+                    "CFFEX Options": ["option_cffex_hs300_list_sina", "option_cffex_sz50_list_sina", "option_cffex_zz1000_list_sina"],
+                    "SSE Options": ["option_sse_codes_sina", "option_sse_daily_sina", "option_sse_greeks_sina"],
+                },
+                "timestamp": int(datetime.now().timestamp())
+            },
+            "count": len(endpoints),
+            "timestamp": int(datetime.now().timestamp())
+        }
+
+
+# ==================== CLI ====================
+def main():
+    wrapper = DerivativesWrapper()
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_derivatives.py <endpoint>"}))
+        return
+
+    endpoint = sys.argv[1]
+
+    endpoint_map = {
+        "get_all_endpoints": wrapper.get_all_available_endpoints,
+        "option_comm_info": wrapper.get_option_comm_info,
+        "option_current_day_sse": wrapper.get_option_current_day_sse,
+        "option_sse_codes_sina": wrapper.get_option_sse_codes_sina,
+    }
+
+    method = endpoint_map.get(endpoint)
+    if method:
+        result = method()
+        print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+    else:
+        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
+
+if __name__ == "__main__":
+    main()

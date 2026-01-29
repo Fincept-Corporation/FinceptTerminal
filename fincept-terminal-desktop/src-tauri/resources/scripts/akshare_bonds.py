@@ -303,11 +303,47 @@ class BondsWrapper:
 
         return {
             "success": True,
-            "endpoints": endpoints,
+            "data": {
+                "available_endpoints": endpoints,
+                "total_count": len(endpoints),
+                "categories": {
+                    "Chinese Bond Market": ["bond_cb_jsl", "bond_cb_index_jsl", "bond_zh_cov_spot", "bond_zh_hs_daily", "bond_zh_hs_spot"],
+                    "Yield Curves": ["bond_china_yield", "bond_china_close_return", "bond_zh_us_rate"],
+                    "Government Bonds": ["bond_treasure_issue_cninfo", "bond_local_government_issue_cninfo"],
+                    "Corporate Bonds": ["bond_corporate_issue_cninfo", "bond_cov_issue_cninfo"],
+                    "Convertible Bonds": ["bond_cb_profile_sina", "bond_cb_summary_sina", "bond_cov_comparison"],
+                },
+                "timestamp": int(datetime.now().timestamp())
+            },
             "count": len(endpoints),
             "timestamp": int(datetime.now().timestamp())
         }
 
 
-# Export wrapper instance
-bonds_wrapper = BondsWrapper()
+# ==================== CLI ====================
+def main():
+    import sys
+    wrapper = BondsWrapper()
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_bonds.py <endpoint>"}))
+        return
+
+    endpoint = sys.argv[1]
+
+    endpoint_map = {
+        "get_all_endpoints": wrapper.get_all_available_endpoints,
+        "bond_yield": wrapper.get_bond_china_yield,
+        "bond_cb_jsl": wrapper.get_bond_cb_jsl,
+        "bond_spot": wrapper.get_bond_zh_hs_spot,
+    }
+
+    method = endpoint_map.get(endpoint)
+    if method:
+        result = method()
+        print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+    else:
+        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
+
+if __name__ == "__main__":
+    main()

@@ -34,6 +34,9 @@ def safe_call(func, *args, **kwargs):
                 for col in result.columns:
                     if result[col].dtype == 'datetime64[ns]':
                         result[col] = result[col].astype(str)
+                # Replace NaN/Infinity with None for valid JSON
+                result = result.replace([float("inf"), float("-inf")], None)
+                result = result.where(pd.notna(result), None)
                 data = result.to_dict(orient='records')
                 return {"success": True, "data": data, "count": len(data)}
             elif isinstance(result, (list, dict)):
@@ -56,7 +59,7 @@ def get_stock_main_stock_holder(symbol="000001"):
 
 def get_stock_circulate_stock_holder(symbol="000001"):
     """Get circulating stock holders"""
-    return safe_call(ak.stock_circulate_stock_holder, stock=symbol)
+    return safe_call(ak.stock_circulate_stock_holder, symbol=symbol)
 
 def get_stock_zh_a_gdhs(symbol="000001"):
     """Get A-shares shareholder count"""
@@ -137,7 +140,7 @@ def get_stock_gddh_em():
 
 def get_stock_fund_stock_holder(symbol="000001"):
     """Get fund stock holdings"""
-    return safe_call(ak.stock_fund_stock_holder, stock=symbol)
+    return safe_call(ak.stock_fund_stock_holder, symbol=symbol)
 
 def get_stock_report_fund_hold(symbol="000001", date=""):
     """Get fund holding report"""

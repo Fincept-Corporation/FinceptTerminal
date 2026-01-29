@@ -34,6 +34,7 @@ export interface ApiKeys {
   NASDAQ_API_KEY?: string;
   FINANCIAL_MODELING_PREP_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  DATABENTO_API_KEY?: string;
   [key: string]: string | undefined;
 }
 
@@ -44,6 +45,7 @@ export const PREDEFINED_API_KEYS = [
   { key: 'COINGECKO_API_KEY', label: 'CoinGecko API Key', description: 'Cryptocurrency data' },
   { key: 'NASDAQ_API_KEY', label: 'NASDAQ API Key', description: 'NASDAQ market data' },
   { key: 'FINANCIAL_MODELING_PREP_API_KEY', label: 'Financial Modeling Prep', description: 'Financial statements & ratios' },
+  { key: 'DATABENTO_API_KEY', label: 'Databento API Key', description: 'Institutional-grade market data (Options, Equities, Futures)' },
   { key: 'OPENROUTER_API_KEY', label: 'OpenRouter API Key', description: 'Access 400+ AI models from all providers (Model Library)' },
 ] as const;
 

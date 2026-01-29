@@ -59,7 +59,7 @@ const MaritimeTab = React.lazy(() => import('@/components/tabs/maritime'));
 const ReportBuilderTab = React.lazy(() => import('@/components/tabs/report-builder'));
 const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping'));
 const ExcelTab = React.lazy(() => import('@/components/tabs/excel'));
-const Visualization3DTab = React.lazy(() => import('@/components/tabs/visualization-3d'));
+const SurfaceAnalyticsTab = React.lazy(() => import('@/components/tabs/surface-analytics'));
 const PolymarketTab = React.lazy(() => import('@/components/tabs/polymarket'));
 const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/trade-visualization'));
 const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena'));
@@ -1066,7 +1066,7 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="3d-viz" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
-                <Visualization3DTab />
+                <SurfaceAnalyticsTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="alpha-arena" className="h-full m-0 p-0">

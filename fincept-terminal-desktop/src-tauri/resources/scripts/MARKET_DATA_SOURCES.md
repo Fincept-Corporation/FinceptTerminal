@@ -12,7 +12,6 @@ Access comprehensive market data from leading financial data providers covering 
 |----------|-----------|---------|-----------------|
 | 📊 **Yahoo Finance** | `yfinance_data.py` | ❌ No | Global stocks, ETFs, indices, forex, crypto, commodities |
 | 📈 **Alpha Vantage** | `alphavantage_data.py` | 🔑 Required | Stocks, forex, crypto, technical indicators |
-| 🔷 **Polygon.io** | `polygon_data.py` | 🔑 Required | US stocks, options, forex, crypto - real-time & historical |
 | 🏛️ **NASDAQ** | `nasdaq_data.py` | ❌ No | NASDAQ-listed stocks, market statistics |
 | 💼 **FMP** | `fmp_data.py` | 🔑 Required | Financial Modeling Prep - fundamentals, financials |
 | 📉 **Trading Economics** | `trading_economics_data.py` | 🔑 Required | Global economic indicators, market forecasts |
@@ -24,10 +23,10 @@ Access comprehensive market data from leading financial data providers covering 
 
 | Category | Sources | Data Types |
 |----------|---------|------------|
-| **Equities** | Yahoo Finance, Polygon, NASDAQ, FMP | Quotes, OHLCV, fundamentals, financials |
-| **Options** | Polygon, CBOE | Chains, Greeks, implied volatility, open interest |
+| **Equities** | Yahoo Finance, NASDAQ, FMP | Quotes, OHLCV, fundamentals, financials |
+| **Options** | CBOE | Chains, Greeks, implied volatility, open interest |
 | **Crypto** | CoinGecko, Yahoo Finance, Alpha Vantage | Prices, market cap, volume, exchanges |
-| **Forex** | Yahoo Finance, Alpha Vantage, Polygon | Exchange rates, historical FX data |
+| **Forex** | Yahoo Finance, Alpha Vantage | Exchange rates, historical FX data |
 | **Commodities** | Yahoo Finance, Trading Economics | Metals, energy, agriculture |
 | **Derivatives** | CFTC, CBOE | COT reports, futures positioning, volatility |
 
@@ -36,7 +35,6 @@ Access comprehensive market data from leading financial data providers covering 
 ```bash
 # Required for premium features
 export ALPHA_VANTAGE_API_KEY="your_key_here"     # Get from: https://www.alphavantage.co/support/#api-key
-export POLYGON_API_KEY="your_key_here"           # Get from: https://polygon.io/
 export FMP_API_KEY="your_key_here"               # Get from: https://financialmodelingprep.com/
 export TRADING_ECONOMICS_KEY="your_key_here"     # Get from: https://tradingeconomics.com/api/
 ```
@@ -51,10 +49,6 @@ aapl = get_historical_data('AAPL', period='1y', interval='1d')
 # Alpha Vantage - Technical indicators
 from alphavantage_data import get_technical_indicator
 rsi = get_technical_indicator('AAPL', 'RSI', interval='daily')
-
-# Polygon.io - Real-time quotes
-from polygon_data import get_quote
-quote = get_quote('AAPL')
 
 # CoinGecko - Crypto data
 from coingecko import get_coin_data
@@ -84,14 +78,6 @@ cot = get_cot_report(commodity='gold')
 - Forex and crypto support
 - Fundamental data
 - 500 calls/day (free tier)
-
-### Polygon.io
-- Real-time market data
-- Tick-level historical data
-- Options chains
-- Aggregates (OHLCV)
-- News and sentiment
-- WebSocket support
 
 ### NASDAQ
 - NASDAQ-listed securities
@@ -142,7 +128,6 @@ cot = get_cot_report(commodity='gold')
 |----------|------------------|------------------|-------------|
 | Yahoo Finance | Real-time (15min delay) | Decades | None (unofficial API) |
 | Alpha Vantage | Real-time | 20+ years | 500/day (free), unlimited (paid) |
-| Polygon.io | Real-time | 2+ years (tick-level) | Based on plan |
 | NASDAQ | Real-time | Varies | Generous |
 | FMP | Daily | 10+ years | 250/day (free), more (paid) |
 | Trading Economics | Varies | 70+ years | Based on plan |
@@ -152,7 +137,7 @@ cot = get_cot_report(commodity='gold')
 
 ## Technical Details
 
-- **Protocol**: REST API (all), WebSocket (Polygon)
+- **Protocol**: REST API (all)
 - **Format**: JSON (primary), CSV (some)
 - **Authentication**: API keys via headers or query params
 - **Rate Limiting**: Varies by provider
@@ -160,4 +145,4 @@ cot = get_cot_report(commodity='gold')
 
 ---
 
-**Total Sources**: 9 providers | **Free Access**: 4 sources | **Real-time Data**: 5 sources | **Last Updated**: 2025-12-28
+**Total Sources**: 8 providers | **Free Access**: 4 sources | **Real-time Data**: 5 sources | **Last Updated**: 2025-01-29

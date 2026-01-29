@@ -33,6 +33,9 @@ def safe_call(func, *args, **kwargs):
                 for col in result.columns:
                     if result[col].dtype == 'datetime64[ns]':
                         result[col] = result[col].astype(str)
+                # Replace NaN/Infinity with None for valid JSON
+                result = result.replace([float("inf"), float("-inf")], None)
+                result = result.where(pd.notna(result), None)
                 data = result.to_dict(orient='records')
                 return {"success": True, "data": data, "count": len(data)}
             elif isinstance(result, (list, dict)):
@@ -57,9 +60,9 @@ def get_reits_hist(symbol="180101", period="daily", start_date="20200101", end_d
     """Get REITs historical data"""
     return safe_call(ak.reits_hist_em, symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
 
-def get_reits_hist_min(symbol="180101", period="1"):
+def get_reits_hist_min(symbol="180101"):
     """Get REITs minute historical data"""
-    return safe_call(ak.reits_hist_min_em, symbol=symbol, period=period)
+    return safe_call(ak.reits_hist_min_em, symbol=symbol)
 
 
 # ==================== ENDPOINT REGISTRY ====================

@@ -33,6 +33,9 @@ def safe_call(func, *args, **kwargs):
                 for col in result.columns:
                     if result[col].dtype == 'datetime64[ns]':
                         result[col] = result[col].astype(str)
+                # Replace NaN/Infinity with None for valid JSON
+                result = result.replace([float("inf"), float("-inf")], None)
+                result = result.where(pd.notna(result), None)
                 data = result.to_dict(orient='records')
                 return {"success": True, "data": data, "count": len(data)}
             elif isinstance(result, (list, dict)):
@@ -43,8 +46,12 @@ def safe_call(func, *args, **kwargs):
             if attempt < max_retries - 1:
                 time.sleep(1)
                 continue
-            return {"success": False, "error": str(e), "data": []}
-    return {"success": False, "error": "Max retries exceeded", "data": []}
+            error_msg = str(e)
+            # Add context for common errors
+            if "find_all" in error_msg or "NoneType" in error_msg:
+                error_msg = f"Data source unavailable or temporarily down: {error_msg}"
+            return {"success": False, "error": error_msg, "data": []}
+    return {"success": False, "error": "Data source unavailable after retries", "data": []}
 
 
 # ==================== CARBON TRADING ====================

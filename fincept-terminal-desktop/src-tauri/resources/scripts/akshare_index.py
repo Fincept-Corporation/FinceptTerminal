@@ -30,10 +30,13 @@ def safe_call(func, *args, **kwargs):
             if isinstance(result, pd.DataFrame):
                 if result.empty:
                     return {"success": True, "data": [], "count": 0}
-                # Convert timestamps
+                # Convert timestamps and handle NaN values
                 for col in result.columns:
                     if result[col].dtype == 'datetime64[ns]':
                         result[col] = result[col].astype(str)
+                # Replace NaN/Infinity with None for valid JSON
+                result = result.replace([float('inf'), float('-inf')], None)
+                result = result.where(pd.notna(result), None)
                 data = result.to_dict(orient='records')
                 return {"success": True, "data": data, "count": len(data)}
             elif isinstance(result, (list, dict)):

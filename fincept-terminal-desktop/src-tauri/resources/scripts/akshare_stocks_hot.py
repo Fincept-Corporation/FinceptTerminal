@@ -34,6 +34,9 @@ def safe_call(func, *args, **kwargs):
                 for col in result.columns:
                     if result[col].dtype == 'datetime64[ns]':
                         result[col] = result[col].astype(str)
+                # Replace NaN/Infinity with None for valid JSON
+                result = result.replace([float("inf"), float("-inf")], None)
+                result = result.where(pd.notna(result), None)
                 data = result.to_dict(orient='records')
                 return {"success": True, "data": data, "count": len(data)}
             elif isinstance(result, (list, dict)):
@@ -169,13 +172,15 @@ def get_stock_comment_detail_zlkp_jgcyd_em(symbol="000001"):
 
 # ==================== WEIBO SENTIMENT ====================
 
-def get_stock_js_weibo_report(symbol="000001"):
-    """Get Weibo stock report"""
-    return safe_call(ak.stock_js_weibo_report, stock=symbol)
+def get_stock_js_weibo_report(time_period="CNHOUR12"):
+    """Get Weibo stock report
+    time_period: CNHOUR2, CNHOUR6, CNHOUR12, CNHOUR24, CNDAY7, CNDAY30
+    """
+    return safe_call(ak.stock_js_weibo_report, time_period=time_period)
 
-def get_stock_js_weibo_nlp_time(symbol="000001"):
-    """Get Weibo NLP time data"""
-    return safe_call(ak.stock_js_weibo_nlp_time, stock=symbol)
+def get_stock_js_weibo_nlp_time():
+    """Get Weibo NLP time data (no parameters required)"""
+    return safe_call(ak.stock_js_weibo_nlp_time)
 
 
 # ==================== ESG DATA ====================

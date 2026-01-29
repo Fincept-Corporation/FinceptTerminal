@@ -274,11 +274,48 @@ class GlobalEconomicsWrapper:
 
         return {
             "success": True,
-            "endpoints": endpoints,
+            "data": {
+                "available_endpoints": endpoints,
+                "total_count": len(endpoints),
+                "categories": {
+                    "USA": ["macro_usa_gdp_monthly", "macro_usa_cpi_monthly", "macro_usa_unemployment_rate"],
+                    "Eurozone": ["macro_euro_gdp_yoy", "macro_euro_cpi_yoy", "macro_euro_manufacturing_pmi"],
+                    "UK": ["macro_uk_gdp_yearly", "macro_uk_cpi_yearly", "macro_uk_unemployment_rate"],
+                    "Japan": ["macro_japan_cpi_yearly", "macro_japan_unemployment_rate"],
+                    "Canada": ["macro_canada_gdp_monthly", "macro_canada_cpi_monthly", "macro_canada_unemployment_rate"],
+                    "Australia": ["macro_australia_cpi_quarterly", "macro_australia_unemployment_rate"],
+                },
+                "timestamp": int(datetime.now().timestamp())
+            },
             "count": len(endpoints),
             "timestamp": int(datetime.now().timestamp())
         }
 
 
-# Export wrapper instance
-global_economics_wrapper = GlobalEconomicsWrapper()
+# ==================== CLI ====================
+def main():
+    wrapper = GlobalEconomicsWrapper()
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_economics_global.py <endpoint>"}))
+        return
+
+    endpoint = sys.argv[1]
+
+    endpoint_map = {
+        "get_all_endpoints": wrapper.get_all_available_endpoints,
+        "macro_usa_gdp_monthly": wrapper.get_macro_usa_gdp_monthly,
+        "macro_usa_cpi_monthly": wrapper.get_macro_usa_cpi_monthly,
+        "macro_euro_gdp_yoy": wrapper.get_macro_euro_gdp_yoy,
+        "macro_uk_gdp_yearly": wrapper.get_macro_uk_gdp_yearly,
+    }
+
+    method = endpoint_map.get(endpoint)
+    if method:
+        result = method()
+        print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+    else:
+        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
+
+if __name__ == "__main__":
+    main()

@@ -1,13 +1,16 @@
 /**
  * AKShare Data Explorer Tab
  *
- * Comprehensive interface for exploring AKShare data sources including:
- * - Bonds (Chinese & International)
- * - Derivatives (Options, Futures)
- * - China Economics (GDP, CPI, PMI, etc.)
- * - Global Economics (US, EU, UK, Japan, etc.)
- * - Funds (ETFs, Mutual Funds)
- * - Alternative Data (Air Quality, Carbon, Real Estate, etc.)
+ * Comprehensive interface for exploring 26 AKShare data sources with 1000+ endpoints:
+ * - Bonds (Chinese & International) - 28 endpoints
+ * - Derivatives (Options, Futures) - 46 endpoints
+ * - China Economics (GDP, CPI, PMI, etc.) - 85 endpoints
+ * - Global Economics (US, EU, UK, Japan, etc.) - 35 endpoints
+ * - Funds (ETFs, Mutual Funds) - 70+ endpoints
+ * - Stocks (Realtime, Historical, Financial) - 150+ endpoints
+ * - Alternative Data (Air Quality, Carbon, Real Estate, etc.) - 14 endpoints
+ * - Macro Global (96 endpoints) - Multi-country economic indicators
+ * - Miscellaneous (129 endpoints) - AMAC, FRED, Car Sales, Movies, etc.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -137,6 +140,15 @@ const AkShareDataTab: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
 
+  // Query Parameters
+  const [symbol, setSymbol] = useState('000001');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [period, setPeriod] = useState('daily');
+  const [market, setMarket] = useState('sh');
+  const [adjust, setAdjust] = useState('');
+  const [showParameters, setShowParameters] = useState(false);
+
   // Debug: Log language on mount and changes
   useEffect(() => {
     console.log('AkShare Tab - Current Language:', currentLanguage);
@@ -207,6 +219,48 @@ const AkShareDataTab: React.FC = () => {
     }
   }, []);
 
+  // Helper function to build parameters based on endpoint name
+  const buildParametersForEndpoint = (endpoint: string): string[] | undefined => {
+    const params: string[] = [];
+
+    // Detect if endpoint needs symbol/stock parameter
+    const needsSymbol = endpoint.includes('stock') || endpoint.includes('holder') ||
+                       endpoint.includes('fund') || endpoint.includes('esg') ||
+                       endpoint.includes('comment') || endpoint.includes('individual');
+
+    // Detect if endpoint needs date parameters
+    const needsDates = endpoint.includes('hist') || endpoint.includes('historical');
+
+    // Detect if endpoint needs period parameter
+    const needsPeriod = endpoint.includes('hist') && !endpoint.includes('min');
+
+    // Detect if endpoint needs market parameter
+    const needsMarket = endpoint.includes('individual_fund_flow');
+
+    if (needsSymbol && symbol) {
+      params.push(symbol);
+    }
+
+    if (needsPeriod && period) {
+      params.push(period);
+    }
+
+    if (needsDates) {
+      if (startDate) params.push(startDate);
+      if (endDate) params.push(endDate);
+    }
+
+    if (adjust) {
+      params.push(adjust);
+    }
+
+    if (needsMarket && market) {
+      params.push(market);
+    }
+
+    return params.length > 0 ? params : undefined;
+  };
+
   const loadEndpoints = async (script: string) => {
     setLoadingEndpoints(true);
     setEndpoints([]);
@@ -218,7 +272,7 @@ const AkShareDataTab: React.FC = () => {
       if (response.success && response.data) {
         // Don't use the parser for endpoints - they have a special structure
         // Handle nested data structure from Python directly
-        let endpointData = response.data;
+        let endpointData = response.data as any;
 
         // Handle nested data.data structure (common from Python)
         if (endpointData.data && typeof endpointData.data === 'object') {
@@ -309,7 +363,7 @@ const AkShareDataTab: React.FC = () => {
     }
   };
 
-  const executeQuery = async (script: string, endpoint: string) => {
+  const executeQuery = async (script: string, endpoint: string, customParams?: string[]) => {
     setLoading(true);
     setError(null);
     setData(null);
@@ -321,7 +375,9 @@ const AkShareDataTab: React.FC = () => {
     setTranslatedPages(new Map());
 
     try {
-      const response = await AKShareAPI.query(script, endpoint);
+      // Build parameters array if provided
+      const params = customParams || buildParametersForEndpoint(endpoint);
+      const response = await AKShareAPI.query(script, endpoint, params);
 
       console.log('Raw AKShare response:', response);
 
@@ -687,7 +743,8 @@ const AkShareDataTab: React.FC = () => {
                       textAlign: 'left',
                       backgroundColor: isSelected ? `${FINCEPT.ORANGE}15` : 'transparent',
                       borderLeft: isSelected ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
-                      border: 'none',
+                      borderTop: 'none',
+                      borderRight: 'none',
                       borderBottom: `1px solid ${FINCEPT.BORDER}`,
                       cursor: 'pointer',
                       transition: 'all 0.2s',
@@ -883,7 +940,9 @@ const AkShareDataTab: React.FC = () => {
                                       backgroundColor: isActive ? `${FINCEPT.ORANGE}15` : 'transparent',
                                       borderLeft: isActive ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
                                       color: isActive ? FINCEPT.CYAN : FINCEPT.WHITE,
-                                      border: 'none',
+                                      borderTop: 'none',
+                                      borderRight: 'none',
+                                      borderBottom: 'none',
                                       borderRadius: '2px',
                                       cursor: 'pointer',
                                       transition: 'all 0.2s',
@@ -936,7 +995,9 @@ const AkShareDataTab: React.FC = () => {
                                 backgroundColor: isActive ? `${FINCEPT.ORANGE}15` : 'transparent',
                                 borderLeft: isActive ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
                                 color: isActive ? FINCEPT.CYAN : FINCEPT.WHITE,
-                                border: 'none',
+                                borderTop: 'none',
+                                borderRight: 'none',
+                                borderBottom: 'none',
                                 borderRadius: '2px',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
@@ -1159,6 +1220,30 @@ const AkShareDataTab: React.FC = () => {
                 </>
               )}
 
+              {/* Parameters Toggle Button */}
+              {selectedEndpoint && selectedSource && (
+                <button
+                  onClick={() => setShowParameters(!showParameters)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    backgroundColor: showParameters ? FINCEPT.PURPLE : 'transparent',
+                    color: showParameters ? FINCEPT.WHITE : FINCEPT.MUTED,
+                    border: `1px solid ${showParameters ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                  title="Toggle Parameters"
+                >
+                  <Filter size={12} />
+                  PARAMS
+                </button>
+              )}
+
               {selectedEndpoint && selectedSource && (
                 <button
                   onClick={() => executeQuery(selectedSource.script, selectedEndpoint)}
@@ -1184,6 +1269,174 @@ const AkShareDataTab: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Parameters Panel */}
+          {showParameters && selectedEndpoint && (
+            <div style={{
+              backgroundColor: FINCEPT.PANEL_BG,
+              borderTop: `1px solid ${FINCEPT.BORDER}`,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              padding: '16px',
+            }}>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.ORANGE, marginBottom: '12px', letterSpacing: '0.5px' }}>
+                QUERY PARAMETERS
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                {/* Symbol/Stock Input */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.MUTED, marginBottom: '6px', fontWeight: 600 }}>
+                    SYMBOL / STOCK
+                  </label>
+                  <input
+                    type="text"
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value)}
+                    placeholder="e.g., 000001, 600000"
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.WHITE,
+                      fontSize: '10px',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Period Selector */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.MUTED, marginBottom: '6px', fontWeight: 600 }}>
+                    PERIOD
+                  </label>
+                  <select
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.WHITE,
+                      fontSize: '10px',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                {/* Market Selector */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.MUTED, marginBottom: '6px', fontWeight: 600 }}>
+                    MARKET
+                  </label>
+                  <select
+                    value={market}
+                    onChange={(e) => setMarket(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.WHITE,
+                      fontSize: '10px',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="sh">Shanghai (sh)</option>
+                    <option value="sz">Shenzhen (sz)</option>
+                  </select>
+                </div>
+
+                {/* Adjust Type */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.MUTED, marginBottom: '6px', fontWeight: 600 }}>
+                    ADJUST
+                  </label>
+                  <select
+                    value={adjust}
+                    onChange={(e) => setAdjust(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.WHITE,
+                      fontSize: '10px',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">No Adjustment</option>
+                    <option value="qfq">Forward (qfq)</option>
+                    <option value="hfq">Backward (hfq)</option>
+                  </select>
+                </div>
+
+                {/* Start Date */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.MUTED, marginBottom: '6px', fontWeight: 600 }}>
+                    START DATE
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.WHITE,
+                      fontSize: '10px',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '9px', color: FINCEPT.MUTED, marginBottom: '6px', fontWeight: 600 }}>
+                    END DATE
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.WHITE,
+                      fontSize: '10px',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginTop: '12px', fontSize: '9px', color: FINCEPT.MUTED, fontStyle: 'italic' }}>
+                ℹ️ Parameters are automatically selected based on endpoint. Not all parameters are used for every query.
+              </div>
+            </div>
+          )}
 
           {/* Data Content */}
           <div className="akshare-scrollbar" style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', padding: '16px' }}>
@@ -1513,7 +1766,7 @@ const AkShareDataTab: React.FC = () => {
                     AKSHARE DATA EXPLORER
                   </div>
                   <div style={{ fontSize: '10px', marginBottom: '24px', color: FINCEPT.MUTED }}>
-                    Access 400+ financial data endpoints covering bonds, derivatives, economics, funds, and alternative data from Chinese and global markets.
+                    Access 1000+ financial data endpoints across 26 data sources covering bonds, derivatives, economics, stocks, funds, and alternative data from Chinese and global markets.
                   </div>
                   <div style={{
                     display: 'grid',

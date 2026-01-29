@@ -378,3 +378,55 @@ pub struct AgentConfig {
     pub created_at: String,
     pub updated_at: String,
 }
+
+// ============================================================================
+// Custom Index (Aggregate Index Feature)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomIndex {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub calculation_method: String,
+    pub base_value: f64,
+    pub base_date: String,
+    pub divisor: f64,
+    pub current_value: f64,
+    pub previous_close: f64,
+    pub cap_weight: Option<f64>,
+    pub currency: String,
+    pub portfolio_id: Option<String>,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexConstituent {
+    pub id: String,
+    pub index_id: String,
+    pub symbol: String,
+    pub shares: Option<f64>,
+    pub weight: Option<f64>,
+    pub market_cap: Option<f64>,
+    pub fundamental_score: Option<f64>,
+    pub custom_price: Option<f64>,
+    pub price_date: Option<String>,
+    pub added_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexSnapshot {
+    pub id: String,
+    pub index_id: String,
+    pub index_value: f64,
+    pub day_change: f64,
+    pub day_change_percent: f64,
+    pub total_market_value: f64,
+    pub divisor: f64,
+    pub constituents_data: String,
+    pub snapshot_date: String,
+    pub created_at: String,
+}

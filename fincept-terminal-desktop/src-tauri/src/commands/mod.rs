@@ -155,3 +155,6 @@ pub mod akshare;
 
 // LLM Models - LiteLLM provider and model listing
 pub mod llm_models;
+
+// Custom Index - Aggregate Index Feature
+pub mod custom_index;

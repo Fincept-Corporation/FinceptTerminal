@@ -28,93 +28,58 @@ export interface AKShareDataSource {
   categories: string[];
 }
 
+// ALL VERIFIED WORKING FILES
 export const AKSHARE_DATA_SOURCES: AKShareDataSource[] = [
   {
     id: 'data',
     name: 'Market Data',
     script: 'akshare_data.py',
-    description: 'Stock quotes, indices, forex, futures, ETFs - real-time and historical data',
+    description: 'Stock quotes, indices, forex, futures, ETFs - 14 endpoints',
     icon: 'BarChart3',
     color: '#06B6D4',
-    categories: ['Stock Market', 'Forex', 'Futures', 'ETF', 'Indices', 'Macro']
+    categories: ['Stocks', 'Funds', 'Macro', 'Bonds', 'Forex', 'Futures']
   },
   {
     id: 'index',
     name: 'Index Data',
     script: 'akshare_index.py',
-    description: 'Index constituents, weights, historical data, global indices, Shenwan, CNI',
+    description: 'Index constituents, weights, historical - 74 endpoints',
     icon: 'TrendingUp',
     color: '#6366F1',
-    categories: ['Chinese Index', 'Shenwan Index', 'CNI Index', 'Global Index', 'Option QVIX', 'Economic Index', 'Commodity Index']
+    categories: ['Chinese Index', 'Shenwan Index', 'CNI Index', 'Global Index']
   },
   {
     id: 'futures',
     name: 'Futures',
     script: 'akshare_futures.py',
-    description: 'Futures contracts, warehouse receipts, positions, spot prices, delivery',
+    description: 'Futures contracts, positions, spot prices - 59 endpoints',
     icon: 'Activity',
     color: '#F97316',
-    categories: ['Contract Info', 'Realtime', 'Historical', 'Global', 'Warehouse', 'Positions', 'Delivery', 'Spot', 'Inventory', 'Hog']
+    categories: ['Contract Info', 'Realtime', 'Historical', 'Global', 'Warehouse', 'Positions']
   },
   {
     id: 'bonds',
     name: 'Bonds',
     script: 'akshare_bonds.py',
-    description: 'Chinese & International bond markets, yield curves, government & corporate bonds',
+    description: 'Bond markets, yield curves, government & corporate - 28 endpoints',
     icon: 'Landmark',
     color: '#3B82F6',
-    categories: ['Chinese Bond Market', 'Yield Curves', 'Government Bonds', 'Corporate Bonds', 'Convertible Bonds', 'International Bonds', 'Bond Indices', 'Ratings']
-  },
-  {
-    id: 'derivatives',
-    name: 'Derivatives',
-    script: 'akshare_derivatives.py',
-    description: 'Options, futures, Greeks, volatility, spreads from Chinese exchanges',
-    icon: 'LineChart',
-    color: '#8B5CF6',
-    categories: ['Options', 'Futures', 'Greeks', 'Volatility', 'Spreads', 'Inventory']
+    categories: ['Chinese Bond Market', 'Yield Curves', 'Government Bonds', 'Corporate Bonds', 'Convertible Bonds']
   },
   {
     id: 'currency',
     name: 'Currency/Forex',
     script: 'akshare_currency.py',
-    description: 'Exchange rates, currency pairs, historical forex data, currency converter',
+    description: 'Exchange rates, currency pairs - 8 endpoints',
     icon: 'DollarSign',
     color: '#22C55E',
     categories: ['Exchange Rates', 'Currency Data']
   },
   {
-    id: 'china_economics',
-    name: 'China Economics',
-    script: 'akshare_economics_china.py',
-    description: 'Chinese macro indicators: GDP, CPI, PPI, PMI, money supply, trade data',
-    icon: 'TrendingUp',
-    color: '#EF4444',
-    categories: ['GDP', 'Inflation', 'PMI', 'Money Supply', 'Trade', 'Industrial', 'Consumer', 'Fiscal', 'Banking', 'Real Estate']
-  },
-  {
-    id: 'global_economics',
-    name: 'Global Economics',
-    script: 'akshare_economics_global.py',
-    description: 'US, Eurozone, UK, Japan, Australia, Canada macro data & global indicators',
-    icon: 'Globe',
-    color: '#10B981',
-    categories: ['US', 'Eurozone', 'UK', 'Japan', 'Australia', 'Canada', 'Switzerland', 'Global Indices', 'Commodities']
-  },
-  {
-    id: 'funds',
-    name: 'Funds',
-    script: 'akshare_funds_expanded.py',
-    description: 'ETF analytics, mutual funds, fund ratings, risk metrics, flows',
-    icon: 'PieChart',
-    color: '#F59E0B',
-    categories: ['ETF', 'Mutual Funds', 'Fund Rankings', 'Risk Metrics', 'Fund Flows', 'Private Equity']
-  },
-  {
     id: 'energy',
     name: 'Energy',
     script: 'akshare_energy.py',
-    description: 'Carbon trading markets, oil prices, energy data from China and EU',
+    description: 'Carbon trading, oil prices - 8 endpoints',
     icon: 'Zap',
     color: '#FBBF24',
     categories: ['Carbon Trading', 'Oil']
@@ -123,7 +88,7 @@ export const AKSHARE_DATA_SOURCES: AKShareDataSource[] = [
     id: 'crypto',
     name: 'Crypto',
     script: 'akshare_crypto.py',
-    description: 'Bitcoin CME futures, holding reports, crypto spot prices',
+    description: 'Bitcoin CME futures, crypto spot - 3 endpoints',
     icon: 'Bitcoin',
     color: '#F7931A',
     categories: ['Bitcoin', 'Spot']
@@ -132,7 +97,7 @@ export const AKSHARE_DATA_SOURCES: AKShareDataSource[] = [
     id: 'news',
     name: 'News',
     script: 'akshare_news.py',
-    description: 'CCTV news, Baidu economic news, trade notifications, dividends',
+    description: 'CCTV news, economic news - 5 endpoints',
     icon: 'Newspaper',
     color: '#64748B',
     categories: ['News Feeds', 'Trade Notifications']
@@ -141,130 +106,164 @@ export const AKSHARE_DATA_SOURCES: AKShareDataSource[] = [
     id: 'reits',
     name: 'REITs',
     script: 'akshare_reits.py',
-    description: 'Real Estate Investment Trusts - realtime, historical, minute data',
+    description: 'Real Estate Investment Trusts - 3 endpoints',
     icon: 'Building',
     color: '#0EA5E9',
     categories: ['REITs']
   },
   {
-    id: 'alternative',
-    name: 'Alternative Data',
-    script: 'akshare_alternative.py',
-    description: 'Air quality, carbon trading, energy, real estate, auto sales, sentiment',
-    icon: 'Layers',
-    color: '#EC4899',
-    categories: ['Air Quality', 'Carbon Trading', 'Energy', 'Real Estate', 'Auto Sales', 'Movies', 'Demographics', 'Sentiment', 'Rankings']
-  },
-  {
-    id: 'analysis',
-    name: 'Market Analysis',
-    script: 'akshare_analysis.py',
-    description: 'Technical analysis, market breadth, sector rotation, smart money',
-    icon: 'BarChart3',
-    color: '#14B8A6',
-    categories: ['Technical', 'Breadth', 'Sectors', 'Smart Money']
-  },
-  {
-    id: 'company',
-    name: 'Company Info',
-    script: 'akshare_company_info.py',
-    description: 'Company profiles, basic info, financial data for CN, HK, US stocks',
-    icon: 'Building2',
-    color: '#8B5CF6',
-    categories: ['CN Stocks', 'HK Stocks', 'US Stocks', 'Company Profiles']
-  },
-  // ==================== STOCK DATA (8 Batches - 398 endpoints) ====================
-  {
     id: 'stocks_realtime',
     name: 'Stocks: Realtime',
     script: 'akshare_stocks_realtime.py',
-    description: 'Realtime stock data: A-shares, B-shares, HK, US, indices, info',
+    description: 'Realtime A-shares, B-shares, HK, US - 49 endpoints',
     icon: 'Activity',
     color: '#10B981',
-    categories: ['A-Shares Realtime', 'B-Shares', 'HK Stocks', 'US Stocks', 'A+H Shares', 'Index Realtime', 'STAR Market', 'Stock Info', 'Global Info', 'Individual Info']
+    categories: ['A-Shares Realtime', 'B-Shares', 'HK Stocks', 'US Stocks']
   },
   {
     id: 'stocks_historical',
     name: 'Stocks: Historical',
     script: 'akshare_stocks_historical.py',
-    description: 'Historical price data: daily, minute, intraday, tick, sector',
+    description: 'Historical daily/minute/tick data - 52 endpoints',
     icon: 'Clock',
     color: '#3B82F6',
-    categories: ['A-Shares Historical', 'B-Shares Historical', 'HK Historical', 'US Historical', 'A+H Historical', 'Index Historical', 'STAR Market Historical', 'Intraday', 'Tick Data', 'Price Data', 'Bid-Ask', 'Sector Data', 'Classification', 'Exchange Summary', 'Valuation', 'Comparison']
+    categories: ['A-Shares Historical', 'HK Historical', 'US Historical', 'Intraday']
   },
   {
     id: 'stocks_financial',
     name: 'Stocks: Financial',
     script: 'akshare_stocks_financial.py',
-    description: 'Financial statements, analysis, earnings, dividends, profiles',
+    description: 'Financial statements, earnings - 45 endpoints',
     icon: 'FileText',
     color: '#8B5CF6',
-    categories: ['Balance Sheet', 'Income Statement', 'Cash Flow', 'Financial Analysis', 'HK Financial', 'US Financial', 'THS Financial', 'Earnings', 'Profit Forecast', 'Dividend', 'Company Profile']
+    categories: ['Balance Sheet', 'Income Statement', 'Cash Flow', 'Earnings']
   },
   {
     id: 'stocks_holders',
     name: 'Stocks: Shareholders',
     script: 'akshare_stocks_holders.py',
-    description: 'Shareholder data, holdings, institutional ownership, pledge',
+    description: 'Shareholder data, holdings - 49 endpoints',
     icon: 'Users',
     color: '#F59E0B',
-    categories: ['Major Shareholders', 'Shareholder Analysis', 'Shareholder Changes', 'Fund Holdings', 'Institutional Holdings', 'Management Holdings', 'Share Changes', 'Executive Holdings', 'Restricted Shares', 'Equity Pledge', 'CNINFO Holdings']
+    categories: ['Major Shareholders', 'Fund Holdings', 'Institutional']
   },
   {
     id: 'stocks_funds',
     name: 'Stocks: Fund Flows',
     script: 'akshare_stocks_funds.py',
-    description: 'Fund flows, capital movement, block trades, LHB, IPO',
+    description: 'Fund flows, block trades, IPO - 56 endpoints',
     icon: 'ArrowRightLeft',
     color: '#EF4444',
-    categories: ['Individual Fund Flow', 'Market Fund Flow', 'Fund Flow Types', 'Block Trade', 'LHB', 'LHB Broker', 'Repurchase', 'Allotment', 'IPO', 'New Issues']
+    categories: ['Fund Flow', 'Block Trade', 'LHB', 'IPO']
   },
   {
     id: 'stocks_board',
     name: 'Stocks: Boards',
     script: 'akshare_stocks_board.py',
-    description: 'Industry boards, concept boards, ZT pool, analyst, rankings',
+    description: 'Industry/concept boards - 49 endpoints',
     icon: 'LayoutGrid',
     color: '#6366F1',
-    categories: ['Concept Board', 'Industry Board', 'Board Changes', 'Industry Category', 'ZT Pool', 'Analyst', 'Research', 'Rankings']
+    categories: ['Concept Board', 'Industry Board', 'Rankings']
   },
   {
     id: 'stocks_margin',
     name: 'Stocks: Margin & HSGT',
     script: 'akshare_stocks_margin.py',
-    description: 'Margin trading, HSGT (Stock Connect), registration, PE/PB',
+    description: 'Margin trading, HSGT - 46 endpoints',
     icon: 'Percent',
     color: '#EC4899',
-    categories: ['Margin Trading', 'HSGT', 'Exchange Rate', 'Registration', 'HK Indicator', 'PE/PB Data', 'Market Indicators', 'A-Share Utils', 'Market Activity', 'CYQ', 'STAQ']
+    categories: ['Margin Trading', 'HSGT', 'PE/PB']
   },
   {
     id: 'stocks_hot',
     name: 'Stocks: Hot & News',
     script: 'akshare_stocks_hot.py',
-    description: 'Hot stocks, news, comments, ESG, sentiment, special data',
+    description: 'Hot stocks, news, sentiment - 55 endpoints',
     icon: 'Flame',
     color: '#F97316',
-    categories: ['Hot Stocks', 'HK Hot Stocks', 'XueQiu Hot', 'News', 'Comments', 'Weibo Sentiment', 'ESG', 'Investor Relations', 'SNS Info', 'Disclosure', 'Special Data', 'Vote', 'Management']
+    categories: ['Hot Stocks', 'News', 'ESG', 'Sentiment']
   },
-  // ==================== NEW WRAPPERS (225 functions) ====================
+  {
+    id: 'alternative',
+    name: 'Alternative Data',
+    script: 'akshare_alternative.py',
+    description: 'Air quality, carbon, real estate - 14 endpoints',
+    icon: 'Layers',
+    color: '#EC4899',
+    categories: ['Air Quality', 'Carbon', 'Energy', 'Movies']
+  },
+  {
+    id: 'analysis',
+    name: 'Market Analysis',
+    script: 'akshare_analysis.py',
+    description: 'Technical analysis, market breadth',
+    icon: 'BarChart3',
+    color: '#14B8A6',
+    categories: ['Technical', 'Breadth', 'Fund Flow']
+  },
+  {
+    id: 'derivatives',
+    name: 'Derivatives',
+    script: 'akshare_derivatives.py',
+    description: 'Options and derivatives data - 46 endpoints',
+    icon: 'TrendingUp',
+    color: '#8B5CF6',
+    categories: ['CFFEX Options', 'SSE Options', 'Commodity Options', 'Historical']
+  },
+  {
+    id: 'economics_china',
+    name: 'China Economics',
+    script: 'akshare_economics_china.py',
+    description: 'Chinese economic indicators - 85 endpoints',
+    icon: 'LineChart',
+    color: '#DC2626',
+    categories: ['Core Indicators', 'Monetary', 'Trade', 'Industry', 'Real Estate']
+  },
+  {
+    id: 'economics_global',
+    name: 'Global Economics',
+    script: 'akshare_economics_global.py',
+    description: 'International economic indicators - 35 endpoints',
+    icon: 'Globe',
+    color: '#059669',
+    categories: ['USA', 'Eurozone', 'UK', 'Japan', 'Canada', 'Australia']
+  },
+  {
+    id: 'funds_expanded',
+    name: 'Funds Expanded',
+    script: 'akshare_funds_expanded.py',
+    description: 'Comprehensive fund data - 70 endpoints',
+    icon: 'Wallet',
+    color: '#7C3AED',
+    categories: ['Fund Rankings', 'Fund Info', 'Holdings', 'Managers', 'Flows']
+  },
+  {
+    id: 'company_info',
+    name: 'Company Info',
+    script: 'akshare_company_info.py',
+    description: 'Company profiles and details',
+    icon: 'Building2',
+    color: '#0891B2',
+    categories: ['CN Stocks', 'HK Stocks', 'US Stocks']
+  },
   {
     id: 'macro',
-    name: 'Macro Economics',
+    name: 'Macro Global',
     script: 'akshare_macro.py',
-    description: 'Global macroeconomic data: 96 indicators from Australia, Brazil, Canada, China, Euro, Germany, India, Japan, Russia, Switzerland, UK, USA',
-    icon: 'Globe',
-    color: '#14B8A6',
-    categories: ['Australia', 'Brazil/India/Russia/NZ', 'Canada', 'China', 'Commodities', 'Euro Zone', 'Germany', 'Global', 'Japan', 'China Financial', 'Shipping', 'Switzerland', 'UK', 'USA']
+    description: 'Global macro economic data - 96 endpoints',
+    icon: 'TrendingUp',
+    color: '#C026D3',
+    categories: ['Australia', 'Brazil', 'India', 'Russia', 'Canada', 'Euro', 'Germany', 'Japan', 'Switzerland', 'UK', 'USA']
   },
   {
     id: 'misc',
     name: 'Miscellaneous',
     script: 'akshare_misc.py',
-    description: 'Additional data sources: futures get functions, spot markets, AMAC, stock analytics, articles, FX, air quality, cars, SW index, QDII, FRED, migration, NLP, and more',
-    icon: 'Layers',
-    color: '#A855F7',
-    categories: ['Get Functions', 'Spot Markets', 'AMAC', 'Stock Functions', 'Academic Articles', 'FX', 'Air Quality', 'Car Market', 'SW Index', 'Fund Announcements', 'Movie Box Office', 'QDII', 'FRED', 'Migration', 'NLP', 'QHKC Tools', 'Repo', 'Realized Volatility', 'Sunrise', 'Video', 'Others']
-  }
+    description: 'Misc data sources - 129 endpoints',
+    icon: 'Package',
+    color: '#EA580C',
+    categories: ['AMAC', 'Air Quality', 'Car Sales', 'Movies', 'FRED', 'Migration']
+  },
 ];
 
 export class AKShareAPI {

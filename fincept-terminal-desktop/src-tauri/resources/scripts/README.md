@@ -45,7 +45,7 @@ scripts/
 ## Key Features
 
 ### Data Integration (60+ Sources)
-- **Market Data**: Yahoo Finance, Polygon.io, Alpha Vantage, TradingView, Databento
+- **Market Data**: Yahoo Finance, Alpha Vantage, TradingView, Databento
 - **Economic Data**: FRED, World Bank, IMF, OECD, ECB, BEA, BLS
 - **Crypto**: CoinGecko, Kraken, Binance
 - **Government**: SEC Edgar, Congress.gov, Federal Reserve

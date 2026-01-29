@@ -350,17 +350,14 @@ class AKShareDataWrapper:
     # ==================== UTILITY FUNCTIONS ====================
 
     def get_all_available_endpoints(self) -> Dict[str, Any]:
-        """Get list of all available endpoints in this wrapper"""
-        # Return the actual endpoint names used in endpoint_map, not method names
+        """Get list of all WORKING endpoints in this wrapper"""
         endpoints = [
-            "stock_zh_spot", "stock_us_spot", "stock_hk_spot", "stock_symbols", "us_stock_symbols",
-            "fund_etf_spot", "fund_rank",
+            "stock_zh_spot", "stock_us_spot", "stock_hk_spot", "stock_symbols",
+            "fund_etf_spot", "fund_manager",
             "china_gdp", "china_cpi", "china_pmi",
             "bond_spot", "bond_yield",
             "currency_rates", "forex_spot",
-            "futures_spot",
-            "air_quality", "carbon_trading",
-            "industry_pe", "hot_rank", "north_south_flow"
+            "futures_spot"
         ]
         return {
             "success": True,
@@ -368,14 +365,12 @@ class AKShareDataWrapper:
                 "available_endpoints": endpoints,
                 "total_count": len(endpoints),
                 "categories": {
-                    "Stock Market": ["stock_zh_spot", "stock_us_spot", "stock_hk_spot", "stock_symbols", "us_stock_symbols"],
-                    "Funds": ["fund_etf_spot", "fund_rank"],
-                    "Economic": ["china_gdp", "china_cpi", "china_pmi"],
+                    "Stocks": ["stock_zh_spot", "stock_us_spot", "stock_hk_spot", "stock_symbols"],
+                    "Funds": ["fund_etf_spot", "fund_manager"],
+                    "Macro": ["china_gdp", "china_cpi", "china_pmi"],
                     "Bonds": ["bond_spot", "bond_yield"],
-                    "Currency & Forex": ["currency_rates", "forex_spot"],
-                    "Futures": ["futures_spot"],
-                    "Alternative Data": ["air_quality", "carbon_trading"],
-                    "Market Analytics": ["industry_pe", "hot_rank", "north_south_flow"]
+                    "Forex": ["currency_rates", "forex_spot"],
+                    "Futures": ["futures_spot"]
                 },
                 "timestamp": int(datetime.now().timestamp())
             }
@@ -403,29 +398,29 @@ def main():
     endpoint = sys.argv[1]
     args = sys.argv[2:] if len(sys.argv) > 2 else []
 
-    # Map endpoint names to method calls (original endpoints)
+    # Map endpoint names to method calls - ONLY WORKING ENDPOINTS
     endpoint_map = {
         "get_all_endpoints": wrapper.get_all_available_endpoints,
+        # Stocks - confirmed working
         "stock_zh_spot": wrapper.get_stock_zh_a_spot,
         "stock_us_spot": wrapper.get_stock_us_spot,
         "stock_hk_spot": wrapper.get_stock_hk_spot,
         "stock_symbols": wrapper.get_stock_info_a_code_name,
-        "us_stock_symbols": wrapper.get_us_stock_name,
+        # Funds - confirmed working
         "fund_etf_spot": wrapper.get_fund_etf_spot,
-        "fund_rank": wrapper.get_fund_rank_em,
+        "fund_manager": wrapper.get_fund_manager,
+        # Macro - confirmed working
         "china_gdp": wrapper.get_macro_china_gdp,
         "china_cpi": wrapper.get_macro_china_cpi,
         "china_pmi": wrapper.get_macro_china_pmi,
+        # Bonds - confirmed working
         "bond_spot": wrapper.get_bond_zh_hs_spot,
         "bond_yield": wrapper.get_bond_china_yield,
+        # Forex - confirmed working
         "currency_rates": wrapper.get_currency_boc_sina,
         "forex_spot": wrapper.get_forex_spot,
+        # Futures - confirmed working
         "futures_spot": wrapper.get_futures_zh_spot,
-        "air_quality": wrapper.get_air_quality_hebei,
-        "carbon_trading": wrapper.get_energy_carbon,
-        "industry_pe": wrapper.get_stock_industry_pe,
-        "hot_rank": wrapper.get_stock_hot_rank,
-        "north_south_flow": wrapper.get_stock_hsgt,
       }
 
     method = endpoint_map.get(endpoint)

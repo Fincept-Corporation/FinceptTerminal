@@ -794,7 +794,78 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_alpha_leaderboard_competition ON alpha_arena_leaderboard(competition_id);
-        CREATE INDEX IF NOT EXISTS idx_alpha_leaderboard_cycle ON alpha_arena_leaderboard(cycle_number DESC)
+        CREATE INDEX IF NOT EXISTS idx_alpha_leaderboard_cycle ON alpha_arena_leaderboard(cycle_number DESC);
+
+        -- =============================================================================
+        -- Custom Index Tables (Aggregate Index Feature)
+        -- =============================================================================
+
+        -- Custom indices table (user-created indices)
+        CREATE TABLE IF NOT EXISTS custom_indices (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            calculation_method TEXT NOT NULL CHECK (calculation_method IN (
+                'price_weighted', 'market_cap_weighted', 'equal_weighted',
+                'float_adjusted', 'fundamental_weighted', 'modified_market_cap',
+                'factor_weighted', 'risk_parity', 'geometric_mean', 'capped_weighted'
+            )),
+            base_value REAL NOT NULL DEFAULT 100,
+            base_date TEXT NOT NULL,
+            divisor REAL NOT NULL DEFAULT 1,
+            current_value REAL NOT NULL DEFAULT 100,
+            previous_close REAL NOT NULL DEFAULT 100,
+            cap_weight REAL,
+            currency TEXT DEFAULT 'USD',
+            portfolio_id TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_custom_indices_active ON custom_indices(is_active);
+        CREATE INDEX IF NOT EXISTS idx_custom_indices_portfolio ON custom_indices(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_custom_indices_method ON custom_indices(calculation_method);
+
+        -- Index constituents table (stocks/assets in each index)
+        CREATE TABLE IF NOT EXISTS index_constituents (
+            id TEXT PRIMARY KEY,
+            index_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            shares REAL,
+            weight REAL,
+            market_cap REAL,
+            fundamental_score REAL,
+            custom_price REAL,
+            price_date TEXT,
+            added_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (index_id) REFERENCES custom_indices(id) ON DELETE CASCADE,
+            UNIQUE(index_id, symbol)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_index_constituents_index ON index_constituents(index_id);
+        CREATE INDEX IF NOT EXISTS idx_index_constituents_symbol ON index_constituents(symbol);
+
+        -- Index snapshots table (historical values for tracking)
+        CREATE TABLE IF NOT EXISTS index_snapshots (
+            id TEXT PRIMARY KEY,
+            index_id TEXT NOT NULL,
+            index_value REAL NOT NULL,
+            day_change REAL NOT NULL DEFAULT 0,
+            day_change_percent REAL NOT NULL DEFAULT 0,
+            total_market_value REAL NOT NULL,
+            divisor REAL NOT NULL,
+            constituents_data TEXT NOT NULL,
+            snapshot_date TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (index_id) REFERENCES custom_indices(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_index_snapshots_index ON index_snapshots(index_id);
+        CREATE INDEX IF NOT EXISTS idx_index_snapshots_date ON index_snapshots(snapshot_date DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_index_snapshots_unique ON index_snapshots(index_id, snapshot_date)
         ",
     )?;
 

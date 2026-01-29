@@ -7,7 +7,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Briefcase, TrendingUp, TrendingDown, DollarSign, BarChart3,
   RefreshCw, Plus, Download, Trash2, PieChart, Activity,
-  Clock, AlertCircle, Target, RotateCcw, ArrowUpRight, ArrowDownRight, Info
+  Clock, AlertCircle, Target, RotateCcw, ArrowUpRight, ArrowDownRight, Info,
+  Layers
 } from 'lucide-react';
 import { createPortfolioTabTour } from '../tours/portfolioTabTour';
 import PositionsView from './portfolio/PositionsView';
@@ -20,6 +21,7 @@ import ReportsView from './portfolio/ReportsView';
 import AlertsView from './portfolio/AlertsView';
 import ActiveManagementView from './portfolio/ActiveManagementView';
 import PortfolioOptimizationView from './portfolio/PortfolioOptimizationView';
+import { CustomIndexView, CreateIndexModal } from './custom-index';
 import CreatePortfolioModal from './modals/CreatePortfolioModal';
 import AddAssetModal from './modals/AddAssetModal';
 import SellAssetModal from './modals/SellAssetModal';
@@ -29,7 +31,7 @@ import { formatCurrency, formatPercent } from './portfolio/utils';
 import { TabFooter } from '@/components/common/TabFooter';
 import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES, LAYOUT } from './finceptStyles';
 
-type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization';
+type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization' | 'indices';
 
 const PortfolioTab: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -41,6 +43,8 @@ const PortfolioTab: React.FC = () => {
   const [showSellAsset, setShowSellAsset] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [portfolioToDelete, setPortfolioToDelete] = useState<string | null>(null);
+  const [showCreateIndex, setShowCreateIndex] = useState(false);
+  const [indexRefreshKey, setIndexRefreshKey] = useState(0);
 
   // Form states
   const [newPortfolioName, setNewPortfolioName] = useState('');
@@ -149,6 +153,7 @@ const PortfolioTab: React.FC = () => {
   const subTabs = [
     { id: 'positions' as SubTab, label: 'POSITIONS', icon: Briefcase },
     { id: 'history' as SubTab, label: 'HISTORY', icon: Clock },
+    { id: 'indices' as SubTab, label: 'INDICES', icon: Layers },
     { id: 'analytics' as SubTab, label: 'ANALYTICS', icon: BarChart3 },
     { id: 'sectors' as SubTab, label: 'SECTORS', icon: PieChart },
     { id: 'performance' as SubTab, label: 'PERFORMANCE', icon: TrendingUp },
@@ -547,6 +552,15 @@ const PortfolioTab: React.FC = () => {
                   />
                 </div>
               )}
+              {activeSubTab === 'indices' && (
+                <div id="indices-view" style={{ height: '100%', padding: SPACING.DEFAULT }}>
+                  <CustomIndexView
+                    key={indexRefreshKey}
+                    portfolioId={selectedPortfolio?.id}
+                    onCreateIndex={() => setShowCreateIndex(true)}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -833,6 +847,16 @@ const PortfolioTab: React.FC = () => {
           setPortfolioToDelete(null);
         }}
         onConfirm={confirmDeletePortfolio}
+      />
+
+      <CreateIndexModal
+        isOpen={showCreateIndex}
+        onClose={() => setShowCreateIndex(false)}
+        onCreated={() => {
+          setShowCreateIndex(false);
+          setIndexRefreshKey(prev => prev + 1);
+        }}
+        portfolioSummary={portfolioSummary}
       />
     </div>
   );

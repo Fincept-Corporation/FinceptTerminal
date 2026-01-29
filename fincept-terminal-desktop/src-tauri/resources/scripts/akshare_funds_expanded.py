@@ -510,11 +510,48 @@ class ExpandedFundsWrapper:
 
         return {
             "success": True,
-            "available_endpoints": endpoints,
-            "total_count": len(endpoints),
+            "data": {
+                "available_endpoints": endpoints,
+                "total_count": len(endpoints),
+                "categories": {
+                    "Fund Rankings": ["get_fund_open_fund_rank_em", "get_fund_etf_fund_info_em", "get_fund_money_fund_daily_em"],
+                    "Fund Info": ["get_fund_info_index_em", "get_fund_individual_basic_info_xq", "get_fund_name_em"],
+                    "Fund Holdings": ["get_fund_portfolio_hold_em", "get_fund_stock_position_lg", "get_fund_balance_position_lg"],
+                    "Fund Managers": ["get_fund_manager_em", "get_fund_manager_detail", "get_fund_manager_performance"],
+                    "Fund Flows": ["get_fund_flow_em", "get_fund_flow_daily", "get_fund_flow_weekly"],
+                    "Fund Dividends": ["get_fund_fh_em", "get_fund_fh_rank_em"],
+                },
+                "timestamp": int(datetime.now().timestamp())
+            },
+            "count": len(endpoints),
             "timestamp": int(datetime.now().timestamp())
         }
 
 
-# Export wrapper instance
-expanded_funds_wrapper = ExpandedFundsWrapper()
+# ==================== CLI ====================
+def main():
+    import sys
+    wrapper = ExpandedFundsWrapper()
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_funds_expanded.py <endpoint>"}))
+        return
+
+    endpoint = sys.argv[1]
+
+    endpoint_map = {
+        "get_all_endpoints": wrapper.get_all_available_endpoints,
+        "get_fund_open_fund_rank_em": wrapper.get_fund_open_fund_rank_em,
+        "get_fund_etf_fund_info_em": wrapper.get_fund_etf_fund_info_em,
+        "get_fund_name_em": wrapper.get_fund_name_em,
+    }
+
+    method = endpoint_map.get(endpoint)
+    if method:
+        result = method()
+        print(json.dumps(result, ensure_ascii=True))
+    else:
+        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
+
+if __name__ == "__main__":
+    main()

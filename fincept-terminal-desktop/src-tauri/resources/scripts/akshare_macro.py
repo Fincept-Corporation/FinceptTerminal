@@ -64,6 +64,9 @@ class MacroEconomicWrapper:
                         if pd.api.types.is_datetime64_any_dtype(df[col]):
                             df[col] = df[col].astype(str)
 
+                    # Replace NaN/Infinity with None for valid JSON
+                    df = df.replace([float('inf'), float('-inf')], None)
+                    df = df.where(pd.notna(df), None)
                     data = df.to_dict(orient='records')
                 else:
                     data = df
@@ -501,6 +504,27 @@ class MacroEconomicWrapper:
         """USA S&P Case-Shiller 20-city home price index"""
         return self._safe_call_with_retry(ak.macro_usa_spcs20)
 
+    def get_all_available_endpoints(self) -> Dict[str, Any]:
+        """Get list of all available macro endpoints"""
+        endpoints = [name for name in dir(self) if name.startswith('macro_') and callable(getattr(self, name))]
+        return {
+            "success": True,
+            "data": {
+                "available_endpoints": endpoints,
+                "total_count": len(endpoints),
+                "categories": {
+                    "Australia": [e for e in endpoints if 'australia' in e],
+                    "USA": [e for e in endpoints if 'usa' in e],
+                    "Euro": [e for e in endpoints if 'euro' in e],
+                    "UK": [e for e in endpoints if 'uk' in e],
+                    "Japan": [e for e in endpoints if 'japan' in e],
+                    "Canada": [e for e in endpoints if 'canada' in e],
+                    "Global": [e for e in endpoints if any(x in e for x in ['china', 'swiss', 'germany', 'brazil', 'india', 'russia'])]
+                }
+            },
+            "count": len(endpoints)
+        }
+
 
 def main():
     """CLI interface for macro economic data wrapper"""
@@ -531,15 +555,19 @@ def main():
     wrapper = MacroEconomicWrapper()
     function_name = sys.argv[1]
 
-    if hasattr(wrapper, function_name):
+    # Handle get_all_endpoints special case
+    if function_name == "get_all_endpoints":
+        result = wrapper.get_all_available_endpoints()
+        print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
+    elif hasattr(wrapper, function_name):
         func = getattr(wrapper, function_name)
         result = func()
-        print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=False, indent=2))
+        print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
     else:
         print(json.dumps({
             "error": f"Function '{function_name}' not found",
             "hint": "Use 'python akshare_macro.py' to see available functions"
-        }, cls=DateTimeEncoder, ensure_ascii=False, indent=2))
+        }, cls=DateTimeEncoder, ensure_ascii=True))
         sys.exit(1)
 
 

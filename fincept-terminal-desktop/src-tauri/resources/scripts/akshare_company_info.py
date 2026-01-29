@@ -110,37 +110,66 @@ def get_us_info(symbol):
             "timestamp": int(datetime.now().timestamp())
         }
 
+def get_all_endpoints():
+    """Get list of all available endpoints"""
+    endpoints = ["cn_basic", "cn_profile", "hk_profile", "us_info"]
+    return {
+        "success": True,
+        "data": {
+            "available_endpoints": endpoints,
+            "total_count": len(endpoints),
+            "categories": {
+                "CN Stocks": ["cn_basic", "cn_profile"],
+                "HK Stocks": ["hk_profile"],
+                "US Stocks": ["us_info"]
+            },
+            "timestamp": int(datetime.now().timestamp())
+        },
+        "count": len(endpoints),
+        "timestamp": int(datetime.now().timestamp())
+    }
+
 def main():
     # Reconfigure stdout to UTF-8
     if sys.platform == 'win32':
         import io
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         print(json.dumps({
             "success": False,
-            "error": "Missing endpoint or symbol parameter"
+            "error": "Missing endpoint parameter"
         }))
         sys.exit(1)
 
     endpoint = sys.argv[1]
-    symbol = sys.argv[2]
 
-    if endpoint == "cn_basic":
-        result = get_cn_basic_info(symbol)
-    elif endpoint == "cn_profile":
-        result = get_cn_profile(symbol)
-    elif endpoint == "hk_profile":
-        result = get_hk_profile(symbol)
-    elif endpoint == "us_info":
-        result = get_us_info(symbol)
-    else:
-        result = {
+    # Handle get_all_endpoints without symbol
+    if endpoint == "get_all_endpoints":
+        result = get_all_endpoints()
+    elif len(sys.argv) < 3:
+        print(json.dumps({
             "success": False,
-            "error": f"Unknown endpoint: {endpoint}"
-        }
+            "error": "Missing symbol parameter"
+        }))
+        sys.exit(1)
+    else:
+        symbol = sys.argv[2]
+        if endpoint == "cn_basic":
+            result = get_cn_basic_info(symbol)
+        elif endpoint == "cn_profile":
+            result = get_cn_profile(symbol)
+        elif endpoint == "hk_profile":
+            result = get_hk_profile(symbol)
+        elif endpoint == "us_info":
+            result = get_us_info(symbol)
+        else:
+            result = {
+                "success": False,
+                "error": f"Unknown endpoint: {endpoint}"
+            }
 
-    print(json.dumps(result, ensure_ascii=False, default=str))
+    print(json.dumps(result, ensure_ascii=True, default=str))
 
 if __name__ == "__main__":
     main()

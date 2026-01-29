@@ -128,11 +128,11 @@ export const COMMANDS: Command[] = [
     id: 'prof',
     name: 'Profile',
     description: 'User profile settings',
-    aliases: ['prof', 'profile', 'account', 'settings'],
+    aliases: ['prof', 'profile', 'account'],
     category: 'navigation',
     action: 'profile',
     shortcut: 'F12',
-    keywords: ['profile', 'account', 'user', 'settings', 'preferences']
+    keywords: ['profile', 'account', 'user', 'preferences']
   },
 
   // Additional Navigation Commands
@@ -210,12 +210,12 @@ export const COMMANDS: Command[] = [
   },
   {
     id: '3dviz',
-    name: '3D Visualization',
-    description: '3D data visualization',
-    aliases: ['3dviz', '3d', 'viz', 'visualization'],
+    name: 'Surface Analytics',
+    description: 'Options volatility surface, correlation matrix, yield curve, PCA analysis',
+    aliases: ['surface', 'volsurface', 'iv', 'vol', 'volatility', 'correlation', '3d', '3dviz'],
     category: 'navigation',
     action: '3d-viz',
-    keywords: ['3d', 'visualization', 'graphics', 'visual']
+    keywords: ['surface', 'volatility', 'options', 'iv', 'correlation', 'yield', 'pca', 'databento', '3d']
   },
 
   // Tools
@@ -351,7 +351,7 @@ export const COMMANDS: Command[] = [
     id: 'support',
     name: 'Support',
     description: 'Support tickets',
-    aliases: ['support', 'ticket', 'help'],
+    aliases: ['support', 'ticket', 'tickets'],
     category: 'system',
     action: 'support',
     keywords: ['support', 'ticket', 'help', 'assistance']
@@ -364,6 +364,62 @@ export const COMMANDS: Command[] = [
     category: 'system',
     action: 'settings',
     keywords: ['settings', 'preferences', 'configuration', 'options']
+  },
+
+  // Missing Tabs - Added
+  {
+    id: 'analytics',
+    name: 'Analytics',
+    description: 'Financial analytics and models',
+    aliases: ['analytics', 'analysis', 'models'],
+    category: 'data',
+    action: 'analytics',
+    keywords: ['analytics', 'analysis', 'financial', 'models', 'statistics']
+  },
+  {
+    id: 'akshare',
+    name: 'AKShare Data',
+    description: 'Chinese financial data (AKShare)',
+    aliases: ['akshare', 'aks', 'chinese'],
+    category: 'data',
+    action: 'akshare',
+    keywords: ['akshare', 'chinese', 'data', 'china', 'financial']
+  },
+  {
+    id: 'asia',
+    name: 'Asia Markets',
+    description: 'Asian market data',
+    aliases: ['asia', 'asian', 'apac'],
+    category: 'navigation',
+    action: 'asia-markets',
+    keywords: ['asia', 'asian', 'markets', 'apac', 'regional']
+  },
+  {
+    id: 'tradeviz',
+    name: 'Trade Visualization',
+    description: 'Trade flow visualization',
+    aliases: ['tradeviz', 'tradegraph', 'flow'],
+    category: 'tool',
+    action: 'trade-viz',
+    keywords: ['trade', 'visualization', 'flow', 'graph', 'network']
+  },
+  {
+    id: 'about',
+    name: 'About',
+    description: 'About Fincept Terminal',
+    aliases: ['about', 'info', 'version'],
+    category: 'system',
+    action: 'about',
+    keywords: ['about', 'information', 'version', 'credits']
+  },
+  {
+    id: 'alphaarena',
+    name: 'Alpha Arena',
+    description: 'Trading competition platform',
+    aliases: ['alphaarena', 'alpha', 'arena', 'competition'],
+    category: 'navigation',
+    action: 'alpha-arena',
+    keywords: ['alpha', 'arena', 'competition', 'trading', 'leaderboard']
   }
 ];
 

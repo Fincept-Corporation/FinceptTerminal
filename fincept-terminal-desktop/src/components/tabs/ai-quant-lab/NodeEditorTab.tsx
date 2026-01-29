@@ -711,8 +711,39 @@ export default function NodeEditorTab() {
         } else if (cloned.type === 'agent-mediator') {
           cloned.data.onExecute = () => {};
           cloned.data.onConfigChange = () => {};
+        } else if (cloned.type === 'python-agent') {
+          // Ensure parameters exist
+          if (!cloned.data.parameters) {
+            cloned.data.parameters = {};
+          }
+          cloned.data.onExecute = () => {};
+          cloned.data.onParameterChange = () => {};
+          cloned.data.onLLMChange = () => {};
+        } else if (cloned.type === 'backtest') {
+          // Ensure parameters exist
+          if (!cloned.data.parameters) {
+            cloned.data.parameters = {};
+          }
+        } else if (cloned.type === 'optimization') {
+          // Ensure parameters exist
+          if (!cloned.data.parameters) {
+            cloned.data.parameters = {};
+          }
+        } else if (cloned.type === 'mcp-tool') {
+          // Ensure parameters exist
+          if (!cloned.data.parameters) {
+            cloned.data.parameters = {};
+          }
+          cloned.data.onExecute = () => {};
+          cloned.data.onParameterChange = () => {};
         } else if (cloned.type === 'custom') {
           cloned.data.onLabelChange = handleLabelChange;
+          // Ensure parameters exist for custom nodes
+          if (!cloned.data.parameters) {
+            cloned.data.parameters = {};
+          }
+        } else if (cloned.type === 'results-display') {
+          // Results display nodes don't need callbacks
         }
         return cloned;
       });
