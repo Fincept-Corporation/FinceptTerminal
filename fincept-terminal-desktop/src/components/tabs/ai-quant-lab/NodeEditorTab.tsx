@@ -72,7 +72,7 @@ import type { WorkflowTemplate } from './workflowTemplates';
 import { pythonAgentService, AgentMetadata } from '@/services/chat/pythonAgentService';
 import { workflowService } from '@/services/core/workflowService';
 import { nodeExecutionManager } from '@/services/core/nodeExecutionManager';
-import { NodeRegistry } from '@/services/nodeSystem';
+import { NodeRegistry, NodeLoader } from '@/services/nodeSystem';
 import { TabFooter } from '@/components/common/TabFooter';
 
 export default function NodeEditorTab() {
@@ -128,8 +128,21 @@ export default function NodeEditorTab() {
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
-  // Load MCP node configurations and Python agents on mount
+  // Load MCP node configurations, Python agents, and NodeSystem on mount
   useEffect(() => {
+    const initializeNodeSystem = async () => {
+      try {
+        // Initialize the node system with all backend nodes
+        if (!NodeLoader.isLoaded()) {
+          console.log('[NodeEditor] Initializing Node System...');
+          await NodeLoader.loadAll();
+          console.log('[NodeEditor] Node System initialized:', NodeLoader.getLoadedNodeNames());
+        }
+      } catch (error) {
+        console.error('[NodeEditor] Failed to initialize Node System:', error);
+      }
+    };
+
     const loadMCPNodes = async () => {
       try {
         const configs = await generateMCPNodeConfigs();
@@ -148,6 +161,7 @@ export default function NodeEditorTab() {
       }
     };
 
+    initializeNodeSystem();
     loadMCPNodes();
     loadAgents();
   }, []);
