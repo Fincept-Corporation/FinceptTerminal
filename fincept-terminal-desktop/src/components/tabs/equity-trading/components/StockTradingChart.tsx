@@ -30,6 +30,7 @@ interface StockTradingChartProps {
   height?: number;
   timezone?: string; // e.g., 'Asia/Kolkata' for IST
   liveQuote?: LiveQuote; // Live quote data from parent for consistent display
+  onIntervalChange?: (interval: TimeFrame) => void; // Callback when user changes timeframe
 }
 
 // Available timeframes
@@ -47,18 +48,19 @@ const TIMEFRAMES: { value: TimeFrame; label: string }[] = [
 ];
 
 // Helper to convert TimeFrame to days for historical data range
+// Optimized for AngelOne API rate limits and chart performance
 const timeframeToDays = (tf: TimeFrame): number => {
   switch (tf) {
-    case '1m': return 7;      // 1 min -> 7 days
-    case '3m': return 7;      // 3 min -> 7 days
-    case '5m': return 14;     // 5 min -> 14 days
-    case '10m': return 14;    // 10 min -> 14 days
-    case '15m': return 30;    // 15 min -> 30 days
-    case '30m': return 30;    // 30 min -> 30 days
-    case '1h': return 60;     // 1 hour -> 60 days
-    case '2h': return 90;     // 2 hours -> 90 days (3 months)
+    case '1m': return 2;      // 1 min -> 2 days (avoid rate limits)
+    case '3m': return 3;      // 3 min -> 3 days
+    case '5m': return 5;      // 5 min -> 5 days (reasonable for 5m chart)
+    case '10m': return 7;     // 10 min -> 7 days
+    case '15m': return 10;    // 15 min -> 10 days (reduced from 30 to avoid rate limits)
+    case '30m': return 15;    // 30 min -> 15 days (reduced from 30)
+    case '1h': return 30;     // 1 hour -> 30 days (reduced from 60)
+    case '2h': return 60;     // 2 hours -> 60 days (reduced from 90)
     case '4h': return 90;     // 4 hours -> 90 days (3 months)
-    case '1d': return 90;     // 1 day -> 90 days (3 months) - default for paper trading
+    case '1d': return 180;    // 1 day -> 180 days (6 months)
     case '1w': return 365;    // 1 week -> 1 year
     case '1M': return 1825;   // 1 month -> 5 years
     default: return 90;       // Default to 3 months
@@ -89,10 +91,11 @@ const EXCHANGE_TIMEZONES: Record<string, string> = {
 export function StockTradingChart({
   symbol,
   exchange,
-  interval: initialInterval = '1d',
+  interval: initialInterval = '5m',
   height,
   timezone: propTimezone,
-  liveQuote
+  liveQuote,
+  onIntervalChange
 }: StockTradingChartProps) {
   // Auto-detect timezone based on exchange if not provided
   const timezone = propTimezone || EXCHANGE_TIMEZONES[exchange] || EXCHANGE_TIMEZONES.DEFAULT;
@@ -112,11 +115,15 @@ export function StockTradingChart({
 
   // Sync selectedInterval when initialInterval prop changes (e.g., broker switch)
   useEffect(() => {
+    console.log(`[StockTradingChart] Syncing interval from prop: ${initialInterval}`);
     setSelectedInterval(initialInterval);
   }, [initialInterval]);
 
-  // Fetch historical data
-  const fetchHistoricalData = useCallback(async () => {
+  // Fetch historical data with retry for race condition handling
+  const fetchHistoricalData = useCallback(async (retryCount = 0) => {
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY = 800; // ms
+
     if (!symbol || !exchange) {
       console.log('[StockTradingChart] No symbol or exchange selected');
       setError('Please select a symbol');
@@ -125,9 +132,51 @@ export function StockTradingChart({
     }
 
     if (!adapter || !isAuthenticated) {
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[StockTradingChart] Adapter or auth not ready, retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY}ms...`);
+        setTimeout(() => fetchHistoricalData(retryCount + 1), RETRY_DELAY);
+        return;
+      }
       setError('Please authenticate with your broker to view charts');
       setIsLoading(false);
       return;
+    }
+
+    // Check if adapter is actually connected (internal state)
+    // This handles the race condition where isAuthenticated is true but adapter._isConnected is not yet
+    if (!adapter.isConnected) {
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[StockTradingChart] Adapter not connected yet, retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY}ms...`);
+        setTimeout(() => fetchHistoricalData(retryCount + 1), RETRY_DELAY);
+        return;
+      }
+      console.warn('[StockTradingChart] Adapter still not connected after retries');
+      setError('Broker connection not ready. Please try again.');
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if master contract/instrument lookup is ready (for brokers that need it)
+    // This prevents fetching with token='0' which returns empty data
+    if (typeof adapter.getInstrument === 'function') {
+      try {
+        const instrument = await adapter.getInstrument(symbol, exchange);
+        if (!instrument || !instrument.token || instrument.token === '0') {
+          if (retryCount < MAX_RETRIES) {
+            console.log(`[StockTradingChart] Instrument token not ready for ${symbol}, retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY}ms...`);
+            setTimeout(() => fetchHistoricalData(retryCount + 1), RETRY_DELAY);
+            return;
+          }
+          console.warn('[StockTradingChart] Instrument token still not available after retries');
+          setError('Symbol data not ready. Please ensure master contract is downloaded.');
+          setIsLoading(false);
+          return;
+        }
+        console.log(`[StockTradingChart] Instrument token ready: ${symbol} -> ${instrument.token}`);
+      } catch (err) {
+        console.warn('[StockTradingChart] getInstrument check failed:', err);
+        // Continue anyway - some brokers may not need this
+      }
     }
 
     try {
@@ -144,18 +193,20 @@ export function StockTradingChart({
       console.log(`[StockTradingChart] Date range: ${from.toISOString()} to ${to.toISOString()}`);
 
       // Fetch OHLCV data from stock broker adapter (Fyers, Zerodha, etc.)
-      const ohlcvData: OHLCV[] = await adapter.getOHLCV(
-        symbol,
-        exchange,
-        selectedInterval,
-        from,
-        to
+      // Use a timeout to prevent infinite loading
+      const fetchTimeout = new Promise<OHLCV[]>((_, reject) =>
+        setTimeout(() => reject(new Error('Data fetch timeout - broker may be rate limited')), 60000) // 60 second timeout
       );
+
+      const ohlcvData: OHLCV[] = await Promise.race([
+        adapter.getOHLCV(symbol, exchange, selectedInterval, from, to),
+        fetchTimeout
+      ]);
 
       console.log(`[StockTradingChart] Fetched ${ohlcvData.length} candles from ${adapter.brokerId}`);
 
       if (ohlcvData.length === 0) {
-        setError('No historical data available. Check your API credentials and symbol format.');
+        setError('No historical data available. Try a different timeframe or check your connection.');
         setIsLoading(false);
         return;
       }
@@ -198,7 +249,15 @@ export function StockTradingChart({
       setIsLoading(false);
     } catch (err) {
       console.error('[StockTradingChart] Failed to fetch historical data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load chart data');
+
+      // If we have existing data, keep showing it with a warning
+      if (chartData.length > 0) {
+        console.warn('[StockTradingChart] Keeping existing chart data visible despite error');
+        setError('Failed to update chart. Showing previous data.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load chart data. Try again or select a different timeframe.');
+      }
+
       setIsLoading(false);
     }
   }, [adapter, isAuthenticated, symbol, exchange, selectedInterval]);
@@ -332,7 +391,10 @@ export function StockTradingChart({
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf.value}
-                onClick={() => setSelectedInterval(tf.value)}
+                onClick={() => {
+                  setSelectedInterval(tf.value);
+                  onIntervalChange?.(tf.value);
+                }}
                 disabled={isLoading}
                 className={`px-2 py-0.5 text-[9px] font-medium rounded transition-colors disabled:opacity-50 ${
                   selectedInterval === tf.value
@@ -376,6 +438,7 @@ export function StockTradingChart({
               showToolbar={true}
               showHeader={false}
               timezone={timezone}
+              interval={selectedInterval}
             />
           </div>
         )}
@@ -386,6 +449,23 @@ export function StockTradingChart({
             <div className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 text-[#FF8800] animate-spin" />
               <span className="text-xs text-gray-400">Updating...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Error Notification - non-blocking, appears at bottom */}
+        {error && chartData.length > 0 && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-red-900/90 backdrop-blur-sm px-4 py-2 rounded border border-red-700 z-10 max-w-md">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <span className="text-xs text-red-200">{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="ml-2 text-red-400 hover:text-red-200 transition-colors"
+                title="Dismiss"
+              >
+                ×
+              </button>
             </div>
           </div>
         )}

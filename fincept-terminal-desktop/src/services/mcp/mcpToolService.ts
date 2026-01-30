@@ -24,6 +24,12 @@ export interface MCPToolExecutionResult {
   toolName: string;
   serverId: string;
   executionTime?: number;
+  // Additional metadata for financial tools
+  chart_data?: any;
+  ticker?: string;
+  company?: string;
+  content?: string;
+  message?: string;
 }
 
 export interface MCPToolValidationResult {

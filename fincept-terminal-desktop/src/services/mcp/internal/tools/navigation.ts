@@ -1,11 +1,12 @@
 import { InternalTool } from '../types';
 
 const AVAILABLE_TABS = [
-  'dashboard', 'markets', 'news', 'watchlist', 'portfolio', 'analytics',
-  'economics', 'dbnomics', 'economic-calendar', 'geopolitics', 'maritime',
-  'options', 'equity-research', 'screener', 'kraken',
-  'chat', 'docs', 'node-editor', 'code-editor', 'forum', 'marketplace',
-  'profile', 'support', 'settings', 'backtesting', 'mcp', 'trading', 'report-builder'
+  'dashboard', 'markets', 'news', 'watchlist', 'portfolio', 'research',
+  'economics', 'dbnomics', 'geopolitics', 'maritime', 'screener',
+  'chat', 'docs', 'nodes', 'code', 'forum', 'marketplace',
+  'profile', 'support', 'settings', 'backtesting', 'mcp', 'trading',
+  'reportbuilder', 'equity-trading', 'datasources', 'ai-quant-lab',
+  'notes', 'agents', 'monitoring', 'polymarket', 'derivatives', 'asia-markets', 'akshare'
 ];
 
 const AVAILABLE_SCREENS = ['pricing', 'dashboard', 'profile', 'login'];

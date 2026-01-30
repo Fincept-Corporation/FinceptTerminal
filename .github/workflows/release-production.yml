@@ -139,8 +139,14 @@ jobs:
 
             TAR_GZ=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app.tar.gz" -type f 2>/dev/null | head -1)
             TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app.tar.gz.sig" -type f 2>/dev/null | head -1)
-            [ -f "$TAR_GZ" ] && cp "$TAR_GZ" "release-artifacts/" && echo "Found macOS tar.gz: $TAR_GZ"
-            [ -f "$TAR_GZ_SIG" ] && cp "$TAR_GZ_SIG" "release-artifacts/" && echo "Found macOS signature: $TAR_GZ_SIG"
+            if [ -f "$TAR_GZ" ]; then
+              cp "$TAR_GZ" "release-artifacts/FinceptTerminal-${{ matrix.arch }}-darwin.app.tar.gz"
+              echo "Found macOS tar.gz: $TAR_GZ"
+            fi
+            if [ -f "$TAR_GZ_SIG" ]; then
+              cp "$TAR_GZ_SIG" "release-artifacts/FinceptTerminal-${{ matrix.arch }}-darwin.app.tar.gz.sig"
+              echo "Found macOS signature: $TAR_GZ_SIG"
+            fi
 
           elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
             SUFFIX="Linux-x64"
@@ -151,8 +157,14 @@ jobs:
 
             APPIMAGE_TAR_GZ=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage.tar.gz" -type f 2>/dev/null | head -1)
             APPIMAGE_TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage.tar.gz.sig" -type f 2>/dev/null | head -1)
-            [ -f "$APPIMAGE_TAR_GZ" ] && cp "$APPIMAGE_TAR_GZ" "release-artifacts/" && echo "Found Linux tar.gz: $APPIMAGE_TAR_GZ"
-            [ -f "$APPIMAGE_TAR_GZ_SIG" ] && cp "$APPIMAGE_TAR_GZ_SIG" "release-artifacts/" && echo "Found Linux signature: $APPIMAGE_TAR_GZ_SIG"
+            if [ -f "$APPIMAGE_TAR_GZ" ]; then
+              cp "$APPIMAGE_TAR_GZ" "release-artifacts/FinceptTerminal-x86_64-linux.AppImage.tar.gz"
+              echo "Found Linux tar.gz: $APPIMAGE_TAR_GZ"
+            fi
+            if [ -f "$APPIMAGE_TAR_GZ_SIG" ]; then
+              cp "$APPIMAGE_TAR_GZ_SIG" "release-artifacts/FinceptTerminal-x86_64-linux.AppImage.tar.gz.sig"
+              echo "Found Linux signature: $APPIMAGE_TAR_GZ_SIG"
+            fi
 
           elif [[ "${{ matrix.platform }}" == "windows-2022" ]]; then
             SUFFIX="Windows-x64"
@@ -161,8 +173,14 @@ jobs:
 
             NSIS_ZIP=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip" -type f 2>/dev/null | head -1)
             NSIS_ZIP_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip.sig" -type f 2>/dev/null | head -1)
-            [ -f "$NSIS_ZIP" ] && cp "$NSIS_ZIP" "release-artifacts/" && echo "Found NSIS zip: $NSIS_ZIP"
-            [ -f "$NSIS_ZIP_SIG" ] && cp "$NSIS_ZIP_SIG" "release-artifacts/" && echo "Found Windows signature: $NSIS_ZIP_SIG"
+            if [ -f "$NSIS_ZIP" ]; then
+              cp "$NSIS_ZIP" "release-artifacts/FinceptTerminal-x86_64-windows.nsis.zip"
+              echo "Found NSIS zip: $NSIS_ZIP"
+            fi
+            if [ -f "$NSIS_ZIP_SIG" ]; then
+              cp "$NSIS_ZIP_SIG" "release-artifacts/FinceptTerminal-x86_64-windows.nsis.zip.sig"
+              echo "Found Windows signature: $NSIS_ZIP_SIG"
+            fi
           fi
 
           LATEST_JSON=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "latest.json" -type f 2>/dev/null | head -1)
@@ -236,13 +254,9 @@ jobs:
           find all-artifacts -type f -name "*.AppImage" -exec cp {} release-files/ \;
           find all-artifacts -type f -name "*.deb" -exec cp {} release-files/ \;
 
-          # Copy updater archives and signatures
-          find all-artifacts -type f -name "*.app.tar.gz" -exec cp {} release-files/ \;
-          find all-artifacts -type f -name "*.app.tar.gz.sig" -exec cp {} release-files/ \;
-          find all-artifacts -type f -name "*.AppImage.tar.gz" -exec cp {} release-files/ \;
-          find all-artifacts -type f -name "*.AppImage.tar.gz.sig" -exec cp {} release-files/ \;
-          find all-artifacts -type f -name "*.nsis.zip" -exec cp {} release-files/ \;
-          find all-artifacts -type f -name "*.nsis.zip.sig" -exec cp {} release-files/ \;
+          # Copy updater archives and signatures (with architecture-specific naming)
+          find all-artifacts -type f \( -name "*-darwin.app.tar.gz" -o -name "*-linux.AppImage.tar.gz" -o -name "*-windows.nsis.zip" \) -exec cp {} release-files/ \;
+          find all-artifacts -type f \( -name "*-darwin.app.tar.gz.sig" -o -name "*-linux.AppImage.tar.gz.sig" -o -name "*-windows.nsis.zip.sig" \) -exec cp {} release-files/ \;
 
           echo "=== Release files ==="
           ls -lh release-files/

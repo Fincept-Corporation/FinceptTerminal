@@ -446,15 +446,16 @@ export function fromAngelOneTick(
 }
 
 /**
- * Convert subscription mode to Angel One WS mode
+ * Convert subscription mode to Angel One WS mode string
+ * NOTE: Rust command expects string, not number
  */
-export function toAngelOneWSMode(mode: SubscriptionMode): number {
-  const modeMap: Record<SubscriptionMode, number> = {
-    ltp: 1,     // LTP mode
-    quote: 2,   // Quote mode
-    full: 3,    // Snap Quote mode (full depth)
+export function toAngelOneWSMode(mode: SubscriptionMode): string {
+  const modeMap: Record<SubscriptionMode, string> = {
+    ltp: 'ltp',       // LTP mode
+    quote: 'quote',   // Quote mode
+    full: 'snap',     // Snap Quote mode (full depth)
   };
-  return modeMap[mode] || 2;
+  return modeMap[mode] || 'quote';
 }
 
 // ============================================================================

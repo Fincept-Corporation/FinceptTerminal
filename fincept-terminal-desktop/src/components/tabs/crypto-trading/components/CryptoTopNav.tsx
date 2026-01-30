@@ -169,71 +169,70 @@ export function CryptoTopNav({
 
         <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
-        {/* Trading Mode Toggle */}
+        {/* Trading Mode Toggle - Matches Equity Tab Style */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          padding: '4px 12px',
-          backgroundColor: tradingMode === 'live' ? `${FINCEPT.RED}20` : `${FINCEPT.GREEN}20`,
-          border: `2px solid ${tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN}`,
-          borderRadius: '4px'
+          gap: '2px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          padding: '2px',
         }}>
-          {/* Mode Indicator */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN,
-              boxShadow: `0 0 8px ${tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN}`,
-              animation: tradingMode === 'live' ? 'pulse 1s infinite' : 'none'
-            }} />
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.GREEN,
-              letterSpacing: '1px'
-            }}>
-              {tradingMode === 'live' ? '🔴 LIVE' : '⚪ PAPER'}
-            </span>
-          </div>
-
-          <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
-
           <button
             onClick={() => onTradingModeChange('paper')}
             style={{
-              padding: '4px 10px',
-              backgroundColor: tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.PANEL_BG,
-              border: `1px solid ${tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+              padding: '6px 14px',
+              backgroundColor: tradingMode === 'paper' ? FINCEPT.GREEN : 'transparent',
+              border: 'none',
               color: tradingMode === 'paper' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
               cursor: 'pointer',
               fontSize: '10px',
               fontWeight: 700,
-              transition: 'all 0.2s'
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            {t('header.paper')}
+            {tradingMode === 'paper' && (
+              <div style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: FINCEPT.DARK_BG,
+              }} />
+            )}
+            PAPER
           </button>
           <button
             onClick={handleLiveModeClick}
             style={{
-              padding: '4px 10px',
-              backgroundColor: tradingMode === 'live' ? FINCEPT.RED : FINCEPT.PANEL_BG,
-              border: `1px solid ${tradingMode === 'live' ? FINCEPT.RED : FINCEPT.BORDER}`,
+              padding: '6px 14px',
+              backgroundColor: tradingMode === 'live' ? FINCEPT.RED : 'transparent',
+              border: 'none',
               color: tradingMode === 'live' ? FINCEPT.WHITE : FINCEPT.GRAY,
               cursor: 'pointer',
               fontSize: '10px',
               fontWeight: 700,
-              transition: 'all 0.2s'
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            {t('header.live')}
+            {tradingMode === 'live' && (
+              <div style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: FINCEPT.WHITE,
+                boxShadow: `0 0 6px ${FINCEPT.WHITE}`,
+                animation: 'pulse 1s infinite',
+              }} />
+            )}
+            LIVE
           </button>
         </div>
       </div>

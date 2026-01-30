@@ -8,6 +8,10 @@ use serde_json::{json, Value};
 use super::common::ApiResponse;
 use totp_rs::{Algorithm, TOTP, Secret};
 use crate::database::master_contract;
+use std::time::Duration;
+
+/// Default timeout for API requests (30 seconds)
+const API_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Base URL for AngelOne API
 const ANGELONE_BASE_URL: &str = "https://apiconnect.angelone.in";
@@ -56,7 +60,11 @@ async fn angel_api_call(
     method: &str,
     payload: Option<Value>,
 ) -> Result<Value, String> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(API_TIMEOUT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
     let url = format!("{}{}", ANGELONE_BASE_URL, endpoint);
 
     let mut builder = build_angel_request(&client, &url, method, api_key, Some(access_token));
@@ -68,7 +76,13 @@ async fn angel_api_call(
     let response = builder
         .send()
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+        .map_err(|e| {
+            if e.is_timeout() {
+                format!("Request timeout after {}s", API_TIMEOUT.as_secs())
+            } else {
+                format!("Request failed: {}", e)
+            }
+        })?;
 
     let status = response.status();
     let text = response
@@ -132,7 +146,17 @@ pub async fn angelone_login(
     password: String,
     totp: String,
 ) -> ApiResponse<Value> {
-    let client = Client::new();
+    let client = match Client::builder().timeout(API_TIMEOUT).build() {
+        Ok(c) => c,
+        Err(e) => {
+            return ApiResponse {
+                success: false,
+                data: None,
+                error: Some(format!("Failed to create HTTP client: {}", e)),
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            };
+        }
+    };
     let timestamp = chrono::Utc::now().timestamp_millis();
 
     let totp_code = match generate_totp_code(&totp) {
@@ -526,8 +550,6 @@ pub async fn angelone_get_quote(
     let timestamp = chrono::Utc::now().timestamp_millis();
     let quote_mode = mode.unwrap_or_else(|| "FULL".to_string());
 
-    eprintln!("[AngelOne Quote] exchange={}, tokens={:?}", exchange, tokens);
-
     let payload = json!({
         "mode": quote_mode,
         "exchangeTokens": {
@@ -595,8 +617,6 @@ pub async fn angelone_get_historical(
         "todate": to_date
     });
 
-    eprintln!("[AngelOne Historical] exchange={}, token={}, interval={}, from={}, to={}", exchange, symbol_token, interval, from_date, to_date);
-
     match angel_api_call(
         &api_key,
         &access_token,
@@ -628,11 +648,13 @@ pub async fn angelone_get_historical(
                 }
             }
         }
-        Err(e) => ApiResponse {
-            success: false,
-            data: None,
-            error: Some(e),
-            timestamp,
+        Err(e) => {
+            ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e),
+                timestamp,
+            }
         },
     }
 }

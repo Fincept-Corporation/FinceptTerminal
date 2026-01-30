@@ -248,13 +248,20 @@ export class DhanAdapter extends BaseStockBrokerAdapter {
   }
 
   /**
-   * Validate access token
+   * Validate access token (uses base class date check + API validation)
    */
-  private async validateToken(token: string, clientId: string): Promise<boolean> {
+  private async validateToken(_token: string, _clientId: string): Promise<boolean> {
+    return this.validateTokenWithDateCheck();
+  }
+
+  /**
+   * Dhan-specific API token validation
+   */
+  protected override async validateTokenWithApi(token: string): Promise<boolean> {
     try {
       const response = await invoke<{ success: boolean }>('dhan_validate_token', {
         accessToken: token,
-        clientId,
+        clientId: this.clientId,
       });
       return response.success;
     } catch {

@@ -352,6 +352,20 @@ export interface ChatMessage {
   provider?: string;
   model?: string;
   tokens_used?: number;
+  tool_calls?: ToolCall[];
+  metadata?: {
+    chart_data?: any;
+    ticker?: string;
+    company?: string;
+  };
+}
+
+export interface ToolCall {
+  name: string;
+  args: any;
+  result?: any;
+  timestamp: string;
+  status: 'calling' | 'success' | 'error';
 }
 
 export const createChatSession = async (title: string): Promise<ChatSession> => {

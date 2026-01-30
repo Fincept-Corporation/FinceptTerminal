@@ -238,14 +238,21 @@ export class FivePaisaAdapter extends BaseStockBrokerAdapter {
   }
 
   /**
-   * Validate access token
+   * Validate access token (uses base class date check + API validation)
    */
-  private async validateToken(accessToken: string): Promise<boolean> {
+  private async validateToken(_accessToken: string): Promise<boolean> {
+    return this.validateTokenWithDateCheck();
+  }
+
+  /**
+   * 5Paisa-specific API token validation
+   */
+  protected override async validateTokenWithApi(token: string): Promise<boolean> {
     try {
       const response = await invoke<{ success: boolean }>('fivepaisa_validate_token', {
         apiKey: this.apiKey,
         clientId: this.clientId,
-        accessToken,
+        accessToken: token,
       });
       return response.success;
     } catch {

@@ -120,8 +120,6 @@ pub async fn init_trading_session(
     let mut session_guard = TRADING_SESSION.write().await;
     *session_guard = Some(session.clone());
 
-    eprintln!("[UnifiedTrading] Session initialized: {:?} mode for {}", trading_mode, broker);
-
     Ok(session)
 }
 
@@ -159,7 +157,6 @@ pub async fn switch_trading_mode(mode: String) -> Result<TradingSession, String>
             session.paper_portfolio_id = Some(portfolio.id);
         }
 
-        eprintln!("[UnifiedTrading] Switched to {:?} mode", trading_mode);
         Ok(session.clone())
     } else {
         Err("No active trading session".to_string())
@@ -200,23 +197,29 @@ async fn place_paper_order(
 
     let symbol = format!("{}:{}", order.exchange, order.symbol);
 
+    // For market orders without price, use a default price estimate (will be filled at market)
+    let order_price = if order.order_type == "market" && order.price.is_none() {
+        // Use a default placeholder price - order will be filled at actual market price
+        Some(1000.0) // Default estimate for margin calculation
+    } else {
+        order.price
+    };
+
     let paper_order = paper_trading::place_order(
         portfolio_id,
         &symbol,
         &order.side,
         &order.order_type,
         order.quantity,
-        order.price,
+        order_price,
         order.stop_price,
         false, // reduce_only
     ).map_err(|e| e.to_string())?;
 
-    // For market orders, auto-fill immediately if we have a price
+    // For market orders, auto-fill immediately with estimated price
     if order.order_type == "market" {
-        if let Some(price) = order.price {
-            let _ = paper_trading::fill_order(&paper_order.id, price, None);
-        }
-        // Otherwise, the order will be filled when we receive a tick
+        let fill_price = order.price.unwrap_or(order_price.unwrap_or(1000.0));
+        let _ = paper_trading::fill_order(&paper_order.id, fill_price, None);
     }
 
     Ok(UnifiedOrderResponse {
@@ -388,14 +391,7 @@ pub async fn process_tick_for_paper_trading(
         };
 
         if should_fill {
-            match paper_trading::fill_order(&order.id, price, None) {
-                Ok(trade) => {
-                    eprintln!("[PaperTrading] Filled order {} at {}: {:?}", order.id, price, trade);
-                }
-                Err(e) => {
-                    eprintln!("[PaperTrading] Failed to fill order {}: {}", order.id, e);
-                }
-            }
+            let _ = paper_trading::fill_order(&order.id, price, None);
         }
     }
 

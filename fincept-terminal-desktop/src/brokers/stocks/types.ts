@@ -62,11 +62,15 @@ export type OptionType = 'CE' | 'PE' | 'CALL' | 'PUT';
 
 export interface Instrument {
   symbol: string;              // "RELIANCE", "AAPL"
+  tradingSymbol?: string;      // Broker-specific format "RELIANCE-EQ", "NIFTY23DEC17500CE"
   name: string;                // "Reliance Industries Ltd"
   exchange: StockExchange;
   instrumentType: InstrumentType;
   currency: Currency;
-  token?: string;              // Broker-specific token
+  token?: string;              // Broker-specific token (AngelOne: symboltoken)
+  instrumentToken?: string;    // Zerodha instrument token
+  exchangeToken?: string;      // Zerodha exchange token
+  segment?: string;            // Trading segment
   isin?: string;               // International Securities ID
   lotSize: number;
   tickSize: number;
@@ -130,6 +134,8 @@ export interface OrderParams {
   validity?: OrderValidity;
   disclosedQuantity?: number;  // Iceberg orders
   tag?: string;                // Order tag/reference
+  token?: string;              // Broker-specific instrument token (avoids re-lookup)
+  tradingSymbol?: string;      // Broker-specific trading symbol format
   // Region-specific (optional)
   amo?: boolean;               // After Market Order (India)
   squareOff?: number;          // Bracket order target

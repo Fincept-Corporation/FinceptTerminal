@@ -30,7 +30,7 @@ import {
 } from './components';
 import type { SymbolSearchResult, SupportedBroker } from '@/services/trading/masterContractService';
 
-import type { StockExchange, Quote, MarketDepth } from '@/brokers/stocks/types';
+import type { StockExchange, Quote, MarketDepth, TimeFrame } from '@/brokers/stocks/types';
 import { GridTradingPanel } from '../trading/grid-trading';
 
 // Market hours and caching utilities
@@ -207,6 +207,19 @@ function EquityTradingContent() {
   const [isBottomPanelMinimized, setIsBottomPanelMinimized] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Chart timeframe - default to 5m for real brokers, 1d for yfinance
+  const [chartInterval, setChartInterval] = useState<TimeFrame>('5m');
+
+  // Set correct chart interval when broker changes or on initial load
+  // yfinance only supports daily data, real brokers default to 5m intraday
+  useEffect(() => {
+    if (activeBroker) {
+      const defaultInterval = activeBroker === 'yfinance' ? '1d' : '5m';
+      setChartInterval(defaultInterval);
+      console.log(`[EquityTrading] Setting chart interval to ${defaultInterval} for broker ${activeBroker}`);
+    }
+  }, [activeBroker]);
+
   // Filter trades for the selected symbol (memoized)
   const symbolTrades = useMemo(() => {
     if (!selectedSymbol || !trades || trades.length === 0) return [];
@@ -280,6 +293,7 @@ function EquityTradingContent() {
         if (brokerChanged) {
           setQuote(null);
           setMarketDepth(null);
+          // Note: chart interval is now handled by dedicated useEffect on activeBroker change
         }
       }
 
@@ -1467,7 +1481,8 @@ function EquityTradingContent() {
                   <StockTradingChart
                     symbol={selectedSymbol}
                     exchange={selectedExchange}
-                    interval={activeBroker === 'yfinance' ? '1d' : '5m'}
+                    interval={chartInterval}
+                    onIntervalChange={setChartInterval}
                     liveQuote={quote ? {
                       lastPrice: quote.lastPrice,
                       change: quote.change || 0,
@@ -1855,9 +1870,9 @@ function EquityTradingContent() {
                     <table style={{ width: '100%', fontSize: '10px' }}>
                       <thead>
                         <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-                          <th style={{ padding: '4px', textAlign: 'left', color: FINCEPT.GRAY }}>QTY</th>
+                          <th style={{ padding: '4px', textAlign: 'left', color: FINCEPT.GRAY }}>ORDERS</th>
+                          <th style={{ padding: '4px', textAlign: 'center', color: FINCEPT.GRAY }}>QTY</th>
                           <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>PRICE</th>
-                          <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>ORDERS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1866,14 +1881,14 @@ function EquityTradingContent() {
                           : [null, null, null, null, null]
                         ).map((bid, i) => (
                           <tr key={i} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}40` }}>
-                            <td style={{ padding: '4px', color: FINCEPT.WHITE }}>
+                            <td style={{ padding: '4px', color: FINCEPT.GRAY }}>
+                              {bid?.orders ?? '--'}
+                            </td>
+                            <td style={{ padding: '4px', textAlign: 'center', color: FINCEPT.WHITE }}>
                               {bid?.quantity ? bid.quantity.toLocaleString('en-IN') : '--'}
                             </td>
                             <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GREEN }}>
                               {bid?.price ? fmtPrice(bid.price) : '--'}
-                            </td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>
-                              {bid?.orders || '--'}
                             </td>
                           </tr>
                         ))}
@@ -1904,7 +1919,7 @@ function EquityTradingContent() {
                       <thead>
                         <tr style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                           <th style={{ padding: '4px', textAlign: 'left', color: FINCEPT.GRAY }}>PRICE</th>
-                          <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>QTY</th>
+                          <th style={{ padding: '4px', textAlign: 'center', color: FINCEPT.GRAY }}>QTY</th>
                           <th style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>ORDERS</th>
                         </tr>
                       </thead>
@@ -1917,11 +1932,11 @@ function EquityTradingContent() {
                             <td style={{ padding: '4px', color: FINCEPT.RED }}>
                               {ask?.price ? fmtPrice(ask.price) : '--'}
                             </td>
-                            <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.WHITE }}>
+                            <td style={{ padding: '4px', textAlign: 'center', color: FINCEPT.WHITE }}>
                               {ask?.quantity ? ask.quantity.toLocaleString('en-IN') : '--'}
                             </td>
                             <td style={{ padding: '4px', textAlign: 'right', color: FINCEPT.GRAY }}>
-                              {ask?.orders || '--'}
+                              {ask?.orders ?? '--'}
                             </td>
                           </tr>
                         ))}

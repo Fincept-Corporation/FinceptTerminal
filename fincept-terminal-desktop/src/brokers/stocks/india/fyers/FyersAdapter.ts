@@ -263,31 +263,14 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
       this.apiSecret = credentials.apiSecret || null;
       this.accessToken = credentials.accessToken || null;
 
-      // If we have an access token, assume valid (Fyers tokens don't expire for 24h)
-      // If expired, API calls will fail and user will need to re-auth
+      // If we have an access token, validate it
       if (this.accessToken) {
-        // TODO: Add token validation when Fyers provides an endpoint
-        // For now, optimistically restore session
-        console.log(`[${this.brokerId}] Access token found, attempting to restore session...`);
+        console.log(`[${this.brokerId}] Access token found, validating...`);
 
-        // Test token with a lightweight API call
-        try {
-          await this.getFundsInternal();
-          this._isConnected = true;
-          console.log(`[${this.brokerId}] ✓ Session restored successfully`);
-
-          // Download master contract for WebSocket symbol lookup (uses correct public Fyers URL)
-          try {
-            console.log(`[${this.brokerId}] Downloading master contract for WebSocket...`);
-            await invoke('download_fyers_master_contract');
-            console.log(`[${this.brokerId}] ✓ Master contract ready`);
-          } catch (mcErr) {
-            console.warn(`[${this.brokerId}] Master contract download failed:`, mcErr);
-          }
-
-          return true;
-        } catch (err) {
-          console.warn(`[${this.brokerId}] Access token expired or invalid, clearing from storage...`);
+        // First check if token is from today (IST)
+        const isTokenValid = await this.validateToken(this.accessToken);
+        if (!isTokenValid) {
+          console.warn(`[${this.brokerId}] Token validation failed (expired or from previous day)`);
 
           // Clear expired token from database
           await this.storeCredentials({
@@ -302,12 +285,46 @@ export class FyersAdapter extends BaseStockBrokerAdapter {
           console.log(`[${this.brokerId}] Please re-authenticate to continue`);
           return false;
         }
+
+        this._isConnected = true;
+        console.log(`[${this.brokerId}] ✓ Session restored successfully`);
+
+        // Download master contract for WebSocket symbol lookup (uses correct public Fyers URL)
+        try {
+          console.log(`[${this.brokerId}] Downloading master contract for WebSocket...`);
+          await invoke('download_fyers_master_contract');
+          console.log(`[${this.brokerId}] ✓ Master contract ready`);
+        } catch (mcErr) {
+          console.warn(`[${this.brokerId}] Master contract download failed:`, mcErr);
+        }
+
+        return true;
       }
 
       console.log(`[${this.brokerId}] No access token found, manual authentication required`);
       return false;
     } catch (error) {
       console.error(`[${this.brokerId}] Failed to initialize from storage:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Validate token using IST date check and API validation
+   */
+  private async validateToken(_token: string): Promise<boolean> {
+    return this.validateTokenWithDateCheck();
+  }
+
+  /**
+   * Override to provide Fyers-specific API validation
+   */
+  protected override async validateTokenWithApi(token: string): Promise<boolean> {
+    try {
+      // Test token with a lightweight API call (get funds)
+      await this.getFundsInternal();
+      return true;
+    } catch {
       return false;
     }
   }

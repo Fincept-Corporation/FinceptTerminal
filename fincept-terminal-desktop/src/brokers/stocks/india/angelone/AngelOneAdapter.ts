@@ -308,7 +308,6 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
 
         // If feedToken is missing (old credentials format), re-authenticate to get it
         if (!this.feedToken && this.apiKey && this.clientCode && this.password && this.totpSecret) {
-          console.log('[AngelOne] Token valid but feedToken missing — re-authenticating for WebSocket support...');
           const authResult = await this.authenticate({
             apiKey: this.apiKey,
             userId: this.clientCode,
@@ -390,9 +389,12 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   // ============================================================================
 
   protected async placeOrderInternal(params: OrderParams): Promise<OrderResponse> {
-    // Get symbol token first
-    const instrument = await this.getInstrument(params.symbol, params.exchange);
-    const symbolToken = instrument?.token || '0';
+    // Use token from params if provided, otherwise lookup
+    let symbolToken = params.token;
+    if (!symbolToken) {
+      const instrument = await this.getInstrument(params.symbol, params.exchange);
+      symbolToken = instrument?.token || '0';
+    }
 
     const angelParams = toAngelOneOrderParams(params, symbolToken);
 
@@ -930,40 +932,60 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     if (exchange === 'NSE_INDEX') apiExchange = 'NSE';
     if (exchange === 'BSE_INDEX') apiExchange = 'BSE';
 
+    const MAX_RETRIES = 3;
+
     while (currentStart <= endDate) {
       const currentEnd = new Date(currentStart);
       currentEnd.setDate(currentEnd.getDate() + chunkDays - 1);
       if (currentEnd > endDate) currentEnd.setTime(endDate.getTime());
 
-      try {
-        const response = await invoke<{
-          success: boolean;
-          data?: unknown[][];
-          error?: string;
-        }>('angelone_get_historical', {
-          apiKey: this.apiKey,
-          accessToken: this.accessToken,
-          exchange: apiExchange,
-          symbolToken: token,
-          interval,
-          fromDate: this.formatDateIST(currentStart),
-          toDate: this.formatDateIST(currentEnd),
-        });
+      let chunkSuccess = false;
+      let chunkRetries = 0;
 
-        if (response.success && response.data) {
-          const candles = response.data.map(fromAngelOneOHLCV);
-          allCandles.push(...candles);
+      while (!chunkSuccess && chunkRetries < MAX_RETRIES) {
+        try {
+          const response = await invoke<{
+            success: boolean;
+            data?: unknown[][];
+            error?: string;
+          }>('angelone_get_historical', {
+            apiKey: this.apiKey,
+            accessToken: this.accessToken,
+            exchange: apiExchange,
+            symbolToken: token,
+            interval,
+            fromDate: this.formatDateIST(currentStart),
+            toDate: this.formatDateIST(currentEnd),
+          });
+
+          if (response.success && response.data) {
+            const candles = response.data.map(fromAngelOneOHLCV);
+            allCandles.push(...candles);
+            chunkSuccess = true;
+          } else {
+            // Check if error is rate limit related
+            const isRateLimit = response.error?.includes('Try After Sometime') ||
+                               response.error?.includes('rate limit');
+
+            if (isRateLimit && chunkRetries < MAX_RETRIES - 1) {
+              // Exponential backoff: 1s, 2s, 4s
+              const backoffDelay = Math.pow(2, chunkRetries) * 1000;
+              await new Promise(resolve => setTimeout(resolve, backoffDelay));
+              chunkRetries++;
+            } else {
+              chunkSuccess = true; // Skip this chunk and continue
+            }
+          }
+        } catch (error) {
+          chunkSuccess = true; // Skip this chunk and continue
         }
+      }
 
-        currentStart.setDate(currentEnd.getDate() + 1);
+      currentStart.setDate(currentEnd.getDate() + 1);
 
-        // Rate limit delay
-        if (currentStart <= endDate) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      } catch (error) {
-        console.error(`[AngelOne] OHLCV chunk error:`, error);
-        currentStart.setDate(currentEnd.getDate() + 1);
+      // Rate limit delay between chunks (reduced to 300ms for faster loading)
+      if (currentStart <= endDate) {
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
 
@@ -1024,9 +1046,7 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     try {
       // Try real WebSocket connection via Rust backend
       await this.connectRealWebSocket();
-      console.log('[AngelOne] ✓ WebSocket connected via Rust backend');
     } catch (error) {
-      console.warn('[AngelOne] WebSocket connection failed, falling back to REST polling:', error);
       this.usePollingFallback = true;
       this.startQuotePolling();
     }
@@ -1036,13 +1056,6 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
    * Connect to real Angel One WebSocket via Tauri/Rust backend
    */
   private async connectRealWebSocket(): Promise<void> {
-    console.log('[AngelOne WS] connectRealWebSocket called:', {
-      hasAccessToken: !!this.accessToken,
-      hasApiKey: !!this.apiKey,
-      hasFeedToken: !!this.feedToken,
-      hasClientCode: !!this.clientCode,
-    });
-
     if (!this.accessToken || !this.apiKey || !this.feedToken) {
       throw new Error(`Missing tokens: accessToken=${!!this.accessToken}, apiKey=${!!this.apiKey}, feedToken=${!!this.feedToken}`);
     }
@@ -1112,11 +1125,6 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
       const symbol = symbolInfo?.symbol || data.symbol;
       const exchange = symbolInfo?.exchange || ('NSE' as StockExchange);
 
-      console.log(`[AngelOne WebSocket] Depth update for ${symbol}:`, {
-        bids: data.bids?.length || 0,
-        asks: data.asks?.length || 0,
-      });
-
       // Get best bid/ask from depth
       const bestBid = data.bids?.[0];
       const bestAsk = data.asks?.[0];
@@ -1167,19 +1175,16 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
       timestamp: number;
     }>('angelone_status', (event) => {
       const status = event.payload;
-      console.log(`[AngelOne WebSocket] Status: ${status.status} - ${status.message || ''}`);
 
       if (status.status === 'disconnected' || status.status === 'error') {
         this.wsConnected = false;
         if (!this.usePollingFallback) {
-          console.warn('[AngelOne] WebSocket disconnected, enabling polling fallback');
           this.usePollingFallback = true;
           this.startQuotePolling();
         }
       } else if (status.status === 'connected') {
         this.wsConnected = true;
         if (this.usePollingFallback) {
-          console.log('[AngelOne] WebSocket reconnected, disabling polling fallback');
           this.usePollingFallback = false;
           this.stopQuotePolling();
         }
@@ -1206,7 +1211,7 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     try {
       await invoke('angelone_ws_disconnect');
     } catch (err) {
-      console.warn('[AngelOne] WebSocket disconnect error:', err);
+      // Silent error handling
     }
 
     this.wsConnected = false;
@@ -1284,7 +1289,6 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     this.pollingSymbols.clear();
     this.usePollingFallback = false;
     this.wsConnected = false;
-    console.log('[AngelOne] WebSocket disconnected');
   }
 
   protected async subscribeInternal(
@@ -1310,10 +1314,7 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
           symbol: `${wsExchange}:${token}`,
           mode: wsMode,
         });
-
-        console.log(`[AngelOne] ✓ WebSocket subscribed to ${symbol} (${wsExchange}:${token}, mode: ${wsMode})`);
       } catch (error) {
-        console.error(`[AngelOne] WebSocket subscribe failed:`, error);
         if (!this.usePollingFallback) {
           this.usePollingFallback = true;
           this.startQuotePolling();
@@ -1347,12 +1348,9 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
         await invoke('angelone_ws_unsubscribe', {
           symbol: `${wsExchange}:${token}`,
         });
-        console.log(`[AngelOne] ✓ WebSocket unsubscribed from ${symbol}`);
       } catch (error) {
-        console.warn(`[AngelOne] WebSocket unsubscribe failed:`, error);
+        // Silent error handling
       }
-    } else {
-      console.log(`[AngelOne] Removed ${key} from polling`);
     }
   }
 
@@ -1388,9 +1386,11 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
 
       return response.data.map(item => ({
         symbol: String(item.symbol || item.tradingsymbol || ''),
+        tradingSymbol: String(item.tradingsymbol || item.symbol || ''), // AngelOne's full trading symbol (e.g., "RELIANCE-EQ")
         exchange: String(item.exchange || 'NSE') as StockExchange,
         name: String(item.name || item.symbol || ''),
         token: String(item.symboltoken || item.token || '0'),
+        instrumentToken: String(item.symboltoken || item.token || '0'), // For compatibility
         lotSize: Number(item.lotsize || 1),
         tickSize: Number(item.ticksize || 0.05),
         instrumentType: String(item.instrumenttype || 'EQ') as any,
@@ -1409,9 +1409,27 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
    * AngelOne API expects dates in IST, not UTC.
    */
   private formatDateIST(date: Date): string {
-    const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in ms
-    const istDate = new Date(date.getTime() + istOffset);
-    return istDate.toISOString().replace('T', ' ').slice(0, 16);
+    // Convert to IST using toLocaleString with IST timezone
+    const formatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+
+    const parts = formatter.formatToParts(date);
+    const values: Record<string, string> = {};
+    parts.forEach(part => {
+      if (part.type !== 'literal') {
+        values[part.type] = part.value;
+      }
+    });
+
+    // Format as "yyyy-MM-dd HH:mm"
+    return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}`;
   }
 
   async getInstrument(symbol: string, exchange: StockExchange): Promise<Instrument | null> {
@@ -1423,7 +1441,7 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
       }>('angelone_get_instrument', {
         apiKey: this.apiKey,
         symbol,
-        exchange,
+        exchange: String(exchange), // Convert to string
       });
 
       if (!response.success || !response.data) {

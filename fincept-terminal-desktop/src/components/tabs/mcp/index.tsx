@@ -6,7 +6,9 @@ import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCirc
 import { mcpManager, MCPServerWithStats } from '../../../services/mcp/mcpManager';
 import { sqliteService } from '../../../services/core/sqliteService';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
+import { useStockBrokerContext } from '../../../contexts/StockBrokerContext';
 import { brokerMCPBridge } from '../../../services/mcp/internal/BrokerMCPBridge';
+import { stockBrokerMCPBridge } from '../../../services/mcp/internal/StockBrokerMCPBridge';
 import MCPMarketplace from './marketplace/MCPMarketplace';
 import MCPAddServerModal from './MCPAddServerModal';
 import MCPToolsManagement from './MCPToolsManagement';
@@ -46,10 +48,17 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
 
-  // Broker context for MCP bridge
+  // Crypto broker context for MCP bridge
   const { activeAdapter, tradingMode, activeBroker } = useBrokerContext();
 
-  // Connect broker to MCP bridge
+  // Stock broker context for MCP bridge
+  const stockBrokerCtx = useStockBrokerContext();
+  const stockAdapter = stockBrokerCtx?.adapter;
+  const stockTradingMode = stockBrokerCtx?.tradingMode;
+  const stockActiveBroker = stockBrokerCtx?.activeBroker;
+  const stockIsAuthenticated = stockBrokerCtx?.isAuthenticated;
+
+  // Connect crypto broker to MCP bridge
   useEffect(() => {
     if (activeAdapter) {
       brokerMCPBridge.connect({
@@ -57,13 +66,30 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
         tradingMode,
         activeBroker,
       });
-      console.log(`[MCP] Connected to ${activeBroker} in ${tradingMode} mode`);
+      console.log(`[MCP] Connected to crypto broker: ${activeBroker} (${tradingMode} mode)`);
     }
 
     return () => {
       brokerMCPBridge.disconnect();
     };
   }, [activeAdapter, tradingMode, activeBroker]);
+
+  // Connect stock broker to MCP bridge
+  useEffect(() => {
+    if (stockAdapter && stockIsAuthenticated && stockActiveBroker) {
+      stockBrokerMCPBridge.connect({
+        activeAdapter: stockAdapter,
+        tradingMode: stockTradingMode || 'paper',
+        activeBroker: stockActiveBroker,
+        isAuthenticated: stockIsAuthenticated,
+      });
+      console.log(`[MCP] Connected to stock broker: ${stockActiveBroker} (${stockTradingMode} mode)`);
+    }
+
+    return () => {
+      stockBrokerMCPBridge.disconnect();
+    };
+  }, [stockAdapter, stockIsAuthenticated, stockActiveBroker, stockTradingMode]);
 
   useEffect(() => {
     const initializeServers = async () => {

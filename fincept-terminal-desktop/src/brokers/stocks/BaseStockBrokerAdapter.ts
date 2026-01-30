@@ -279,6 +279,48 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
     return BaseStockBrokerAdapter.isTokenValidForTodayIST(tokenTimestamp);
   }
 
+  /**
+   * Validate token with IST date check (for Indian brokers)
+   * First checks if token is from today (IST), then validates with API
+   * Subclasses should override validateTokenWithApi() for broker-specific API validation
+   */
+  protected async validateTokenWithDateCheck(): Promise<boolean> {
+    try {
+      // First check: Is token from today (IST)?
+      const credentials = await this.loadCredentials();
+      if (credentials?.tokenTimestamp) {
+        const isFromToday = BaseStockBrokerAdapter.isTokenValidForTodayIST(credentials.tokenTimestamp);
+        if (!isFromToday) {
+          console.log(`[${this.brokerId}] Token is from a previous day, needs re-authentication`);
+          return false;
+        }
+      }
+
+      // Second check: Validate with broker-specific API (if implemented)
+      if (this.accessToken) {
+        const isValid = await this.validateTokenWithApi(this.accessToken);
+        console.log(`[${this.brokerId}] Token API validation result: ${isValid}`);
+        return isValid;
+      }
+
+      return false;
+    } catch (error) {
+      console.error(`[${this.brokerId}] Token validation error:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Broker-specific API token validation
+   * Override this in subclasses to implement broker-specific validation
+   * Default implementation returns true (assumes valid if we have a token)
+   */
+  protected async validateTokenWithApi(_token: string): Promise<boolean> {
+    // Default: assume valid if token exists
+    // Subclasses should override with actual API validation
+    return true;
+  }
+
   // ============================================================================
   // Authentication Guard
   // ============================================================================

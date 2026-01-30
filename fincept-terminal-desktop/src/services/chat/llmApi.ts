@@ -58,7 +58,8 @@ class LLMApiService {
         throw new Error(result.error || 'Tool execution failed');
       }
 
-      return result.data;
+      // Return full result object (includes chart_data, ticker, company, etc.)
+      return result;
     } else {
       // External MCP server - use mcpManager
       const { mcpManager } = await import('../mcp/mcpManager');
@@ -736,8 +737,16 @@ class LLMApiService {
         formattedTools.map(t => t.function.name));
 
       // Build messages array
+      const defaultSystemPrompt = `You are a helpful assistant with access to tools. Use them when appropriate to help the user.
+
+When you use the edgar_get_financials tool, it returns financial data with chart_data containing YoY comparisons. The chart_data includes:
+- revenue, net_income, total_assets, total_equity with historical periods
+- growth metrics showing YoY percentage changes
+
+Mention the year-over-year growth percentages when discussing financial performance to provide meaningful context.`;
+
       const messages: ChatMessage[] = [
-        { role: 'system', content: config.systemPrompt || 'You are a helpful assistant with access to tools. Use them when appropriate to help the user.' },
+        { role: 'system', content: config.systemPrompt || defaultSystemPrompt },
         ...conversationHistory,
         { role: 'user', content: userMessage }
       ];
@@ -1068,7 +1077,27 @@ class LLMApiService {
               const result = await this.executeMCPTool(serverId, toolName, args);
               console.log('[Fincept Tools] Tool result:', result);
               onToolCall?.(toolName, args, result);
-              toolResults += `\n**Tool: ${toolName}**\nResult: ${JSON.stringify(result, null, 2)}\n`;
+
+              // Extract the most relevant content from result
+              let resultContent = '';
+              if (result.content) {
+                resultContent = result.content;
+              } else if (result.data && typeof result.data === 'string') {
+                resultContent = result.data;
+              } else if (result.data?.markdown) {
+                resultContent = result.data.markdown;
+              } else if (result.markdown) {
+                resultContent = result.markdown;
+              } else if (result.message) {
+                resultContent = result.message;
+              } else if (result.data) {
+                // Fallback: stringify data but limit size
+                resultContent = JSON.stringify(result.data, null, 2).slice(0, 2000);
+              } else {
+                resultContent = JSON.stringify(result, null, 2).slice(0, 2000);
+              }
+
+              toolResults += `\n**Tool: ${toolName}**\n${resultContent}\n`;
             } catch (toolError) {
               console.error('[Fincept Tools] Tool error:', toolError);
               toolResults += `\n**Tool: ${toolName}**\nError: ${toolError instanceof Error ? toolError.message : 'Unknown error'}\n`;
@@ -1080,8 +1109,10 @@ class LLMApiService {
         if (toolResults) {
           console.log('[Fincept Tools] Sending tool results back to LLM for formatting');
 
-          // Build new prompt with tool results
-          const newPrompt = `${fullPrompt}\n\nAssistant: I used the following tools:\n${toolResults}\n\nNow I'll provide a natural language summary based on these results.`;
+          // Build SIMPLE prompt with ONLY the user's last question and tool results
+          // No full history needed - just format the data
+          const userQuestion = messages[messages.length - 1]?.content || 'Please summarize the data';
+          const newPrompt = `User asked: "${userQuestion}"\n\nI retrieved this data:\n${toolResults}\n\nPlease provide a clear, concise summary of this data in natural language.`;
 
           const followUpBody = {
             prompt: newPrompt,

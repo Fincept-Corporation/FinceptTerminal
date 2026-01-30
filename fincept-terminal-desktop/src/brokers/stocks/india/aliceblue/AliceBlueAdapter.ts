@@ -198,14 +198,21 @@ export class AliceBlueAdapter extends BaseStockBrokerAdapter {
   }
 
   /**
-   * Validate session
+   * Validate session (uses base class date check + API validation)
    */
-  private async validateSession(sessionId: string): Promise<boolean> {
+  private async validateSession(_sessionId: string): Promise<boolean> {
+    return this.validateTokenWithDateCheck();
+  }
+
+  /**
+   * AliceBlue-specific API session validation
+   */
+  protected override async validateTokenWithApi(token: string): Promise<boolean> {
     try {
       const response = await invoke<{ success: boolean }>('aliceblue_validate_session', {
         userId: this.userId,
         apiSecret: this.apiSecret,
-        sessionId: sessionId,
+        sessionId: token,
       });
       return response.success;
     } catch {

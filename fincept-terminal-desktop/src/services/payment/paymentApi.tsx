@@ -188,7 +188,7 @@ const makePaymentApiRequest = async <T = any>(
 export class PaymentApiService {
   // Get all subscription plans from API
   static async getSubscriptionPlans(): Promise<PaymentApiResponse<SubscriptionPlan[]>> {
-    const response = await makePaymentApiRequest<PlansResponse>('GET', '/payment/plans');
+    const response = await makePaymentApiRequest<PlansResponse>('GET', '/cashfree/plans');
 
     // Backend returns: { success: true, message: "Success", data: [plans array] }
     if (response.success && response.data) {
@@ -255,7 +255,7 @@ export class PaymentApiService {
       currency: request.currency || 'USD'
     };
 
-    const response = await makePaymentApiRequest<{ data: CheckoutResponse }>('POST', '/payment/create-order', requestBody, headers);
+    const response = await makePaymentApiRequest<{ data: CheckoutResponse }>('POST', '/cashfree/create-order', requestBody, headers);
 
     // Construct checkout URL from payment_session_id
     if (response.success && response.data?.data?.payment_session_id) {

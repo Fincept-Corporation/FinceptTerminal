@@ -669,6 +669,12 @@ pub fn run() {
                 .map(|p| p.join("fincept_terminal.db").to_string_lossy().to_string())
                 .unwrap_or_else(|_| "fincept_terminal.db".to_string());
 
+            // Initialize edgar cache database
+            if let Ok(app_data_dir) = app.path().app_data_dir() {
+                let edgar_cache_path = app_data_dir.join("edgar_company_cache.db");
+                commands::edgar_cache::set_cache_db_path(edgar_cache_path);
+            }
+
             // Use tauri::async_runtime to spawn task in Tauri's runtime
             tauri::async_runtime::spawn(async move {
                 // Set router app handle
@@ -775,6 +781,11 @@ pub fn run() {
             commands::market_data::get_financials,
             commands::yfinance::execute_yfinance_command,
             commands::edgar::execute_edgar_command,
+            commands::edgar_cache::edgar_cache_store_tickers,
+            commands::edgar_cache::edgar_cache_search_companies,
+            commands::edgar_cache::edgar_cache_get_all_companies,
+            commands::edgar_cache::edgar_cache_get_count,
+            commands::edgar_cache::edgar_cache_is_populated,
             commands::alphavantage::execute_alphavantage_command,
             commands::alphavantage::get_alphavantage_quote,
             commands::alphavantage::get_alphavantage_daily,
@@ -2329,7 +2340,57 @@ pub fn run() {
             commands::llm_models::get_llm_models_by_provider,
             commands::llm_models::get_all_llm_models,
             commands::llm_models::get_llm_stats,
-            commands::llm_models::search_llm_models
+            commands::llm_models::search_llm_models,
+            // M&A Analytics Commands (Complete M&A and Financial Advisory System)
+            commands::ma_analytics::scan_ma_filings,
+            commands::ma_analytics::parse_ma_filing,
+            commands::ma_analytics::create_ma_deal,
+            commands::ma_analytics::get_all_ma_deals,
+            commands::ma_analytics::search_ma_deals,
+            commands::ma_analytics::update_ma_deal,
+            commands::ma_analytics::calculate_precedent_transactions,
+            commands::ma_analytics::calculate_trading_comps,
+            commands::ma_analytics::calculate_ma_dcf,
+            commands::ma_analytics::calculate_dcf_sensitivity,
+            commands::ma_analytics::generate_football_field,
+            commands::ma_analytics::build_merger_model,
+            commands::ma_analytics::calculate_accretion_dilution,
+            commands::ma_analytics::build_pro_forma,
+            commands::ma_analytics::calculate_sources_uses,
+            commands::ma_analytics::analyze_contribution,
+            commands::ma_analytics::build_lbo_model,
+            commands::ma_analytics::calculate_lbo_returns,
+            commands::ma_analytics::analyze_lbo_debt_schedule,
+            commands::ma_analytics::calculate_lbo_sensitivity,
+            commands::ma_analytics::calculate_berkus_valuation,
+            commands::ma_analytics::calculate_scorecard_valuation,
+            commands::ma_analytics::calculate_vc_method_valuation,
+            commands::ma_analytics::calculate_first_chicago_valuation,
+            commands::ma_analytics::calculate_risk_factor_valuation,
+            commands::ma_analytics::comprehensive_startup_valuation,
+            commands::ma_analytics::quick_pre_revenue_valuation,
+            commands::ma_analytics::analyze_payment_structure,
+            commands::ma_analytics::value_earnout,
+            commands::ma_analytics::calculate_exchange_ratio,
+            commands::ma_analytics::analyze_collar_mechanism,
+            commands::ma_analytics::value_cvr,
+            commands::ma_analytics::calculate_revenue_synergies,
+            commands::ma_analytics::calculate_cost_synergies,
+            commands::ma_analytics::estimate_integration_costs,
+            commands::ma_analytics::value_synergies_dcf,
+            commands::ma_analytics::generate_fairness_opinion,
+            commands::ma_analytics::analyze_premium_fairness,
+            commands::ma_analytics::assess_process_quality,
+            commands::ma_analytics::calculate_tech_metrics,
+            commands::ma_analytics::calculate_healthcare_metrics,
+            commands::ma_analytics::calculate_financial_services_metrics,
+            commands::ma_analytics::run_monte_carlo_valuation,
+            commands::ma_analytics::run_regression_valuation,
+            commands::ma_analytics::compare_deals,
+            commands::ma_analytics::rank_deals,
+            commands::ma_analytics::benchmark_deal_premium,
+            commands::ma_analytics::analyze_payment_structures,
+            commands::ma_analytics::analyze_industry_deals
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

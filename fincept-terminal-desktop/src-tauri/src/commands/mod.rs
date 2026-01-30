@@ -13,6 +13,7 @@ pub mod fmp;
 pub mod federal_reserve;
 pub mod sec;
 pub mod edgar;
+pub mod edgar_cache;
 pub mod cftc;
 pub mod cboe;
 pub mod bls;
@@ -158,3 +159,6 @@ pub mod llm_models;
 
 // Custom Index - Aggregate Index Feature
 pub mod custom_index;
+
+// M&A Analytics - Complete M&A and Financial Advisory System
+pub mod ma_analytics;

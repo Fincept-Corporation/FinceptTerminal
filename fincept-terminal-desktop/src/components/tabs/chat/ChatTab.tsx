@@ -12,6 +12,7 @@ import { brokerMCPBridge } from '@/services/mcp/internal/BrokerMCPBridge';
 import { notesMCPBridge } from '@/services/mcp/internal/NotesMCPBridge';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
 import ContextSelector from '@/components/common/ContextSelector';
+import FinancialSparklines from './FinancialSparklines';
 
 // Fincept Terminal Design System Colors
 const FINCEPT = {
@@ -61,14 +62,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const [statistics, setStatistics] = useState({ totalSessions: 0, totalMessages: 0, totalTokens: 0 });
   const [mcpToolsCount, setMcpToolsCount] = useState(0);
   const [linkedContexts, setLinkedContexts] = useState<RecordedContext[]>([]);
+  const [activeToolCalls, setActiveToolCalls] = useState<Array<{ name: string; args: any; status: 'calling' | 'success' | 'error' }>>([]);
+  const [pendingChartData, setPendingChartData] = useState<any>(null);
 
   // LLM Configuration state
   const [activeLLMConfig, setActiveLLMConfig] = useState<LLMConfig | null>(null);
+  const [allLLMConfigs, setAllLLMConfigs] = useState<LLMConfig[]>([]);
   const [llmGlobalSettings, setLLMGlobalSettings] = useState<LLMGlobalSettings>({
     temperature: 0.7,
     max_tokens: 4096,
     system_prompt: ''
   });
+  const [showLLMSelector, setShowLLMSelector] = useState(false);
 
   const handleContextsChange = (contexts: RecordedContext[]) => {
     setLinkedContexts(contexts);
@@ -83,6 +88,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const sessionsListRef = useRef<HTMLDivElement>(null);
   const streamedContentRef = useRef<string>(''); // Track accumulated streaming content
   const retryTimeoutsRef = useRef<Set<NodeJS.Timeout>>(new Set()); // Track pending retry timeouts
+  const llmSelectorRef = useRef<HTMLDivElement>(null);
 
   // Check if current provider supports MCP tools
   const providerSupportsMCP = () => {
@@ -179,6 +185,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     scrollToBottom();
   }, [messages, streamingContent]);
 
+  // Click outside to close LLM selector
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (llmSelectorRef.current && !llmSelectorRef.current.contains(event.target as Node)) {
+        setShowLLMSelector(false);
+      }
+    };
+
+    if (showLLMSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showLLMSelector]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -211,12 +234,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
   const loadLLMConfiguration = async () => {
     try {
-      const [activeConfig, globalSettings] = await Promise.all([
+      const [activeConfig, globalSettings, allConfigs] = await Promise.all([
         sqliteService.getActiveLLMConfig(),
-        sqliteService.getLLMGlobalSettings()
+        sqliteService.getLLMGlobalSettings(),
+        sqliteService.getLLMConfigs()
       ]);
 
       setActiveLLMConfig(activeConfig);
+      setAllLLMConfigs(allConfigs);
       setLLMGlobalSettings(globalSettings);
 
       if (!activeConfig) {
@@ -225,6 +250,20 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     } catch (error) {
       console.error('[ChatTab] Failed to load LLM configuration:', error);
       setSystemStatus('ERROR: Failed to load LLM configuration');
+    }
+  };
+
+  const switchLLMProvider = async (provider: string) => {
+    try {
+      setSystemStatus('STATUS: SWITCHING LLM PROVIDER...');
+      await sqliteService.setActiveLLMProvider(provider);
+      await loadLLMConfiguration();
+      setShowLLMSelector(false);
+      setSystemStatus('STATUS: READY');
+      console.log(`[ChatTab] Switched to LLM provider: ${provider}`);
+    } catch (error) {
+      console.error('[ChatTab] Failed to switch LLM provider:', error);
+      setSystemStatus('ERROR: Failed to switch provider');
     }
   };
 
@@ -501,15 +540,34 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
   const handleToolCallback = (toolName: string, args: any, result?: any) => {
     if (!result) {
+      // Tool call started
       console.log(`[Tool Call] ${toolName}`, args);
-      setSystemStatus('STATUS: Fetching data...');
+      setSystemStatus(`STATUS: Calling ${toolName}...`);
+      setActiveToolCalls(prev => [...prev, { name: toolName, args, status: 'calling' }]);
     } else {
+      // Tool call completed
       console.log(`[Tool Result] ${toolName}`, result);
       setSystemStatus('STATUS: Processing response...');
+      setActiveToolCalls(prev =>
+        prev.map(call =>
+          call.name === toolName && call.status === 'calling'
+            ? { ...call, status: result.error ? 'error' : 'success' }
+            : call
+        )
+      );
+
+      // Store chart data for financial tools
+      if (result.chart_data) {
+        console.log('[ChatTab] Chart data received:', result.chart_data);
+        setPendingChartData({
+          data: result.chart_data,
+          ticker: result.ticker,
+          company: result.company
+        });
+      }
 
       // Check if a report was created and schedule navigation after completion
       if (toolName === 'create_report_template' && result?.id) {
-        // Store the flag to navigate after response is complete
         (window as any).__navigateToReportBuilder = true;
       }
     }
@@ -518,16 +576,28 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const saveAssistantMessage = async (sessionUuid: string, content: string, usage?: any): Promise<void> => {
     if (!activeLLMConfig) return;
 
+    // Save message with chart data if available
+    const chartData = pendingChartData;
+
     const aiMessage = await sqliteService.addChatMessage({
       session_uuid: sessionUuid,
       role: 'assistant',
       content,
       provider: activeLLMConfig.provider,
       model: activeLLMConfig.model,
-      tokens_used: usage?.totalTokens
+      tokens_used: usage?.totalTokens,
+      tool_calls: activeToolCalls.length > 0 ? activeToolCalls.map(call => ({
+        name: call.name,
+        args: call.args,
+        timestamp: new Date().toISOString(),
+        status: call.status
+      })) : undefined,
+      metadata: chartData ? { chart_data: chartData.data, ticker: chartData.ticker, company: chartData.company } : undefined
     });
 
     setMessages(prev => [...prev, aiMessage]);
+    setActiveToolCalls([]);
+    setPendingChartData(null);
   };
 
   const saveErrorMessage = async (sessionUuid: string, error: string): Promise<void> => {
@@ -813,8 +883,68 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   </span>
                 )}
               </div>
+              {/* Tool calls indicator - like Perplexity sources */}
+              {message.tool_calls && message.tool_calls.length > 0 && (
+                <div style={{
+                  marginBottom: '12px',
+                  padding: '8px 12px',
+                  background: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '4px',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  alignItems: 'center'
+                }}>
+                  <span style={{
+                    color: FINCEPT.GRAY,
+                    fontSize: '9px',
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase'
+                  }}>
+                    Tools Used:
+                  </span>
+                  {message.tool_calls.map((tool, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '4px 8px',
+                        background: tool.status === 'success' ? FINCEPT.GREEN + '20' :
+                                   tool.status === 'error' ? FINCEPT.RED + '20' : FINCEPT.ORANGE + '20',
+                        border: `1px solid ${tool.status === 'success' ? FINCEPT.GREEN :
+                                             tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE}`,
+                        borderRadius: '3px',
+                        fontSize: '9px',
+                        color: tool.status === 'success' ? FINCEPT.GREEN :
+                               tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE,
+                        letterSpacing: '0.5px',
+                        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <span style={{ fontSize: '8px' }}>
+                        {tool.status === 'success' ? '✓' : tool.status === 'error' ? '✗' : '⋯'}
+                      </span>
+                      {tool.name.replace('edgar_', '').replace(/_/g, ' ')}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {message.role === 'assistant' && message.content ? (
-                <MarkdownRenderer content={message.content} />
+                <>
+                  <MarkdownRenderer content={message.content} />
+                  {message.metadata?.chart_data && (
+                    <FinancialSparklines
+                      data={message.metadata.chart_data}
+                      ticker={message.metadata.ticker}
+                      company={message.metadata.company}
+                      responseText={message.content}
+                    />
+                  )}
+                </>
               ) : (
                 <div style={{
                   color: FINCEPT.WHITE,
@@ -846,7 +976,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   };
 
   const renderStreamingMessage = () => {
-    if (!streamingContent) return null;
+    if (!streamingContent && activeToolCalls.length === 0) return null;
 
     return (
       <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'flex-start' }}>
@@ -865,29 +995,97 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             paddingBottom: '6px',
             borderBottom: `1px solid ${FINCEPT.BORDER}`
           }}>
-            <Bot size={12} color={FINCEPT.ORANGE} />
+            <Bot
+              size={12}
+              color={FINCEPT.ORANGE}
+              style={{ animation: 'spin 2s linear infinite' }}
+            />
             <span style={{
               color: FINCEPT.ORANGE,
               fontSize: '9px',
               fontWeight: 700,
-              letterSpacing: '0.5px'
+              letterSpacing: '0.5px',
+              animation: 'fadeInOut 1.5s ease-in-out infinite'
             }}>
               {t('messages.typing').toUpperCase()}
             </span>
-          </div>
-          <div style={{
-            color: FINCEPT.WHITE,
-            fontSize: '11px',
-            lineHeight: '1.6',
-            whiteSpace: 'pre-wrap',
-            fontFamily: '"IBM Plex Mono", "Consolas", monospace'
-          }}>
-            {streamingContent}
             <span style={{
               color: FINCEPT.ORANGE,
-              animation: 'blink 1s infinite'
-            }}>▊</span>
+              fontSize: '9px',
+              animation: 'dots 1.5s steps(4, end) infinite'
+            }}>
+              <span>.</span>
+              <span>.</span>
+              <span>.</span>
+            </span>
           </div>
+
+          {/* Live tool calls - Perplexity-style */}
+          {activeToolCalls.length > 0 && (
+            <div style={{
+              marginBottom: streamingContent ? '12px' : '0',
+              padding: '8px 12px',
+              background: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '4px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '6px',
+              alignItems: 'center'
+            }}>
+              <span style={{
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase'
+              }}>
+                Calling:
+              </span>
+              {activeToolCalls.map((tool, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '4px 8px',
+                    background: tool.status === 'success' ? FINCEPT.GREEN + '20' :
+                               tool.status === 'error' ? FINCEPT.RED + '20' : FINCEPT.ORANGE + '20',
+                    border: `1px solid ${tool.status === 'success' ? FINCEPT.GREEN :
+                                         tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE}`,
+                    borderRadius: '3px',
+                    fontSize: '9px',
+                    color: tool.status === 'success' ? FINCEPT.GREEN :
+                           tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE,
+                    letterSpacing: '0.5px',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    animation: tool.status === 'calling' ? 'pulse 1.5s infinite' : 'none'
+                  }}
+                >
+                  <span style={{ fontSize: '8px' }}>
+                    {tool.status === 'success' ? '✓' : tool.status === 'error' ? '✗' : '⋯'}
+                  </span>
+                  {tool.name.replace('edgar_', '').replace('stock_', '').replace(/_/g, ' ')}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {streamingContent && (
+            <div style={{
+              color: FINCEPT.WHITE,
+              fontSize: '11px',
+              lineHeight: '1.6',
+              whiteSpace: 'pre-wrap',
+              fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+            }}>
+              {streamingContent}
+              <span style={{
+                color: FINCEPT.ORANGE,
+                animation: 'blink 1s infinite'
+              }}>▊</span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -933,6 +1131,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           0%, 50% { opacity: 1; }
           51%, 100% { opacity: 0; }
         }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.02); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes fadeInOut {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+        @keyframes dots {
+          0%, 20% { content: '.'; }
+          40% { content: '..'; }
+          60%, 100% { content: '...'; }
+        }
       `}</style>
       {/* Top Navigation Bar */}
       <div style={{
@@ -955,14 +1170,136 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             {t('title').toUpperCase()}
           </span>
           <span style={{ color: FINCEPT.GRAY }}>|</span>
-          <span style={{
-            color: FINCEPT.YELLOW,
-            fontSize: '9px',
-            fontWeight: 700,
-            letterSpacing: '0.5px'
-          }}>
-            {activeLLMConfig?.provider.toUpperCase() || 'NO PROVIDER'}
-          </span>
+
+          {/* LLM Provider Selector */}
+          <div ref={llmSelectorRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowLLMSelector(!showLLMSelector)}
+              style={{
+                backgroundColor: `${FINCEPT.YELLOW}20`,
+                border: `1px solid ${FINCEPT.YELLOW}40`,
+                color: FINCEPT.YELLOW,
+                padding: '4px 10px',
+                fontSize: '9px',
+                fontWeight: 700,
+                borderRadius: '2px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `${FINCEPT.YELLOW}30`;
+                e.currentTarget.style.borderColor = FINCEPT.YELLOW;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = `${FINCEPT.YELLOW}20`;
+                e.currentTarget.style.borderColor = `${FINCEPT.YELLOW}40`;
+              }}
+              title="Switch LLM Provider"
+            >
+              <Bot size={10} />
+              {activeLLMConfig?.provider.toUpperCase() || 'NO PROVIDER'}
+              <span style={{ fontSize: '7px' }}>▼</span>
+            </button>
+
+            {/* Dropdown Menu */}
+            {showLLMSelector && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: '4px',
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.ORANGE}`,
+                borderRadius: '2px',
+                padding: '4px',
+                minWidth: '220px',
+                maxHeight: '400px',
+                overflowY: 'auto',
+                zIndex: 1000,
+                boxShadow: `0 4px 12px ${FINCEPT.DARK_BG}80`
+              }}>
+                <div style={{
+                  padding: '6px 8px',
+                  fontSize: '8px',
+                  fontWeight: 700,
+                  color: FINCEPT.GRAY,
+                  letterSpacing: '0.5px',
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  marginBottom: '4px'
+                }}>
+                  SELECT LLM PROVIDER
+                </div>
+                {allLLMConfigs.length > 0 ? (
+                  allLLMConfigs.map((config) => (
+                    <button
+                      key={config.provider}
+                      onClick={() => switchLLMProvider(config.provider)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: activeLLMConfig?.provider === config.provider ? `${FINCEPT.ORANGE}20` : 'transparent',
+                        border: activeLLMConfig?.provider === config.provider ? `1px solid ${FINCEPT.ORANGE}` : `1px solid ${FINCEPT.BORDER}`,
+                        color: activeLLMConfig?.provider === config.provider ? FINCEPT.ORANGE : FINCEPT.WHITE,
+                        padding: '8px',
+                        fontSize: '9px',
+                        fontWeight: 600,
+                        borderRadius: '2px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        marginBottom: '2px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activeLLMConfig?.provider !== config.provider) {
+                          e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                          e.currentTarget.style.borderColor = FINCEPT.MUTED;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activeLLMConfig?.provider !== config.provider) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                        }
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 700, letterSpacing: '0.3px' }}>
+                          {config.provider.toUpperCase()}
+                        </span>
+                        {activeLLMConfig?.provider === config.provider && (
+                          <span style={{ color: FINCEPT.GREEN, fontSize: '8px' }}>● ACTIVE</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '8px', color: FINCEPT.GRAY }}>
+                        Model: {config.model || 'N/A'}
+                      </div>
+                      {config.base_url && (
+                        <div style={{ fontSize: '7px', color: FINCEPT.MUTED }}>
+                          {config.base_url}
+                        </div>
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div style={{
+                    padding: '12px',
+                    textAlign: 'center',
+                    fontSize: '9px',
+                    color: FINCEPT.MUTED
+                  }}>
+                    No LLM providers configured. Go to Settings to add one.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <span style={{ color: FINCEPT.GRAY }}>|</span>
           <span style={{
             color: FINCEPT.WHITE,

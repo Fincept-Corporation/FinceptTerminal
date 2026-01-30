@@ -87,7 +87,13 @@ class TerminalMCPProvider {
       const result: InternalToolResult = await tool.handler(args, this.contexts);
       return {
         success: result.success,
-        data: result.data ?? result.message,
+        data: result.data ?? result.message ?? result.content,
+        // Preserve additional metadata for charts, etc.
+        chart_data: result.chart_data,
+        ticker: result.ticker,
+        company: result.company,
+        content: result.content,
+        message: result.message,
         error: result.error,
         toolName: name,
         serverId: INTERNAL_SERVER_ID,

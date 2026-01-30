@@ -33,6 +33,7 @@ interface ProChartProps {
   showHeader?: boolean; // Option to hide the symbol/OHLC header
   onToolChange?: (tool: DrawingTool | null) => void;
   timezone?: string; // e.g., 'Asia/Kolkata' for IST, 'America/New_York' for EST
+  interval?: string; // Timeframe/interval for proper time scale formatting (e.g., '1m', '5m', '1h', '1d')
 }
 
 export function ProChartWithToolkit({
@@ -44,6 +45,7 @@ export function ProChartWithToolkit({
   showHeader = true,
   onToolChange,
   timezone,
+  interval = '1d',
 }: ProChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -63,6 +65,13 @@ export function ProChartWithToolkit({
     if (!chartContainerRef.current) return;
 
     const containerHeight = chartContainerRef.current.clientHeight || height;
+
+    // Determine time visibility based on interval
+    // For intraday timeframes (minutes, hours), show time
+    // For daily and above, time is less important
+    const isIntradayTimeframe = interval ? !['1d', '1w', '1M'].includes(interval) : true;
+    const showSeconds = interval ? ['1m', '3m', '5m'].includes(interval) : false;
+
     // Build localization options for timezone
     const localizationOptions = timezone ? {
       locale: 'en-IN', // Use Indian locale for IST, can be customized per timezone
@@ -130,8 +139,8 @@ export function ProChartWithToolkit({
       },
       timeScale: {
         borderColor: '#2a2a2a',
-        timeVisible: true,
-        secondsVisible: false,
+        timeVisible: isIntradayTimeframe, // Show time for intraday timeframes
+        secondsVisible: showSeconds, // Show seconds for very short timeframes (1m, 3m, 5m)
       },
     });
 
@@ -277,7 +286,7 @@ export function ProChartWithToolkit({
       pluginManager.destroy();
       chart.remove();
     };
-  }, [height, showVolume, timezone]);
+  }, [height, showVolume, timezone, interval]);
 
   // Update chart data
   useEffect(() => {

@@ -208,23 +208,45 @@ export class ShoonyaAdapter extends BaseStockBrokerAdapter {
       this.userId = credentials.userId || null;
 
       if (this.accessToken) {
-        // Test token with funds call
-        try {
-          await this.getFundsInternal();
-          this._isConnected = true;
-          console.log(`[${this.brokerId}] ✓ Session restored successfully`);
-          return true;
-        } catch (err) {
-          console.warn(`[${this.brokerId}] Access token expired or invalid`);
+        console.log(`[${this.brokerId}] Access token found, validating...`);
+
+        // First check if token is from today (IST)
+        const isTokenValid = await this.validateToken(this.accessToken);
+        if (!isTokenValid) {
+          console.warn(`[${this.brokerId}] Token validation failed (expired or from previous day)`);
           this.accessToken = null;
           this._isConnected = false;
           return false;
         }
+
+        this._isConnected = true;
+        console.log(`[${this.brokerId}] ✓ Session restored successfully`);
+        return true;
       }
 
       return false;
     } catch (error) {
       console.error(`[${this.brokerId}] Failed to initialize from storage:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Validate token using IST date check and API validation
+   */
+  private async validateToken(_token: string): Promise<boolean> {
+    return this.validateTokenWithDateCheck();
+  }
+
+  /**
+   * Override to provide Shoonya-specific API validation
+   */
+  protected override async validateTokenWithApi(token: string): Promise<boolean> {
+    try {
+      // Test token with a lightweight API call (get funds)
+      await this.getFundsInternal();
+      return true;
+    } catch {
       return false;
     }
   }

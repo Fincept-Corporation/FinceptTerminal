@@ -337,9 +337,16 @@ export class KotakAdapter extends BaseStockBrokerAdapter {
   }
 
   /**
-   * Validate access token
+   * Validate access token (uses base class date check + API validation)
    */
-  private async validateToken(token: string): Promise<boolean> {
+  private async validateToken(_token: string): Promise<boolean> {
+    return this.validateTokenWithDateCheck();
+  }
+
+  /**
+   * Kotak-specific API token validation
+   */
+  protected override async validateTokenWithApi(token: string): Promise<boolean> {
     try {
       const response = await invoke<{ success: boolean }>('kotak_validate_token', {
         authToken: token,

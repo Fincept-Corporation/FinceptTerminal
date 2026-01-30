@@ -43,9 +43,9 @@ def main():
     if not merged['platforms']:
         print("No platforms found from JSON files, generating from artifacts...")
 
-        # Windows NSIS
-        nsis_zips = glob.glob("release-files/*.nsis.zip")
-        nsis_sigs = glob.glob("release-files/*.nsis.zip.sig")
+        # Windows NSIS (x86_64)
+        nsis_zips = glob.glob("release-files/*-x86_64-windows.nsis.zip")
+        nsis_sigs = glob.glob("release-files/*-x86_64-windows.nsis.zip.sig")
         if nsis_zips and nsis_sigs:
             nsis_filename = os.path.basename(nsis_zips[0])
             with open(nsis_sigs[0], 'r') as f:
@@ -54,11 +54,11 @@ def main():
                 "signature": signature,
                 "url": f"{repo_url}/releases/download/{tag_name}/{nsis_filename}"
             }
-            print("Added windows-x86_64 from artifacts")
+            print(f"Added windows-x86_64 from artifacts: {nsis_filename}")
 
-        # macOS ARM (aarch64)
-        macos_arm_tars = [f for f in glob.glob("release-files/*.app.tar.gz") if 'aarch64' in f]
-        macos_arm_sigs = [f for f in glob.glob("release-files/*.app.tar.gz.sig") if 'aarch64' in f]
+        # macOS ARM64 (aarch64)
+        macos_arm_tars = glob.glob("release-files/*-arm64-darwin.app.tar.gz")
+        macos_arm_sigs = glob.glob("release-files/*-arm64-darwin.app.tar.gz.sig")
         if macos_arm_tars and macos_arm_sigs:
             tar_filename = os.path.basename(macos_arm_tars[0])
             with open(macos_arm_sigs[0], 'r') as f:
@@ -67,11 +67,11 @@ def main():
                 "signature": signature,
                 "url": f"{repo_url}/releases/download/{tag_name}/{tar_filename}"
             }
-            print("Added darwin-aarch64 from artifacts")
+            print(f"Added darwin-aarch64 from artifacts: {tar_filename}")
 
-        # macOS Intel (x86_64)
-        macos_x64_tars = [f for f in glob.glob("release-files/*.app.tar.gz") if 'x86_64' in f and 'aarch64' not in f]
-        macos_x64_sigs = [f for f in glob.glob("release-files/*.app.tar.gz.sig") if 'x86_64' in f and 'aarch64' not in f]
+        # macOS x64 (x86_64)
+        macos_x64_tars = glob.glob("release-files/*-x64-darwin.app.tar.gz")
+        macos_x64_sigs = glob.glob("release-files/*-x64-darwin.app.tar.gz.sig")
         if macos_x64_tars and macos_x64_sigs:
             tar_filename = os.path.basename(macos_x64_tars[0])
             with open(macos_x64_sigs[0], 'r') as f:
@@ -80,11 +80,11 @@ def main():
                 "signature": signature,
                 "url": f"{repo_url}/releases/download/{tag_name}/{tar_filename}"
             }
-            print("Added darwin-x86_64 from artifacts")
+            print(f"Added darwin-x86_64 from artifacts: {tar_filename}")
 
-        # Linux
-        linux_tars = glob.glob("release-files/*.AppImage.tar.gz")
-        linux_sigs = glob.glob("release-files/*.AppImage.tar.gz.sig")
+        # Linux x86_64
+        linux_tars = glob.glob("release-files/*-x86_64-linux.AppImage.tar.gz")
+        linux_sigs = glob.glob("release-files/*-x86_64-linux.AppImage.tar.gz.sig")
         if linux_tars and linux_sigs:
             tar_filename = os.path.basename(linux_tars[0])
             with open(linux_sigs[0], 'r') as f:
@@ -93,7 +93,7 @@ def main():
                 "signature": signature,
                 "url": f"{repo_url}/releases/download/{tag_name}/{tar_filename}"
             }
-            print("Added linux-x86_64 from artifacts")
+            print(f"Added linux-x86_64 from artifacts: {tar_filename}")
 
     # Write the merged JSON
     with open('release-files/latest.json', 'w') as f:

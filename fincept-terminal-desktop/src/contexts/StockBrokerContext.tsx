@@ -212,6 +212,9 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasInitializedRef = useRef(false);
 
+  // Counter to force adapter re-initialization
+  const [adapterInitKey, setAdapterInitKey] = useState(0);
+
   // ============================================================================
   // COMPUTED VALUES (Memoized)
   // ============================================================================
@@ -280,10 +283,12 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
         if (savedBroker && STOCK_BROKER_REGISTRY[savedBroker]) {
           console.log(`[StockBrokerContext] Found saved broker: ${savedBroker}`);
           setActiveBrokerState(savedBroker);
+          // Note: isLoading will be set to false by initializeAdapter useEffect
         } else {
           // No saved broker - scan all brokers to find one with valid session
           console.log('[StockBrokerContext] No saved broker, scanning for valid sessions...');
           const allBrokers = getAllStockBrokers();
+          let foundBroker = false;
 
           for (const broker of allBrokers) {
             try {
@@ -296,12 +301,18 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
                 if (isValid) {
                   console.log(`[StockBrokerContext] Found valid session for: ${broker.id}`);
                   setActiveBrokerState(broker.id);
+                  foundBroker = true;
                   break;
                 }
               }
             } catch (err) {
               // Skip broker if check fails
             }
+          }
+
+          // If no broker found, set loading to false here
+          if (!foundBroker) {
+            setIsLoading(false);
           }
         }
 
@@ -311,7 +322,6 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
         });
       } catch (err) {
         console.error('[StockBrokerContext] Failed to load preferences:', err);
-      } finally {
         setIsLoading(false);
       }
     };
@@ -320,11 +330,19 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
   }, []);
 
   // Auto-create adapter when broker changes (including on startup)
+  // adapterInitKey forces re-init when incremented (for re-selecting same broker)
   useEffect(() => {
     const initializeAdapter = async () => {
-      if (!activeBroker || adapter?.brokerId === activeBroker) return;
+      if (!activeBroker) {
+        // If we're skipping init and isLoading is true, set it to false
+        if (isLoading) {
+          setIsLoading(false);
+        }
+        return;
+      }
 
-      console.log(`[StockBrokerContext] Initializing adapter for: ${activeBroker}`);
+      console.log(`[StockBrokerContext] Initializing adapter for: ${activeBroker} (key: ${adapterInitKey})`);
+      setIsLoading(true);
 
       try {
         const newAdapter = createStockBrokerAdapter(activeBroker);
@@ -362,6 +380,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
             setAdapter(newAdapter);
           }
 
+          setIsLoading(false);
           return;
         }
 
@@ -379,14 +398,18 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
               console.log(`[StockBrokerContext] ✓ Credentials loaded into adapter memory`);
             }
 
-            // If access_token exists, attempt auto-restore session
-            if (storedCreds.accessToken && typeof (newAdapter as any).initFromStorage === 'function') {
-              console.log(`[StockBrokerContext] Access token found, attempting auto-restore...`);
+            // Attempt auto-restore or auto-authenticate
+            if (typeof (newAdapter as any).initFromStorage === 'function') {
+              console.log(`[StockBrokerContext] Attempting auto-restore/auto-authenticate...`);
               const restored = await (newAdapter as any).initFromStorage();
 
               if (restored) {
                 console.log(`[StockBrokerContext] ✓ Session restored successfully`);
+
+                // CRITICAL: Set adapter BEFORE isAuthenticated to avoid race condition
+                setAdapter(newAdapter);
                 setIsAuthenticated(true);
+                setError(null);
 
                 // Initialize unified trading session
                 try {
@@ -396,31 +419,49 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
                   console.error('[StockBrokerContext] Failed to init trading session:', sessionErr);
                 }
 
-                // Note: Data will be auto-loaded by the useEffect that watches isAuthenticated
+                // Success - skip setting adapter again below
+                setIsLoading(false);
+                return;
               } else {
-                console.log(`[StockBrokerContext] Session restore failed (token may be expired)`);
-                // Indian broker tokens expire at midnight IST - notify user
-                setError(`Session expired. Please re-authenticate with ${activeBroker}.`);
+                console.log(`[StockBrokerContext] Auto-restore failed - session expired or invalid`);
+                setAdapter(newAdapter);
                 setIsAuthenticated(false);
+                setError(`Session expired for ${activeBroker}. Please re-authenticate in the BROKERS tab.`);
+                setIsLoading(false);
+                return; // Don't set adapter again below
               }
             } else {
-              console.log(`[StockBrokerContext] No access token found, manual OAuth required`);
+              console.log(`[StockBrokerContext] No initFromStorage method, manual OAuth required`);
+              setAdapter(newAdapter);
+              setIsAuthenticated(false);
+              setError(null); // No error - just needs manual auth
+              setIsLoading(false);
+              return;
             }
           } else {
             console.log(`[StockBrokerContext] No stored credentials found`);
+            setAdapter(newAdapter);
+            setIsAuthenticated(false);
+            setError(null); // No error - just needs initial setup
+            setIsLoading(false);
+            return;
           }
         } catch (loadErr) {
           console.log('[StockBrokerContext] Failed to load credentials:', loadErr);
+          setAdapter(newAdapter);
+          setIsAuthenticated(false);
+          setError(null);
+          setIsLoading(false);
+          return;
         }
-
-        setAdapter(newAdapter);
       } catch (err) {
         console.error('[StockBrokerContext] Failed to create adapter:', err);
+        setIsLoading(false);
       }
     };
 
     initializeAdapter();
-  }, [activeBroker, tradingMode]);
+  }, [activeBroker, tradingMode, adapterInitKey]);
 
   // ============================================================================
   // BROKER MANAGEMENT
@@ -434,11 +475,20 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     // Abort any ongoing connection
     abortControllerRef.current?.abort();
 
+    // Check if re-selecting the same broker (needs re-init)
+    const isReselecting = brokerId === activeBroker;
+
     // Clean up existing adapter (DON'T logout - preserves credentials in DB)
-    if (adapter && adapter.brokerId !== brokerId) {
-      console.log(`[StockBrokerContext] Switching from ${adapter.brokerId} to ${brokerId}, preserving credentials`);
-      // Don't call logout() - it deletes credentials from database
-      // Just reset the adapter instance
+    if (adapter) {
+      console.log(`[StockBrokerContext] ${isReselecting ? 'Re-initializing' : 'Switching from'} ${adapter.brokerId} ${isReselecting ? '' : `to ${brokerId}`}, preserving credentials`);
+      // Cleanup WebSocket connections without deleting credentials
+      try {
+        if (adapter.disconnectWebSocket) {
+          await adapter.disconnectWebSocket();
+        }
+      } catch (err) {
+        console.error('[StockBrokerContext] Failed to disconnect WebSocket:', err);
+      }
     }
 
     // Reset state
@@ -458,13 +508,19 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       await safeStorageSet(STORAGE_KEYS.STOCK_TRADING_MODE, 'paper');
     }
 
-    // Set new broker
+    // Set new broker (or same broker for re-init)
     setActiveBrokerState(brokerId);
     await safeStorageSet(STORAGE_KEYS.ACTIVE_STOCK_BROKER, brokerId);
 
-    // Adapter will be created by useEffect watching activeBroker
+    // If re-selecting same broker, increment key to force re-initialization
+    if (isReselecting) {
+      console.log(`[StockBrokerContext] Re-selecting same broker, forcing re-init...`);
+      setAdapterInitKey(prev => prev + 1);
+    }
+
+    // Adapter will be created by useEffect watching activeBroker + adapterInitKey
     console.log(`[StockBrokerContext] Active broker set to: ${brokerId}`);
-  }, [adapter, tradingMode]);
+  }, [adapter, tradingMode, activeBroker]);
 
   const setTradingMode = useCallback(async (mode: 'live' | 'paper') => {
     setTradingModeState(mode);
@@ -569,6 +625,24 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           try {
             await adapterToUse.connectWebSocket();
             console.log(`[StockBrokerContext] ✓ WebSocket connected for ${activeBroker}`);
+
+            // If in paper trading mode, set up tick handler to update paper positions
+            if (tradingMode === 'paper') {
+              const { invoke } = await import('@tauri-apps/api/core');
+              adapterToUse.onTick(async (tick) => {
+                try {
+                  // Update paper trading position prices
+                  const symbol = `${tick.exchange}:${tick.symbol}`;
+                  await invoke('process_tick_for_paper_trading', {
+                    symbol,
+                    price: tick.lastPrice
+                  });
+                } catch (err) {
+                  console.error('[StockBrokerContext] Failed to process tick for paper trading:', err);
+                }
+              });
+              console.log(`[StockBrokerContext] ✓ Paper trading tick handler registered`);
+            }
           } catch (wsErr) {
             console.warn(`[StockBrokerContext] WebSocket connection failed for ${activeBroker}, will use REST polling:`, wsErr);
           }
@@ -768,7 +842,10 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     try {
       if (tradingMode === 'paper') {
         // Fetch from unified trading service (paper positions)
+        console.log('[StockBrokerContext] Fetching paper positions from DB...');
         const unifiedPositions = await getUnifiedPositions();
+        console.log(`[StockBrokerContext] Fetched ${unifiedPositions.length} positions from DB:`, unifiedPositions);
+
         // Convert UnifiedPosition to Position format
         const convertedPositions: Position[] = unifiedPositions.map((p) => ({
           symbol: p.symbol,
@@ -785,6 +862,8 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           pnlPercent: p.entry_price > 0 ? ((p.current_price - p.entry_price) / p.entry_price) * 100 : 0,
           dayPnl: 0,
         }));
+
+        console.log(`[StockBrokerContext] Setting ${convertedPositions.length} positions in state`);
         setPositions(convertedPositions);
       } else if (adapter) {
         // Fetch from live broker
@@ -999,6 +1078,96 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       }
     }
   }, [tradingMode, isAuthenticated, adapter]);
+
+  // ============================================================================
+  // AUTO-REFRESH POSITIONS AFTER ORDER PLACEMENT (FROM MCP/CHAT)
+  // ============================================================================
+
+  useEffect(() => {
+    const handleOrderPlaced = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('[StockBrokerContext] Order placed, refreshing data from DB...', customEvent.detail);
+      // Simply refresh positions and orders from database
+      await refreshPositions();
+      await refreshOrders();
+    };
+
+    window.addEventListener('stock-order-placed', handleOrderPlaced);
+    return () => {
+      window.removeEventListener('stock-order-placed', handleOrderPlaced);
+    };
+  }, [refreshPositions, refreshOrders]);
+
+  // ============================================================================
+  // PERIODIC REFRESH FOR PAPER TRADING (Real-time price updates from WebSocket)
+  // ============================================================================
+
+  useEffect(() => {
+    // Only in paper mode with active positions
+    if (tradingMode !== 'paper' || !isAuthenticated) {
+      return;
+    }
+
+    // Refresh every 3 seconds to show updated prices
+    // (WebSocket updates the DB, we just need to read it)
+    const intervalId = setInterval(() => {
+      refreshPositions();
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [tradingMode, isAuthenticated, refreshPositions]);
+
+  // ============================================================================
+  // SUBSCRIBE TO POSITION SYMBOLS (Paper Trading Real-time Updates)
+  // ============================================================================
+
+  useEffect(() => {
+    // Only subscribe in paper mode when we have positions
+    if (tradingMode !== 'paper' || !adapter || positions.length === 0) {
+      return;
+    }
+
+    // Subscribe to all position symbols once
+    const subscribeToPositions = async () => {
+      console.log(`[StockBrokerContext] Subscribing to ${positions.length} position symbols...`);
+      for (const pos of positions) {
+        try {
+          await adapter.subscribe(pos.symbol, pos.exchange, 'quote');
+        } catch (err) {
+          console.warn(`[StockBrokerContext] Failed to subscribe to ${pos.symbol}:`, err);
+        }
+      }
+    };
+
+    subscribeToPositions();
+  }, [positions.map(p => p.symbol).join(','), tradingMode, adapter]); // Only re-run if symbols change
+
+  // ============================================================================
+  // MCP BRIDGE INTEGRATION
+  // ============================================================================
+
+  useEffect(() => {
+    // Connect stock broker adapter to MCP bridge for AI-controlled trading
+    if (adapter && isAuthenticated && activeBroker) {
+      import('@/services/mcp/internal').then(({ stockBrokerMCPBridge }) => {
+        stockBrokerMCPBridge.connect({
+          activeAdapter: adapter,
+          tradingMode,
+          activeBroker,
+          isAuthenticated,
+        });
+
+        console.log(`[StockBrokerContext] Connected to MCP bridge: ${activeBroker} (${tradingMode} mode)`);
+      });
+
+      return () => {
+        import('@/services/mcp/internal').then(({ stockBrokerMCPBridge }) => {
+          stockBrokerMCPBridge.disconnect();
+          console.log('[StockBrokerContext] Disconnected from MCP bridge');
+        });
+      };
+    }
+  }, [adapter, isAuthenticated, activeBroker, tradingMode]);
 
   // ============================================================================
   // ERROR HANDLING

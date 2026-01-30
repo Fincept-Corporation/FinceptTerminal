@@ -202,9 +202,16 @@ export class GrowwAdapter extends BaseStockBrokerAdapter {
   }
 
   /**
-   * Validate access token
+   * Validate access token (uses base class date check + API validation)
    */
-  private async validateToken(token: string): Promise<boolean> {
+  private async validateToken(_token: string): Promise<boolean> {
+    return this.validateTokenWithDateCheck();
+  }
+
+  /**
+   * Groww-specific API token validation
+   */
+  protected override async validateTokenWithApi(token: string): Promise<boolean> {
     try {
       const response = await invoke<{ success: boolean }>('groww_validate_token', {
         accessToken: token,

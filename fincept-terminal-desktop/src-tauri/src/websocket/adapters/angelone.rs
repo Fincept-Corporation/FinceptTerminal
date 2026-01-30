@@ -30,7 +30,7 @@ use tokio_tungstenite::{
 // ============================================================================
 
 const ANGEL_WS_URL: &str = "wss://smartapisocket.angelone.in/smart-stream";
-const HEARTBEAT_INTERVAL: u64 = 30; // spec says 30 seconds
+const HEARTBEAT_INTERVAL: u64 = 30; // per official spec
 
 // Subscription modes (official spec)
 const MODE_LTP: u8 = 1;      // packet size = 51 bytes
@@ -240,7 +240,6 @@ impl AngelOneAdapter {
     fn parse_binary_data(data: &[u8]) -> Option<AngelTick> {
         // Minimum LTP packet = 51 bytes
         if data.len() < 51 {
-            eprintln!("[AngelOne WS] Binary packet too small: {} bytes (need >= 51)", data.len());
             return None;
         }
 
@@ -343,15 +342,33 @@ impl AngelOneAdapter {
 
         let mut messages = Vec::new();
 
+        // Extract best bid/ask from depth data if available
+        let (best_bid, best_bid_qty, best_ask, best_ask_qty) = if let Some(ref entries) = tick.best_five {
+            let best_bid_entry = entries.iter().filter(|e| e.is_buy).max_by(|a, b|
+                a.price.partial_cmp(&b.price).unwrap_or(std::cmp::Ordering::Equal)
+            );
+            let best_ask_entry = entries.iter().filter(|e| !e.is_buy).min_by(|a, b|
+                a.price.partial_cmp(&b.price).unwrap_or(std::cmp::Ordering::Equal)
+            );
+            (
+                best_bid_entry.map(|e| e.price),
+                best_bid_entry.map(|e| e.quantity as f64),
+                best_ask_entry.map(|e| e.price),
+                best_ask_entry.map(|e| e.quantity as f64),
+            )
+        } else {
+            (None, None, None, None)
+        };
+
         // Always emit a Ticker message
         messages.push(MarketMessage::Ticker(TickerData {
             provider: "angelone".to_string(),
             symbol: symbol.clone(),
             price: tick.ltp,
-            bid: None,
-            ask: None,
-            bid_size: if tick.total_buy_qty > 0.0 { Some(tick.total_buy_qty) } else { None },
-            ask_size: if tick.total_sell_qty > 0.0 { Some(tick.total_sell_qty) } else { None },
+            bid: best_bid,
+            ask: best_ask,
+            bid_size: best_bid_qty.or(if tick.total_buy_qty > 0.0 { Some(tick.total_buy_qty) } else { None }),
+            ask_size: best_ask_qty.or(if tick.total_sell_qty > 0.0 { Some(tick.total_sell_qty) } else { None }),
             volume: if tick.volume > 0 { Some(tick.volume as f64) } else { None },
             high: if tick.high > 0.0 { Some(tick.high) } else { None },
             low: if tick.low > 0.0 { Some(tick.low) } else { None },
@@ -426,15 +443,13 @@ impl AngelOneAdapter {
 #[async_trait]
 impl WebSocketAdapter for AngelOneAdapter {
     async fn connect(&mut self) -> anyhow::Result<()> {
-        eprintln!("[AngelOne WS] Connecting to {}", ANGEL_WS_URL);
-        eprintln!("[AngelOne WS] auth_token_len={}, api_key_len={}, client_code={}, feed_token_len={}",
-            self.auth_token.len(), self.api_key.len(), self.client_code, self.feed_token.len());
-
         let uri: Uri = ANGEL_WS_URL.parse()?;
+        // NOTE: Angel One WebSocket does NOT use "Bearer" prefix for Authorization header
+        // It expects just the raw JWT token (authToken from login response)
         let request = Request::builder()
             .uri(&uri)
             .header("Host", uri.host().unwrap_or("smartapisocket.angelone.in"))
-            .header("Authorization", format!("Bearer {}", &self.auth_token))
+            .header("Authorization", &self.auth_token)  // NO "Bearer" prefix!
             .header("x-api-key", &self.api_key)
             .header("x-client-code", &self.client_code)
             .header("x-feed-token", &self.feed_token)
@@ -445,7 +460,6 @@ impl WebSocketAdapter for AngelOneAdapter {
             .body(())?;
 
         let (ws_stream, response) = connect_async_with_config(request, None, false).await?;
-        eprintln!("[AngelOne WS] ✓ Connected! Response status: {}", response.status());
 
         *self.ws_stream.write().await = Some(ws_stream);
         *self.is_connected.write().await = true;
@@ -459,15 +473,33 @@ impl WebSocketAdapter for AngelOneAdapter {
         tokio::spawn(async move {
             let mut msg_count: u64 = 0;
             loop {
-                let mut stream = ws_stream_clone.write().await;
-                if let Some(ref mut ws) = *stream {
-                    match ws.next().await {
-                        Some(Ok(Message::Binary(data))) => {
-                            msg_count += 1;
-                            if msg_count <= 5 || msg_count % 100 == 0 {
-                                eprintln!("[AngelOne WS] Binary msg #{}: {} bytes, mode={}",
-                                    msg_count, data.len(), if data.len() > 0 { data[0] } else { 0 });
+                // Use a short timeout to avoid holding the lock indefinitely
+                // This allows subscribe() to acquire the lock between reads
+                let message = {
+                    let mut stream = ws_stream_clone.write().await;
+                    if let Some(ref mut ws) = *stream {
+                        // Use tokio::time::timeout to avoid blocking forever
+                        match tokio::time::timeout(
+                            tokio::time::Duration::from_millis(100),
+                            ws.next()
+                        ).await {
+                            Ok(Some(msg)) => Some(msg),
+                            Ok(None) => {
+                                *is_connected_clone.write().await = false;
+                                break;
                             }
+                            Err(_) => None, // Timeout - no message, continue loop
+                        }
+                    } else {
+                        break;
+                    }
+                }; // Lock is released here
+
+                // Process message outside the lock
+                if let Some(msg_result) = message {
+                    match msg_result {
+                        Ok(Message::Binary(data)) => {
+                            msg_count += 1;
 
                             if let Some(tick) = AngelOneAdapter::parse_binary_data(&data) {
                                 let map = token_map_clone.read().await;
@@ -482,40 +514,30 @@ impl WebSocketAdapter for AngelOneAdapter {
                                 }
                             }
                         }
-                        Some(Ok(Message::Text(text))) => {
+                        Ok(Message::Text(text)) => {
                             if text == "pong" {
                                 // heartbeat response
                             } else {
-                                eprintln!("[AngelOne WS] Text: {}", text);
                             }
                         }
-                        Some(Ok(Message::Ping(data))) => {
-                            if let Err(e) = ws.send(Message::Pong(data)).await {
-                                eprintln!("[AngelOne WS] Failed to send pong: {}", e);
+                        Ok(Message::Ping(data)) => {
+                            // Send pong - need to reacquire lock
+                            if let Some(ref mut ws) = *ws_stream_clone.write().await {
+                                if let Err(e) = ws.send(Message::Pong(data)).await {
+                                }
                             }
                         }
-                        Some(Ok(Message::Pong(_))) => {
+                        Ok(Message::Pong(_)) => {
                             // pong response to our ping
                         }
-                        Some(Err(e)) => {
-                            eprintln!("[AngelOne WS] Error: {}", e);
-                            *is_connected_clone.write().await = false;
-                            break;
-                        }
-                        None => {
-                            eprintln!("[AngelOne WS] Connection closed by server");
+                        Err(e) => {
                             *is_connected_clone.write().await = false;
                             break;
                         }
                         _ => {}
                     }
-                } else {
-                    break;
                 }
-                drop(stream);
-                tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
             }
-            eprintln!("[AngelOne WS] Message handler loop ended. Total messages: {}", msg_count);
         });
 
         // Heartbeat: send "ping" every 30 seconds per spec
@@ -525,12 +547,10 @@ impl WebSocketAdapter for AngelOneAdapter {
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_secs(HEARTBEAT_INTERVAL)).await;
                 if !*is_connected_hb.read().await {
-                    eprintln!("[AngelOne WS] Heartbeat: not connected, stopping");
                     break;
                 }
                 if let Some(ref mut ws) = *ws_stream_hb.write().await {
                     if let Err(e) = ws.send(Message::Text("ping".to_string())).await {
-                        eprintln!("[AngelOne WS] Heartbeat send failed: {}", e);
                         break;
                     }
                 }
@@ -541,13 +561,11 @@ impl WebSocketAdapter for AngelOneAdapter {
     }
 
     async fn disconnect(&mut self) -> anyhow::Result<()> {
-        eprintln!("[AngelOne WS] Disconnecting...");
         if let Some(ref mut ws) = *self.ws_stream.write().await {
             ws.close(None).await?;
         }
         *self.ws_stream.write().await = None;
         *self.is_connected.write().await = false;
-        eprintln!("[AngelOne WS] Disconnected");
         Ok(())
     }
 
@@ -557,6 +575,7 @@ impl WebSocketAdapter for AngelOneAdapter {
         channel: &str,
         _params: Option<Value>,
     ) -> anyhow::Result<()> {
+
         let mode = match channel {
             "depth" | "snap" | "snap_quote" | "full" => AngelMode::SnapQuote, // depth is part of SnapQuote in v2
             "quote" => AngelMode::Quote,
@@ -589,12 +608,10 @@ impl WebSocketAdapter for AngelOneAdapter {
         };
 
         let request_json = serde_json::to_string(&request)?;
-        eprintln!("[AngelOne WS] Subscribe request: {}", request_json);
 
         if let Some(ref mut ws) = *self.ws_stream.write().await {
             ws.send(Message::Text(request_json)).await?;
             self.subscriptions.write().await.insert(symbol.to_string(), mode);
-            eprintln!("[AngelOne WS] ✓ Subscribed to {} ({})", symbol, channel);
         } else {
             return Err(anyhow::anyhow!("WebSocket not connected"));
         }
@@ -629,7 +646,6 @@ impl WebSocketAdapter for AngelOneAdapter {
             if let Some(ref mut ws) = *self.ws_stream.write().await {
                 ws.send(Message::Text(serde_json::to_string(&request)?)).await?;
                 self.subscriptions.write().await.remove(symbol);
-                eprintln!("[AngelOne WS] Unsubscribed from {}", symbol);
             }
         }
 

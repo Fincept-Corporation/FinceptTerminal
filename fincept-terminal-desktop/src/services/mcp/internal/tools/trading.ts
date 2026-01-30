@@ -3,7 +3,7 @@ import { InternalTool } from '../types';
 export const tradingTools: InternalTool[] = [
   {
     name: 'place_order',
-    description: 'Place a buy or sell order through the active broker',
+    description: 'Place a crypto order through the active crypto broker (Kraken, Binance, etc). For STOCKS, use stock_place_market_order or stock_place_limit_order instead.',
     inputSchema: {
       type: 'object',
       properties: {

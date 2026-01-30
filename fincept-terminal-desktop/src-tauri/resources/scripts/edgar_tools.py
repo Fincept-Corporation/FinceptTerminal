@@ -40,6 +40,7 @@ try:
         find, find_company, find_fund,
         get_entity, get_by_accession_number,
         get_company_facts, get_company_tickers,
+        get_entity_submissions,
 
         # Data objects
         ThirteenF, ProxyStatement, NPX, FundReport,
@@ -389,7 +390,7 @@ class EdgarToolsWrapper:
     def get_financials(self, ticker: str, periods: int = 4,
                       annual: bool = True) -> Dict[str, Any]:
         """
-        Get complete financial statements
+        Get complete financial statements with markdown formatting
 
         Args:
             ticker: Stock ticker symbol
@@ -397,9 +398,12 @@ class EdgarToolsWrapper:
             annual: If True, annual data; if False, quarterly data
 
         Returns:
-            Balance sheet, income statement, and cash flow data
+            Financial statements formatted as markdown tables
         """
         try:
+            import pandas as pd
+            import numpy as np
+
             company = Company(ticker)
             financials = company.get_financials() if annual else company.get_quarterly_financials()
 
@@ -409,24 +413,171 @@ class EdgarToolsWrapper:
                                       f"No financial data available for {ticker}").to_dict()
                 }
 
-            # Get all three statements (edgartools properties)
-            balance_sheet = financials.balance_sheet
-            income_stmt = financials.income_statement
-            cash_flow = financials.cashflow_statement  # Note: cashflow_statement, not cash_flow
+            # Get all three statements - call as methods
+            balance_sheet_stmt = financials.balance_sheet() if callable(financials.balance_sheet) else financials.balance_sheet
+            income_stmt = financials.income_statement() if callable(financials.income_statement) else financials.income_statement
+            cash_flow_stmt = financials.cashflow_statement() if callable(financials.cashflow_statement) else financials.cashflow_statement
+
+            # Convert Statement to DataFrame and format as markdown
+            def statement_to_markdown(stmt, title: str) -> str:
+                if stmt is None:
+                    return f"## {title}\n\nNo data available.\n"
+
+                try:
+                    # Get DataFrame
+                    if hasattr(stmt, 'to_dataframe'):
+                        df = stmt.to_dataframe()
+                    else:
+                        return f"## {title}\n\nCannot convert to table.\n"
+
+                    if df.empty:
+                        return f"## {title}\n\nNo data available.\n"
+
+                    # Filter out abstract/header rows and limit rows
+                    if 'abstract' in df.columns:
+                        df = df[df['abstract'] != True]
+
+                    # Get date columns (usually YYYY-MM-DD format)
+                    date_cols = [col for col in df.columns if '-' in str(col) and len(str(col)) == 10]
+                    if not date_cols:
+                        # Try to find any numeric columns
+                        date_cols = [col for col in df.columns if df[col].dtype in [np.float64, np.int64, 'float64', 'int64']]
+
+                    # Keep only label and date columns
+                    keep_cols = ['label'] + date_cols[:periods]
+                    available_cols = [col for col in keep_cols if col in df.columns]
+
+                    if not available_cols or 'label' not in available_cols:
+                        return f"## {title}\n\nCannot extract financial data.\n"
+
+                    df_display = df[available_cols].copy()
+
+                    # Replace NaN with empty string for display
+                    df_display = df_display.fillna('')
+
+                    # Format numbers as millions
+                    for col in date_cols:
+                        if col in df_display.columns:
+                            df_display[col] = df_display[col].apply(
+                                lambda x: f"${x/1_000_000:,.1f}M" if isinstance(x, (int, float)) and x != '' else x
+                            )
+
+                    # Limit to top 20 key line items
+                    df_display = df_display.head(20)
+
+                    # Convert to markdown table
+                    markdown = f"## {title}\n\n"
+                    markdown += df_display.to_markdown(index=False)
+                    markdown += "\n\n"
+
+                    return markdown
+
+                except Exception as e:
+                    return f"## {title}\n\nError formatting: {str(e)}\n"
+
+            # Generate markdown report
+            markdown_report = f"# Financial Statements: {ticker}\n\n"
+            markdown_report += f"**Company:** {company.name if hasattr(company, 'name') else ticker}\n"
+            markdown_report += f"**CIK:** {company.cik if hasattr(company, 'cik') else 'N/A'}\n"
+            markdown_report += f"**Report Type:** {'Annual (10-K)' if annual else 'Quarterly (10-Q)'}\n\n"
+            markdown_report += "---\n\n"
+
+            markdown_report += statement_to_markdown(income_stmt, "Income Statement")
+            markdown_report += statement_to_markdown(balance_sheet_stmt, "Balance Sheet")
+            markdown_report += statement_to_markdown(cash_flow_stmt, "Cash Flow Statement")
+
+            # Extract chart data for key metrics
+            chart_data = self._extract_chart_data(income_stmt, balance_sheet_stmt, periods)
 
             return {
                 "success": True,
                 "data": {
-                    "balance_sheet": balance_sheet.to_dict() if balance_sheet is not None else None,
-                    "income_statement": income_stmt.to_dict() if income_stmt is not None else None,
-                    "cash_flow": cash_flow.to_dict() if cash_flow is not None else None,
+                    "ticker": ticker,
+                    "company_name": company.name if hasattr(company, 'name') else None,
+                    "cik": company.cik if hasattr(company, 'cik') else None,
+                    "markdown": markdown_report,
                     "statement_type": "annual" if annual else "quarterly",
-                    "periods": periods
+                    "chart_data": chart_data,
                 },
                 "parameters": {"ticker": ticker, "periods": periods, "annual": annual}
             }
         except Exception as e:
             return {"error": EdgarError("get_financials", str(e), traceback.format_exc()).to_dict()}
+
+    def _extract_chart_data(self, income_stmt, balance_sheet_stmt, periods: int) -> Dict[str, Any]:
+        """Extract key metrics for charting"""
+        try:
+            import pandas as pd
+            import numpy as np
+
+            chart_data = {
+                "revenue": [],
+                "net_income": [],
+                "total_assets": [],
+                "total_equity": []
+            }
+
+            # Extract from income statement
+            if income_stmt and hasattr(income_stmt, 'to_dataframe'):
+                df = income_stmt.to_dataframe()
+                date_cols = [col for col in df.columns if '-' in str(col) and len(str(col)) == 10]
+
+                # Find revenue row
+                revenue_row = df[df['label'].str.contains('Revenue|Contract Revenue', case=False, na=False)]
+                if not revenue_row.empty:
+                    for col in date_cols[:periods]:
+                        val = revenue_row.iloc[0][col]
+                        if pd.notna(val) and isinstance(val, (int, float)):
+                            chart_data["revenue"].append({"period": col, "value": float(val) / 1_000_000})
+
+                # Find net income
+                net_income_row = df[df['label'].str.contains('Net Income|Net Earnings', case=False, na=False)]
+                if not net_income_row.empty:
+                    for col in date_cols[:periods]:
+                        val = net_income_row.iloc[0][col]
+                        if pd.notna(val) and isinstance(val, (int, float)):
+                            chart_data["net_income"].append({"period": col, "value": float(val) / 1_000_000})
+
+            # Extract from balance sheet
+            if balance_sheet_stmt and hasattr(balance_sheet_stmt, 'to_dataframe'):
+                df = balance_sheet_stmt.to_dataframe()
+                date_cols = [col for col in df.columns if '-' in str(col) and len(str(col)) == 10]
+
+                # Find total assets
+                assets_row = df[df['label'].str.contains('Total Assets', case=False, na=False)]
+                if not assets_row.empty:
+                    for col in date_cols[:periods]:
+                        val = assets_row.iloc[0][col]
+                        if pd.notna(val) and isinstance(val, (int, float)):
+                            chart_data["total_assets"].append({"period": col, "value": float(val) / 1_000_000})
+
+                # Find total equity
+                equity_row = df[df['label'].str.contains('Total Equity|Stockholders\' Equity', case=False, na=False)]
+                if not equity_row.empty:
+                    for col in date_cols[:periods]:
+                        val = equity_row.iloc[0][col]
+                        if pd.notna(val) and isinstance(val, (int, float)):
+                            chart_data["total_equity"].append({"period": col, "value": float(val) / 1_000_000})
+
+            # Calculate YoY growth if we have data
+            growth = {}
+            if len(chart_data["revenue"]) >= 2:
+                latest = chart_data["revenue"][0]["value"]
+                previous = chart_data["revenue"][1]["value"]
+                growth["revenue_yoy"] = round(((latest - previous) / previous) * 100, 1) if previous else 0
+
+            if len(chart_data["net_income"]) >= 2:
+                latest = chart_data["net_income"][0]["value"]
+                previous = chart_data["net_income"][1]["value"]
+                growth["net_income_yoy"] = round(((latest - previous) / previous) * 100, 1) if previous else 0
+
+            chart_data["growth"] = growth
+
+            return chart_data
+
+        except Exception as e:
+            print(f"Error extracting chart data: {e}")
+            return {}
 
     def get_balance_sheet(self, ticker: str, periods: int = 4,
                          annual: bool = True, as_json: bool = True) -> Dict[str, Any]:
@@ -439,9 +590,15 @@ class EdgarToolsWrapper:
 
             bs = financials.balance_sheet
 
+            # Convert safely
+            if as_json and bs is not None:
+                data = bs.to_dict('records') if hasattr(bs, 'to_dict') else str(bs)
+            else:
+                data = str(bs)
+
             return {
                 "success": True,
-                "data": bs.to_dict() if as_json and bs is not None else str(bs),
+                "data": data,
                 "parameters": {"ticker": ticker, "periods": periods, "annual": annual}
             }
         except Exception as e:
@@ -458,9 +615,15 @@ class EdgarToolsWrapper:
 
             inc = financials.income_statement
 
+            # Convert safely
+            if as_json and inc is not None:
+                data = inc.to_dict('records') if hasattr(inc, 'to_dict') else str(inc)
+            else:
+                data = str(inc)
+
             return {
                 "success": True,
-                "data": inc.to_dict() if as_json and inc is not None else str(inc),
+                "data": data,
                 "parameters": {"ticker": ticker, "periods": periods, "annual": annual}
             }
         except Exception as e:
@@ -477,9 +640,15 @@ class EdgarToolsWrapper:
 
             cf = financials.cashflow_statement
 
+            # Convert safely
+            if as_json and cf is not None:
+                data = cf.to_dict('records') if hasattr(cf, 'to_dict') else str(cf)
+            else:
+                data = str(cf)
+
             return {
                 "success": True,
-                "data": cf.to_dict() if as_json and cf is not None else str(cf),
+                "data": data,
                 "parameters": {"ticker": ticker, "periods": periods, "annual": annual}
             }
         except Exception as e:
@@ -1591,7 +1760,7 @@ class EdgarToolsWrapper:
 
     def find_company_by_name(self, query: str, top_n: int = 10) -> Dict[str, Any]:
         """
-        Search for companies by name
+        Search for companies by name - uses fast local search
 
         Args:
             query: Search query string
@@ -1601,21 +1770,36 @@ class EdgarToolsWrapper:
             List of matching companies
         """
         try:
-            results = find_company(query, top_n=top_n)
+            # Use get_company_tickers for fast local search
+            from edgar import get_company_tickers
 
-            companies = []
-            if results:
-                for result in results:
-                    companies.append({
-                        "cik": result.cik if hasattr(result, 'cik') else None,
-                        "name": result.name if hasattr(result, 'name') else str(result),
-                        "ticker": result.ticker if hasattr(result, 'ticker') else None,
+            # Get DataFrame with columns: cik, ticker, company
+            df = get_company_tickers()
+
+            # Filter by query (case-insensitive)
+            query_lower = query.lower()
+            matches = []
+
+            # Iterate DataFrame rows
+            for _, row in df.iterrows():
+                company_name = str(row['company']) if 'company' in row else ''
+                ticker = str(row['ticker']) if 'ticker' in row else ''
+                cik = int(row['cik']) if 'cik' in row else None
+
+                if query_lower in company_name.lower() or query_lower in ticker.lower():
+                    matches.append({
+                        "cik": cik,
+                        "name": company_name,
+                        "ticker": ticker,
                     })
+
+                    if len(matches) >= top_n:
+                        break
 
             return {
                 "success": True,
-                "data": companies,
-                "count": len(companies),
+                "data": matches,
+                "count": len(matches),
                 "parameters": {"query": query, "top_n": top_n}
             }
         except Exception as e:
@@ -1812,6 +1996,341 @@ class EdgarToolsWrapper:
             return {"error": EdgarError("get_filings_by_date", str(e), traceback.format_exc()).to_dict()}
 
     # =========================================================================
+    # ENTITY OPERATIONS
+    # =========================================================================
+
+    def get_entity(self, cik: Union[str, int]) -> Dict[str, Any]:
+        """
+        Get entity information by CIK
+
+        Args:
+            cik: Company CIK number
+
+        Returns:
+            Entity information
+        """
+        try:
+            entity = get_entity(int(cik))
+
+            return {
+                "success": True,
+                "data": {
+                    "cik": entity.cik if hasattr(entity, 'cik') else None,
+                    "name": entity.name if hasattr(entity, 'name') else None,
+                    "tickers": entity.tickers if hasattr(entity, 'tickers') else [],
+                    "category": entity.category if hasattr(entity, 'category') else None,
+                    "entity_type": entity.entity_type if hasattr(entity, 'entity_type') else None,
+                    "sic": entity.sic if hasattr(entity, 'sic') else None,
+                    "state_of_incorporation": entity.state_of_incorporation if hasattr(entity, 'state_of_incorporation') else None,
+                },
+                "parameters": {"cik": str(cik)}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_entity", str(e), traceback.format_exc()).to_dict()}
+
+    def get_entity_submissions(self, cik: Union[str, int]) -> Dict[str, Any]:
+        """
+        Get all submissions for an entity
+
+        Args:
+            cik: Company CIK number
+
+        Returns:
+            Entity submissions data
+        """
+        try:
+            submissions = get_entity_submissions(int(cik))
+
+            # Extract recent filings
+            recent_filings = []
+            if submissions and hasattr(submissions, 'recent'):
+                recent = submissions.recent
+                if hasattr(recent, 'to_dict'):
+                    recent_filings = recent.to_dict('records')[:50]
+
+            return {
+                "success": True,
+                "data": {
+                    "cik": submissions.cik if hasattr(submissions, 'cik') else None,
+                    "name": submissions.name if hasattr(submissions, 'name') else None,
+                    "recent_filings": recent_filings,
+                    "total_filings": len(recent_filings),
+                },
+                "parameters": {"cik": str(cik)}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_entity_submissions", str(e), traceback.format_exc()).to_dict()}
+
+    # =========================================================================
+    # FUND REPORTS (NPX/NPORT)
+    # =========================================================================
+
+    def get_fund_report(self, ticker: str, form: str = "NPORT-P") -> Dict[str, Any]:
+        """
+        Get fund portfolio report (NPORT or NPX forms)
+
+        Args:
+            ticker: Fund ticker symbol
+            form: Form type ("NPORT-P", "NPORT-EX", "NPX")
+
+        Returns:
+            Fund portfolio holdings
+        """
+        try:
+            company = Company(ticker)
+            filings = company.get_filings(form=form)
+
+            if not filings or len(filings) == 0:
+                return {
+                    "success": True,
+                    "data": {"holdings": [], "note": f"No {form} filings found"},
+                    "parameters": {"ticker": ticker, "form": form}
+                }
+
+            latest_filing = filings[0]
+            fund_report = latest_filing.obj()
+
+            holdings = []
+            if fund_report:
+                if hasattr(fund_report, 'holdings'):
+                    holdings_data = fund_report.holdings
+                    if holdings_data is not None and hasattr(holdings_data, 'head'):
+                        holdings = holdings_data.head(100).to_dict('records')
+
+            return {
+                "success": True,
+                "data": {
+                    "filing_date": str(latest_filing.filing_date) if hasattr(latest_filing, 'filing_date') else None,
+                    "period_of_report": str(latest_filing.period_of_report) if hasattr(latest_filing, 'period_of_report') else None,
+                    "holdings": holdings,
+                    "holdings_count": len(holdings),
+                },
+                "parameters": {"ticker": ticker, "form": form}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_fund_report", str(e), traceback.format_exc()).to_dict()}
+
+    # =========================================================================
+    # DOCUMENT & ATTACHMENT OPERATIONS
+    # =========================================================================
+
+    def get_filing_documents(self, accession_number: str) -> Dict[str, Any]:
+        """
+        Get all documents in a filing
+
+        Args:
+            accession_number: SEC accession number
+
+        Returns:
+            List of documents in the filing
+        """
+        try:
+            filing = get_by_accession_number(accession_number)
+
+            if not filing:
+                return {"error": EdgarError("get_filing_documents", f"Filing not found: {accession_number}").to_dict()}
+
+            documents = []
+            if hasattr(filing, 'documents'):
+                docs = filing.documents
+                if docs:
+                    for doc in docs:
+                        documents.append({
+                            "sequence": doc.sequence if hasattr(doc, 'sequence') else None,
+                            "document": doc.document if hasattr(doc, 'document') else None,
+                            "type": doc.type if hasattr(doc, 'type') else None,
+                            "description": doc.description if hasattr(doc, 'description') else None,
+                            "size": doc.size if hasattr(doc, 'size') else None,
+                        })
+
+            return {
+                "success": True,
+                "data": {
+                    "accession_number": accession_number,
+                    "documents": documents,
+                    "count": len(documents),
+                },
+                "parameters": {"accession_number": accession_number}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_filing_documents", str(e), traceback.format_exc()).to_dict()}
+
+    def get_filing_attachments(self, accession_number: str) -> Dict[str, Any]:
+        """
+        Get attachments/exhibits from a filing
+
+        Args:
+            accession_number: SEC accession number
+
+        Returns:
+            List of attachments/exhibits
+        """
+        try:
+            filing = get_by_accession_number(accession_number)
+
+            if not filing:
+                return {"error": EdgarError("get_filing_attachments", f"Filing not found: {accession_number}").to_dict()}
+
+            attachments_list = []
+            if hasattr(filing, 'attachments'):
+                attachments = filing.attachments
+                if attachments:
+                    for att in attachments:
+                        attachments_list.append({
+                            "sequence": att.sequence if hasattr(att, 'sequence') else None,
+                            "document": att.document if hasattr(att, 'document') else None,
+                            "description": att.description if hasattr(att, 'description') else None,
+                            "type": att.type if hasattr(att, 'type') else None,
+                        })
+
+            return {
+                "success": True,
+                "data": {
+                    "accession_number": accession_number,
+                    "attachments": attachments_list,
+                    "count": len(attachments_list),
+                },
+                "parameters": {"accession_number": accession_number}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_filing_attachments", str(e), traceback.format_exc()).to_dict()}
+
+    # =========================================================================
+    # BATCH OPERATIONS
+    # =========================================================================
+
+    def download_filings_batch(self, ticker: str, form: str,
+                               year: Optional[int] = None,
+                               limit: int = 10,
+                               download_details: bool = False) -> Dict[str, Any]:
+        """
+        Download multiple filings at once
+
+        Args:
+            ticker: Stock ticker symbol
+            form: Form type
+            year: Optional year filter
+            limit: Max number of filings to process
+            download_details: Whether to download full details
+
+        Returns:
+            Summary of downloaded filings
+        """
+        try:
+            from edgar import download_filings
+
+            company = Company(ticker)
+            filings = company.get_filings(form=form, year=year)
+
+            downloaded = []
+            for i, filing in enumerate(filings):
+                if i >= limit:
+                    break
+
+                filing_info = {
+                    "accession_number": filing.accession_number,
+                    "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                    "form": filing.form if hasattr(filing, 'form') else None,
+                }
+
+                if download_details:
+                    try:
+                        # Download filing details
+                        filing_obj = filing.obj()
+                        if filing_obj:
+                            filing_info["downloaded"] = True
+                    except:
+                        filing_info["downloaded"] = False
+
+                downloaded.append(filing_info)
+
+            return {
+                "success": True,
+                "data": {
+                    "filings": downloaded,
+                    "total_downloaded": len(downloaded),
+                },
+                "parameters": {"ticker": ticker, "form": form, "year": year, "limit": limit}
+            }
+        except Exception as e:
+            return {"error": EdgarError("download_filings_batch", str(e), traceback.format_exc()).to_dict()}
+
+    # =========================================================================
+    # STORAGE MANAGEMENT
+    # =========================================================================
+
+    def analyze_storage(self) -> Dict[str, Any]:
+        """
+        Analyze cache storage usage
+
+        Returns:
+            Storage analysis with size breakdown
+        """
+        try:
+            from edgar import analyze_storage
+
+            analysis = analyze_storage()
+
+            return {
+                "success": True,
+                "data": {
+                    "analysis": str(analysis)[:2000],
+                },
+            }
+        except Exception as e:
+            return {"error": EdgarError("analyze_storage", str(e), traceback.format_exc()).to_dict()}
+
+    def optimize_storage(self, dry_run: bool = True) -> Dict[str, Any]:
+        """
+        Optimize cache storage by removing old/unused files
+
+        Args:
+            dry_run: If True, only simulate optimization
+
+        Returns:
+            Optimization results
+        """
+        try:
+            from edgar import optimize_storage
+
+            result = optimize_storage(dry_run=dry_run)
+
+            return {
+                "success": True,
+                "data": {
+                    "result": str(result)[:2000],
+                    "dry_run": dry_run,
+                },
+            }
+        except Exception as e:
+            return {"error": EdgarError("optimize_storage", str(e), traceback.format_exc()).to_dict()}
+
+    def cleanup_storage(self, older_than_days: int = 30) -> Dict[str, Any]:
+        """
+        Clean up old cache files
+
+        Args:
+            older_than_days: Remove files older than this many days
+
+        Returns:
+            Cleanup results
+        """
+        try:
+            from edgar import cleanup_storage
+
+            result = cleanup_storage(older_than_days=older_than_days)
+
+            return {
+                "success": True,
+                "data": {
+                    "result": str(result)[:1000],
+                    "older_than_days": older_than_days,
+                },
+            }
+        except Exception as e:
+            return {"error": EdgarError("cleanup_storage", str(e), traceback.format_exc()).to_dict()}
+
+    # =========================================================================
     # XBRL OPERATIONS
     # =========================================================================
 
@@ -1844,6 +2363,23 @@ class EdgarToolsWrapper:
                                       f"No XBRL data available for filing").to_dict()
                 }
 
+            # Safely get counts
+            statement_count = 0
+            fact_count = 0
+
+            if hasattr(xbrl, 'statements'):
+                try:
+                    statement_count = len(xbrl.statements) if xbrl.statements else 0
+                except TypeError:
+                    # statements might not support len()
+                    statement_count = 0
+
+            if hasattr(xbrl, 'facts'):
+                try:
+                    fact_count = len(xbrl.facts) if xbrl.facts else 0
+                except TypeError:
+                    fact_count = 0
+
             return {
                 "success": True,
                 "data": {
@@ -1851,8 +2387,8 @@ class EdgarToolsWrapper:
                     "document_type": xbrl.document_type if hasattr(xbrl, 'document_type') else None,
                     "period_of_report": str(xbrl.period_of_report) if hasattr(xbrl, 'period_of_report') else None,
                     "reporting_periods": [str(p) for p in xbrl.reporting_periods] if hasattr(xbrl, 'reporting_periods') else [],
-                    "statement_count": len(xbrl.statements) if hasattr(xbrl, 'statements') else 0,
-                    "fact_count": len(xbrl.facts) if hasattr(xbrl, 'facts') else 0,
+                    "statement_count": statement_count,
+                    "fact_count": fact_count,
                 },
                 "parameters": {"ticker": ticker, "form": form}
             }
@@ -1911,6 +2447,25 @@ def main(args=None):
                     "get_filing_by_accession <accession_number>",
                     "get_filing_text <accession_number> [max_length]",
                     "get_filings_by_date <year> [quarter] [form] [limit]"
+                ],
+                "entity": [
+                    "get_entity <cik>",
+                    "get_entity_submissions <cik>"
+                ],
+                "fund_reports": [
+                    "get_fund_report <ticker> [form]"
+                ],
+                "documents": [
+                    "get_filing_documents <accession_number>",
+                    "get_filing_attachments <accession_number>"
+                ],
+                "batch": [
+                    "download_filings_batch <ticker> <form> [year] [limit]"
+                ],
+                "storage": [
+                    "analyze_storage",
+                    "optimize_storage [dry_run:true|false]",
+                    "cleanup_storage [older_than_days]"
                 ]
             }
         }, indent=2))
@@ -1960,10 +2515,10 @@ def main(args=None):
                 result = {"error": "Usage: edgar_tools.py get_company_filings <ticker> [form] [year] [quarter] [limit]"}
             else:
                 ticker = args[1]
-                form = args[2] if len(args) > 2 else None
-                year = int(args[3]) if len(args) > 3 else None
-                quarter = int(args[4]) if len(args) > 4 else None
-                limit = int(args[5]) if len(args) > 5 else 10
+                form = args[2] if len(args) > 2 and args[2] else None
+                year = int(args[3]) if len(args) > 3 and args[3] else None
+                quarter = int(args[4]) if len(args) > 4 and args[4] else None
+                limit = int(args[5]) if len(args) > 5 and args[5] else 10
                 result = wrapper.get_company_filings(ticker, form, year, quarter, limit)
 
         elif command == "get_corporate_events":
@@ -2099,11 +2654,55 @@ def main(args=None):
             result = wrapper.get_filing_text(accession, max_length)
 
         elif command == "get_filings_by_date":
-            year = int(args[1]) if len(args) > 1 else None
-            quarter = int(args[2]) if len(args) > 2 else None
-            form = args[3] if len(args) > 3 else None
-            limit = int(args[4]) if len(args) > 4 else 50
+            year = int(args[1]) if len(args) > 1 and args[1] else None
+            quarter = int(args[2]) if len(args) > 2 and args[2] else None
+            form = args[3] if len(args) > 3 and args[3] else None
+            limit = int(args[4]) if len(args) > 4 and args[4] else 50
             result = wrapper.get_filings_by_date(year, quarter, form, limit)
+
+        # Entity commands
+        elif command == "get_entity":
+            cik = args[1] if len(args) > 1 else None
+            result = wrapper.get_entity(cik)
+
+        elif command == "get_entity_submissions":
+            cik = args[1] if len(args) > 1 else None
+            result = wrapper.get_entity_submissions(cik)
+
+        # Fund report commands
+        elif command == "get_fund_report":
+            ticker = args[1] if len(args) > 1 else None
+            form = args[2] if len(args) > 2 else "NPORT-P"
+            result = wrapper.get_fund_report(ticker, form)
+
+        # Document commands
+        elif command == "get_filing_documents":
+            accession = args[1] if len(args) > 1 else None
+            result = wrapper.get_filing_documents(accession)
+
+        elif command == "get_filing_attachments":
+            accession = args[1] if len(args) > 1 else None
+            result = wrapper.get_filing_attachments(accession)
+
+        # Batch commands
+        elif command == "download_filings_batch":
+            ticker = args[1] if len(args) > 1 else None
+            form = args[2] if len(args) > 2 else None
+            year = int(args[3]) if len(args) > 3 and args[3] else None
+            limit = int(args[4]) if len(args) > 4 else 10
+            result = wrapper.download_filings_batch(ticker, form, year, limit)
+
+        # Storage commands
+        elif command == "analyze_storage":
+            result = wrapper.analyze_storage()
+
+        elif command == "optimize_storage":
+            dry_run = args[1].lower() == "true" if len(args) > 1 else True
+            result = wrapper.optimize_storage(dry_run)
+
+        elif command == "cleanup_storage":
+            older_than_days = int(args[1]) if len(args) > 1 else 30
+            result = wrapper.cleanup_storage(older_than_days)
 
         else:
             result = {"error": EdgarError(command, f"Unknown command: {command}").to_dict()}

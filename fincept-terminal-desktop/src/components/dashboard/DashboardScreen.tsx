@@ -62,6 +62,7 @@ const ExcelTab = React.lazy(() => import('@/components/tabs/excel'));
 const SurfaceAnalyticsTab = React.lazy(() => import('@/components/tabs/surface-analytics'));
 const PolymarketTab = React.lazy(() => import('@/components/tabs/polymarket'));
 const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/trade-visualization'));
+const MAAnalyticsTab = React.lazy(() => import('@/components/tabs/MAAnalyticsTab'));
 const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena'));
 const NotesTab = React.lazy(() => import('@/components/tabs/notes').then(m => ({ default: m.NotesTab })));
 
@@ -876,6 +877,13 @@ function FinxeptTerminalContent() {
                   Code Editor
                 </TabsTrigger>
                 <TabsTrigger
+                  value="ma-analytics"
+                  style={activeTab === 'ma-analytics' ? tabStyles.active : tabStyles.default}
+                  title="M&A Analytics"
+                >
+                  M&A Analytics
+                </TabsTrigger>
+                <TabsTrigger
                   value="profile"
                   style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
                   title="Profile (F12)"
@@ -1072,6 +1080,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="alpha-arena" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <AlphaArenaTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="ma-analytics" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <MAAnalyticsTab />
               </React.Suspense>
             </TabsContent>
           </Tabs>

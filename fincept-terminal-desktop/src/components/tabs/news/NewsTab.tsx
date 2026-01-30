@@ -30,17 +30,25 @@ const SentIcon: React.FC<{ s: string; size?: number }> = ({ s, size = 10 }) =>
   s === 'BULLISH' ? <TrendingUp size={size} /> : s === 'BEARISH' ? <TrendingDown size={size} /> : <Minus size={size} />;
 
 // ══════════════════════════════════════════════════════════════
-// NEWS GRID CARD – compact, shows key info at a glance
+// NEWS GRID CARD – compact, shows key info + inline actions
 // ══════════════════════════════════════════════════════════════
 const NewsGridCard: React.FC<{
   article: NewsArticle;
-  onClick: () => void;
-}> = ({ article, onClick }) => {
+  onAnalyze: (article: NewsArticle) => void;
+  analyzing: boolean;
+  analysisData: NewsAnalysisData | null;
+  showAnalysis: boolean;
+  currentAnalyzingId: string | null;
+  openExternal: (url: string) => void;
+}> = ({ article, onAnalyze, analyzing, analysisData, showAnalysis, currentAnalyzingId, openExternal }) => {
   const [hovered, setHovered] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const isHighPri = article.priority === 'FLASH' || article.priority === 'URGENT';
+  const isAnalyzing = analyzing && currentAnalyzingId === article.id;
+  const hasAnalysis = showAnalysis && analysisData && currentAnalyzingId === article.id;
+
   return (
     <div
-      onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -49,11 +57,9 @@ const NewsGridCard: React.FC<{
         border: `1px solid ${isHighPri ? `${priColor(article.priority)}40` : F.BORDER}`,
         borderLeft: `3px solid ${priColor(article.priority)}`,
         borderRadius: '2px',
-        cursor: 'pointer',
         transition: 'background 0.15s',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
         minHeight: '100px',
       }}
     >
@@ -68,22 +74,135 @@ const NewsGridCard: React.FC<{
       </div>
 
       {/* Headline */}
-      <div style={{
-        color: F.WHITE,
-        fontSize: '11px',
-        fontWeight: 600,
-        lineHeight: '1.4',
-        flex: 1,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        display: '-webkit-box',
-        WebkitLineClamp: 3,
-        WebkitBoxOrient: 'vertical' as any,
-        marginBottom: '8px',
-      }}>{article.headline}</div>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          color: F.WHITE,
+          fontSize: '11px',
+          fontWeight: 600,
+          lineHeight: '1.4',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: expanded ? 'unset' : 3,
+          WebkitBoxOrient: 'vertical' as any,
+          marginBottom: '8px',
+          cursor: 'pointer',
+        }}
+      >{article.headline}</div>
+
+      {/* Summary (when expanded) */}
+      {expanded && (
+        <div style={{
+          color: F.GRAY,
+          fontSize: '10px',
+          lineHeight: '1.5',
+          marginBottom: '8px',
+          paddingLeft: '8px',
+          borderLeft: `2px solid ${F.BORDER}`,
+        }}>{article.summary}</div>
+      )}
+
+      {/* Tickers (when expanded) */}
+      {expanded && article.tickers && article.tickers.length > 0 && (
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
+          {article.tickers.map((ticker, i) => (
+            <span key={i} style={{
+              padding: '1px 6px', backgroundColor: `${F.GREEN}15`, color: F.GREEN,
+              fontSize: '8px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${F.GREEN}30`,
+            }}>{ticker}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Action Buttons (visible on hover or when expanded) */}
+      {(hovered || expanded) && article.link && (
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+          marginBottom: '8px',
+          opacity: hovered || expanded ? 1 : 0,
+          transition: 'opacity 0.2s',
+        }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); openExternal(article.link!); }}
+            style={{
+              flex: 1, padding: '5px 8px', backgroundColor: F.BLUE, color: F.WHITE,
+              border: 'none', fontSize: '8px', fontWeight: 700, cursor: 'pointer',
+              borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+            }}
+          ><ExternalLink size={9} />OPEN</button>
+          <button
+            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(article.link!); }}
+            style={{
+              padding: '5px 8px', background: 'none', border: `1px solid ${F.BORDER}`,
+              color: F.GRAY, fontSize: '8px', fontWeight: 700, cursor: 'pointer',
+              borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '3px',
+            }}
+          ><Copy size={9} /></button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onAnalyze(article); setExpanded(true); }}
+            disabled={isAnalyzing}
+            style={{
+              flex: 1, padding: '5px 8px',
+              backgroundColor: isAnalyzing ? F.MUTED : F.PURPLE,
+              color: F.WHITE, border: 'none', fontSize: '8px', fontWeight: 700,
+              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+              borderRadius: '2px', opacity: isAnalyzing ? 0.5 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+            }}
+          ><Zap size={9} />{isAnalyzing ? 'ANALYZING...' : 'ANALYZE'}</button>
+        </div>
+      )}
+
+      {/* AI Analysis Results (inline, when available) */}
+      {hasAnalysis && expanded && (
+        <div style={{ borderTop: `1px solid ${F.BORDER}`, paddingTop: '8px', marginTop: '4px' }}>
+          <div style={{
+            padding: '4px 8px', backgroundColor: `${F.PURPLE}15`, border: `1px solid ${F.PURPLE}`,
+            borderRadius: '2px', marginBottom: '8px', fontSize: '8px',
+          }}>
+            <span style={{ color: F.PURPLE, fontWeight: 700, letterSpacing: '0.5px' }}>AI ANALYSIS</span>
+          </div>
+
+          <div style={{
+            fontSize: '9px', color: F.WHITE, lineHeight: '1.5', padding: '6px 8px',
+            backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', marginBottom: '8px',
+          }}>{analysisData.analysis.summary}</div>
+
+          {analysisData.analysis.key_points.length > 0 && (
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ fontSize: '8px', color: F.GRAY, fontWeight: 700, marginBottom: '4px' }}>KEY POINTS</div>
+              <div style={{ padding: '6px 8px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
+                {analysisData.analysis.key_points.slice(0, 3).map((pt, i) => (
+                  <div key={i} style={{
+                    fontSize: '8px', color: F.WHITE, paddingLeft: '6px',
+                    borderLeft: `2px solid ${F.ORANGE}`, marginBottom: '4px', lineHeight: '1.4',
+                  }}>{pt}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            <div style={{ padding: '6px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
+              <div style={{ fontSize: '8px', color: F.GRAY, fontWeight: 700, marginBottom: '3px' }}>SENTIMENT</div>
+              <div style={{ fontSize: '8px', color: getSentimentColor(analysisData.analysis.sentiment.score), fontWeight: 700 }}>
+                {analysisData.analysis.sentiment.score.toFixed(2)}
+              </div>
+            </div>
+            <div style={{ padding: '6px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
+              <div style={{ fontSize: '8px', color: F.GRAY, fontWeight: 700, marginBottom: '3px' }}>URGENCY</div>
+              <div style={{ fontSize: '8px', color: getUrgencyColor(analysisData.analysis.market_impact.urgency), fontWeight: 700 }}>
+                {analysisData.analysis.market_impact.urgency}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom: badges row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
         {isHighPri && (
           <span style={{
             padding: '1px 6px', fontSize: '8px', fontWeight: 700, borderRadius: '2px',
@@ -391,7 +510,6 @@ const NewsTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeSources, setActiveSources] = useState<string[]>([]);
   const [feedCount, setFeedCount] = useState(9);
-  const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [refreshInterval, setRefreshInterval] = useState(10);
   const [showIntervalSettings, setShowIntervalSettings] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -400,6 +518,7 @@ const NewsTab: React.FC = () => {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showFeedSettings, setShowFeedSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentAnalyzingId, setCurrentAnalyzingId] = useState<string | null>(null);
 
   // ── Data loading ──
   const recordCurrentData = async () => {
@@ -438,13 +557,21 @@ const NewsTab: React.FC = () => {
     } catch { /* silent */ } finally { setLoading(false); }
   }, [isRecording, activeFilter]);
 
-  const handleAnalyzeArticle = async () => {
-    if (!selectedArticle?.link) return;
-    setAnalyzingArticle(true); setShowAnalysis(false); setAnalysisData(null);
+  const handleAnalyzeArticle = async (article: NewsArticle) => {
+    if (!article?.link) return;
+    setAnalyzingArticle(true);
+    setShowAnalysis(false);
+    setAnalysisData(null);
+    setCurrentAnalyzingId(article.id);
     try {
-      const result = await analyzeNewsArticle(selectedArticle.link);
-      if (result.success && 'data' in result) { setAnalysisData(result.data); setShowAnalysis(true); }
-    } catch { /* silent */ } finally { setAnalyzingArticle(false); }
+      const result = await analyzeNewsArticle(article.link);
+      if (result.success && 'data' in result) {
+        setAnalysisData(result.data);
+        setShowAnalysis(true);
+      }
+    } catch { /* silent */ } finally {
+      setAnalyzingArticle(false);
+    }
   };
 
   const isInitialMount = useRef(true);
@@ -849,7 +976,7 @@ const NewsTab: React.FC = () => {
           ) : (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
               gap: '8px',
               alignContent: 'start',
             }}>
@@ -857,7 +984,12 @@ const NewsTab: React.FC = () => {
                 <NewsGridCard
                   key={article.id}
                   article={article}
-                  onClick={() => { setSelectedArticle(article); setShowAnalysis(false); setAnalysisData(null); }}
+                  onAnalyze={handleAnalyzeArticle}
+                  analyzing={analyzingArticle}
+                  analysisData={analysisData}
+                  showAnalysis={showAnalysis}
+                  currentAnalyzingId={currentAnalyzingId}
+                  openExternal={openExternal}
                 />
               ))}
             </div>
@@ -888,19 +1020,6 @@ const NewsTab: React.FC = () => {
           <span style={{ color: loading ? F.YELLOW : F.GREEN, fontWeight: 700 }}>{loading ? 'UPDATING' : 'LIVE'}</span>
         </div>
       </div>
-
-      {/* ── ARTICLE DETAIL MODAL (overlay, on demand) ── */}
-      {selectedArticle && (
-        <ArticleDetailModal
-          article={selectedArticle}
-          onClose={() => setSelectedArticle(null)}
-          onAnalyze={handleAnalyzeArticle}
-          analyzing={analyzingArticle}
-          analysisData={analysisData}
-          showAnalysis={showAnalysis}
-          openExternal={openExternal}
-        />
-      )}
 
       {/* ── CSS ── */}
       <style>{`

@@ -301,18 +301,19 @@ const handleSelectPlan = async () => {
         {/* Features Section - Flexible Height */}
         <div className="flex-1">
           <div className="text-xs text-zinc-300 space-y-0.5">
-            <div className="flex items-center">
-              <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
-              <span>{plan.support_display}</span>
-            </div>
-            <div className="flex items-center">
-              <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
-              <span>All API endpoints</span>
-            </div>
-            <div className="flex items-center">
-              <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
-              <span>Real-time data access</span>
-            </div>
+            {plan.features && plan.features.length > 0 ? (
+              plan.features.map((feature: string, idx: number) => (
+                <div key={idx} className="flex items-center">
+                  <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
+                  <span>{feature}</span>
+                </div>
+              ))
+            ) : (
+              <div className="flex items-center">
+                <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
+                <span>{plan.support_display}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
