@@ -27,21 +27,19 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 ---
 
 <!-- DOWNLOAD_SECTION_START -->
+## Download Latest Release
 
-## 📥 Download Latest Release
-
-**Version:** `v3.2.0` | **Released:** 2026-01-21
+**Version:** `v3.2.1`
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
-| **macOS** | Apple Silicon | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.0/FinceptTerminal-v3.2.0-macOS-arm64.dmg) |
-| **macOS** | Intel | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.0/FinceptTerminal-v3.2.0-macOS-x64.dmg) |
-| **Linux** | x64 (AppImage) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.0/FinceptTerminal-v3.2.0-Linux-x64.AppImage) |
-| **Linux** | x64 (Debian) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.0/FinceptTerminal-v3.2.0-Linux-x64.deb) |
-| **Windows** | x64 | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.0/FinceptTerminal-v3.2.0-Windows-x64.msi) |
+| **macOS** | Apple Silicon | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-arm64.dmg) |
+| **macOS** | Intel | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-x64.dmg) |
+| **Linux** | x64 (AppImage) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.AppImage) |
+| **Linux** | x64 (Debian) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.deb) |
+| **Windows** | x64 | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Windows-x64.msi) |
 
 [View All Releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
-
 <!-- DOWNLOAD_SECTION_END -->
 
 ---
