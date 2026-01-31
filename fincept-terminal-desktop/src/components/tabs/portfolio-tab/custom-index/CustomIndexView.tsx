@@ -38,8 +38,10 @@ import {
   IndexConstituent,
   IndexCalculationMethod,
   INDEX_METHOD_INFO,
+  IndexSnapshot,
 } from './types';
 import { customIndexService } from '../../../../services/portfolio/customIndexService';
+import IndexPerformanceChart from './IndexPerformanceChart';
 
 interface CustomIndexViewProps {
   portfolioId?: string;
@@ -53,6 +55,8 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
   const [indices, setIndices] = useState<CustomIndex[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<CustomIndex | null>(null);
   const [indexSummary, setIndexSummary] = useState<IndexSummary | null>(null);
+  const [snapshots, setSnapshots] = useState<IndexSnapshot[]>([]);
+  const [showChart, setShowChart] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showMethodInfo, setShowMethodInfo] = useState<IndexCalculationMethod | null>(null);
@@ -100,6 +104,15 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
     try {
       const summary = await customIndexService.calculateIndexSummary(indexId);
       setIndexSummary(summary);
+
+      // Load snapshots for historical chart
+      const snapshotData = await customIndexService.getSnapshots(indexId, 365); // Last year
+      setSnapshots(snapshotData);
+
+      // Auto-show chart if historical data exists
+      if (snapshotData.length > 0) {
+        setShowChart(true);
+      }
     } catch (error) {
       console.error('Failed to load index summary:', error);
     } finally {
@@ -613,6 +626,64 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Performance Chart */}
+        {snapshots.length > 0 && (
+          <div
+            style={{
+              padding: SPACING.LARGE,
+              borderBottom: BORDERS.STANDARD,
+              backgroundColor: FINCEPT.DARK_BG,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: SPACING.DEFAULT,
+              }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: FINCEPT.WHITE,
+                }}
+              >
+                PERFORMANCE CHART
+              </h3>
+              <button
+                onClick={() => setShowChart(!showChart)}
+                style={{
+                  padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${FINCEPT.CYAN}`,
+                  color: FINCEPT.CYAN,
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  fontSize: TYPOGRAPHY.SMALL,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: SPACING.SMALL,
+                }}
+              >
+                <BarChart2 size={14} />
+                {showChart ? 'HIDE CHART' : 'SHOW CHART'}
+              </button>
+            </div>
+
+            {showChart && (
+              <IndexPerformanceChart
+                snapshots={snapshots}
+                baseValue={selectedIndex.base_value}
+                currency={selectedIndex.currency}
+              />
+            )}
+          </div>
+        )}
 
         {/* Constituents Table */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

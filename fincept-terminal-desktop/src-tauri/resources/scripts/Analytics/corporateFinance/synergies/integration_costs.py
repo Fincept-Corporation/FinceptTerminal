@@ -349,53 +349,47 @@ class IntegrationCostAnalyzer:
             'recommended_contingency_pct': (combined_risk_multiplier - 1) * 100
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "integration_cost":
+            if len(sys.argv) < 5:
+                raise ValueError("Deal value, systems to integrate, and complexity factor required")
+
+            deal_value = float(sys.argv[2])
+            systems_to_integrate = int(sys.argv[3])
+            complexity_factor = float(sys.argv[4])
+
+            analyzer = IntegrationCostAnalyzer(deal_value=deal_value)
+
+            analysis = analyzer.estimate_it_integration(
+                systems_to_integrate=systems_to_integrate,
+                complexity_factor=complexity_factor,
+                third_party_consulting=True
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    analyzer = IntegrationCostAnalyzer(deal_value=500_000_000)
-
-    it_integration = analyzer.estimate_it_integration(
-        systems_to_integrate=15,
-        complexity_factor=1.3,
-        third_party_consulting=True
-    )
-
-    print("=== IT INTEGRATION COSTS ===\n")
-    print(f"Systems to Integrate: {it_integration['systems_to_integrate']}")
-    print(f"Base Integration: ${it_integration['base_integration_cost']:,.0f}")
-    print(f"Data Migration: ${it_integration['data_migration']:,.0f}")
-    print(f"Testing: ${it_integration['testing']:,.0f}")
-    print(f"Training: ${it_integration['training']:,.0f}")
-    print(f"Total: ${it_integration['total_cost']:,.0f}")
-    print(f"Duration: {it_integration['estimated_duration_months']} months")
-
-    integration_costs = [
-        IntegrationCost(IntegrationCategory.IT_INTEGRATION, "IT systems consolidation", 25_000_000, 18, True),
-        IntegrationCost(IntegrationCategory.EMPLOYEE_RETENTION, "Key employee retention", 15_000_000, 24, False),
-        IntegrationCost(IntegrationCategory.REBRANDING, "Rebranding program", 8_000_000, 12, False),
-        IntegrationCost(IntegrationCategory.CHANGE_MANAGEMENT, "Change management", 5_000_000, 24, False),
-        IntegrationCost(IntegrationCategory.LEGAL_REGULATORY, "Legal/regulatory", 6_000_000, 12, False),
-        IntegrationCost(IntegrationCategory.ADVISORS_FEES, "Transaction advisors", 7_000_000, 6, False)
-    ]
-
-    budget = analyzer.comprehensive_integration_budget(integration_costs)
-
-    print("\n\n=== COMPREHENSIVE INTEGRATION BUDGET ===")
-    print(f"Total Integration Cost: ${budget['total_integration_cost']:,.0f}")
-    print(f"As % of Deal Value: {budget['as_pct_of_deal_value']:.1f}%")
-    print(f"Capitalized: ${budget['capitalized_costs']:,.0f}")
-    print(f"Expensed: ${budget['expensed_costs']:,.0f}")
-    print(f"Duration: {budget['integration_duration_months']} months\n")
-
-    print("Cost Breakdown:")
-    for cost in budget['cost_breakdown'][:5]:
-        print(f"  {cost['category'].replace('_', ' ').title()}: ${cost['estimated_cost']:,.0f} ({cost['treatment']})")
-
-    risk = analyzer.integration_risk_assessment(
-        integration_complexity='high',
-        cultural_fit='medium',
-        size_ratio=0.6
-    )
-
-    print(f"\n\n=== INTEGRATION RISK ASSESSMENT ===")
-    print(f"Risk Rating: {risk['risk_rating'].upper()}")
-    print(f"Combined Risk Multiplier: {risk['combined_risk_multiplier']:.2f}x")
-    print(f"Recommended Contingency: {risk['recommended_contingency_pct']:.0f}%")
+    main()

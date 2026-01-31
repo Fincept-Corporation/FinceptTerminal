@@ -332,37 +332,52 @@ class CollarMechanism:
             'structures': structures
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "collar":
+            if len(sys.argv) < 6:
+                raise ValueError("Announcement price, target shares, base exchange ratio, floor price, and cap price required")
+
+            announcement_price = float(sys.argv[2])
+            target_shares = float(sys.argv[3])
+            base_exchange_ratio = float(sys.argv[4])
+            floor_price = float(sys.argv[5])
+            cap_price = float(sys.argv[6])
+
+            collar = CollarMechanism(
+                announcement_price=announcement_price,
+                target_shares=target_shares,
+                base_exchange_ratio=base_exchange_ratio
+            )
+
+            analysis = collar.fixed_collar(
+                floor_price=floor_price,
+                cap_price=cap_price
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    collar = CollarMechanism(
-        announcement_price=100.00,
-        target_shares=10_000_000,
-        base_exchange_ratio=0.65
-    )
-
-    fixed = collar.fixed_collar(
-        floor_price=90.00,
-        cap_price=110.00
-    )
-
-    print("=== FIXED COLLAR ANALYSIS ===\n")
-    print(f"Base Exchange Ratio: {fixed['base_exchange_ratio']:.4f}")
-    print(f"Floor Price: ${fixed['floor_price']:.2f} ({fixed['floor_pct_below']:.1f}% below)")
-    print(f"Cap Price: ${fixed['cap_price']:.2f} ({fixed['cap_pct_above']:.1f}% above)\n")
-
-    print("Sample Scenarios:")
-    for scenario in fixed['scenarios'][::4]:
-        print(f"\nAcquirer @ ${scenario['acquirer_price']:.2f}:")
-        print(f"  Exchange Ratio: {scenario['effective_exchange_ratio']:.4f}")
-        print(f"  Value/Share: ${scenario['value_per_target_share']:.2f}")
-        print(f"  Protection: {scenario['protection_active']}")
-
-    comparison = collar.compare_collar_structures(
-        price_scenarios=[70, 80, 90, 100, 110, 120, 130]
-    )
-
-    print("\n\n=== COLLAR STRUCTURE COMPARISON ===")
-    for comp in comparison['comparison']:
-        print(f"\n{comp['structure'].replace('_', ' ').title()}:")
-        print(f"  Mean Value: ${comp['mean_value']:,.0f}")
-        print(f"  Std Dev: ${comp['std_dev']:,.0f}")
-        print(f"  Range: ${comp['min_value']:,.0f} - ${comp['max_value']:,.0f}")
+    main()

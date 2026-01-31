@@ -107,3 +107,49 @@ if __name__ == '__main__':
     print(f"\nHurdle IRR: {hurdle['hurdle_irr']:.1f}%")
     print(f"Excess IRR: {hurdle['excess_irr']:.1f}%")
     print(f"Meets Hurdle: {hurdle['meets_hurdle']}")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "returns":
+            if len(sys.argv) < 6:
+                raise ValueError("Entry valuation, exit valuation, equity invested, and holding period required")
+
+            entry_valuation = float(sys.argv[2])  # Not directly used, but enterprise value at entry
+            exit_valuation = float(sys.argv[3])    # Not directly used, but enterprise value at exit
+            equity_invested = float(sys.argv[4])   # Initial equity investment
+            holding_period = int(sys.argv[5])
+
+            # Calculate exit equity value from exit enterprise valuation
+            # In an LBO, equity value at exit = exit EV - remaining debt
+            # For simplification, we'll use exit_valuation directly as exit equity
+            # In real scenario, you'd subtract remaining debt
+
+            calc = ReturnsCalculator()
+            analysis = calc.comprehensive_returns(equity_invested, exit_valuation, holding_period)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

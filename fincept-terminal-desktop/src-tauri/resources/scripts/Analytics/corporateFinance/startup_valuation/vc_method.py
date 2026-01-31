@@ -159,33 +159,46 @@ class VCMethod:
 
         return required_multiple
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "vc_method":
+            if len(sys.argv) < 7:
+                raise ValueError("All VC method parameters required")
+            exit_year_metric = float(sys.argv[2])
+            exit_multiple = float(sys.argv[3])
+            years_to_exit = int(sys.argv[4])
+            investment_amount = float(sys.argv[5])
+            stage = sys.argv[6]
+
+            vc = VCMethod()
+            valuation = vc.comprehensive_valuation(
+                exit_year_metric=exit_year_metric,
+                exit_multiple=exit_multiple,
+                years_to_exit=years_to_exit,
+                investment_amount=investment_amount,
+                stage=stage
+            )
+
+            result = {"success": True, "data": valuation}
+            print(json.dumps(result))
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    vc = VCMethod()
-
-    valuation = vc.comprehensive_valuation(
-        exit_year_metric=100_000_000,
-        exit_multiple=8.0,
-        years_to_exit=5,
-        investment_amount=10_000_000,
-        stage='series_a'
-    )
-
-    print("=== VC METHOD VALUATION ===\n")
-    print(f"Exit Value (Year 5): ${valuation['terminal_value']:,.0f}")
-    print(f"Required ROR: {valuation['inputs']['required_ror']:.0f}%")
-    print(f"\nPre-Money Valuation: ${valuation['pre_money_valuation']:,.0f}")
-    print(f"Post-Money Valuation: ${valuation['post_money_valuation']:,.0f}")
-    print(f"\nInvestor Ownership: {valuation['investor_ownership_pct']:.1f}%")
-    print(f"Investor Return: {valuation['investor_return_multiple']:.2f}x")
-
-    scenarios = vc.scenario_analysis(
-        base_case={'exit_metric': 100_000_000, 'exit_multiple': 8.0, 'years_to_exit': 5},
-        bear_case={'exit_metric': 60_000_000, 'exit_multiple': 6.0, 'years_to_exit': 6},
-        bull_case={'exit_metric': 150_000_000, 'exit_multiple': 10.0, 'years_to_exit': 4},
-        investment_amount=10_000_000
-    )
-
-    print(f"\nValuation Range:")
-    print(f"  Bear: ${scenarios['valuation_range']['low']:,.0f}")
-    print(f"  Base: ${scenarios['valuation_range']['base']:,.0f}")
-    print(f"  Bull: ${scenarios['valuation_range']['high']:,.0f}")
+    main()

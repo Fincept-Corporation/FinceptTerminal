@@ -394,71 +394,49 @@ class CostSynergyAnalyzer:
             'on_track': realization_rate >= 85.0
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "cost_synergy":
+            if len(sys.argv) < 6:
+                raise ValueError("Duplicate roles, average loaded cost, severance multiple, and ramp years required")
+
+            duplicate_roles = int(sys.argv[2])
+            average_loaded_cost = float(sys.argv[3])
+            severance_multiple = float(sys.argv[4])
+            ramp_years = int(sys.argv[5])
+
+            analyzer = CostSynergyAnalyzer(tax_rate=0.25, cost_of_capital=0.10)
+
+            analysis = analyzer.calculate_headcount_synergy(
+                duplicate_roles=duplicate_roles,
+                average_loaded_cost=average_loaded_cost,
+                severance_multiple=severance_multiple,
+                ramp_years=ramp_years
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    analyzer = CostSynergyAnalyzer(tax_rate=0.25, cost_of_capital=0.10)
-
-    headcount = analyzer.calculate_headcount_synergy(
-        duplicate_roles=250,
-        average_loaded_cost=120_000,
-        severance_multiple=1.5,
-        ramp_years=2
-    )
-
-    print("=== HEADCOUNT REDUCTION SYNERGY ===\n")
-    print(f"Duplicate Roles: {headcount['duplicate_roles']}")
-    print(f"Annual Savings: ${headcount['annual_savings']:,.0f}")
-    print(f"Severance Cost: ${headcount['one_time_severance_cost']:,.0f}")
-    print(f"NPV: ${headcount['npv']:,.0f}")
-    print(f"Payback Period: {headcount['payback_period_years']} years")
-    print(f"ROI: {headcount['roi']:.0f}%\n")
-
-    print("Yearly Projections:")
-    for proj in headcount['yearly_projections'][:5]:
-        print(f"  Year {proj['year']}: ${proj['net_cash_flow']:,.0f} (PV: ${proj['present_value']:,.0f})")
-
-    cost_reductions = [
-        CostReduction(
-            CostSynergyType.HEADCOUNT_REDUCTION,
-            "Eliminate duplicate corporate functions",
-            30_000_000,
-            45_000_000,
-            2
-        ),
-        CostReduction(
-            CostSynergyType.FACILITIES_CONSOLIDATION,
-            "Close redundant offices",
-            15_000_000,
-            8_000_000,
-            2
-        ),
-        CostReduction(
-            CostSynergyType.PROCUREMENT,
-            "Volume purchasing discounts",
-            12_000_000,
-            2_000_000,
-            3
-        ),
-        CostReduction(
-            CostSynergyType.IT_SYSTEMS,
-            "Consolidate IT infrastructure",
-            8_000_000,
-            10_000_000,
-            2
-        )
-    ]
-
-    comprehensive = analyzer.comprehensive_cost_synergy(cost_reductions)
-
-    print("\n\n=== COMPREHENSIVE COST SYNERGY ===")
-    print(f"Total Annual Savings (Run-Rate): ${comprehensive['total_annual_savings_run_rate']:,.0f}")
-    print(f"Total One-Time Costs: ${comprehensive['total_one_time_costs']:,.0f}")
-    print(f"Total NPV: ${comprehensive['total_cost_synergy_npv']:,.0f}")
-    print(f"Blended ROI: {comprehensive['blended_roi']:.0f}%\n")
-
-    print("Synergy Breakdown (by NPV):")
-    for synergy in comprehensive['synergy_breakdown']:
-        print(f"\n{synergy['category'].replace('_', ' ').title()}:")
-        print(f"  Annual Savings: ${synergy['annual_savings']:,.0f}")
-        print(f"  One-Time Cost: ${synergy['one_time_cost']:,.0f}")
-        print(f"  NPV: ${synergy['npv']:,.0f}")
-        print(f"  ROI: {synergy['roi']:.0f}%")
+    main()

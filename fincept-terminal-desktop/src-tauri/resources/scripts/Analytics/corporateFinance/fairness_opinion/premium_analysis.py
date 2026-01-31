@@ -263,62 +263,57 @@ class PremiumAnalysis:
             'within_analyst_range': min_target <= self.offer_price_per_share <= max_target
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "premium":
+            if len(sys.argv) < 4:
+                raise ValueError("Daily prices (JSON), offer price, and announcement date required")
+
+            daily_prices = json.loads(sys.argv[2])
+            offer_price = float(sys.argv[3])
+            announcement_date = int(sys.argv[4]) if len(sys.argv) > 4 else None
+
+            shares_outstanding = 50_000_000  # Default or could be passed as param
+
+            analyzer = PremiumAnalysis(
+                offer_price_per_share=offer_price,
+                shares_outstanding=shares_outstanding
+            )
+
+            if announcement_date:
+                analysis = analyzer.unaffected_price_analysis(daily_prices, rumor_date=announcement_date)
+            else:
+                # Use last price as current price
+                historical_prices = {
+                    '1_day': daily_prices[-1] if daily_prices else 0,
+                    '1_week': daily_prices[-5] if len(daily_prices) >= 5 else daily_prices[0],
+                    '1_month': daily_prices[-20] if len(daily_prices) >= 20 else daily_prices[0]
+                }
+                analysis = analyzer.calculate_premiums(historical_prices)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    analyzer = PremiumAnalysis(
-        offer_price_per_share=42.50,
-        shares_outstanding=50_000_000
-    )
-
-    historical_prices = {
-        '1_day': 32.50,
-        '1_week': 31.80,
-        '1_month': 30.20,
-        '3_month': 28.50
-    }
-
-    premiums = analyzer.calculate_premiums(historical_prices)
-
-    print("=== PREMIUM ANALYSIS ===\n")
-    print(f"Offer Price: ${premiums['offer_price_per_share']:.2f}")
-    print(f"Offer Value: ${premiums['offer_value']:,.0f}\n")
-
-    print("Premiums to Historical Prices:")
-    for period, data in premiums['premiums'].items():
-        print(f"  {period.replace('_', ' ').title()}: ${data['historical_price']:.2f} → {data['premium_pct']:.1f}% premium")
-
-    daily_prices = [28.0, 28.5, 29.0, 29.5, 30.0, 30.5, 31.0, 31.5, 32.0, 32.5] + [33.0] * 5
-    unaffected = analyzer.unaffected_price_analysis(daily_prices, rumor_date=10)
-
-    print("\n\n=== UNAFFECTED PRICE ANALYSIS ===")
-    print("\nUnaffected Prices:")
-    for period, price in unaffected['unaffected_prices'].items():
-        premium = unaffected['premiums_to_unaffected'][period.replace('_prior', '').replace('_avg', '')]
-        print(f"  {period.replace('_', ' ').title()}: ${price:.2f} → {premium:.1f}% premium")
-
-    comparison = analyzer.compare_to_benchmarks(
-        actual_premium=premiums['premiums']['1_day']['premium_pct'],
-        period='1_day',
-        industry='technology'
-    )
-
-    print("\n\n=== BENCHMARK COMPARISON ===")
-    print(f"Industry: {comparison['industry'].title()}")
-    print(f"Actual Premium: {comparison['actual_premium']:.1f}%")
-    print(f"Position: {comparison['relative_position']}")
-    print(f"\nIndustry Benchmarks:")
-    print(f"  25th percentile: {comparison['benchmarks']['25th']:.0f}%")
-    print(f"  Median: {comparison['benchmarks']['median']:.0f}%")
-    print(f"  75th percentile: {comparison['benchmarks']['75th']:.0f}%")
-
-    week_52 = analyzer.fifty_two_week_analysis(
-        week_52_high=35.00,
-        week_52_low=24.00,
-        current_price=32.50
-    )
-
-    print("\n\n=== 52-WEEK ANALYSIS ===")
-    print(f"52-Week Range: ${week_52['52_week_low']:.2f} - ${week_52['52_week_high']:.2f}")
-    print(f"Offer Price: ${week_52['offer_price']:.2f}")
-    print(f"Premium to 52W High: {week_52['premium_to_52w_high']:.1f}%")
-    print(f"Position in Range: {week_52['position_in_52w_range_pct']:.1f}%")
-    print(f"Interpretation: {week_52['interpretation']}")
+    main()

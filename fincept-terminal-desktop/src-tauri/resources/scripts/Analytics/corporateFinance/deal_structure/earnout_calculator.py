@@ -320,3 +320,59 @@ if __name__ == '__main__':
     print(f"Cap: ${continuous['cap']:,.0f}")
     print(f"Total Earnout PV: ${continuous['total_earnout_pv']:,.0f}")
     print(f"Total Consideration: ${continuous['total_consideration']:,.0f}")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "earnout":
+            if len(sys.argv) < 4:
+                raise ValueError("Earnout params and financial projections required")
+
+            earnout_params = json.loads(sys.argv[2])
+            financial_projections = json.loads(sys.argv[3])
+
+            calculator = EarnoutCalculator(discount_rate=earnout_params.get('discount_rate', 0.10))
+
+            # Basic earnout calculation
+            base_price = earnout_params.get('base_price', 0)
+            tranches_data = earnout_params.get('tranches', [])
+            
+            tranches = []
+            for t in tranches_data:
+                tranches.append(EarnoutTranche(
+                    metric=t.get('metric', ''),
+                    target_value=t.get('target_value', 0),
+                    payment=t.get('payment', 0),
+                    measurement_period_years=t.get('measurement_period_years', 1),
+                    description=t.get('description', '')
+                ))
+
+            probabilities = earnout_params.get('probabilities', [1.0] * len(tranches))
+
+            analysis = calculator.calculate_simple_earnout(base_price, tranches, probabilities)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

@@ -1,9 +1,17 @@
 """Complete LBO Model"""
+import sys
+from pathlib import Path
 from typing import Dict, Any, List, Optional
-from .capital_structure import CapitalStructureBuilder
-from .debt_schedule import DebtSchedule
-from .returns_calculator import ReturnsCalculator
-from .exit_analysis import ExitAnalyzer
+
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.lbo.capital_structure import CapitalStructureBuilder
+from corporateFinance.lbo.debt_schedule import DebtSchedule
+from corporateFinance.lbo.returns_calculator import ReturnsCalculator
+from corporateFinance.lbo.exit_analysis import ExitAnalyzer
 
 class LBOModel:
     """Complete Leveraged Buyout Model"""
@@ -199,36 +207,55 @@ class LBOModel:
             }
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {
+            "success": False,
+            "error": "No command specified. Usage: lbo_model.py <command> [args...]"
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "build":
+            # build_lbo_model(target_company, assumptions, projection_years)
+            if len(sys.argv) < 4:
+                raise ValueError("Target company data, assumptions, and projection years required")
+
+            target_company = json.loads(sys.argv[2])
+            assumptions = json.loads(sys.argv[3])
+            projection_years = int(sys.argv[4]) if len(sys.argv) > 4 else 5
+
+            model = LBOModel(target_company, assumptions)
+            results = model.build_complete_model(projection_years)
+
+            result = {
+                "success": True,
+                "data": results
+            }
+            print(json.dumps(result))
+
+        else:
+            result = {
+                "success": False,
+                "error": f"Unknown command: {command}. Available: build"
+            }
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": str(e),
+            "command": command
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    target_company = {
-        'company_name': 'Target LBO Co',
-        'revenue': 3_000_000_000,
-        'ebitda': 625_000_000
-    }
-
-    assumptions = {
-        'entry_multiple': 8.0,
-        'target_leverage': 5.5,
-        'revenue_growth': [0.05, 0.06, 0.07, 0.07, 0.08],
-        'ebitda_margin': 0.25,
-        'capex_pct_revenue': 0.03,
-        'nwc_pct_revenue': 0.05,
-        'tax_rate': 0.21,
-        'exit_year': 5,
-        'exit_multiples': [9.0, 10.0, 11.0, 12.0],
-        'hurdle_irr': 0.20
-    }
-
-    model = LBOModel(target_company, assumptions)
-    results = model.build_complete_model(projection_years=5)
-
-    print("=== LBO MODEL RESULTS ===\n")
-    print(f"Entry EV: ${results['transaction_summary']['entry_enterprise_value']:,.0f}")
-    print(f"Entry Multiple: {results['transaction_summary']['entry_multiple']:.1f}x")
-    print(f"Total Leverage: {results['capital_structure']['leverage_metrics']['debt_to_ebitda']:.2f}x\n")
-
-    print("Returns by Exit Multiple:")
-    for multiple, returns in results['returns_analysis'].items():
-        print(f"  {multiple:.1f}x: IRR {returns['irr']:.1f}% | MOIC {returns['moic']:.2f}x")
-
-    print(f"\nDebt Paydown: ${results['debt_summary']['total_paydown']:,.0f} ({results['debt_summary']['paydown_percentage']:.1f}%)")
+    main()

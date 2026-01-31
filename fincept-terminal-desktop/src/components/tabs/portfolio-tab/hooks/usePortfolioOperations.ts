@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   portfolioService,
   Portfolio,
@@ -14,78 +14,13 @@ export const usePortfolioOperations = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Initialize service and load portfolios
-  useEffect(() => {
-    const initService = async () => {
-      setLoading(true);
-      try {
-        await portfolioService.initialize();
-        const result = await portfolioService.getPortfolios();
-        setPortfolios(result);
-        // Select first portfolio on initial load
-        if (result.length > 0) {
-          setSelectedPortfolio(result[0]);
-        }
-      } catch (error) {
-        console.error('[usePortfolioOperations] Initialization error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initService();
-  }, []);
+  // Track the currently loading portfolio ID to prevent race conditions
+  const loadingPortfolioIdRef = useRef<string | null>(null);
 
-  // Auto-refresh portfolio data only when tab is visible
-  useEffect(() => {
-    if (!selectedPortfolio) return;
-
-    let refreshTimer: ReturnType<typeof setInterval> | null = null;
-
-    const startRefresh = () => {
-      if (!refreshTimer) {
-        refreshTimer = setInterval(() => {
-          refreshPortfolioData();
-        }, 60000);
-      }
-    };
-
-    const stopRefresh = () => {
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
-        refreshTimer = null;
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        stopRefresh();
-      } else {
-        startRefresh();
-      }
-    };
-
-    // Start refresh only if page is visible
-    if (!document.hidden) {
-      startRefresh();
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      stopRefresh();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [selectedPortfolio]);
-
-  // Load portfolio summary when selection changes
-  useEffect(() => {
-    if (selectedPortfolio) {
-      loadPortfolioSummary(selectedPortfolio.id);
-    }
-  }, [selectedPortfolio]);
+  // ==================== FUNCTIONS (declared before useEffect) ====================
 
   // Load portfolios
-  const loadPortfolios = async () => {
+  const loadPortfolios = useCallback(async () => {
     try {
       const result = await portfolioService.getPortfolios();
       setPortfolios(result);
@@ -94,30 +29,43 @@ export const usePortfolioOperations = () => {
       console.error('[usePortfolioOperations] Error loading portfolios:', error);
       return [];
     }
-  };
+  }, []);
 
   // Load portfolio summary
-  const loadPortfolioSummary = async (portfolioId: string) => {
+  const loadPortfolioSummary = useCallback(async (portfolioId: string) => {
     try {
       setRefreshing(true);
       const summary = await portfolioService.getPortfolioSummary(portfolioId);
-      setPortfolioSummary(summary);
+
+      // Only update state if this portfolio is still the one being loaded (prevent race conditions)
+      if (loadingPortfolioIdRef.current === portfolioId) {
+        setPortfolioSummary(summary);
+      } else {
+        console.log(`[usePortfolioOperations] Discarding stale data for portfolio ${portfolioId}`);
+        return; // Don't fetch transactions if portfolio changed
+      }
 
       const txns = await portfolioService.getPortfolioTransactions(portfolioId, 20);
-      setTransactions(txns);
+
+      // Only update state if this portfolio is still the one being loaded (prevent race conditions)
+      if (loadingPortfolioIdRef.current === portfolioId) {
+        setTransactions(txns);
+      } else {
+        console.log(`[usePortfolioOperations] Discarding stale transactions for portfolio ${portfolioId}`);
+      }
     } catch (error) {
       console.error('[usePortfolioOperations] Error loading portfolio summary:', error);
     } finally {
       setRefreshing(false);
     }
-  };
+  }, []);
 
   // Refresh portfolio data
-  const refreshPortfolioData = () => {
+  const refreshPortfolioData = useCallback(() => {
     if (selectedPortfolio) {
       loadPortfolioSummary(selectedPortfolio.id);
     }
-  };
+  }, [selectedPortfolio, loadPortfolioSummary]);
 
   // Create new portfolio
   const createPortfolio = async (name: string, owner: string, currency: string) => {
@@ -191,6 +139,93 @@ export const usePortfolioOperations = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  // ==================== EFFECTS (use functions declared above) ====================
+
+  // Initialize service and load portfolios
+  useEffect(() => {
+    const initService = async () => {
+      setLoading(true);
+      try {
+        await portfolioService.initialize();
+        const result = await portfolioService.getPortfolios();
+        setPortfolios(result);
+        // Select first portfolio on initial load
+        if (result.length > 0) {
+          setSelectedPortfolio(result[0]);
+        }
+      } catch (error) {
+        console.error('[usePortfolioOperations] Initialization error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initService();
+  }, []);
+
+  // Auto-refresh portfolio data only when tab is visible
+  useEffect(() => {
+    if (!selectedPortfolio) return;
+
+    let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+    const startRefresh = () => {
+      if (!refreshTimer) {
+        refreshTimer = setInterval(() => {
+          refreshPortfolioData();
+        }, 60000);
+      }
+    };
+
+    const stopRefresh = () => {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopRefresh();
+      } else {
+        startRefresh();
+      }
+    };
+
+    // Start refresh only if page is visible
+    if (!document.hidden) {
+      startRefresh();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopRefresh();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedPortfolio, refreshPortfolioData]);
+
+  // Load portfolio summary when selection changes
+  useEffect(() => {
+    if (selectedPortfolio) {
+      // Clear previous portfolio data immediately when switching
+      setPortfolioSummary(null);
+      setTransactions([]);
+
+      // Update the ref to track which portfolio we're loading
+      loadingPortfolioIdRef.current = selectedPortfolio.id;
+
+      // Load new portfolio data
+      loadPortfolioSummary(selectedPortfolio.id);
+    } else {
+      // Clear data when no portfolio is selected
+      setPortfolioSummary(null);
+      setTransactions([]);
+      loadingPortfolioIdRef.current = null;
+    }
+  }, [selectedPortfolio, loadPortfolioSummary]);
+
+  // ==================== RETURN ====================
 
   return {
     portfolios,

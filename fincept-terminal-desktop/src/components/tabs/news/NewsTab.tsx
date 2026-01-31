@@ -36,16 +36,13 @@ const NewsGridCard: React.FC<{
   article: NewsArticle;
   onAnalyze: (article: NewsArticle) => void;
   analyzing: boolean;
-  analysisData: NewsAnalysisData | null;
-  showAnalysis: boolean;
   currentAnalyzingId: string | null;
   openExternal: (url: string) => void;
-}> = ({ article, onAnalyze, analyzing, analysisData, showAnalysis, currentAnalyzingId, openExternal }) => {
+}> = ({ article, onAnalyze, analyzing, currentAnalyzingId, openExternal }) => {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const isHighPri = article.priority === 'FLASH' || article.priority === 'URGENT';
   const isAnalyzing = analyzing && currentAnalyzingId === article.id;
-  const hasAnalysis = showAnalysis && analysisData && currentAnalyzingId === article.id;
 
   return (
     <div
@@ -141,7 +138,7 @@ const NewsGridCard: React.FC<{
             }}
           ><Copy size={9} /></button>
           <button
-            onClick={(e) => { e.stopPropagation(); onAnalyze(article); setExpanded(true); }}
+            onClick={(e) => { e.stopPropagation(); onAnalyze(article); }}
             disabled={isAnalyzing}
             style={{
               flex: 1, padding: '5px 8px',
@@ -155,51 +152,6 @@ const NewsGridCard: React.FC<{
         </div>
       )}
 
-      {/* AI Analysis Results (inline, when available) */}
-      {hasAnalysis && expanded && (
-        <div style={{ borderTop: `1px solid ${F.BORDER}`, paddingTop: '8px', marginTop: '4px' }}>
-          <div style={{
-            padding: '4px 8px', backgroundColor: `${F.PURPLE}15`, border: `1px solid ${F.PURPLE}`,
-            borderRadius: '2px', marginBottom: '8px', fontSize: '8px',
-          }}>
-            <span style={{ color: F.PURPLE, fontWeight: 700, letterSpacing: '0.5px' }}>AI ANALYSIS</span>
-          </div>
-
-          <div style={{
-            fontSize: '9px', color: F.WHITE, lineHeight: '1.5', padding: '6px 8px',
-            backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', marginBottom: '8px',
-          }}>{analysisData.analysis.summary}</div>
-
-          {analysisData.analysis.key_points.length > 0 && (
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{ fontSize: '8px', color: F.GRAY, fontWeight: 700, marginBottom: '4px' }}>KEY POINTS</div>
-              <div style={{ padding: '6px 8px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
-                {analysisData.analysis.key_points.slice(0, 3).map((pt, i) => (
-                  <div key={i} style={{
-                    fontSize: '8px', color: F.WHITE, paddingLeft: '6px',
-                    borderLeft: `2px solid ${F.ORANGE}`, marginBottom: '4px', lineHeight: '1.4',
-                  }}>{pt}</div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-            <div style={{ padding: '6px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
-              <div style={{ fontSize: '8px', color: F.GRAY, fontWeight: 700, marginBottom: '3px' }}>SENTIMENT</div>
-              <div style={{ fontSize: '8px', color: getSentimentColor(analysisData.analysis.sentiment.score), fontWeight: 700 }}>
-                {analysisData.analysis.sentiment.score.toFixed(2)}
-              </div>
-            </div>
-            <div style={{ padding: '6px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
-              <div style={{ fontSize: '8px', color: F.GRAY, fontWeight: 700, marginBottom: '3px' }}>URGENCY</div>
-              <div style={{ fontSize: '8px', color: getUrgencyColor(analysisData.analysis.market_impact.urgency), fontWeight: 700 }}>
-                {analysisData.analysis.market_impact.urgency}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Bottom: badges row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
@@ -231,273 +183,6 @@ const NewsGridCard: React.FC<{
 };
 
 // ══════════════════════════════════════════════════════════════
-// ARTICLE DETAIL MODAL (overlay)
-// ══════════════════════════════════════════════════════════════
-const ArticleDetailModal: React.FC<{
-  article: NewsArticle;
-  onClose: () => void;
-  onAnalyze: () => void;
-  analyzing: boolean;
-  analysisData: NewsAnalysisData | null;
-  showAnalysis: boolean;
-  openExternal: (url: string) => void;
-}> = ({ article, onClose, onAnalyze, analyzing, analysisData, showAnalysis, openExternal }) => (
-  <div
-    onClick={onClose}
-    style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      backgroundColor: 'rgba(0,0,0,0.75)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: FONT,
-    }}
-  >
-    <div
-      onClick={e => e.stopPropagation()}
-      style={{
-        width: '700px', maxWidth: '90vw', maxHeight: '85vh',
-        backgroundColor: F.PANEL_BG, border: `1px solid ${F.ORANGE}40`,
-        borderRadius: '2px', display: 'flex', flexDirection: 'column',
-        overflow: 'hidden', boxShadow: `0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px ${F.BORDER}`,
-      }}
-    >
-      {/* Modal Header */}
-      <div style={{
-        padding: '10px 16px', backgroundColor: F.HEADER_BG,
-        borderBottom: `2px solid ${F.ORANGE}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Newspaper size={13} style={{ color: F.ORANGE }} />
-          <span style={{ fontSize: '10px', fontWeight: 700, color: F.ORANGE, letterSpacing: '0.5px' }}>ARTICLE DETAIL</span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span style={{ fontSize: '10px', color: F.CYAN, fontWeight: 700 }}>{article.source}</span>
-          {article.time && article.time.trim() !== '' && (
-            <span style={{ fontSize: '10px', color: F.MUTED }}>{article.time}</span>
-          )}
-        </div>
-        <button onClick={onClose} style={{
-          background: 'none', border: `1px solid ${F.BORDER}`, color: F.GRAY,
-          cursor: 'pointer', borderRadius: '2px', padding: '3px 6px',
-          display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', fontWeight: 700,
-        }}><X size={11} />CLOSE</button>
-      </div>
-
-      {/* Modal Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-        {/* Badges */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-          {[
-            { label: article.priority, color: priColor(article.priority) },
-            { label: article.category, color: F.CYAN },
-            { label: article.sentiment, color: sentColor(article.sentiment) },
-            { label: article.region, color: F.PURPLE },
-            { label: `IMPACT: ${article.impact}`, color: impColor(article.impact) },
-          ].map((b, i) => (
-            <span key={i} style={{
-              padding: '3px 10px', backgroundColor: `${b.color}15`, color: b.color,
-              fontSize: '9px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${b.color}30`,
-            }}>{b.label}</span>
-          ))}
-        </div>
-
-        {/* Headline */}
-        <div style={{
-          color: F.WHITE, fontSize: '14px', fontWeight: 700, lineHeight: '1.45',
-          marginBottom: '12px', padding: '10px 14px', backgroundColor: F.DARK_BG,
-          borderLeft: `3px solid ${priColor(article.priority)}`, borderRadius: '2px',
-        }}>{article.headline}</div>
-
-        {/* Tickers */}
-        {article.tickers && article.tickers.length > 0 && (
-          <div style={{ display: 'flex', gap: '5px', marginBottom: '12px', flexWrap: 'wrap' }}>
-            {article.tickers.map((ticker, i) => (
-              <span key={i} style={{
-                padding: '2px 10px', backgroundColor: `${F.GREEN}15`, color: F.GREEN,
-                fontSize: '9px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${F.GREEN}30`,
-              }}>{ticker}</span>
-            ))}
-          </div>
-        )}
-
-        {/* Summary */}
-        <div style={{ color: F.GRAY, fontSize: '11px', lineHeight: '1.7', marginBottom: '14px' }}>
-          {article.summary}
-        </div>
-
-        {/* Action Buttons */}
-        {article.link && (
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
-            <button
-              onClick={() => openExternal(article.link!)}
-              style={{
-                flex: 1, padding: '8px 12px', backgroundColor: F.BLUE, color: F.WHITE,
-                border: 'none', fontSize: '10px', fontWeight: 700, cursor: 'pointer',
-                borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              }}
-            ><ExternalLink size={12} />OPEN IN BROWSER</button>
-            <button
-              onClick={() => navigator.clipboard.writeText(article.link!)}
-              style={{
-                padding: '8px 14px', background: 'none', border: `1px solid ${F.BORDER}`,
-                color: F.GRAY, fontSize: '10px', fontWeight: 700, cursor: 'pointer',
-                borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '5px',
-              }}
-            ><Copy size={12} />COPY</button>
-            <button
-              onClick={onAnalyze}
-              disabled={analyzing}
-              style={{
-                flex: 1, padding: '8px 12px',
-                backgroundColor: analyzing ? F.MUTED : F.PURPLE,
-                color: F.WHITE, border: 'none', fontSize: '10px', fontWeight: 700,
-                cursor: analyzing ? 'not-allowed' : 'pointer',
-                borderRadius: '2px', opacity: analyzing ? 0.5 : 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              }}
-            ><Zap size={12} />{analyzing ? 'ANALYZING...' : 'AI ANALYZE'}</button>
-          </div>
-        )}
-
-        {/* AI Analysis Results */}
-        {showAnalysis && analysisData && (
-          <div style={{ borderTop: `1px solid ${F.BORDER}`, paddingTop: '14px' }}>
-            <div style={{
-              padding: '8px 12px', backgroundColor: `${F.PURPLE}15`, border: `1px solid ${F.PURPLE}`,
-              borderRadius: '2px', marginBottom: '14px', display: 'flex', justifyContent: 'space-between',
-              alignItems: 'center', fontSize: '10px',
-            }}>
-              <span style={{ color: F.PURPLE, fontWeight: 700, letterSpacing: '0.5px' }}>AI POWERED ANALYSIS</span>
-              <span style={{ color: F.GRAY }}>{analysisData.credits_used} CR | {analysisData.credits_remaining.toLocaleString()} REM</span>
-            </div>
-
-            <div style={{
-              fontSize: '11px', color: F.WHITE, lineHeight: '1.6', padding: '10px 14px',
-              backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', marginBottom: '14px',
-            }}>{analysisData.analysis.summary}</div>
-
-            {analysisData.analysis.key_points.length > 0 && (
-              <div style={{ marginBottom: '14px' }}>
-                <div style={{ fontSize: '10px', color: F.GRAY, fontWeight: 700, marginBottom: '6px', letterSpacing: '0.5px' }}>KEY POINTS</div>
-                <div style={{ padding: '10px 14px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
-                  {analysisData.analysis.key_points.map((pt, i) => (
-                    <div key={i} style={{
-                      fontSize: '10px', color: F.WHITE, paddingLeft: '10px',
-                      borderLeft: `2px solid ${F.ORANGE}`, marginBottom: '6px', lineHeight: '1.5',
-                    }}>{pt}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
-              <div style={{ padding: '10px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
-                <div style={{ fontSize: '10px', color: F.GRAY, fontWeight: 700, marginBottom: '6px' }}>SENTIMENT</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '3px' }}>
-                  <span style={{ color: F.GRAY }}>Score</span>
-                  <span style={{ color: getSentimentColor(analysisData.analysis.sentiment.score), fontWeight: 700 }}>
-                    {analysisData.analysis.sentiment.score.toFixed(2)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '3px' }}>
-                  <span style={{ color: F.GRAY }}>Intensity</span>
-                  <span style={{ color: F.CYAN, fontWeight: 700 }}>{analysisData.analysis.sentiment.intensity.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-                  <span style={{ color: F.GRAY }}>Confidence</span>
-                  <span style={{ color: F.GREEN, fontWeight: 700 }}>{(analysisData.analysis.sentiment.confidence * 100).toFixed(0)}%</span>
-                </div>
-              </div>
-              <div style={{ padding: '10px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
-                <div style={{ fontSize: '10px', color: F.GRAY, fontWeight: 700, marginBottom: '6px' }}>MARKET IMPACT</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '3px' }}>
-                  <span style={{ color: F.GRAY }}>Urgency</span>
-                  <span style={{ color: getUrgencyColor(analysisData.analysis.market_impact.urgency), fontWeight: 700 }}>
-                    {analysisData.analysis.market_impact.urgency}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-                  <span style={{ color: F.GRAY }}>Prediction</span>
-                  <span style={{ color: F.CYAN, fontWeight: 700 }}>
-                    {analysisData.analysis.market_impact.prediction.replace('_', ' ').toUpperCase()}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Risk Signals */}
-            <div style={{ marginBottom: '14px' }}>
-              <div style={{ fontSize: '10px', color: F.GRAY, fontWeight: 700, marginBottom: '6px', letterSpacing: '0.5px' }}>RISK SIGNALS</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                {Object.entries(analysisData.analysis.risk_signals).map(([type, signal]) => (
-                  <div key={type} style={{
-                    padding: '8px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-                  }}>
-                    <div style={{ color: getRiskColor(signal.level), fontWeight: 700, fontSize: '10px', marginBottom: '2px' }}>
-                      {type.toUpperCase()}: {signal.level.toUpperCase()}
-                    </div>
-                    {signal.details && <div style={{ color: F.MUTED, fontSize: '9px', lineHeight: '1.3' }}>{signal.details}</div>}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Topics + Keywords */}
-            {(analysisData.analysis.topics.length > 0 || analysisData.analysis.keywords.length > 0) && (
-              <div style={{ marginBottom: '14px' }}>
-                {analysisData.analysis.topics.length > 0 && (
-                  <div style={{ marginBottom: '8px' }}>
-                    <div style={{ fontSize: '10px', color: F.GRAY, fontWeight: 700, marginBottom: '4px' }}>TOPICS</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {analysisData.analysis.topics.map((topic, idx) => (
-                        <span key={idx} style={{
-                          padding: '2px 8px', backgroundColor: `${F.PURPLE}20`, color: F.WHITE,
-                          fontSize: '9px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${F.PURPLE}`,
-                        }}>{topic}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {analysisData.analysis.keywords.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: '10px', color: F.GRAY, fontWeight: 700, marginBottom: '4px' }}>KEYWORDS</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {analysisData.analysis.keywords.slice(0, 8).map((kw, idx) => (
-                        <span key={idx} style={{
-                          padding: '2px 8px', backgroundColor: `${F.MUTED}20`, color: F.GRAY,
-                          fontSize: '9px', borderRadius: '2px', border: `1px solid ${F.MUTED}`,
-                        }}>{kw}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Entities */}
-            {analysisData.analysis.entities.organizations.length > 0 && (
-              <div>
-                <div style={{ fontSize: '10px', color: F.GRAY, fontWeight: 700, marginBottom: '4px' }}>ORGANIZATIONS</div>
-                {analysisData.analysis.entities.organizations.map((org, idx) => (
-                  <div key={idx} style={{
-                    padding: '6px 10px', backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`,
-                    borderRadius: '2px', marginBottom: '4px',
-                  }}>
-                    <span style={{ color: F.WHITE, fontWeight: 700, fontSize: '10px' }}>{org.name}</span>
-                    <span style={{ color: F.GRAY, fontSize: '10px', marginLeft: '6px' }}>
-                      {org.sector} {org.ticker ? `| ${org.ticker}` : ''}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  </div>
-);
-
-// ══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════
 const NewsTab: React.FC = () => {
@@ -519,6 +204,8 @@ const NewsTab: React.FC = () => {
   const [showFeedSettings, setShowFeedSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentAnalyzingId, setCurrentAnalyzingId] = useState<string | null>(null);
+  const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
+  const [currentAnalyzedArticle, setCurrentAnalyzedArticle] = useState<NewsArticle | null>(null);
 
   // ── Data loading ──
   const recordCurrentData = async () => {
@@ -563,6 +250,8 @@ const NewsTab: React.FC = () => {
     setShowAnalysis(false);
     setAnalysisData(null);
     setCurrentAnalyzingId(article.id);
+    setCurrentAnalyzedArticle(article);
+    setAnalysisPanelOpen(true); // Auto-open the panel
     try {
       const result = await analyzeNewsArticle(article.link);
       if (result.success && 'data' in result) {
@@ -842,7 +531,7 @@ const NewsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* ══ MAIN CONTENT: Sidebar + Grid ══ */}
+      {/* ══ MAIN CONTENT: Left Sidebar + Grid + Right Analysis Panel ══ */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
 
         {/* ── LEFT SIDEBAR: Sentiment + Stats (fixed, no scroll needed) ── */}
@@ -986,8 +675,6 @@ const NewsTab: React.FC = () => {
                   article={article}
                   onAnalyze={handleAnalyzeArticle}
                   analyzing={analyzingArticle}
-                  analysisData={analysisData}
-                  showAnalysis={showAnalysis}
                   currentAnalyzingId={currentAnalyzingId}
                   openExternal={openExternal}
                 />
@@ -995,6 +682,541 @@ const NewsTab: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* ── RIGHT ANALYSIS PANEL (Collapsible) ── */}
+        {analysisPanelOpen && (
+          <div style={{
+            width: '400px',
+            flexShrink: 0,
+            backgroundColor: F.PANEL_BG,
+            borderLeft: `2px solid ${F.ORANGE}`,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: `-4px 0 12px rgba(0,0,0,0.3)`,
+            transition: 'width 0.3s ease',
+          }}>
+            {/* Panel Header */}
+            <div style={{
+              padding: '10px 14px',
+              backgroundColor: F.HEADER_BG,
+              borderBottom: `2px solid ${F.ORANGE}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={13} style={{ color: F.PURPLE }} />
+                <span style={{ fontSize: '10px', fontWeight: 700, color: F.PURPLE, letterSpacing: '0.5px' }}>
+                  AI ANALYSIS
+                </span>
+              </div>
+              <button
+                onClick={() => setAnalysisPanelOpen(false)}
+                style={{
+                  background: 'none',
+                  border: `1px solid ${F.BORDER}`,
+                  color: F.GRAY,
+                  cursor: 'pointer',
+                  borderRadius: '2px',
+                  padding: '3px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                }}
+              >
+                <X size={11} />CLOSE
+              </button>
+            </div>
+
+            {/* Panel Content */}
+            <div style={{
+              flex: 1,
+              overflow: 'auto',
+              padding: '14px',
+            }}>
+              {/* Article Info */}
+              {currentAnalyzedArticle && (
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{
+                    fontSize: '9px',
+                    color: F.GRAY,
+                    fontWeight: 700,
+                    marginBottom: '6px',
+                    letterSpacing: '0.5px',
+                  }}>
+                    ANALYZING ARTICLE
+                  </div>
+                  <div style={{
+                    padding: '10px 12px',
+                    backgroundColor: F.DARK_BG,
+                    border: `1px solid ${F.BORDER}`,
+                    borderLeft: `3px solid ${priColor(currentAnalyzedArticle.priority)}`,
+                    borderRadius: '2px',
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: F.WHITE,
+                      fontWeight: 600,
+                      lineHeight: '1.4',
+                      marginBottom: '8px',
+                    }}>
+                      {currentAnalyzedArticle.headline}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                      <span style={{
+                        fontSize: '8px',
+                        color: F.CYAN,
+                        fontWeight: 700,
+                      }}>
+                        {currentAnalyzedArticle.source}
+                      </span>
+                      {currentAnalyzedArticle.time && (
+                        <span style={{ fontSize: '8px', color: F.MUTED }}>
+                          {currentAnalyzedArticle.time}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        padding: '1px 6px',
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        backgroundColor: `${priColor(currentAnalyzedArticle.priority)}20`,
+                        color: priColor(currentAnalyzedArticle.priority),
+                        border: `1px solid ${priColor(currentAnalyzedArticle.priority)}40`,
+                      }}>
+                        {currentAnalyzedArticle.priority}
+                      </span>
+                      <span style={{
+                        padding: '1px 6px',
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        backgroundColor: `${sentColor(currentAnalyzedArticle.sentiment)}15`,
+                        color: sentColor(currentAnalyzedArticle.sentiment),
+                      }}>
+                        {currentAnalyzedArticle.sentiment}
+                      </span>
+                      <span style={{
+                        padding: '1px 6px',
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        color: F.GRAY,
+                        backgroundColor: `${F.MUTED}20`,
+                      }}>
+                        {currentAnalyzedArticle.category}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {analyzingArticle && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px 20px',
+                  gap: '12px',
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    border: `3px solid ${F.BORDER}`,
+                    borderTop: `3px solid ${F.PURPLE}`,
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                  <div style={{
+                    color: F.PURPLE,
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    letterSpacing: '0.5px',
+                  }}>
+                    ANALYZING WITH AI...
+                  </div>
+                  <div style={{
+                    color: F.GRAY,
+                    fontSize: '9px',
+                    textAlign: 'center',
+                    lineHeight: '1.5',
+                  }}>
+                    Processing article content and generating insights
+                  </div>
+                </div>
+              )}
+
+              {/* Analysis Results */}
+              {showAnalysis && analysisData && !analyzingArticle && (
+                <div>
+                  {/* Credits Info */}
+                  <div style={{
+                    padding: '8px 12px',
+                    backgroundColor: `${F.PURPLE}15`,
+                    border: `1px solid ${F.PURPLE}`,
+                    borderRadius: '2px',
+                    marginBottom: '14px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '9px',
+                  }}>
+                    <span style={{ color: F.PURPLE, fontWeight: 700, letterSpacing: '0.5px' }}>
+                      ANALYSIS COMPLETE
+                    </span>
+                    <span style={{ color: F.GRAY }}>
+                      {analysisData.credits_used} CR | {analysisData.credits_remaining.toLocaleString()} REM
+                    </span>
+                  </div>
+
+                  {/* Summary */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{
+                      fontSize: '9px',
+                      color: F.GRAY,
+                      fontWeight: 700,
+                      marginBottom: '6px',
+                      letterSpacing: '0.5px',
+                    }}>
+                      SUMMARY
+                    </div>
+                    <div style={{
+                      fontSize: '10px',
+                      color: F.WHITE,
+                      lineHeight: '1.6',
+                      padding: '10px 12px',
+                      backgroundColor: F.DARK_BG,
+                      border: `1px solid ${F.BORDER}`,
+                      borderRadius: '2px',
+                    }}>
+                      {analysisData.analysis.summary}
+                    </div>
+                  </div>
+
+                  {/* Key Points */}
+                  {analysisData.analysis.key_points.length > 0 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{
+                        fontSize: '9px',
+                        color: F.GRAY,
+                        fontWeight: 700,
+                        marginBottom: '6px',
+                        letterSpacing: '0.5px',
+                      }}>
+                        KEY POINTS
+                      </div>
+                      <div style={{
+                        padding: '10px 12px',
+                        backgroundColor: F.DARK_BG,
+                        border: `1px solid ${F.BORDER}`,
+                        borderRadius: '2px',
+                      }}>
+                        {analysisData.analysis.key_points.map((pt, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              fontSize: '9px',
+                              color: F.WHITE,
+                              paddingLeft: '10px',
+                              borderLeft: `2px solid ${F.ORANGE}`,
+                              marginBottom: i < analysisData.analysis.key_points.length - 1 ? '8px' : 0,
+                              lineHeight: '1.5',
+                            }}
+                          >
+                            {pt}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sentiment & Market Impact */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '8px',
+                    marginBottom: '14px',
+                  }}>
+                    <div style={{
+                      padding: '10px',
+                      backgroundColor: F.DARK_BG,
+                      border: `1px solid ${F.BORDER}`,
+                      borderRadius: '2px',
+                    }}>
+                      <div style={{
+                        fontSize: '9px',
+                        color: F.GRAY,
+                        fontWeight: 700,
+                        marginBottom: '6px',
+                      }}>
+                        SENTIMENT
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '9px',
+                        marginBottom: '3px',
+                      }}>
+                        <span style={{ color: F.GRAY }}>Score</span>
+                        <span style={{
+                          color: getSentimentColor(analysisData.analysis.sentiment.score),
+                          fontWeight: 700,
+                        }}>
+                          {analysisData.analysis.sentiment.score.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '9px',
+                        marginBottom: '3px',
+                      }}>
+                        <span style={{ color: F.GRAY }}>Intensity</span>
+                        <span style={{ color: F.CYAN, fontWeight: 700 }}>
+                          {analysisData.analysis.sentiment.intensity.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '9px',
+                      }}>
+                        <span style={{ color: F.GRAY }}>Confidence</span>
+                        <span style={{ color: F.GREEN, fontWeight: 700 }}>
+                          {(analysisData.analysis.sentiment.confidence * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '10px',
+                      backgroundColor: F.DARK_BG,
+                      border: `1px solid ${F.BORDER}`,
+                      borderRadius: '2px',
+                    }}>
+                      <div style={{
+                        fontSize: '9px',
+                        color: F.GRAY,
+                        fontWeight: 700,
+                        marginBottom: '6px',
+                      }}>
+                        MARKET IMPACT
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '9px',
+                        marginBottom: '3px',
+                      }}>
+                        <span style={{ color: F.GRAY }}>Urgency</span>
+                        <span style={{
+                          color: getUrgencyColor(analysisData.analysis.market_impact.urgency),
+                          fontWeight: 700,
+                        }}>
+                          {analysisData.analysis.market_impact.urgency}
+                        </span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '9px',
+                      }}>
+                        <span style={{ color: F.GRAY }}>Prediction</span>
+                        <span style={{ color: F.CYAN, fontWeight: 700 }}>
+                          {analysisData.analysis.market_impact.prediction.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Risk Signals */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{
+                      fontSize: '9px',
+                      color: F.GRAY,
+                      fontWeight: 700,
+                      marginBottom: '6px',
+                      letterSpacing: '0.5px',
+                    }}>
+                      RISK SIGNALS
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      {Object.entries(analysisData.analysis.risk_signals).map(([type, signal]) => (
+                        <div
+                          key={type}
+                          style={{
+                            padding: '8px',
+                            backgroundColor: F.DARK_BG,
+                            border: `1px solid ${F.BORDER}`,
+                            borderRadius: '2px',
+                          }}
+                        >
+                          <div style={{
+                            color: getRiskColor(signal.level),
+                            fontWeight: 700,
+                            fontSize: '9px',
+                            marginBottom: '2px',
+                          }}>
+                            {type.toUpperCase()}: {signal.level.toUpperCase()}
+                          </div>
+                          {signal.details && (
+                            <div style={{
+                              color: F.MUTED,
+                              fontSize: '8px',
+                              lineHeight: '1.3',
+                            }}>
+                              {signal.details}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Topics */}
+                  {analysisData.analysis.topics.length > 0 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{
+                        fontSize: '9px',
+                        color: F.GRAY,
+                        fontWeight: 700,
+                        marginBottom: '6px',
+                      }}>
+                        TOPICS
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {analysisData.analysis.topics.map((topic, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              padding: '2px 8px',
+                              backgroundColor: `${F.PURPLE}20`,
+                              color: F.WHITE,
+                              fontSize: '8px',
+                              fontWeight: 700,
+                              borderRadius: '2px',
+                              border: `1px solid ${F.PURPLE}`,
+                            }}
+                          >
+                            {topic}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Keywords */}
+                  {analysisData.analysis.keywords.length > 0 && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{
+                        fontSize: '9px',
+                        color: F.GRAY,
+                        fontWeight: 700,
+                        marginBottom: '6px',
+                      }}>
+                        KEYWORDS
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {analysisData.analysis.keywords.slice(0, 10).map((kw, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              padding: '2px 8px',
+                              backgroundColor: `${F.MUTED}20`,
+                              color: F.GRAY,
+                              fontSize: '8px',
+                              borderRadius: '2px',
+                              border: `1px solid ${F.MUTED}`,
+                            }}
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Organizations */}
+                  {analysisData.analysis.entities.organizations.length > 0 && (
+                    <div>
+                      <div style={{
+                        fontSize: '9px',
+                        color: F.GRAY,
+                        fontWeight: 700,
+                        marginBottom: '6px',
+                      }}>
+                        ORGANIZATIONS
+                      </div>
+                      {analysisData.analysis.entities.organizations.map((org, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: '6px 10px',
+                            backgroundColor: F.DARK_BG,
+                            border: `1px solid ${F.BORDER}`,
+                            borderRadius: '2px',
+                            marginBottom: '4px',
+                          }}
+                        >
+                          <span style={{
+                            color: F.WHITE,
+                            fontWeight: 700,
+                            fontSize: '9px',
+                          }}>
+                            {org.name}
+                          </span>
+                          <span style={{
+                            color: F.GRAY,
+                            fontSize: '9px',
+                            marginLeft: '6px',
+                          }}>
+                            {org.sector} {org.ticker ? `| ${org.ticker}` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Analysis Yet */}
+              {!analyzingArticle && !showAnalysis && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px 20px',
+                  gap: '12px',
+                  color: F.MUTED,
+                }}>
+                  <Zap size={32} style={{ opacity: 0.3 }} />
+                  <div style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    letterSpacing: '0.5px',
+                  }}>
+                    NO ANALYSIS YET
+                  </div>
+                  <div style={{
+                    fontSize: '9px',
+                    textAlign: 'center',
+                    lineHeight: '1.5',
+                  }}>
+                    Click "ANALYZE" on any article to see AI-powered insights
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── STATUS BAR ── */}

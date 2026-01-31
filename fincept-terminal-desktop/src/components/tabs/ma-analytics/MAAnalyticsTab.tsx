@@ -1,215 +1,185 @@
 /**
- * M&A Analytics Tab - Bloomberg FA Replacement
+ * M&A Analytics Tab - Streamlined & Unified
  *
- * Complete M&A and Financial Advisory System
- * Three-panel terminal layout following Fincept design system
+ * Clean, professional M&A toolkit with 3 focused sections:
+ * 1. Valuation Toolkit - DCF, LBO, Trading Comps
+ * 2. Merger Analysis - Accretion/Dilution, Synergies, Deal Structure
+ * 3. Deal Database - Track and save deals
  */
 
 import React, { useState } from 'react';
-import {
-  Building2,
-  TrendingUp,
-  Calculator,
-  BarChart3,
-  Rocket,
-  FileText,
-  GitMerge,
-  Zap,
-  Activity,
-  Target,
-  Database,
-} from 'lucide-react';
+import { Calculator, GitMerge, Database, TrendingUp, Building2, Zap } from 'lucide-react';
+import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../portfolio-tab/finceptStyles';
 
-// Import Fincept styles
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES } from '../portfolio-tab/finceptStyles';
+// Import new unified panels
+import { ValuationToolkit } from './unified/ValuationToolkit';
+import { MergerAnalysis } from './unified/MergerAnalysis';
+import { DealDatabase } from './unified/DealDatabase';
 
-// Import tab components
-import { DealDatabasePanel } from './panels/DealDatabasePanel';
-import { ValuationPanel } from './panels/ValuationPanel';
-import { MergerModelPanel } from './panels/MergerModelPanel';
-import { LBOModelPanel } from './panels/LBOModelPanel';
-import { StartupValuationPanel } from './panels/StartupValuationPanel';
-import { DealStructurePanel } from './panels/DealStructurePanel';
-import { SynergiesPanel } from './panels/SynergiesPanel';
-import { FairnessOpinionPanel } from './panels/FairnessOpinionPanel';
-import { IndustryMetricsPanel } from './panels/IndustryMetricsPanel';
-import { AdvancedAnalyticsPanel } from './panels/AdvancedAnalyticsPanel';
+type MainTab = 'valuation' | 'merger' | 'database';
 
-type AnalysisModule =
-  | 'deal_database'
-  | 'valuation'
-  | 'merger_model'
-  | 'lbo'
-  | 'startup'
-  | 'deal_structure'
-  | 'synergies'
-  | 'fairness'
-  | 'industry_metrics'
-  | 'advanced';
+const MAAnalyticsTabNew: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<MainTab>('valuation');
 
-const MODULES = [
-  { id: 'deal_database' as const, label: 'DEAL DATABASE', icon: Database },
-  { id: 'valuation' as const, label: 'VALUATION', icon: TrendingUp },
-  { id: 'merger_model' as const, label: 'MERGER MODEL', icon: GitMerge },
-  { id: 'lbo' as const, label: 'LBO MODEL', icon: Building2 },
-  { id: 'startup' as const, label: 'STARTUP', icon: Rocket },
-  { id: 'deal_structure' as const, label: 'DEAL STRUCTURE', icon: FileText },
-  { id: 'synergies' as const, label: 'SYNERGIES', icon: Zap },
-  { id: 'fairness' as const, label: 'FAIRNESS OPINION', icon: Target },
-  { id: 'industry_metrics' as const, label: 'INDUSTRY METRICS', icon: BarChart3 },
-  { id: 'advanced' as const, label: 'ADVANCED', icon: Activity },
-];
+  const TABS = [
+    {
+      id: 'valuation' as const,
+      label: 'VALUATION TOOLKIT',
+      icon: Calculator,
+      description: 'DCF, LBO, Trading Comps'
+    },
+    {
+      id: 'merger' as const,
+      label: 'MERGER ANALYSIS',
+      icon: GitMerge,
+      description: 'Accretion/Dilution, Synergies'
+    },
+    {
+      id: 'database' as const,
+      label: 'DEAL DATABASE',
+      icon: Database,
+      description: 'Track & Save Deals'
+    },
+  ];
 
-const MAAnalyticsTab: React.FC = () => {
-  const [activeModule, setActiveModule] = useState<AnalysisModule>('deal_database');
-  const [selectedDeal, setSelectedDeal] = useState<any>(null);
-
-  const renderActivePanel = () => {
-    switch (activeModule) {
-      case 'deal_database':
-        return <DealDatabasePanel onSelectDeal={setSelectedDeal} />;
+  const renderContent = () => {
+    switch (activeTab) {
       case 'valuation':
-        return <ValuationPanel selectedDeal={selectedDeal} />;
-      case 'merger_model':
-        return <MergerModelPanel selectedDeal={selectedDeal} />;
-      case 'lbo':
-        return <LBOModelPanel selectedDeal={selectedDeal} />;
-      case 'startup':
-        return <StartupValuationPanel />;
-      case 'deal_structure':
-        return <DealStructurePanel selectedDeal={selectedDeal} />;
-      case 'synergies':
-        return <SynergiesPanel selectedDeal={selectedDeal} />;
-      case 'fairness':
-        return <FairnessOpinionPanel selectedDeal={selectedDeal} />;
-      case 'industry_metrics':
-        return <IndustryMetricsPanel />;
-      case 'advanced':
-        return <AdvancedAnalyticsPanel selectedDeal={selectedDeal} />;
+        return <ValuationToolkit />;
+      case 'merger':
+        return <MergerAnalysis />;
+      case 'database':
+        return <DealDatabase />;
       default:
         return null;
     }
   };
 
   return (
-    <div
-      style={{
-        ...COMMON_STYLES.container,
-        fontFamily: TYPOGRAPHY.MONO,
-      }}
-    >
-      {/* Top Navigation Bar */}
-      <div
-        style={{
-          ...COMMON_STYLES.header,
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      backgroundColor: FINCEPT.DARK_BG,
+      fontFamily: TYPOGRAPHY.MONO,
+    }}>
+      {/* Header */}
+      <div style={{
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+        padding: SPACING.DEFAULT,
+      }}>
+        <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: SPACING.MEDIUM,
-        }}
-      >
-        {/* Left Section - Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
+          marginBottom: SPACING.DEFAULT,
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
-            <Building2 size={16} color={FINCEPT.ORANGE} />
-            <span
-              style={{
-                color: FINCEPT.ORANGE,
-                fontWeight: TYPOGRAPHY.BOLD,
-                fontSize: TYPOGRAPHY.SUBHEADING,
-                letterSpacing: TYPOGRAPHY.WIDE,
-                textTransform: 'uppercase',
-              }}
-            >
+            <Building2 size={20} color={FINCEPT.ORANGE} />
+            <span style={{
+              color: FINCEPT.ORANGE,
+              fontWeight: TYPOGRAPHY.BOLD,
+              fontSize: TYPOGRAPHY.HEADING,
+              letterSpacing: TYPOGRAPHY.WIDE,
+            }}>
               M&A ANALYTICS
             </span>
           </div>
-
-          <div style={COMMON_STYLES.verticalDivider} />
-
-          {/* Module Selector Tabs */}
-          <div style={{ display: 'flex', gap: SPACING.TINY }}>
-            {MODULES.map((module) => {
-              const Icon = module.icon;
-              const isActive = activeModule === module.id;
-              return (
-                <button
-                  key={module.id}
-                  onClick={() => setActiveModule(module.id)}
-                  style={{
-                    ...COMMON_STYLES.tabButton(isActive),
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: SPACING.SMALL,
-                  }}
-                >
-                  <Icon size={12} />
-                  {module.label}
-                </button>
-              );
-            })}
+          <div style={{
+            fontSize: TYPOGRAPHY.TINY,
+            color: FINCEPT.GRAY,
+            letterSpacing: TYPOGRAPHY.WIDE,
+          }}>
+            PROFESSIONAL TOOLKIT
           </div>
         </div>
 
-        {/* Right Section - Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
-          <span
-            style={{
-              fontSize: TYPOGRAPHY.TINY,
-              color: FINCEPT.GRAY,
-              letterSpacing: TYPOGRAPHY.WIDE,
-            }}
-          >
-            BLOOMBERG FA REPLACEMENT
-          </span>
+        {/* Tab Navigation */}
+        <div style={{ display: 'flex', gap: SPACING.SMALL }}>
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  flex: 1,
+                  padding: SPACING.DEFAULT,
+                  backgroundColor: isActive ? FINCEPT.PANEL_BG : 'transparent',
+                  border: `1px solid ${isActive ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                  borderRadius: '4px',
+                  color: isActive ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: SPACING.TINY,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = FINCEPT.GRAY;
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+                  <Icon size={14} />
+                  <span style={{
+                    fontSize: TYPOGRAPHY.SMALL,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    letterSpacing: TYPOGRAPHY.WIDE,
+                  }}>
+                    {tab.label}
+                  </span>
+                </div>
+                <span style={{
+                  fontSize: TYPOGRAPHY.TINY,
+                  color: FINCEPT.MUTED,
+                }}>
+                  {tab.description}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {renderActivePanel()}
+      {/* Main Content */}
+      <div style={{
+        flex: 1,
+        overflow: 'hidden',
+      }}>
+        {renderContent()}
       </div>
 
       {/* Status Bar */}
-      <div
-        style={{
-          backgroundColor: FINCEPT.HEADER_BG,
-          borderTop: `1px solid ${FINCEPT.BORDER}`,
-          padding: `${SPACING.SMALL} ${SPACING.LARGE}`,
-          fontSize: TYPOGRAPHY.TINY,
-          color: FINCEPT.GRAY,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', gap: SPACING.LARGE }}>
-          <span>
-            MODULE: <span style={{ color: FINCEPT.ORANGE }}>{MODULES.find((m) => m.id === activeModule)?.label}</span>
+      <div style={{
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+        fontSize: TYPOGRAPHY.TINY,
+        color: FINCEPT.GRAY,
+        display: 'flex',
+        justifyContent: 'space-between',
+      }}>
+        <span>
+          ACTIVE: <span style={{ color: FINCEPT.ORANGE }}>
+            {TABS.find(t => t.id === activeTab)?.label}
           </span>
-          {selectedDeal && (
-            <span>
-              SELECTED DEAL:{' '}
-              <span style={{ color: FINCEPT.CYAN }}>
-                {selectedDeal.acquirer_name} + {selectedDeal.target_name}
-              </span>
-            </span>
-          )}
-        </div>
-        <div>
-          <span style={{ color: FINCEPT.MUTED }}>TERMINAL v3.2.1</span>
-        </div>
+        </span>
+        <span style={{ color: FINCEPT.MUTED }}>FINCEPT TERMINAL v3.2.1</span>
       </div>
     </div>
   );
 };
 
-export default MAAnalyticsTab;
+export default MAAnalyticsTabNew;

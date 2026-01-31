@@ -341,3 +341,54 @@ if __name__ == '__main__':
     print(f"  5th Percentile: {acc['percentile_5']:+.2f}%")
     print(f"  95th Percentile: {acc['percentile_95']:+.2f}%")
     print(f"\nProbability Accretive: {accretion['probability_accretive']:.1f}%")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "monte_carlo":
+            if len(sys.argv) < 9:
+                raise ValueError("All parameters required: base_valuation, revenue_growth_mean, revenue_growth_std, margin_mean, margin_std, discount_rate, simulations")
+
+            base_valuation = float(sys.argv[2])
+            revenue_growth_mean = float(sys.argv[3])
+            revenue_growth_std = float(sys.argv[4])
+            margin_mean = float(sys.argv[5])
+            margin_std = float(sys.argv[6])
+            discount_rate = float(sys.argv[7])
+            simulations = int(sys.argv[8])
+
+            mc = MonteCarloValuation(num_simulations=simulations)
+
+            # Run synergy simulation as example
+            analysis = mc.simulate_synergies(
+                base_revenue_synergy=base_valuation * revenue_growth_mean,
+                base_cost_synergy=base_valuation * margin_mean,
+                revenue_std_dev_pct=revenue_growth_std,
+                cost_std_dev_pct=margin_std
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

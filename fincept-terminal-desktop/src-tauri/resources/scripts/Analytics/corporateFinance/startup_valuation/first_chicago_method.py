@@ -185,43 +185,36 @@ class FirstChicagoMethod:
 
         return max(0, min(1, breakeven_prob))
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "first_chicago":
+            if len(sys.argv) < 3:
+                raise ValueError("Scenarios required")
+            scenarios = json.loads(sys.argv[2])
+
+            fc = FirstChicagoMethod()
+            valuation = fc.multi_scenario_valuation(scenarios)
+
+            result = {"success": True, "data": valuation}
+            print(json.dumps(result))
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    fc = FirstChicagoMethod()
-
-    valuation = fc.three_scenario_valuation(
-        best_case={
-            'exit_value': 500_000_000,
-            'exit_year': 4,
-            'description': 'IPO or strategic acquisition at premium'
-        },
-        base_case={
-            'exit_value': 150_000_000,
-            'exit_year': 5,
-            'description': 'Moderate success, trade sale'
-        },
-        worst_case={
-            'exit_value': 20_000_000,
-            'exit_year': 6,
-            'description': 'Acqui-hire or distressed sale'
-        }
-    )
-
-    print("=== FIRST CHICAGO METHOD VALUATION ===\n")
-    print(f"Expected Valuation: ${valuation['expected_present_value']:,.0f}")
-    print(f"Discount Rate: {valuation['discount_rate']:.0f}%\n")
-
-    print("Scenario Analysis:")
-    for scenario in valuation['scenarios']:
-        print(f"\n{scenario['name']} ({scenario['probability']:.0f}% probability):")
-        print(f"  Exit Value (Year {scenario['exit_year']}): ${scenario['exit_value']:,.0f}")
-        print(f"  Present Value: ${scenario['present_value']:,.0f}")
-        print(f"  Weighted PV: ${scenario['weighted_present_value']:,.0f}")
-
-    scenarios = [
-        fc.create_scenario('Best', 0.20, 4, 500_000_000),
-        fc.create_scenario('Base', 0.50, 5, 150_000_000),
-        fc.create_scenario('Worst', 0.30, 6, 20_000_000)
-    ]
-
-    breakeven = fc.calculate_breakeven_probability(scenarios, 15_000_000, success_scenario_index=0)
-    print(f"\nBreakeven Best Case Probability: {breakeven * 100:.1f}%")
+    main()

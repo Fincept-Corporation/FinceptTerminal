@@ -902,8 +902,8 @@ pub fn create_custom_index(index: &CustomIndex) -> Result<()> {
     let conn = pool.get()?;
 
     conn.execute(
-        "INSERT INTO custom_indices (id, name, description, calculation_method, base_value, base_date, divisor, current_value, previous_close, cap_weight, currency, portfolio_id, is_active, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        "INSERT INTO custom_indices (id, name, description, calculation_method, base_value, base_date, historical_start_date, divisor, current_value, previous_close, cap_weight, currency, portfolio_id, is_active, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
         params![
             index.id,
             index.name,
@@ -911,6 +911,7 @@ pub fn create_custom_index(index: &CustomIndex) -> Result<()> {
             index.calculation_method,
             index.base_value,
             index.base_date,
+            index.historical_start_date,
             index.divisor,
             index.current_value,
             index.previous_close,
@@ -929,7 +930,7 @@ pub fn get_all_custom_indices() -> Result<Vec<CustomIndex>> {
     let conn = pool.get()?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, name, description, calculation_method, base_value, base_date, divisor, current_value, previous_close, cap_weight, currency, portfolio_id, is_active, created_at, updated_at
+        "SELECT id, name, description, calculation_method, base_value, base_date, historical_start_date, divisor, current_value, previous_close, cap_weight, currency, portfolio_id, is_active, created_at, updated_at
          FROM custom_indices WHERE is_active = 1 ORDER BY created_at DESC"
     )?;
 
@@ -942,15 +943,16 @@ pub fn get_all_custom_indices() -> Result<Vec<CustomIndex>> {
                 calculation_method: row.get(3)?,
                 base_value: row.get(4)?,
                 base_date: row.get(5)?,
-                divisor: row.get(6)?,
-                current_value: row.get(7)?,
-                previous_close: row.get(8)?,
-                cap_weight: row.get(9)?,
-                currency: row.get(10)?,
-                portfolio_id: row.get(11)?,
-                is_active: row.get::<_, i32>(12)? != 0,
-                created_at: row.get(13)?,
-                updated_at: row.get(14)?,
+                historical_start_date: row.get(6)?,
+                divisor: row.get(7)?,
+                current_value: row.get(8)?,
+                previous_close: row.get(9)?,
+                cap_weight: row.get(10)?,
+                currency: row.get(11)?,
+                portfolio_id: row.get(12)?,
+                is_active: row.get::<_, i32>(13)? != 0,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
             })
         })?
         .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -964,7 +966,7 @@ pub fn get_custom_index_by_id(index_id: &str) -> Result<Option<CustomIndex>> {
 
     let result = conn
         .query_row(
-            "SELECT id, name, description, calculation_method, base_value, base_date, divisor, current_value, previous_close, cap_weight, currency, portfolio_id, is_active, created_at, updated_at
+            "SELECT id, name, description, calculation_method, base_value, base_date, historical_start_date, divisor, current_value, previous_close, cap_weight, currency, portfolio_id, is_active, created_at, updated_at
              FROM custom_indices WHERE id = ?1",
             params![index_id],
             |row| {
@@ -975,15 +977,16 @@ pub fn get_custom_index_by_id(index_id: &str) -> Result<Option<CustomIndex>> {
                     calculation_method: row.get(3)?,
                     base_value: row.get(4)?,
                     base_date: row.get(5)?,
-                    divisor: row.get(6)?,
-                    current_value: row.get(7)?,
-                    previous_close: row.get(8)?,
-                    cap_weight: row.get(9)?,
-                    currency: row.get(10)?,
-                    portfolio_id: row.get(11)?,
-                    is_active: row.get::<_, i32>(12)? != 0,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
+                    historical_start_date: row.get(6)?,
+                    divisor: row.get(7)?,
+                    current_value: row.get(8)?,
+                    previous_close: row.get(9)?,
+                    cap_weight: row.get(10)?,
+                    currency: row.get(11)?,
+                    portfolio_id: row.get(12)?,
+                    is_active: row.get::<_, i32>(13)? != 0,
+                    created_at: row.get(14)?,
+                    updated_at: row.get(15)?,
                 })
             },
         )

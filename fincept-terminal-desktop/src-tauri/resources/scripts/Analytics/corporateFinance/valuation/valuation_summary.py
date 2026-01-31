@@ -7,10 +7,15 @@ from datetime import datetime
 scripts_path = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(scripts_path))
 
-from .precedent_transactions import PrecedentTransactionAnalyzer
-from .trading_comps import TradingCompsAnalyzer
-from .football_field import FootballFieldChart, ValuationRange
-from ..deal_database.database_schema import MADatabase
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.valuation.precedent_transactions import PrecedentTransactionAnalyzer
+from corporateFinance.valuation.trading_comps import TradingCompsAnalyzer
+from corporateFinance.valuation.football_field import FootballFieldChart, ValuationRange
+from corporateFinance.deal_database.database_schema import MADatabase
 
 class ValuationSummary:
     def __init__(self, db: Optional[MADatabase] = None):
@@ -263,31 +268,80 @@ class ValuationSummary:
 
         return observations
 
-if __name__ == '__main__':
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {
+            "success": False,
+            "error": "No command specified. Usage: valuation_summary.py <command> [args...]"
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
     summary = ValuationSummary()
 
-    target_metrics = {
-        'company_name': 'Target Corp',
-        'industry': 'Technology',
-        'revenue': 1_000_000_000,
-        'ebitda': 250_000_000,
-        'ebit': 200_000_000,
-        'net_income': 150_000_000,
-        'current_market_cap': 4_000_000_000,
-        'dcf_valuation': {
-            'valuation_range': {
-                'low': 4_500_000_000,
-                'base': 5_000_000_000,
-                'high': 5_500_000_000
+    try:
+        if command == "comprehensive":
+            # comprehensive_valuation(target_metrics)
+            if len(sys.argv) < 3:
+                raise ValueError("Target metrics JSON required")
+
+            target_metrics = json.loads(sys.argv[2])
+            valuation_result = summary.comprehensive_valuation(target_metrics)
+
+            result = {
+                "success": True,
+                "data": valuation_result
             }
+            print(json.dumps(result))
+
+        elif command == "executive_summary":
+            # generate_executive_summary(valuation_results)
+            if len(sys.argv) < 3:
+                raise ValueError("Valuation results JSON required")
+
+            valuation_results = json.loads(sys.argv[2])
+            exec_summary = summary.generate_executive_summary(valuation_results)
+
+            result = {
+                "success": True,
+                "data": exec_summary
+            }
+            print(json.dumps(result))
+
+        elif command == "football_field":
+            # create_football_field_chart(valuation_results)
+            if len(sys.argv) < 3:
+                raise ValueError("Valuation results JSON required")
+
+            valuation_results = json.loads(sys.argv[2])
+            chart_data = summary.create_football_field_chart(valuation_results)
+
+            result = {
+                "success": True,
+                "data": chart_data
+            }
+            print(json.dumps(result))
+
+        else:
+            result = {
+                "success": False,
+                "error": f"Unknown command: {command}. Available: comprehensive, executive_summary, football_field"
+            }
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": str(e),
+            "command": command
         }
-    }
+        print(json.dumps(result))
+        sys.exit(1)
 
-    result = summary.comprehensive_valuation(target_metrics)
-    exec_summary = summary.generate_executive_summary(result)
-
-    print(f"\nValuation Range: ${exec_summary['valuation_range']['low']/1e9:.2f}B - ${exec_summary['valuation_range']['high']/1e9:.2f}B")
-    print(f"Midpoint: ${exec_summary['valuation_range']['midpoint']/1e9:.2f}B")
-
-    if 'implied_premium' in exec_summary:
-        print(f"Implied Premium: {exec_summary['implied_premium']['percentage']:.1f}%")
+if __name__ == '__main__':
+    main()

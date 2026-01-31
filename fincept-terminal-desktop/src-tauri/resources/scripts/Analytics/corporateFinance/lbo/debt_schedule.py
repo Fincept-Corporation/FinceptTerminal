@@ -1,6 +1,14 @@
 """Debt Schedule and Amortization Calculator"""
+import sys
+from pathlib import Path
 from typing import Dict, Any, List
-from .capital_structure import DebtTranche
+
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.lbo.capital_structure import DebtTranche
 
 class DebtSchedule:
     """Calculate debt amortization schedule"""
@@ -127,23 +135,60 @@ class DebtSchedule:
             'total_interest_paid': total_interest_paid
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified. Usage: debt_schedule.py <command> [args...]"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "debt_schedule":
+            if len(sys.argv) < 4:
+                raise ValueError("Debt structure, cash flows, and sweep percentage required")
+            debt_structure = json.loads(sys.argv[2])
+            cash_flows = json.loads(sys.argv[3])
+            sweep_percentage = float(sys.argv[4]) if len(sys.argv) > 4 else 0.5
+
+            from corporateFinance.lbo.capital_structure import DebtTranche
+
+            tranches = []
+            for t in debt_structure.get('tranches', []):
+                tranche = DebtTranche(
+                    t.get('name', ''),
+                    t.get('principal', 0),
+                    t.get('interest_rate', 0),
+                    t.get('maturity', 0),
+                    t.get('tranche_type', ''),
+                    t.get('amortization_rate', 0),
+                    t.get('sweep_priority', 0)
+                )
+                tranches.append(tranche)
+
+            debt_schedule = DebtSchedule(tranches)
+            schedule = debt_schedule.calculate_annual_schedule(
+                cash_flows.get('fcf_projection', []),
+                years=len(cash_flows.get('fcf_projection', [])),
+                sweep_percentage=sweep_percentage
+            )
+            summary = debt_schedule.summarize_debt_paydown(schedule)
+
+            result = {"success": True, "data": {"schedule": schedule, "summary": summary}}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}. Available: debt_schedule"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e), "command": command}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    from capital_structure import DebtTranche
-
-    tranches = [
-        DebtTranche('Revolver', 250_000_000, 0.04, 5, 'Revolver', 0, 0),
-        DebtTranche('Term Loan A', 1_000_000_000, 0.045, 5, 'Term Loan A', 0.20, 0.5),
-        DebtTranche('Term Loan B', 2_500_000_000, 0.055, 7, 'Term Loan B', 0.01, 0.75),
-    ]
-
-    fcf_projection = [400_000_000, 450_000_000, 500_000_000, 550_000_000,
-                     600_000_000, 650_000_000, 700_000_000]
-
-    debt_schedule = DebtSchedule(tranches)
-    schedule = debt_schedule.calculate_annual_schedule(fcf_projection, years=7)
-
-    summary = debt_schedule.summarize_debt_paydown(schedule)
-    print(f"Initial Debt: ${summary['initial_debt']:,.0f}")
-    print(f"Final Debt: ${summary['final_debt']:,.0f}")
-    print(f"Paydown: ${summary['total_paydown']:,.0f} ({summary['paydown_percentage']:.1f}%)")
-    print(f"Total Interest: ${summary['total_interest_paid']:,.0f}")
+    main()

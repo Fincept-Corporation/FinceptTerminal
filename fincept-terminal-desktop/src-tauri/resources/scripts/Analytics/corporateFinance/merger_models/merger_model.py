@@ -1,9 +1,17 @@
 """Complete Merger Model - Accretion/Dilution Analysis"""
+import sys
+from pathlib import Path
 from typing import Dict, Any, Optional
-from .sources_uses import SourcesUsesBuilder
-from .pro_forma_builder import ProFormaBuilder, CompanyFinancials
-from .contribution_analysis import ContributionAnalyzer
-from .sensitivity_analysis import SensitivityAnalyzer
+
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.merger_models.sources_uses import SourcesUsesBuilder
+from corporateFinance.merger_models.pro_forma_builder import ProFormaBuilder, CompanyFinancials
+from corporateFinance.merger_models.contribution_analysis import ContributionAnalyzer
+from corporateFinance.merger_models.sensitivity_analysis import SensitivityAnalyzer
 
 class MergerModel:
     """Complete M&A merger model with accretion/dilution analysis"""
@@ -201,52 +209,55 @@ class MergerModel:
 
         return summary
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {
+            "success": False,
+            "error": "No command specified. Usage: merger_model.py <command> [args...]"
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "build":
+            # build_merger_model(acquirer_data, target_data, deal_terms)
+            if len(sys.argv) < 5:
+                raise ValueError("Acquirer data, target data, and deal terms required")
+
+            acquirer = json.loads(sys.argv[2])
+            target = json.loads(sys.argv[3])
+            deal_terms = json.loads(sys.argv[4])
+
+            model = MergerModel(acquirer, target, deal_terms)
+            results = model.build_complete_model()
+
+            result = {
+                "success": True,
+                "data": results
+            }
+            print(json.dumps(result))
+
+        else:
+            result = {
+                "success": False,
+                "error": f"Unknown command: {command}. Available: build"
+            }
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": str(e),
+            "command": command
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    acquirer = {
-        'company_name': 'Acquirer Corp',
-        'revenue': 10_000_000_000,
-        'ebitda': 1_500_000_000,
-        'net_income': 869_000_000,
-        'shares_outstanding': 500_000_000,
-        'eps': 1.738,
-        'cash': 2_000_000_000,
-        'debt': 3_000_000_000
-    }
-
-    target = {
-        'company_name': 'Target Inc',
-        'revenue': 2_000_000_000,
-        'ebitda': 300_000_000,
-        'net_income': 173_800_000,
-        'shares_outstanding': 100_000_000,
-        'eps': 1.738,
-        'cash': 300_000_000,
-        'debt': 500_000_000
-    }
-
-    deal_terms = {
-        'purchase_price': 3_000_000_000,
-        'cash_consideration': 1_500_000_000,
-        'stock_consideration': 1_500_000_000,
-        'acquirer_stock_price': 50.0,
-        'synergies': 150_000_000,
-        'integration_costs': 75_000_000,
-        'debt_interest_rate': 0.045
-    }
-
-    model = MergerModel(acquirer, target, deal_terms)
-    results = model.build_complete_model()
-
-    print("=== MERGER MODEL RESULTS ===\n")
-    print(f"Purchase Price: ${results['deal_overview']['purchase_price']:,.0f}")
-    print(f"Payment Mix: {results['deal_overview']['payment_mix']['cash_pct']:.0f}% Cash / "
-          f"{results['deal_overview']['payment_mix']['stock_pct']:.0f}% Stock\n")
-
-    ad = results['accretion_dilution']
-    print(f"EPS Impact: {ad['accretion_dilution_pct']:.2f}% {ad['status']}")
-    print(f"  Standalone EPS: ${ad['standalone_eps']:.2f}")
-    print(f"  Pro Forma EPS: ${ad['pro_forma_eps']:.2f}\n")
-
-    print(f"Breakeven Synergies: ${results['breakeven_synergies']:,.0f}")
-    print(f"Assumed Synergies: ${deal_terms['synergies']:,.0f}")
-    print(f"Cushion: ${deal_terms['synergies'] - results['breakeven_synergies']:,.0f}")
+    main()

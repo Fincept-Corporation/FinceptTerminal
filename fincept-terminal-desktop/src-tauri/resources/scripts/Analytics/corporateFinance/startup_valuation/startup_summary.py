@@ -1,10 +1,18 @@
 """Comprehensive Startup Valuation Summary"""
+import sys
+from pathlib import Path
 from typing import Dict, Any, List, Optional
-from .berkus_method import BerkusMethod, BerkusFactor
-from .scorecard_method import ScorecardMethod
-from .vc_method import VCMethod
-from .first_chicago_method import FirstChicagoMethod, Scenario
-from .risk_factor_summation import RiskFactorSummation, RiskFactor
+
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.startup_valuation.berkus_method import BerkusMethod, BerkusFactor
+from corporateFinance.startup_valuation.scorecard_method import ScorecardMethod
+from corporateFinance.startup_valuation.vc_method import VCMethod
+from corporateFinance.startup_valuation.first_chicago_method import FirstChicagoMethod, Scenario
+from corporateFinance.startup_valuation.risk_factor_summation import RiskFactorSummation, RiskFactor
 
 class StartupValuationSummary:
     """Aggregate all startup valuation methods into comprehensive summary"""
@@ -210,54 +218,61 @@ class StartupValuationSummary:
             first_chicago_scenarios=scenarios
         )
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "quick_pre_revenue":
+            if len(sys.argv) < 6:
+                raise ValueError("Startup name and quality scores required")
+            startup_name = sys.argv[2] if len(sys.argv) > 2 else "Startup"
+            idea_quality = int(sys.argv[3]) if len(sys.argv) > 3 else 50
+            team_quality = int(sys.argv[4]) if len(sys.argv) > 4 else 50
+            prototype_status = int(sys.argv[5]) if len(sys.argv) > 5 else 50
+            market_size = int(sys.argv[6]) if len(sys.argv) > 6 else 50
+
+            startup = StartupValuationSummary(startup_name)
+            valuation = startup.quick_pre_revenue_valuation(
+                idea_quality=idea_quality,
+                team_quality=team_quality,
+                prototype_status=prototype_status,
+                market_size=market_size
+            )
+
+            result = {"success": True, "data": valuation}
+            print(json.dumps(result))
+
+        elif command == "comprehensive":
+            if len(sys.argv) < 3:
+                raise ValueError("Startup name and inputs required")
+            startup_name = sys.argv[2]
+            inputs = {}
+            if len(sys.argv) > 3:
+                inputs = json.loads(sys.argv[3])
+
+            startup = StartupValuationSummary(startup_name)
+            valuation = startup.comprehensive_valuation(**inputs)
+
+            result = {"success": True, "data": valuation}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    startup = StartupValuationSummary("TechStartup Inc")
-
-    # Pre-revenue example
-    pre_revenue = startup.quick_pre_revenue_valuation(
-        idea_quality=85,
-        team_quality=90,
-        prototype_status=70,
-        market_size=80
-    )
-
-    print("=== PRE-REVENUE STARTUP VALUATION ===\n")
-    print(f"Startup: {pre_revenue['startup_name']}")
-    print(f"Methods Used: {pre_revenue['num_methods']}\n")
-
-    print("Valuation Summary:")
-    summary = pre_revenue['valuation_summary']
-    print(f"  Min: ${summary['min']:,.0f}")
-    print(f"  Max: ${summary['max']:,.0f}")
-    print(f"  Weighted Average: ${summary['weighted_average']:,.0f}")
-    print(f"  Median: ${summary['median']:,.0f}")
-
-    print(f"\nRecommendation:")
-    rec = pre_revenue['recommendation']
-    print(f"  Suggested Valuation: ${rec['suggested_valuation']:,.0f}")
-    print(f"  Range: {rec['valuation_range']}")
-    print(f"  Confidence: {rec['confidence'].title()}")
-
-    print("\n\nValuations by Method:")
-    for method, data in pre_revenue['valuations_by_method'].items():
-        print(f"  {data['method']}: ${data['valuation']:,.0f}")
-
-    # Series A example
-    series_a = startup.series_a_valuation(
-        revenue=5_000_000,
-        revenue_growth=1.0,
-        exit_year=5,
-        exit_multiple=8.0,
-        investment_amount=15_000_000
-    )
-
-    print("\n\n=== SERIES A VALUATION ===")
-    print(f"Methods Used: {series_a['num_methods']}\n")
-
-    summary_a = series_a['valuation_summary']
-    print("Valuation Summary:")
-    print(f"  Weighted Average: ${summary_a['weighted_average']:,.0f}")
-    print(f"  Range: ${summary_a['min']:,.0f} - ${summary_a['max']:,.0f}")
-
-    rec_a = series_a['recommendation']
-    print(f"\nSuggested Pre-Money: ${rec_a['suggested_valuation']:,.0f}")
+    main()

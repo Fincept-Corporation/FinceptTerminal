@@ -287,54 +287,47 @@ class CVRValuation:
             'risk_reward_ratio': upside_scenario / downside_risk if downside_risk > 0 else float('inf')
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "cvr":
+            if len(sys.argv) < 5:
+                raise ValueError("Payment if approved, approval probability, and expected decision years required")
+
+            payment_if_approved = float(sys.argv[2])
+            approval_probability = float(sys.argv[3])
+            expected_decision_years = float(sys.argv[4])
+
+            cvr = CVRValuation(discount_rate=0.12)
+
+            analysis = cvr.value_regulatory_cvr(
+                payment_if_approved=payment_if_approved,
+                approval_probability=approval_probability,
+                expected_decision_years=expected_decision_years
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    cvr = CVRValuation(discount_rate=0.12)
-
-    regulatory = cvr.value_regulatory_cvr(
-        payment_if_approved=100_000_000,
-        approval_probability=0.65,
-        expected_decision_years=2.0,
-        appeal_possible=True,
-        appeal_probability=0.30,
-        appeal_delay_years=1.5
-    )
-
-    print("=== REGULATORY CVR VALUATION ===\n")
-    print(f"Payment if Approved: ${regulatory['payment_if_approved']:,.0f}")
-    print(f"Base Approval Probability: {regulatory['base_approval_probability']:.1f}%")
-    print(f"Expected Decision: {regulatory['expected_decision_years']:.1f} years")
-    print(f"\nBase Expected Value: ${regulatory['base_expected_value']:,.0f}")
-    print(f"Appeal Expected Value: ${regulatory['appeal_scenario']['appeal_expected_value']:,.0f}")
-    print(f"Total Expected Value: ${regulatory['total_expected_value']:,.0f}")
-    print(f"Blended Success Probability: {regulatory['blended_success_probability']:.1f}%")
-
-    triggers = [
-        CVRTrigger(CVRType.MILESTONE, "FDA Approval", 50_000_000, 0.70, 2.0),
-        CVRTrigger(CVRType.MILESTONE, "EU Approval", 30_000_000, 0.60, 2.5),
-        CVRTrigger(CVRType.MILESTONE, "Product Launch", 20_000_000, 0.80, 3.0)
-    ]
-
-    milestone = cvr.value_milestone_cvr(triggers)
-
-    print("\n\n=== MILESTONE CVR VALUATION ===")
-    print(f"Total Face Value: ${milestone['total_face_value']:,.0f}")
-    print(f"Total Expected Value: ${milestone['total_expected_value']:,.0f}")
-    print(f"\nMilestones:")
-    for trigger in milestone['triggers']:
-        print(f"\n  {trigger['description']}:")
-        print(f"    Payment: ${trigger['payment_if_triggered']:,.0f}")
-        print(f"    Probability: {trigger['probability']:.0f}%")
-        print(f"    Expected Value: ${trigger['expected_value']:,.0f}")
-
-    comparison = cvr.compare_cvr_vs_cash(
-        cash_alternative=40_000_000,
-        cvr_expected_value=milestone['total_expected_value'],
-        cvr_max_value=milestone['total_face_value']
-    )
-
-    print("\n\n=== CVR vs CASH COMPARISON ===")
-    print(f"Cash Alternative: ${comparison['cash_alternative']:,.0f}")
-    print(f"CVR Expected Value: ${comparison['cvr_expected_value']:,.0f}")
-    print(f"Cash Preferred: {comparison['cash_preferred']}")
-    print(f"Upside Potential: ${comparison['upside_potential']:,.0f}")
-    print(f"Downside Risk: ${comparison['downside_risk']:,.0f}")
+    main()

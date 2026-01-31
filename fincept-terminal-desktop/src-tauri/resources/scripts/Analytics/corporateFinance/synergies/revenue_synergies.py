@@ -338,63 +338,53 @@ class RevenueSynergyAnalyzer:
             'haircut_amount': base_synergy_pv - risk_adjusted_pv
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "revenue_synergy":
+            if len(sys.argv) < 7:
+                raise ValueError("Acquirer customers, target customers, acquirer ARPU, target ARPU, cross-sell rate, and ramp years required")
+
+            acquirer_customers = int(sys.argv[2])
+            target_customers = int(sys.argv[3])
+            acquirer_arpu = float(sys.argv[4])
+            target_arpu = float(sys.argv[5])
+            cross_sell_rate = float(sys.argv[6])
+            ramp_years = int(sys.argv[7]) if len(sys.argv) > 7 else 3
+
+            analyzer = RevenueSynergyAnalyzer(tax_rate=0.25, synergy_discount_rate=0.15)
+
+            analysis = analyzer.calculate_cross_sell_synergy(
+                acquirer_customers=acquirer_customers,
+                target_customers=target_customers,
+                acquirer_arpu=acquirer_arpu,
+                target_arpu=target_arpu,
+                cross_sell_rate=cross_sell_rate,
+                ramp_years=ramp_years
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    analyzer = RevenueSynergyAnalyzer(tax_rate=0.25, synergy_discount_rate=0.15)
-
-    cross_sell = analyzer.calculate_cross_sell_synergy(
-        acquirer_customers=1_000_000,
-        target_customers=500_000,
-        acquirer_arpu=100,
-        target_arpu=80,
-        cross_sell_rate=0.15,
-        ramp_years=3
-    )
-
-    print("=== CROSS-SELL REVENUE SYNERGY ===\n")
-    print(f"Total Annual Synergy (Steady State): ${cross_sell['total_annual_synergy']:,.0f}")
-    print(f"Cross-Sell Rate: {cross_sell['cross_sell_rate']:.0f}%")
-    print(f"Ramp Period: {cross_sell['ramp_years']} years")
-    print(f"Total PV: ${cross_sell['total_pv']:,.0f}\n")
-
-    print("Yearly Projections:")
-    for proj in cross_sell['yearly_projections'][:5]:
-        print(f"  Year {proj['year']}: ${proj['revenue_synergy']:,.0f} (PV: ${proj['present_value']:,.0f})")
-
-    opportunities = [
-        SynergyOpportunity(
-            RevenueSynergyType.CROSS_SELL,
-            "Cross-sell acquirer products to target customers",
-            50_000_000,
-            0.20,
-            3,
-            4
-        ),
-        SynergyOpportunity(
-            RevenueSynergyType.MARKET_EXPANSION,
-            "Expand target product to acquirer's APAC markets",
-            30_000_000,
-            0.15,
-            4,
-            5
-        ),
-        SynergyOpportunity(
-            RevenueSynergyType.PRODUCT_BUNDLING,
-            "Bundle complementary products",
-            40_000_000,
-            0.25,
-            2,
-            3
-        )
-    ]
-
-    comprehensive = analyzer.comprehensive_revenue_synergy(opportunities)
-
-    print("\n\n=== COMPREHENSIVE REVENUE SYNERGY ===")
-    print(f"Total Revenue Synergy PV: ${comprehensive['total_revenue_synergy_pv']:,.0f}")
-    print(f"Number of Opportunities: {comprehensive['number_of_opportunities']}\n")
-
-    for synergy in comprehensive['synergy_breakdown']:
-        print(f"\n{synergy['synergy_type'].replace('_', ' ').title()}:")
-        print(f"  Description: {synergy['description']}")
-        print(f"  Annual Synergy: ${synergy['annual_synergy_steady_state']:,.0f}")
-        print(f"  PV: ${synergy['present_value']:,.0f}")
+    main()

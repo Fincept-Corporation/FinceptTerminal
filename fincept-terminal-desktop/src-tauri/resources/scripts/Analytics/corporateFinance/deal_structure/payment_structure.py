@@ -245,44 +245,54 @@ class PaymentStructureAnalyzer:
             'effective_tax_rate': (current_tax / total_consideration * 100) if total_consideration > 0 else 0
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "payment":
+            if len(sys.argv) < 6:
+                raise ValueError("Purchase price, cash percentage, acquirer cash, and debt capacity required")
+
+            purchase_price = float(sys.argv[2])
+            cash_percentage = float(sys.argv[3])
+            acquirer_cash = float(sys.argv[4])
+            debt_capacity = float(sys.argv[5])
+
+            # Use default values for analyzer parameters or get from optional args
+            analyzer = PaymentStructureAnalyzer(
+                acquirer_shares_outstanding=100_000_000,
+                acquirer_share_price=50.00,
+                target_shares_outstanding=20_000_000,
+                target_share_price=30.00
+            )
+
+            analysis = analyzer.analyze_mixed_payment(
+                purchase_price=purchase_price,
+                cash_percentage=cash_percentage,
+                acquirer_cash=acquirer_cash,
+                debt_capacity=debt_capacity
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    analyzer = PaymentStructureAnalyzer(
-        acquirer_shares_outstanding=100_000_000,
-        acquirer_share_price=50.00,
-        target_shares_outstanding=20_000_000,
-        target_share_price=30.00
-    )
-
-    purchase_price = 800_000_000
-
-    comparison = analyzer.compare_payment_structures(
-        purchase_price=purchase_price,
-        acquirer_cash=200_000_000,
-        debt_capacity=400_000_000
-    )
-
-    print("=== PAYMENT STRUCTURE COMPARISON ===\n")
-    print(f"Purchase Price: ${purchase_price:,.0f}\n")
-
-    for scenario_name, scenario_data in comparison['scenarios'].items():
-        print(f"\n{scenario_name.replace('_', ' ').title()}:")
-        print(f"  Dilution: {scenario_data['shareholder_dilution']:.2f}%")
-        if 'cash_required' in scenario_data:
-            print(f"  Cash Required: ${scenario_data.get('cash_required', 0):,.0f}")
-        if 'debt_required' in scenario_data:
-            print(f"  Debt Required: ${scenario_data.get('debt_required', 0):,.0f}")
-        print(f"  Target Ownership: {scenario_data['target_shareholders_receive']['ownership_pct']:.2f}%")
-
-    optimal = analyzer.optimal_payment_mix(
-        purchase_price=purchase_price,
-        acquirer_cash=200_000_000,
-        debt_capacity=400_000_000,
-        max_acceptable_dilution=15.0
-    )
-
-    print("\n\n=== OPTIMAL PAYMENT MIX ===")
-    if optimal['feasible']:
-        print(f"\nMinimize Dilution: {optimal['optimal_scenarios']['minimize_dilution']['cash_percentage']}% cash")
-        print(f"  Dilution: {optimal['optimal_scenarios']['minimize_dilution']['dilution']:.2f}%")
-        print(f"\nMinimize Debt: {optimal['optimal_scenarios']['minimize_debt']['cash_percentage']}% cash")
-        print(f"  Debt Required: ${optimal['optimal_scenarios']['minimize_debt']['debt_required']:,.0f}")
+    main()

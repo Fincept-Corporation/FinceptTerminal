@@ -132,21 +132,36 @@ class BerkusMethod:
             }
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "berkus":
+            if len(sys.argv) < 3:
+                raise ValueError("Factor scores required")
+            factor_scores = json.loads(sys.argv[2])
+
+            berkus = BerkusMethod(max_value_per_factor=factor_scores.get('max_value_per_factor', 500_000))
+            valuation = berkus.quick_assessment(**{k: v for k, v in factor_scores.items() if k != 'max_value_per_factor'})
+
+            result = {"success": True, "data": valuation}
+            print(json.dumps(result))
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    berkus = BerkusMethod(max_value_per_factor=500_000)
-
-    valuation = berkus.quick_assessment(
-        idea_score=0.8,
-        prototype_score=0.6,
-        team_score=0.9,
-        relationships_score=0.4,
-        rollout_score=0.3
-    )
-
-    print(f"=== BERKUS METHOD VALUATION ===\n")
-    print(f"Total Valuation: ${valuation['total_valuation']:,.0f}")
-    print(f"Percentage of Max: {valuation['valuation_percentage']:.1f}%\n")
-
-    print("Factor Breakdown:")
-    for factor, data in valuation['factor_assessments'].items():
-        print(f"  {factor.replace('_', ' ').title()}: ${data['value']:,.0f} (score: {data['score']:.1f})")
+    main()

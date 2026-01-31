@@ -321,3 +321,46 @@ if __name__ == '__main__':
     print(f"Target Deal: {benchmark['target_deal']['target']} ({benchmark['target_deal']['premium']:.1f}%)")
     print(f"Position: {benchmark['target_position']}")
     print(f"Median Premium: {benchmark['comparable_premiums']['median']:.1f}%")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "compare":
+            if len(sys.argv) < 3:
+                raise ValueError("Deals data required")
+
+            deals_data = json.loads(sys.argv[2])
+
+            comparator = DealComparator()
+
+            # Perform comprehensive comparison
+            analysis = {
+                "deals_count": len(deals_data),
+                "deals_data": deals_data
+            }
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

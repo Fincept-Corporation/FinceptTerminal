@@ -250,7 +250,7 @@ pub async fn calculate_lbo_returns(
         equity_invested.to_string(),
         holding_period.to_string(),
     ];
-    python::execute(&app, "Analytics/corporateFinance/lbo/returns_analysis.py", args).await
+    python::execute(&app, "Analytics/corporateFinance/lbo/returns_calculator.py", args).await
 }
 
 #[tauri::command]
@@ -418,7 +418,7 @@ pub async fn value_earnout(
     financial_projections: String,
 ) -> Result<String, String> {
     let args = vec!["earnout".to_string(), earnout_params, financial_projections];
-    python::execute(&app, "Analytics/corporateFinance/deal_structure/earnout_valuation.py", args).await
+    python::execute(&app, "Analytics/corporateFinance/deal_structure/earnout_calculator.py", args).await
 }
 
 #[tauri::command]
@@ -444,7 +444,7 @@ pub async fn analyze_collar_mechanism(
     price_scenarios: String,
 ) -> Result<String, String> {
     let args = vec!["collar".to_string(), collar_params, price_scenarios];
-    python::execute(&app, "Analytics/corporateFinance/deal_structure/collar_mechanism.py", args).await
+    python::execute(&app, "Analytics/corporateFinance/deal_structure/collar_mechanisms.py", args).await
 }
 
 #[tauri::command]

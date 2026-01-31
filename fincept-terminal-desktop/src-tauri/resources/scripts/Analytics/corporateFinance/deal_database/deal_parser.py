@@ -9,13 +9,18 @@ import json
 scripts_path = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(scripts_path))
 
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
 try:
     from edgar_tools import Company, Filing
 except ImportError:
     from edgartools import Company, Filing
 
-from ..config import DEAL_TYPES, PAYMENT_METHODS, INDUSTRIES
-from .database_schema import MADatabase
+# Use absolute imports instead of relative imports
+from corporateFinance.config import DEAL_TYPES, PAYMENT_METHODS, INDUSTRIES
+from corporateFinance.deal_database.database_schema import MADatabase
 
 class MADealParser:
     def __init__(self, db: Optional[MADatabase] = None):
@@ -398,20 +403,86 @@ class MADealParser:
 
         return results
 
-if __name__ == '__main__':
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {
+            "success": False,
+            "error": "No command specified. Usage: deal_parser.py <command> [args...]"
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
     parser = MADealParser()
 
-    db = MADatabase()
-    high_conf_filings = db._get_connection().execute("""
-        SELECT accession_number FROM sec_filings
-        WHERE confidence_score > 0.75 AND parsed_flag = 0
-        LIMIT 5
-    """).fetchall()
+    try:
+        if command == "parse":
+            # parse_ma_filing(filing_url, filing_type)
+            if len(sys.argv) < 4:
+                raise ValueError("Filing URL and filing type required")
 
-    for filing in high_conf_filings:
-        acc = filing[0]
-        print(f"\nParsing {acc}...")
-        deal = parser.parse_filing(acc)
-        if deal:
-            print(f"  Deal: {deal['acquirer_name']} acquiring {deal['target_name']}")
-            print(f"  Value: ${deal.get('deal_value', 0):,.0f}")
+            filing_url = sys.argv[2]
+            filing_type = sys.argv[3]
+
+            # Extract accession number from URL
+            import re
+            acc_match = re.search(r'accession[_-]?number=([0-9-]+)', filing_url)
+            if acc_match:
+                accession_number = acc_match.group(1)
+            else:
+                # Try to use the URL as an accession number directly
+                accession_number = filing_url
+
+            deal_data = parser.parse_filing(accession_number)
+
+            if deal_data:
+                result = {
+                    "success": True,
+                    "data": deal_data
+                }
+            else:
+                result = {
+                    "success": False,
+                    "error": "Failed to parse filing - no M&A deal data found"
+                }
+
+            print(json.dumps(result))
+
+        elif command == "parse_batch":
+            # Parse multiple filings
+            if len(sys.argv) < 3:
+                raise ValueError("Accession numbers JSON array required")
+
+            accession_numbers = json.loads(sys.argv[2])
+            max_workers = int(sys.argv[3]) if len(sys.argv) > 3 else 5
+
+            results = parser.parse_batch(accession_numbers, max_workers)
+
+            result = {
+                "success": True,
+                "data": results
+            }
+            print(json.dumps(result))
+
+        else:
+            result = {
+                "success": False,
+                "error": f"Unknown command: {command}. Available: parse, parse_batch"
+            }
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": str(e),
+            "command": command
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

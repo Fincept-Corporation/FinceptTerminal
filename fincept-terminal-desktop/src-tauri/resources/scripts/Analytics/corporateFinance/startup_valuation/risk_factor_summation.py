@@ -177,30 +177,37 @@ class RiskFactorSummation:
             'base_valuation': self.base_valuation
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "risk_factor":
+            if len(sys.argv) < 4:
+                raise ValueError("Base valuation and risk assessments required")
+            base_valuation = float(sys.argv[2])
+            risk_assessments = json.loads(sys.argv[3])
+
+            rfs = RiskFactorSummation(base_valuation=base_valuation)
+            valuation = rfs.quick_assessment(base_valuation=base_valuation, **risk_assessments)
+
+            result = {"success": True, "data": valuation}
+            print(json.dumps(result))
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    rfs = RiskFactorSummation(base_valuation=2_000_000, adjustment_per_factor=250_000)
-
-    valuation = rfs.quick_assessment(
-        base_valuation=2_000_000,
-        management_risk=1,
-        stage_risk=-1,
-        technology_risk=0,
-        competition_risk=-1,
-        market_risk=0,
-        funding_risk=-1
-    )
-
-    print("=== RISK FACTOR SUMMATION VALUATION ===\n")
-    print(f"Base Valuation: ${valuation['base_valuation']:,.0f}")
-    print(f"Total Adjustment: ${valuation['total_adjustment']:,} ({valuation['adjustment_pct']:+.1f}%)")
-    print(f"Final Valuation: ${valuation['final_valuation']:,.0f}\n")
-
-    print("Risk Factor Assessments:")
-    for factor, data in valuation['risk_assessments'].items():
-        if data['adjustment'] != 0:
-            print(f"  {factor.replace('_', ' ').title()}: {data['risk_level']:+d} (${data['adjustment']:+,})")
-
-    guide = rfs.risk_scoring_guide()
-    print("\n=== RISK SCORING GUIDE ===")
-    for level, desc in guide['risk_levels'].items():
-        print(f"{level}: {desc}")
+    main()

@@ -473,7 +473,21 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
   async getQuote(symbol: string, exchange: StockExchange): Promise<Quote> {
     this.ensureConnected();
     await this.rateLimit();
-    return this.getQuoteInternal(symbol, exchange);
+    try {
+      return await this.getQuoteInternal(symbol, exchange);
+    } catch (error) {
+      // Check if error is authentication-related
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Invalid Token') ||
+          errorMessage.includes('Unauthorized') ||
+          errorMessage.includes('Session expired') ||
+          errorMessage.includes('Authentication failed')) {
+        console.error(`[${this.brokerId}] Authentication error detected:`, errorMessage);
+        // Mark as disconnected to prevent further requests
+        this.isConnected = false;
+      }
+      throw error;
+    }
   }
 
   async getQuotes(
@@ -489,6 +503,18 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
         const quote = await this.getQuoteInternal(symbol, exchange);
         quotes.push(quote);
       } catch (error) {
+        // Check if error is authentication-related
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('Invalid Token') ||
+            errorMessage.includes('Unauthorized') ||
+            errorMessage.includes('Session expired') ||
+            errorMessage.includes('Authentication failed')) {
+          console.error(`[${this.brokerId}] Authentication error detected:`, errorMessage);
+          // Mark as disconnected to prevent further requests
+          this.isConnected = false;
+          // Re-throw to propagate auth error
+          throw error;
+        }
         console.error(`[${this.brokerId}] Error fetching quote for ${symbol}:`, error);
       }
     }

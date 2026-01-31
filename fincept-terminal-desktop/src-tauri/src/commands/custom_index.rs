@@ -12,6 +12,7 @@ pub async fn custom_index_create(
     cap_weight: Option<f64>,
     currency: String,
     portfolio_id: Option<String>,
+    historical_start_date: Option<String>,
 ) -> Result<CustomIndex, String> {
     let id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
@@ -23,6 +24,7 @@ pub async fn custom_index_create(
         calculation_method,
         base_value,
         base_date: now.clone(),
+        historical_start_date,
         divisor: 1.0,
         current_value: base_value,
         previous_close: base_value,

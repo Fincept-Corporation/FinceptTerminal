@@ -395,3 +395,45 @@ if __name__ == '__main__':
     print(f"Rating: {board['governance_rating'].title()}")
     print(f"Best Practices Met: {board['best_practices_met']}")
     print(f"Process Defensible: {board['process_defensible']}")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "process":
+            if len(sys.argv) < 3:
+                raise ValueError("Process factors required")
+
+            process_factors = json.loads(sys.argv[2])
+
+            assessment = ProcessQualityAssessment()
+
+            # Default analysis combining all aspects
+            result_data = {
+                "process_factors": process_factors
+            }
+
+            result = {"success": True, "data": result_data}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://fundingjson.org/schema/v1.1.0.json",
+  "version": "v1.1.0",
+  "entity": {
+    "type": "organisation",
+    "role": "owner",
+    "name": "Fincept Corporation",
+    "email": "support@fincept.in",
+    "description": "Fincept Corporation develops the Fincept Terminal, a state-of-the-art open-source financial intelligence platform with CFA-level analytics, AI automation, and unlimited data connectivity. We build professional-grade financial tools that compete on analytics depth and data accessibility.",
+    "webpageUrl": {
+      "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
+    }
+  },
+  "projects": [
+    {
+      "guid": "fincept-terminal",
+      "name": "Fincept Terminal",
+      "description": "Cross-platform financial intelligence terminal built with Tauri, React, and Rust. Features complete CFA Level 1-3 analytics, 20+ AI investor personas, 100+ data connectors, visual workflow automation, 3D maritime tracking, and geopolitical intelligence frameworks. A professional alternative to Bloomberg Terminal, built for analysts who refuse to be limited by traditional software.",
+      "webpageUrl": {
+        "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/Fincept-Corporation/FinceptTerminal"
+      },
+      "licenses": [
+        "spdx:AGPL-3.0"
+      ],
+      "tags": [
+        "finance",
+        "analytics",
+        "ai",
+        "trading",
+        "portfolio-management",
+        "data-visualization",
+        "workflow-automation",
+        "rust",
+        "typescript",
+        "python"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/tilakpatel22",
+        "description": "GitHub Sponsors for one-time or recurring donations"
+      }
+    ],
+    "plans": [
+      {
+        "guid": "one-time-grant",
+        "status": "active",
+        "name": "One-time Grant/Donation",
+        "description": "Support the development of Fincept Terminal with a one-time contribution to fund feature development, infrastructure, and maintenance.",
+        "amount": 0,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": [
+          "github-sponsors"
+        ]
+      },
+      {
+        "guid": "monthly-sponsorship",
+        "status": "active",
+        "name": "Monthly Sponsorship",
+        "description": "Recurring monthly support to sustain ongoing development, bug fixes, documentation, and community support.",
+        "amount": 0,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": [
+          "github-sponsors"
+        ]
+      },
+      {
+        "guid": "development-grant",
+        "status": "active",
+        "name": "Development Grant",
+        "description": "Grants to fund specific development initiatives: advanced AI agents, additional data connectors, mobile applications, institutional features, and infrastructure scaling.",
+        "amount": 17000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": [
+          "github-sponsors"
+        ]
+      }
+    ]
+  }
+}

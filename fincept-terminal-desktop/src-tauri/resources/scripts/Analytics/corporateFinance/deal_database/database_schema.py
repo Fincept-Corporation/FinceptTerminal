@@ -1,15 +1,25 @@
 """SQLite Database Schema for M&A Deals"""
+import sys
 import sqlite3
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import json
 
+# Add Analytics path for absolute imports
+scripts_path = Path(__file__).parent.parent.parent.parent
+sys.path.append(str(scripts_path))
+
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.config import MA_DATABASE as DEFAULT_MA_DATABASE
+
 class MADatabase:
     def __init__(self, db_path: Optional[Path] = None):
         if db_path is None:
-            from ..config import MA_DATABASE
-            db_path = MA_DATABASE
+            db_path = DEFAULT_MA_DATABASE
 
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -366,6 +376,36 @@ class MADatabase:
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_all_deals(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Get all deals with optional filters"""
+        if filters:
+            return self.search_deals(filters)
+        else:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM ma_deals ORDER BY announcement_date DESC")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def update_deal(self, deal_id: str, updates: Dict[str, Any]) -> None:
+        """Update an existing deal"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # Build SET clause dynamically from updates dict
+        set_clauses = []
+        params = []
+
+        for key, value in updates.items():
+            set_clauses.append(f"{key} = ?")
+            params.append(value)
+
+        params.append(deal_id)  # For WHERE clause
+
+        if set_clauses:
+            query = f"UPDATE ma_deals SET {', '.join(set_clauses)} WHERE deal_id = ?"
+            cursor.execute(query, params)
+            conn.commit()
+
     def get_deal_by_id(self, deal_id: str) -> Optional[Dict[str, Any]]:
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -442,3 +482,104 @@ class MADatabase:
         if self.conn:
             self.conn.close()
             self.conn = None
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {
+            "success": False,
+            "error": "No command specified. Usage: database_schema.py <command> [args...]"
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+    db = MADatabase()
+
+    try:
+        if command == "get_all":
+            # get_all_ma_deals(filters)
+            filters = json.loads(sys.argv[2]) if len(sys.argv) > 2 else None
+            deals = db.get_all_deals(filters)
+
+            result = {
+                "success": True,
+                "data": deals,
+                "count": len(deals)
+            }
+            print(json.dumps(result))
+
+        elif command == "create":
+            # create_ma_deal(deal_data)
+            if len(sys.argv) < 3:
+                raise ValueError("Deal data required")
+
+            deal_data = json.loads(sys.argv[2])
+            deal_id = db.insert_deal(deal_data)
+
+            result = {
+                "success": True,
+                "data": {"deal_id": deal_id}
+            }
+            print(json.dumps(result))
+
+        elif command == "search":
+            # search_ma_deals(query, search_type)
+            if len(sys.argv) < 3:
+                raise ValueError("Search query required")
+
+            query = sys.argv[2]
+            search_type = sys.argv[3] if len(sys.argv) > 3 else None
+
+            deals = db.search_deals({
+                'query': query,
+                'search_type': search_type
+            })
+
+            result = {
+                "success": True,
+                "data": deals,
+                "count": len(deals)
+            }
+            print(json.dumps(result))
+
+        elif command == "update":
+            # update_ma_deal(deal_id, updates)
+            if len(sys.argv) < 4:
+                raise ValueError("Deal ID and updates required")
+
+            deal_id = sys.argv[2]
+            updates = json.loads(sys.argv[3])
+
+            db.update_deal(deal_id, updates)
+
+            result = {
+                "success": True,
+                "data": {"deal_id": deal_id}
+            }
+            print(json.dumps(result))
+
+        else:
+            result = {
+                "success": False,
+                "error": f"Unknown command: {command}. Available: get_all, create, search, update"
+            }
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": str(e),
+            "command": command
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+    finally:
+        db.close()
+
+if __name__ == '__main__':
+    main()

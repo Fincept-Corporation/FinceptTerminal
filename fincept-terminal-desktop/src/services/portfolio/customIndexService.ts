@@ -41,10 +41,12 @@ class CustomIndexService {
     baseValue: number = 100,
     capWeight: number | undefined,
     currency: string = 'USD',
-    portfolioId?: string
+    portfolioId?: string,
+    historicalStartDate?: string
   ): Promise<CustomIndex> {
     console.log(`[CustomIndexService] Creating index: ${name}`);
 
+    // Tauri auto-converts camelCase to snake_case for Rust
     const index = await invoke<CustomIndex>('custom_index_create', {
       name,
       description,
@@ -53,6 +55,7 @@ class CustomIndexService {
       capWeight: capWeight && capWeight > 0 ? capWeight : null,
       currency,
       portfolioId,
+      historicalStartDate: historicalStartDate || null,
     });
 
     return index;
@@ -120,12 +123,12 @@ class CustomIndexService {
     return invoke<IndexConstituent>('index_constituent_add', {
       indexId,
       symbol: config.symbol.toUpperCase(),
-      shares: config.shares,
-      weight: config.weight,
-      marketCap: config.marketCap,
-      fundamentalScore: config.fundamentalScore,
-      customPrice: config.customPrice,
-      priceDate: config.priceDate,
+      shares: config.shares || null,
+      weight: config.weight || null,
+      marketCap: config.marketCap || null,
+      fundamentalScore: config.fundamentalScore || null,
+      customPrice: config.customPrice || null,
+      priceDate: config.priceDate || null,
     });
   }
 
@@ -150,12 +153,12 @@ class CustomIndexService {
   ): Promise<void> {
     await invoke('index_constituent_update', {
       constituentId,
-      shares,
-      weight,
-      marketCap,
-      fundamentalScore,
-      customPrice,
-      priceDate,
+      shares: shares || null,
+      weight: weight || null,
+      marketCap: marketCap || null,
+      fundamentalScore: fundamentalScore || null,
+      customPrice: customPrice || null,
+      priceDate: priceDate || null,
     });
   }
 
@@ -180,7 +183,10 @@ class CustomIndexService {
    * Remove a constituent from an index
    */
   async removeConstituent(indexId: string, symbol: string): Promise<void> {
-    await invoke('index_constituent_remove', { indexId, symbol: symbol.toUpperCase() });
+    await invoke('index_constituent_remove', {
+      indexId,
+      symbol: symbol.toUpperCase()
+    });
   }
 
   // ==================== SNAPSHOT MANAGEMENT ====================
@@ -323,8 +329,8 @@ class CustomIndexService {
       } as IndexConstituent;
     });
 
-    // Second pass: calculate weights and contributions
-    return enriched.map(c => {
+    // Second pass: calculate weights
+    const withWeights = enriched.map(c => {
       const effectiveWeight = this.calculateEffectiveWeight(
         c,
         totalMarketValue,
@@ -336,13 +342,74 @@ class CustomIndexService {
       return {
         ...c,
         effective_weight: effectiveWeight,
-        contribution: effectiveWeight * (c.day_change_percent / 100),
       };
     });
+
+    // Third pass: normalize weights to ensure they sum to exactly 100%
+    const normalized = this.normalizeWeights(withWeights);
+
+    // Fourth pass: calculate contributions
+    return normalized.map(c => ({
+      ...c,
+      contribution: c.effective_weight * (c.day_change_percent / 100),
+    }));
+  }
+
+  /**
+   * Normalize weights to ensure they sum to exactly 100%
+   * Handles floating point rounding errors by adjusting the largest weight
+   */
+  private normalizeWeights(constituents: IndexConstituent[]): IndexConstituent[] {
+    if (constituents.length === 0) return constituents;
+
+    // Calculate total weight
+    const totalWeight = constituents.reduce((sum, c) => sum + c.effective_weight, 0);
+
+    if (totalWeight === 0) {
+      // If all weights are 0, distribute equally
+      const equalWeight = 100 / constituents.length;
+      return constituents.map(c => ({
+        ...c,
+        effective_weight: equalWeight,
+      }));
+    }
+
+    // Round each weight to 2 decimal places and track the sum
+    const rounded = constituents.map(c => ({
+      ...c,
+      effective_weight: Math.round((c.effective_weight / totalWeight) * 100 * 100) / 100,
+    }));
+
+    // Calculate the rounding error
+    const roundedSum = rounded.reduce((sum, c) => sum + c.effective_weight, 0);
+    const diff = Math.round((100 - roundedSum) * 100) / 100;
+
+    // If there's a difference, add it to the largest weight
+    if (diff !== 0) {
+      // Find the index with the largest weight
+      let maxIndex = 0;
+      let maxWeight = rounded[0].effective_weight;
+      for (let i = 1; i < rounded.length; i++) {
+        if (rounded[i].effective_weight > maxWeight) {
+          maxWeight = rounded[i].effective_weight;
+          maxIndex = i;
+        }
+      }
+
+      // Adjust the largest weight
+      rounded[maxIndex] = {
+        ...rounded[maxIndex],
+        effective_weight: Math.round((maxWeight + diff) * 100) / 100,
+      };
+    }
+
+    return rounded;
   }
 
   /**
    * Calculate effective weight based on method
+   * Note: This returns the calculated weight for a single constituent.
+   * For methods that need normalization, use normalizeWeights() after all weights are calculated.
    */
   private calculateEffectiveWeight(
     constituent: IndexConstituent,
@@ -366,7 +433,13 @@ class CustomIndexService {
         break;
 
       case 'equal_weighted':
-        weight = n > 0 ? 100 / n : 0;
+        // Use constituent's defined weight if available, otherwise calculate equal weight
+        if (constituent.weight !== undefined && constituent.weight > 0) {
+          weight = constituent.weight;
+        } else {
+          // Calculate equal weight - will be normalized later to ensure exact 100%
+          weight = n > 0 ? 100 / n : 0;
+        }
         break;
 
       case 'fundamental_weighted':
@@ -390,6 +463,11 @@ class CustomIndexService {
         const totalInverseVol = inverseVols.reduce((sum, iv) => sum + iv, 0);
         const myInverseVol = 1 / (Math.abs(constituent.day_change_percent) || 1);
         weight = totalInverseVol > 0 ? (myInverseVol / totalInverseVol) * 100 : 100 / n;
+        break;
+
+      case 'factor_weighted':
+        // Use custom weight if provided, else equal weight
+        weight = constituent.weight || (100 / n);
         break;
 
       default:
@@ -610,6 +688,112 @@ class CustomIndexService {
       summary.constituents,
       today
     );
+  }
+
+  /**
+   * Backfill historical snapshots for an index
+   * Calculates index values for each day from startDate to today using historical prices
+   */
+  async backfillHistoricalSnapshots(indexId: string, startDate: string): Promise<void> {
+    console.log(`[CustomIndexService] Backfilling historical snapshots from ${startDate} for index ${indexId}`);
+
+    try {
+      // Get index details and constituents
+      const summary = await this.calculateIndexSummary(indexId);
+      const { index, constituents } = summary;
+
+      // Generate date range from startDate to today
+      const start = new Date(startDate);
+      const today = new Date();
+      const dates: string[] = [];
+
+      for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+        // Only include weekdays (Mon-Fri), skip weekends
+        const dayOfWeek = d.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          dates.push(d.toISOString().split('T')[0]);
+        }
+      }
+
+      console.log(`[CustomIndexService] Backfilling ${dates.length} days of data`);
+
+      // Fetch historical prices for all constituents for all dates
+      const historicalData: Record<string, Record<string, number>> = {};
+
+      for (const constituent of constituents) {
+        historicalData[constituent.symbol] = {};
+
+        // Fetch historical prices in batches to avoid overwhelming the API
+        for (const date of dates) {
+          try {
+            const price = await this.getHistoricalPrice(constituent.symbol, date);
+            if (price !== null) {
+              historicalData[constituent.symbol][date] = price;
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch price for ${constituent.symbol} on ${date}:`, error);
+          }
+        }
+      }
+
+      // Calculate index values for each date and save snapshots
+      let previousValue = index.base_value;
+
+      for (const date of dates) {
+        try {
+          // Check if all constituents have prices for this date
+          const allPricesAvailable = constituents.every(c =>
+            historicalData[c.symbol] && historicalData[c.symbol][date]
+          );
+
+          if (!allPricesAvailable) {
+            console.warn(`[CustomIndexService] Missing prices for some constituents on ${date}, skipping`);
+            continue;
+          }
+
+          // Create temporary constituents with historical prices
+          const historicalConstituents: IndexConstituent[] = constituents.map(c => ({
+            ...c,
+            current_price: historicalData[c.symbol][date],
+            previous_close: previousValue, // Use previous day's value
+          }));
+
+          // Calculate index value for this date
+          const { indexValue, totalMarketValue } = this.calculateIndexValue(
+            index,
+            historicalConstituents
+          );
+
+          // Calculate change from previous day
+          const dayChange = indexValue - previousValue;
+          const dayChangePercent = previousValue > 0 ? (dayChange / previousValue) * 100 : 0;
+
+          // Save snapshot for this date
+          await this.saveSnapshot(
+            indexId,
+            indexValue,
+            dayChange,
+            dayChangePercent,
+            totalMarketValue,
+            index.divisor,
+            historicalConstituents,
+            date
+          );
+
+          // Update previous value for next iteration
+          previousValue = indexValue;
+
+          console.log(`[CustomIndexService] Saved snapshot for ${date}: ${indexValue.toFixed(2)}`);
+        } catch (error) {
+          console.error(`[CustomIndexService] Error calculating snapshot for ${date}:`, error);
+        }
+      }
+
+      console.log(`[CustomIndexService] Backfill complete for index ${indexId}`);
+    } catch (error) {
+      console.error('[CustomIndexService] Error backfilling historical snapshots:', error);
+      throw error;
+    }
   }
 
   /**

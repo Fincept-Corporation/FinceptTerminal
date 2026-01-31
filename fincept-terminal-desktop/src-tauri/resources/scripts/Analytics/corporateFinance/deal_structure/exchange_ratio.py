@@ -220,44 +220,46 @@ class ExchangeRatioCalculator:
             'scenarios': scenarios
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "exchange_ratio":
+            if len(sys.argv) < 5:
+                raise ValueError("Acquirer price, target price, and offer price required")
+
+            acquirer_price = float(sys.argv[2])
+            target_price = float(sys.argv[3])
+            offer_price = float(sys.argv[4])
+
+            calc = ExchangeRatioCalculator(
+                acquirer_price=acquirer_price,
+                target_price=target_price
+            )
+
+            analysis = calc.calculate_fixed_exchange_ratio(offer_price_per_share=offer_price)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    calc = ExchangeRatioCalculator(
-        acquirer_price=100.00,
-        target_price=50.00
-    )
-
-    fixed = calc.calculate_fixed_exchange_ratio(offer_price_per_share=65.00)
-
-    print("=== FIXED EXCHANGE RATIO ===\n")
-    print(f"Exchange Ratio: {fixed['exchange_ratio']:.4f}")
-    print(f"Acquirer Price: ${fixed['acquirer_share_price']:.2f}")
-    print(f"Target Price: ${fixed['target_share_price']:.2f}")
-    print(f"Offer Price: ${fixed['offer_price_per_target_share']:.2f}")
-    print(f"Premium: {fixed['premium_to_target']:.2f}%")
-
-    price_range = [80, 90, 100, 110, 120]
-    movement = calc.analyze_exchange_ratio_movement(
-        exchange_ratio=fixed['exchange_ratio'],
-        acquirer_price_range=price_range,
-        target_shares=10_000_000
-    )
-
-    print("\n\n=== VALUE MOVEMENT ANALYSIS ===")
-    for scenario in movement['price_scenarios']:
-        print(f"\nAcquirer @ ${scenario['acquirer_price']:.2f}:")
-        print(f"  Value per Target Share: ${scenario['value_per_target_share']:.2f}")
-        print(f"  Total Deal Value: ${scenario['total_deal_value']:,.0f}")
-        print(f"  Premium: {scenario['premium']:.1f}%")
-
-    relative = calc.relative_valuation_ratio(
-        acquirer_eps=5.00,
-        target_eps=3.00,
-        target_shares=10_000_000,
-        acquirer_shares=50_000_000
-    )
-
-    print("\n\n=== RELATIVE VALUATION RATIO ===")
-    print(f"Acquirer P/E: {relative['acquirer_pe']:.1f}x")
-    print(f"Target P/E: {relative['target_pe']:.1f}x")
-    print(f"Exchange Ratio at EPS Parity: {relative['exchange_ratio_at_eps_parity']:.4f}")
-    print(f"Current Market Ratio: {relative['current_market_ratio']:.4f}")
+    main()

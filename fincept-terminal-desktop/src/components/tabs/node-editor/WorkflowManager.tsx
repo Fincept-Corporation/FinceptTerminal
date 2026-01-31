@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Node, Edge } from 'reactflow';
 import { Workflow, workflowService } from '@/services/core/workflowService';
-import { Play, Trash2, Edit3, Eye, FileText, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Play, Trash2, Edit3, Eye, FileText, Clock, CheckCircle, AlertCircle, RefreshCw, Search, X } from 'lucide-react';
 
 interface WorkflowManagerProps {
   onLoadWorkflow: (nodes: Node[], edges: Edge[], workflowId: string, workflow: Workflow) => void;
@@ -9,12 +9,33 @@ interface WorkflowManagerProps {
   onEditDraft: (workflow: Workflow) => void;
 }
 
+// FINCEPT Design System Colors
+const F = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
+
+const FONT = '"IBM Plex Mono", "Consolas", monospace';
+
 const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onViewResults, onEditDraft }) => {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'draft' | 'completed'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Load workflows on mount
   useEffect(() => {
     loadWorkflows();
   }, []);
@@ -61,330 +82,494 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
     onViewResults(workflow);
   };
 
-  // Filter workflows
+  // Filter and search workflows
   const filteredWorkflows = workflows.filter(wf => {
-    if (filter === 'all') return true;
-    if (filter === 'draft') return wf.status === 'draft';
-    if (filter === 'completed') return wf.status === 'completed';
-    return true;
+    const matchesFilter = filter === 'all' || wf.status === filter;
+    const matchesSearch = searchQuery.trim() === '' ||
+      wf.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (wf.description && wf.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesFilter && matchesSearch;
   });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return <CheckCircle size={14} color="#10b981" />;
-      case 'draft': return <FileText size={14} color="#f59e0b" />;
-      case 'error': return <AlertCircle size={14} color="#ef4444" />;
-      case 'running': return <Clock size={14} color="#3b82f6" />;
-      default: return <FileText size={14} color="#6b7280" />;
+      case 'completed': return <CheckCircle size={12} color={F.GREEN} />;
+      case 'draft': return <FileText size={12} color={F.YELLOW} />;
+      case 'error': return <AlertCircle size={12} color={F.RED} />;
+      case 'running': return <Clock size={12} color={F.BLUE} />;
+      default: return <FileText size={12} color={F.MUTED} />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return '#10b981';
-      case 'draft': return '#f59e0b';
-      case 'error': return '#ef4444';
-      case 'running': return '#3b82f6';
-      default: return '#6b7280';
+      case 'completed': return F.GREEN;
+      case 'draft': return F.YELLOW;
+      case 'error': return F.RED;
+      case 'running': return F.BLUE;
+      default: return F.MUTED;
     }
   };
 
   return (
     <div style={{
-      padding: '20px',
-      color: '#a3a3a3',
       height: '100%',
-      overflow: 'auto'
+      backgroundColor: F.DARK_BG,
+      color: F.WHITE,
+      fontFamily: FONT,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
     }}>
-      {/* Header */}
+      {/* Top Header Bar */}
       <div style={{
+        backgroundColor: F.HEADER_BG,
+        borderBottom: `2px solid ${F.ORANGE}`,
+        padding: '8px 16px',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '20px',
-        paddingBottom: '12px',
-        borderBottom: '2px solid #404040'
+        justifyContent: 'space-between',
+        boxShadow: `0 2px 8px ${F.ORANGE}20`,
+        flexShrink: 0,
       }}>
-        <h2 style={{
-          margin: 0,
-          fontSize: '20px',
-          color: '#fff',
-          fontWeight: 'bold'
-        }}>
-          📋 Workflow Manager
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FileText size={14} style={{ color: F.ORANGE }} />
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            color: F.ORANGE,
+            letterSpacing: '0.5px',
+          }}>
+            WORKFLOW MANAGER
+          </span>
+        </div>
         <button
           onClick={loadWorkflows}
+          disabled={loading}
           style={{
-            backgroundColor: '#3b82f6',
-            color: '#fff',
-            border: 'none',
             padding: '6px 12px',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            borderRadius: '4px'
+            backgroundColor: loading ? F.MUTED : F.ORANGE,
+            color: F.DARK_BG,
+            border: 'none',
+            borderRadius: '2px',
+            fontSize: '9px',
+            fontWeight: 700,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            letterSpacing: '0.5px',
+            opacity: loading ? 0.5 : 1,
           }}
         >
-          🔄 REFRESH
+          <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
+          REFRESH
         </button>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter Bar */}
       <div style={{
+        backgroundColor: F.PANEL_BG,
+        borderBottom: `1px solid ${F.BORDER}`,
+        padding: '8px 12px',
         display: 'flex',
+        alignItems: 'center',
         gap: '8px',
-        marginBottom: '16px',
-        borderBottom: '1px solid #404040',
-        paddingBottom: '8px'
+        flexShrink: 0,
       }}>
+        {/* Filter Tabs */}
         {['all', 'draft', 'completed'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f as any)}
             style={{
-              backgroundColor: filter === f ? '#3b82f6' : 'transparent',
-              color: filter === f ? '#fff' : '#a3a3a3',
-              border: `1px solid ${filter === f ? '#3b82f6' : '#404040'}`,
-              padding: '6px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
+              padding: '6px 12px',
+              backgroundColor: filter === f ? F.ORANGE : 'transparent',
+              color: filter === f ? F.DARK_BG : F.GRAY,
+              border: 'none',
+              fontSize: '9px',
+              fontWeight: 700,
               cursor: 'pointer',
-              borderRadius: '4px',
-              textTransform: 'uppercase'
+              borderRadius: '2px',
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s',
             }}
           >
-            {f} ({workflows.filter(wf => f === 'all' || wf.status === f).length})
+            {f.toUpperCase()} ({workflows.filter(wf => f === 'all' || wf.status === f).length})
           </button>
         ))}
-      </div>
 
-      {/* Loading State */}
-      {loading && (
+        {/* Search */}
         <div style={{
-          textAlign: 'center',
-          padding: '40px',
-          color: '#6b7280'
+          marginLeft: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          backgroundColor: F.DARK_BG,
+          border: `1px solid ${F.BORDER}`,
+          borderRadius: '2px',
+          padding: '4px 8px',
+          flex: '0 1 220px',
         }}>
-          Loading workflows...
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!loading && filteredWorkflows.length === 0 && (
-        <div style={{
-          textAlign: 'center',
-          padding: '40px',
-          color: '#6b7280'
-        }}>
-          <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-          <p style={{ fontSize: '14px', marginBottom: '8px' }}>
-            No {filter !== 'all' ? filter : ''} workflows found
-          </p>
-          <p style={{ fontSize: '12px', opacity: 0.7 }}>
-            Create a new workflow in the Editor tab
-          </p>
-        </div>
-      )}
-
-      {/* Workflow List */}
-      {!loading && filteredWorkflows.length > 0 && (
-        <div style={{
-          display: 'grid',
-          gap: '12px'
-        }}>
-          {filteredWorkflows.map(workflow => (
-            <div
-              key={workflow.id}
+          <Search size={10} style={{ color: F.MUTED, flexShrink: 0 }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search workflows..."
+            style={{
+              flex: 1,
+              backgroundColor: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: F.WHITE,
+              fontSize: '9px',
+              fontFamily: FONT,
+              padding: '2px 0',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
               style={{
-                backgroundColor: '#1a1a1a',
-                border: '1px solid #404040',
-                borderRadius: '6px',
-                padding: '16px',
-                transition: 'all 0.2s',
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#3b82f6';
-                e.currentTarget.style.backgroundColor = '#252525';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#404040';
-                e.currentTarget.style.backgroundColor = '#1a1a1a';
+                background: 'none',
+                border: 'none',
+                color: F.MUTED,
+                cursor: 'pointer',
+                padding: '0',
+                display: 'flex',
+                alignItems: 'center',
               }}
             >
-              {/* Workflow Header */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                marginBottom: '12px'
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '4px'
-                  }}>
-                    {getStatusIcon(workflow.status)}
-                    <h3 style={{
-                      margin: 0,
-                      fontSize: '14px',
-                      color: '#fff',
-                      fontWeight: 'bold'
-                    }}>
-                      {workflow.name}
-                    </h3>
-                    <span style={{
-                      backgroundColor: getStatusColor(workflow.status),
-                      color: '#000',
-                      padding: '2px 8px',
-                      fontSize: '9px',
-                      fontWeight: 'bold',
-                      borderRadius: '3px',
-                      textTransform: 'uppercase'
-                    }}>
-                      {workflow.status}
-                    </span>
-                  </div>
-                  {workflow.description && (
-                    <p style={{
-                      margin: '4px 0 0 0',
-                      fontSize: '11px',
-                      color: '#6b7280',
-                      lineHeight: '1.4'
-                    }}>
-                      {workflow.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Workflow Info */}
-              <div style={{
-                display: 'flex',
-                gap: '16px',
-                marginBottom: '12px',
-                fontSize: '11px',
-                color: '#6b7280'
-              }}>
-                <span>📦 {workflow.nodes?.length || 0} nodes</span>
-                <span>🔗 {workflow.edges?.length || 0} connections</span>
-                <span style={{ marginLeft: 'auto', fontSize: '10px' }}>
-                  ID: {workflow.id.substring(0, 12)}...
-                </span>
-              </div>
-
-              {/* Action Buttons */}
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                paddingTop: '12px',
-                borderTop: '1px solid #404040'
-              }}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePlay(workflow);
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#10b981',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Play size={12} />
-                  LOAD & RUN
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEdit(workflow);
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#3b82f6',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Edit3 size={12} />
-                  EDIT
-                </button>
-
-                {workflow.results && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewResults(workflow);
-                    }}
-                    style={{
-                      backgroundColor: '#f59e0b',
-                      color: '#000',
-                      border: 'none',
-                      padding: '6px 12px',
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      borderRadius: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Eye size={12} />
-                    RESULTS
-                  </button>
-                )}
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(workflow.id);
-                  }}
-                  style={{
-                    backgroundColor: '#ef4444',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            </div>
-          ))}
+              <X size={10} />
+            </button>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Main Content Area */}
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        padding: '12px',
+      }}>
+        {/* Loading State */}
+        {loading && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: F.MUTED,
+            fontSize: '10px',
+          }}>
+            <RefreshCw size={24} className="animate-spin" style={{ marginBottom: '12px', opacity: 0.5 }} />
+            <span>LOADING WORKFLOWS...</span>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && filteredWorkflows.length === 0 && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: F.MUTED,
+            fontSize: '10px',
+            textAlign: 'center',
+          }}>
+            <FileText size={32} style={{ marginBottom: '12px', opacity: 0.3 }} />
+            <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: '4px', letterSpacing: '0.5px' }}>
+              NO {filter !== 'all' ? filter.toUpperCase() : ''} WORKFLOWS FOUND
+            </div>
+            <div style={{ fontSize: '9px', color: F.GRAY }}>
+              {searchQuery ? 'Try adjusting your search query' : 'Create a new workflow in the Editor tab'}
+            </div>
+          </div>
+        )}
+
+        {/* Workflow List */}
+        {!loading && filteredWorkflows.length > 0 && (
+          <div style={{
+            display: 'grid',
+            gap: '8px',
+          }}>
+            {filteredWorkflows.map(workflow => (
+              <WorkflowCard
+                key={workflow.id}
+                workflow={workflow}
+                onPlay={handlePlay}
+                onEdit={handleEdit}
+                onViewResults={handleViewResults}
+                onDelete={handleDelete}
+                getStatusIcon={getStatusIcon}
+                getStatusColor={getStatusColor}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Status Bar */}
+      <div style={{
+        backgroundColor: F.HEADER_BG,
+        borderTop: `1px solid ${F.BORDER}`,
+        padding: '4px 16px',
+        fontSize: '9px',
+        color: F.GRAY,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <span>TOTAL: <span style={{ color: F.CYAN, fontWeight: 700 }}>{workflows.length}</span></span>
+          <span style={{ color: F.BORDER }}>|</span>
+          <span>SHOWING: <span style={{ color: F.CYAN, fontWeight: 700 }}>{filteredWorkflows.length}</span></span>
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <span>FILTER: <span style={{ color: F.ORANGE, fontWeight: 700 }}>{filter.toUpperCase()}</span></span>
+        </div>
+      </div>
+
+      {/* Scrollbar Styles */}
+      <style>{`
+        *::-webkit-scrollbar { width: 6px; height: 6px; }
+        *::-webkit-scrollbar-track { background: ${F.DARK_BG}; }
+        *::-webkit-scrollbar-thumb { background: ${F.BORDER}; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: ${F.MUTED}; }
+      `}</style>
+    </div>
+  );
+};
+
+// Workflow Card Component
+interface WorkflowCardProps {
+  workflow: Workflow;
+  onPlay: (workflow: Workflow) => void;
+  onEdit: (workflow: Workflow) => void;
+  onViewResults: (workflow: Workflow) => void;
+  onDelete: (workflowId: string) => void;
+  getStatusIcon: (status: string) => JSX.Element;
+  getStatusColor: (status: string) => string;
+}
+
+const WorkflowCard: React.FC<WorkflowCardProps> = ({
+  workflow,
+  onPlay,
+  onEdit,
+  onViewResults,
+  onDelete,
+  getStatusIcon,
+  getStatusColor,
+}) => {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        backgroundColor: hovered ? F.HOVER : F.PANEL_BG,
+        border: `1px solid ${hovered ? F.ORANGE : F.BORDER}`,
+        borderLeft: `3px solid ${getStatusColor(workflow.status)}`,
+        borderRadius: '2px',
+        padding: '12px',
+        transition: 'all 0.2s',
+      }}
+    >
+      {/* Card Header */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: '8px',
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            marginBottom: '4px',
+          }}>
+            {getStatusIcon(workflow.status)}
+            <span style={{
+              fontSize: '11px',
+              color: F.WHITE,
+              fontWeight: 700,
+            }}>
+              {workflow.name}
+            </span>
+            <span style={{
+              backgroundColor: `${getStatusColor(workflow.status)}20`,
+              color: getStatusColor(workflow.status),
+              padding: '2px 6px',
+              fontSize: '8px',
+              fontWeight: 700,
+              borderRadius: '2px',
+              letterSpacing: '0.3px',
+              border: `1px solid ${getStatusColor(workflow.status)}40`,
+            }}>
+              {workflow.status.toUpperCase()}
+            </span>
+          </div>
+          {workflow.description && (
+            <div style={{
+              fontSize: '9px',
+              color: F.GRAY,
+              lineHeight: '1.4',
+              marginTop: '4px',
+            }}>
+              {workflow.description}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Workflow Info */}
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        marginBottom: '8px',
+        fontSize: '9px',
+        color: F.GRAY,
+        paddingTop: '8px',
+        borderTop: `1px solid ${F.BORDER}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ color: F.MUTED }}>NODES:</span>
+          <span style={{ color: F.CYAN, fontWeight: 700 }}>{workflow.nodes?.length || 0}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ color: F.MUTED }}>EDGES:</span>
+          <span style={{ color: F.CYAN, fontWeight: 700 }}>{workflow.edges?.length || 0}</span>
+        </div>
+        <div style={{ marginLeft: 'auto', fontSize: '8px', color: F.MUTED }}>
+          ID: {workflow.id.substring(0, 8)}
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{
+        display: 'flex',
+        gap: '4px',
+        paddingTop: '8px',
+        borderTop: `1px solid ${F.BORDER}`,
+      }}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlay(workflow);
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: F.GREEN,
+            color: F.DARK_BG,
+            border: 'none',
+            padding: '6px 8px',
+            fontSize: '9px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            letterSpacing: '0.3px',
+          }}
+        >
+          <Play size={10} />
+          RUN
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(workflow);
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: F.BLUE,
+            color: F.WHITE,
+            border: 'none',
+            padding: '6px 8px',
+            fontSize: '9px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            letterSpacing: '0.3px',
+          }}
+        >
+          <Edit3 size={10} />
+          EDIT
+        </button>
+
+        {workflow.results && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewResults(workflow);
+            }}
+            style={{
+              flex: 1,
+              backgroundColor: F.YELLOW,
+              color: F.DARK_BG,
+              border: 'none',
+              padding: '6px 8px',
+              fontSize: '9px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              borderRadius: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              letterSpacing: '0.3px',
+            }}
+          >
+            <Eye size={10} />
+            VIEW
+          </button>
+        )}
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(workflow.id);
+          }}
+          style={{
+            backgroundColor: 'transparent',
+            color: F.RED,
+            border: `1px solid ${F.BORDER}`,
+            padding: '6px 8px',
+            fontSize: '9px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            borderRadius: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = `${F.RED}20`;
+            e.currentTarget.style.borderColor = F.RED;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.borderColor = F.BORDER;
+          }}
+        >
+          <Trash2 size={10} />
+        </button>
+      </div>
     </div>
   );
 };

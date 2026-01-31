@@ -302,3 +302,50 @@ if __name__ == '__main__':
         sig = "***" if stats['significant'] else ""
         print(f"  {driver}: {stats['coefficient']:+.2f}% {sig}")
         print(f"    {stats['interpretation']}")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "regression":
+            if len(sys.argv) < 5:
+                raise ValueError("Comp data, subject metrics, and regression type required")
+
+            comp_data = json.loads(sys.argv[2])
+            subject_metrics = json.loads(sys.argv[3])
+            regression_type = sys.argv[4]
+
+            analyzer = MARegression()
+
+            # Route to appropriate regression
+            if regression_type == "premium":
+                analysis = analyzer.premium_regression(comp_data)
+            elif regression_type == "multiple":
+                analysis = analyzer.multiple_regression(comp_data, subject_metrics)
+            else:
+                analysis = analyzer.premium_regression(comp_data)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

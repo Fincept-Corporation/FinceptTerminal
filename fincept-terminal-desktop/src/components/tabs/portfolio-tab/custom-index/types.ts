@@ -46,6 +46,7 @@ export interface CustomIndex {
   calculation_method: IndexCalculationMethod;
   base_value: number;              // Starting index value (e.g., 100, 1000)
   base_date: string;               // Date when index started
+  historical_start_date?: string;  // Optional: backfill snapshots from this date
   divisor: number;                 // Used for price-weighted calculations
   current_value: number;           // Current calculated index value
   previous_close: number;          // Previous day close value
@@ -177,6 +178,7 @@ export interface IndexFormState {
   base_value: number;
   cap_weight: number;
   currency: string;
+  historical_start_date: string;  // YYYY-MM-DD or empty for current date
   constituents: IndexConstituentConfig[];
 }
 
@@ -188,5 +190,6 @@ export const DEFAULT_INDEX_FORM: IndexFormState = {
   base_value: 100,
   cap_weight: 0,  // 0 means no cap
   currency: 'USD',
+  historical_start_date: '',  // Empty = start from today
   constituents: [],
 };

@@ -401,3 +401,59 @@ if __name__ == '__main__':
     print(f"Quantitative Conclusion: {fairness['quantitative_analysis']['conclusion']}")
     print(f"\nFairness Opinion: The offer price of ${fairness['offer_price']:,.0f} is")
     print(f"{fairness['fairness_conclusion']['conclusion']}")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "fairness":
+            if len(sys.argv) < 5:
+                raise ValueError("Valuation methods, offer price, and qualitative factors required")
+
+            valuation_methods = json.loads(sys.argv[2])
+            offer_price = float(sys.argv[3])
+            qualitative_factors = json.loads(sys.argv[4])
+
+            framework = FairnessOpinionFramework(
+                company_name=valuation_methods.get('company_name', 'Target Company'),
+                offer_price_per_share=offer_price
+            )
+
+            # Convert valuation methods data to ValuationRange objects
+            valuation_ranges = []
+            for method_data in valuation_methods.get('methods', []):
+                val_range = ValuationRange(
+                    method=ValuationMethod[method_data['method'].upper()],
+                    low=method_data['low'],
+                    high=method_data['high'],
+                    midpoint=method_data.get('midpoint', (method_data['low'] + method_data['high']) / 2),
+                    weight=method_data.get('weight', 1.0)
+                )
+                valuation_ranges.append(val_range)
+
+            analysis = framework.weighted_valuation_summary(valuation_ranges)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

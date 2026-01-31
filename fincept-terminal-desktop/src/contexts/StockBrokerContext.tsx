@@ -842,9 +842,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     try {
       if (tradingMode === 'paper') {
         // Fetch from unified trading service (paper positions)
-        console.log('[StockBrokerContext] Fetching paper positions from DB...');
         const unifiedPositions = await getUnifiedPositions();
-        console.log(`[StockBrokerContext] Fetched ${unifiedPositions.length} positions from DB:`, unifiedPositions);
 
         // Convert UnifiedPosition to Position format
         const convertedPositions: Position[] = unifiedPositions.map((p) => ({
@@ -863,7 +861,6 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           dayPnl: 0,
         }));
 
-        console.log(`[StockBrokerContext] Setting ${convertedPositions.length} positions in state`);
         setPositions(convertedPositions);
       } else if (adapter) {
         // Fetch from live broker
@@ -1088,6 +1085,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       const customEvent = event as CustomEvent;
       console.log('[StockBrokerContext] Order placed, refreshing data from DB...', customEvent.detail);
       // Simply refresh positions and orders from database
+      // Call functions directly - they're stable enough or will use latest closure
       await refreshPositions();
       await refreshOrders();
     };
@@ -1096,7 +1094,8 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     return () => {
       window.removeEventListener('stock-order-placed', handleOrderPlaced);
     };
-  }, [refreshPositions, refreshOrders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - event listener setup only once
 
   // ============================================================================
   // PERIODIC REFRESH FOR PAPER TRADING (Real-time price updates from WebSocket)
@@ -1115,11 +1114,15 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     }, 3000);
 
     return () => clearInterval(intervalId);
-  }, [tradingMode, isAuthenticated, refreshPositions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tradingMode, isAuthenticated]); // Don't include refreshPositions to avoid recreating interval
 
   // ============================================================================
   // SUBSCRIBE TO POSITION SYMBOLS (Paper Trading Real-time Updates)
   // ============================================================================
+
+  // Use a ref to track subscribed symbols and avoid re-subscription
+  const subscribedSymbolsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Only subscribe in paper mode when we have positions
@@ -1129,10 +1132,21 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
 
     // Subscribe to all position symbols once
     const subscribeToPositions = async () => {
-      console.log(`[StockBrokerContext] Subscribing to ${positions.length} position symbols...`);
-      for (const pos of positions) {
+      const currentSymbols = new Set(positions.map(p => `${p.symbol}:${p.exchange}`));
+      const symbolsToSubscribe = positions.filter(pos => {
+        const key = `${pos.symbol}:${pos.exchange}`;
+        return !subscribedSymbolsRef.current.has(key);
+      });
+
+      if (symbolsToSubscribe.length === 0) {
+        return; // All symbols already subscribed
+      }
+
+      console.log(`[StockBrokerContext] Subscribing to ${symbolsToSubscribe.length} new position symbols...`);
+      for (const pos of symbolsToSubscribe) {
         try {
           await adapter.subscribe(pos.symbol, pos.exchange, 'quote');
+          subscribedSymbolsRef.current.add(`${pos.symbol}:${pos.exchange}`);
         } catch (err) {
           console.warn(`[StockBrokerContext] Failed to subscribe to ${pos.symbol}:`, err);
         }
@@ -1140,7 +1154,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     };
 
     subscribeToPositions();
-  }, [positions.map(p => p.symbol).join(','), tradingMode, adapter]); // Only re-run if symbols change
+  }, [positions, tradingMode, adapter]); // positions is now stable
 
   // ============================================================================
   // MCP BRIDGE INTEGRATION
@@ -1292,6 +1306,15 @@ export function useStockBrokerContext(): StockBrokerContextType {
     throw new Error('useStockBrokerContext must be used within a StockBrokerProvider');
   }
 
+  return context;
+}
+
+/**
+ * Optional hook for accessing stock broker context
+ * Returns null if provider is not available instead of throwing an error
+ */
+export function useStockBrokerContextOptional(): StockBrokerContextType | null {
+  const context = useContext(StockBrokerContext);
   return context;
 }
 

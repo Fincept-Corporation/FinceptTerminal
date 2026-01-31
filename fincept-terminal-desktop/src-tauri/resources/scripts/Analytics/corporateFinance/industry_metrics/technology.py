@@ -406,3 +406,59 @@ if __name__ == '__main__':
         for metric, values in data.items():
             if metric != 'key_driver':
                 print(f"  {metric.replace('_', ' ').title()}: {values['median']:.1f}x median")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "tech":
+            if len(sys.argv) < 4:
+                raise ValueError("Sector and company data required")
+
+            sector = sys.argv[2]
+            company_data = json.loads(sys.argv[3])
+
+            # Determine business model from sector
+            if 'saas' in sector.lower():
+                model = TechBusinessModel.SAAS
+            elif 'marketplace' in sector.lower():
+                model = TechBusinessModel.MARKETPLACE
+            elif 'semiconductor' in sector.lower():
+                model = TechBusinessModel.SEMICONDUCTOR
+            else:
+                model = TechBusinessModel.SAAS  # default
+
+            analyzer = TechnologyMetrics(model)
+
+            # Route to appropriate calculation based on model
+            if model == TechBusinessModel.SAAS:
+                analysis = analyzer.calculate_saas_metrics(**company_data)
+            elif model == TechBusinessModel.MARKETPLACE:
+                analysis = analyzer.calculate_marketplace_metrics(**company_data)
+            elif model == TechBusinessModel.SEMICONDUCTOR:
+                analysis = analyzer.calculate_semiconductor_metrics(**company_data)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

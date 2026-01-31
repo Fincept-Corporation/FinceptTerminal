@@ -306,23 +306,70 @@ class TradingCompsAnalyzer:
             'y_values': y_vals
         }
 
-if __name__ == '__main__':
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {
+            "success": False,
+            "error": "No command specified. Usage: trading_comps.py <command> [args...]"
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
     analyzer = TradingCompsAnalyzer()
 
-    print("Fetching Technology sector comps...")
-    comps = analyzer.find_comparables('Technology')
-    print(f"Found {len(comps)} comparables")
+    try:
+        if command == "find_comps":
+            # find_comparables(industry)
+            if len(sys.argv) < 3:
+                raise ValueError("Industry required")
 
-    target_financials = {
-        'revenue': 1_000_000_000,
-        'ebitda': 250_000_000,
-        'ebit': 200_000_000,
-        'net_income': 150_000_000
-    }
+            industry = sys.argv[2]
+            comps = analyzer.find_comparables(industry)
 
-    comp_table = analyzer.build_comp_table(comps, target_financials)
-    print(f"\nMedian EV/EBITDA: {comp_table['summary_statistics']['median']['EV/EBITDA']:.2f}x")
+            result = {
+                "success": True,
+                "data": comps,
+                "count": len(comps)
+            }
+            print(json.dumps(result))
 
-    if 'target_valuation' in comp_table:
-        vals = comp_table['target_valuation']['valuations']
-        print(f"Implied EV (EV/EBITDA): ${vals.get('ev_ebitda_median', 0):,.0f}")
+        elif command == "build_table":
+            # build_comp_table(industry, target_financials)
+            if len(sys.argv) < 4:
+                raise ValueError("Industry and target financials required")
+
+            industry = sys.argv[2]
+            target_financials = json.loads(sys.argv[3])
+
+            comps = analyzer.find_comparables(industry)
+            comp_table = analyzer.build_comp_table(comps, target_financials)
+
+            result = {
+                "success": True,
+                "data": comp_table
+            }
+            print(json.dumps(result))
+
+        else:
+            result = {
+                "success": False,
+                "error": f"Unknown command: {command}. Available: find_comps, build_table"
+            }
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": str(e),
+            "command": command
+        }
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

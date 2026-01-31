@@ -211,26 +211,57 @@ class DetailedSourcesUses(SourcesUsesBuilder):
 
         return base_table
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified. Usage: sources_uses.py <command> [args...]"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "sources_uses":
+            if len(sys.argv) < 4:
+                raise ValueError("Deal structure and financing structure required")
+            deal_structure = json.loads(sys.argv[2])
+            financing_structure = json.loads(sys.argv[3])
+
+            builder = SourcesUsesBuilder(
+                purchase_price=deal_structure.get('purchase_price', 0),
+                target_debt_refinanced=deal_structure.get('target_debt_refinanced', 0),
+                acquirer_cash=financing_structure.get('acquirer_cash', 0),
+                new_debt=financing_structure.get('new_debt', 0),
+                new_equity=financing_structure.get('new_equity', 0)
+            )
+
+            if 'transaction_fees' in deal_structure:
+                builder.transaction_fees = deal_structure['transaction_fees']
+            else:
+                builder.estimate_transaction_fees(deal_structure.get('purchase_price', 0))
+
+            if 'financing_fees' in financing_structure:
+                builder.financing_fees = financing_structure['financing_fees']
+            else:
+                builder.estimate_financing_fees(financing_structure.get('new_debt', 0))
+
+            table = builder.auto_balance()
+            financing_mix = builder.calculate_financing_mix()
+
+            result = {"success": True, "data": {"table": table, "financing_mix": financing_mix}}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}. Available: sources_uses"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e), "command": command}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    builder = SourcesUsesBuilder(
-        purchase_price=5_000_000_000,
-        target_debt_refinanced=500_000_000,
-        acquirer_cash=2_000_000_000,
-        new_debt=2_500_000_000,
-        new_equity=1_000_000_000
-    )
-
-    builder.estimate_transaction_fees(5_000_000_000)
-    builder.estimate_financing_fees(2_500_000_000)
-
-    table = builder.auto_balance()
-
-    print(f"Total Uses: ${table['uses']['total_uses']:,.0f}")
-    print(f"Total Sources: ${table['sources']['total_sources']:,.0f}")
-    print(f"Balanced: {table['balanced']}")
-
-    financing_mix = builder.calculate_financing_mix()
-    print(f"\nFinancing Mix:")
-    print(f"  Debt: {financing_mix['debt_percentage']:.1f}%")
-    print(f"  Equity: {financing_mix['equity_percentage']:.1f}%")
-    print(f"  Cash: {financing_mix['cash_percentage']:.1f}%")
+    main()

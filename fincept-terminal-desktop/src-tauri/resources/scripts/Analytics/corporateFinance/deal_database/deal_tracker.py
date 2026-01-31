@@ -5,9 +5,14 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 
-from .database_schema import MADatabase
-from .deal_scanner import MADealScanner
-from .deal_parser import MADealParser
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.deal_database.database_schema import MADatabase
+from corporateFinance.deal_database.deal_scanner import MADealScanner
+from corporateFinance.deal_database.deal_parser import MADealParser
 
 class MADealTracker:
     def __init__(self, db_path: Optional[Path] = None):
@@ -217,63 +222,104 @@ class MADealTracker:
         self.db.close()
 
 def main():
-    """CLI interface"""
-    import argparse
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
 
-    parser = argparse.ArgumentParser(description='M&A Deal Tracker')
-    parser.add_argument('--update', action='store_true', help='Update deal database')
-    parser.add_argument('--days', type=int, default=7, help='Days to scan back')
-    parser.add_argument('--search', type=str, help='Search deals by industry')
-    parser.add_argument('--track', type=str, help='Track company by ticker')
-    parser.add_argument('--summary', action='store_true', help='Show recent deals summary')
-    parser.add_argument('--comps', type=str, help='Build comp table for industry')
-    parser.add_argument('--value', type=float, help='Target value for comps')
+    if len(sys.argv) < 2:
+        result = {
+            "success": False,
+            "error": "No command specified. Usage: deal_tracker.py <command> [args...]"
+        }
+        print(json.dumps(result))
+        sys.exit(1)
 
-    args = parser.parse_args()
-
+    command = sys.argv[1]
     tracker = MADealTracker()
 
     try:
-        if args.update:
-            result = tracker.update_deal_database(days_back=args.days)
-            print(f"\nUpdate complete:")
-            print(f"  Filings found: {result['filings_found']}")
-            print(f"  Deals parsed: {result['deals_parsed']}")
-            print(f"  Failed: {result['parsing_failed']}")
+        if command == "update":
+            # Update deal database
+            days_back = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+            result = tracker.update_deal_database(days_back=days_back)
 
-        elif args.search:
-            deals = tracker.search_deals(industry=args.search)
-            print(f"\nFound {len(deals)} deals in {args.search}")
-            for deal in deals[:10]:
-                print(f"  {deal['announcement_date']}: {deal['acquirer_name']} -> {deal['target_name']}")
-                if deal.get('deal_value'):
-                    print(f"    Value: ${deal['deal_value']:,.0f}")
+            output = {
+                "success": True,
+                "data": result
+            }
+            print(json.dumps(output))
 
-        elif args.track:
-            result = tracker.track_company(args.track)
-            print(f"\nM&A Activity for {args.track}:")
-            print(f"  Total acquisitions: {result['total_acquisitions']}")
-            print(f"  Filings found: {result['filings_found']}")
+        elif command == "search":
+            # Search deals by industry
+            if len(sys.argv) < 3:
+                raise ValueError("Industry name required")
 
-        elif args.summary:
-            summary = tracker.get_recent_deals_summary(days=30)
-            print(f"\nRecent M&A Activity (Last 30 days):")
-            print(f"  Total deals: {summary['total_deals']}")
-            print(f"  Total value: ${summary['total_value']:,.0f}")
-            print(f"\nBy Industry:")
-            for industry, count in summary['by_industry'].items():
-                print(f"    {industry}: {count}")
+            industry = sys.argv[2]
+            deals = tracker.search_deals(industry=industry)
 
-        elif args.comps and args.value:
-            comp_table = tracker.build_transaction_comp_table(args.comps, args.value)
-            print(f"\nTransaction Comparables - {args.comps}")
-            print(f"  Found {comp_table['comparable_count']} comparable deals")
-            print(f"  Median EV/Revenue: {comp_table['valuation_multiples']['ev_revenue_median']:.2f}x")
-            print(f"  Median EV/EBITDA: {comp_table['valuation_multiples']['ev_ebitda_median']:.2f}x")
+            result = {
+                "success": True,
+                "data": deals,
+                "count": len(deals)
+            }
+            print(json.dumps(result))
+
+        elif command == "track":
+            # Track company M&A activity
+            if len(sys.argv) < 3:
+                raise ValueError("Company ticker required")
+
+            ticker = sys.argv[2]
+            result = tracker.track_company(ticker)
+
+            output = {
+                "success": True,
+                "data": result
+            }
+            print(json.dumps(output))
+
+        elif command == "summary":
+            # Get recent deals summary
+            days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+            summary = tracker.get_recent_deals_summary(days=days)
+
+            result = {
+                "success": True,
+                "data": summary
+            }
+            print(json.dumps(result))
+
+        elif command == "comps":
+            # Build transaction comp table
+            if len(sys.argv) < 4:
+                raise ValueError("Industry and target value required")
+
+            industry = sys.argv[2]
+            target_value = float(sys.argv[3])
+
+            comp_table = tracker.build_transaction_comp_table(industry, target_value)
+
+            result = {
+                "success": True,
+                "data": comp_table
+            }
+            print(json.dumps(result))
 
         else:
-            parser.print_help()
+            result = {
+                "success": False,
+                "error": f"Unknown command: {command}. Available: update, search, track, summary, comps"
+            }
+            print(json.dumps(result))
+            sys.exit(1)
 
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": str(e),
+            "command": command
+        }
+        print(json.dumps(result))
+        sys.exit(1)
     finally:
         tracker.close()
 

@@ -286,61 +286,48 @@ class SynergyValuation:
             }
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "synergy_valuation":
+            if len(sys.argv) < 5:
+                raise ValueError("Revenue synergies, cost synergies, and integration costs required")
+
+            revenue_synergies = json.loads(sys.argv[2])
+            cost_synergies = json.loads(sys.argv[3])
+            integration_costs = json.loads(sys.argv[4])
+
+            valuator = SynergyValuation(wacc=0.10, terminal_growth_rate=0.02, tax_rate=0.25)
+
+            analysis = valuator.value_synergies_dcf(
+                annual_revenue_synergies=revenue_synergies,
+                annual_cost_synergies=cost_synergies,
+                integration_costs_by_year=integration_costs,
+                projection_years=10
+            )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    valuator = SynergyValuation(wacc=0.10, terminal_growth_rate=0.02, tax_rate=0.25)
-
-    revenue_synergies = [10_000_000, 20_000_000, 35_000_000, 50_000_000, 60_000_000,
-                         70_000_000, 80_000_000, 80_000_000, 80_000_000, 80_000_000]
-    cost_synergies = [15_000_000, 30_000_000, 45_000_000, 60_000_000, 65_000_000,
-                      65_000_000, 65_000_000, 65_000_000, 65_000_000, 65_000_000]
-    integration_costs = [25_000_000, 35_000_000, 15_000_000, 5_000_000, 0,
-                        0, 0, 0, 0, 0]
-
-    dcf_value = valuator.value_synergies_dcf(
-        annual_revenue_synergies=revenue_synergies,
-        annual_cost_synergies=cost_synergies,
-        integration_costs_by_year=integration_costs,
-        projection_years=10
-    )
-
-    print("=== SYNERGY DCF VALUATION ===\n")
-    print(f"Explicit Forecast PV: ${dcf_value['explicit_forecast_pv']:,.0f}")
-    print(f"Terminal Value: ${dcf_value['terminal_value']:,.0f}")
-    print(f"Terminal Value PV: ${dcf_value['terminal_value_pv']:,.0f}")
-    print(f"Total Synergy Value: ${dcf_value['total_synergy_value']:,.0f}")
-    print(f"Terminal Value %: {dcf_value['terminal_value_pct']:.1f}%\n")
-
-    print("First 5 Years:")
-    for year in dcf_value['yearly_projections'][:5]:
-        print(f"  Year {year['year']}: Rev ${year['revenue_synergy']:,.0f} + Cost ${year['cost_synergy']:,.0f} - Integration ${year['integration_cost']:,.0f} = PV ${year['present_value']:,.0f}")
-
-    comparison = valuator.compare_deal_with_without_synergies(
-        purchase_price=800_000_000,
-        standalone_target_value=650_000_000,
-        synergy_value=dcf_value['total_synergy_value'],
-        acquirer_market_cap=5_000_000_000
-    )
-
-    print("\n\n=== DEAL ECONOMICS COMPARISON ===")
-    print(f"Purchase Price: ${comparison['purchase_price']:,.0f}")
-    print(f"Standalone Value: ${comparison['standalone_target_value']:,.0f}")
-    print(f"Premium Paid: ${comparison['premium_paid']:,.0f} ({comparison['premium_pct']:.1f}%)")
-    print(f"\nWithout Synergies NPV: ${comparison['without_synergies']['npv']:,.0f}")
-    print(f"With Synergies NPV: ${comparison['with_synergies']['npv']:,.0f}")
-    print(f"Value Creation: {comparison['with_synergies']['creates_value']}")
-    print(f"Synergies Justify Premium: {comparison['synergy_impact']['synergy_justifies_premium']}")
-
-    scenarios = [
-        {'name': 'Bear Case', 'synergy_value': dcf_value['total_synergy_value'] * 0.6, 'probability': 0.25},
-        {'name': 'Base Case', 'synergy_value': dcf_value['total_synergy_value'], 'probability': 0.50},
-        {'name': 'Bull Case', 'synergy_value': dcf_value['total_synergy_value'] * 1.4, 'probability': 0.25}
-    ]
-
-    prob_adjusted = valuator.calculate_probability_adjusted_synergies(scenarios)
-
-    print("\n\n=== PROBABILITY-ADJUSTED SYNERGIES ===")
-    print(f"Expected Value: ${prob_adjusted['expected_synergy_value']:,.0f}")
-    print(f"Range: ${prob_adjusted['value_range']['min']:,.0f} - ${prob_adjusted['value_range']['max']:,.0f}")
-    print(f"\nScenarios:")
-    for scenario in prob_adjusted['scenarios']:
-        print(f"  {scenario['scenario_name']}: ${scenario['synergy_value']:,.0f} ({scenario['probability']:.0f}% prob)")
+    main()

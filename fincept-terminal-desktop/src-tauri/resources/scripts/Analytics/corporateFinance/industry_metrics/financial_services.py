@@ -416,3 +416,50 @@ if __name__ == '__main__':
     for sector, data in benchmarks.items():
         print(f"\n{sector.upper()}:")
         print(f"  Key Drivers: {data['key_drivers']}")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "financial":
+            if len(sys.argv) < 4:
+                raise ValueError("Sector and institution data required")
+
+            sector = sys.argv[2]
+            institution_data = json.loads(sys.argv[3])
+
+            analyzer = FinancialServicesMetrics()
+
+            # Route to appropriate calculation based on sector
+            if 'bank' in sector.lower():
+                analysis = analyzer.calculate_bank_metrics(**institution_data)
+            elif 'wealth' in sector.lower():
+                analysis = analyzer.calculate_wealth_management_metrics(**institution_data)
+            else:
+                # Default to bank metrics
+                analysis = analyzer.calculate_bank_metrics(**institution_data)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

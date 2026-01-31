@@ -391,6 +391,7 @@ pub struct CustomIndex {
     pub calculation_method: String,
     pub base_value: f64,
     pub base_date: String,
+    pub historical_start_date: Option<String>,
     pub divisor: f64,
     pub current_value: f64,
     pub previous_close: f64,

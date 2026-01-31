@@ -869,5 +869,60 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         ",
     )?;
 
+    // Migrations: Add missing columns to existing tables
+    // Check if custom_price column exists, if not add it
+    let column_check: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('index_constituents') WHERE name='custom_price'",
+        [],
+        |row| row.get(0)
+    );
+
+    if let Ok(count) = column_check {
+        if count == 0 {
+            // Add custom_price column
+            conn.execute(
+                "ALTER TABLE index_constituents ADD COLUMN custom_price REAL",
+                [],
+            )?;
+            println!("[Migration] Added custom_price column to index_constituents");
+        }
+    }
+
+    // Check if price_date column exists, if not add it
+    let column_check: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('index_constituents') WHERE name='price_date'",
+        [],
+        |row| row.get(0)
+    );
+
+    if let Ok(count) = column_check {
+        if count == 0 {
+            // Add price_date column
+            conn.execute(
+                "ALTER TABLE index_constituents ADD COLUMN price_date TEXT",
+                [],
+            )?;
+            println!("[Migration] Added price_date column to index_constituents");
+        }
+    }
+
+    // Check if historical_start_date column exists in custom_indices, if not add it
+    let column_check: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('custom_indices') WHERE name='historical_start_date'",
+        [],
+        |row| row.get(0)
+    );
+
+    if let Ok(count) = column_check {
+        if count == 0 {
+            // Add historical_start_date column
+            conn.execute(
+                "ALTER TABLE custom_indices ADD COLUMN historical_start_date TEXT",
+                [],
+            )?;
+            println!("[Migration] Added historical_start_date column to custom_indices");
+        }
+    }
+
     Ok(())
 }

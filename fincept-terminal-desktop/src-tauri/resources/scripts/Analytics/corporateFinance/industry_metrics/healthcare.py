@@ -404,3 +404,59 @@ if __name__ == '__main__':
     for sector, data in benchmarks.items():
         print(f"\n{sector.upper().replace('_', ' ')}:")
         print(f"  Key Drivers: {data['key_drivers']}")
+
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "healthcare":
+            if len(sys.argv) < 4:
+                raise ValueError("Sector and company data required")
+
+            sector = sys.argv[2]
+            company_data = json.loads(sys.argv[3])
+
+            # Determine segment from sector
+            if 'pharma' in sector.lower() or 'biotech' in sector.lower():
+                segment = HealthcareSegment.PHARMA_BIOTECH
+            elif 'device' in sector.lower():
+                segment = HealthcareSegment.MEDICAL_DEVICES
+            elif 'service' in sector.lower():
+                segment = HealthcareSegment.HEALTHCARE_SERVICES
+            else:
+                segment = HealthcareSegment.PHARMA_BIOTECH  # default
+
+            analyzer = HealthcareMetrics(segment)
+
+            # Route to appropriate calculation
+            if segment == HealthcareSegment.PHARMA_BIOTECH:
+                analysis = analyzer.calculate_drug_candidate_value(**company_data)
+            elif segment == HealthcareSegment.MEDICAL_DEVICES:
+                analysis = analyzer.calculate_medical_device_metrics(**company_data)
+            elif segment == HealthcareSegment.HEALTHCARE_SERVICES:
+                analysis = analyzer.calculate_healthcare_services_metrics(**company_data)
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

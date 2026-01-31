@@ -180,10 +180,16 @@ export class DealDatabaseService {
     daysBack: number = 30,
     filingTypes?: string[]
   ): Promise<any> {
-    return invoke('scan_ma_filings', {
+    const result = await invoke('scan_ma_filings', {
       daysBack,
       filingTypes: filingTypes ? JSON.stringify(filingTypes) : undefined,
     });
+    const parsed = JSON.parse(result as string);
+    if (parsed.success) {
+      return parsed.data || [];
+    } else {
+      throw new Error(parsed.error || 'Failed to scan filings');
+    }
   }
 
   /**
@@ -193,10 +199,16 @@ export class DealDatabaseService {
     filingUrl: string,
     filingType: string
   ): Promise<any> {
-    return invoke('parse_ma_filing', {
+    const result = await invoke('parse_ma_filing', {
       filingUrl,
       filingType,
     });
+    const parsed = JSON.parse(result as string);
+    if (parsed.success) {
+      return parsed.data;
+    } else {
+      throw new Error(parsed.error || 'Failed to parse filing');
+    }
   }
 
   /**
@@ -215,7 +227,12 @@ export class DealDatabaseService {
     const result = await invoke('get_all_ma_deals', {
       filters: filters ? JSON.stringify(filters) : undefined,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (parsed.success) {
+      return parsed.data || [];
+    } else {
+      throw new Error(parsed.error || 'Failed to get deals');
+    }
   }
 
   /**
@@ -229,7 +246,12 @@ export class DealDatabaseService {
       query,
       searchType,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (parsed.success) {
+      return parsed.data || [];
+    } else {
+      throw new Error(parsed.error || 'Failed to search deals');
+    }
   }
 
   /**

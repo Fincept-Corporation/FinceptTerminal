@@ -151,23 +151,38 @@ class ScorecardMethod:
             'baseline_valuation': self.get_baseline_valuation(stage)
         }
 
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "scorecard":
+            if len(sys.argv) < 5:
+                raise ValueError("Stage, region, and factor assessments required")
+            stage = sys.argv[2]
+            region = sys.argv[3]
+            factor_assessments = json.loads(sys.argv[4])
+
+            scorecard = ScorecardMethod(region=region)
+            valuation = scorecard.comprehensive_assessment(stage=stage, **factor_assessments)
+
+            result = {"success": True, "data": valuation}
+            print(json.dumps(result))
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+            print(json.dumps(result))
+            sys.exit(1)
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result))
+        sys.exit(1)
+
 if __name__ == '__main__':
-    scorecard = ScorecardMethod(region='US')
-
-    valuation = scorecard.comprehensive_assessment(
-        stage='seed',
-        team_strength='excellent',
-        market_size='strong',
-        product_strength='above_average',
-        competition='average',
-        sales_traction='below_average'
-    )
-
-    print(f"=== SCORECARD METHOD VALUATION ===\n")
-    print(f"Baseline ({valuation['region']} {valuation['stage']}): ${valuation['baseline_valuation']:,.0f}")
-    print(f"Adjustment: {valuation['adjustment_pct']:+.1f}%")
-    print(f"Final Valuation: ${valuation['final_valuation']:,.0f}\n")
-
-    print("Factor Assessments:")
-    for factor, data in valuation['factor_assessments'].items():
-        print(f"  {factor.replace('_', ' ').title()}: {data['comparison_score']:+.2f} (weight: {data['weight']:.0%})")
+    main()

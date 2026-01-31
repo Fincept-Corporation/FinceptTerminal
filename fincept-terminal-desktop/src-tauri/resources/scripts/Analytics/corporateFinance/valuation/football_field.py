@@ -1,18 +1,8 @@
-"""Football Field Valuation Chart"""
+"""Football Field Valuation Chart - Data Generation for Frontend Rendering"""
 import sys
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
-import numpy as np
-from dataclasses import dataclass
-
-scripts_path = Path(__file__).parent.parent.parent.parent
-sys.path.append(str(scripts_path))
-
-try:
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
-except ImportError:
-    plt = None
+import json
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, asdict
 
 @dataclass
 class ValuationRange:
@@ -23,10 +13,9 @@ class ValuationRange:
     weight: float = 1.0
 
 class FootballFieldChart:
-    def __init__(self):
-        if plt is None:
-            raise ImportError("matplotlib required: pip install matplotlib")
+    """Generate football field valuation data for frontend charting"""
 
+    def __init__(self):
         self.colors = {
             'DCF': '#2E86AB',
             'Trading Comps': '#A23B72',
@@ -51,17 +40,54 @@ class FootballFieldChart:
             weight=weight
         )
 
-    def generate_chart(self, valuation_ranges: List[ValuationRange],
-                      current_price: Optional[float] = None,
-                      offer_price: Optional[float] = None,
-                      output_path: Optional[str] = None) -> Dict[str, Any]:
-        """Generate football field chart"""
+    def format_value(self, value: float, format_type: str = 'auto') -> Dict[str, Any]:
+        """Format value with appropriate scale
+
+        Args:
+            value: Value to format
+            format_type: 'auto', 'billions', 'millions', 'thousands', 'dollars'
+
+        Returns:
+            Dict with formatted value and scale
+        """
+        if format_type == 'auto':
+            if abs(value) >= 1e9:
+                return {'value': value / 1e9, 'scale': 'B', 'formatted': f'${value/1e9:.2f}B'}
+            elif abs(value) >= 1e6:
+                return {'value': value / 1e6, 'scale': 'M', 'formatted': f'${value/1e6:.2f}M'}
+            elif abs(value) >= 1e3:
+                return {'value': value / 1e3, 'scale': 'K', 'formatted': f'${value/1e3:.2f}K'}
+            else:
+                return {'value': value, 'scale': '', 'formatted': f'${value:.2f}'}
+        elif format_type == 'billions':
+            return {'value': value / 1e9, 'scale': 'B', 'formatted': f'${value/1e9:.2f}B'}
+        elif format_type == 'millions':
+            return {'value': value / 1e6, 'scale': 'M', 'formatted': f'${value/1e6:.2f}M'}
+        elif format_type == 'thousands':
+            return {'value': value / 1e3, 'scale': 'K', 'formatted': f'${value/1e3:.2f}K'}
+        else:
+            return {'value': value, 'scale': '', 'formatted': f'${value:.2f}'}
+
+    def generate_chart_data(self, valuation_ranges: List[ValuationRange],
+                           current_price: Optional[float] = None,
+                           offer_price: Optional[float] = None,
+                           format_type: str = 'auto') -> Dict[str, Any]:
+        """Generate football field chart data for frontend rendering
+
+        Args:
+            valuation_ranges: List of valuation ranges
+            current_price: Current market price (optional)
+            offer_price: Offer/deal price (optional)
+            format_type: Value formatting ('auto', 'billions', 'millions', 'thousands', 'dollars')
+
+        Returns:
+            Chart data structure for frontend
+        """
 
         if not valuation_ranges:
             return {'error': 'No valuation ranges provided'}
 
-        fig, ax = plt.subplots(figsize=(14, 8))
-
+        # Collect all values for scaling
         all_values = []
         for vr in valuation_ranges:
             all_values.extend([vr.low, vr.high])
@@ -73,87 +99,72 @@ class FootballFieldChart:
         min_val = min(all_values) * 0.9
         max_val = max(all_values) * 1.1
 
-        y_positions = list(range(len(valuation_ranges), 0, -1))
-
-        for i, vr in enumerate(valuation_ranges):
-            y = y_positions[i]
+        # Build chart data
+        chart_ranges = []
+        for vr in valuation_ranges:
             color = self.colors.get(vr.method_name, '#95B8D1')
 
-            ax.barh(y, vr.high - vr.low, left=vr.low, height=0.6,
-                   color=color, alpha=0.7, edgecolor='black', linewidth=1.5)
+            chart_ranges.append({
+                'method': vr.method_name,
+                'low': vr.low,
+                'high': vr.high,
+                'midpoint': vr.midpoint,
+                'weight': vr.weight,
+                'color': color,
+                'range_pct': ((vr.high - vr.low) / vr.midpoint) * 100 if vr.midpoint > 0 else 0,
+                'low_formatted': self.format_value(vr.low, format_type),
+                'high_formatted': self.format_value(vr.high, format_type),
+                'midpoint_formatted': self.format_value(vr.midpoint, format_type)
+            })
 
-            ax.plot(vr.midpoint, y, 'D', color='black', markersize=8, zorder=5)
-
-            ax.text(min_val, y, f'{vr.method_name}', va='center', ha='right',
-                   fontsize=11, fontweight='bold')
-
-            range_text = f'${vr.low/1e9:.2f}B - ${vr.high/1e9:.2f}B'
-            ax.text(max_val, y, range_text, va='center', ha='left',
-                   fontsize=10)
-
-        if current_price:
-            ax.axvline(current_price, color='blue', linestyle='--', linewidth=2,
-                      label=f'Current Price: ${current_price/1e9:.2f}B', alpha=0.8)
-
-        if offer_price:
-            ax.axvline(offer_price, color='red', linestyle='--', linewidth=2,
-                      label=f'Offer Price: ${offer_price/1e9:.2f}B', alpha=0.8)
-
-        ax.set_xlim(min_val, max_val)
-        ax.set_ylim(0.5, len(valuation_ranges) + 0.5)
-
-        ax.set_xlabel('Enterprise Value ($ Billions)', fontsize=12, fontweight='bold')
-        ax.set_title('Valuation Summary - Football Field Chart', fontsize=14, fontweight='bold', pad=20)
-
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x/1e9:.1f}B'))
-
-        ax.set_yticks([])
-        ax.grid(axis='x', alpha=0.3, linestyle='--')
-
-        if current_price or offer_price:
-            ax.legend(loc='upper right', fontsize=10)
-
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-
-        plt.tight_layout()
-
-        if output_path:
-            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        midpoints = [vr.midpoint for vr in valuation_ranges]
+        overall_midpoint = sum(midpoints) / len(midpoints) if midpoints else 0
 
         chart_data = {
-            'valuation_ranges': [
-                {
-                    'method': vr.method_name,
-                    'low': vr.low,
-                    'high': vr.high,
-                    'midpoint': vr.midpoint,
-                    'range_pct': ((vr.high - vr.low) / vr.midpoint) * 100
-                }
-                for vr in valuation_ranges
-            ],
+            'valuation_ranges': chart_ranges,
             'overall_low': min(vr.low for vr in valuation_ranges),
             'overall_high': max(vr.high for vr in valuation_ranges),
-            'overall_midpoint': np.mean([vr.midpoint for vr in valuation_ranges]),
+            'overall_midpoint': overall_midpoint,
+            'min_val': min_val,
+            'max_val': max_val,
             'current_price': current_price,
-            'offer_price': offer_price
+            'offer_price': offer_price,
+            'format_type': format_type
         }
 
+        # Add reference lines
         if current_price:
+            chart_data['current_price_formatted'] = self.format_value(current_price, format_type)
             chart_data['current_vs_low_pct'] = ((current_price - chart_data['overall_low']) / chart_data['overall_low']) * 100
             chart_data['current_vs_high_pct'] = ((current_price - chart_data['overall_high']) / chart_data['overall_high']) * 100
 
         if offer_price:
+            chart_data['offer_price_formatted'] = self.format_value(offer_price, format_type)
             chart_data['offer_vs_current_pct'] = ((offer_price - current_price) / current_price) * 100 if current_price else 0
-            chart_data['offer_vs_midpoint_pct'] = ((offer_price - chart_data['overall_midpoint']) / chart_data['overall_midpoint']) * 100
+            chart_data['offer_vs_midpoint_pct'] = ((offer_price - overall_midpoint) / overall_midpoint) * 100 if overall_midpoint > 0 else 0
 
         return chart_data
 
     def calculate_weighted_valuation(self, valuation_ranges: List[ValuationRange]) -> Dict[str, float]:
         """Calculate weighted average valuation"""
 
+        if not valuation_ranges:
+            return {
+                'weighted_low': 0,
+                'weighted_high': 0,
+                'weighted_midpoint': 0,
+                'total_weight': 0
+            }
+
         total_weight = sum(vr.weight for vr in valuation_ranges)
+
+        if total_weight == 0:
+            return {
+                'weighted_low': 0,
+                'weighted_high': 0,
+                'weighted_midpoint': 0,
+                'total_weight': 0
+            }
 
         weighted_low = sum(vr.low * vr.weight for vr in valuation_ranges) / total_weight
         weighted_high = sum(vr.high * vr.weight for vr in valuation_ranges) / total_weight
@@ -169,35 +180,70 @@ class FootballFieldChart:
     def analyze_valuation_dispersion(self, valuation_ranges: List[ValuationRange]) -> Dict[str, float]:
         """Analyze dispersion across valuation methods"""
 
+        if not valuation_ranges:
+            return {
+                'mean_midpoint': 0,
+                'median_midpoint': 0,
+                'std_dev': 0,
+                'coefficient_of_variation': 0,
+                'min_midpoint': 0,
+                'max_midpoint': 0,
+                'range': 0,
+                'range_pct': 0
+            }
+
         midpoints = [vr.midpoint for vr in valuation_ranges]
 
+        mean_val = sum(midpoints) / len(midpoints)
+        sorted_midpoints = sorted(midpoints)
+        n = len(sorted_midpoints)
+        median_val = sorted_midpoints[n // 2] if n % 2 == 1 else (sorted_midpoints[n // 2 - 1] + sorted_midpoints[n // 2]) / 2
+
+        # Calculate standard deviation
+        variance = sum((x - mean_val) ** 2 for x in midpoints) / len(midpoints)
+        std_dev = variance ** 0.5
+
         return {
-            'mean_midpoint': np.mean(midpoints),
-            'median_midpoint': np.median(midpoints),
-            'std_dev': np.std(midpoints),
-            'coefficient_of_variation': (np.std(midpoints) / np.mean(midpoints)) * 100 if np.mean(midpoints) else 0,
+            'mean_midpoint': mean_val,
+            'median_midpoint': median_val,
+            'std_dev': std_dev,
+            'coefficient_of_variation': (std_dev / mean_val) * 100 if mean_val > 0 else 0,
             'min_midpoint': min(midpoints),
             'max_midpoint': max(midpoints),
             'range': max(midpoints) - min(midpoints),
-            'range_pct': ((max(midpoints) - min(midpoints)) / np.mean(midpoints)) * 100 if np.mean(midpoints) else 0
+            'range_pct': ((max(midpoints) - min(midpoints)) / mean_val) * 100 if mean_val > 0 else 0
         }
 
     def generate_summary_table(self, valuation_ranges: List[ValuationRange],
-                               current_price: Optional[float] = None) -> Dict[str, Any]:
-        """Generate valuation summary table"""
+                               current_price: Optional[float] = None,
+                               format_type: str = 'auto') -> Dict[str, Any]:
+        """Generate valuation summary table
+
+        Args:
+            valuation_ranges: List of valuation ranges
+            current_price: Current market price (optional)
+            format_type: Value formatting ('auto', 'billions', 'millions', 'thousands', 'dollars')
+
+        Returns:
+            Summary table data
+        """
 
         table_rows = []
         for vr in valuation_ranges:
             row = {
-                'Method': vr.method_name,
-                'Low ($M)': vr.low / 1_000_000,
-                'Midpoint ($M)': vr.midpoint / 1_000_000,
-                'High ($M)': vr.high / 1_000_000,
-                'Weight': vr.weight
+                'method': vr.method_name,
+                'low': vr.low,
+                'midpoint': vr.midpoint,
+                'high': vr.high,
+                'weight': vr.weight,
+                'low_formatted': self.format_value(vr.low, format_type),
+                'midpoint_formatted': self.format_value(vr.midpoint, format_type),
+                'high_formatted': self.format_value(vr.high, format_type)
             }
 
             if current_price:
-                row['Implied Premium to Current (%)'] = ((vr.midpoint - current_price) / current_price) * 100
+                premium = ((vr.midpoint - current_price) / current_price) * 100 if current_price > 0 else 0
+                row['implied_premium_to_current_pct'] = premium
 
             table_rows.append(row)
 
@@ -205,45 +251,100 @@ class FootballFieldChart:
         dispersion = self.analyze_valuation_dispersion(valuation_ranges)
 
         summary_row = {
-            'Method': 'WEIGHTED AVERAGE',
-            'Low ($M)': weighted['weighted_low'] / 1_000_000,
-            'Midpoint ($M)': weighted['weighted_midpoint'] / 1_000_000,
-            'High ($M)': weighted['weighted_high'] / 1_000_000,
-            'Weight': weighted['total_weight']
+            'method': 'WEIGHTED AVERAGE',
+            'low': weighted['weighted_low'],
+            'midpoint': weighted['weighted_midpoint'],
+            'high': weighted['weighted_high'],
+            'weight': weighted['total_weight'],
+            'low_formatted': self.format_value(weighted['weighted_low'], format_type),
+            'midpoint_formatted': self.format_value(weighted['weighted_midpoint'], format_type),
+            'high_formatted': self.format_value(weighted['weighted_high'], format_type)
         }
 
         if current_price:
-            summary_row['Implied Premium to Current (%)'] = ((weighted['weighted_midpoint'] - current_price) / current_price) * 100
+            premium = ((weighted['weighted_midpoint'] - current_price) / current_price) * 100 if current_price > 0 else 0
+            summary_row['implied_premium_to_current_pct'] = premium
 
         return {
             'valuation_methods': table_rows,
             'weighted_average': summary_row,
-            'dispersion_analysis': dispersion
+            'dispersion_analysis': dispersion,
+            'format_type': format_type
         }
 
-if __name__ == '__main__':
+def main():
+    """CLI entry point - outputs JSON for Tauri integration
+
+    Usage:
+        python football_field.py generate <valuation_methods_json> [current_price] [offer_price] [format_type]
+
+    Example:
+        python football_field.py generate '[{"method":"DCF","low":1e9,"high":1.5e9,"midpoint":1.25e9}]' 1.1e9 1.3e9 billions
+    """
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "Usage: football_field.py <command> [args...]"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
     chart = FootballFieldChart()
 
-    valuation_ranges = [
-        chart.add_valuation_range('DCF', 4.5e9, 5.5e9, 5.0e9, weight=1.5),
-        chart.add_valuation_range('Trading Comps', 4.8e9, 6.0e9, 5.4e9, weight=1.0),
-        chart.add_valuation_range('Transaction Comps', 5.0e9, 6.2e9, 5.6e9, weight=1.2),
-        chart.add_valuation_range('LBO', 4.2e9, 5.2e9, 4.7e9, weight=0.8),
-        chart.add_valuation_range('Premiums Paid', 5.5e9, 6.5e9, 6.0e9, weight=1.0)
-    ]
+    try:
+        if command == "generate":
+            if len(sys.argv) < 3:
+                raise ValueError("Valuation methods JSON required")
 
-    current_price = 4.0e9
-    offer_price = 5.5e9
+            valuation_methods = json.loads(sys.argv[2])
+            current_price = float(sys.argv[3]) if len(sys.argv) > 3 else None
+            offer_price = float(sys.argv[4]) if len(sys.argv) > 4 else None
+            format_type = sys.argv[5] if len(sys.argv) > 5 else 'auto'
 
-    result = chart.generate_chart(
-        valuation_ranges,
-        current_price=current_price,
-        offer_price=offer_price,
-        output_path='football_field.png'
-    )
+            # Build valuation ranges
+            valuation_ranges = []
+            for method in valuation_methods:
+                vr = chart.add_valuation_range(
+                    method.get('method', 'Unknown'),
+                    method.get('low', 0),
+                    method.get('high', 0),
+                    method.get('midpoint'),
+                    weight=method.get('weight', 1.0)
+                )
+                valuation_ranges.append(vr)
 
-    print(f"Overall Valuation Range: ${result['overall_low']/1e9:.2f}B - ${result['overall_high']/1e9:.2f}B")
-    print(f"Offer vs Current: {result['offer_vs_current_pct']:.1f}% premium")
+            # Generate chart data
+            chart_data = chart.generate_chart_data(
+                valuation_ranges,
+                current_price=current_price,
+                offer_price=offer_price,
+                format_type=format_type
+            )
 
-    summary = chart.generate_summary_table(valuation_ranges, current_price)
-    print(f"\nWeighted Midpoint: ${summary['weighted_average']['Midpoint ($M)']:.0f}M")
+            # Generate summary table
+            summary = chart.generate_summary_table(
+                valuation_ranges,
+                current_price=current_price,
+                format_type=format_type
+            )
+
+            result = {
+                "success": True,
+                "data": {
+                    "chart": chart_data,
+                    "summary": summary
+                }
+            }
+            print(json.dumps(result, default=str))
+
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}. Available: generate"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e), "command": command}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

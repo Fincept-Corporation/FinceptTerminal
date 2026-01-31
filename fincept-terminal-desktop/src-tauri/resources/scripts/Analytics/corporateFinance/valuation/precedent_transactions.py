@@ -10,7 +10,12 @@ from statistics import median, mean, stdev
 scripts_path = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(scripts_path))
 
-from ..deal_database.database_schema import MADatabase
+# Add Analytics path for absolute imports
+analytics_path = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(analytics_path))
+
+# Use absolute imports instead of relative imports
+from corporateFinance.deal_database.database_schema import MADatabase
 
 @dataclass
 class TransactionComp:
@@ -327,23 +332,47 @@ class PrecedentTransactionAnalyzer:
             'premium_dollars': implied_price_per_share - current_price
         }
 
-if __name__ == '__main__':
+def main():
+    """CLI entry point - outputs JSON for Tauri integration"""
+    import json
+
+    if len(sys.argv) < 2:
+        result = {"success": False, "error": "No command specified. Usage: precedent_transactions.py <command> [args...]"}
+        print(json.dumps(result))
+        sys.exit(1)
+
+    command = sys.argv[1]
     analyzer = PrecedentTransactionAnalyzer()
 
-    target_metrics = {
-        'industry': 'Technology',
-        'enterprise_value': 5_000_000_000,
-        'revenue': 1_000_000_000,
-        'ebitda': 250_000_000,
-        'ebit': 200_000_000
-    }
+    try:
+        if command == "precedent":
+            if len(sys.argv) < 4:
+                raise ValueError("Target data and comp deals required")
+            target_data = json.loads(sys.argv[2])
+            comp_deals = json.loads(sys.argv[3])
 
-    comps = analyzer.find_comparables(target_metrics)
-    print(f"Found {len(comps)} comparable transactions")
+            # Convert comp_deals to TransactionComp objects if needed
+            from corporateFinance.valuation.precedent_transactions import TransactionComp
+            comps = []
+            for deal in comp_deals:
+                if isinstance(deal, dict):
+                    comps.append(TransactionComp(**deal))
+                else:
+                    comps.append(deal)
 
-    comp_table = analyzer.build_comp_table(comps, target_metrics)
-    print(f"\nMedian EV/EBITDA: {comp_table['summary_statistics']['median']['EV/EBITDA']:.2f}x")
+            comp_table = analyzer.build_comp_table(comps, target_data)
+            result = {"success": True, "data": comp_table}
+            print(json.dumps(result))
 
-    if 'target_valuation' in comp_table:
-        vals = comp_table['target_valuation']['valuations']
-        print(f"Implied Valuation (EV/EBITDA): ${vals.get('ev_ebitda_median', 0):,.0f}")
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}. Available: precedent"}
+            print(json.dumps(result))
+            sys.exit(1)
+
+    except Exception as e:
+        result = {"success": False, "error": str(e), "command": command}
+        print(json.dumps(result))
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

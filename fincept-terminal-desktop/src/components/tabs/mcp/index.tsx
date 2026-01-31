@@ -6,7 +6,7 @@ import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCirc
 import { mcpManager, MCPServerWithStats } from '../../../services/mcp/mcpManager';
 import { sqliteService } from '../../../services/core/sqliteService';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
-import { useStockBrokerContext } from '../../../contexts/StockBrokerContext';
+import { useStockBrokerContextOptional } from '../../../contexts/StockBrokerContext';
 import { brokerMCPBridge } from '../../../services/mcp/internal/BrokerMCPBridge';
 import { stockBrokerMCPBridge } from '../../../services/mcp/internal/StockBrokerMCPBridge';
 import MCPMarketplace from './marketplace/MCPMarketplace';
@@ -51,8 +51,8 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   // Crypto broker context for MCP bridge
   const { activeAdapter, tradingMode, activeBroker } = useBrokerContext();
 
-  // Stock broker context for MCP bridge
-  const stockBrokerCtx = useStockBrokerContext();
+  // Stock broker context for MCP bridge (optional - may not be available)
+  const stockBrokerCtx = useStockBrokerContextOptional();
   const stockAdapter = stockBrokerCtx?.adapter;
   const stockTradingMode = stockBrokerCtx?.tradingMode;
   const stockActiveBroker = stockBrokerCtx?.activeBroker;
