@@ -7,6 +7,7 @@ import React from 'react';
 import { useOrders, useCancelOrder } from '../../hooks/useOrders';
 import { formatPrice, formatCurrency, formatDateTime, formatOrderStatus } from '../../utils/formatters';
 import type { UnifiedOrder } from '../../types';
+import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -25,30 +26,43 @@ export function OrdersTable() {
   const { cancelOrder, cancelAllOrders, isCanceling } = useCancelOrder();
 
   const handleCancelOrder = async (order: UnifiedOrder) => {
-    if (!confirm(`Cancel ${order.type} ${order.side} order for ${order.symbol}?`)) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      `Cancel ${order.type.toUpperCase()} ${order.side.toUpperCase()} order for ${order.symbol}?`,
+      { title: 'Cancel Order', type: 'warning' }
+    );
+
+    if (!confirmed) return;
 
     try {
       await cancelOrder(order.id, order.symbol);
       await refresh();
-      alert(`[OK] Order canceled: ${order.id}`);
+      showSuccess('Order canceled successfully', [
+        { label: 'Order ID', value: order.id },
+        { label: 'Symbol', value: order.symbol },
+      ]);
     } catch (error) {
-      alert(`[FAIL] Failed to cancel order: ${(error as Error).message}`);
+      showError(`Failed to cancel order: ${(error as Error).message}`, [
+        { label: 'Order ID', value: order.id },
+      ]);
     }
   };
 
   const handleCancelAll = async () => {
-    if (!confirm(`Cancel ALL open orders?`)) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      `Cancel ALL ${openOrders.length} open orders?\n\nThis action cannot be undone.`,
+      { title: 'Cancel All Orders', type: 'danger', confirmText: 'Cancel All' }
+    );
+
+    if (!confirmed) return;
 
     try {
       await cancelAllOrders();
       await refresh();
-      alert('[OK] All orders canceled');
+      showSuccess('All orders canceled successfully', [
+        { label: 'Orders Canceled', value: String(openOrders.length) },
+      ]);
     } catch (error) {
-      alert(`[FAIL] Failed to cancel all orders: ${(error as Error).message}`);
+      showError(`Failed to cancel all orders: ${(error as Error).message}`);
     }
   };
 

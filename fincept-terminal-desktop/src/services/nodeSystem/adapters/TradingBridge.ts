@@ -572,7 +572,7 @@ class TradingBridgeClass {
 
     try {
       const adapterPath = this.getAdapterPath(broker);
-      const module = await import(adapterPath);
+      const module = await import(/* @vite-ignore */ adapterPath);
       const AdapterClass = module.default || Object.values(module)[0];
 
       if (AdapterClass) {

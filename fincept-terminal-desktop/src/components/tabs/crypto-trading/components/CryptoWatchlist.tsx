@@ -1,10 +1,11 @@
-// CryptoWatchlist.tsx - Left Sidebar Watchlist for Crypto Trading
+// CryptoWatchlist.tsx - Professional Terminal-Style Left Sidebar Watchlist
 import React from 'react';
+import { Star, Bot, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { FINCEPT } from '../constants';
-import type { WatchlistPrice, LeftSidebarViewType } from '../types';
+import type { WatchlistPrice, LeftSidebarViewType, Position } from '../types';
 import { AIAgentsPanel } from '../../trading/ai-agents/AIAgentsPanel';
 import { LeaderboardPanel } from '../../trading/ai-agents/LeaderboardPanel';
-import type { Position } from '../types';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 interface CryptoWatchlistProps {
   watchlist: string[];
@@ -27,197 +28,241 @@ export function CryptoWatchlist({
   onSymbolSelect,
   onViewChange,
 }: CryptoWatchlistProps) {
+  const formatPrice = (price: number) => {
+    if (price >= 1000) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (price >= 1) return price.toFixed(2);
+    return price.toFixed(4);
+  };
+
   return (
     <div style={{
-      width: '320px',
+      width: '260px',
       backgroundColor: FINCEPT.PANEL_BG,
       borderRight: `1px solid ${FINCEPT.BORDER}`,
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      fontFamily: '"IBM Plex Mono", monospace',
     }}>
-      {/* Toggle Header */}
+      {/* Tab Header - Terminal style */}
       <div style={{
-        padding: '6px',
+        display: 'flex',
         backgroundColor: FINCEPT.HEADER_BG,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        display: 'flex',
-        gap: '4px'
       }}>
-        <button
-          onClick={() => onViewChange('watchlist')}
-          style={{
-            flex: 1,
-            padding: '6px 8px',
-            backgroundColor: leftSidebarView === 'watchlist' ? FINCEPT.ORANGE : 'transparent',
-            border: 'none',
-            color: leftSidebarView === 'watchlist' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-            cursor: 'pointer',
-            fontSize: '9px',
-            fontWeight: 700,
-            letterSpacing: '0.5px',
-            transition: 'all 0.2s',
-            borderRadius: '2px'
-          }}
-        >
-          WATCH
-        </button>
-        <button
-          onClick={() => onViewChange('ai-agents')}
-          style={{
-            flex: 1,
-            padding: '6px 8px',
-            backgroundColor: leftSidebarView === 'ai-agents' ? FINCEPT.ORANGE : 'transparent',
-            border: 'none',
-            color: leftSidebarView === 'ai-agents' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-            cursor: 'pointer',
-            fontSize: '9px',
-            fontWeight: 700,
-            letterSpacing: '0.5px',
-            transition: 'all 0.2s',
-            borderRadius: '2px'
-          }}
-        >
-          AGENTS
-        </button>
-        <button
-          onClick={() => onViewChange('leaderboard')}
-          style={{
-            flex: 1,
-            padding: '6px 8px',
-            backgroundColor: leftSidebarView === 'leaderboard' ? FINCEPT.ORANGE : 'transparent',
-            border: 'none',
-            color: leftSidebarView === 'leaderboard' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-            cursor: 'pointer',
-            fontSize: '9px',
-            fontWeight: 700,
-            letterSpacing: '0.5px',
-            transition: 'all 0.2s',
-            borderRadius: '2px'
-          }}
-        >
-          LEADER
-        </button>
+        {[
+          { id: 'watchlist' as LeftSidebarViewType, label: 'WATCH', icon: <Star size={10} /> },
+          { id: 'ai-agents' as LeftSidebarViewType, label: 'AGENTS', icon: <Bot size={10} /> },
+          { id: 'leaderboard' as LeftSidebarViewType, label: 'RANK', icon: <Trophy size={10} /> },
+        ].map((tab) => {
+          const isActive = leftSidebarView === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onViewChange(tab.id)}
+              style={{
+                flex: 1,
+                padding: '8px 6px',
+                backgroundColor: isActive ? FINCEPT.ORANGE : 'transparent',
+                border: 'none',
+                borderBottom: isActive ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                color: isActive ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  e.currentTarget.style.color = FINCEPT.WHITE;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = FINCEPT.GRAY;
+                }
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {leftSidebarView === 'watchlist' && (
-          <div style={{
-            flex: 1,
-            overflow: 'auto',
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '0',
-            alignContent: 'start'
-          }}>
-            {watchlist.map((symbol, idx) => (
-              <div
-                key={symbol}
-                onClick={() => onSymbolSelect(symbol)}
-                style={{
-                  padding: '8px 10px',
-                  cursor: 'pointer',
-                  backgroundColor: selectedSymbol === symbol ? `${FINCEPT.ORANGE}15` : 'transparent',
-                  borderLeft: selectedSymbol === symbol ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
-                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
-                  borderRight: idx % 2 === 0 ? `1px solid ${FINCEPT.BORDER}` : 'none',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedSymbol !== symbol) {
-                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedSymbol !== symbol) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                {/* Flex container: Ticker on left, Price/Change on right */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  {/* Left side: Ticker symbol */}
-                  <div style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: selectedSymbol === symbol ? FINCEPT.ORANGE : FINCEPT.WHITE,
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {symbol.replace('/USD', '')}
-                  </div>
+          <>
+            {/* Watchlist Header */}
+            <div style={{
+              padding: '8px 10px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+            }}>
+              <span style={{ fontSize: '9px', color: FINCEPT.GRAY, fontWeight: 600, letterSpacing: '0.5px' }}>
+                SYMBOL
+              </span>
+              <span style={{ fontSize: '9px', color: FINCEPT.GRAY, fontWeight: 600, letterSpacing: '0.5px' }}>
+                PRICE / 24H
+              </span>
+            </div>
 
-                  {/* Right side: Price and Change */}
-                  {watchlistPrices[symbol] ? (
+            {/* Watchlist Items */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {watchlist.map((symbol) => {
+                const data = watchlistPrices[symbol];
+                const isSelected = selectedSymbol === symbol;
+                const isPositive = data && data.change >= 0;
+
+                return (
+                  <div
+                    key={symbol}
+                    onClick={() => onSymbolSelect(symbol)}
+                    style={{
+                      padding: '8px 10px',
+                      cursor: 'pointer',
+                      borderBottom: `1px solid ${FINCEPT.BORDER}20`,
+                      borderLeft: isSelected ? `3px solid ${FINCEPT.ORANGE}` : '3px solid transparent',
+                      backgroundColor: isSelected ? `${FINCEPT.ORANGE}10` : 'transparent',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
                     <div style={{
                       display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      gap: '2px'
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
                     }}>
-                      <div style={{
-                        fontSize: '10px',
-                        color: FINCEPT.WHITE,
-                        fontFamily: 'monospace',
-                        fontWeight: 600
-                      }}>
-                        ${watchlistPrices[symbol].price >= 1000
-                          ? watchlistPrices[symbol].price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                          : watchlistPrices[symbol].price >= 1
-                            ? watchlistPrices[symbol].price.toFixed(2)
-                            : watchlistPrices[symbol].price.toFixed(4)
-                        }
+                      {/* Symbol */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          backgroundColor: `${isSelected ? FINCEPT.ORANGE : FINCEPT.GRAY}20`,
+                          border: `1px solid ${isSelected ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '8px',
+                          fontWeight: 700,
+                          color: isSelected ? FINCEPT.ORANGE : FINCEPT.WHITE,
+                        }}>
+                          {symbol.replace('/USD', '').slice(0, 3)}
+                        </div>
+                        <div>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: isSelected ? FINCEPT.ORANGE : FINCEPT.WHITE,
+                          }}>
+                            {symbol.replace('/USD', '')}
+                          </div>
+                          <div style={{ fontSize: '8px', color: FINCEPT.GRAY }}>
+                            USD
+                          </div>
+                        </div>
                       </div>
-                      <div style={{
-                        fontSize: '9px',
-                        color: watchlistPrices[symbol].change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                        fontFamily: 'monospace',
-                        fontWeight: 700
-                      }}>
-                        {watchlistPrices[symbol].change >= 0 ? '▲' : '▼'} {Math.abs(watchlistPrices[symbol].change).toFixed(2)}%
-                      </div>
+
+                      {/* Price & Change */}
+                      {data ? (
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: FINCEPT.WHITE,
+                          }}>
+                            ${formatPrice(data.price)}
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            gap: '3px',
+                            fontSize: '9px',
+                            fontWeight: 600,
+                            color: isPositive ? FINCEPT.GREEN : FINCEPT.RED,
+                          }}>
+                            {isPositive ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+                            {isPositive ? '+' : ''}{data.change.toFixed(2)}%
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{
+                          fontSize: '9px',
+                          color: FINCEPT.GRAY,
+                        }}>
+                          Loading...
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{
-                      fontSize: '9px',
-                      color: FINCEPT.GRAY,
-                      fontFamily: 'monospace'
-                    }}>
-                      ...
-                    </div>
-                  )}
-                </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer Stats */}
+            <div style={{
+              padding: '8px 10px',
+              borderTop: `1px solid ${FINCEPT.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+              fontSize: '9px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: FINCEPT.GRAY }}>ASSETS</span>
+                <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>{watchlist.length}</span>
               </div>
-            ))}
-          </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: FINCEPT.GRAY }}>UPDATED</span>
+                <span style={{ color: FINCEPT.CYAN }}>{new Date().toLocaleTimeString()}</span>
+              </div>
+            </div>
+          </>
         )}
 
         {leftSidebarView === 'ai-agents' && (
           <div style={{ flex: 1, overflow: 'auto' }}>
-            <AIAgentsPanel
-              selectedSymbol={selectedSymbol}
-              portfolioData={{
-                positions: positions.map(p => ({
-                  symbol: p.symbol,
-                  quantity: p.quantity,
-                  entry_price: p.entryPrice,
-                  current_price: p.currentPrice,
-                  value: p.positionValue
-                })),
-                total_value: equity
-              }}
-            />
+            <ErrorBoundary name="AIAgentsPanel" variant="minimal">
+              <AIAgentsPanel
+                selectedSymbol={selectedSymbol}
+                portfolioData={{
+                  positions: positions.map(p => ({
+                    symbol: p.symbol,
+                    quantity: p.quantity,
+                    entry_price: p.entryPrice,
+                    current_price: p.currentPrice,
+                    value: p.positionValue
+                  })),
+                  total_value: equity
+                }}
+              />
+            </ErrorBoundary>
           </div>
         )}
 
         {leftSidebarView === 'leaderboard' && (
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <LeaderboardPanel refreshInterval={10000} />
+            <ErrorBoundary name="LeaderboardPanel" variant="minimal">
+              <LeaderboardPanel refreshInterval={10000} />
+            </ErrorBoundary>
           </div>
         )}
       </div>

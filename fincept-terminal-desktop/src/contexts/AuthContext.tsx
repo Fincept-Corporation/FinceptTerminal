@@ -159,8 +159,9 @@ interface AuthContextType {
   fetchPlans: () => Promise<{ success: boolean; error?: string }>;
   createPaymentSession: (planId: string, currency?: string) => Promise<{ success: boolean; data?: PaymentSession; error?: string }>;
   getUserSubscription: () => Promise<{ success: boolean; data?: UserSubscription; error?: string }>;
-  cancelSubscription: () => Promise<{ success: boolean; error?: string }>;
   refreshUserData: () => Promise<void>;
+  // API key management - centralized for all components
+  updateApiKey: (newApiKey: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -516,28 +517,6 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     }
   };
 
-  // Cancel subscription
-  // Cancels subscription in Polar, user keeps access until end of billing period
-  // Subscription auto-downgrades to free plan when it expires (via webhook)
-  const cancelSubscription = async (): Promise<{ success: boolean; error?: string }> => {
-    if (!session?.api_key) {
-      return { success: false, error: 'No API key available' };
-    }
-
-    try {
-      const result = await PaymentApiService.cancelSubscription(session.api_key);
-      if (result.success) {
-        // Refresh user data to reflect the cancellation status
-        await refreshUserData();
-        return { success: true };
-      } else {
-        return { success: false, error: result.error || 'Failed to cancel subscription' };
-      }
-    } catch (error) {
-      console.error('Failed to cancel subscription:', error);
-      return { success: false, error: 'Failed to cancel subscription' };
-    }
-  };
 
   // Login function
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string; mfa_required?: boolean }> => {
@@ -593,6 +572,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
         setSession(newSession);
         await saveSession(newSession);
+        // Save to legacy location for backward compatibility
+        await saveSetting('fincept_api_key', apiKey, 'auth');
+        await saveSetting('fincept_device_id', newSession.device_id, 'auth');
         const isFirstTime = await checkIsFirstTimeUser();
         setIsFirstTimeUser(isFirstTime);
 
@@ -863,10 +845,30 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     }
   };
 
+  // Update API key - centralized function for key regeneration
+  // This ensures all components using useAuth() get the new key immediately
+  const updateApiKey = async (newApiKey: string): Promise<void> => {
+    if (!session) return;
+
+    const updatedSession: SessionData = {
+      ...session,
+      api_key: newApiKey,
+    };
+
+    setSession(updatedSession);
+    await saveSession(updatedSession);
+
+    // Also save to legacy key locations for backward compatibility
+    // with components that may still use direct SQLite access
+    await saveSetting('fincept_api_key', newApiKey, 'auth');
+  };
+
   // Logout function
   const logout = async (): Promise<void> => {
     setSession(null);
     await clearSession();
+    // Clear legacy key storage as well
+    await saveSetting('fincept_api_key', '', 'auth');
     const isFirstTime = await checkIsFirstTimeUser();
     setIsFirstTimeUser(isFirstTime);
   };
@@ -889,8 +891,9 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     fetchPlans,
     createPaymentSession,
     getUserSubscription,
-    cancelSubscription,
-    refreshUserData
+    
+    refreshUserData,
+    updateApiKey
   };
 
   return (

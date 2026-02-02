@@ -3,6 +3,7 @@ import React from 'react';
 import { FINCEPT } from '../constants';
 import type { CenterViewType, TradeData } from '../types';
 import { TradingChart, DepthChart } from '../../trading/charts';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 interface CryptoChartAreaProps {
   selectedSymbol: string;
@@ -68,17 +69,21 @@ export function CryptoChartArea({
       }}>
         {selectedView === 'chart' && (
           <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <TradingChart
-              symbol={selectedSymbol}
-              showVolume={true}
-            />
+            <ErrorBoundary name="TradingChart" variant="minimal">
+              <TradingChart
+                symbol={selectedSymbol}
+                showVolume={true}
+              />
+            </ErrorBoundary>
           </div>
         )}
         {selectedView === 'depth' && (
           <div style={{ width: '100%', height: '100%', padding: '8px' }}>
-            <DepthChart
-              symbol={selectedSymbol}
-            />
+            <ErrorBoundary name="DepthChart" variant="minimal">
+              <DepthChart
+                symbol={selectedSymbol}
+              />
+            </ErrorBoundary>
           </div>
         )}
         {selectedView === 'trades' && (

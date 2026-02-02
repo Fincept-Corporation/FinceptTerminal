@@ -1,36 +1,4 @@
-"""
-Alternative Investment Performance Metrics Module
-===============================================
-
-Comprehensive performance measurement and analysis framework for alternative investments. Implements CFA Institute standard methodologies including time-weighted returns, money-weighted returns, risk-adjusted metrics, performance attribution, and fee impact analysis.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Historical market data and prices for investments
-  - Cash flow data including contributions and distributions
-  - Benchmark return series for comparison
-  - Factor returns for multi-factor analysis
-  - Fee structures and terms
-  - Portfolio holdings and weights
-
-OUTPUT:
-  - Time-weighted and money-weighted return calculations
-  - Risk-adjusted performance metrics (Sharpe, Sortino, Treynor, etc.)
-  - Performance attribution analysis
-  - Benchmark comparison and relative performance
-  - Factor exposure analysis
-  - Fee impact assessment and net-of-fee performance
-
-PARAMETERS:
-  - risk_free_rate: Risk-free rate for calculations - default: Config.RISK_FREE_RATE
-  - benchmark_returns: Benchmark return series for comparison
-  - factor_returns: Dictionary of factor return series
-  - management_fee: Annual management fee rate for fee analysis
-  - performance_fee: Performance fee rate
-  - hurdle_rate: Hurdle rate for performance fees
-  - high_water_mark: Whether high water mark applies
-  - window_months: Rolling window size for performance analysis - default: 12
-"""
+"""performance_metrics Module"""
 
 import numpy as np
 import pandas as pd

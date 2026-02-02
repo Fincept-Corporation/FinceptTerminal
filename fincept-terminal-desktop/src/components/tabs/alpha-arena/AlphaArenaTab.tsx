@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { showConfirm } from '@/utils/notifications';
 import {
   Bot, Trophy, Play, Pause, RotateCcw, Plus, Settings, Key,
   TrendingUp, TrendingDown, Activity, Zap, AlertCircle, CheckCircle,
@@ -309,9 +310,11 @@ const AlphaArenaTab: React.FC = () => {
   const handleDeleteCompetition = async (competitionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!confirm('Are you sure you want to delete this competition? This cannot be undone.')) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      { title: 'Delete this competition?', type: 'danger' }
+    );
+    if (!confirmed) return;
 
     try {
       const result = await alphaArenaService.deleteCompetition(competitionId);

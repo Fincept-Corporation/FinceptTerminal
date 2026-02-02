@@ -9,6 +9,7 @@ import { Trash2, Download, Search, Eye, FileJson, FileText, ListTree, X } from '
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
 import { RecordedContext } from '@/services/core/sqliteService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { showConfirm } from '@/utils/notifications';
 
 export const RecordedContextsManager: React.FC = () => {
   const { colors } = useTerminalTheme();
@@ -81,7 +82,14 @@ export const RecordedContextsManager: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this recorded context?')) return;
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      {
+        title: 'Delete this recorded context?',
+        type: 'danger'
+      }
+    );
+    if (!confirmed) return;
 
     try {
       await contextRecorderService.deleteContext(id);

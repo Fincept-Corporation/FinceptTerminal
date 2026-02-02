@@ -73,13 +73,17 @@ export function CompetitionPanel({ selectedSymbol }: { selectedSymbol: string })
       setTeamId(tid);
       setIsRunning(true);
 
-      // Start price feed
-      const { krakenPriceFeed } = await import('../../../../services/markets/krakenPriceFeed');
-      await krakenPriceFeed.connect();
+      // Start price feed via Rust WebSocket
+      const { websocketBridge, configureProvider } = await import('../../../../services/trading/websocketBridge');
 
-      krakenPriceFeed.subscribe(selectedSymbol, async (p) => {
+      await configureProvider('kraken', 'wss://ws.kraken.com/v2');
+      await websocketBridge.connect('kraken');
+      await websocketBridge.subscribe('kraken', selectedSymbol, 'ticker');
+
+      await websocketBridge.onTicker(async (data) => {
+        if (data.provider !== 'kraken' || data.symbol !== selectedSymbol.replace('/', '')) return;
         if (!isRunning) return;
-        setPrice(p);
+        setPrice(data.price);
 
         try {
           await agnoTradingService.runCompetition(tid, selectedSymbol, 'signal');
@@ -97,8 +101,8 @@ export function CompetitionPanel({ selectedSymbol }: { selectedSymbol: string })
   // Stop competition
   const stop = async () => {
     setIsRunning(false);
-    const { krakenPriceFeed } = await import('../../../../services/markets/krakenPriceFeed');
-    await krakenPriceFeed.disconnect();
+    const { websocketBridge } = await import('../../../../services/trading/websocketBridge');
+    await websocketBridge.unsubscribe('kraken', selectedSymbol, 'ticker');
   };
 
   return (

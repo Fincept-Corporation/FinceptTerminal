@@ -1,39 +1,4 @@
-"""
-Real Estate Analytics Module
-============================
-
-Comprehensive analysis framework for real estate investments including direct property investments, REITs, and infrastructure projects. Provides specialized valuation methodologies, income analysis, and portfolio management tools for real estate assets.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Property acquisition costs and current market values
-  - Gross rental income and operating expense data
-  - Vacancy rates and occupancy information
-  - REIT financial statements (income statement, balance sheet)
-  - Infrastructure project cash flow projections
-  - Property type and regional market data
-
-OUTPUT:
-  - Net Operating Income (NOI) and capitalization rates
-  - Direct capitalization and DCF valuations
-  - REIT FFO, AFFO, and NAV per share calculations
-  - Infrastructure project valuation with regulatory analysis
-  - Portfolio diversification and geographic analysis
-
-PARAMETERS:
-  - property_type: Real estate property type (OFFICE, RETAIL, RESIDENTIAL, etc.)
-  - acquisition_price: Property acquisition cost
-  - current_market_value: Current property market value
-  - gross_rental_income: Annual gross rental income
-  - operating_expenses: Annual operating expenses
-  - vacancy_rate: Vacancy rate percentage - default: 0.05 (5%)
-  - cap_rate: Capitalization rate
-  - shares_outstanding: REIT shares outstanding
-  - infrastructure_type: Infrastructure asset type
-  - regulatory_framework: Regulatory environment (regulated, merchant)
-  - concession_period: Infrastructure concession period in years
-  - revenue_model: Revenue model (user_pays, availability, hybrid)
-"""
+"""real_estate Module"""
 
 import numpy as np
 import pandas as pd
@@ -700,5 +665,202 @@ class RealEstatePortfolio:
         return diversification
 
 
+
+
+# This content should be inserted before final __all__ export in real_estate.py
+
+class InternationalREITAnalyzer(AlternativeInvestmentBase):
+    """
+    International REIT Analysis
+
+    CFA Standards: Global real estate securities
+
+    Key Concepts from Key insight: - Correlation benefits with US REITs
+    - Currency risk exposure
+    - Regional diversification
+    - Different regulatory frameworks
+    - Expense ratio considerations
+
+    Verdict: THE GOOD - For diversification
+    Rating: 7/10 - Valuable for global diversification
+    """
+
+    def __init__(self, parameters: AssetParameters):
+        super().__init__(parameters)
+        self.region = getattr(parameters, 'region', 'Europe')  # Europe, Asia-Pacific, Emerging
+        self.currency = getattr(parameters, 'currency', 'EUR')
+        self.local_currency_return = getattr(parameters, 'local_currency_return', Decimal('0'))
+        self.currency_return = getattr(parameters, 'currency_return', Decimal('0'))
+        self.expense_ratio = getattr(parameters, 'expense_ratio', Decimal('0.005'))  # 0.5% typical
+        self.correlation_with_us = getattr(parameters, 'correlation_with_us', Decimal('0.65'))  # Historical ~0.65
+
+        # REIT metrics
+        self.shares_outstanding = getattr(parameters, 'shares_outstanding', None)
+        self.total_assets = getattr(parameters, 'total_assets', None)
+        self.total_debt = getattr(parameters, 'total_debt', None)
+        self.property_value = getattr(parameters, 'property_value', None)
+        self.net_income = getattr(parameters, 'net_income', None)
+        self.depreciation = getattr(parameters, 'depreciation', None)
+
+    def calculate_usd_return(self) -> Decimal:
+        """
+        Calculate USD-hedged return
+        Total USD Return = (1 + Local Return) × (1 + Currency Return) - 1
+        """
+        total_return = (Decimal('1') + self.local_currency_return) * \
+                      (Decimal('1') + self.currency_return) - Decimal('1')
+        return total_return
+
+    def currency_risk_analysis(self) -> Dict[str, Any]:
+        """Analyze currency exposure and hedging considerations"""
+        usd_return = self.calculate_usd_return()
+
+        return {
+            'local_currency_return': float(self.local_currency_return),
+            'currency_return': float(self.currency_return),
+            'total_usd_return': float(usd_return),
+            'currency_contribution': float(self.currency_return),
+            'hedging_recommendation': 'Consider hedging' if abs(self.currency_return) > Decimal('0.05') else 'Unhedged acceptable',
+            'analysis_note': 'Currency hedging reduces diversification benefits'
+        }
+
+    def correlation_benefit_analysis(self) -> Dict[str, Any]:
+        """Analyze diversification benefits vs US REITs"""
+        # Lower correlation = better diversification
+        diversification_score = Decimal('1') - abs(self.correlation_with_us)
+
+        return {
+            'correlation_with_us_reits': float(self.correlation_with_us),
+            'diversification_score': float(diversification_score),
+            'interpretation': 'High' if diversification_score > Decimal('0.4') else
+                            'Medium' if diversification_score > Decimal('0.2') else 'Low',
+            'analysis_recommendation': 'Allocate 20-30% of REIT exposure internationally' if diversification_score > Decimal('0.3') else 'Limited benefit'
+        }
+
+    def regional_characteristics(self) -> Dict[str, Any]:
+        """Regional market characteristics"""
+        regional_data = {
+            'Europe': {
+                'typical_yield': '3-4%',
+                'regulation': 'Varied by country',
+                'liquidity': 'High',
+                'correlation_us': 0.70,
+                'key_markets': ['UK', 'France', 'Germany', 'Netherlands']
+            },
+            'Asia-Pacific': {
+                'typical_yield': '2-3%',
+                'regulation': 'Japan & Singapore mature',
+                'liquidity': 'Medium to High',
+                'correlation_us': 0.60,
+                'key_markets': ['Japan', 'Singapore', 'Australia', 'Hong Kong']
+            },
+            'Emerging': {
+                'typical_yield': '4-6%',
+                'regulation': 'Developing',
+                'liquidity': 'Lower',
+                'correlation_us': 0.55,
+                'key_markets': ['Mexico', 'South Africa', 'Brazil']
+            }
+        }
+
+        return regional_data.get(self.region, {'note': 'Unknown region'})
+
+    def expense_impact_analysis(self) -> Dict[str, Any]:
+        """Analyze expense ratio impact on returns"""
+        gross_return = self.calculate_usd_return()
+        net_return = gross_return - self.expense_ratio
+
+        # Compound over 10 years
+        years = 10
+        gross_value = Decimal('10000') * ((Decimal('1') + gross_return) ** years)
+        net_value = Decimal('10000') * ((Decimal('1') + net_return) ** years)
+        expense_drag = gross_value - net_value
+
+        return {
+            'expense_ratio': float(self.expense_ratio),
+            'gross_return': float(gross_return),
+            'net_return': float(net_return),
+            'expense_drag_10y': float(expense_drag),
+            'analysis_note': 'Keep expense ratios below 0.5% for international REITs'
+        }
+
+    def analysis_verdict(self) -> Dict[str, Any]:
+        """verdict on International REITs"""
+        return {
+            'asset_class': 'International REITs',
+            'category': 'THE GOOD',
+            'rating': '7/10',
+            'best_for': 'Global diversification of real estate exposure',
+            'pros': [
+                'Correlation benefit with US REITs (0.60-0.70)',
+                'Geographic diversification',
+                'Access to different property markets',
+                'Currency diversification (unhedged)',
+                'Lower home bias'
+            ],
+            'cons': [
+                'Currency risk/volatility',
+                'Higher expense ratios than US',
+                'Less liquidity in some markets',
+                'Different regulatory frameworks',
+                'Lower transparency in emerging markets'
+            ],
+            'analysis_quote': '"International REITs provide valuable diversification. Allocate 20-30% of your REIT exposure internationally."',
+            'allocation_recommendation': '20-30% of total REIT allocation'
+        }
+
+    def calculate_nav(self) -> Decimal:
+        """Calculate NAV in USD"""
+        if self.property_value and self.total_debt:
+            local_nav = self.property_value - (self.total_debt or Decimal('0'))
+            # Convert to USD
+            usd_nav = local_nav * (Decimal('1') + self.currency_return)
+            return usd_nav
+
+        # Fallback to total assets approach
+        if self.total_assets:
+            return self.total_assets * (Decimal('1') + self.currency_return)
+
+        return Decimal('0')
+
+    def calculate_key_metrics(self) -> Dict[str, Any]:
+        """Key International REIT metrics"""
+        return {
+            'region': self.region,
+            'currency': self.currency,
+            'total_usd_return': float(self.calculate_usd_return()),
+            'correlation_with_us': float(self.correlation_with_us),
+            'diversification_benefit': self.correlation_benefit_analysis(),
+            'currency_analysis': self.currency_risk_analysis(),
+            'expense_impact': self.expense_impact_analysis(),
+            'analysis_category': 'THE GOOD'
+        }
+
+    def valuation_summary(self) -> Dict[str, Any]:
+        """Valuation summary"""
+        return {
+            'asset_overview': {
+                'type': 'International REIT',
+                'region': self.region,
+                'currency': self.currency,
+                'nav_usd': float(self.calculate_nav())
+            },
+            'key_metrics': self.calculate_key_metrics(),
+            'regional_profile': self.regional_characteristics(),
+            'analysis_category': 'THE GOOD',
+            'allocation': '20-30% of REIT exposure'
+        }
+
+    def calculate_performance(self) -> Dict[str, Any]:
+        """Performance metrics"""
+        return {
+            'local_return': float(self.local_currency_return),
+            'currency_return': float(self.currency_return),
+            'total_usd_return': float(self.calculate_usd_return()),
+            'correlation_us_reits': float(self.correlation_with_us),
+            'diversification_value': 'High'
+        }
+
+
 # Export main components
-__all__ = ['RealEstateAnalyzer', 'REITAnalyzer', 'InfrastructureAnalyzer', 'RealEstatePortfolio']
+__all__ = ['RealEstateAnalyzer', 'REITAnalyzer', 'InternationalREITAnalyzer', 'InfrastructureAnalyzer', 'RealEstatePortfolio']

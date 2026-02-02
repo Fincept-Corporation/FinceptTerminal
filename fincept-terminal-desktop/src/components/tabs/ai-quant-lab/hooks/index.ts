@@ -4,5 +4,5 @@
  * Export all custom hooks
  */
 
-export { useWorkflowManagement } from './useWorkflowManagement';
-export type { UseWorkflowManagementReturn } from './useWorkflowManagement';
+// Hook moved to node-editor folder, re-export from there for backwards compatibility
+export { useWorkflowManagement } from '../../node-editor/hooks';

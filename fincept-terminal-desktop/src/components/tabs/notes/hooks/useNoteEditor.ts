@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { notesService, Note, NoteTemplate } from '@/services/core/notesService';
 import { noteReminderService } from '@/services/core/noteReminderService.tsx';
 import { toast } from 'sonner';
+import { showWarning, showError } from '@/utils/notifications';
 import type { EditorState } from '../types';
 import { DEFAULT_EDITOR_STATE } from '../constants';
 
@@ -121,7 +122,7 @@ export function useNoteEditor({
   // Handle save - create or update note
   const handleSave = useCallback(async () => {
     if (!editorState.title.trim()) {
-      alert('Please enter a title');
+      showWarning('Please enter a title');
       return;
     }
 
@@ -190,7 +191,7 @@ export function useNoteEditor({
       }
     } catch (error) {
       console.error('[useNoteEditor] Failed to save note:', error);
-      alert('Failed to save note');
+      showError('Failed to save note');
     }
   }, [editorState, isCreating, isEditing, selectedNote, loadNotes, loadStatistics, loadUpcomingReminders, resetEditor, setSelectedNote]);
 

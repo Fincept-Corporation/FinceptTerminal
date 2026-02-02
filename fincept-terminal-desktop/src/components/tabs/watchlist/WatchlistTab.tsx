@@ -15,6 +15,7 @@ import AddStockModal from './AddStockModal';
 import RecordingControlPanel from '@/components/common/RecordingControlPanel';
 import { FINCEPT, FONT_FAMILY, SortCriteria, sortStocks, getNextWatchlistColor } from './utils';
 import { useTranslation } from 'react-i18next';
+import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 
 const WatchlistTab: React.FC = () => {
   const { t } = useTranslation('watchlist');
@@ -168,7 +169,15 @@ const WatchlistTab: React.FC = () => {
   };
 
   const handleDeleteWatchlist = async (watchlistId: string) => {
-    if (!confirm('Are you sure you want to delete this watchlist? This action cannot be undone.')) return;
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      {
+        title: 'Delete this watchlist?',
+        type: 'danger'
+      }
+    );
+    if (!confirmed) return;
+
     try {
       await watchlistService.deleteWatchlist(watchlistId);
       await loadWatchlists();
@@ -177,9 +186,10 @@ const WatchlistTab: React.FC = () => {
         setSelectedStock(null);
         await invalidateStocks();
       }
+      showSuccess('Watchlist deleted successfully');
     } catch (error) {
       console.error('[WatchlistTab] Error deleting watchlist:', error);
-      alert('Failed to delete watchlist');
+      showError('Failed to delete watchlist');
     }
   };
 
@@ -204,9 +214,12 @@ const WatchlistTab: React.FC = () => {
       await refreshStocks();
       await loadWatchlists();
       if (selectedStock?.symbol === symbol) setSelectedStock(null);
+      showSuccess('Stock removed from watchlist', [
+        { label: 'Symbol', value: symbol },
+      ]);
     } catch (error) {
       console.error('[WatchlistTab] Error removing stock:', error);
-      alert('Failed to remove stock');
+      showError('Failed to remove stock');
     }
   };
 
@@ -223,9 +236,12 @@ const WatchlistTab: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      showSuccess('Watchlist exported successfully', [
+        { label: 'File', value: `${selectedWatchlist?.name || 'watchlist'}.csv` },
+      ]);
     } catch (error) {
       console.error('[WatchlistTab] Error exporting CSV:', error);
-      alert('Failed to export CSV');
+      showError('Failed to export CSV');
     }
   };
 

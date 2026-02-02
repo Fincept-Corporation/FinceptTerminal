@@ -269,10 +269,48 @@ export class PaperTradingAdapter {
 
   async fetchBalance(): Promise<any> {
     const portfolio = await getPortfolio(this.portfolioId);
+    const positions = await getPositions(this.portfolioId);
+
+    // Calculate total unrealized P&L and margin used from all open positions
+    let totalUnrealizedPnl = 0;
+    let totalMarginUsed = 0;
+
+    for (const position of positions) {
+      // Get live price from market data service
+      const livePrice = this.marketDataService.getCurrentPrice(position.symbol, this.config.provider);
+      const currentPrice = livePrice?.last || position.current_price;
+
+      if (currentPrice > 0 && position.entry_price > 0) {
+        // Recalculate unrealized P&L with live price
+        let pnl = 0;
+        if (position.side === 'long') {
+          pnl = (currentPrice - position.entry_price) * position.quantity;
+        } else {
+          pnl = (position.entry_price - currentPrice) * position.quantity;
+        }
+        totalUnrealizedPnl += pnl;
+
+        // Calculate margin used for this position (entry_value / leverage)
+        const entryValue = position.entry_price * position.quantity;
+        const leverage = position.leverage || portfolio.leverage || 1;
+        totalMarginUsed += entryValue / leverage;
+      } else {
+        // Fall back to stored unrealized P&L
+        totalUnrealizedPnl += position.unrealized_pnl || 0;
+        const entryValue = position.entry_price * position.quantity;
+        const leverage = position.leverage || portfolio.leverage || 1;
+        totalMarginUsed += entryValue / leverage;
+      }
+    }
+
+    // Balance = available cash (after margin reserved for positions)
+    // Equity = Balance + Margin Used + Unrealized P&L = Total account value
+    const equity = portfolio.balance + totalMarginUsed + totalUnrealizedPnl;
+
     return {
-      free: { USD: portfolio.balance },
-      used: { USD: 0 },
-      total: { USD: portfolio.balance },
+      free: { USD: portfolio.balance },           // Available margin (cash)
+      used: { USD: totalMarginUsed },             // Margin locked in positions
+      total: { USD: equity },                     // Total equity (balance + margin + unrealized P&L)
     };
   }
 

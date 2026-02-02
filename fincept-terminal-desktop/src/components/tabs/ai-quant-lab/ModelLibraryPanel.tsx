@@ -25,6 +25,7 @@ import {
   Filter
 } from 'lucide-react';
 import { qlibService, type QlibModel } from '@/services/aiQuantLab/qlibService';
+import { showError } from '@/utils/notifications';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -105,7 +106,9 @@ export function ModelLibraryPanel() {
       setPredictionResult(result);
     } catch (error) {
       console.error('[Model Library] Prediction error:', error);
-      alert('Failed to run predictions: ' + error);
+      showError('Failed to run predictions', [
+        { label: 'ERROR', value: String(error) }
+      ]);
     } finally {
       setIsPredicting(false);
     }

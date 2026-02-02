@@ -484,7 +484,8 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
           errorMessage.includes('Authentication failed')) {
         console.error(`[${this.brokerId}] Authentication error detected:`, errorMessage);
         // Mark as disconnected to prevent further requests
-        this.isConnected = false;
+        this._isConnected = false;
+        this.accessToken = null; // Clear invalid token
       }
       throw error;
     }
@@ -511,7 +512,8 @@ export abstract class BaseStockBrokerAdapter implements IStockBrokerAdapter {
             errorMessage.includes('Authentication failed')) {
           console.error(`[${this.brokerId}] Authentication error detected:`, errorMessage);
           // Mark as disconnected to prevent further requests
-          this.isConnected = false;
+          this._isConnected = false;
+          this.accessToken = null; // Clear invalid token
           // Re-throw to propagate auth error
           throw error;
         }

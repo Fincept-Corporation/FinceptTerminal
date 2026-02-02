@@ -49,13 +49,10 @@ parking_lot = "0.12"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 futures-util = "0.3"
 zip = "2.2"
-which = "7.0"
 printpdf = "0.7"
 flate2 = "1.0"  # For tar.gz extraction (macOS/Linux)
-tar = "0.4"  # For tar archive extraction
 hashbrown = "0.15"  # Faster HashMap alternative
 ahash = "0.8"  # Fast hashing for orderbook
-smallvec = "1.13"  # Stack-allocated vectors for small arrays
 
 # WebSocket dependencies
 tokio-tungstenite = { version = "0.23", features = ["native-tls"] }  # WebSocket client with TLS support
@@ -64,17 +61,9 @@ url = "2"  # URL parsing for WebSocket connections
 async-trait = "0.1"  # Async trait support
 thiserror = "2"  # Error handling
 
-rust_decimal = "1.36"
-rust_decimal_macros = "1.36"
-smol_str = "0.3"
-fnv = "1.0"
-indexmap = { version = "2", features = ["serde"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 futures = "0.3"
-pin-project = "1.1"
 regex = "1.12.2"
-rayon = "1.11.0"
 quick-xml = "0.37"  # Fast XML/RSS parsing
 rand = "0.8"  # Random number generation for paper trading
 aes-gcm = "0.10"  # AES-256-GCM encryption for secure credential storage

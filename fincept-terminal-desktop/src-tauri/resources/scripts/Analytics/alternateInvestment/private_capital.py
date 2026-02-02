@@ -1,35 +1,4 @@
-"""
-Private Capital Analytics Module
-================================
-
-Comprehensive analysis framework for private capital investments including private equity funds, private debt instruments, and direct investments. Provides specialized valuation methodologies, performance metrics, and cash flow analysis for illiquid investment vehicles.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Capital calls and distribution cash flow data
-  - Fund NAV values and reporting dates
-  - Commitment amounts and vintage years
-  - Private debt instrument details (principal, coupon, maturity)
-  - Credit ratings and seniority information for debt investments
-  - Fee structures and terms
-
-OUTPUT:
-  - IRR, MOIC, DPI, RVPI, TVPI performance metrics
-  - Private equity fund performance analysis
-  - Private debt yield and duration calculations
-  - Credit risk assessment for debt instruments
-  - Portfolio-level private capital analysis
-
-PARAMETERS:
-  - fund_life: Expected fund life in years - default: Constants.PE_TYPICAL_FUND_LIFE
-  - vintage_year: Fund vintage year
-  - commitment: Total commitment amount
-  - principal_amount: Principal amount for debt investments
-  - coupon_rate: Annual coupon rate for debt instruments
-  - maturity_date: Maturity date for debt instruments
-  - credit_rating: Credit rating for debt investments
-  - seniority: Debt seniority level (senior, mezzanine, subordinated) - default: senior
-"""
+"""private_capital Module"""
 
 import numpy as np
 import pandas as pd
@@ -221,6 +190,346 @@ class PrivateEquityAnalyzer(AlternativeInvestmentBase):
         }
 
         return comparison
+
+    def lbo_returns_decomposition(self, entry_ebitda: Decimal, exit_ebitda: Decimal,
+                                   entry_multiple: Decimal, exit_multiple: Decimal,
+                                   initial_debt: Decimal, final_debt: Decimal,
+                                   equity_invested: Decimal, holding_period_years: int) -> Dict[str, Any]:
+        """
+        Decompose LBO returns into component drivers (3-Lever Model)
+
+        CFA Standards: LBO returns come from:
+        1. EBITDA Growth (operational improvement)
+        2. Multiple Expansion (entry vs exit valuation)
+        3. Deleveraging (debt paydown increases equity value)
+
+        Args:
+            entry_ebitda: EBITDA at acquisition
+            exit_ebitda: EBITDA at exit
+            entry_multiple: Entry EV/EBITDA multiple
+            exit_multiple: Exit EV/EBITDA multiple
+            initial_debt: Debt at entry
+            final_debt: Debt at exit
+            equity_invested: Initial equity investment
+            holding_period_years: Investment holding period
+
+        Returns:
+            LBO return decomposition
+        """
+        # Entry valuation
+        entry_ev = entry_ebitda * entry_multiple
+        entry_equity_value = entry_ev - initial_debt
+
+        # Exit valuation
+        exit_ev = exit_ebitda * exit_multiple
+        exit_equity_value = exit_ev - final_debt
+
+        # Return components
+
+        # 1. EBITDA Growth impact (operational improvement)
+        ebitda_growth = (exit_ebitda - entry_ebitda) / entry_ebitda
+        ebitda_contribution_ev = (exit_ebitda - entry_ebitda) * entry_multiple
+
+        # 2. Multiple Expansion impact (valuation arbitrage)
+        multiple_expansion = (exit_multiple - entry_multiple) / entry_multiple
+        multiple_contribution_ev = (exit_multiple - entry_multiple) * exit_ebitda
+
+        # 3. Deleveraging impact (debt paydown)
+        debt_paydown = initial_debt - final_debt
+        deleveraging_contribution = debt_paydown
+
+        # Total equity value creation
+        equity_value_created = exit_equity_value - entry_equity_value
+
+        # MOIC and IRR
+        moic = exit_equity_value / equity_invested if equity_invested > 0 else Decimal('0')
+
+        # IRR approximation: (Exit Value / Entry Value) ^ (1/years) - 1
+        irr = (moic ** (Decimal('1') / Decimal(str(holding_period_years)))) - Decimal('1')
+
+        # Attribution of value creation
+        total_ev_change = exit_ev - entry_ev
+
+        attribution = {}
+        if total_ev_change != 0:
+            attribution = {
+                'ebitda_growth_contribution_pct': float(ebitda_contribution_ev / total_ev_change) if total_ev_change != 0 else 0,
+                'multiple_expansion_contribution_pct': float(multiple_contribution_ev / total_ev_change) if total_ev_change != 0 else 0,
+                'deleveraging_contribution_pct': float(deleveraging_contribution / equity_value_created) if equity_value_created != 0 else 0
+            }
+
+        return {
+            'entry_metrics': {
+                'ebitda': float(entry_ebitda),
+                'ev_ebitda_multiple': float(entry_multiple),
+                'enterprise_value': float(entry_ev),
+                'debt': float(initial_debt),
+                'equity_value': float(entry_equity_value),
+                'leverage_ratio': float(initial_debt / entry_ebitda)
+            },
+            'exit_metrics': {
+                'ebitda': float(exit_ebitda),
+                'ev_ebitda_multiple': float(exit_multiple),
+                'enterprise_value': float(exit_ev),
+                'debt': float(final_debt),
+                'equity_value': float(exit_equity_value),
+                'leverage_ratio': float(final_debt / exit_ebitda) if exit_ebitda > 0 else 0
+            },
+            'return_components': {
+                'ebitda_growth': float(ebitda_growth),
+                'ebitda_contribution_value': float(ebitda_contribution_ev),
+                'multiple_expansion': float(multiple_expansion),
+                'multiple_contribution_value': float(multiple_contribution_ev),
+                'debt_paydown': float(debt_paydown),
+                'deleveraging_contribution': float(deleveraging_contribution)
+            },
+            'attribution': attribution,
+            'returns': {
+                'equity_invested': float(equity_invested),
+                'exit_equity_value': float(exit_equity_value),
+                'equity_value_created': float(equity_value_created),
+                'moic': float(moic),
+                'irr': float(irr),
+                'holding_period_years': holding_period_years
+            },
+            'interpretation': self._interpret_lbo_drivers(ebitda_growth, multiple_expansion, debt_paydown, equity_value_created)
+        }
+
+    def _interpret_lbo_drivers(self, ebitda_growth: Decimal, multiple_expansion: Decimal,
+                               debt_paydown: Decimal, equity_value: Decimal) -> str:
+        """Interpret LBO return drivers"""
+        drivers = []
+
+        if ebitda_growth > Decimal('0.30'):
+            drivers.append('Strong operational improvement')
+        elif ebitda_growth > Decimal('0.10'):
+            drivers.append('Moderate operational growth')
+        else:
+            drivers.append('Limited operational improvement')
+
+        if multiple_expansion > Decimal('0.20'):
+            drivers.append('significant multiple expansion')
+        elif multiple_expansion > 0:
+            drivers.append('modest multiple expansion')
+        elif multiple_expansion < Decimal('-0.10'):
+            drivers.append('multiple compression (headwind)')
+
+        leverage_contribution_pct = (debt_paydown / equity_value) if equity_value > 0 else Decimal('0')
+        if leverage_contribution_pct > Decimal('0.40'):
+            drivers.append('substantial deleveraging')
+        elif leverage_contribution_pct > Decimal('0.20'):
+            drivers.append('meaningful debt paydown')
+
+        return f"Returns driven by: {', '.join(drivers)}"
+
+    def lbo_transaction_model(self, purchase_price: Decimal, ebitda: Decimal,
+                              debt_percent: Decimal, interest_rate: Decimal,
+                              exit_multiple: Decimal, years: int,
+                              ebitda_growth_rate: Decimal = Decimal('0.05'),
+                              annual_debt_paydown_pct: Decimal = Decimal('0.30')) -> Dict[str, Any]:
+        """
+        Full LBO transaction model with year-by-year projection
+
+        CFA: Complete LBO financial model showing:
+        - Sources & Uses
+        - Cash flow projections
+        - Debt schedule
+        - Exit scenarios
+        - Return calculations
+
+        Args:
+            purchase_price: Acquisition price (Enterprise Value)
+            ebitda: Current EBITDA
+            debt_percent: Debt as % of purchase price (e.g., 0.60 = 60% debt)
+            interest_rate: Interest rate on debt
+            exit_multiple: Exit EV/EBITDA multiple
+            years: Holding period
+            ebitda_growth_rate: Annual EBITDA growth rate
+            annual_debt_paydown_pct: % of FCF used for debt paydown
+
+        Returns:
+            Complete LBO model output
+        """
+        # Sources & Uses
+        debt = purchase_price * debt_percent
+        equity = purchase_price * (Decimal('1') - debt_percent)
+
+        sources = {
+            'debt': float(debt),
+            'equity': float(equity),
+            'total': float(purchase_price)
+        }
+
+        uses = {
+            'purchase_price': float(purchase_price),
+            'transaction_fees': float(purchase_price * Decimal('0.02')),  # 2% fees
+            'total': float(purchase_price * Decimal('1.02'))
+        }
+
+        # Adjusted equity for fees
+        equity_with_fees = equity + (purchase_price * Decimal('0.02'))
+
+        # Year-by-year projections
+        projections = []
+        current_debt = debt
+        current_ebitda = ebitda
+
+        for year in range(1, years + 1):
+            # EBITDA growth
+            current_ebitda = current_ebitda * (Decimal('1') + ebitda_growth_rate)
+
+            # Interest expense
+            interest_expense = current_debt * interest_rate
+
+            # Free Cash Flow (simplified: EBITDA - CapEx - Interest)
+            # Assume CapEx = depreciation (maintenance capex)
+            capex = current_ebitda * Decimal('0.05')  # 5% of EBITDA
+            fcf = current_ebitda - capex - interest_expense
+
+            # Debt paydown
+            debt_paydown = fcf * annual_debt_paydown_pct
+            current_debt = max(Decimal('0'), current_debt - debt_paydown)
+
+            projections.append({
+                'year': year,
+                'ebitda': float(current_ebitda),
+                'interest_expense': float(interest_expense),
+                'capex': float(capex),
+                'free_cash_flow': float(fcf),
+                'debt_paydown': float(debt_paydown),
+                'ending_debt': float(current_debt),
+                'leverage_ratio': float(current_debt / current_ebitda)
+            })
+
+        # Exit valuation
+        exit_ebitda = current_ebitda
+        exit_ev = exit_ebitda * exit_multiple
+        exit_debt = current_debt
+        exit_equity_value = exit_ev - exit_debt
+
+        # Returns
+        moic = exit_equity_value / equity_with_fees
+        irr = (moic ** (Decimal('1') / Decimal(str(years)))) - Decimal('1')
+
+        # Decompose returns
+        entry_multiple = purchase_price / ebitda
+        decomposition = self.lbo_returns_decomposition(
+            entry_ebitda=ebitda,
+            exit_ebitda=exit_ebitda,
+            entry_multiple=entry_multiple,
+            exit_multiple=exit_multiple,
+            initial_debt=debt,
+            final_debt=exit_debt,
+            equity_invested=equity_with_fees,
+            holding_period_years=years
+        )
+
+        return {
+            'transaction_summary': {
+                'purchase_price': float(purchase_price),
+                'entry_ebitda': float(ebitda),
+                'entry_multiple': float(entry_multiple),
+                'sources_and_uses': {
+                    'sources': sources,
+                    'uses': uses
+                },
+                'initial_leverage': float(debt / ebitda)
+            },
+            'projections': projections,
+            'exit_scenario': {
+                'exit_year': years,
+                'exit_ebitda': float(exit_ebitda),
+                'exit_multiple': float(exit_multiple),
+                'exit_enterprise_value': float(exit_ev),
+                'exit_debt': float(exit_debt),
+                'exit_equity_value': float(exit_equity_value),
+                'exit_leverage': float(exit_debt / exit_ebitda) if exit_ebitda > 0 else 0
+            },
+            'returns': {
+                'equity_invested': float(equity_with_fees),
+                'equity_at_exit': float(exit_equity_value),
+                'moic': float(moic),
+                'irr': float(irr)
+            },
+            'return_decomposition': decomposition
+        }
+
+    def lbo_sensitivity_analysis(self, base_params: Dict[str, Decimal],
+                                 variable: str, range_pct: Decimal = Decimal('0.20')) -> Dict[str, Any]:
+        """
+        Sensitivity analysis for LBO returns
+
+        Tests impact of changing key variables:
+        - Exit multiple
+        - EBITDA growth
+        - Interest rates
+        - Leverage
+
+        Args:
+            base_params: Dictionary with base case parameters
+            variable: Variable to test ('exit_multiple', 'ebitda_growth', 'interest_rate', 'leverage')
+            range_pct: +/- range to test (e.g., 0.20 = +/- 20%)
+
+        Returns:
+            Sensitivity analysis results
+        """
+        scenarios = []
+        base_value = base_params.get(variable, Decimal('0'))
+
+        # Create range of values
+        test_values = [
+            base_value * (Decimal('1') - range_pct),
+            base_value * (Decimal('1') - range_pct / Decimal('2')),
+            base_value,
+            base_value * (Decimal('1') + range_pct / Decimal('2')),
+            base_value * (Decimal('1') + range_pct)
+        ]
+
+        for test_value in test_values:
+            # Update params with test value
+            test_params = base_params.copy()
+            test_params[variable] = test_value
+
+            # Run LBO model
+            model = self.lbo_transaction_model(
+                purchase_price=test_params.get('purchase_price', Decimal('1000')),
+                ebitda=test_params.get('ebitda', Decimal('100')),
+                debt_percent=test_params.get('debt_percent', Decimal('0.60')),
+                interest_rate=test_params.get('interest_rate', Decimal('0.06')),
+                exit_multiple=test_params.get('exit_multiple', Decimal('10')),
+                years=int(test_params.get('years', 5)),
+                ebitda_growth_rate=test_params.get('ebitda_growth_rate', Decimal('0.05'))
+            )
+
+            scenarios.append({
+                f'{variable}': float(test_value),
+                'moic': model['returns']['moic'],
+                'irr': model['returns']['irr']
+            })
+
+        return {
+            'variable_tested': variable,
+            'base_value': float(base_value),
+            'range_pct': float(range_pct),
+            'scenarios': scenarios,
+            'sensitivity_interpretation': self._interpret_sensitivity(scenarios, variable)
+        }
+
+    def _interpret_sensitivity(self, scenarios: List[Dict], variable: str) -> str:
+        """Interpret sensitivity analysis results"""
+        moics = [s['moic'] for s in scenarios]
+        moic_range = max(moics) - min(moics)
+
+        if moic_range > 2.0:
+            sensitivity = 'Very High'
+        elif moic_range > 1.0:
+            sensitivity = 'High'
+        elif moic_range > 0.5:
+            sensitivity = 'Moderate'
+        else:
+            sensitivity = 'Low'
+
+        return f"{sensitivity} sensitivity to {variable} - MOIC range: {min(moics):.2f}x to {max(moics):.2f}x"
 
 
 class PrivateDebtAnalyzer(AlternativeInvestmentBase):

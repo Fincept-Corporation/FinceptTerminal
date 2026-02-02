@@ -1,5 +1,6 @@
-// CryptoStatusBar.tsx - Bottom Status Bar for Crypto Trading
+// CryptoStatusBar.tsx - Professional Terminal-Style Status Bar for Crypto Trading
 import React from 'react';
+import { Wifi, WifiOff } from 'lucide-react';
 import { FINCEPT } from '../constants';
 import { APP_VERSION } from '@/constants/version';
 
@@ -24,18 +25,87 @@ export function CryptoStatusBar({
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      flexShrink: 0
+      flexShrink: 0,
+      fontFamily: '"IBM Plex Mono", monospace',
     }}>
-      <span>Fincept Terminal v{APP_VERSION} | Professional Crypto Trading Platform</span>
-      <span>
-        Broker: <span style={{ color: FINCEPT.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
-        Mode: <span style={{ color: tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.RED }}>
-          {tradingMode.toUpperCase()}
-        </span> |
-        Status: <span style={{ color: isConnected ? FINCEPT.GREEN : FINCEPT.RED }}>
-          {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
+      {/* Left - Branding */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: FINCEPT.ORANGE, fontWeight: 700 }}>FINCEPT</span>
+        <span>v{APP_VERSION}</span>
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+        <span>CRYPTO TERMINAL</span>
+      </div>
+
+      {/* Right - Status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Exchange */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: FINCEPT.GRAY }}>EXCHANGE:</span>
+          <span style={{ color: FINCEPT.ORANGE, fontWeight: 600 }}>
+            {activeBroker?.toUpperCase() || 'NONE'}
+          </span>
+        </div>
+
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+
+        {/* Trading Mode */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: FINCEPT.GRAY }}>MODE:</span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '1px 6px',
+            backgroundColor: tradingMode === 'paper' ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
+            border: `1px solid ${tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.RED}40`,
+          }}>
+            <div style={{
+              width: '5px',
+              height: '5px',
+              backgroundColor: tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.RED,
+              animation: tradingMode === 'live' ? 'pulse 1s infinite' : 'none',
+            }} />
+            <span style={{
+              color: tradingMode === 'paper' ? FINCEPT.GREEN : FINCEPT.RED,
+              fontWeight: 700,
+              fontSize: '8px',
+            }}>
+              {tradingMode.toUpperCase()}
+            </span>
+          </div>
+        </div>
+
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+
+        {/* Connection Status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {isConnected ? (
+            <>
+              <Wifi size={10} color={FINCEPT.GREEN} />
+              <span style={{ color: FINCEPT.GREEN, fontWeight: 600 }}>CONNECTED</span>
+            </>
+          ) : (
+            <>
+              <WifiOff size={10} color={FINCEPT.RED} />
+              <span style={{ color: FINCEPT.RED, fontWeight: 600 }}>OFFLINE</span>
+            </>
+          )}
+        </div>
+
+        <span style={{ color: FINCEPT.BORDER }}>|</span>
+
+        {/* Time */}
+        <span style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>
+          {new Date().toLocaleTimeString('en-US', { hour12: false })}
         </span>
-      </span>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   );
 }

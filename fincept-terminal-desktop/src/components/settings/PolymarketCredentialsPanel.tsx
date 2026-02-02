@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import polymarketServiceEnhanced from '@/services/polymarket/polymarketServiceEnhanced';
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
+import { showConfirm } from '@/utils/notifications';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -249,14 +250,21 @@ export const PolymarketCredentialsPanel: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (confirm('Delete Polymarket credentials?')) {
-      await saveSetting('polymarket_credentials', '', 'polymarket');
-      setCredentials(null);
-      setWalletConnected(false);
-      setWalletAddress('');
-      polymarketServiceEnhanced.clearCredentials();
-      setTestResult({ success: true, message: 'Credentials deleted' });
-    }
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      {
+        title: 'Delete Polymarket credentials?',
+        type: 'danger'
+      }
+    );
+    if (!confirmed) return;
+
+    await saveSetting('polymarket_credentials', '', 'polymarket');
+    setCredentials(null);
+    setWalletConnected(false);
+    setWalletAddress('');
+    polymarketServiceEnhanced.clearCredentials();
+    setTestResult({ success: true, message: 'Credentials deleted' });
   };
 
   const handleCopy = (text: string, label: string) => {

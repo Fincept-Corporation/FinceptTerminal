@@ -1,4 +1,4 @@
-// Header Support Buttons - Feedback, Contact, Newsletter
+// Header Support Buttons - Feedback, Contact, Newsletter, Notifications
 // Fincept-style modal forms for user engagement
 
 import React, { useState } from 'react';

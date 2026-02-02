@@ -2,6 +2,7 @@ import React from 'react';
 import { WatchlistStockWithQuote } from '../../../services/core/watchlistService';
 import { FINCEPT, FONT_FAMILY, formatCurrency, formatPercent, formatVolume, getChangeColor, SortCriteria } from './utils';
 import { Trash2, ArrowUpDown, Inbox } from 'lucide-react';
+import { showConfirm } from '@/utils/notifications';
 
 interface StockListViewProps {
   stocks: WatchlistStockWithQuote[];
@@ -31,9 +32,13 @@ const StockListView: React.FC<StockListViewProps> = ({
   selectedSymbol,
   isLoading
 }) => {
-  const handleRemove = (e: React.MouseEvent, symbol: string) => {
+  const handleRemove = async (e: React.MouseEvent, symbol: string) => {
     e.stopPropagation();
-    if (confirm(`Remove ${symbol} from watchlist?`)) {
+    const confirmed = await showConfirm(
+      `Remove ${symbol} from watchlist "${watchlistName}"?`,
+      { title: 'Remove Stock', type: 'warning' }
+    );
+    if (confirmed) {
       onRemoveStock(symbol);
     }
   };

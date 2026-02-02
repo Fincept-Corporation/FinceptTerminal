@@ -9,6 +9,7 @@ import { readFile as tauriReadFile, writeFile as tauriWriteFile } from '@tauri-a
 import { excelService, ExcelFile, ExcelSnapshot } from '@/services/core/excelService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { showConfirm, showSuccess, showError, showWarning, showPrompt } from '@/utils/notifications';
 
 interface SheetData {
   name: string;
@@ -147,7 +148,7 @@ const ExcelTab: React.FC = () => {
       }
     } catch (error) {
       console.error('Error importing Excel file:', error);
-      alert('Failed to import Excel file');
+      showError('Failed to import Excel file');
     }
   };
 
@@ -176,11 +177,11 @@ const ExcelTab: React.FC = () => {
         await tauriWriteFile(filePath, new Uint8Array(excelBuffer));
 
         setFileName(filePath.split(/[\\/]/).pop() || 'Untitled.xlsx');
-        alert('Excel file exported successfully!');
+        showSuccess('Excel file exported successfully!');
       }
     } catch (error) {
       console.error('Error exporting Excel file:', error);
-      alert('Failed to export Excel file');
+      showError('Failed to export Excel file');
     }
   };
 
@@ -195,21 +196,28 @@ const ExcelTab: React.FC = () => {
   };
 
   // Delete sheet
-  const handleDeleteSheet = () => {
+  const handleDeleteSheet = async () => {
     if (sheets.length === 1) {
-      alert('Cannot delete the last sheet');
+      showWarning('Cannot delete the last sheet');
       return;
     }
 
-    if (confirm(`Delete "${sheets[activeSheetIndex].name}"?`)) {
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      { title: `Delete "${sheets[activeSheetIndex].name}"?`, type: 'danger' }
+    );
+    if (confirmed) {
       setSheets(prev => prev.filter((_, idx) => idx !== activeSheetIndex));
       setActiveSheetIndex(Math.max(0, activeSheetIndex - 1));
     }
   };
 
   // Rename sheet
-  const handleRenameSheet = (index: number) => {
-    const newName = prompt('Enter new sheet name:', sheets[index].name);
+  const handleRenameSheet = async (index: number) => {
+    const newName = await showPrompt('Enter new sheet name:', {
+      title: 'Rename Sheet',
+      defaultValue: sheets[index].name
+    });
     if (newName && newName.trim()) {
       setSheets(prev => {
         const updated = [...prev];
@@ -236,36 +244,46 @@ const ExcelTab: React.FC = () => {
   // Create snapshot
   const handleCreateSnapshot = async () => {
     if (!currentFileId) {
-      alert('Please save the file first before creating a snapshot');
+      showWarning('Please save the file first before creating a snapshot');
       return;
     }
 
-    const snapshotName = prompt('Enter snapshot name:', `Restore Point ${new Date().toLocaleString()}`);
+    const snapshotName = await showPrompt('Enter snapshot name:', {
+      title: 'Create Snapshot',
+      defaultValue: `Restore Point ${new Date().toLocaleString()}`
+    });
     if (!snapshotName) return;
 
     try {
       saveCurrentSheetData();
       await excelService.createSnapshot(currentFileId, snapshotName, JSON.stringify({ sheets }));
       await loadSnapshots();
-      alert('Snapshot created successfully!');
+      showSuccess('Snapshot created successfully!');
     } catch (error) {
       console.error('Failed to create snapshot:', error);
-      alert('Failed to create snapshot');
+      showError('Failed to create snapshot');
     }
   };
 
   // Restore from snapshot
   const handleRestoreSnapshot = async (snapshot: ExcelSnapshot) => {
-    if (!confirm(`Restore to: ${snapshot.snapshot_name}?\n\nCurrent changes will be lost.`)) return;
+    const confirmed = await showConfirm(
+      'Current changes will be lost.',
+      {
+        title: `Restore to: ${snapshot.snapshot_name}?`,
+        type: 'warning'
+      }
+    );
+    if (!confirmed) return;
 
     try {
       const data = JSON.parse(snapshot.sheet_data);
       setSheets(data.sheets);
       setActiveSheetIndex(0);
-      alert('Snapshot restored successfully!');
+      showSuccess('Snapshot restored successfully!');
     } catch (error) {
       console.error('Failed to restore snapshot:', error);
-      alert('Failed to restore snapshot');
+      showError('Failed to restore snapshot');
     }
   };
 
@@ -311,7 +329,7 @@ const ExcelTab: React.FC = () => {
       });
     } catch (error) {
       console.error('Error opening file from history:', error);
-      alert('Failed to open file');
+      showError('Failed to open file');
     }
   };
 
@@ -635,7 +653,11 @@ const ExcelTab: React.FC = () => {
                     </button>
                     <button
                       onClick={async () => {
-                        if (confirm('Delete this snapshot?')) {
+                        const confirmed = await showConfirm(
+                          'This action cannot be undone.',
+                          { title: 'Delete this snapshot?', type: 'danger' }
+                        );
+                        if (confirmed) {
                           await excelService.deleteSnapshot(snapshot.id!);
                           await loadSnapshots();
                         }

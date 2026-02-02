@@ -5,6 +5,7 @@ import { Plus, Trash2, Database, Edit3, Sparkles, AlertCircle } from 'lucide-rea
 import { CustomField, FieldType } from '../types';
 import { SchemaSelector } from './SchemaSelector';
 import { JSONExplorer } from './JSONExplorer';
+import { showWarning } from '@/utils/notifications';
 
 interface SchemaBuilderProps {
   schemaType: 'predefined' | 'custom';
@@ -110,7 +111,7 @@ export function SchemaBuilder({
 
     // Don't add complex objects/arrays directly (only leaf values)
     if (fieldType === 'object' || fieldType === 'array') {
-      alert('Please expand this field and select a specific property inside it.');
+      showWarning('Please expand this field and select a specific property inside it.');
       return;
     }
 
@@ -231,7 +232,7 @@ export function SchemaBuilder({
     const limitedFields = uniqueFields.slice(0, 50);
 
     if (uniqueFields.length > 50) {
-      alert(`Found ${uniqueFields.length} fields. Adding first 50 to prevent UI overload. You can add more manually.`);
+      showWarning(`Found ${uniqueFields.length} fields. Adding first 50 to prevent UI overload. You can add more manually.`);
     }
 
     onCustomFieldsChange(limitedFields);

@@ -9,6 +9,7 @@ import { useExchangeCapabilities } from '../../hooks/useExchangeCapabilities';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
 import { formatPrice, formatCurrency, formatPnL, formatLeverage } from '../../utils/formatters';
 import type { UnifiedPosition } from '../../types';
+import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -31,9 +32,13 @@ export function PositionsTable() {
   const { activeBroker } = useBrokerContext();
 
   const handleClosePosition = async (position: UnifiedPosition) => {
-    if (!confirm(`Close ${position.side.toUpperCase()} position for ${position.symbol}?`)) {
-      return;
-    }
+    const pnlValue = typeof position.unrealizedPnl === 'number' ? position.unrealizedPnl : 0;
+    const confirmed = await showConfirm(
+      `Close ${position.side.toUpperCase()} position for ${position.symbol}?\n\nCurrent PnL: ${formatCurrency(pnlValue, 'USD')}`,
+      { title: 'Close Position', type: pnlValue >= 0 ? 'info' : 'warning' }
+    );
+
+    if (!confirmed) return;
 
     try {
       console.log('[PositionsTable] Closing position:', position);
@@ -46,10 +51,16 @@ export function PositionsTable() {
       // Additional refresh after 500ms to ensure DB sync
       setTimeout(() => refresh(), 500);
 
-      alert(`[OK] Position closed: ${position.symbol}`);
+      showSuccess('Position closed successfully', [
+        { label: 'Symbol', value: position.symbol },
+        { label: 'Side', value: position.side.toUpperCase(), color: position.side === 'long' ? '#00D66F' : '#FF3B3B' },
+        { label: 'PnL', value: formatCurrency(pnlValue, 'USD'), color: pnlValue >= 0 ? '#00D66F' : '#FF3B3B' },
+      ]);
     } catch (error) {
       console.error('[PositionsTable] Close error:', error);
-      alert(`[FAIL] Failed to close position: ${(error as Error).message}`);
+      showError(`Failed to close position: ${(error as Error).message}`, [
+        { label: 'Symbol', value: position.symbol },
+      ]);
     }
   };
 

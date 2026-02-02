@@ -588,10 +588,489 @@ class DeltaHedging:
         }
 
 
+class CoveredCallStrategy:
+    """
+    Covered Call Strategy Implementation
+
+    CFA Standards: Options strategies, income generation, downside protection analysis
+
+    Swedroe Perspective (from "The Only Guide"):
+    - Covered calls = Giving up upside for premium income
+    - NOT a free lunch - opportunity cost when stock rises strongly
+    - Asymmetric payoff: Limited upside, full downside (minus premium)
+    - Tax inefficiency (short-term gains from premiums)
+    - Better alternatives: Buy-and-hold, index funds
+
+    When suitable:
+    - Neutral to slightly bullish outlook
+    - Stock considered overvalued short-term
+    - Need income in flat markets
+    - Willing to cap upside
+
+    Position: Long 100 shares + Short 1 call option
+    """
+
+    def __init__(self, stock_price: float, shares: int = 100):
+        """
+        Initialize covered call strategy
+
+        Args:
+            stock_price: Current stock price
+            shares: Number of shares owned (typically 100 per contract)
+        """
+        self.stock_price = stock_price
+        self.shares = shares
+        self.stock_value = stock_price * shares
+        self.call_option = None
+        self.premium_received = 0.0
+
+    def write_call(self, strike_price: float, premium: float, expiry_date: datetime,
+                   option_type: OptionType = OptionType.CALL) -> Dict:
+        """
+        Write (sell) call option against stock position
+
+        Args:
+            strike_price: Strike price of call
+            premium: Premium received per share
+            expiry_date: Option expiration date
+            option_type: Must be CALL
+
+        Returns:
+            Position summary
+        """
+        if option_type != OptionType.CALL:
+            raise ValueError("Covered call must be a call option")
+
+        self.call_option = VanillaOption(
+            option_type=option_type,
+            underlying_type=UnderlyingType.EQUITY,
+            expiry_date=expiry_date,
+            strike_price=strike_price,
+            exercise_style=ExerciseStyle.AMERICAN,
+            notional=self.shares
+        )
+
+        self.premium_received = premium * self.shares
+
+        return {
+            'strategy': 'Covered Call',
+            'stock_position': self.shares,
+            'stock_price': self.stock_price,
+            'stock_value': self.stock_value,
+            'call_strike': strike_price,
+            'premium_per_share': premium,
+            'total_premium': self.premium_received,
+            'net_basis': self.stock_value - self.premium_received,
+            'expiry': expiry_date.strftime('%Y-%m-%d')
+        }
+
+    def calculate_payoff(self, stock_price_at_expiry: float) -> Dict:
+        """
+        Calculate payoff at expiration
+
+        CFA: Payoff = Stock Value + Option Value (negative for short)
+
+        Args:
+            stock_price_at_expiry: Stock price at expiration
+
+        Returns:
+            Payoff analysis
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        # Stock value at expiry
+        stock_value_final = stock_price_at_expiry * self.shares
+        stock_pnl = stock_value_final - self.stock_value
+
+        # Call option payoff (SHORT position)
+        call_payoff = -self.call_option.calculate_payoff(stock_price_at_expiry)
+
+        # Total payoff
+        total_payoff = stock_pnl + call_payoff + self.premium_received
+
+        # Return calculations
+        total_return = total_payoff / self.stock_value
+
+        # Assignment check
+        assigned = stock_price_at_expiry > self.call_option.strike_price
+
+        return {
+            'stock_price_at_expiry': stock_price_at_expiry,
+            'stock_value_final': stock_value_final,
+            'stock_pnl': stock_pnl,
+            'call_payoff': call_payoff,
+            'premium_kept': self.premium_received,
+            'total_payoff': total_payoff,
+            'total_return': total_return,
+            'total_return_pct': total_return * 100,
+            'option_assigned': assigned,
+            'shares_called_away': self.shares if assigned else 0
+        }
+
+    def payoff_profile(self, price_range: Tuple[float, float], num_points: int = 50) -> List[Dict]:
+        """
+        Generate complete payoff profile across price range
+
+        Args:
+            price_range: (min_price, max_price) tuple
+            num_points: Number of points to calculate
+
+        Returns:
+            List of payoff points
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        prices = np.linspace(price_range[0], price_range[1], num_points)
+        payoffs = []
+
+        for price in prices:
+            result = self.calculate_payoff(price)
+            payoffs.append({
+                'stock_price': price,
+                'total_payoff': result['total_payoff'],
+                'total_return_pct': result['total_return_pct']
+            })
+
+        return payoffs
+
+    def breakeven_analysis(self) -> Dict:
+        """
+        Calculate breakeven points
+
+        Breakeven = Initial stock price - Premium received
+
+        Returns:
+            Breakeven analysis
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        breakeven_price = self.stock_price - (self.premium_received / self.shares)
+        downside_protection = self.premium_received / self.stock_value
+
+        return {
+            'initial_stock_price': self.stock_price,
+            'premium_per_share': self.premium_received / self.shares,
+            'breakeven_price': breakeven_price,
+            'downside_protection_pct': downside_protection * 100,
+            'interpretation': f"Protected down to ${breakeven_price:.2f} ({downside_protection*100:.2f}% below current)"
+        }
+
+    def max_profit_and_loss(self) -> Dict:
+        """
+        Calculate maximum profit and loss
+
+        CFA:
+        - Max Profit = (Strike - Stock Price) + Premium (if stock >= strike at expiry)
+        - Max Loss = Stock Price - Premium (if stock goes to $0)
+
+        Returns:
+            Max profit/loss analysis
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        strike = self.call_option.strike_price
+        premium_per_share = self.premium_received / self.shares
+
+        # Max profit: stock called away at strike
+        max_profit_per_share = (strike - self.stock_price) + premium_per_share
+        max_profit_total = max_profit_per_share * self.shares
+        max_profit_pct = max_profit_per_share / self.stock_price
+
+        # Max loss: stock goes to zero (keep premium)
+        max_loss_per_share = self.stock_price - premium_per_share
+        max_loss_total = max_loss_per_share * self.shares
+        max_loss_pct = max_loss_per_share / self.stock_price
+
+        return {
+            'max_profit': {
+                'per_share': max_profit_per_share,
+                'total': max_profit_total,
+                'return_pct': max_profit_pct * 100,
+                'occurs_when': f'Stock >= ${strike} at expiry'
+            },
+            'max_loss': {
+                'per_share': max_loss_per_share,
+                'total': max_loss_total,
+                'loss_pct': max_loss_pct * 100,
+                'occurs_when': 'Stock goes to $0'
+            },
+            'risk_reward_ratio': abs(max_profit_per_share / max_loss_per_share)
+        }
+
+    def return_if_unchanged(self) -> Dict:
+        """
+        Calculate return if stock price unchanged at expiration
+
+        Returns:
+            Return analysis for flat market
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        result = self.calculate_payoff(self.stock_price)
+
+        return {
+            'scenario': 'Stock Unchanged',
+            'stock_price_at_expiry': self.stock_price,
+            'total_return': result['total_return'],
+            'total_return_pct': result['total_return_pct'],
+            'annualized_return_pct': self._annualize_return(result['total_return']),
+            'source': 'Premium income only'
+        }
+
+    def _annualize_return(self, return_period: float) -> float:
+        """Annualize return based on option time to expiry"""
+        if self.call_option is None:
+            return 0.0
+
+        days_to_expiry = (self.call_option.expiry_date - datetime.now()).days
+        if days_to_expiry <= 0:
+            return 0.0
+
+        years = days_to_expiry / 365.25
+        return (1 + return_period) ** (1 / years) - 1 if years > 0 else 0.0
+
+    def moneyness_analysis(self) -> Dict:
+        """
+        Analyze strike selection (moneyness)
+
+        ITM: Strike < Stock Price (more premium, less upside)
+        ATM: Strike ≈ Stock Price (balanced)
+        OTM: Strike > Stock Price (less premium, more upside)
+
+        Returns:
+            Moneyness classification and implications
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        strike = self.call_option.strike_price
+        stock = self.stock_price
+
+        moneyness_ratio = strike / stock
+
+        if moneyness_ratio < 0.98:
+            classification = 'ITM (In-The-Money)'
+            characteristics = {
+                'premium': 'High',
+                'upside': 'Limited (likely called away)',
+                'probability_assignment': 'High',
+                'strategy_outlook': 'Bearish to neutral'
+            }
+        elif moneyness_ratio < 1.02:
+            classification = 'ATM (At-The-Money)'
+            characteristics = {
+                'premium': 'Moderate',
+                'upside': 'Moderate',
+                'probability_assignment': 'Medium',
+                'strategy_outlook': 'Neutral'
+            }
+        else:
+            classification = 'OTM (Out-of-The-Money)'
+            characteristics = {
+                'premium': 'Lower',
+                'upside': 'More (less likely called away)',
+                'probability_assignment': 'Lower',
+                'strategy_outlook': 'Neutral to bullish'
+            }
+
+        return {
+            'stock_price': stock,
+            'strike_price': strike,
+            'moneyness_ratio': moneyness_ratio,
+            'classification': classification,
+            'characteristics': characteristics,
+            'upside_room': max(0, strike - stock),
+            'upside_room_pct': max(0, (strike - stock) / stock) * 100
+        }
+
+    def compare_to_buy_and_hold(self, stock_return_scenarios: List[float]) -> Dict:
+        """
+        Compare covered call strategy to simple buy-and-hold
+
+        Swedroe Insight: Covered calls underperform in strong bull markets
+        They give up unlimited upside for limited premium income
+
+        Args:
+            stock_return_scenarios: List of potential stock returns (e.g., [-0.20, 0.0, 0.10, 0.30])
+
+        Returns:
+            Comparison analysis
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        comparisons = []
+
+        for stock_return in stock_return_scenarios:
+            final_stock_price = self.stock_price * (1 + stock_return)
+
+            # Buy-and-hold return
+            bh_return = stock_return
+
+            # Covered call return
+            cc_result = self.calculate_payoff(final_stock_price)
+            cc_return = cc_result['total_return']
+
+            # Difference
+            return_difference = cc_return - bh_return
+
+            comparisons.append({
+                'stock_return': stock_return * 100,
+                'final_stock_price': final_stock_price,
+                'buy_hold_return_pct': bh_return * 100,
+                'covered_call_return_pct': cc_return * 100,
+                'difference_pct': return_difference * 100,
+                'winner': 'Covered Call' if cc_return > bh_return else 'Buy-and-Hold',
+                'option_assigned': final_stock_price > self.call_option.strike_price
+            })
+
+        return {
+            'scenarios': comparisons,
+            'swedroe_insight': (
+                'Covered calls outperform in flat/down markets (premium cushion) '
+                'but underperform in strong bull markets (capped upside). '
+                'Over long term, buy-and-hold typically wins due to unlimited upside.'
+            )
+        }
+
+    def tax_considerations(self, holding_period_days: int, tax_rate_short: float = 0.37,
+                          tax_rate_long: float = 0.20) -> Dict:
+        """
+        Analyze tax implications
+
+        Swedroe: Covered calls create tax inefficiency
+        - Premium income = SHORT-TERM capital gain (higher rate)
+        - If assigned, can convert long-term gains to short-term
+        - Holding period rules complex
+
+        Args:
+            holding_period_days: Days stock held before writing call
+            tax_rate_short: Short-term capital gains rate
+            tax_rate_long: Long-term capital gains rate
+
+        Returns:
+            Tax analysis
+        """
+        if self.call_option is None:
+            raise ValueError("No call option written")
+
+        # Premium is always short-term income
+        premium_tax = self.premium_received * tax_rate_short
+
+        # Stock gain/loss tax treatment
+        qualified_long_term = holding_period_days >= 365
+
+        return {
+            'premium_received': self.premium_received,
+            'premium_tax': premium_tax,
+            'premium_after_tax': self.premium_received - premium_tax,
+            'stock_holding_period_days': holding_period_days,
+            'qualified_for_ltcg': qualified_long_term,
+            'applicable_tax_rate': tax_rate_long if qualified_long_term else tax_rate_short,
+            'swedroe_warning': (
+                'Covered calls create tax drag: (1) Premium taxed as short-term income, '
+                '(2) Can suspend long-term holding period, converting LTCG to STCG, '
+                '(3) Best used in tax-deferred accounts (IRA, 401k)'
+            ),
+            'recommendation': 'Use in tax-deferred accounts to avoid tax inefficiency'
+        }
+
+    def swedroe_verdict(self) -> Dict:
+        """
+        Larry Swedroe's complete verdict on Covered Call strategies
+
+        Category: Generally NOT recommended for most investors
+
+        Returns:
+            Complete verdict
+        """
+        return {
+            'strategy': 'Covered Call Writing',
+            'category': 'THE FLAWED (for most investors)',
+            'overall_rating': '4/10 - Limited use cases',
+
+            'the_good': [
+                'Generates income in flat/declining markets',
+                'Provides small downside cushion (premium)',
+                'Can be profitable in sideways markets',
+                'Psychologically satisfying (collecting premiums)'
+            ],
+
+            'the_bad': [
+                'CAPS UPSIDE - gives up unlimited stock gains',
+                'Full downside exposure (minus small premium)',
+                'Asymmetric payoff: limited gain, large loss potential',
+                'Tax inefficient (premiums = short-term gains)',
+                'Transaction costs reduce returns',
+                'Timing risk - hard to optimize consistently',
+                'Underperforms buy-and-hold in bull markets'
+            ],
+
+            'the_ugly': [
+                'Often sold by brokers for commissions, not client benefit',
+                'Marketed as "free money" but comes with real costs',
+                'Complexity allows for mistakes and suboptimal execution',
+                'Can suspend long-term capital gains status',
+                'Behavioral trap: selling winners too early'
+            ],
+
+            'key_findings': {
+                'expected_return': 'Lower than buy-and-hold long-term',
+                'risk_reduction': 'Minimal (premium cushion only)',
+                'tax_efficiency': 'Poor (short-term income treatment)',
+                'complexity': 'High (timing, strike selection, rolling)',
+                'better_alternative': 'Buy-and-hold index funds'
+            },
+
+            'swedroe_quote': (
+                '"Covered call writing is not a free lunch. You are selling away your upside '
+                'in exchange for premium income. In bull markets, you give up significant gains. '
+                'The small premium does not compensate for unlimited upside forgone. '
+                'For most investors, simple buy-and-hold is superior."'
+            ),
+
+            'suitable_for': [
+                'Sophisticated investors with neutral short-term outlook',
+                'Stocks considered temporarily overvalued',
+                'Tax-deferred accounts only (avoid tax drag)',
+                'Investors willing to actively manage positions',
+                'Those who would sell stock at strike price anyway'
+            ],
+
+            'not_suitable_for': [
+                'Long-term buy-and-hold investors',
+                'Taxable accounts (tax inefficiency)',
+                'Bull market environments (capped upside hurts)',
+                'Investors unable to monitor and roll positions',
+                'Anyone expecting strong stock appreciation'
+            ],
+
+            'better_alternatives': [
+                'Buy-and-hold diversified portfolio',
+                'Index funds (lower cost, tax efficient)',
+                'If need income: dividend-paying stocks or bond allocation',
+                'If bearish: just sell the stock (don\'t half-commit)'
+            ],
+
+            'final_verdict': (
+                'Covered calls are FLAWED for most investors. They sacrifice unlimited upside '
+                'for limited premium income, creating an asymmetric bet. Tax inefficiency, '
+                'transaction costs, and behavioral pitfalls make them inferior to simple buy-and-hold '
+                'for long-term wealth building. Use only in tax-deferred accounts with specific '
+                'short-term neutral outlook, and be prepared to actively manage positions.'
+            )
+        }
+
+
 # Export main classes
 __all__ = [
     'OptionGreeks', 'BinomialNode', 'VanillaOption', 'OnePeriodBinomialModel',
     'TwoPeriodBinomialModel', 'BinomialPricingEngine', 'BlackScholesPricingEngine',
     'BlackModelPricingEngine', 'PutCallParity', 'ImpliedVolatilityCalculator',
-    'DeltaHedging'
+    'DeltaHedging', 'CoveredCallStrategy'
 ]

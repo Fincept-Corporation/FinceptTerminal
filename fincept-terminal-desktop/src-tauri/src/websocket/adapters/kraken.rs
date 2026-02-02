@@ -76,15 +76,41 @@ impl KrakenAdapter {
                     // Update last message time
                     *last_message_time.write().await = Self::now();
 
-                    // Handle message in separate task to avoid blocking
-                    let cb = callback.clone();
-                    tokio::spawn(async move {
-                        if let Message::Text(text) = msg {
-                            if let Ok(data) = serde_json::from_str::<Value>(&text) {
-                                Self::process_message(&data, &cb);
-                            }
+                    match &msg {
+                        Message::Text(text) => {
+                            // Handle text message in separate task to avoid blocking
+                            let cb = callback.clone();
+                            let text_clone = text.clone();
+                            tokio::spawn(async move {
+                                if let Ok(data) = serde_json::from_str::<Value>(&text_clone) {
+                                    Self::process_message(&data, &cb);
+                                }
+                            });
                         }
-                    });
+                        Message::Ping(data) => {
+                            // Auto-respond to pings with pong
+                            let ws_clone = ws.clone();
+                            let pong_data = data.clone();
+                            tokio::spawn(async move {
+                                let _ = ws_clone.write().await.send(Message::Pong(pong_data)).await;
+                            });
+                        }
+                        Message::Pong(_) => {
+                            // Pong received - heartbeat acknowledged
+                        }
+                        Message::Close(frame) => {
+                            eprintln!("[Kraken WS] Close frame received: {:?}", frame);
+                            connected.store(false, Ordering::SeqCst);
+                            callback(MarketMessage::Status(StatusData {
+                                provider: "kraken".to_string(),
+                                status: ConnectionStatus::Disconnected,
+                                message: Some(format!("Server closed connection: {:?}", frame)),
+                                timestamp: Self::now(),
+                            }));
+                            break;
+                        }
+                        _ => {}
+                    }
                 }
                 Some(Err(e)) => {
                     let error_msg = format!("WebSocket error: {}", e);
@@ -284,27 +310,32 @@ impl WebSocketAdapter for KrakenAdapter {
         let url = self.config.url.clone();
         let connect_url = if url.is_empty() { KRAKEN_WS_URL } else { &url };
 
+        eprintln!("[Kraken] Connecting to WebSocket: {}", connect_url);
 
         let (ws_stream, _) = connect_async(connect_url).await
             .map_err(|e| {
+                eprintln!("[Kraken] ✗ Failed to connect: {}", e);
                 e
             })?;
 
+        eprintln!("[Kraken] ✓ WebSocket connected successfully");
 
         let ws = Arc::new(RwLock::new(ws_stream));
         self.ws = Some(ws.clone());
         self.connected.store(true, Ordering::SeqCst);
-
 
         // Start receive loop with error callback
         if let Some(callback) = self.message_callback.clone() {
             let connected = self.connected.clone();
             let error_callback = self.error_callback.clone();
             let last_message_time = self.last_message_time.clone();
+            eprintln!("[Kraken] Starting receive loop");
             tokio::spawn(async move {
                 Self::receive_loop(ws, callback, error_callback, connected, last_message_time).await;
+                eprintln!("[Kraken] Receive loop ended");
             });
         } else {
+            eprintln!("[Kraken] Warning: No message callback set");
         }
 
         Ok(())
@@ -327,9 +358,17 @@ impl WebSocketAdapter for KrakenAdapter {
         channel: &str,
         params: Option<Value>,
     ) -> anyhow::Result<()> {
+        eprintln!("[Kraken] subscribe called: symbol={}, channel={}, connected={}",
+                  symbol, channel, self.connected.load(Ordering::SeqCst));
+
+        // Check if actually connected first
+        if !self.connected.load(Ordering::SeqCst) {
+            return Err(anyhow::anyhow!("WebSocket not connected"));
+        }
 
         let ws = self.ws.as_ref()
             .ok_or_else(|| {
+                eprintln!("[Kraken] subscribe failed: ws is None");
                 anyhow::anyhow!("Not connected")
             })?;
 
@@ -356,13 +395,20 @@ impl WebSocketAdapter for KrakenAdapter {
         }
 
         let msg_str = serde_json::to_string(&sub_msg)?;
+        eprintln!("[Kraken] Sending subscription: {}", msg_str);
 
-        ws.write().await.send(Message::Text(msg_str)).await
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to send subscription: {}", e)
-            })?;
-
-        Ok(())
+        match ws.write().await.send(Message::Text(msg_str)).await {
+            Ok(_) => {
+                eprintln!("[Kraken] ✓ Subscription sent successfully for {} {}", symbol, channel);
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("[Kraken] ✗ Failed to send subscription: {}", e);
+                // Mark as disconnected since send failed
+                self.connected.store(false, Ordering::SeqCst);
+                Err(anyhow::anyhow!("Failed to send subscription: {}", e))
+            }
+        }
     }
 
     async fn unsubscribe(&mut self, symbol: &str, channel: &str) -> anyhow::Result<()> {

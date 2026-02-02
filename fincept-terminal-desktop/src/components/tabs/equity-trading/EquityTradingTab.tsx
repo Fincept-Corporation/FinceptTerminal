@@ -15,6 +15,7 @@ import {
   FileText, History, PieChart, LineChart, BarChart2, Layers
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { showConfirm } from '@/utils/notifications';
 
 import { StockBrokerProvider, useStockBrokerContext, useStockTradingMode, useStockTradingData } from '@/contexts/StockBrokerContext';
 import {
@@ -916,15 +917,14 @@ function EquityTradingContent() {
                 PAPER
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!isLive) {
-                    const confirmed = window.confirm(
-                      'WARNING: SWITCHING TO LIVE TRADING\n\n' +
-                      'You are about to enable LIVE trading mode.\n\n' +
-                      '- All orders will be placed with REAL funds\n' +
-                      '- Trades will be executed on the actual exchange\n' +
-                      '- You may lose money\n\n' +
-                      'Are you sure you want to continue?'
+                    const confirmed = await showConfirm(
+                      'You are about to enable LIVE trading mode. All orders will be placed with REAL funds and trades will be executed on the actual exchange.\n\nMODE: LIVE TRADING\nRISK: REAL FUNDS AT RISK - YOU MAY LOSE MONEY',
+                      {
+                        title: 'WARNING: SWITCHING TO LIVE TRADING',
+                        type: 'danger'
+                      }
                     );
                     if (confirmed) {
                       setTradingMode('live');

@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { MCPServerDefinition } from '../serverDefinitions';
+import { showWarning } from '@/utils/notifications';
 
 interface GenericFormProps {
   server: MCPServerDefinition;
@@ -26,7 +27,7 @@ const GenericForm: React.FC<GenericFormProps> = ({ server, onSubmit, onCancel })
     const allFilled = Object.values(envValues).every(v => v.trim());
 
     if (!allFilled) {
-      alert('Please fill in all required fields');
+      showWarning('Please fill in all required fields');
       return;
     }
 

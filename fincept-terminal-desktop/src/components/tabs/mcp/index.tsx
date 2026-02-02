@@ -12,6 +12,7 @@ import { stockBrokerMCPBridge } from '../../../services/mcp/internal/StockBroker
 import MCPMarketplace from './marketplace/MCPMarketplace';
 import MCPAddServerModal from './MCPAddServerModal';
 import MCPToolsManagement from './MCPToolsManagement';
+import { showConfirm } from '@/utils/notifications';
 
 interface MCPTabProps {
   onNavigateToTab?: (tabName: string) => void;
@@ -176,7 +177,11 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   };
 
   const handleRemoveServer = async (serverId: string) => {
-    if (!confirm('Remove this MCP server? This will delete all associated data.')) {
+    const confirmed = await showConfirm('This will delete all associated data.', {
+      title: 'Remove this MCP server?',
+      type: 'danger'
+    });
+    if (!confirmed) {
       return;
     }
 

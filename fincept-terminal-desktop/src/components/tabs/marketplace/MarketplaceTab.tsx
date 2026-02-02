@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useReducer, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MarketplaceApiService, Dataset } from '@/services/marketplace/marketplaceApi';
 import { useTranslation } from 'react-i18next';
+import { withTimeout } from '@/services/core/apiUtils';
+import { sanitizeInput } from '@/services/core/validators';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { showConfirm, showSuccess, showError, showWarning } from '@/utils/notifications';
 import {
   Search,
   Upload,
@@ -45,22 +49,107 @@ const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
 
 type ScreenType = 'BROWSE' | 'UPLOAD' | 'MY_PURCHASES' | 'MY_DATASETS' | 'ANALYTICS' | 'PRICING' | 'ADMIN_STATS' | 'ADMIN_PENDING' | 'ADMIN_REVENUE';
 
+// ══════════════════════════════════════════════════════════════
+// STATE MACHINE & TYPES
+// ══════════════════════════════════════════════════════════════
+type MarketplaceStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface MarketplaceState {
+  status: MarketplaceStatus;
+  currentScreen: ScreenType;
+  datasets: Dataset[];
+  myUploadedDatasets: Dataset[];
+  selectedDataset: Dataset | null;
+  selectedCategory: string;
+  searchQuery: string;
+  currentPage: number;
+  totalPages: number;
+  error: string | null;
+}
+
+type MarketplaceAction =
+  | { type: 'SET_LOADING' }
+  | { type: 'SET_READY' }
+  | { type: 'SET_ERROR'; error: string }
+  | { type: 'SET_SCREEN'; screen: ScreenType }
+  | { type: 'SET_DATASETS'; datasets: Dataset[]; totalPages: number }
+  | { type: 'SET_MY_DATASETS'; datasets: Dataset[] }
+  | { type: 'SET_SELECTED_DATASET'; dataset: Dataset | null }
+  | { type: 'SET_CATEGORY'; category: string }
+  | { type: 'SET_SEARCH'; query: string }
+  | { type: 'SET_PAGE'; page: number }
+  | { type: 'RESET_ERROR' };
+
+const initialState: MarketplaceState = {
+  status: 'idle',
+  currentScreen: 'BROWSE',
+  datasets: [],
+  myUploadedDatasets: [],
+  selectedDataset: null,
+  selectedCategory: 'ALL',
+  searchQuery: '',
+  currentPage: 1,
+  totalPages: 1,
+  error: null
+};
+
+function marketplaceReducer(state: MarketplaceState, action: MarketplaceAction): MarketplaceState {
+  switch (action.type) {
+    case 'SET_LOADING':
+      return { ...state, status: 'loading', error: null };
+    case 'SET_READY':
+      return { ...state, status: 'ready', error: null };
+    case 'SET_ERROR':
+      return { ...state, status: 'error', error: action.error };
+    case 'SET_SCREEN':
+      return { ...state, currentScreen: action.screen };
+    case 'SET_DATASETS':
+      return { ...state, datasets: action.datasets, totalPages: action.totalPages };
+    case 'SET_MY_DATASETS':
+      return { ...state, myUploadedDatasets: action.datasets };
+    case 'SET_SELECTED_DATASET':
+      return { ...state, selectedDataset: action.dataset };
+    case 'SET_CATEGORY':
+      return { ...state, selectedCategory: action.category, currentPage: 1 };
+    case 'SET_SEARCH':
+      return { ...state, searchQuery: action.query, currentPage: 1 };
+    case 'SET_PAGE':
+      return { ...state, currentPage: action.page };
+    case 'RESET_ERROR':
+      return { ...state, error: null };
+    default:
+      return state;
+  }
+}
+
+const API_TIMEOUT_MS = 30000;
+
 const MarketplaceTab: React.FC = () => {
   const { t } = useTranslation('marketplace');
   const { session } = useAuth();
 
-  // State
-  const [currentScreen, setCurrentScreen] = useState<ScreenType>('BROWSE');
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [myUploadedDatasets, setMyUploadedDatasets] = useState<Dataset[]>([]);
-  const [selectedDataset, setSelectedDataset] = useState<Dataset | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  // State machine
+  const [state, dispatch] = useReducer(marketplaceReducer, initialState);
+  const {
+    status,
+    currentScreen,
+    datasets,
+    myUploadedDatasets,
+    selectedDataset,
+    selectedCategory,
+    searchQuery,
+    currentPage,
+    totalPages,
+    error
+  } = state;
 
-  // Upload state
+  // Cleanup refs for race condition prevention
+  const mountedRef = useRef(true);
+  const fetchIdRef = useRef(0);
+
+  const isLoading = status === 'loading';
+
+  // Upload state (kept separate as form state)
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadMetadata, setUploadMetadata] = useState({
     title: '',
@@ -73,19 +162,37 @@ const MarketplaceTab: React.FC = () => {
   const isGuestUser = session?.user_type === 'guest' || session?.api_key?.startsWith('fk_guest_');
   const isAdmin = (session?.user_info as any)?.is_admin;
 
-  // Fetch datasets
-  const fetchDatasets = async () => {
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Fetch datasets with race condition prevention
+  const fetchDatasets = useCallback(async () => {
     if (!session?.api_key) return;
-    setIsLoading(true);
+
+    const currentFetchId = ++fetchIdRef.current;
+    dispatch({ type: 'SET_LOADING' });
+
     try {
-      const response = await MarketplaceApiService.browseDatasets(session.api_key, {
-        category: selectedCategory === 'ALL' ? undefined : selectedCategory,
-        search: searchQuery || undefined,
-        page: currentPage,
-        limit: 20,
-        sort_by: 'uploaded_at',
-        sort_order: 'desc'
-      });
+      const response = await withTimeout(
+        MarketplaceApiService.browseDatasets(session.api_key, {
+          category: selectedCategory === 'ALL' ? undefined : selectedCategory,
+          search: searchQuery || undefined,
+          page: currentPage,
+          limit: 20,
+          sort_by: 'uploaded_at',
+          sort_order: 'desc'
+        }),
+        API_TIMEOUT_MS,
+        'Browse datasets timeout'
+      );
+
+      // Prevent stale updates
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
 
       if (response.success && response.data) {
         const responseData = response.data as any;
@@ -112,32 +219,64 @@ const MarketplaceTab: React.FC = () => {
           updated_at: apiDataset.updated_at || apiDataset.uploaded_at
         }));
 
-        setDatasets(transformedDatasets);
-        setTotalPages(pagination.total_pages || responseData.total_pages || 1);
+        dispatch({ type: 'SET_DATASETS', datasets: transformedDatasets, totalPages: pagination.total_pages || responseData.total_pages || 1 });
+        dispatch({ type: 'SET_READY' });
+      } else {
+        dispatch({ type: 'SET_READY' });
       }
-    } catch (error) {
-      console.error('Failed to fetch datasets:', error);
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+      console.error('Failed to fetch datasets:', err);
+      dispatch({ type: 'SET_ERROR', error: err instanceof Error ? err.message : 'Failed to fetch datasets' });
     }
-  };
+  }, [session?.api_key, selectedCategory, searchQuery, currentPage]);
 
-  const fetchMyDatasets = async () => {
+  const fetchMyDatasets = useCallback(async () => {
     if (!session?.api_key) return;
+
     try {
-      const response = await MarketplaceApiService.getMyDatasets(session.api_key, 1, 100);
+      const response = await withTimeout(
+        MarketplaceApiService.getMyDatasets(session.api_key, 1, 100),
+        API_TIMEOUT_MS,
+        'Fetch my datasets timeout'
+      );
+
+      if (!mountedRef.current) return;
+
       if (response.success && response.data) {
-        setMyUploadedDatasets(response.data.datasets || []);
+        dispatch({ type: 'SET_MY_DATASETS', datasets: response.data.datasets || [] });
       }
-    } catch (error) {
-      console.error('Failed to fetch my datasets:', error);
+    } catch (err) {
+      // Non-critical, don't show error
+      console.error('Failed to fetch my datasets:', err);
     }
-  };
+  }, [session?.api_key]);
 
   useEffect(() => {
     fetchDatasets();
     fetchMyDatasets();
-  }, [session?.api_key, selectedCategory, searchQuery, currentPage]);
+  }, [fetchDatasets, fetchMyDatasets]);
+
+  // Handler functions for state updates
+  const setCurrentScreen = useCallback((screen: ScreenType) => {
+    dispatch({ type: 'SET_SCREEN', screen });
+  }, []);
+
+  const setSelectedDataset = useCallback((dataset: Dataset | null) => {
+    dispatch({ type: 'SET_SELECTED_DATASET', dataset });
+  }, []);
+
+  const setSelectedCategory = useCallback((category: string) => {
+    dispatch({ type: 'SET_CATEGORY', category });
+  }, []);
+
+  const setSearchQuery = useCallback((query: string) => {
+    dispatch({ type: 'SET_SEARCH', query });
+  }, []);
+
+  const setCurrentPage = useCallback((page: number) => {
+    dispatch({ type: 'SET_PAGE', page });
+  }, []);
 
   // Get unique categories
   const categories = [
@@ -296,8 +435,10 @@ const MarketplaceTab: React.FC = () => {
       )}
 
       {/* Main Content */}
+      <ErrorBoundary name="MarketplaceContent" variant="minimal">
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {currentScreen === 'BROWSE' && (
+          <ErrorBoundary name="BrowseScreen" variant="minimal">
           <BrowseScreen
             datasets={filteredDatasets}
             categories={categories}
@@ -310,8 +451,10 @@ const MarketplaceTab: React.FC = () => {
             isLoading={isLoading}
             onRefresh={() => { fetchDatasets(); fetchMyDatasets(); }}
           />
+          </ErrorBoundary>
         )}
         {currentScreen === 'UPLOAD' && (
+          <ErrorBoundary name="UploadScreen" variant="minimal">
           <UploadScreen
             uploadFile={uploadFile}
             onFileChange={setUploadFile}
@@ -325,15 +468,45 @@ const MarketplaceTab: React.FC = () => {
               setCurrentScreen('BROWSE');
             }}
           />
+          </ErrorBoundary>
         )}
-        {currentScreen === 'MY_PURCHASES' && <MyPurchasesScreen session={session} />}
-        {currentScreen === 'MY_DATASETS' && <MyDatasetsScreen session={session} onRefresh={() => { fetchDatasets(); fetchMyDatasets(); }} />}
-        {currentScreen === 'ANALYTICS' && <AnalyticsScreen session={session} />}
-        {currentScreen === 'PRICING' && <PricingScreen session={session} />}
-        {currentScreen === 'ADMIN_STATS' && <AdminStatsScreen session={session} />}
-        {currentScreen === 'ADMIN_PENDING' && <AdminPendingScreen session={session} onRefresh={fetchDatasets} />}
-        {currentScreen === 'ADMIN_REVENUE' && <AdminRevenueScreen session={session} />}
+        {currentScreen === 'MY_PURCHASES' && (
+          <ErrorBoundary name="MyPurchasesScreen" variant="minimal">
+            <MyPurchasesScreen session={session} />
+          </ErrorBoundary>
+        )}
+        {currentScreen === 'MY_DATASETS' && (
+          <ErrorBoundary name="MyDatasetsScreen" variant="minimal">
+            <MyDatasetsScreen session={session} onRefresh={() => { fetchDatasets(); fetchMyDatasets(); }} />
+          </ErrorBoundary>
+        )}
+        {currentScreen === 'ANALYTICS' && (
+          <ErrorBoundary name="AnalyticsScreen" variant="minimal">
+            <AnalyticsScreen session={session} />
+          </ErrorBoundary>
+        )}
+        {currentScreen === 'PRICING' && (
+          <ErrorBoundary name="PricingScreen" variant="minimal">
+            <PricingScreen session={session} />
+          </ErrorBoundary>
+        )}
+        {currentScreen === 'ADMIN_STATS' && (
+          <ErrorBoundary name="AdminStatsScreen" variant="minimal">
+            <AdminStatsScreen session={session} />
+          </ErrorBoundary>
+        )}
+        {currentScreen === 'ADMIN_PENDING' && (
+          <ErrorBoundary name="AdminPendingScreen" variant="minimal">
+            <AdminPendingScreen session={session} onRefresh={fetchDatasets} />
+          </ErrorBoundary>
+        )}
+        {currentScreen === 'ADMIN_REVENUE' && (
+          <ErrorBoundary name="AdminRevenueScreen" variant="minimal">
+            <AdminRevenueScreen session={session} />
+          </ErrorBoundary>
+        )}
       </div>
+      </ErrorBoundary>
 
       {/* Status Bar */}
       <div style={{
@@ -744,10 +917,10 @@ const DatasetDetails: React.FC<{ dataset: Dataset; onClose: () => void }> = ({ d
       if (response.success && response.data?.download_url) {
         window.open(response.data.download_url, '_blank');
       } else {
-        alert('Download failed');
+        showError('Download failed');
       }
     } catch (error) {
-      alert('Download failed');
+      showError('Download failed');
     } finally {
       setIsDownloading(false);
     }
@@ -758,12 +931,12 @@ const DatasetDetails: React.FC<{ dataset: Dataset; onClose: () => void }> = ({ d
     try {
       const response = await MarketplaceApiService.purchaseDataset(session.api_key, dataset.id);
       if (response.success) {
-        alert('Purchase successful!');
+        showSuccess('Purchase successful');
       } else {
-        alert('Purchase failed');
+        showError('Purchase failed');
       }
     } catch (error) {
-      alert('Purchase failed');
+      showError('Purchase failed');
     }
   };
 
@@ -995,27 +1168,51 @@ const UploadScreen: React.FC<{
   session: any;
   onUploadComplete: () => void;
 }> = ({ uploadFile, onFileChange, uploadMetadata, onMetadataChange, isLoading, session, onUploadComplete }) => {
-  const handleUpload = async () => {
+  const [uploading, setUploading] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const handleUpload = useCallback(async () => {
     if (!session?.api_key || !uploadFile) {
-      alert('Please select a file and fill in all required fields');
+      showWarning('Please select a file and fill in all required fields');
       return;
     }
 
+    // Sanitize inputs
+    const sanitizedTitle = sanitizeInput(uploadMetadata.title);
+    const sanitizedDescription = sanitizeInput(uploadMetadata.description);
+
+    if (!sanitizedTitle || !sanitizedDescription) {
+      showWarning('Title and description are required');
+      return;
+    }
+
+    setUploading(true);
     try {
-      const response = await MarketplaceApiService.uploadDataset(
-        session.api_key,
-        uploadFile,
-        {
-          title: uploadMetadata.title,
-          description: uploadMetadata.description,
-          category: uploadMetadata.category,
-          price_tier: uploadMetadata.price_tier,
-          tags: uploadMetadata.tags ? uploadMetadata.tags.split(',').map((t: string) => t.trim()) : []
-        }
+      const response = await withTimeout(
+        MarketplaceApiService.uploadDataset(
+          session.api_key,
+          uploadFile,
+          {
+            title: sanitizedTitle,
+            description: sanitizedDescription,
+            category: uploadMetadata.category,
+            price_tier: uploadMetadata.price_tier,
+            tags: uploadMetadata.tags ? uploadMetadata.tags.split(',').map((t: string) => sanitizeInput(t.trim())).filter((t: string) => t) : []
+          }
+        ),
+        60000, // 60 second timeout for file uploads
+        'Upload timeout'
       );
 
+      if (!mountedRef.current) return;
+
       if (response.success) {
-        alert('Dataset uploaded successfully!');
+        showSuccess('Dataset uploaded successfully');
         onFileChange(null);
         onMetadataChange({
           title: '',
@@ -1026,12 +1223,20 @@ const UploadScreen: React.FC<{
         });
         setTimeout(() => onUploadComplete(), 1000);
       } else {
-        alert(`Upload failed: ${response.error}`);
+        showError('Upload failed', [
+          { label: 'ERROR', value: response.error || 'Unknown error' }
+        ]);
       }
-    } catch (error) {
-      alert('Upload failed');
+    } catch (err) {
+      if (mountedRef.current) {
+        showError('Upload failed', [
+          { label: 'ERROR', value: err instanceof Error ? err.message : 'Unknown error' }
+        ]);
+      }
+    } finally {
+      if (mountedRef.current) setUploading(false);
     }
-  };
+  }, [session?.api_key, uploadFile, uploadMetadata, onFileChange, onMetadataChange, onUploadComplete]);
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -1336,18 +1541,18 @@ const UploadScreen: React.FC<{
             {/* Upload Button */}
             <button
               onClick={handleUpload}
-              disabled={isLoading || !uploadFile || !uploadMetadata.title || !uploadMetadata.description}
+              disabled={uploading || isLoading || !uploadFile || !uploadMetadata.title || !uploadMetadata.description}
               style={{
                 width: '100%',
                 padding: '12px',
-                backgroundColor: isLoading || !uploadFile || !uploadMetadata.title || !uploadMetadata.description ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                backgroundColor: uploading || isLoading || !uploadFile || !uploadMetadata.title || !uploadMetadata.description ? FINCEPT.MUTED : FINCEPT.ORANGE,
                 color: FINCEPT.DARK_BG,
                 border: 'none',
                 borderRadius: '2px',
                 fontSize: '9px',
                 fontWeight: 700,
                 letterSpacing: '0.5px',
-                cursor: isLoading || !uploadFile || !uploadMetadata.title || !uploadMetadata.description ? 'not-allowed' : 'pointer',
+                cursor: uploading || isLoading || !uploadFile || !uploadMetadata.title || !uploadMetadata.description ? 'not-allowed' : 'pointer',
                 fontFamily: FONT_FAMILY,
                 display: 'flex',
                 alignItems: 'center',
@@ -1356,7 +1561,7 @@ const UploadScreen: React.FC<{
               }}
             >
               <Upload size={12} />
-              {isLoading ? 'UPLOADING...' : 'UPLOAD DATASET'}
+              {uploading ? 'UPLOADING...' : 'UPLOAD DATASET'}
             </button>
           </div>
         </div>
@@ -1369,38 +1574,59 @@ const UploadScreen: React.FC<{
 const MyPurchasesScreen: React.FC<{ session: any }> = ({ session }) => {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     const fetchPurchases = async () => {
       if (!session?.api_key) return;
       setIsLoading(true);
+      setError(null);
       try {
-        const response = await MarketplaceApiService.getUserPurchases(session.api_key, 1, 50);
+        const response = await withTimeout(
+          MarketplaceApiService.getUserPurchases(session.api_key, 1, 50),
+          API_TIMEOUT_MS,
+          'Fetch purchases timeout'
+        );
+        if (!mountedRef.current) return;
         if (response.success && response.data) {
           setPurchases(response.data.purchases || []);
         }
-      } catch (error) {
-        console.error('Failed to fetch purchases:', error);
+      } catch (err) {
+        if (!mountedRef.current) return;
+        console.error('Failed to fetch purchases:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch purchases');
       } finally {
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       }
     };
     fetchPurchases();
   }, [session?.api_key]);
 
-  const handleDownload = async (datasetId: number) => {
+  const handleDownload = useCallback(async (datasetId: number) => {
     if (!session?.api_key) return;
     try {
-      const response = await MarketplaceApiService.downloadDataset(session.api_key, datasetId);
+      const response = await withTimeout(
+        MarketplaceApiService.downloadDataset(session.api_key, datasetId),
+        API_TIMEOUT_MS,
+        'Download timeout'
+      );
       if (response.success && response.data?.download_url) {
         window.open(response.data.download_url, '_blank');
       } else {
-        alert('Download failed');
+        showError('Download failed');
       }
-    } catch (error) {
-      alert('Download failed');
+    } catch (err) {
+      showError('Download failed', [
+        { label: 'ERROR', value: err instanceof Error ? err.message : 'Unknown error' }
+      ]);
     }
-  };
+  }, [session?.api_key]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -1509,27 +1735,39 @@ const MyDatasetsScreen: React.FC<{ session: any; onRefresh: () => void }> = ({ s
     price_tier: '',
     tags: ''
   });
+  const mountedRef = useRef(true);
 
-  const loadMyDatasets = async () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const loadMyDatasets = useCallback(async () => {
     if (!session?.api_key) return;
     setIsLoading(true);
     try {
-      const response = await MarketplaceApiService.getMyDatasets(session.api_key, 1, 100);
+      const response = await withTimeout(
+        MarketplaceApiService.getMyDatasets(session.api_key, 1, 100),
+        API_TIMEOUT_MS,
+        'Fetch my datasets timeout'
+      );
+      if (!mountedRef.current) return;
       if (response.success && response.data) {
         setMyDatasets(response.data.datasets || []);
       }
-    } catch (error) {
-      console.error('Failed to fetch my datasets:', error);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      console.error('Failed to fetch my datasets:', err);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
-  };
+  }, [session?.api_key]);
 
   useEffect(() => {
     loadMyDatasets();
-  }, [session?.api_key]);
+  }, [loadMyDatasets]);
 
-  const handleEdit = (dataset: Dataset) => {
+  const handleEdit = useCallback((dataset: Dataset) => {
     setEditingDataset(dataset);
     setEditForm({
       title: dataset.title,
@@ -1538,56 +1776,92 @@ const MyDatasetsScreen: React.FC<{ session: any; onRefresh: () => void }> = ({ s
       price_tier: dataset.price_tier,
       tags: dataset.tags.join(', ')
     });
-  };
+  }, []);
 
-  const handleUpdate = async () => {
+  const handleUpdate = useCallback(async () => {
     if (!session?.api_key || !editingDataset) return;
+
+    // Sanitize inputs
+    const sanitizedTitle = sanitizeInput(editForm.title);
+    const sanitizedDescription = sanitizeInput(editForm.description);
+
+    if (!sanitizedTitle || !sanitizedDescription) {
+      showWarning('Title and description are required');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const response = await MarketplaceApiService.updateDataset(session.api_key, editingDataset.id, {
-        title: editForm.title,
-        description: editForm.description,
-        category: editForm.category,
-        price_tier: editForm.price_tier,
-        tags: editForm.tags.split(',').map(t => t.trim()).filter(t => t)
-      });
+      const response = await withTimeout(
+        MarketplaceApiService.updateDataset(session.api_key, editingDataset.id, {
+          title: sanitizedTitle,
+          description: sanitizedDescription,
+          category: editForm.category,
+          price_tier: editForm.price_tier,
+          tags: editForm.tags.split(',').map(t => sanitizeInput(t.trim())).filter(t => t)
+        }),
+        API_TIMEOUT_MS,
+        'Update dataset timeout'
+      );
+      if (!mountedRef.current) return;
       if (response.success) {
-        alert('Dataset updated successfully!');
+        showSuccess('Dataset updated successfully');
         setEditingDataset(null);
         loadMyDatasets();
         onRefresh();
       } else {
-        alert(`Update failed: ${response.error}`);
+        showError('Update failed', [
+          { label: 'ERROR', value: response.error || 'Unknown error' }
+        ]);
       }
-    } catch (error) {
-      alert('Update failed');
+    } catch (err) {
+      if (mountedRef.current) {
+        showError('Update failed', [
+          { label: 'ERROR', value: err instanceof Error ? err.message : 'Unknown error' }
+        ]);
+      }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
-  };
+  }, [session?.api_key, editingDataset, editForm, loadMyDatasets, onRefresh]);
 
-  const handleDelete = async (datasetId: number, datasetTitle: string) => {
+  const handleDelete = useCallback(async (datasetId: number, datasetTitle: string) => {
     if (!session?.api_key) return;
-    if (!confirm(`Are you sure you want to delete "${datasetTitle}"?`)) return;
+    const confirmed = await showConfirm(`This action cannot be undone.`, {
+      title: `Delete "${datasetTitle}"?`,
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     setIsLoading(true);
     try {
-      const response = await MarketplaceApiService.deleteDataset(session.api_key, datasetId);
+      const response = await withTimeout(
+        MarketplaceApiService.deleteDataset(session.api_key, datasetId),
+        API_TIMEOUT_MS,
+        'Delete dataset timeout'
+      );
+      if (!mountedRef.current) return;
       if (response.success) {
-        alert('Dataset deleted successfully!');
+        showSuccess('Dataset deleted successfully');
         loadMyDatasets();
         onRefresh();
       } else {
-        alert(`Delete failed: ${response.error}`);
+        showError('Delete failed', [
+          { label: 'ERROR', value: response.error || 'Unknown error' }
+        ]);
       }
-    } catch (error) {
-      alert('Delete failed');
+    } catch (err) {
+      if (mountedRef.current) {
+        showError('Delete failed', [
+          { label: 'ERROR', value: err instanceof Error ? err.message : 'Unknown error' }
+        ]);
+      }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
-  };
+  }, [session?.api_key, loadMyDatasets, onRefresh]);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (datasetStatus: string) => {
     switch (status) {
       case 'approved': return FINCEPT.GREEN;
       case 'pending': return FINCEPT.YELLOW;
@@ -1941,20 +2215,32 @@ const MyDatasetsScreen: React.FC<{ session: any; onRefresh: () => void }> = ({ s
 const AnalyticsScreen: React.FC<{ session: any }> = ({ session }) => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       if (!session?.api_key) return;
       setIsLoading(true);
       try {
-        const response = await MarketplaceApiService.getDatasetAnalytics(session.api_key);
+        const response = await withTimeout(
+          MarketplaceApiService.getDatasetAnalytics(session.api_key),
+          API_TIMEOUT_MS,
+          'Fetch analytics timeout'
+        );
+        if (!mountedRef.current) return;
         if (response.success && response.data) {
           setAnalytics(response.data);
         }
-      } catch (error) {
-        console.error('Failed to fetch analytics:', error);
+      } catch (err) {
+        if (!mountedRef.current) return;
+        console.error('Failed to fetch analytics:', err);
       } finally {
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       }
     };
     fetchAnalytics();
@@ -2117,20 +2403,32 @@ const AnalyticsScreen: React.FC<{ session: any }> = ({ session }) => {
 const PricingScreen: React.FC<{ session: any }> = ({ session }) => {
   const [pricingTiers, setPricingTiers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     const fetchPricing = async () => {
       if (!session?.api_key) return;
       setIsLoading(true);
       try {
-        const response = await MarketplaceApiService.getPricingTiers(session.api_key);
+        const response = await withTimeout(
+          MarketplaceApiService.getPricingTiers(session.api_key),
+          API_TIMEOUT_MS,
+          'Fetch pricing timeout'
+        );
+        if (!mountedRef.current) return;
         if (response.success && response.data) {
           setPricingTiers(response.data.tiers || []);
         }
-      } catch (error) {
-        console.error('Failed to fetch pricing tiers:', error);
+      } catch (err) {
+        if (!mountedRef.current) return;
+        console.error('Failed to fetch pricing tiers:', err);
       } finally {
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       }
     };
     fetchPricing();
@@ -2269,20 +2567,32 @@ const PricingScreen: React.FC<{ session: any }> = ({ session }) => {
 const AdminStatsScreen: React.FC<{ session: any }> = ({ session }) => {
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     const fetchStats = async () => {
       if (!session?.api_key) return;
       setIsLoading(true);
       try {
-        const response = await MarketplaceApiService.getMarketplaceStats(session.api_key);
+        const response = await withTimeout(
+          MarketplaceApiService.getMarketplaceStats(session.api_key),
+          API_TIMEOUT_MS,
+          'Fetch stats timeout'
+        );
+        if (!mountedRef.current) return;
         if (response.success && response.data) {
           setStats(response.data);
         }
-      } catch (error) {
-        console.error('Failed to fetch stats:', error);
+      } catch (err) {
+        if (!mountedRef.current) return;
+        console.error('Failed to fetch stats:', err);
       } finally {
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       }
     };
     fetchStats();
@@ -2387,68 +2697,103 @@ const AdminPendingScreen: React.FC<{ session: any; onRefresh: () => void }> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const mountedRef = useRef(true);
 
-  const loadPending = async () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const loadPending = useCallback(async () => {
     if (!session?.api_key) return;
     setIsLoading(true);
     try {
-      const response = await MarketplaceApiService.getPendingDatasets(session.api_key);
+      const response = await withTimeout(
+        MarketplaceApiService.getPendingDatasets(session.api_key),
+        API_TIMEOUT_MS,
+        'Fetch pending datasets timeout'
+      );
+      if (!mountedRef.current) return;
       if (response.success && response.data) {
         setPendingDatasets(response.data.datasets || []);
       }
-    } catch (error) {
-      console.error('Failed to fetch pending datasets:', error);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      console.error('Failed to fetch pending datasets:', err);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
-  };
+  }, [session?.api_key]);
 
   useEffect(() => {
     loadPending();
-  }, [session?.api_key]);
+  }, [loadPending]);
 
-  const handleApprove = async (datasetId: number, title: string) => {
-    if (!confirm(`Approve dataset "${title}"?`)) return;
+  const handleApprove = useCallback(async (datasetId: number, title: string) => {
+    const confirmed = await showConfirm('', {
+      title: `Approve dataset "${title}"?`,
+      type: 'info'
+    });
+    if (!confirmed) return;
     setIsLoading(true);
     try {
-      const response = await MarketplaceApiService.approveDataset(session.api_key, datasetId);
+      const response = await withTimeout(
+        MarketplaceApiService.approveDataset(session.api_key, datasetId),
+        API_TIMEOUT_MS,
+        'Approve dataset timeout'
+      );
+      if (!mountedRef.current) return;
       if (response.success) {
-        alert('Dataset approved!');
+        showSuccess('Dataset approved');
         loadPending();
         onRefresh();
       } else {
-        alert('Approval failed');
+        showError('Approval failed');
       }
-    } catch (error) {
-      alert('Approval failed');
+    } catch (err) {
+      if (mountedRef.current) {
+        showError('Approval failed', [
+          { label: 'ERROR', value: err instanceof Error ? err.message : 'Unknown error' }
+        ]);
+      }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
-  };
+  }, [session?.api_key, loadPending, onRefresh]);
 
-  const handleReject = async (datasetId: number) => {
-    if (!rejectionReason.trim()) {
-      alert('Please provide a rejection reason');
+  const handleReject = useCallback(async (datasetId: number) => {
+    const sanitizedReason = sanitizeInput(rejectionReason);
+    if (!sanitizedReason.trim()) {
+      showWarning('Please provide a rejection reason');
       return;
     }
     setIsLoading(true);
     try {
-      const response = await MarketplaceApiService.rejectDataset(session.api_key, datasetId, rejectionReason);
+      const response = await withTimeout(
+        MarketplaceApiService.rejectDataset(session.api_key, datasetId, sanitizedReason),
+        API_TIMEOUT_MS,
+        'Reject dataset timeout'
+      );
+      if (!mountedRef.current) return;
       if (response.success) {
-        alert('Dataset rejected!');
+        showSuccess('Dataset rejected');
         setRejectingId(null);
         setRejectionReason('');
         loadPending();
         onRefresh();
       } else {
-        alert('Rejection failed');
+        showError('Rejection failed');
       }
-    } catch (error) {
-      alert('Rejection failed');
+    } catch (err) {
+      if (mountedRef.current) {
+        showError('Rejection failed', [
+          { label: 'ERROR', value: err instanceof Error ? err.message : 'Unknown error' }
+        ]);
+      }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
-  };
+  }, [session?.api_key, rejectionReason, loadPending, onRefresh]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -2661,20 +3006,32 @@ const AdminPendingScreen: React.FC<{ session: any; onRefresh: () => void }> = ({
 const AdminRevenueScreen: React.FC<{ session: any }> = ({ session }) => {
   const [revenue, setRevenue] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     const fetchRevenue = async () => {
       if (!session?.api_key) return;
       setIsLoading(true);
       try {
-        const response = await MarketplaceApiService.getAdminRevenueAnalytics(session.api_key);
+        const response = await withTimeout(
+          MarketplaceApiService.getAdminRevenueAnalytics(session.api_key),
+          API_TIMEOUT_MS,
+          'Fetch revenue timeout'
+        );
+        if (!mountedRef.current) return;
         if (response.success && response.data) {
           setRevenue(response.data);
         }
-      } catch (error) {
-        console.error('Failed to fetch revenue:', error);
+      } catch (err) {
+        if (!mountedRef.current) return;
+        console.error('Failed to fetch revenue:', err);
       } finally {
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       }
     };
     fetchRevenue();

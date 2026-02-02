@@ -101,6 +101,10 @@ class TradeService {
   private async apiRequest<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
     const apiKey = await this.getApiKey();
     const url = new URL(`${API_BASE}${endpoint}`);
+    if (!apiKey) {
+      throw new Error('API key not found. Please log in to access trade data.');
+    }
+
 
     // Add query parameters
     if (params) {

@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { X, Plus } from 'lucide-react';
+import { showWarning } from '@/utils/notifications';
 
 interface MCPAddServerModalProps {
   onClose: () => void;
@@ -41,7 +42,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
     e.preventDefault();
 
     if (!formData.name || !formData.command || !formData.args) {
-      alert('Please fill in all required fields');
+      showWarning('Please fill in all required fields');
       return;
     }
 

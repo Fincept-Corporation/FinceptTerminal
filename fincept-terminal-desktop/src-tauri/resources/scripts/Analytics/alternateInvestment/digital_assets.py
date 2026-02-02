@@ -1,33 +1,6 @@
-"""
-Digital Assets Analytics Module
-===============================
+"""Digital Assets Analytics Module
 
-Comprehensive analysis framework for digital assets including cryptocurrencies, blockchain tokens, DeFi protocols, and NFTs. Provides valuation methodologies, risk assessment, and portfolio integration analysis for digital asset investments.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Market price data for digital assets (historical prices, volume)
-  - Market capitalization and circulating supply data
-  - Protocol revenue and metrics for DeFi tokens
-  - Staking yields and reward rates for PoS tokens
-  - Blockchain network metrics and transaction data
-
-OUTPUT:
-  - Digital asset valuation metrics and price analysis
-  - Volatility and risk assessment reports
-  - Correlation analysis with traditional assets
-  - Portfolio integration impact analysis
-  - DeFi protocol fundamentals evaluation
-
-PARAMETERS:
-  - asset_type: Type of digital asset (cryptocurrency, defi_token, nft, stablecoin)
-  - blockchain: Blockchain network (bitcoin, ethereum, etc.) - default: bitcoin
-  - market_cap: Current market capitalization
-  - circulating_supply: Current circulating supply
-  - total_supply: Maximum or total supply
-  - trading_volume_24h: 24-hour trading volume
-  - staking_yield: Annual staking yield for PoS tokens
-  - protocol_revenue: Annual protocol revenue for DeFi tokens
+Comprehensive analysis for digital assets including cryptocurrencies, tokens, DeFi, and NFTs.
 """
 
 import numpy as np
@@ -45,11 +18,9 @@ from base_analytics import AlternativeInvestmentBase, FinancialMath
 
 logger = logging.getLogger(__name__)
 
-
 class DigitalAssetAnalyzer(AlternativeInvestmentBase):
     """
     Digital Asset investment analysis and valuation
-    CFA Standards: Risk assessment, correlation analysis, portfolio integration
     """
 
     def __init__(self, parameters: AssetParameters):
@@ -67,7 +38,6 @@ class DigitalAssetAnalyzer(AlternativeInvestmentBase):
     def fundamental_metrics(self) -> Dict[str, Any]:
         """
         Calculate fundamental valuation metrics for digital assets
-        CFA Standard: Fundamental analysis adaptation for digital assets
         """
         metrics = {}
 
@@ -122,7 +92,6 @@ class DigitalAssetAnalyzer(AlternativeInvestmentBase):
     def volatility_analysis(self) -> Dict[str, Any]:
         """
         Comprehensive volatility analysis for digital assets
-        CFA Standard: Risk measurement adapted for high volatility assets
         """
         returns = self.calculate_simple_returns()
 
@@ -197,7 +166,6 @@ class DigitalAssetAnalyzer(AlternativeInvestmentBase):
                              traditional_assets: Dict[str, List[Decimal]] = None) -> Dict[str, Any]:
         """
         Analyze correlations with traditional assets and crypto market
-        CFA Standard: Diversification benefit analysis
         """
         crypto_returns = self.calculate_simple_returns()
 
@@ -286,7 +254,6 @@ class DigitalAssetAnalyzer(AlternativeInvestmentBase):
     def defi_protocol_analysis(self) -> Dict[str, Any]:
         """
         Analyze DeFi protocol fundamentals
-        CFA Standard: Business model analysis for DeFi protocols
         """
         if self.asset_type != 'defi_token':
             return {"not_applicable": "Analysis specific to DeFi tokens"}
@@ -323,7 +290,6 @@ class DigitalAssetAnalyzer(AlternativeInvestmentBase):
     def risk_assessment(self) -> Dict[str, Any]:
         """
         Comprehensive risk assessment for digital assets
-        CFA Standard: Risk identification and measurement
         """
         risk_assessment = {}
 
@@ -384,7 +350,6 @@ class DigitalAssetAnalyzer(AlternativeInvestmentBase):
                                        target_allocation: Decimal = Decimal('0.05')) -> Dict[str, Any]:
         """
         Analyze impact of adding digital asset to traditional portfolio
-        CFA Standard: Portfolio optimization with alternative assets
         """
         crypto_returns = self.calculate_simple_returns()
 
@@ -509,11 +474,9 @@ class DigitalAssetAnalyzer(AlternativeInvestmentBase):
             "performance_metrics": self.calculate_key_metrics()
         }
 
-
 class DigitalAssetPortfolio:
     """
     Portfolio-level digital asset analysis
-    CFA Standards: Portfolio construction and risk management
     """
 
     def __init__(self):
@@ -629,7 +592,6 @@ class DigitalAssetPortfolio:
             var_index = len(sorted_returns) - 1
 
         return abs(sorted_returns[var_index])
-
 
 # Export main components
 __all__ = ['DigitalAssetAnalyzer', 'DigitalAssetPortfolio']

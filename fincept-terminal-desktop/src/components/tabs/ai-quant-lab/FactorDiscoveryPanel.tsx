@@ -24,6 +24,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { rdAgentService, type DiscoveredFactor } from '@/services/aiQuantLab/rdAgentService';
+import { showError, showWarning, showSuccess } from '@/utils/notifications';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -75,7 +76,7 @@ export function FactorDiscoveryPanel() {
 
   const handleStartMining = async () => {
     if (!taskDescription || !apiKey) {
-      alert('Please provide task description and OpenAI API key');
+      showWarning('Please provide task description and OpenAI API key');
       return;
     }
 
@@ -102,12 +103,16 @@ export function FactorDiscoveryPanel() {
         // Start polling for status
         startPolling(response.task_id);
       } else {
-        alert('Failed to start factor mining: ' + (response.error || 'Unknown error'));
+        showError('Failed to start factor mining', [
+          { label: 'ERROR', value: response.error || 'Unknown error' }
+        ]);
         setIsRunning(false);
       }
     } catch (error) {
       console.error('Error starting factor mining:', error);
-      alert('Error starting factor mining: ' + error);
+      showError('Error starting factor mining', [
+        { label: 'ERROR', value: String(error) }
+      ]);
       setIsRunning(false);
     }
   };
@@ -137,7 +142,9 @@ export function FactorDiscoveryPanel() {
             clearInterval(interval);
             setStatusPollInterval(null);
             setIsRunning(false);
-            alert('Factor mining failed: ' + status.error);
+            showError('Factor mining failed', [
+              { label: 'ERROR', value: status.error || 'Unknown error' }
+            ]);
           }
         }
       } catch (error) {
@@ -173,9 +180,13 @@ export function FactorDiscoveryPanel() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('Copied to clipboard!');
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showSuccess('Copied to clipboard!');
+    } catch (error) {
+      showError('Failed to copy to clipboard');
+    }
   };
 
   return (

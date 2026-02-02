@@ -29,6 +29,7 @@ import Header from './components/common/Header';
 import Footer from './components/common/Footer';
 import SetupScreen from './components/setup/SetupScreen';
 import { Toaster } from 'sonner';
+import { NotificationProvider } from './utils/notifications';
 
 export type Screen =
   | 'login'
@@ -192,7 +193,7 @@ const App: React.FC = () => {
   // If authenticated and should show dashboard
   if (session?.authenticated && currentScreen === 'dashboard') {
     return (
-      <>
+      <NotificationProvider>
         <ProviderProvider>
           <DataSourceProvider>
             <ThemeProvider>
@@ -204,7 +205,7 @@ const App: React.FC = () => {
         </ProviderProvider>
         {/* Toast Notifications */}
         <Toaster position="top-right" richColors closeButton />
-      </>
+      </NotificationProvider>
     );
   }
 

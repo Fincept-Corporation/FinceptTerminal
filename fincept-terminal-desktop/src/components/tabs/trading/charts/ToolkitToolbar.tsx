@@ -30,6 +30,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { DrawingTool, PositionType, TradingToolkitPlugin } from './plugins';
+import { showConfirm } from '@/utils/notifications';
 
 interface ToolkitToolbarProps {
   toolkit: TradingToolkitPlugin | null;
@@ -236,15 +237,27 @@ export function ToolkitToolbar({ toolkit, onToolSelect, activeTool }: ToolkitToo
     setActiveGroup(null);
   };
 
-  const handleClearAll = () => {
-    if (toolkit && confirm('Clear all drawings and positions?')) {
-      toolkit.clearAll();
+  const handleClearAll = async () => {
+    if (toolkit) {
+      const confirmed = await showConfirm('Clear all drawings and positions?', {
+        title: 'Clear All',
+        type: 'warning'
+      });
+      if (confirmed) {
+        toolkit.clearAll();
+      }
     }
   };
 
-  const handleClearDrawings = () => {
-    if (toolkit && confirm('Clear all drawings?')) {
-      toolkit.clearDrawings();
+  const handleClearDrawings = async () => {
+    if (toolkit) {
+      const confirmed = await showConfirm('Clear all drawings?', {
+        title: 'Clear Drawings',
+        type: 'warning'
+      });
+      if (confirmed) {
+        toolkit.clearDrawings();
+      }
     }
   };
 

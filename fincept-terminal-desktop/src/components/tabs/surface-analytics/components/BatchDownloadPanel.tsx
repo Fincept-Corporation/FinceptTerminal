@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { FINCEPT_COLORS } from '../constants';
+import { showSuccess } from '@/utils/notifications';
 
 interface BatchJob {
   job_id: string;
@@ -236,7 +237,10 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
       } else {
         // Show success message with download location
         setError(null);
-        alert(`Downloaded ${parsed.count} file(s) to:\n${parsed.output_dir}`);
+        showSuccess('Download complete', [
+          { label: 'FILES', value: `${parsed.count} file(s)` },
+          { label: 'LOCATION', value: parsed.output_dir }
+        ]);
       }
     } catch (err) {
       setError(`Failed to download: ${err}`);

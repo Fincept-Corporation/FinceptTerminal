@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Wifi, Database, Edit3, Trash2, Power, PowerOff, Search, Filter, RefreshCw } from 'lucide-react';
 import { DataSource } from '@/services/core/sqliteService';
+import { showConfirm, showSuccess, showError, showWarning } from '@/utils/notifications';
 import {
   getAllDataSources,
   toggleDataSource,
@@ -101,29 +102,37 @@ export function DataSourcesPanel({ colors }: DataSourcesPanelProps) {
     try {
       await toggleDataSource(id);
       await loadDataSources();
+      showSuccess('Data source toggled successfully');
     } catch (error) {
       console.error('Failed to toggle data source:', error);
-      alert('Failed to toggle data source');
+      showError('Failed to toggle data source');
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this data source? This cannot be undone.')) {
-      return;
-    }
+    const source = dataSources.find(s => s.id === id);
+    const confirmed = await showConfirm(
+      `Delete data source "${source?.display_name || 'Unknown'}"?\n\nThis action cannot be undone.`,
+      { title: 'Delete Data Source', type: 'danger', confirmText: 'Delete' }
+    );
+
+    if (!confirmed) return;
 
     try {
       await deleteDataSource(id);
       await loadDataSources();
+      showSuccess('Data source deleted successfully', [
+        { label: 'Source', value: source?.display_name || 'Unknown' },
+      ]);
     } catch (error) {
       console.error('Failed to delete data source:', error);
-      alert('Failed to delete data source');
+      showError('Failed to delete data source');
     }
   }
 
   async function handleAddWebSocket() {
     if (!newWSForm.alias || !newWSForm.displayName || !newWSForm.provider || !newWSForm.channel) {
-      alert('Please fill in all required fields');
+      showWarning('Please fill in all required fields');
       return;
     }
 
@@ -149,12 +158,15 @@ export function DataSourcesPanel({ colors }: DataSourcesPanelProps) {
           symbol: ''
         });
         await loadDataSources();
+        showSuccess('Data source created successfully');
       } else {
-        alert(result.message);
+        showError('Failed to create data source', [
+          { label: 'ERROR', value: result.message || 'Unknown error' }
+        ]);
       }
     } catch (error) {
       console.error('Failed to create data source:', error);
-      alert('Failed to create data source');
+      showError('Failed to create data source');
     }
   }
 
@@ -180,7 +192,7 @@ export function DataSourcesPanel({ colors }: DataSourcesPanelProps) {
 
   async function handleUpdateWebSocket() {
     if (!editingSource || !editWSForm.alias || !editWSForm.displayName || !editWSForm.provider || !editWSForm.channel) {
-      alert('Please fill in all required fields');
+      showWarning('Please fill in all required fields');
       return;
     }
 
@@ -212,12 +224,15 @@ export function DataSourcesPanel({ colors }: DataSourcesPanelProps) {
           symbol: ''
         });
         await loadDataSources();
+        showSuccess('Data source updated successfully');
       } else {
-        alert(result.message);
+        showError('Failed to update data source', [
+          { label: 'ERROR', value: result.message || 'Unknown error' }
+        ]);
       }
     } catch (error) {
       console.error('Failed to update data source:', error);
-      alert('Failed to update data source');
+      showError('Failed to update data source');
     }
   }
 

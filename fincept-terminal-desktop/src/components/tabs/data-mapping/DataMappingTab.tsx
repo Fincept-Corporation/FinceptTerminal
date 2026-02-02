@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, List, Save, Play, ArrowLeft, ArrowRight, CheckCircle2, Circle, Bookmark, Database, Trash2, Edit3 } from 'lucide-react';
+import { showConfirm, showSuccess, showError, showWarning } from '@/utils/notifications';
 import {
   DataMappingConfig,
   APIConfig,
@@ -151,12 +152,12 @@ export default function DataMappingTab() {
 
   const handleTestMapping = async () => {
     if (!sampleData) {
-      alert('Please fetch sample data first');
+      showWarning('Please fetch sample data first');
       return;
     }
 
     if (fieldMappings.length === 0) {
-      alert('Please configure at least one field mapping');
+      showWarning('Please configure at least one field mapping');
       return;
     }
 
@@ -227,7 +228,9 @@ export default function DataMappingTab() {
       setTestResult(result);
 
       if (!result.success) {
-        alert(`Test failed: ${result.errors?.join(', ')}`);
+        showError('Test failed', [
+          { label: 'ERRORS', value: result.errors?.join(', ') || 'Unknown error' }
+        ]);
       }
     } catch (error) {
       console.error('Test failed:', error);
@@ -248,12 +251,12 @@ export default function DataMappingTab() {
 
   const handleSaveMapping = async () => {
     if (!testResult?.success) {
-      alert('Please test the mapping successfully before saving');
+      showWarning('Please test the mapping successfully before saving');
       return;
     }
 
     if (!mappingName) {
-      alert('Please provide a mapping name');
+      showWarning('Please provide a mapping name');
       return;
     }
 
@@ -319,26 +322,31 @@ export default function DataMappingTab() {
       };
 
       await mappingDatabase.saveMapping(mappingConfig);
-      alert('Mapping saved successfully!');
+      showSuccess('Mapping saved successfully!');
       await loadSavedMappings();
       setView('list');
     } catch (error) {
       console.error('Failed to save mapping:', error);
-      alert(`Failed to save mapping: ${error instanceof Error ? error.message : String(error)}`);
+      showError('Failed to save mapping', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : String(error) }
+      ]);
     }
   };
 
   const handleDeleteMapping = async (id: string) => {
-    if (!confirm('Delete this mapping? This cannot be undone.')) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      { title: 'Delete this mapping?', type: 'danger' }
+    );
+    if (!confirmed) return;
 
     try {
       await mappingDatabase.deleteMapping(id);
       await loadSavedMappings();
+      showSuccess('Mapping deleted successfully');
     } catch (error) {
       console.error('Failed to delete mapping:', error);
-      alert('Failed to delete mapping');
+      showError('Failed to delete mapping');
     }
   };
 
@@ -757,7 +765,7 @@ export default function DataMappingTab() {
           <button
             onClick={() => {
               if (!canProceedToNextStep()) {
-                alert('Please complete the current step before proceeding');
+                showWarning('Please complete the current step before proceeding');
                 return;
               }
               const nextIndex = stepIndex + 1;

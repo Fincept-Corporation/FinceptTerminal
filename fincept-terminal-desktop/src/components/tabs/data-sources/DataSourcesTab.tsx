@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Plus,
   Search,
@@ -16,21 +15,41 @@ import {
   AlertCircle,
   Edit2,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { DATA_SOURCE_CONFIGS } from './dataSourceConfigs';
 import { DataSourceConfig, DataSourceConnection, DataSourceCategory } from './types';
 import { hasAdapter } from './adapters';
 import { useDataSources } from '../../../contexts/DataSourceContext';
 import { TabFooter } from '@/components/common/TabFooter';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
-export default function DataSourcesTab() {
-  const { t } = useTranslation('dataSources');
+// Design system colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+};
+
+function DataSourcesTabContent() {
   const {
     connections,
+    loadState,
+    error,
     addConnection,
     updateConnection,
     deleteConnection,
     testConnection,
+    refresh,
   } = useDataSources();
 
   const [view, setView] = useState<'gallery' | 'connections'>('gallery');
@@ -40,42 +59,41 @@ export default function DataSourcesTab() {
   const [selectedDataSource, setSelectedDataSource] = useState<DataSourceConfig | null>(null);
   const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
   const [editingConnection, setEditingConnection] = useState<DataSourceConnection | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Category icons
   const getCategoryIcon = (category: DataSourceCategory) => {
+    const iconProps = { size: 12, color: FINCEPT.GRAY };
     switch (category) {
       case 'database':
-        return <Database size={16} />;
+        return <Database {...iconProps} />;
       case 'api':
-        return <Globe size={16} />;
+        return <Globe {...iconProps} />;
       case 'file':
-        return <FileText size={16} />;
+        return <FileText {...iconProps} />;
       case 'streaming':
-        return <Activity size={16} />;
+        return <Activity {...iconProps} />;
       case 'cloud':
-        return <Cloud size={16} />;
+        return <Cloud {...iconProps} />;
       case 'timeseries':
-        return <TrendingUp size={16} />;
       case 'market-data':
-        return <TrendingUp size={16} />;
+        return <TrendingUp {...iconProps} />;
       default:
-        return <Database size={16} />;
+        return <Database {...iconProps} />;
     }
   };
 
-  // Filter data sources
   const filteredDataSources = DATA_SOURCE_CONFIGS.filter((ds) => {
-    const matchesSearch = ds.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch =
+      ds.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ds.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || ds.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  // Handle open config modal
   const handleOpenConfig = (dataSource: DataSourceConfig) => {
     setSelectedDataSource(dataSource);
     setEditingConnection(null);
-    // Initialize form with default values
+    setSaveError(null);
     const initialData: Record<string, any> = {};
     dataSource.fields.forEach((field) => {
       if (field.defaultValue !== undefined) {
@@ -86,205 +104,284 @@ export default function DataSourcesTab() {
     setShowConfigModal(true);
   };
 
-  // Handle edit connection
   const handleEditConnection = (connection: DataSourceConnection) => {
     const dataSource = DATA_SOURCE_CONFIGS.find((ds) => ds.type === connection.type);
     if (!dataSource) return;
 
     setSelectedDataSource(dataSource);
     setEditingConnection(connection);
+    setSaveError(null);
     setConfigFormData({ ...connection.config, name: connection.name });
     setShowConfigModal(true);
   };
 
-  // Handle save connection
-  const handleSaveConnection = () => {
+  const handleSaveConnection = async () => {
     if (!selectedDataSource) return;
 
-    if (editingConnection) {
-      // Update existing connection
-      updateConnection(editingConnection.id, {
-        name: configFormData.name || editingConnection.name,
-        config: { ...configFormData },
-      });
-
-      console.log('Updated connection:', editingConnection.id);
-    } else {
-      // Create new connection
-      const newConnection: DataSourceConnection = {
-        id: `conn_${Date.now()}`,
-        name: configFormData.name || `${selectedDataSource.name} Connection`,
-        type: selectedDataSource.type,
-        category: selectedDataSource.category,
-        config: { ...configFormData },
-        status: 'disconnected',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      addConnection(newConnection);
-      console.log('Saved connection:', newConnection);
+    // Validate required fields
+    const connectionName = configFormData.name?.trim();
+    if (!connectionName) {
+      setSaveError('Connection name is required');
+      return;
     }
 
-    setShowConfigModal(false);
-    setSelectedDataSource(null);
-    setConfigFormData({});
-    setEditingConnection(null);
-    setView('connections');
+    setSaveError(null);
+
+    try {
+      if (editingConnection) {
+        await updateConnection(editingConnection.id, {
+          name: connectionName,
+          config: { ...configFormData },
+        });
+      } else {
+        const newConnection: DataSourceConnection = {
+          id: `conn_${Date.now()}`,
+          name: connectionName,
+          type: selectedDataSource.type,
+          category: selectedDataSource.category,
+          config: { ...configFormData },
+          status: 'disconnected',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        await addConnection(newConnection);
+      }
+
+      setShowConfigModal(false);
+      setSelectedDataSource(null);
+      setConfigFormData({});
+      setEditingConnection(null);
+      setView('connections');
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save connection');
+    }
   };
 
-  // Handle delete connection
-  const handleDeleteConnectionClick = (id: string) => {
-    deleteConnection(id);
+  const handleDeleteConnectionClick = async (id: string) => {
+    try {
+      await deleteConnection(id);
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
   };
 
-  // Handle test connection
   const handleTestConnection = async (connection: DataSourceConnection) => {
-    console.log('Testing connection:', connection);
-
-    // Update status to testing
-    updateConnection(connection.id, {
-      status: 'testing',
-      lastTested: new Date().toISOString(),
-    });
-
-    // Test connection (context will handle status updates)
     await testConnection(connection);
   };
+
+  // Loading state
+  if (loadState === 'loading') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: FINCEPT.DARK_BG,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <Loader2 size={24} color={FINCEPT.ORANGE} style={{ animation: 'spin 1s linear infinite' }} />
+        <span style={{ fontSize: '10px', color: FINCEPT.GRAY, fontFamily: '"IBM Plex Mono", monospace' }}>
+          LOADING DATA SOURCES...
+        </span>
+      </div>
+    );
+  }
+
+  // Error state
+  if (loadState === 'error' && error) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: FINCEPT.DARK_BG,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <AlertCircle size={24} color={FINCEPT.RED} />
+        <span style={{ fontSize: '10px', color: FINCEPT.RED, fontFamily: '"IBM Plex Mono", monospace' }}>
+          {error}
+        </span>
+        <button
+          onClick={refresh}
+          style={{
+            padding: '6px 12px',
+            backgroundColor: FINCEPT.ORANGE,
+            color: FINCEPT.DARK_BG,
+            border: 'none',
+            borderRadius: '2px',
+            fontSize: '9px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            fontFamily: '"IBM Plex Mono", monospace',
+          }}
+        >
+          RETRY
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
       style={{
         width: '100%',
         height: '100%',
-        backgroundColor: '#0a0a0a',
+        backgroundColor: FINCEPT.DARK_BG,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
       }}
     >
-      {/* Header */}
+      {/* Top Nav Bar */}
       <div
         style={{
-          backgroundColor: '#1a1a1a',
-          borderBottom: '1px solid #2d2d2d',
-          padding: '12px 16px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`,
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span
-              style={{
-                color: '#ea580c',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                letterSpacing: '0.5px',
-              }}
-            >
-              DATA SOURCES
-            </span>
-            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
-            <span style={{ color: '#737373', fontSize: '11px' }}>
-              {DATA_SOURCE_CONFIGS.length} Available | {connections.length} Connected
-            </span>
-          </div>
-
-          {/* View Switcher */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setView('gallery')}
-              style={{
-                backgroundColor: view === 'gallery' ? '#ea580c' : 'transparent',
-                color: view === 'gallery' ? 'white' : '#a3a3a3',
-                border: `1px solid ${view === 'gallery' ? '#ea580c' : '#404040'}`,
-                padding: '6px 12px',
-                fontSize: '11px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold',
-              }}
-            >
-              GALLERY
-            </button>
-            <button
-              onClick={() => setView('connections')}
-              style={{
-                backgroundColor: view === 'connections' ? '#ea580c' : 'transparent',
-                color: view === 'connections' ? 'white' : '#a3a3a3',
-                border: `1px solid ${view === 'connections' ? '#ea580c' : '#404040'}`,
-                padding: '6px 12px',
-                fontSize: '11px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold',
-              }}
-            >
-              MY CONNECTIONS ({connections.length})
-            </button>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span
+            style={{
+              color: FINCEPT.ORANGE,
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+            }}
+          >
+            DATA SOURCES
+          </span>
+          <div style={{ width: '1px', height: '16px', backgroundColor: FINCEPT.BORDER }} />
+          <span style={{ color: FINCEPT.GRAY, fontSize: '9px', letterSpacing: '0.5px' }}>
+            {DATA_SOURCE_CONFIGS.length} AVAILABLE | {connections.length} CONNECTED
+          </span>
         </div>
 
-        {/* Search and Filter Bar */}
-        {view === 'gallery' && (
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <Search
-                size={16}
-                style={{
-                  position: 'absolute',
-                  left: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#737373',
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search data sources..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#0a0a0a',
-                  border: '1px solid #2d2d2d',
-                  color: '#a3a3a3',
-                  padding: '8px 12px 8px 36px',
-                  fontSize: '11px',
-                  borderRadius: '4px',
-                  outline: 'none',
-                }}
-              />
-            </div>
-
-            {/* Category Filter */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {['all', 'database', 'api', 'file', 'streaming', 'cloud', 'timeseries', 'market-data'].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat as any)}
-                  style={{
-                    backgroundColor: selectedCategory === cat ? '#2d2d2d' : 'transparent',
-                    color: selectedCategory === cat ? '#ea580c' : '#737373',
-                    border: `1px solid ${selectedCategory === cat ? '#ea580c' : '#2d2d2d'}`,
-                    padding: '6px 10px',
-                    fontSize: '10px',
-                    cursor: 'pointer',
-                    borderRadius: '3px',
-                    textTransform: 'uppercase',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  {cat !== 'all' && getCategoryIcon(cat as DataSourceCategory)}
-                  {cat.replace('-', ' ')}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* View Switcher */}
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button
+            onClick={() => setView('gallery')}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: view === 'gallery' ? FINCEPT.ORANGE : 'transparent',
+              color: view === 'gallery' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: 'none',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              cursor: 'pointer',
+              borderRadius: '2px',
+            }}
+          >
+            GALLERY
+          </button>
+          <button
+            onClick={() => setView('connections')}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: view === 'connections' ? FINCEPT.ORANGE : 'transparent',
+              color: view === 'connections' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+              border: 'none',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              cursor: 'pointer',
+              borderRadius: '2px',
+            }}
+          >
+            MY CONNECTIONS ({connections.length})
+          </button>
+        </div>
       </div>
+
+      {/* Search and Filter Bar */}
+      {view === 'gallery' && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: FINCEPT.HEADER_BG,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
+            <Search
+              size={12}
+              style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: FINCEPT.GRAY,
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search data sources..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px 8px 32px',
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '10px',
+                fontFamily: '"IBM Plex Mono", monospace',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Category Filter */}
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+            {['all', 'database', 'api', 'file', 'streaming', 'cloud', 'timeseries', 'market-data'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat as DataSourceCategory | 'all')}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: selectedCategory === cat ? `${FINCEPT.ORANGE}15` : 'transparent',
+                  color: selectedCategory === cat ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                  border: `1px solid ${selectedCategory === cat ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {cat !== 'all' && getCategoryIcon(cat as DataSourceCategory)}
+                {cat.replace('-', ' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Content Area */}
       <div
@@ -292,55 +389,48 @@ export default function DataSourcesTab() {
           flex: 1,
           overflow: 'auto',
           padding: '16px',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
         }}
-        className="hide-scrollbar"
       >
-        <style>{`
-          .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-          }
-        `}</style>
         {view === 'gallery' ? (
           /* Data Source Gallery */
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: '16px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: '12px',
             }}
           >
             {filteredDataSources.map((dataSource) => (
               <div
                 key={dataSource.id}
                 style={{
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #2d2d2d',
-                  borderRadius: '6px',
-                  padding: '16px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  padding: '12px',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = dataSource.color;
-                  e.currentTarget.style.boxShadow = `0 0 12px ${dataSource.color}40`;
+                  e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                  e.currentTarget.style.boxShadow = `0 0 8px ${FINCEPT.ORANGE}30`;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#2d2d2d';
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
                   e.currentTarget.style.boxShadow = 'none';
                 }}
                 onClick={() => handleOpenConfig(dataSource)}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '32px' }}>{dataSource.icon}</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '24px' }}>{dataSource.icon}</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                       <h3
                         style={{
-                          color: dataSource.color,
-                          fontSize: '13px',
-                          fontWeight: 'bold',
+                          color: FINCEPT.WHITE,
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          margin: 0,
                         }}
                       >
                         {dataSource.name}
@@ -348,65 +438,53 @@ export default function DataSourcesTab() {
                       {hasAdapter(dataSource.type) && (
                         <span
                           style={{
-                            backgroundColor: '#10b98120',
-                            color: '#10b981',
                             padding: '2px 6px',
+                            backgroundColor: `${FINCEPT.GREEN}20`,
+                            color: FINCEPT.GREEN,
                             fontSize: '8px',
-                            borderRadius: '3px',
-                            fontWeight: 'bold',
+                            fontWeight: 700,
+                            borderRadius: '2px',
                           }}
                         >
-                          [OK] READY
+                          READY
                         </span>
                       )}
                     </div>
-                    <div
+                    <span
                       style={{
                         display: 'inline-block',
-                        backgroundColor: `${dataSource.color}20`,
-                        color: dataSource.color,
-                        padding: '2px 8px',
-                        fontSize: '9px',
-                        borderRadius: '3px',
+                        padding: '2px 6px',
+                        backgroundColor: `${FINCEPT.CYAN}20`,
+                        color: FINCEPT.CYAN,
+                        fontSize: '8px',
+                        fontWeight: 700,
+                        borderRadius: '2px',
                         textTransform: 'uppercase',
-                        fontWeight: 'bold',
                       }}
                     >
                       {dataSource.category}
-                    </div>
+                    </span>
                   </div>
                 </div>
                 <p
                   style={{
-                    color: '#a3a3a3',
-                    fontSize: '11px',
-                    lineHeight: '1.5',
-                    marginBottom: '12px',
+                    color: FINCEPT.GRAY,
+                    fontSize: '10px',
+                    lineHeight: '1.4',
+                    margin: '0 0 10px 0',
                   }}
                 >
                   {dataSource.description}
                 </p>
-                <div style={{ display: 'flex', gap: '8px', fontSize: '10px', color: '#737373' }}>
+                <div style={{ display: 'flex', gap: '8px', fontSize: '9px', color: FINCEPT.MUTED }}>
                   {dataSource.requiresAuth && (
-                    <span
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Settings size={12} /> Auth Required
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Settings size={10} /> AUTH
                     </span>
                   )}
                   {dataSource.testable && (
-                    <span
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Check size={12} /> Testable
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Check size={10} /> TESTABLE
                     </span>
                   )}
                 </div>
@@ -415,33 +493,36 @@ export default function DataSourcesTab() {
           </div>
         ) : (
           /* Connections List */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {connections.length === 0 ? (
               <div
                 style={{
-                  textAlign: 'center',
-                  padding: '60px 20px',
-                  color: '#737373',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '300px',
+                  color: FINCEPT.MUTED,
                 }}
               >
-                <Database size={48} style={{ marginBottom: '16px', opacity: 0.3 }} />
-                <h3 style={{ fontSize: '14px', marginBottom: '8px', color: '#a3a3a3' }}>
-                  No connections configured
-                </h3>
-                <p style={{ fontSize: '11px', marginBottom: '16px' }}>
+                <Database size={32} style={{ marginBottom: '12px', opacity: 0.5 }} />
+                <span style={{ fontSize: '11px', marginBottom: '8px', color: FINCEPT.GRAY }}>
+                  NO CONNECTIONS CONFIGURED
+                </span>
+                <span style={{ fontSize: '10px', marginBottom: '16px' }}>
                   Add your first data source connection to get started
-                </p>
+                </span>
                 <button
                   onClick={() => setView('gallery')}
                   style={{
-                    backgroundColor: '#ea580c',
-                    color: 'white',
-                    border: 'none',
                     padding: '8px 16px',
-                    fontSize: '11px',
+                    backgroundColor: FINCEPT.ORANGE,
+                    color: FINCEPT.DARK_BG,
+                    border: 'none',
+                    borderRadius: '2px',
+                    fontSize: '9px',
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    borderRadius: '4px',
-                    fontWeight: 'bold',
                   }}
                 >
                   BROWSE DATA SOURCES
@@ -454,30 +535,36 @@ export default function DataSourcesTab() {
                   <div
                     key={connection.id}
                     style={{
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #2d2d2d',
-                      borderRadius: '6px',
-                      padding: '16px',
+                      backgroundColor: FINCEPT.PANEL_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      padding: '12px',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '24px' }}>{config?.icon}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '20px' }}>{config?.icon}</span>
                         <div>
-                          <h3 style={{ color: '#a3a3a3', fontSize: '13px', fontWeight: 'bold', marginBottom: '4px' }}>
+                          <h3
+                            style={{
+                              color: FINCEPT.WHITE,
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              margin: '0 0 4px 0',
+                            }}
+                          >
                             {connection.name}
                           </h3>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                             <span
                               style={{
-                                display: 'inline-block',
-                                backgroundColor: `${config?.color}20`,
-                                color: config?.color,
-                                padding: '2px 8px',
-                                fontSize: '9px',
-                                borderRadius: '3px',
+                                padding: '2px 6px',
+                                backgroundColor: `${FINCEPT.CYAN}20`,
+                                color: FINCEPT.CYAN,
+                                fontSize: '8px',
+                                fontWeight: 700,
+                                borderRadius: '2px',
                                 textTransform: 'uppercase',
-                                fontWeight: 'bold',
                               }}
                             >
                               {connection.type}
@@ -487,91 +574,96 @@ export default function DataSourcesTab() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '4px',
-                                fontSize: '10px',
+                                fontSize: '9px',
                                 color:
                                   connection.status === 'connected'
-                                    ? '#10b981'
+                                    ? FINCEPT.GREEN
                                     : connection.status === 'error'
-                                      ? '#ef4444'
+                                      ? FINCEPT.RED
                                       : connection.status === 'testing'
-                                        ? '#f59e0b'
-                                        : '#737373',
+                                        ? FINCEPT.ORANGE
+                                        : FINCEPT.GRAY,
                               }}
                             >
-                              {connection.status === 'connected' && <Check size={12} />}
-                              {connection.status === 'error' && <X size={12} />}
-                              {connection.status === 'testing' && <RefreshCw size={12} className="animate-spin" />}
-                              {connection.status === 'disconnected' && <AlertCircle size={12} />}
+                              {connection.status === 'connected' && <Check size={10} />}
+                              {connection.status === 'error' && <X size={10} />}
+                              {connection.status === 'testing' && (
+                                <RefreshCw size={10} style={{ animation: 'spin 1s linear infinite' }} />
+                              )}
+                              {connection.status === 'disconnected' && <AlertCircle size={10} />}
                               {connection.status.toUpperCase()}
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '6px' }}>
                         {config?.testable && (
                           <button
                             onClick={() => handleTestConnection(connection)}
                             disabled={connection.status === 'testing'}
                             style={{
+                              padding: '6px 10px',
                               backgroundColor: 'transparent',
-                              color: '#10b981',
-                              border: '1px solid #10b981',
-                              padding: '6px 12px',
-                              fontSize: '10px',
+                              border: `1px solid ${FINCEPT.GREEN}`,
+                              color: FINCEPT.GREEN,
+                              fontSize: '9px',
+                              fontWeight: 700,
+                              borderRadius: '2px',
                               cursor: connection.status === 'testing' ? 'not-allowed' : 'pointer',
-                              borderRadius: '3px',
+                              opacity: connection.status === 'testing' ? 0.5 : 1,
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '6px',
-                              opacity: connection.status === 'testing' ? 0.5 : 1,
+                              gap: '4px',
                             }}
                           >
-                            <RefreshCw size={12} />
+                            <RefreshCw size={10} />
                             TEST
                           </button>
                         )}
                         <button
                           onClick={() => handleEditConnection(connection)}
                           style={{
+                            padding: '6px 10px',
                             backgroundColor: 'transparent',
-                            color: '#a3a3a3',
-                            border: '1px solid #404040',
-                            padding: '6px 12px',
-                            fontSize: '10px',
+                            border: `1px solid ${FINCEPT.BORDER}`,
+                            color: FINCEPT.GRAY,
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            borderRadius: '2px',
                             cursor: 'pointer',
-                            borderRadius: '3px',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
+                            gap: '4px',
                           }}
                         >
-                          <Edit2 size={12} />
+                          <Edit2 size={10} />
                           EDIT
                         </button>
                         <button
                           onClick={() => handleDeleteConnectionClick(connection.id)}
                           style={{
+                            padding: '6px 10px',
                             backgroundColor: 'transparent',
-                            color: '#ef4444',
-                            border: '1px solid #ef4444',
-                            padding: '6px 12px',
-                            fontSize: '10px',
+                            border: `1px solid ${FINCEPT.RED}`,
+                            color: FINCEPT.RED,
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            borderRadius: '2px',
                             cursor: 'pointer',
-                            borderRadius: '3px',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
+                            gap: '4px',
                           }}
                         >
-                          <Trash2 size={12} />
+                          <Trash2 size={10} />
                           DELETE
                         </button>
                       </div>
                     </div>
 
                     {connection.lastTested && (
-                      <div style={{ marginTop: '12px', fontSize: '10px', color: '#737373' }}>
+                      <div style={{ marginTop: '8px', fontSize: '9px', color: FINCEPT.MUTED }}>
                         Last tested: {new Date(connection.lastTested).toLocaleString()}
                       </div>
                     )}
@@ -579,13 +671,13 @@ export default function DataSourcesTab() {
                     {connection.errorMessage && (
                       <div
                         style={{
-                          marginTop: '12px',
-                          padding: '8px',
-                          backgroundColor: '#ef444420',
-                          border: '1px solid #ef4444',
-                          borderRadius: '4px',
-                          fontSize: '10px',
-                          color: '#ef4444',
+                          marginTop: '8px',
+                          padding: '6px 8px',
+                          backgroundColor: `${FINCEPT.RED}15`,
+                          border: `1px solid ${FINCEPT.RED}`,
+                          borderRadius: '2px',
+                          fontSize: '9px',
+                          color: FINCEPT.RED,
                         }}
                       >
                         Error: {connection.errorMessage}
@@ -608,7 +700,7 @@ export default function DataSourcesTab() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.8)',
+            backgroundColor: 'rgba(0,0,0,0.85)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -618,41 +710,42 @@ export default function DataSourcesTab() {
         >
           <div
             style={{
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #2d2d2d',
-              borderRadius: '8px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderRadius: '2px',
               width: '90%',
-              maxWidth: '600px',
+              maxWidth: '500px',
               maxHeight: '80vh',
               overflow: 'auto',
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
             }}
-            className="hide-scrollbar-modal"
             onClick={(e) => e.stopPropagation()}
           >
-            <style>{`
-              .hide-scrollbar-modal::-webkit-scrollbar {
-                display: none;
-              }
-            `}</style>
             {/* Modal Header */}
             <div
               style={{
-                padding: '16px',
-                borderBottom: '1px solid #2d2d2d',
+                padding: '12px 16px',
+                borderBottom: `1px solid ${FINCEPT.BORDER}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '32px' }}>{selectedDataSource.icon}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>{selectedDataSource.icon}</span>
                 <div>
-                  <h2 style={{ color: selectedDataSource.color, fontSize: '16px', fontWeight: 'bold' }}>
-                    {editingConnection ? 'Edit' : 'Configure'} {selectedDataSource.name}
+                  <h2
+                    style={{
+                      color: FINCEPT.ORANGE,
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      margin: 0,
+                    }}
+                  >
+                    {editingConnection ? 'EDIT' : 'CONFIGURE'} {selectedDataSource.name.toUpperCase()}
                   </h2>
-                  <p style={{ color: '#737373', fontSize: '11px' }}>{selectedDataSource.description}</p>
+                  <p style={{ color: FINCEPT.GRAY, fontSize: '9px', margin: '4px 0 0 0' }}>
+                    {selectedDataSource.description}
+                  </p>
                 </div>
               </div>
               <button
@@ -660,21 +753,46 @@ export default function DataSourcesTab() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#a3a3a3',
+                  color: FINCEPT.GRAY,
                   cursor: 'pointer',
                   padding: '4px',
                 }}
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
 
             {/* Modal Body */}
             <div style={{ padding: '16px' }}>
+              {saveError && (
+                <div
+                  style={{
+                    marginBottom: '12px',
+                    padding: '8px',
+                    backgroundColor: `${FINCEPT.RED}15`,
+                    border: `1px solid ${FINCEPT.RED}`,
+                    borderRadius: '2px',
+                    fontSize: '9px',
+                    color: FINCEPT.RED,
+                  }}
+                >
+                  {saveError}
+                </div>
+              )}
+
               {/* Connection Name */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ color: '#a3a3a3', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
-                  Connection Name *
+              <div style={{ marginBottom: '12px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  CONNECTION NAME *
                 </label>
                 <input
                   type="text"
@@ -683,22 +801,33 @@ export default function DataSourcesTab() {
                   onChange={(e) => setConfigFormData({ ...configFormData, name: e.target.value })}
                   style={{
                     width: '100%',
-                    backgroundColor: '#0a0a0a',
-                    border: '1px solid #2d2d2d',
-                    color: '#a3a3a3',
-                    padding: '8px 12px',
-                    fontSize: '11px',
-                    borderRadius: '4px',
+                    padding: '8px 10px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderRadius: '2px',
+                    fontSize: '10px',
+                    fontFamily: '"IBM Plex Mono", monospace',
                     outline: 'none',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
 
               {/* Dynamic Fields */}
               {selectedDataSource.fields.map((field) => (
-                <div key={field.name} style={{ marginBottom: '16px' }}>
-                  <label style={{ color: '#a3a3a3', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
-                    {field.label} {field.required && '*'}
+                <div key={field.name} style={{ marginBottom: '12px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      marginBottom: '6px',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: FINCEPT.GRAY,
+                      letterSpacing: '0.5px',
+                    }}
+                  >
+                    {field.label.toUpperCase()} {field.required && '*'}
                   </label>
                   {field.type === 'select' ? (
                     <select
@@ -706,13 +835,15 @@ export default function DataSourcesTab() {
                       onChange={(e) => setConfigFormData({ ...configFormData, [field.name]: e.target.value })}
                       style={{
                         width: '100%',
-                        backgroundColor: '#0a0a0a',
-                        border: '1px solid #2d2d2d',
-                        color: '#a3a3a3',
-                        padding: '8px 12px',
-                        fontSize: '11px',
-                        borderRadius: '4px',
+                        padding: '8px 10px',
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        borderRadius: '2px',
+                        fontSize: '10px',
+                        fontFamily: '"IBM Plex Mono", monospace',
                         outline: 'none',
+                        boxSizing: 'border-box',
                       }}
                     >
                       {field.options?.map((opt) => (
@@ -729,14 +860,16 @@ export default function DataSourcesTab() {
                       rows={4}
                       style={{
                         width: '100%',
-                        backgroundColor: '#0a0a0a',
-                        border: '1px solid #2d2d2d',
-                        color: '#a3a3a3',
-                        padding: '8px 12px',
-                        fontSize: '11px',
-                        borderRadius: '4px',
+                        padding: '8px 10px',
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        borderRadius: '2px',
+                        fontSize: '10px',
+                        fontFamily: '"IBM Plex Mono", monospace',
                         outline: 'none',
-                        fontFamily: 'monospace',
+                        resize: 'vertical',
+                        boxSizing: 'border-box',
                       }}
                     />
                   ) : field.type === 'checkbox' ? (
@@ -747,7 +880,7 @@ export default function DataSourcesTab() {
                         onChange={(e) => setConfigFormData({ ...configFormData, [field.name]: e.target.checked })}
                         style={{ cursor: 'pointer' }}
                       />
-                      <span style={{ color: '#737373', fontSize: '11px' }}>{field.placeholder}</span>
+                      <span style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>{field.placeholder}</span>
                     </label>
                   ) : (
                     <input
@@ -762,13 +895,15 @@ export default function DataSourcesTab() {
                       }
                       style={{
                         width: '100%',
-                        backgroundColor: '#0a0a0a',
-                        border: '1px solid #2d2d2d',
-                        color: '#a3a3a3',
-                        padding: '8px 12px',
-                        fontSize: '11px',
-                        borderRadius: '4px',
+                        padding: '8px 10px',
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        borderRadius: '2px',
+                        fontSize: '10px',
+                        fontFamily: '"IBM Plex Mono", monospace',
                         outline: 'none',
+                        boxSizing: 'border-box',
                       }}
                     />
                   )}
@@ -779,24 +914,24 @@ export default function DataSourcesTab() {
             {/* Modal Footer */}
             <div
               style={{
-                padding: '16px',
-                borderTop: '1px solid #2d2d2d',
+                padding: '12px 16px',
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
                 display: 'flex',
                 justifyContent: 'flex-end',
-                gap: '12px',
+                gap: '8px',
               }}
             >
               <button
                 onClick={() => setShowConfigModal(false)}
                 style={{
+                  padding: '6px 12px',
                   backgroundColor: 'transparent',
-                  color: '#a3a3a3',
-                  border: '1px solid #404040',
-                  padding: '8px 16px',
-                  fontSize: '11px',
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.GRAY,
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  borderRadius: '2px',
                   cursor: 'pointer',
-                  borderRadius: '4px',
-                  fontWeight: 'bold',
                 }}
               >
                 CANCEL
@@ -804,14 +939,14 @@ export default function DataSourcesTab() {
               <button
                 onClick={handleSaveConnection}
                 style={{
-                  backgroundColor: '#ea580c',
-                  color: 'white',
+                  padding: '6px 12px',
+                  backgroundColor: FINCEPT.ORANGE,
+                  color: FINCEPT.DARK_BG,
                   border: 'none',
-                  padding: '8px 16px',
-                  fontSize: '11px',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  borderRadius: '2px',
                   cursor: 'pointer',
-                  borderRadius: '4px',
-                  fontWeight: 'bold',
                 }}
               >
                 {editingConnection ? 'UPDATE CONNECTION' : 'SAVE CONNECTION'}
@@ -821,17 +956,45 @@ export default function DataSourcesTab() {
         </div>
       )}
 
-      <TabFooter
-        tabName="DATA SOURCES"
-        leftInfo={[
-          { label: `Sources: ${DATA_SOURCE_CONFIGS.length}`, color: '#a3a3a3' },
-          { label: `Connections: ${connections.length}`, color: '#a3a3a3' },
-          { label: `View: ${view.toUpperCase()}`, color: '#a3a3a3' },
-        ]}
-        statusInfo={`Connected: ${connections.filter(c => c.status === 'connected').length} | Active adapters available`}
-        backgroundColor="#1a1a1a"
-        borderColor="#2d2d2d"
-      />
+      {/* Status Bar */}
+      <div
+        style={{
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
+          padding: '4px 16px',
+          fontSize: '9px',
+          color: FINCEPT.GRAY,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <span>SOURCES: {DATA_SOURCE_CONFIGS.length}</span>
+          <span>CONNECTIONS: {connections.length}</span>
+          <span>VIEW: {view.toUpperCase()}</span>
+        </div>
+        <span>
+          CONNECTED: {connections.filter((c) => c.status === 'connected').length} | ADAPTERS AVAILABLE
+        </span>
+      </div>
+
+      {/* CSS for spin animation */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
+  );
+}
+
+export default function DataSourcesTab() {
+  return (
+    <ErrorBoundary name="DataSourcesTab" variant="minimal">
+      <DataSourcesTabContent />
+    </ErrorBoundary>
   );
 }

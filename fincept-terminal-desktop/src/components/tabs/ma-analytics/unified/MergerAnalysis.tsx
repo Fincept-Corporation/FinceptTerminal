@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { GitMerge, Zap, DollarSign, PlayCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 import { MAAnalyticsService } from '@/services/maAnalyticsService';
+import { showSuccess, showError } from '@/utils/notifications';
 
 type AnalysisType = 'accretion' | 'synergies' | 'structure';
 
@@ -76,9 +77,14 @@ export const MergerAnalysis: React.FC = () => {
         },
       });
       setResult(res);
-      alert(`✓ Merger Analysis Complete!\n${res.eps_accretion_pct > 0 ? 'ACCRETIVE' : 'DILUTIVE'}: ${res.eps_accretion_pct?.toFixed(1)}%`);
+      showSuccess('Merger Analysis Complete', [
+        { label: 'TYPE', value: res.eps_accretion_pct > 0 ? 'ACCRETIVE' : 'DILUTIVE' },
+        { label: 'EPS ACCRETION', value: `${res.eps_accretion_pct?.toFixed(1)}%` }
+      ]);
     } catch (error) {
-      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('Analysis failed', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -98,9 +104,11 @@ export const MergerAnalysis: React.FC = () => {
         : await MAAnalyticsService.Synergies.calculateCostSynergies('headcount_reduction', params);
 
       setResult(res);
-      alert(`✓ ${synergiesInputs.synergyType === 'revenue' ? 'Revenue' : 'Cost'} Synergies Calculated!`);
+      showSuccess(`${synergiesInputs.synergyType === 'revenue' ? 'Revenue' : 'Cost'} Synergies Calculated`);
     } catch (error) {
-      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('Synergies calculation failed', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -116,9 +124,11 @@ export const MergerAnalysis: React.FC = () => {
         structureInputs.debtCapacity * 1000000
       );
       setResult(res);
-      alert('✓ Payment Structure Analyzed!');
+      showSuccess('Payment Structure Analyzed');
     } catch (error) {
-      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('Structure analysis failed', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     } finally {
       setLoading(false);
     }

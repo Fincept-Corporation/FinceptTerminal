@@ -1,34 +1,11 @@
 """
 Alternative Investments Configuration Module
-============================================
 
-Centralized configuration management for alternative investments analytics platform.
-Provides constants, validation rules, enums, and parameter settings compliant
-with CFA Institute standards for alternative investment analysis across all
-asset classes including private equity, real estate, hedge funds, and digital assets.
+Configuration, constants, enums, and validation rules for alternative investment analytics.
+Supports private equity, real estate, hedge funds, commodities, and digital assets.
 
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Configuration files (JSON/YAML) for asset parameters
-  - Validation rule definitions for data quality checks
-  - Risk parameters and tolerance settings
-  - Market data source configurations
-  - Currency and exchange rate settings
-
-OUTPUT:
-  - Standardized configuration objects
-  - Validated parameters for analytics calculations
-  - Asset class specific settings and constraints
-  - Risk management configuration parameters
-  - Data source connection settings
-
-PARAMETERS:
-  - default_currency: Base currency for calculations (default: 'USD')
-  - decimal_precision: Precision for financial calculations (default: 8)
-  - max_lookback_years: Maximum historical data lookback (default: 20)
-  - min_data_quality_score: Minimum data quality threshold (default: 0.8)
-  - risk_free_rate: Default risk-free rate (default: 0.02)
-  - confidence_levels: VaR confidence levels (default: [0.90, 0.95, 0.99])
+IMPORTANT: This module provides GLOBAL configurations. For market-specific parameters
+(tax rates, trading days, etc.), use market_config.py
 """
 
 from decimal import Decimal, getcontext
@@ -42,25 +19,28 @@ getcontext().prec = 28
 
 
 # ============================================================================
-# CALCULATION CONSTANTS
+# CALCULATION CONSTANTS (UNIVERSAL)
 # ============================================================================
 
 class Constants:
-    """Mathematical and financial constants"""
+    """
+    Mathematical and financial constants (market-agnostic)
+    For market-specific values, use market_config.py
+    """
     DAYS_IN_YEAR = Decimal('365.25')
-    BUSINESS_DAYS_IN_YEAR = Decimal('252')
+    BUSINESS_DAYS_IN_YEAR = Decimal('252')  # Default US/Europe, override with market_config
     MONTHS_IN_YEAR = Decimal('12')
     QUARTERS_IN_YEAR = Decimal('4')
     BASIS_POINTS = Decimal('10000')
     PERCENT = Decimal('100')
 
-    # Risk-free rates (update as needed)
-    DEFAULT_RISK_FREE_RATE = Decimal('0.03')  # 3%
+    # Risk-free rates (default, override with market_config)
+    DEFAULT_RISK_FREE_RATE = Decimal('0.03')  # 3% global average
 
     # Alternative investment specific
-    PE_TYPICAL_FUND_LIFE = 10  # years
-    RE_DEPRECIATION_YEARS = 39  # US commercial real estate
-    COMMODITY_STORAGE_COST_TYPICAL = Decimal('0.02')  # 2%
+    PE_TYPICAL_FUND_LIFE = 10  # years (global standard)
+    RE_DEPRECIATION_YEARS = 40  # Average global, use market_config for specific
+    COMMODITY_STORAGE_COST_TYPICAL = Decimal('0.02')  # 2% global average
 
 
 # ============================================================================
@@ -80,6 +60,9 @@ class AssetClass(Enum):
     RAW_LAND = "raw_land"
     HEDGE_FUND = "hedge_fund"
     DIGITAL_ASSETS = "digital_assets"
+    FIXED_INCOME = "fixed_income"
+    EQUITY = "equity"
+    ALTERNATIVE = "alternative"
 
 
 class InvestmentMethod(Enum):
@@ -146,11 +129,17 @@ class RealEstateType(Enum):
 
 @dataclass
 class AssetParameters:
-    """Standard parameters for alternative investments"""
+    """
+    Standard parameters for alternative investments
+
+    For market-specific parameters (tax rates, trading days, etc.),
+    specify market_region and the system will auto-load from market_config.py
+    """
     asset_class: AssetClass
     ticker: Optional[str] = None
     name: Optional[str] = None
     currency: str = "USD"
+    market_region: Optional[str] = None  # ISO country code or "GLOBAL"
     inception_date: Optional[str] = None
     management_fee: Optional[Decimal] = None
     performance_fee: Optional[Decimal] = None

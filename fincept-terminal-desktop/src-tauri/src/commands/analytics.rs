@@ -52,72 +52,6 @@ pub async fn execute_skfolio(
     python::execute(&app, "Analytics/skfolio_wrapper.py", cmd_args).await
 }
 
-// Module-specific commands for alternateInvestment
-#[tauri::command]
-pub async fn analyze_digital_assets(
-    app: tauri::AppHandle,
-    asset_data: String,
-    analysis_type: Option<String>,
-) -> Result<String, String> {
-    let mut args = vec!["digital_assets".to_string(), asset_data];
-    if let Some(at) = analysis_type {
-        args.push(at);
-    }
-    python::execute(&app, "Analytics/alternateInvestment/digital_assets.py", args).await
-}
-
-#[tauri::command]
-pub async fn analyze_hedge_funds(
-    app: tauri::AppHandle,
-    fund_data: String,
-    metrics: Option<String>,
-) -> Result<String, String> {
-    let mut args = vec!["hedge_funds".to_string(), fund_data];
-    if let Some(m) = metrics {
-        args.push(m);
-    }
-    python::execute(&app, "Analytics/alternateInvestment/hedge_funds.py", args).await
-}
-
-#[tauri::command]
-pub async fn analyze_real_estate(
-    app: tauri::AppHandle,
-    property_data: String,
-    valuation_method: Option<String>,
-) -> Result<String, String> {
-    let mut args = vec!["real_estate".to_string(), property_data];
-    if let Some(vm) = valuation_method {
-        args.push(vm);
-    }
-    python::execute(&app, "Analytics/alternateInvestment/real_estate.py", args).await
-}
-
-#[tauri::command]
-pub async fn analyze_private_capital(
-    app: tauri::AppHandle,
-    investment_data: String,
-    analysis_params: Option<String>,
-) -> Result<String, String> {
-    let mut args = vec!["private_capital".to_string(), investment_data];
-    if let Some(ap) = analysis_params {
-        args.push(ap);
-    }
-    python::execute(&app, "Analytics/alternateInvestment/private_capital.py", args).await
-}
-
-#[tauri::command]
-pub async fn analyze_natural_resources(
-    app: tauri::AppHandle,
-    resource_data: String,
-    commodity_type: Option<String>,
-) -> Result<String, String> {
-    let mut args = vec!["natural_resources".to_string(), resource_data];
-    if let Some(ct) = commodity_type {
-        args.push(ct);
-    }
-    python::execute(&app, "Analytics/alternateInvestment/natural_resources.py", args).await
-}
-
 // Derivatives analytics commands
 #[tauri::command]
 pub async fn price_options(
@@ -502,4 +436,115 @@ pub async fn execute_quant_analytics(
         args.push(p);
     }
     python::execute(&app, "Analytics/quant_analytics_cli.py", args).await
+}
+
+// Alternative Investment analytics commands
+#[tauri::command]
+pub async fn analyze_digital_assets(
+    app: tauri::AppHandle,
+    asset_data: String,
+    method: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec!["digital-assets".to_string(), "--data".to_string(), asset_data];
+    if let Some(m) = method {
+        args.push("--method".to_string());
+        args.push(m);
+    }
+    python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_hedge_funds(
+    app: tauri::AppHandle,
+    fund_data: String,
+    method: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec!["hedge-funds".to_string(), "--data".to_string(), fund_data];
+    if let Some(m) = method {
+        args.push("--method".to_string());
+        args.push(m);
+    }
+    python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_real_estate(
+    app: tauri::AppHandle,
+    property_data: String,
+    method: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec!["real-estate".to_string(), "--data".to_string(), property_data];
+    if let Some(m) = method {
+        args.push("--method".to_string());
+        args.push(m);
+    }
+    python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_private_capital(
+    app: tauri::AppHandle,
+    investment_data: String,
+    method: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec!["private-capital".to_string(), "--data".to_string(), investment_data];
+    if let Some(m) = method {
+        args.push("--method".to_string());
+        args.push(m);
+    }
+    python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_natural_resources(
+    app: tauri::AppHandle,
+    resource_data: String,
+    method: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec!["natural-resources".to_string(), "--data".to_string(), resource_data];
+    if let Some(m) = method {
+        args.push("--method".to_string());
+        args.push(m);
+    }
+    python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
+}
+
+// Performance metrics command
+#[tauri::command]
+pub async fn analyze_performance_metrics(
+    app: tauri::AppHandle,
+    returns_data: String,
+    benchmark_data: Option<String>,
+    method: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec!["performance".to_string(), "--returns".to_string(), returns_data];
+    if let Some(b) = benchmark_data {
+        args.push("--benchmark".to_string());
+        args.push(b);
+    }
+    if let Some(m) = method {
+        args.push("--method".to_string());
+        args.push(m);
+    }
+    python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
+}
+
+// Risk analysis command
+#[tauri::command]
+pub async fn analyze_investment_risk(
+    app: tauri::AppHandle,
+    returns_data: String,
+    method: Option<String>,
+    confidence_level: Option<f64>,
+) -> Result<String, String> {
+    let mut args = vec!["risk".to_string(), "--returns".to_string(), returns_data];
+    if let Some(m) = method {
+        args.push("--method".to_string());
+        args.push(m);
+    }
+    if let Some(cl) = confidence_level {
+        args.push("--confidence-level".to_string());
+        args.push(cl.to_string());
+    }
+    python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
 }

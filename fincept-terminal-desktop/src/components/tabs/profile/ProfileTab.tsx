@@ -1,11 +1,15 @@
 // File: src/components/tabs/profile/ProfileTab.tsx
 // Fincept Terminal – Profile & Account Management (FINCEPT Design System)
+// Uses: State machine, cleanup, timeout, error boundaries, validation
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserApiService } from '@/services/auth/userApi';
 import { TabHeader } from '@/components/common/TabHeader';
 import { TabFooter } from '@/components/common/TabFooter';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { withTimeout } from '@/services/core/apiUtils';
+import { validateEmail, sanitizeInput } from '@/services/core/validators';
 import {
   User, CreditCard, Activity, Shield, Key, RefreshCw,
   LogOut, Zap, CheckCircle, AlertCircle, Eye, EyeOff, BarChart,
@@ -19,6 +23,9 @@ import {
   type ContactFormData,
   type FeedbackFormData,
 } from '@/services/support/supportApi';
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+const API_TIMEOUT_MS = 30000;
 
 // ─── FINCEPT Design System Colors ─────────────────────────────────────────────
 const F = {
@@ -41,7 +48,7 @@ const F = {
 const FONT = '"IBM Plex Mono", "Consolas", monospace';
 
 // ─── Types (matched to actual API responses) ─────────────────────────────────
-// GET /payment/subscription → { success, data: { user_id, account_type, credit_balance, ... } }
+// GET /cashfree/subscription → { success, data: { user_id, account_type, credit_balance, ... } }
 interface AccountSubscriptionData {
   user_id: number;
   account_type: string;
@@ -77,81 +84,194 @@ interface UsageData {
 
 type Section = 'overview' | 'usage' | 'security' | 'billing' | 'support';
 
+// ─── State Machine ─────────────────────────────────────────────────────────────
+type ProfileStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface ProfileState {
+  status: ProfileStatus;
+  activeSection: Section;
+  usageData: UsageData | null;
+  subscriptionData: AccountSubscriptionData | null;
+  paymentHistory: PaymentHistoryItem[];
+  showApiKey: boolean;
+  showLogoutConfirm: boolean;
+  showRegenerateConfirm: boolean;
+  error: string | null;
+}
+
+type ProfileAction =
+  | { type: 'START_LOADING' }
+  | { type: 'SET_READY' }
+  | { type: 'SET_ERROR'; error: string }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_SECTION'; section: Section }
+  | { type: 'SET_USAGE_DATA'; data: UsageData }
+  | { type: 'SET_SUBSCRIPTION_DATA'; data: AccountSubscriptionData }
+  | { type: 'SET_PAYMENT_HISTORY'; payments: PaymentHistoryItem[] }
+  | { type: 'TOGGLE_API_KEY'; show: boolean }
+  | { type: 'TOGGLE_LOGOUT_CONFIRM'; show: boolean }
+  | { type: 'TOGGLE_REGENERATE_CONFIRM'; show: boolean };
+
+const initialState: ProfileState = {
+  status: 'idle',
+  activeSection: 'overview',
+  usageData: null,
+  subscriptionData: null,
+  paymentHistory: [],
+  showApiKey: false,
+  showLogoutConfirm: false,
+  showRegenerateConfirm: false,
+  error: null,
+};
+
+function profileReducer(state: ProfileState, action: ProfileAction): ProfileState {
+  switch (action.type) {
+    case 'START_LOADING':
+      return { ...state, status: 'loading', error: null };
+    case 'SET_READY':
+      return { ...state, status: 'ready' };
+    case 'SET_ERROR':
+      return { ...state, status: 'error', error: action.error };
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+    case 'SET_SECTION':
+      return { ...state, activeSection: action.section };
+    case 'SET_USAGE_DATA':
+      return { ...state, usageData: action.data, status: 'ready' };
+    case 'SET_SUBSCRIPTION_DATA':
+      return { ...state, subscriptionData: action.data };
+    case 'SET_PAYMENT_HISTORY':
+      return { ...state, paymentHistory: action.payments, status: 'ready' };
+    case 'TOGGLE_API_KEY':
+      return { ...state, showApiKey: action.show };
+    case 'TOGGLE_LOGOUT_CONFIRM':
+      return { ...state, showLogoutConfirm: action.show };
+    case 'TOGGLE_REGENERATE_CONFIRM':
+      return { ...state, showRegenerateConfirm: action.show };
+    default:
+      return state;
+  }
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ProfileTab: React.FC = () => {
-  const { session, logout, refreshUserData } = useAuth();
-  const [activeSection, setActiveSection] = useState<Section>('overview');
-  const [loading, setLoading] = useState(false);
-  const [usageData, setUsageData] = useState<UsageData | null>(null);
-  const [subscriptionData, setSubscriptionData] = useState<AccountSubscriptionData | null>(null);
-  const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryItem[]>([]);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { session, logout, refreshUserData, updateApiKey } = useAuth();
+  const [state, dispatch] = useReducer(profileReducer, initialState);
+  const mountedRef = useRef(true);
+  const fetchIdRef = useRef(0);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const fetchSectionData = useCallback(async () => {
     if (!session?.api_key) return;
-    setLoading(true);
-    setError(null);
+    if (state.status === 'loading') return; // Prevent duplicate fetches
+
+    const currentFetchId = ++fetchIdRef.current;
+    dispatch({ type: 'START_LOADING' });
+
     try {
-      if (activeSection === 'usage') {
+      if (state.activeSection === 'usage') {
         const result = session.user_type === 'guest'
-          ? await UserApiService.getGuestUsage(session.api_key)
-          : await UserApiService.getUserUsage(session.api_key);
+          ? await withTimeout(UserApiService.getGuestUsage(session.api_key), API_TIMEOUT_MS, 'Usage fetch timeout')
+          : await withTimeout(UserApiService.getUserUsage(session.api_key), API_TIMEOUT_MS, 'Usage fetch timeout');
+
+        if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
         if (result.success && result.data) {
-          // API wraps in { success, message, data: { ... } }
           const raw = result.data as any;
-          setUsageData(raw?.data || raw);
+          dispatch({ type: 'SET_USAGE_DATA', data: raw?.data || raw });
         } else {
-          setError(result.error || 'Failed to load usage data');
+          dispatch({ type: 'SET_ERROR', error: result.error || 'Failed to load usage data' });
         }
-      } else if (activeSection === 'billing') {
-        // /payment/subscription returns account-level data
-        // /payment/payments returns actual payment history (NOT /payment/history which is 404)
+      } else if (state.activeSection === 'billing') {
         const [subResult, historyResult] = await Promise.all([
-          UserApiService.getUserSubscription(session.api_key),
-          UserApiService.getPaymentHistory(session.api_key, 1, 20),
+          withTimeout(UserApiService.getUserSubscription(session.api_key), API_TIMEOUT_MS, 'Subscription fetch timeout'),
+          withTimeout(UserApiService.getPaymentHistory(session.api_key, 1, 20), API_TIMEOUT_MS, 'Payment history fetch timeout'),
         ]);
+
+        if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
         if (subResult.success && subResult.data) {
-          // API wraps in { success, message, data: { ... } }
           const raw = subResult.data as any;
           const d = raw?.data || raw;
-          setSubscriptionData(d);
+          dispatch({ type: 'SET_SUBSCRIPTION_DATA', data: d });
         }
         if (historyResult.success && historyResult.data) {
           const raw = historyResult.data as any;
           const payments = raw?.data?.payments || raw?.payments || [];
-          setPaymentHistory(payments);
+          dispatch({ type: 'SET_PAYMENT_HISTORY', payments });
         }
         if (!subResult.success && !historyResult.success) {
-          setError('Failed to load billing data');
+          dispatch({ type: 'SET_ERROR', error: 'Failed to load billing data' });
+        } else {
+          dispatch({ type: 'SET_READY' });
         }
+      } else {
+        dispatch({ type: 'SET_READY' });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
-    } finally {
-      setLoading(false);
+      if (mountedRef.current && currentFetchId === fetchIdRef.current) {
+        dispatch({ type: 'SET_ERROR', error: err instanceof Error ? err.message : 'Network error' });
+      }
     }
-  }, [activeSection, session]);
+  }, [state.activeSection, state.status, session]);
 
   useEffect(() => {
     fetchSectionData();
-  }, [fetchSectionData]);
+  }, [state.activeSection]); // Only re-fetch when section changes
 
-  const confirmLogout = async () => {
-    setShowLogoutConfirm(false);
+  const confirmLogout = useCallback(async () => {
+    dispatch({ type: 'TOGGLE_LOGOUT_CONFIRM', show: false });
     await logout();
-  };
+  }, [logout]);
 
-  const confirmRegenerateKey = async () => {
+  const confirmRegenerateKey = useCallback(async () => {
     if (!session?.api_key) return;
-    setShowRegenerateConfirm(false);
-    setLoading(true);
-    const result = await UserApiService.regenerateApiKey(session.api_key);
-    setLoading(false);
-    if (result.success) await refreshUserData();
-  };
+    dispatch({ type: 'TOGGLE_REGENERATE_CONFIRM', show: false });
+    dispatch({ type: 'START_LOADING' });
+
+    try {
+      const result = await withTimeout(
+        UserApiService.regenerateApiKey(session.api_key),
+        API_TIMEOUT_MS,
+        'Regenerate key timeout'
+      );
+
+      if (!mountedRef.current) return;
+
+      if (result.success && result.data) {
+        // Extract new API key from response
+        const apiData = (result.data as any)?.data || result.data;
+        const newApiKey = apiData?.api_key || apiData?.new_api_key;
+
+        if (newApiKey) {
+          // Update the API key in AuthContext - this propagates to ALL components
+          await updateApiKey(newApiKey);
+          dispatch({ type: 'SET_READY' });
+          // Also refresh user data to get latest profile info
+          await refreshUserData();
+        } else {
+          dispatch({ type: 'SET_ERROR', error: 'No new API key received' });
+        }
+      } else {
+        dispatch({ type: 'SET_ERROR', error: result.error || 'Failed to regenerate API key' });
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        dispatch({ type: 'SET_ERROR', error: err instanceof Error ? err.message : 'Failed to regenerate API key' });
+      }
+    }
+  }, [session, refreshUserData, updateApiKey]);
+
+  // Destructure state for easier access
+  const { status, activeSection, usageData, subscriptionData, paymentHistory, showApiKey, showLogoutConfirm, showRegenerateConfirm, error } = state;
+  const loading = status === 'loading';
 
   const accountType = session?.user_info?.account_type || 'free';
   const credits = session?.user_info?.credit_balance || 0;
@@ -186,7 +306,7 @@ const ProfileTab: React.FC = () => {
         {sections.map(s => (
           <button
             key={s.id}
-            onClick={() => setActiveSection(s.id)}
+            onClick={() => dispatch({ type: 'SET_SECTION', section: s.id })}
             style={{
               padding: '6px 12px',
               backgroundColor: activeSection === s.id ? F.ORANGE : 'transparent',
@@ -226,29 +346,39 @@ const ProfileTab: React.FC = () => {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: '16px', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {activeSection === 'overview' && (
-          <OverviewSection session={session} onLogout={() => setShowLogoutConfirm(true)} />
-        )}
-        {activeSection === 'usage' && (
-          <UsageSection usageData={usageData} loading={loading} session={session} />
-        )}
-        {activeSection === 'security' && (
-          <SecuritySection
-            session={session}
-            onRegenerateKey={() => setShowRegenerateConfirm(true)}
-            loading={loading}
-            showApiKey={showApiKey}
-            setShowApiKey={setShowApiKey}
-          />
-        )}
-        {activeSection === 'billing' && (
-          <BillingSection
-            subscriptionData={subscriptionData}
-            paymentHistory={paymentHistory}
-            loading={loading}
-          />
-        )}
-        {activeSection === 'support' && <SupportSection />}
+        <ErrorBoundary name="ProfileOverview" variant="minimal">
+          {activeSection === 'overview' && (
+            <OverviewSection session={session} onLogout={() => dispatch({ type: 'TOGGLE_LOGOUT_CONFIRM', show: true })} />
+          )}
+        </ErrorBoundary>
+        <ErrorBoundary name="ProfileUsage" variant="minimal">
+          {activeSection === 'usage' && (
+            <UsageSection usageData={usageData} loading={loading} session={session} />
+          )}
+        </ErrorBoundary>
+        <ErrorBoundary name="ProfileSecurity" variant="minimal">
+          {activeSection === 'security' && (
+            <SecuritySection
+              session={session}
+              onRegenerateKey={() => dispatch({ type: 'TOGGLE_REGENERATE_CONFIRM', show: true })}
+              loading={loading}
+              showApiKey={showApiKey}
+              setShowApiKey={(show) => dispatch({ type: 'TOGGLE_API_KEY', show })}
+            />
+          )}
+        </ErrorBoundary>
+        <ErrorBoundary name="ProfileBilling" variant="minimal">
+          {activeSection === 'billing' && (
+            <BillingSection
+              subscriptionData={subscriptionData}
+              paymentHistory={paymentHistory}
+              loading={loading}
+            />
+          )}
+        </ErrorBoundary>
+        <ErrorBoundary name="ProfileSupport" variant="minimal">
+          {activeSection === 'support' && <SupportSection />}
+        </ErrorBoundary>
       </div>
 
       <TabFooter
@@ -268,7 +398,7 @@ const ProfileTab: React.FC = () => {
           message="Are you sure you want to logout from Fincept Terminal?"
           confirmLabel="LOGOUT"
           confirmColor={F.RED}
-          onCancel={() => setShowLogoutConfirm(false)}
+          onCancel={() => dispatch({ type: 'TOGGLE_LOGOUT_CONFIRM', show: false })}
           onConfirm={confirmLogout}
         />
       )}
@@ -282,7 +412,7 @@ const ProfileTab: React.FC = () => {
           confirmLabel={loading ? 'REGENERATING...' : 'CONFIRM'}
           confirmColor={F.ORANGE}
           disabled={loading}
-          onCancel={() => setShowRegenerateConfirm(false)}
+          onCancel={() => dispatch({ type: 'TOGGLE_REGENERATE_CONFIRM', show: false })}
           onConfirm={confirmRegenerateKey}
         />
       )}
@@ -456,13 +586,25 @@ const SecuritySection: React.FC<{
     if (!session?.api_key) return;
     setMfaLoading(true);
     setStatusMessage(null);
-    const result = await UserApiService.enableMFA(session.api_key);
-    setMfaLoading(false);
-    if (result.success) {
-      setStatusMessage({ type: 'success', text: 'MFA enabled! OTP codes will be sent via email during login.' });
-      setTimeout(async () => { await refreshUserData(); setStatusMessage(null); }, 2000);
-    } else {
-      setStatusMessage({ type: 'error', text: result.error || 'Failed to enable MFA' });
+
+    try {
+      const result = await withTimeout(
+        UserApiService.enableMFA(session.api_key),
+        API_TIMEOUT_MS,
+        'MFA enable timeout'
+      );
+
+      setMfaLoading(false);
+      if (result.success) {
+        setStatusMessage({ type: 'success', text: 'MFA enabled! OTP codes will be sent via email during login.' });
+        setTimeout(async () => { await refreshUserData(); setStatusMessage(null); }, 2000);
+      } else {
+        setStatusMessage({ type: 'error', text: result.error || 'Failed to enable MFA' });
+        setTimeout(() => setStatusMessage(null), 3000);
+      }
+    } catch (err) {
+      setMfaLoading(false);
+      setStatusMessage({ type: 'error', text: err instanceof Error ? err.message : 'Network error' });
       setTimeout(() => setStatusMessage(null), 3000);
     }
   };
@@ -474,22 +616,39 @@ const SecuritySection: React.FC<{
   };
 
   const confirmDisableMFA = async () => {
-    if (!password) {
+    const sanitizedPassword = password.trim();
+    if (!sanitizedPassword) {
       setStatusMessage({ type: 'error', text: 'Please enter your password' });
       setTimeout(() => setStatusMessage(null), 3000);
       return;
     }
+
     setMfaLoading(true);
     setStatusMessage(null);
-    const result = await UserApiService.disableMFA(session.api_key, password);
-    setMfaLoading(false);
-    setShowPasswordPrompt(false);
-    setPassword('');
-    if (result.success) {
-      setStatusMessage({ type: 'success', text: 'MFA disabled successfully!' });
-      setTimeout(async () => { await refreshUserData(); setStatusMessage(null); }, 2000);
-    } else {
-      setStatusMessage({ type: 'error', text: result.error || 'Failed to disable MFA' });
+
+    try {
+      const result = await withTimeout(
+        UserApiService.disableMFA(session.api_key, sanitizedPassword),
+        API_TIMEOUT_MS,
+        'MFA disable timeout'
+      );
+
+      setMfaLoading(false);
+      setShowPasswordPrompt(false);
+      setPassword('');
+
+      if (result.success) {
+        setStatusMessage({ type: 'success', text: 'MFA disabled successfully!' });
+        setTimeout(async () => { await refreshUserData(); setStatusMessage(null); }, 2000);
+      } else {
+        setStatusMessage({ type: 'error', text: result.error || 'Failed to disable MFA' });
+        setTimeout(() => setStatusMessage(null), 3000);
+      }
+    } catch (err) {
+      setMfaLoading(false);
+      setShowPasswordPrompt(false);
+      setPassword('');
+      setStatusMessage({ type: 'error', text: err instanceof Error ? err.message : 'Network error' });
       setTimeout(() => setStatusMessage(null), 3000);
     }
   };
@@ -726,49 +885,103 @@ const SupportSection: React.FC = () => {
   const [newsletterError, setNewsletterError] = useState('');
 
   const handleFeedbackSubmit = async () => {
-    if (!feedbackRating || !feedbackText.trim()) { setFeedbackError('Please provide a rating and feedback'); return; }
-    if (!session?.api_key) { setFeedbackError('Please login to submit feedback'); return; }
+    // Validate and sanitize
+    const sanitizedFeedback = sanitizeInput(feedbackText);
+    if (!feedbackRating || !sanitizedFeedback) {
+      setFeedbackError('Please provide a rating and feedback');
+      return;
+    }
+    if (!session?.api_key) {
+      setFeedbackError('Please login to submit feedback');
+      return;
+    }
+
     setFeedbackLoading(true);
     setFeedbackError('');
-    const data: FeedbackFormData = { rating: feedbackRating, feedback_text: feedbackText, category: feedbackCategory };
-    const result = await submitFeedback(data, session.api_key);
-    setFeedbackLoading(false);
-    if (result.success) {
-      setFeedbackSuccess(true);
-      setTimeout(() => { setFeedbackRating(0); setFeedbackText(''); setFeedbackCategory('general'); setFeedbackSuccess(false); }, 3000);
-    } else {
-      setFeedbackError(result.error || 'Failed to submit feedback');
+
+    try {
+      const data: FeedbackFormData = { rating: feedbackRating, feedback_text: sanitizedFeedback, category: feedbackCategory };
+      const result = await withTimeout(submitFeedback(data, session.api_key), API_TIMEOUT_MS, 'Feedback submit timeout');
+
+      setFeedbackLoading(false);
+      if (result.success) {
+        setFeedbackSuccess(true);
+        setTimeout(() => { setFeedbackRating(0); setFeedbackText(''); setFeedbackCategory('general'); setFeedbackSuccess(false); }, 3000);
+      } else {
+        setFeedbackError(result.error || 'Failed to submit feedback');
+      }
+    } catch (err) {
+      setFeedbackLoading(false);
+      setFeedbackError(err instanceof Error ? err.message : 'Network error');
     }
   };
 
   const handleContactSubmit = async () => {
-    if (!contactName.trim() || !contactEmail.trim() || !contactSubject.trim() || !contactMessage.trim()) {
-      setContactError('Please fill in all required fields'); return;
+    // Validate and sanitize
+    const sanitizedName = sanitizeInput(contactName);
+    const sanitizedSubject = sanitizeInput(contactSubject);
+    const sanitizedMessage = sanitizeInput(contactMessage);
+
+    if (!sanitizedName || !contactEmail.trim() || !sanitizedSubject || !sanitizedMessage) {
+      setContactError('Please fill in all required fields');
+      return;
     }
+
+    // Validate email
+    const emailValidation = validateEmail(contactEmail);
+    if (!emailValidation.valid) {
+      setContactError(emailValidation.error || 'Invalid email address');
+      return;
+    }
+
     setContactLoading(true);
     setContactError('');
-    const data: ContactFormData = { name: contactName, email: contactEmail, subject: contactSubject, message: contactMessage };
-    const result = await submitContactForm(data);
-    setContactLoading(false);
-    if (result.success) {
-      setContactSuccess(true);
-      setTimeout(() => { setContactName(''); setContactEmail(''); setContactSubject(''); setContactMessage(''); setContactSuccess(false); }, 3000);
-    } else {
-      setContactError(result.error || 'Failed to submit contact form');
+
+    try {
+      const data: ContactFormData = { name: sanitizedName, email: contactEmail.trim(), subject: sanitizedSubject, message: sanitizedMessage };
+      const result = await withTimeout(submitContactForm(data), API_TIMEOUT_MS, 'Contact submit timeout');
+
+      setContactLoading(false);
+      if (result.success) {
+        setContactSuccess(true);
+        setTimeout(() => { setContactName(''); setContactEmail(''); setContactSubject(''); setContactMessage(''); setContactSuccess(false); }, 3000);
+      } else {
+        setContactError(result.error || 'Failed to submit contact form');
+      }
+    } catch (err) {
+      setContactLoading(false);
+      setContactError(err instanceof Error ? err.message : 'Network error');
     }
   };
 
   const handleNewsletterSubmit = async () => {
-    if (!newsletterEmail.trim()) { setNewsletterError('Please enter your email'); return; }
+    // Validate email
+    const emailValidation = validateEmail(newsletterEmail);
+    if (!emailValidation.valid) {
+      setNewsletterError(emailValidation.error || 'Please enter a valid email');
+      return;
+    }
+
     setNewsletterLoading(true);
     setNewsletterError('');
-    const result = await subscribeToNewsletter({ email: newsletterEmail, source: 'profile_tab' });
-    setNewsletterLoading(false);
-    if (result.success) {
-      setNewsletterSuccess(true);
-      setTimeout(() => { setNewsletterEmail(''); setNewsletterSuccess(false); }, 3000);
-    } else {
-      setNewsletterError(result.error || 'Failed to subscribe');
+
+    try {
+      const result = await withTimeout(
+        subscribeToNewsletter({ email: newsletterEmail.trim(), source: 'profile_tab' }),
+        API_TIMEOUT_MS,
+        'Newsletter subscribe timeout'
+      );
+
+      setNewsletterLoading(false);
+      if (result.success) {
+        setNewsletterSuccess(true);
+        setTimeout(() => { setNewsletterEmail(''); setNewsletterSuccess(false); }, 3000);
+      } else {
+        setNewsletterError(result.error || 'Failed to subscribe');
+      }
+    } catch (err) {
+      setNewsletterLoading(false);
+      setNewsletterError(err instanceof Error ? err.message : 'Network error');
     }
   };
 

@@ -24,6 +24,7 @@ import {
 import { sqliteService, type BacktestingProvider } from '@/services/core/sqliteService';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { PathService } from '@/services/backtesting/PathService';
+import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -410,14 +411,21 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
    * Delete provider
    */
   const deleteProvider = async (providerName: string) => {
-    if (!confirm('Are you sure you want to delete this provider?')) return;
+    const confirmed = await showConfirm(
+      `Delete backtesting provider "${providerName}"?\n\nThis action cannot be undone.`,
+      { title: 'Delete Provider', type: 'danger', confirmText: 'Delete' }
+    );
+
+    if (!confirmed) return;
 
     try {
       await sqliteService.deleteBacktestingProvider(providerName);
       await loadProviders();
-      showMessage('success', 'Provider deleted');
+      showSuccess('Provider deleted successfully', [
+        { label: 'Provider', value: providerName },
+      ]);
     } catch (error) {
-      showMessage('error', `Failed to delete provider: ${error}`);
+      showError(`Failed to delete provider: ${error}`);
     }
   };
 

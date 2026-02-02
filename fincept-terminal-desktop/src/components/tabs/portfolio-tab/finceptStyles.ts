@@ -26,6 +26,7 @@ export const FINCEPT = {
   // Grayscale
   GRAY: 'var(--ft-color-text-muted, #787878)',
   MUTED: '#4A4A4A',
+  CHARCOAL: '#1A1A1A',
 
   // Backgrounds
   DARK_BG: 'var(--ft-color-background, #000000)',
@@ -74,6 +75,7 @@ export const SPACING = {
   DEFAULT: '12px',
   LARGE: '16px',
   XLARGE: '24px',
+  EXTRA_LARGE: '32px',
 
   // Gaps
   GAP_TINY: '4px',
@@ -143,6 +145,15 @@ export const EFFECTS = {
   TRANSITION_FAST: 'all 0.15s ease',
   TRANSITION_STANDARD: 'all 0.2s ease',
   TRANSITION_SLOW: 'all 0.3s ease',
+
+  // Tooltip styles
+  tooltip: {
+    backgroundColor: FINCEPT.PANEL_BG,
+    border: `1px solid ${FINCEPT.BORDER}`,
+    borderRadius: '4px',
+    boxShadow: `0 4px 12px rgba(0,0,0,0.5)`,
+    color: FINCEPT.WHITE,
+  },
 } as const;
 
 // ========== COMMON STYLES ==========

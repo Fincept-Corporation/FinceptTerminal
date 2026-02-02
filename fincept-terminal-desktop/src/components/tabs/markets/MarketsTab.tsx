@@ -1,723 +1,550 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Info, RefreshCw } from 'lucide-react';
+// MarketsTab - Production-ready Markets Terminal
+// Uses shared utilities: apiUtils, validators, ErrorBoundary
+
+import React, { useState, useEffect, useCallback, useMemo, useReducer } from 'react';
+import { Edit2, Info, RefreshCw, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { marketDataService, QuoteData } from '@/services/markets/marketDataService';
 import { tickerStorage, UserMarketPreferences } from '@/services/core/tickerStorageService';
 import { sqliteService } from '@/services/core/sqliteService';
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
+import { withTimeout, rateLimiters } from '@/services/core/apiUtils';
+import { validateSymbolList } from '@/services/core/validators';
 import { useCache } from '@/hooks/useCache';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import TickerEditModal from '@/components/tabs/ticker-edit-modal';
 import RecordingControlPanel from '@/components/common/RecordingControlPanel';
 import { TabFooter } from '@/components/common/TabFooter';
-import { useTranslation } from 'react-i18next';
 import { createMarketsTabTour } from '@/components/tabs/tours/marketsTabTour';
 
-// Hook to fetch market data for a category
-// Cache key includes ticker count and first/last ticker to detect changes
-const useMarketCategory = (
-  category: string,
-  tickers: string[],
-  enabled: boolean,
-  refetchInterval: number
-) => {
-  // Create a cache key that changes when tickers change
-  const tickerHash = useMemo(() => {
-    if (tickers.length === 0) return 'empty';
-    return `${tickers.length}:${tickers[0]}:${tickers[tickers.length - 1]}`;
-  }, [tickers]);
+// ============================================================================
+// Constants
+// ============================================================================
 
-  return useCache<QuoteData[]>({
-    key: `markets:global:${category}:${tickerHash}`,
+const API_TIMEOUT_MS = 30000;
+const STALE_DATA_WARNING_MS = 30 * 60 * 1000;
+
+// ============================================================================
+// State Reducer (lightweight, component-local)
+// ============================================================================
+
+type ModalState = {
+  isOpen: boolean;
+  category: string;
+  type: 'global' | 'regional';
+  tickers: string[];
+};
+
+type State = {
+  preferences: UserMarketPreferences | null;
+  autoUpdate: boolean;
+  updateInterval: number;
+  isRecording: boolean;
+  editModal: ModalState;
+};
+
+type Action =
+  | { type: 'SET_PREFERENCES'; payload: UserMarketPreferences }
+  | { type: 'SET_AUTO_UPDATE'; payload: boolean }
+  | { type: 'SET_UPDATE_INTERVAL'; payload: number }
+  | { type: 'SET_RECORDING'; payload: boolean }
+  | { type: 'OPEN_MODAL'; payload: Omit<ModalState, 'isOpen'> }
+  | { type: 'CLOSE_MODAL' };
+
+const initialState: State = {
+  preferences: null,
+  autoUpdate: true,
+  updateInterval: 600000,
+  isRecording: false,
+  editModal: { isOpen: false, category: '', type: 'global', tickers: [] },
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'SET_PREFERENCES':
+      return { ...state, preferences: action.payload };
+    case 'SET_AUTO_UPDATE':
+      return { ...state, autoUpdate: action.payload };
+    case 'SET_UPDATE_INTERVAL':
+      return { ...state, updateInterval: action.payload };
+    case 'SET_RECORDING':
+      return { ...state, isRecording: action.payload };
+    case 'OPEN_MODAL':
+      return { ...state, editModal: { isOpen: true, ...action.payload } };
+    case 'CLOSE_MODAL':
+      return { ...state, editModal: { ...state.editModal, isOpen: false } };
+    default:
+      return state;
+  }
+}
+
+// ============================================================================
+// Market Panel Component
+// ============================================================================
+
+interface MarketPanelProps {
+  title: string;
+  tickers: string[];
+  tickerNames?: Record<string, string>;
+  enabled: boolean;
+  refetchInterval: number;
+  onEdit: () => void;
+  onDataUpdate: (data: QuoteData[]) => void;
+  showName?: boolean;
+}
+
+const MarketPanel: React.FC<MarketPanelProps> = ({
+  title,
+  tickers,
+  tickerNames,
+  enabled,
+  refetchInterval,
+  onEdit,
+  onDataUpdate,
+  showName = false,
+}) => {
+  const { t } = useTranslation('markets');
+  const { colors, fontSize } = useTerminalTheme();
+
+  const { data, isLoading, isFetching, error, isStale, refresh } = useCache<QuoteData[]>({
+    key: `markets:${title}:${tickers.length}:${tickers[0] || 'empty'}`,
     category: 'market-quotes',
-    fetcher: () => marketDataService.getQuotes(tickers),
+    fetcher: async () => {
+      if (!rateLimiters.standard.canProceed()) {
+        throw new Error('Rate limit exceeded. Please wait.');
+      }
+      rateLimiters.standard.record();
+
+      const validation = validateSymbolList(tickers);
+      if (!validation.valid) {
+        throw new Error(`Invalid symbols: ${validation.error}`);
+      }
+
+      return withTimeout(
+        marketDataService.getQuotes(validation.sanitized),
+        API_TIMEOUT_MS,
+        'Request timed out'
+      );
+    },
     ttl: '10m',
     enabled: enabled && tickers.length > 0,
     refetchInterval,
-    staleWhileRevalidate: true
+    staleWhileRevalidate: true,
+    onSuccess: onDataUpdate,
   });
+
+  const quotes = data || [];
+  const formatChange = (v: number) => (v >= 0 ? `+${v.toFixed(2)}` : v.toFixed(2));
+  const formatPercent = (v: number) => (v >= 0 ? `+${v.toFixed(2)}%` : `${v.toFixed(2)}%`);
+
+  const columns = showName
+    ? { template: '1fr 2fr 1fr 1fr 1fr', count: 5 }
+    : { template: '2fr 1fr 1fr 1fr 1fr 1fr', count: 6 };
+
+  return (
+    <div
+      style={{
+        backgroundColor: colors.panel,
+        border: `1px solid ${error ? colors.alert : colors.textMuted}`,
+        flex: '1 1 calc(33.333% - 16px)',
+        minWidth: '300px',
+        maxWidth: '600px',
+        height: showName ? '300px' : '280px',
+        margin: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          backgroundColor: colors.background,
+          color: colors.primary,
+          padding: '8px',
+          fontSize: fontSize.subheading,
+          fontWeight: 'bold',
+          textAlign: 'center',
+          borderBottom: `1px solid ${colors.textMuted}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+        }}
+      >
+        {title.toUpperCase()}
+        {showName && ' - LIVE DATA'}
+        {isFetching && <RefreshCw size={12} className="animate-spin" />}
+        <Edit2
+          size={14}
+          style={{ cursor: 'pointer', color: colors.text }}
+          onClick={onEdit}
+          aria-label={`Edit ${title}`}
+        />
+      </div>
+
+      {/* Error Banner */}
+      {error && (
+        <div
+          style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            color: colors.alert,
+            padding: '4px 8px',
+            fontSize: '10px',
+            display: 'flex',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span>{error.message}</span>
+          <button
+            onClick={refresh}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: colors.alert,
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Table Header */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: columns.template,
+          gap: '4px',
+          padding: '4px 8px',
+          backgroundColor: colors.background,
+          color: colors.text,
+          fontSize: fontSize.body,
+          fontWeight: 'bold',
+          borderBottom: `1px solid ${colors.textMuted}`,
+        }}
+      >
+        <div>{t('symbol')}</div>
+        {showName && <div>{t('name')}</div>}
+        <div style={{ textAlign: 'right' }}>{t('price')}</div>
+        <div style={{ textAlign: 'right' }}>{t('change')}</div>
+        <div style={{ textAlign: 'right' }}>{t('percentChange')}</div>
+        {!showName && (
+          <>
+            <div style={{ textAlign: 'right' }}>{t('high')}</div>
+            <div style={{ textAlign: 'right' }}>{t('low')}</div>
+          </>
+        )}
+      </div>
+
+      {/* Data Rows */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {isLoading && quotes.length === 0 ? (
+          Array.from({ length: Math.min(tickers.length, 12) }).map((_, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: columns.template,
+                gap: '4px',
+                padding: '2px 8px',
+                minHeight: '18px',
+                alignItems: 'center',
+                borderBottom: '1px solid rgba(120,120,120,0.3)',
+              }}
+            >
+              {Array.from({ length: columns.count }).map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    backgroundColor: 'rgba(120,120,120,0.3)',
+                    height: '12px',
+                    borderRadius: '2px',
+                    animation: 'pulse 1.5s infinite',
+                  }}
+                />
+              ))}
+            </div>
+          ))
+        ) : quotes.length === 0 ? (
+          <div style={{ color: colors.textMuted, textAlign: 'center', padding: '16px' }}>
+            {error ? 'Error loading data' : t('noData')}
+          </div>
+        ) : (
+          quotes.map((quote, idx) => (
+            <div
+              key={quote.symbol}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: columns.template,
+                gap: '4px',
+                padding: '2px 8px',
+                fontSize: fontSize.small,
+                backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
+                borderBottom: '1px solid rgba(120,120,120,0.3)',
+                minHeight: '18px',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ color: colors.text }}>{quote.symbol}</div>
+              {showName && (
+                <div style={{ color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {tickerNames?.[quote.symbol] || quote.symbol}
+                </div>
+              )}
+              <div style={{ color: colors.text, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
+              <div
+                style={{
+                  color: quote.change >= 0 ? colors.secondary : colors.alert,
+                  textAlign: 'right',
+                }}
+              >
+                {formatChange(quote.change)}
+              </div>
+              <div
+                style={{
+                  color: quote.change_percent >= 0 ? colors.secondary : colors.alert,
+                  textAlign: 'right',
+                }}
+              >
+                {formatPercent(quote.change_percent)}
+              </div>
+              {!showName && (
+                <>
+                  <div style={{ color: colors.text, textAlign: 'right' }}>
+                    {quote.high?.toFixed(2) || '-'}
+                  </div>
+                  <div style={{ color: colors.text, textAlign: 'right' }}>
+                    {quote.low?.toFixed(2) || '-'}
+                  </div>
+                </>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Stale Warning */}
+      {isStale && (
+        <div
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            color: '#f59e0b',
+            padding: '2px 8px',
+            fontSize: '9px',
+            textAlign: 'center',
+          }}
+        >
+          Showing cached data (may be outdated)
+        </div>
+      )}
+    </div>
+  );
 };
 
-// Hook to fetch regional market data
-const useRegionalMarket = (
-  region: string,
-  tickers: Array<{ symbol: string; name: string }>,
-  enabled: boolean,
-  refetchInterval: number
-) => {
-  const symbols = useMemo(() => tickers.map(t => t.symbol), [tickers]);
-
-  // Create a cache key that changes when tickers change
-  const tickerHash = useMemo(() => {
-    if (symbols.length === 0) return 'empty';
-    return `${symbols.length}:${symbols[0]}:${symbols[symbols.length - 1]}`;
-  }, [symbols]);
-
-  return useCache<QuoteData[]>({
-    key: `markets:regional:${region}:${tickerHash}`,
-    category: 'market-quotes',
-    fetcher: () => marketDataService.getQuotes(symbols),
-    ttl: '10m',
-    enabled: enabled && symbols.length > 0,
-    refetchInterval,
-    staleWhileRevalidate: true
-  });
-};
+// ============================================================================
+// Main Component
+// ============================================================================
 
 const MarketsTab: React.FC = () => {
   const { t } = useTranslation('markets');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+
+  const [state, dispatch] = useReducer(reducer, initialState);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [autoUpdate, setAutoUpdate] = useState(true);
-  const [updateInterval, setUpdateInterval] = useState(600000); // 10 minutes default
   const [dbInitialized, setDbInitialized] = useState(false);
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [collectedData, setCollectedData] = useState<Record<string, QuoteData[]>>({});
+  const [initError, setInitError] = useState<string | null>(null);
 
-  // Edit modal state
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<string>('');
-  const [editingTickers, setEditingTickers] = useState<string[]>([]);
-  const [editingType, setEditingType] = useState<'global' | 'regional'>('global');
+  const effectiveRefetchInterval = state.autoUpdate ? state.updateInterval : 0;
 
-  // User preferences
-  const [preferences, setPreferences] = useState<UserMarketPreferences>({
-    globalMarkets: [],
-    regionalMarkets: [],
-    lastUpdated: Date.now()
-  });
-  const [isRecording, setIsRecording] = useState(false);
-
-  // Load preferences on mount
+  // Initialize
   useEffect(() => {
-    const loadPreferences = async () => {
-      const prefs = await tickerStorage.loadPreferences();
-      setPreferences(prefs);
-      setPreferencesLoaded(true);
-    };
-    loadPreferences();
-  }, []);
+    let mounted = true;
 
-  // Calculate effective refetch interval (0 = disabled)
-  const effectiveRefetchInterval = autoUpdate ? updateInterval : 0;
-
-  // Use cache hooks for each global market category
-  const stockIndicesCache = useMarketCategory(
-    'Stock Indices',
-    preferences.globalMarkets.find(m => m.category === 'Stock Indices')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  const forexCache = useMarketCategory(
-    'Forex',
-    preferences.globalMarkets.find(m => m.category === 'Forex')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  const commoditiesCache = useMarketCategory(
-    'Commodities',
-    preferences.globalMarkets.find(m => m.category === 'Commodities')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  const bondsCache = useMarketCategory(
-    'Bonds',
-    preferences.globalMarkets.find(m => m.category === 'Bonds')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  const etfsCache = useMarketCategory(
-    'ETFs',
-    preferences.globalMarkets.find(m => m.category === 'ETFs')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  const cryptoCache = useMarketCategory(
-    'Cryptocurrencies',
-    preferences.globalMarkets.find(m => m.category === 'Cryptocurrencies')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  // Use cache hooks for regional markets
-  const indiaCache = useRegionalMarket(
-    'India',
-    preferences.regionalMarkets.find(m => m.region === 'India')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  const chinaCache = useRegionalMarket(
-    'China',
-    preferences.regionalMarkets.find(m => m.region === 'China')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  const usCache = useRegionalMarket(
-    'United States',
-    preferences.regionalMarkets.find(m => m.region === 'United States')?.tickers || [],
-    preferencesLoaded && dbInitialized,
-    effectiveRefetchInterval
-  );
-
-  // Aggregate market data from cache hooks
-  const marketData: Record<string, QuoteData[]> = useMemo(() => ({
-    'Stock Indices': stockIndicesCache.data || [],
-    'Forex': forexCache.data || [],
-    'Commodities': commoditiesCache.data || [],
-    'Bonds': bondsCache.data || [],
-    'ETFs': etfsCache.data || [],
-    'Cryptocurrencies': cryptoCache.data || [],
-  }), [stockIndicesCache.data, forexCache.data, commoditiesCache.data, bondsCache.data, etfsCache.data, cryptoCache.data]);
-
-  const regionalData: Record<string, QuoteData[]> = useMemo(() => ({
-    'India': indiaCache.data || [],
-    'China': chinaCache.data || [],
-    'United States': usCache.data || [],
-  }), [indiaCache.data, chinaCache.data, usCache.data]);
-
-  // Track if any market is updating
-  const isUpdating = stockIndicesCache.isFetching || forexCache.isFetching ||
-    commoditiesCache.isFetching || bondsCache.isFetching ||
-    etfsCache.isFetching || cryptoCache.isFetching ||
-    indiaCache.isFetching || chinaCache.isFetching || usCache.isFetching;
-
-  // Get last update time from any successful fetch
-  const lastUpdate = useMemo(() => {
-    // Return current time when data is available
-    if (stockIndicesCache.data || forexCache.data) {
-      return new Date();
-    }
-    return new Date();
-  }, [stockIndicesCache.data, forexCache.data]);
-
-  // Refresh all markets
-  const refreshAllMarkets = useCallback(async () => {
-    await Promise.all([
-      stockIndicesCache.refresh(),
-      forexCache.refresh(),
-      commoditiesCache.refresh(),
-      bondsCache.refresh(),
-      etfsCache.refresh(),
-      cryptoCache.refresh(),
-      indiaCache.refresh(),
-      chinaCache.refresh(),
-      usCache.refresh(),
-    ]);
-  }, [stockIndicesCache, forexCache, commoditiesCache, bondsCache, etfsCache, cryptoCache, indiaCache, chinaCache, usCache]);
-
-  // Function to record current market data
-  const recordCurrentData = async () => {
-    if (Object.keys(marketData).length > 0 || Object.keys(regionalData).length > 0) {
-      try {
-        const allData = {
-          globalMarkets: marketData,
-          regionalMarkets: regionalData,
-          timestamp: new Date().toISOString(),
-          updateInterval: updateInterval
-        };
-        console.log('[MarketsTab] Recording current data:', allData);
-        await contextRecorderService.recordApiResponse(
-          'Markets',
-          'market-data',
-          allData,
-          `Market Data (Snapshot) - ${new Date().toLocaleString()}`,
-          ['markets', 'quotes', 'snapshot']
-        );
-        console.log('[MarketsTab] Current data recorded successfully');
-      } catch (error) {
-        console.error('[MarketsTab] Failed to record current data:', error);
-      }
-    }
-  };
-
-  // Initialize database on mount
-  useEffect(() => {
-    const initDatabase = async () => {
+    const init = async () => {
       try {
         await sqliteService.initialize();
-        const healthCheck = await sqliteService.healthCheck();
-        if (healthCheck.healthy) {
-          setDbInitialized(true);
-          console.log('[MarketsTab] Database initialized and ready for caching');
-        } else {
-          console.warn('[MarketsTab] Database not healthy:', healthCheck.message);
-          // Still set initialized to allow data fetching
-          setDbInitialized(true);
-        }
-      } catch (error) {
-        console.error('[MarketsTab] Database initialization error:', error);
-        // Still set initialized to allow data fetching even without cache
+        if (!mounted) return;
+        setDbInitialized(true);
+
+        const prefs = await withTimeout(tickerStorage.loadPreferences(), 10000);
+        if (!mounted) return;
+        dispatch({ type: 'SET_PREFERENCES', payload: prefs });
+      } catch (err) {
+        if (!mounted) return;
+        setInitError(err instanceof Error ? err.message : 'Failed to initialize');
         setDbInitialized(true);
       }
     };
-    initDatabase();
+
+    init();
+    return () => { mounted = false; };
   }, []);
 
-  // Update current time display
+  // Clock
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Open edit modal for global markets
-  const openEditModal = async (category: string) => {
-    const tickers = await tickerStorage.getCategoryTickers(category);
-    setEditingCategory(category);
-    setEditingTickers(tickers);
-    setEditingType('global');
-    setEditModalOpen(true);
-  };
+  // Handlers
+  const handleDataUpdate = useCallback((category: string) => (data: QuoteData[]) => {
+    setCollectedData((prev) => ({ ...prev, [category]: data }));
+  }, []);
 
-  // Open edit modal for regional markets
-  const openRegionalEditModal = async (region: string) => {
-    const regionalTickers = await tickerStorage.getRegionalTickers(region);
-    const symbols = regionalTickers.map((t: { symbol: string; name: string }) => t.symbol);
-    setEditingCategory(region);
-    setEditingTickers(symbols);
-    setEditingType('regional');
-    setEditModalOpen(true);
-  };
+  const handleRefreshAll = useCallback(() => setRefreshKey((k) => k + 1), []);
 
-  // Save edited tickers
-  const handleSaveTickers = async (tickers: string[]) => {
-    if (editingType === 'global') {
-      await tickerStorage.updateCategoryTickers(editingCategory, tickers);
-    } else {
-      // For regional markets, convert back to {symbol, name} format
-      const tickersWithNames = tickers.map(symbol => ({
-        symbol,
-        name: symbol // Use symbol as name for new tickers, actual names will be fetched from API
-      }));
-      await tickerStorage.updateRegionalTickers(editingCategory, tickersWithNames);
+  const handleOpenEdit = useCallback(async (category: string, type: 'global' | 'regional') => {
+    let tickers: string[] = [];
+    try {
+      if (type === 'global') {
+        tickers = await tickerStorage.getCategoryTickers(category);
+      } else {
+        const regional = await tickerStorage.getRegionalTickers(category);
+        tickers = regional.map((t) => t.symbol);
+      }
+    } catch (err) {
+      console.error('Failed to load tickers:', err);
     }
-    const prefs = await tickerStorage.loadPreferences();
-    setPreferences(prefs);
-    // Refresh the specific category after save
-    setTimeout(() => refreshAllMarkets(), 100);
-  };
+    dispatch({ type: 'OPEN_MODAL', payload: { category, type, tickers } });
+  }, []);
 
-  // Format helpers
-  const formatChange = (value: number) => value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
-  const formatPercent = (value: number) => value >= 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`;
+  const handleSaveTickers = useCallback(async (tickers: string[]) => {
+    const { editModal } = state;
+    const validation = validateSymbolList(tickers);
+    if (!validation.valid) return;
 
-  // Skeleton loading row for global markets (6 columns)
-  const SkeletonRowGlobal = ({ delay = 0 }: { delay?: number }) => (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
-      gap: '4px',
-      padding: '2px 8px',
-      minHeight: '18px',
-      alignItems: 'center',
-      borderBottom: '1px solid rgba(120,120,120,0.3)'
-    }}>
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <div key={i} style={{
-          backgroundColor: 'rgba(120,120,120,0.3)',
-          height: '12px',
-          borderRadius: '2px',
-          animation: 'pulse 1.5s infinite',
-          animationDelay: `${delay + i * 0.1}s`
-        }} />
-      ))}
-    </div>
-  );
-
-  // Skeleton loading row for regional markets (5 columns)
-  const SkeletonRowRegional = ({ delay = 0 }: { delay?: number }) => (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr',
-      gap: '4px',
-      padding: '2px 8px',
-      minHeight: '18px',
-      alignItems: 'center',
-      borderBottom: '1px solid rgba(120,120,120,0.3)'
-    }}>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <div key={i} style={{
-          backgroundColor: 'rgba(120,120,120,0.3)',
-          height: '12px',
-          borderRadius: '2px',
-          animation: 'pulse 1.5s infinite',
-          animationDelay: `${delay + i * 0.1}s`
-        }} />
-      ))}
-    </div>
-  );
-
-  // Get loading state for a specific category
-  const getCategoryLoading = (category: string): boolean => {
-    switch (category) {
-      case 'Stock Indices': return stockIndicesCache.isLoading;
-      case 'Forex': return forexCache.isLoading;
-      case 'Commodities': return commoditiesCache.isLoading;
-      case 'Bonds': return bondsCache.isLoading;
-      case 'ETFs': return etfsCache.isLoading;
-      case 'Cryptocurrencies': return cryptoCache.isLoading;
-      default: return false;
+    try {
+      if (editModal.type === 'global') {
+        await tickerStorage.updateCategoryTickers(editModal.category, validation.sanitized);
+      } else {
+        await tickerStorage.updateRegionalTickers(
+          editModal.category,
+          validation.sanitized.map((s) => ({ symbol: s, name: s }))
+        );
+      }
+      const prefs = await tickerStorage.loadPreferences();
+      dispatch({ type: 'SET_PREFERENCES', payload: prefs });
+      dispatch({ type: 'CLOSE_MODAL' });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      console.error('Failed to save tickers:', err);
     }
-  };
+  }, [state.editModal]);
 
-  // Get loading state for a specific region
-  const getRegionLoading = (region: string): boolean => {
-    switch (region) {
-      case 'India': return indiaCache.isLoading;
-      case 'China': return chinaCache.isLoading;
-      case 'United States': return usCache.isLoading;
-      default: return false;
+  const recordData = useCallback(async () => {
+    if (Object.keys(collectedData).length === 0) return;
+    try {
+      await contextRecorderService.recordApiResponse(
+        'Markets',
+        'market-data',
+        { data: collectedData, timestamp: new Date().toISOString() },
+        `Market Data - ${new Date().toLocaleString()}`,
+        ['markets', 'snapshot']
+      );
+    } catch (err) {
+      console.error('Failed to record:', err);
     }
-  };
+  }, [collectedData]);
 
-  // Create market panel
-  const createMarketPanel = (title: string, quotes: QuoteData[]) => {
-    const isLoading = getCategoryLoading(title);
-    const tickerCount = preferences.globalMarkets.find(m => m.category === title)?.tickers.length || 12;
-
+  // Loading
+  if (!dbInitialized || !state.preferences) {
     return (
-      <div style={{
-        backgroundColor: colors.panel,
-        border: `1px solid ${colors.textMuted}`,
-        flex: '1 1 calc(33.333% - 16px)',
-        minWidth: '300px',
-        maxWidth: '600px',
-        height: '280px',
-        margin: '8px',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        {/* Panel Header with Edit Icon */}
-        <div style={{
-          backgroundColor: colors.background,
-          color: colors.primary,
-          padding: '8px',
-          fontSize: fontSize.subheading,
-          fontWeight: 'bold',
-          textAlign: 'center',
-          borderBottom: `1px solid ${colors.textMuted}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px'
-        }}>
-          {title.toUpperCase()}
-          <Edit2
-            size={14}
-            style={{ cursor: 'pointer', color: colors.text }}
-            onClick={() => openEditModal(title)}
-          />
-        </div>
-
-        {/* Table Header */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
-          gap: '4px',
-          padding: '4px 8px',
+      <div
+        style={{
+          height: '100%',
           backgroundColor: colors.background,
           color: colors.text,
-          fontSize: fontSize.body,
-          fontWeight: 'bold',
-          borderBottom: `1px solid ${colors.textMuted}`
-        }}>
-          <div>{t('symbol')}</div>
-          <div style={{ textAlign: 'right' }}>{t('price')}</div>
-          <div style={{ textAlign: 'right' }}>{t('change')}</div>
-          <div style={{ textAlign: 'right' }}>{t('percentChange')}</div>
-          <div style={{ textAlign: 'right' }}>{t('high')}</div>
-          <div style={{ textAlign: 'right' }}>{t('low')}</div>
-        </div>
-
-        {/* Data Rows */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {isLoading && quotes.length === 0 ? (
-            // Show skeleton loading animation
-            <>
-              {Array.from({ length: tickerCount }).map((_, idx) => (
-                <SkeletonRowGlobal key={idx} delay={idx * 0.05} />
-              ))}
-            </>
-          ) : quotes.length === 0 ? (
-            <div style={{
-              color: colors.textMuted,
-              fontSize: fontSize.body,
-              textAlign: 'center',
-              padding: '16px'
-            }}>
-              {t('noData')}
-            </div>
-          ) : (
-            quotes.map((quote, index) => (
-              <div key={index} style={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
-                gap: '4px',
-                padding: '2px 8px',
-                fontSize: fontSize.small,
-                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
-                borderBottom: `1px solid rgba(120,120,120,0.3)`,
-                minHeight: '18px',
-                alignItems: 'center'
-              }}>
-                <div style={{ color: colors.text }}>{quote.symbol}</div>
-                <div style={{ color: colors.text, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
-                <div style={{
-                  color: quote.change >= 0 ? colors.secondary : colors.alert,
-                  textAlign: 'right'
-                }}>{formatChange(quote.change)}</div>
-                <div style={{
-                  color: quote.change_percent >= 0 ? colors.secondary : colors.alert,
-                  textAlign: 'right'
-                }}>{formatPercent(quote.change_percent)}</div>
-                <div style={{
-                  color: colors.text,
-                  textAlign: 'right'
-                }}>{quote.high ? quote.high.toFixed(2) : '-'}</div>
-                <div style={{
-                  color: colors.text,
-                  textAlign: 'right'
-                }}>{quote.low ? quote.low.toFixed(2) : '-'}</div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Create regional panel
-  const createRegionalPanel = (title: string, quotes: QuoteData[]) => {
-    const regionConfig = preferences.regionalMarkets.find(r => r.region === title);
-    const isLoading = getRegionLoading(title);
-    const tickerCount = regionConfig?.tickers.length || 12;
-
-    return (
-      <div style={{
-        backgroundColor: colors.panel,
-        border: `1px solid ${colors.textMuted}`,
-        flex: '1 1 calc(33.333% - 16px)',
-        minWidth: '300px',
-        maxWidth: '600px',
-        height: '300px',
-        margin: '8px',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        {/* Panel Header with Edit Icon */}
-        <div style={{
-          backgroundColor: colors.background,
-          color: colors.primary,
-          padding: '8px',
-          fontSize: fontSize.subheading,
-          fontWeight: 'bold',
-          textAlign: 'center',
-          borderBottom: `1px solid ${colors.textMuted}`,
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '8px'
-        }}>
-          {title.toUpperCase()} - LIVE DATA
-          <Edit2
-            size={14}
-            style={{ cursor: 'pointer', color: colors.text }}
-            onClick={() => openRegionalEditModal(title)}
-          />
-        </div>
-
-        {/* Table Header */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr',
-          gap: '4px',
-          padding: '4px 8px',
-          backgroundColor: colors.background,
-          color: colors.text,
-          fontSize: fontSize.body,
-          fontWeight: 'bold',
-          borderBottom: `1px solid ${colors.textMuted}`
-        }}>
-          <div>{t('symbol')}</div>
-          <div>{t('name')}</div>
-          <div style={{ textAlign: 'right' }}>{t('price')}</div>
-          <div style={{ textAlign: 'right' }}>{t('change')}</div>
-          <div style={{ textAlign: 'right' }}>{t('percentChange')}</div>
-        </div>
-
-        {/* Data Rows */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {isLoading && quotes.length === 0 ? (
-            // Show skeleton loading animation
-            <>
-              {Array.from({ length: tickerCount }).map((_, idx) => (
-                <SkeletonRowRegional key={idx} delay={idx * 0.05} />
-              ))}
-            </>
-          ) : quotes.length === 0 ? (
-            <div style={{
-              color: colors.textMuted,
-              fontSize: fontSize.body,
-              textAlign: 'center',
-              padding: '16px'
-            }}>
-              {t('noData')}
-            </div>
-          ) : (
-            quotes.map((quote, index) => {
-              const tickerInfo = regionConfig?.tickers.find(t => t.symbol === quote.symbol);
-              return (
-                <div key={index} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr',
-                  gap: '4px',
-                  padding: '2px 8px',
-                  fontSize: fontSize.small,
-                  backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  borderBottom: `1px solid rgba(120,120,120,0.3)`,
-                  minHeight: '18px',
-                  alignItems: 'center'
-                }}>
-                  <div style={{ color: colors.text }}>{quote.symbol}</div>
-                  <div style={{ color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {tickerInfo?.name || quote.symbol}
-                  </div>
-                  <div style={{ color: colors.text, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
-                  <div style={{
-                    color: quote.change >= 0 ? colors.secondary : colors.alert,
-                    textAlign: 'right'
-                  }}>{formatChange(quote.change)}</div>
-                  <div style={{
-                    color: quote.change_percent >= 0 ? colors.secondary : colors.alert,
-                    textAlign: 'right'
-                  }}>{formatPercent(quote.change_percent)}</div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Show loading screen while database initializes
-  if (!dbInitialized) {
-    return (
-      <div style={{
-        height: '100%',
-        backgroundColor: colors.background,
-        color: colors.text,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '20px'
-      }}>
-        <div style={{
-          width: '60px',
-          height: '60px',
-          border: '4px solid #404040',
-          borderTop: '4px solid #ea580c',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }} />
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          @keyframes pulse {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 0.8; }
-          }
-        `}</style>
-        <div style={{ textAlign: 'center', maxWidth: '500px' }}>
-          <h3 style={{ color: '#ea580c', fontSize: '18px', marginBottom: '10px' }}>
-            {t('loading.title', 'Initializing Markets Terminal')}
-          </h3>
-          <p style={{ color: '#a3a3a3', fontSize: '13px', lineHeight: '1.5' }}>
-            {t('loading.description', 'Setting up database and market data connections...')}
-          </p>
-          <p style={{ color: '#787878', fontSize: '11px', marginTop: '10px' }}>
-            {t('loading.note', 'This may take a few moments on first launch')}
-          </p>
-        </div>
+          gap: '20px',
+        }}
+      >
+        {initError ? (
+          <>
+            <AlertCircle size={48} color={colors.alert} />
+            <div style={{ color: colors.alert }}>{initError}</div>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                backgroundColor: colors.primary,
+                color: '#000',
+                border: 'none',
+                padding: '8px 24px',
+                cursor: 'pointer',
+              }}
+            >
+              Reload
+            </button>
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                width: '50px',
+                height: '50px',
+                border: '3px solid #404040',
+                borderTop: '3px solid #ea580c',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+            <div>{t('loading.title', 'Initializing...')}</div>
+          </>
+        )}
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse { 50% { opacity: 0.5; } }`}</style>
       </div>
     );
   }
 
+  const { preferences } = state;
+
   return (
-    <div style={{
-      height: '100%',
-      backgroundColor: colors.background,
-      color: colors.text,
-      fontFamily: fontFamily,
-      fontWeight: fontWeight,
-      fontStyle: fontStyle,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
+    <div
+      style={{
+        height: '100%',
+        backgroundColor: colors.background,
+        color: colors.text,
+        fontFamily,
+        fontWeight,
+        fontStyle,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       <style>{`
-        *::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        *::-webkit-scrollbar-track {
-          background: #1a1a1a;
-        }
-        *::-webkit-scrollbar-thumb {
-          background: #404040;
-          border-radius: 4px;
-        }
-        *::-webkit-scrollbar-thumb:hover {
-          background: #525252;
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.8; }
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 50% { opacity: 0.5; } }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
 
-      {/* Header Bar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        padding: '8px 12px',
-        backgroundColor: colors.panel,
-        borderBottom: `1px solid ${colors.textMuted}`,
-        fontSize: '13px',
-        gap: '8px',
-        flexShrink: 0
-      }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
+          fontSize: '13px',
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT</span>
-          <span style={{ color: colors.text }}>{t('marketTerminalLive')}</span>
+          <span>{t('marketTerminalLive')}</span>
           <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: colors.text, fontSize: '11px' }}>
+          <span style={{ fontSize: '11px' }}>
             {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
           </span>
         </div>
         <button
-          onClick={() => {
-            const tour = createMarketsTabTour();
-            tour.drive();
-          }}
+          onClick={() => createMarketsTabTour().drive()}
           style={{
             backgroundColor: colors.info,
             color: colors.background,
@@ -729,78 +556,65 @@ const MarketsTab: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            borderRadius: '2px'
           }}
-          title="Start interactive tour"
         >
-          <Info size={14} />
-          HELP
+          <Info size={14} /> HELP
         </button>
       </div>
 
-      {/* Control Panel */}
+      {/* Controls */}
       <div
-        id="markets-control-panel"
         style={{
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           padding: '8px 12px',
           backgroundColor: colors.panel,
           borderBottom: `1px solid ${colors.textMuted}`,
-          fontSize: '12px',
           gap: '8px',
-          flexShrink: 0
-        }}>
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
-            id="markets-refresh"
-            onClick={refreshAllMarkets}
-            disabled={isUpdating}
+            onClick={handleRefreshAll}
             style={{
               backgroundColor: colors.primary,
-              color: 'black',
+              color: '#000',
               border: 'none',
               padding: '4px 12px',
               fontSize: '11px',
               fontWeight: 'bold',
-              cursor: isUpdating ? 'wait' : 'pointer',
-              opacity: isUpdating ? 0.7 : 1,
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px'
+              gap: '4px',
             }}
           >
-            <RefreshCw size={12} className={isUpdating ? 'animate-spin' : ''} />
-            {t('refresh')}
+            <RefreshCw size={12} /> {t('refresh')}
           </button>
           <button
-            id="markets-auto-update"
-            onClick={() => setAutoUpdate(!autoUpdate)}
+            onClick={() => dispatch({ type: 'SET_AUTO_UPDATE', payload: !state.autoUpdate })}
             style={{
-              backgroundColor: autoUpdate ? colors.secondary : colors.textMuted,
-              color: 'black',
+              backgroundColor: state.autoUpdate ? colors.secondary : colors.textMuted,
+              color: '#000',
               border: 'none',
               padding: '4px 12px',
               fontSize: '11px',
               fontWeight: 'bold',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
-            {t('auto')} {autoUpdate ? t('on') : t('off')}
+            {t('auto')} {state.autoUpdate ? t('on') : t('off')}
           </button>
           <select
-            id="markets-timeframe"
-            value={updateInterval}
-            onChange={(e) => setUpdateInterval(Number(e.target.value))}
+            value={state.updateInterval}
+            onChange={(e) => dispatch({ type: 'SET_UPDATE_INTERVAL', payload: Number(e.target.value) })}
             style={{
               backgroundColor: colors.background,
               border: `1px solid ${colors.textMuted}`,
               color: colors.text,
               padding: '4px 8px',
               fontSize: '11px',
-              cursor: 'pointer'
             }}
           >
             <option value={600000}>10 min</option>
@@ -808,110 +622,77 @@ const MarketsTab: React.FC = () => {
             <option value={1800000}>30 min</option>
             <option value={3600000}>1 hour</option>
           </select>
-          <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: colors.textMuted, fontSize: '11px' }}>{t('lastUpdate')}:</span>
-          <span style={{ color: colors.text, fontSize: '11px' }}>
-            {lastUpdate.toTimeString().substring(0, 8)}
-          </span>
-          <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '14px' }}>●</span>
-          <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '11px', fontWeight: 'bold' }}>
-            {isUpdating ? t('updating') : t('live')}
-          </span>
         </div>
         <RecordingControlPanel
           tabName="Markets"
-          onRecordingChange={setIsRecording}
-          onRecordingStart={recordCurrentData}
+          onRecordingChange={(r) => dispatch({ type: 'SET_RECORDING', payload: r })}
+          onRecordingStart={recordData}
         />
       </div>
 
-      {/* Main Content */}
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      {/* Content */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
         {/* Global Markets */}
-        <div style={{
-          color: colors.primary,
-          fontSize: '14px',
-          fontWeight: 'bold',
-          marginBottom: '8px',
-          letterSpacing: '0.5px'
-        }}>
+        <div style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
           {t('globalMarkets')}
         </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
-
-        <div
-          id="markets-global-section"
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0',
-            marginBottom: '24px'
-          }}>
-          {preferences.globalMarkets.map(market =>
-            createMarketPanel(market.category, marketData[market.category] || [])
-          )}
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }} />
+        <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '24px' }}>
+          {preferences.globalMarkets.map((m) => (
+            <ErrorBoundary key={`${m.category}-${refreshKey}`} name={m.category} variant="minimal">
+              <MarketPanel
+                title={m.category}
+                tickers={m.tickers}
+                enabled={dbInitialized}
+                refetchInterval={effectiveRefetchInterval}
+                onEdit={() => handleOpenEdit(m.category, 'global')}
+                onDataUpdate={handleDataUpdate(m.category)}
+              />
+            </ErrorBoundary>
+          ))}
         </div>
 
         {/* Regional Markets */}
-        <div style={{
-          color: colors.primary,
-          fontSize: '14px',
-          fontWeight: 'bold',
-          marginBottom: '8px',
-          marginTop: '16px',
-          letterSpacing: '0.5px'
-        }}>
+        <div style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
           {t('regionalMarketsLive')}
         </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
-
-        <div
-          id="markets-regional-section"
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0'
-          }}>
-          {preferences.regionalMarkets.map(market =>
-            createRegionalPanel(market.region, regionalData[market.region] || [])
-          )}
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }} />
+        <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+          {preferences.regionalMarkets.map((m) => {
+            const names = Object.fromEntries(m.tickers.map((t) => [t.symbol, t.name]));
+            return (
+              <ErrorBoundary key={`${m.region}-${refreshKey}`} name={m.region} variant="minimal">
+                <MarketPanel
+                  title={m.region}
+                  tickers={m.tickers.map((t) => t.symbol)}
+                  tickerNames={names}
+                  enabled={dbInitialized}
+                  refetchInterval={effectiveRefetchInterval}
+                  onEdit={() => handleOpenEdit(m.region, 'regional')}
+                  onDataUpdate={handleDataUpdate(m.region)}
+                  showName
+                />
+              </ErrorBoundary>
+            );
+          })}
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* Footer */}
       <TabFooter
         tabName="LIVE MARKETS"
-        leftInfo={[
-          { label: 'Data provided by Yahoo Finance API', color: colors.textMuted },
-          { label: 'Real-time updates', color: colors.textMuted },
-        ]}
-        statusInfo={
-          <span style={{ whiteSpace: 'nowrap' }}>
-            Connected: {Object.keys(regionalData).length} regional markets
-            {dbInitialized && (
-              <span style={{ marginLeft: '8px', color: colors.secondary }}>
-                | Cache: ENABLED
-              </span>
-            )}
-          </span>
-        }
+        leftInfo={[{ label: 'Yahoo Finance API', color: colors.textMuted }]}
+        statusInfo={`${preferences.regionalMarkets.length} regional markets | Cache: ENABLED`}
         backgroundColor={colors.panel}
         borderColor={colors.textMuted}
       />
 
       {/* Edit Modal */}
       <TickerEditModal
-        isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        title={editingCategory}
-        tickers={editingTickers}
+        isOpen={state.editModal.isOpen}
+        onClose={() => dispatch({ type: 'CLOSE_MODAL' })}
+        title={state.editModal.category}
+        tickers={state.editModal.tickers}
         onSave={handleSaveTickers}
       />
     </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { notesService, Note } from './notesService';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 
 class NoteReminderService {
   private checkInterval: NodeJS.Timeout | null = null;
@@ -67,87 +67,49 @@ class NoteReminderService {
    * Show a toast notification for a note reminder
    */
   private showReminderNotification(note: Note) {
-    const priorityEmoji = this.getPriorityEmoji(note.priority);
-    const sentimentEmoji = this.getSentimentEmoji(note.sentiment);
+    const metadata = [
+      { label: 'Category', value: note.category },
+      { label: 'Priority', value: note.priority, color: this.getPriorityColor(note.priority) },
+      { label: 'Sentiment', value: note.sentiment },
+    ];
 
-    toast(
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ fontWeight: 700, fontSize: '13px', color: '#FF8800' }}>
-          {priorityEmoji} NOTE REMINDER
-        </div>
-        <div style={{ fontSize: '12px', fontWeight: 600 }}>
-          {note.title}
-        </div>
-        <div style={{ fontSize: '10px', color: '#999', display: 'flex', gap: '8px' }}>
-          <span>{sentimentEmoji} {note.sentiment}</span>
-          <span>•</span>
-          <span>{note.category}</span>
-          {note.tickers && (
-            <>
-              <span>•</span>
-              <span style={{ color: '#00E5FF' }}>{note.tickers}</span>
-            </>
-          )}
-        </div>
-        {note.content && (
-          <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px', lineHeight: '1.4' }}>
-            {note.content.substring(0, 100)}{note.content.length > 100 ? '...' : ''}
-          </div>
-        )}
-      </div>,
-      {
-        duration: 10000, // Show for 10 seconds
-        position: 'top-right',
-        className: 'note-reminder-toast',
-        style: {
-          backgroundColor: '#1A1A1A',
-          border: '2px solid #FF8800',
-          borderRadius: '4px',
-          padding: '12px',
-          boxShadow: '0 4px 16px rgba(255, 136, 0, 0.3)'
-        },
-        action: {
+    if (note.tickers) {
+      metadata.push({ label: 'Tickers', value: note.tickers, color: '#00E5FF' });
+    }
+
+    toast.custom({
+      type: 'warning',
+      header: { label: 'Note Reminder' },
+      message: `${note.title}${note.content ? '\n\n' + note.content.substring(0, 100) + (note.content.length > 100 ? '...' : '') : ''}`,
+      metadata,
+      actions: [
+        {
           label: 'View',
           onClick: () => {
-            // Emit custom event to open the note
             window.dispatchEvent(new CustomEvent('openNote', { detail: { noteId: note.id } }));
-          }
-        }
-      }
-    );
+          },
+        },
+      ],
+      duration: 10000,
+      borderColor: '#FF8800',
+    });
 
     console.log(`[NoteReminderService] Showed reminder for note: ${note.title}`);
   }
 
   /**
-   * Get emoji for priority level
+   * Get color for priority level
    */
-  private getPriorityEmoji(priority: string): string {
+  private getPriorityColor(priority: string): string {
     switch (priority) {
       case 'HIGH':
-        return '🔴';
+        return '#FF3B3B';
       case 'MEDIUM':
-        return '🟡';
+        return '#FFD700';
       case 'LOW':
-        return '🟢';
+        return '#00D66F';
       default:
-        return '';
-    }
-  }
-
-  /**
-   * Get emoji for sentiment
-   */
-  private getSentimentEmoji(sentiment: string): string {
-    switch (sentiment) {
-      case 'BULLISH':
-        return '📈';
-      case 'BEARISH':
-        return '📉';
-      case 'NEUTRAL':
-        return '➡️';
-      default:
-        return '📊';
+        return '#787878';
     }
   }
 

@@ -14,6 +14,8 @@ import { HyperLiquidLeverageControl } from '../../exchange-specific/hyperliquid'
 import type { UnifiedOrderRequest } from '../../types';
 import type { OrderType, OrderSide } from '../../../../../brokers/crypto/types';
 import { validateOrder, formatValidationErrors } from '../../utils/orderValidation';
+import { OrderConfirmationDialog } from '../../../../../components/common/OrderConfirmationDialog';
+import { toast } from '../../../../../components/ui/terminal-toast';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -46,6 +48,7 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
   const [side, setSide] = useState<OrderSide>('buy');
   const [orderData, setOrderData] = useState<Partial<UnifiedOrderRequest>>({});
   const [validationError, setValidationError] = useState<string>('');
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Calculate position quantity for the current symbol (for sell orders)
   const positionQuantity = useMemo(() => {
@@ -82,23 +85,24 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
     const validation = validateOrder(completeOrder, capabilities, balance, currentPrice);
 
     if (!validation.valid) {
-      setValidationError(formatValidationErrors(validation.errors));
+      const errorMsg = formatValidationErrors(validation.errors);
+      setValidationError(errorMsg);
+      toast.error(errorMsg, {
+        metadata: [
+          { label: 'Symbol', value: symbol },
+          { label: 'Type', value: orderType.toUpperCase() },
+        ],
+      });
       return;
     }
 
-    // Confirm before placing order
-    const confirmMsg = `Place ${orderType.toUpperCase()} ${side.toUpperCase()} order?\n\n` +
-      `Symbol: ${symbol}\n` +
-      `Quantity: ${orderData.quantity}\n` +
-      (orderType === 'limit' ? `Price: ${orderData.price}\n` : '') +
-      `Total: ${((orderData.quantity || 0) * (orderData.price || currentPrice)).toFixed(2)} USD`;
+    // Show confirmation dialog
+    setShowConfirmDialog(true);
+  };
 
-    const confirmed = confirm(confirmMsg);
-    if (!confirmed) {
-      // User cancelled - properly handle cancellation without calling placeOrder
-      console.log('[EnhancedOrderForm] Order cancelled by user');
-      return;
-    }
+  // Handle confirmed order placement
+  const handleConfirmOrder = async () => {
+    setShowConfirmDialog(false);
 
     try {
       await placeOrder(completeOrder);
@@ -117,10 +121,28 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
         onOrderPlaced();
       }
 
-      alert(`[OK] Order placed: ${side.toUpperCase()} ${orderData.quantity} ${symbol.split('/')[0]}`);
+      // Show success notification
+      toast.success(`Order placed successfully`, {
+        metadata: [
+          { label: 'Side', value: side.toUpperCase(), color: side === 'buy' ? '#00D66F' : '#FF3B3B' },
+          { label: 'Symbol', value: symbol },
+          { label: 'Quantity', value: String(orderData.quantity) },
+          { label: 'Total', value: `$${((orderData.quantity || 0) * (orderData.price || currentPrice)).toFixed(2)}` },
+        ],
+        duration: 10000,
+      });
     } catch (err) {
       const error = err as Error;
       setValidationError(error.message);
+
+      // Show error notification
+      toast.error(`Order failed: ${error.message}`, {
+        metadata: [
+          { label: 'Symbol', value: symbol },
+          { label: 'Type', value: orderType.toUpperCase() },
+        ],
+        duration: 15000,
+      });
     }
   };
 
@@ -301,6 +323,21 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
       >
         {isPlacing ? '⟳ PLACING ORDER...' : `${side.toUpperCase()} ${symbol.split('/')[0]}`}
       </button>
+
+      {/* Order Confirmation Dialog */}
+      <OrderConfirmationDialog
+        isOpen={showConfirmDialog}
+        onConfirm={handleConfirmOrder}
+        onCancel={() => setShowConfirmDialog(false)}
+        orderDetails={{
+          side,
+          type: orderType,
+          symbol,
+          quantity: orderData.quantity || 0,
+          price: orderType !== 'market' ? orderData.price : undefined,
+          total: (orderData.quantity || 0) * (orderData.price || currentPrice),
+        }}
+      />
     </div>
   );
 }

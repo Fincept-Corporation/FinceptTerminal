@@ -108,20 +108,14 @@ export class UserApiService {
   // ========================
 
   static async getUserSubscription(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/payment/subscription', 'GET', apiKey);
+    return makeApiRequest('/cashfree/subscription', 'GET', apiKey);
   }
 
   static async getUsageDetails(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/payment/usage', 'GET', apiKey);
+    return makeApiRequest('/cashfree/usage', 'GET', apiKey);
   }
 
-  static async cancelSubscription(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/payment/cancel', 'POST', apiKey);
-  }
 
-  static async reactivateSubscription(apiKey: string): Promise<ApiResponse> {
-    return makeApiRequest('/payment/reactivate', 'POST', apiKey);
-  }
 
   static async getPaymentHistory(apiKey: string, page: number = 1, limit: number = 10): Promise<ApiResponse> {
     return makeApiRequest(`/payment/payments?page=${page}&limit=${limit}`, 'GET', apiKey);

@@ -5,6 +5,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { Screen } from '../../App';
+import { showInfo } from '@/utils/notifications';
 
 interface HelpScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -148,7 +149,7 @@ const HelpScreen: React.FC<HelpScreenProps> = ({ onNavigate }) => {
           </button>
 
           <Button
-            onClick={() => alert('Opening live chat...')}
+            onClick={() => showInfo('Opening live chat...')}
             className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/50 text-blue-400 px-3 py-1 text-xs font-normal transition-colors"
           >
             Live Chat

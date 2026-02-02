@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { notesService, Note, NoteTemplate } from '@/services/core/notesService';
 import { noteReminderService } from '@/services/core/noteReminderService.tsx';
 import { toast } from 'sonner';
+import { showConfirm, showError } from '@/utils/notifications';
 import type { NoteStatistics, UpcomingReminder, FilterState } from '../types';
 
 export interface UseNotesReturn {
@@ -175,7 +176,14 @@ export function useNotes(): UseNotesReturn {
 
   // Delete note
   const handleDeleteNote = useCallback(async (id: number) => {
-    if (!confirm('Are you sure you want to delete this note?')) return;
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      {
+        title: 'Delete this note?',
+        type: 'danger'
+      }
+    );
+    if (!confirmed) return;
 
     try {
       await notesService.deleteNote(id);
@@ -186,7 +194,7 @@ export function useNotes(): UseNotesReturn {
       }
     } catch (error) {
       console.error('[useNotes] Failed to delete note:', error);
-      alert('Failed to delete note');
+      showError('Failed to delete note');
     }
   }, [loadNotes, loadStatistics, selectedNote]);
 

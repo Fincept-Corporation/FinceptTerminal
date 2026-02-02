@@ -1,6 +1,7 @@
 // RSS Feed Settings Modal - Allows users to manage their RSS news sources
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Check, X, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
+import { showConfirm } from '@/utils/notifications';
 import {
   getUserRSSFeeds,
   getDefaultFeeds,
@@ -195,7 +196,11 @@ const RSSFeedSettingsModal: React.FC<RSSFeedSettingsModalProps> = ({
   };
 
   const handleDeleteFeed = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this RSS feed?')) return;
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      { title: 'Delete this RSS feed?', type: 'danger' }
+    );
+    if (!confirmed) return;
     try {
       await deleteUserRSSFeed(id);
       await loadFeeds();

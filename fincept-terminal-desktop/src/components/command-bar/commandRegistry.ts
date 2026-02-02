@@ -164,6 +164,15 @@ export const COMMANDS: Command[] = [
     keywords: ['derivatives', 'options', 'futures', 'pricing']
   },
   {
+    id: 'altinv',
+    name: 'Alternative Investments',
+    description: 'Alternative investment analysis (22 analyzers)',
+    aliases: ['altinv', 'alt', 'alternatives', 'alts'],
+    category: 'navigation',
+    action: 'alternative-investments',
+    keywords: ['alternative', 'investments', 'hedge', 'private', 'real estate', 'bonds', 'commodities', 'annuities']
+  },
+  {
     id: 'econ',
     name: 'Economics',
     description: 'Economic indicators',

@@ -1,9 +1,11 @@
 // Forum Tab - Main Component
 // Redesigned to follow Fincept Terminal UI Design System
+// Uses: State machine (via hooks), cleanup, error boundaries
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { APP_VERSION } from '@/constants/version';
 import { MessageSquare, Users, TrendingUp, RefreshCw, Plus, Search as SearchIcon, User, Shield } from 'lucide-react';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 // Local imports
 import { useForum } from './hooks/useForum';
@@ -41,6 +43,7 @@ const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
 
 const ForumTab: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const mountedRef = useRef(true);
 
   // Forum data and actions
   const forum = useForum({ colors: FINCEPT });
@@ -48,9 +51,21 @@ const ForumTab: React.FC = () => {
   // Modal states
   const modals = useForumModals({ colors: FINCEPT });
 
-  // Update time every second
+  // Cleanup on unmount
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Update time every second with cleanup
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (mountedRef.current) {
+        setCurrentTime(new Date());
+      }
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -326,36 +341,42 @@ const ForumTab: React.FC = () => {
       {/* Main Content - Three Panel Layout */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Left Panel - Stats & Quick Info */}
-        <LeftPanel
-          colors={FINCEPT}
-          categories={forum.categories}
-          activeCategory={forum.activeCategory}
-          onCategoryChange={forum.setActiveCategory}
-          onViewUserProfile={handleViewUserProfile}
-          forumStats={forum.forumStats}
-          totalPosts={forum.totalPosts}
-          postsToday={forum.postsToday}
-          onlineUsers={forum.onlineUsers}
-        />
+        <ErrorBoundary name="ForumLeftPanel" variant="minimal">
+          <LeftPanel
+            colors={FINCEPT}
+            categories={forum.categories}
+            activeCategory={forum.activeCategory}
+            onCategoryChange={forum.setActiveCategory}
+            onViewUserProfile={handleViewUserProfile}
+            forumStats={forum.forumStats}
+            totalPosts={forum.totalPosts}
+            postsToday={forum.postsToday}
+            onlineUsers={forum.onlineUsers}
+          />
+        </ErrorBoundary>
 
         {/* Center Panel - Posts List */}
-        <CenterPanel
-          colors={FINCEPT}
-          activeCategory={forum.activeCategory}
-          sortBy={forum.sortBy}
-          onSortChange={forum.setSortBy}
-          filteredPosts={forum.filteredPosts}
-          isLoading={forum.isLoading}
-          onViewPost={handleViewPost}
-        />
+        <ErrorBoundary name="ForumCenterPanel" variant="minimal">
+          <CenterPanel
+            colors={FINCEPT}
+            activeCategory={forum.activeCategory}
+            sortBy={forum.sortBy}
+            onSortChange={forum.setSortBy}
+            filteredPosts={forum.filteredPosts}
+            isLoading={forum.isLoading}
+            onViewPost={handleViewPost}
+          />
+        </ErrorBoundary>
 
         {/* Right Panel - Trending & Activity */}
-        <RightPanel
-          colors={FINCEPT}
-          trendingTopics={forum.trendingTopics}
-          recentActivity={forum.recentActivity}
-          forumPosts={forum.forumPosts}
-        />
+        <ErrorBoundary name="ForumRightPanel" variant="minimal">
+          <RightPanel
+            colors={FINCEPT}
+            trendingTopics={forum.trendingTopics}
+            recentActivity={forum.recentActivity}
+            forumPosts={forum.forumPosts}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Status Bar */}

@@ -1,36 +1,4 @@
-"""
-Alternative Investments Data Handler Module
-============================================
-
-Multi-source data ingestion and standardization platform for alternative investments.
-Handles data validation, quality assessment, and transformation from various formats
-including CSV, JSON, and API sources. Ensures CFA Institute compliance for data
-integrity and processing across private equity, hedge funds, real estate, and digital assets.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Market data files (CSV, JSON, Excel) from multiple providers
-  - Alternative investment fund performance data
-  - Private equity/hedge fund cash flow statements
-  - Real estate valuation and income data
-  - Digital asset blockchain data and exchange feeds
-  - Economic indicators and benchmark data
-
-OUTPUT:
-  - Validated and standardized pandas DataFrames
-  - Data quality reports and anomaly detection
-  - Cleaned time series with consistent formatting
-  - Performance metrics and attribution data
-  - Portfolio holdings and transaction records
-
-PARAMETERS:
-  - data_quality_threshold: Minimum data quality score (default: 0.85)
-  - max_missing_percentage: Maximum allowed missing data (default: 0.15)
-  - validation_rules: Data validation rule sets (default: strict)
-  - currency_base: Base currency for conversion (default: 'USD')
-  - frequency: Data frequency standardization (default: 'monthly')
-  - outlier_detection: Outlier detection method (default: 'iqr')
-"""
+"""data_handler Module"""
 
 import pandas as pd
 import numpy as np

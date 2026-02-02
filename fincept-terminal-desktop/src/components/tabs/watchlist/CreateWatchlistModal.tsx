@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FINCEPT, FONT_FAMILY, WATCHLIST_COLORS } from './utils';
+import { showWarning, showError } from '@/utils/notifications';
 
 interface CreateWatchlistModalProps {
   onClose: () => void;
@@ -17,7 +18,7 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      alert('Please enter a watchlist name');
+      showWarning('Please enter a watchlist name');
       return;
     }
     setLoading(true);
@@ -26,7 +27,7 @@ const CreateWatchlistModal: React.FC<CreateWatchlistModalProps> = ({ onClose, on
       onClose();
     } catch (error) {
       console.error('Error creating watchlist:', error);
-      alert('Failed to create watchlist');
+      showError('Failed to create watchlist');
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 // CryptoTickerBar.tsx - Ticker/Price Bar for Crypto Trading
-import React from 'react';
+// Uses ref-based DOM updates for high-frequency price changes to prevent flickering
+import React, { useRef, useEffect, memo } from 'react';
 import { TrendingUp as ArrowUp, TrendingDown as ArrowDown, ChevronDown } from 'lucide-react';
 import { FINCEPT } from '../constants';
 import type { TickerData } from '../types';
@@ -35,13 +36,71 @@ export function CryptoTickerBar({
   onSearchQueryChange,
   onSymbolDropdownToggle,
 }: CryptoTickerBarProps) {
-  const currentPrice = tickerData?.last || tickerData?.price || 0;
+  // Refs for direct DOM updates - prevents flickering on rapid price changes
+  const priceRef = useRef<HTMLSpanElement>(null);
+  const changeRef = useRef<HTMLDivElement>(null);
+  const bidRef = useRef<HTMLDivElement>(null);
+  const askRef = useRef<HTMLDivElement>(null);
+  const rangeRef = useRef<HTMLDivElement>(null);
+  const highRef = useRef<HTMLDivElement>(null);
+  const lowRef = useRef<HTMLDivElement>(null);
+  const volumeRef = useRef<HTMLDivElement>(null);
 
-  // Calculate 24h price range (High - Low)
-  const spread24h = (tickerData?.high && tickerData?.low) ? (tickerData.high - tickerData.low) : 0;
-  const spread24hPercent = (spread24h > 0 && tickerData?.low && tickerData.low > 0)
-    ? ((spread24h / tickerData.low) * 100)
-    : 0;
+  // Update price display via DOM to avoid React re-render flicker
+  useEffect(() => {
+    const currentPrice = tickerData?.last || tickerData?.price || 0;
+    const spread24h = (tickerData?.high && tickerData?.low) ? (tickerData.high - tickerData.low) : 0;
+    const spread24hPercent = (spread24h > 0 && tickerData?.low && tickerData.low > 0)
+      ? ((spread24h / tickerData.low) * 100)
+      : 0;
+
+    // Update main price
+    if (priceRef.current) {
+      priceRef.current.textContent = tickerData
+        ? `$${currentPrice?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`
+        : '--';
+    }
+
+    // Update change display
+    if (changeRef.current && tickerData) {
+      const arrow = priceChange >= 0 ? '▲' : '▼';
+      const sign = priceChange >= 0 ? '+' : '';
+      changeRef.current.innerHTML = `<span style="color: ${priceChange >= 0 ? FINCEPT.GREEN : FINCEPT.RED}">${arrow} ${sign}${priceChange.toFixed(2)} (${sign}${priceChangePercent.toFixed(2)}%)</span>`;
+    }
+
+    // Update bid/ask
+    if (bidRef.current) {
+      bidRef.current.textContent = tickerData?.bid ? `$${tickerData.bid.toFixed(2)}` : '--';
+    }
+    if (askRef.current) {
+      askRef.current.textContent = tickerData?.ask ? `$${tickerData.ask.toFixed(2)}` : '--';
+    }
+
+    // Update range
+    if (rangeRef.current) {
+      rangeRef.current.textContent = spread24h > 0 ? `$${spread24h.toFixed(2)} (${spread24hPercent.toFixed(2)}%)` : '--';
+    }
+
+    // Update high/low
+    if (highRef.current) {
+      highRef.current.textContent = tickerData?.high ? `$${tickerData.high.toFixed(2)}` : '--';
+    }
+    if (lowRef.current) {
+      lowRef.current.textContent = tickerData?.low ? `$${tickerData.low.toFixed(2)}` : '--';
+    }
+
+    // Update volume
+    if (volumeRef.current && tickerData?.volume) {
+      const volText = tickerData.quoteVolume
+        ? `$${tickerData.quoteVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+        : currentPrice > 0
+          ? `$${(tickerData.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+          : `${tickerData.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${selectedSymbol.split('/')[0]}`;
+      volumeRef.current.textContent = volText;
+    } else if (volumeRef.current) {
+      volumeRef.current.textContent = '--';
+    }
+  }, [tickerData, priceChange, priceChangePercent, selectedSymbol]);
 
   return (
     <div style={{
@@ -140,79 +199,46 @@ export function CryptoTickerBar({
         )}
       </div>
 
-      {/* Price Display */}
+      {/* Price Display - Uses refs for flicker-free updates */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-        <span style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.YELLOW, willChange: 'contents', transition: 'none' }}>
-          {tickerData ? `$${currentPrice?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}` : '--'}
+        <span
+          ref={priceRef}
+          style={{ fontSize: '24px', fontWeight: 700, color: FINCEPT.YELLOW }}
+        >
+          --
         </span>
-        {tickerData && (priceChange !== 0 || priceChangePercent !== 0) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {priceChange >= 0 ? (
-              <ArrowUp size={16} color={FINCEPT.GREEN} />
-            ) : (
-              <ArrowDown size={16} color={FINCEPT.RED} />
-            )}
-            <span style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: priceChange >= 0 ? FINCEPT.GREEN : FINCEPT.RED
-            }}>
-              {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%)
-            </span>
-          </div>
-        )}
-        {tickerData && priceChange === 0 && priceChangePercent === 0 && (
-          <div style={{ fontSize: '11px', color: FINCEPT.GRAY, fontStyle: 'italic' }}>
-            No change data
-          </div>
-        )}
+        <div ref={changeRef} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600 }}>
+          {/* Updated via ref */}
+        </div>
       </div>
 
       <div style={{ height: '24px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
-      {/* Market Stats */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '11px', willChange: 'contents' }}>
+      {/* Market Stats - Uses refs for flicker-free updates */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '11px' }}>
         <div style={{ minWidth: '60px' }}>
           <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
-          <div style={{ color: FINCEPT.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-            {tickerData?.bid ? `$${tickerData.bid.toFixed(2)}` : '--'}
-          </div>
+          <div ref={bidRef} style={{ color: FINCEPT.GREEN, fontWeight: 600 }}>--</div>
         </div>
         <div style={{ minWidth: '60px' }}>
           <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
-          <div style={{ color: FINCEPT.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-            {tickerData?.ask ? `$${tickerData.ask.toFixed(2)}` : '--'}
-          </div>
+          <div ref={askRef} style={{ color: FINCEPT.RED, fontWeight: 600 }}>--</div>
         </div>
         <div style={{ minWidth: '120px' }}>
           <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H RANGE</div>
-          <div style={{ color: FINCEPT.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-            {spread24h > 0 ? `$${spread24h.toFixed(2)} (${spread24hPercent.toFixed(2)}%)` : '--'}
-          </div>
+          <div ref={rangeRef} style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>--</div>
         </div>
         <div style={{ minWidth: '80px' }}>
           <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H HIGH</div>
-          <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-            {tickerData?.high ? `$${tickerData.high.toFixed(2)}` : '--'}
-          </div>
+          <div ref={highRef} style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>--</div>
         </div>
         <div style={{ minWidth: '80px' }}>
           <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H LOW</div>
-          <div style={{ color: FINCEPT.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-            {tickerData?.low ? `$${tickerData.low.toFixed(2)}` : '--'}
-          </div>
+          <div ref={lowRef} style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>--</div>
         </div>
         <div style={{ minWidth: '100px' }}>
           <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H VOLUME</div>
-          <div style={{ color: FINCEPT.PURPLE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-            {tickerData?.volume ? (
-              tickerData.quoteVolume
-                ? `$${tickerData.quoteVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                : currentPrice > 0
-                  ? `$${(tickerData.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                  : `${tickerData.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${selectedSymbol.split('/')[0]}`
-            ) : '--'}
-          </div>
+          <div ref={volumeRef} style={{ color: FINCEPT.PURPLE, fontWeight: 600 }}>--</div>
         </div>
       </div>
 

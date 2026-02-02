@@ -1,35 +1,4 @@
-"""
-Alternative Investment Risk Analyzer Module
-==========================================
-
-Comprehensive risk management framework for alternative investments including VaR analysis, stress testing, correlation analysis, liquidity risk assessment, and portfolio-level risk analytics. Implements CFA Institute standard risk measurement methodologies.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Historical return series for alternative investments
-  - Market data and price histories
-  - Trading volumes and market capitalization data
-  - Bid-ask spreads and liquidity metrics
-  - Factor returns for multi-factor risk models
-  - Portfolio weights and asset classifications
-
-OUTPUT:
-  - Value at Risk (VaR) calculations using multiple methods
-  - Conditional VaR and tail risk analysis
-  - Stress testing and scenario analysis results
-  - Correlation matrices and diversification metrics
-  - Liquidity risk assessment and scoring
-  - Portfolio-level risk attribution and budgeting
-
-PARAMETERS:
-  - confidence_levels: VaR confidence levels - default: [0.01, 0.05, 0.10]
-  - rolling_window: Window size for rolling correlations - default: 60
-  - asset_class: Asset class for specific risk scenarios
-  - portfolio_weights: Portfolio allocation weights
-  - stress_scenarios: Custom stress scenario parameters
-  - target_risk_budgets: Risk budget allocations by asset
-  - num_simulations: Number of Monte Carlo simulations - default: 1000
-"""
+"""risk_analyzer Module"""
 
 import numpy as np
 import pandas as pd

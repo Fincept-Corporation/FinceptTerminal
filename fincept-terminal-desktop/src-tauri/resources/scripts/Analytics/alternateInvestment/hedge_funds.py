@@ -1,38 +1,4 @@
-"""
-Hedge Fund Analytics Module
-==========================
-
-Comprehensive analysis framework for hedge fund investments across all major strategies including long/short equity, market neutral, event-driven, relative value, and opportunistic approaches. Provides performance measurement, risk assessment, and fee structure analysis.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Historical NAV and performance data for hedge funds
-  - Strategy classification and exposure information
-  - Gross and net exposure levels
-  - Leverage and portfolio composition data
-  - Management and performance fee structures
-  - Redemption terms and liquidity constraints
-
-OUTPUT:
-  - Strategy-specific performance metrics and analytics
-  - Risk-adjusted return calculations (Sharpe, Sortino, etc.)
-  - Factor exposure analysis and attribution
-  - Fee structure impact analysis
-  - Liquidity risk assessment
-  - Portfolio diversification analysis
-
-PARAMETERS:
-  - strategy: Hedge fund strategy type (LONG_SHORT_EQUITY, MARKET_NEUTRAL, etc.)
-  - gross_exposure: Total gross exposure percentage
-  - net_exposure: Net market exposure percentage
-  - leverage: Leverage multiple - default: 1.0
-  - management_fee: Annual management fee rate
-  - performance_fee: Performance fee rate (typically 20%)
-  - hurdle_rate: Performance hurdle rate - default: Config.HF_HURDLE_RATE_DEFAULT
-  - high_water_mark: High water mark level - default: 100
-  - redemption_frequency: Redemption frequency (daily, weekly, monthly, quarterly, annual)
-  - lock_up_period: Lock-up period in months - default: 12
-"""
+"""hedge_funds Module"""
 
 import numpy as np
 import pandas as pd
@@ -53,7 +19,21 @@ logger = logging.getLogger(__name__)
 class HedgeFundAnalyzer(AlternativeInvestmentBase):
     """
     Comprehensive hedge fund analysis across all strategies
+
     CFA Standards: Performance analysis, risk metrics, factor models
+
+    Key Findings on Hedge Funds:
+    - Survivorship bias inflates reported returns (~3-5% annually)
+    - Backfill bias adds another 1-2% false outperformance
+    - Selection bias: Only successful funds report data
+    - High fees (2/20) eat returns
+    - Illiquidity and lock-ups
+    - Lack of transparency
+    - Capacity constraints
+    - Style drift
+
+    Analysis Verdict: "THE BAD" - Avoid for most investors
+    Rating: 2/10 - Access, cost, and data quality issues fatal
     """
 
     def __init__(self, parameters: AssetParameters):
@@ -512,6 +492,86 @@ class HedgeFundAnalyzer(AlternativeInvestmentBase):
             "liquidity_profile": self.liquidity_analysis()
         }
 
+    def analysis_verdict(self) -> Dict[str, Any]:
+        """
+        Analytical verdict on Hedge Funds
+
+        Category: "THE BAD"
+        """
+        return {
+            'strategy': 'Hedge Funds',
+            'category': 'THE BAD',
+            'rating': '2/10',
+            'analysis_summary': 'Fatal flaws: Biases, fees, illiquidity, lack of transparency',
+            'key_problems': [
+                'SURVIVORSHIP BIAS: Dead funds disappear from databases (3-5% annual bias)',
+                'BACKFILL BIAS: Only add successful track records (1-2% bias)',
+                'SELECTION BIAS: Only successful funds report (unknown magnitude)',
+                'HIGH FEES: 2% mgmt + 20% performance eats returns',
+                'ILLIQUIDITY: Lock-ups, redemption restrictions',
+                'LACK OF TRANSPARENCY: Black box strategies',
+                'CAPACITY CONSTRAINTS: Best managers close to new money',
+                'STYLE DRIFT: Managers chase performance, deviate from strategy',
+                'SURVIVORSHIP: ~10% of funds die annually'
+            ],
+            'data_quality_issues': {
+                'survivorship_bias': '3-5% annual overstatement',
+                'backfill_bias': '1-2% annual overstatement',
+                'selection_bias': 'Unknown but significant',
+                'total_bias_estimate': '5-8% annual false outperformance',
+                'analysis_conclusion': 'Reported returns are fantasy, not reality'
+            },
+            'fee_impact': {
+                '2_and_20_structure': {
+                    'management_fee': '2% of AUM',
+                    'performance_fee': '20% of profits',
+                    'hurdle_rate': 'Often none or very low',
+                    'example': 'On 10% gross return: 2% mgmt + 1.6% perf = 3.6% total fee',
+                    'net_return': '6.4% after fees on 10% gross'
+                },
+                'long_term_impact': 'Fees compound to destroy wealth over decades',
+                'key_insight': '"The only people getting rich from hedge funds are the hedge fund managers"'
+            },
+            'access_issues': {
+                'minimum_investment': '$1M-$5M typical',
+                'accredited_investor_only': True,
+                'lock_up_periods': '1-3 years common',
+                'redemption_restrictions': 'Quarterly at best, often annually',
+                'gates': 'Can refuse redemptions during stress',
+                'analysis_note': 'Illiquidity premium not compensated'
+            },
+            'ltcm_case_study': {
+                'fund': 'Long-Term Capital Management',
+                'managers': 'Nobel Prize winners + Wall Street legends',
+                'strategy': 'Fixed income arbitrage',
+                'outcome': 'Spectacular collapse in 1998',
+                'loss': '>$4 billion',
+                'bailout': 'Fed-organized rescue',
+                'key_lesson': 'Even genius managers fail; leverage kills'
+            },
+            'alternatives_to_hedge_funds': [
+                'Low-cost index funds (broad diversification)',
+                'Factor-based strategies (value, momentum, quality)',
+                'Managed futures (liquid, transparent)',
+                'REITs for diversification',
+                'TIPS for inflation protection',
+                'Just hold stocks + bonds'
+            ],
+            'who_might_use': [
+                'Ultra-wealthy with access to truly elite managers',
+                'Investors who can afford illiquidity',
+                'Institutional investors with due diligence resources'
+            ],
+            'analysis_recommendation': 'AVOID - Not worth the cost, risk, and complexity',
+            'key_insights': [
+                '"Hedge funds are the triumph of marketing over substance"',
+                '"The only certainty with hedge funds is high fees"',
+                '"After fees and biases, hedge funds don\'t beat a simple 60/40 portfolio"',
+                '"Hedge funds: Expensive, illiquid, opaque, and underperforming"'
+            ],
+            'bottom_line': 'Biases make performance data unreliable; fees make real returns poor; illiquidity makes them unsuitable for most'
+        }
+
 
 class HedgeFundPortfolio:
     """
@@ -610,7 +670,6 @@ class HedgeFundPortfolio:
             return Decimal('0')
 
         return numerator / denominator
-
 
 # Export main components
 __all__ = ['HedgeFundAnalyzer', 'HedgeFundPortfolio']

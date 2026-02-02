@@ -1431,7 +1431,7 @@ export class TradingToolkitPlugin extends BasePlugin<Time> {
     }
   }
 
-  private completeDrawing(): void {
+  private async completeDrawing(): Promise<void> {
     if (!this.currentTool || !this.toolkitPrimitive) return;
 
     const drawing: DrawingObject = {
@@ -1454,7 +1454,12 @@ export class TradingToolkitPlugin extends BasePlugin<Time> {
 
     // For text-based annotations, prompt for text input
     if (this.currentTool === DrawingTool.TEXT || this.currentTool === DrawingTool.CALLOUT) {
-      const text = prompt('Enter annotation text:');
+      // Import showPrompt dynamically to avoid circular dependencies
+      const { showPrompt } = await import('@/utils/notifications');
+      const text = await showPrompt('Enter annotation text:', {
+        title: 'Add Annotation',
+        placeholder: 'Type your annotation here...'
+      });
       if (text) {
         drawing.data = { text };
       } else {

@@ -229,16 +229,25 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   }
 
   /**
-   * Validate access token
+   * Validate access token by calling getProfile API
    */
   private async validateToken(token: string): Promise<boolean> {
     try {
-      const response = await invoke<{ success: boolean }>('angelone_validate_token', {
+      const response = await invoke<{ success: boolean; error?: string }>('angelone_validate_token', {
         apiKey: this.apiKey,
         authToken: token,
       });
-      return response.success;
-    } catch {
+
+      console.log('[AngelOne] Token validation response:', { success: response.success, error: response.error });
+
+      if (!response.success) {
+        console.warn('[AngelOne] Token validation failed:', response.error);
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[AngelOne] Token validation error:', err);
       return false;
     }
   }

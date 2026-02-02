@@ -141,6 +141,7 @@ interface StockBrokerContextType {
   // Authentication
   isAuthenticated: boolean;
   authenticate: (credentials: BrokerCredentials) => Promise<AuthResponse>;
+  connect: () => Promise<AuthResponse>; // Connect using stored credentials
   logout: () => Promise<void>;
   getAuthUrl: () => Promise<string | null>;
 
@@ -276,44 +277,18 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           setTradingModeState(savedMode);
         }
 
-        // Load saved broker preference
+        // Load saved broker preference (but DON'T auto-connect)
         const savedBroker = await safeStorageGet(STORAGE_KEYS.ACTIVE_STOCK_BROKER);
 
-        // If we have a saved broker, try to use it
+        // If we have a saved broker, set it as active (adapter will be created, but NOT auto-authenticated)
         if (savedBroker && STOCK_BROKER_REGISTRY[savedBroker]) {
-          console.log(`[StockBrokerContext] Found saved broker: ${savedBroker}`);
+          console.log(`[StockBrokerContext] Found saved broker preference: ${savedBroker} (lazy init - no auto-connect)`);
           setActiveBrokerState(savedBroker);
           // Note: isLoading will be set to false by initializeAdapter useEffect
         } else {
-          // No saved broker - scan all brokers to find one with valid session
-          console.log('[StockBrokerContext] No saved broker, scanning for valid sessions...');
-          const allBrokers = getAllStockBrokers();
-          let foundBroker = false;
-
-          for (const broker of allBrokers) {
-            try {
-              const tempAdapter = createStockBrokerAdapter(broker.id);
-              const creds = await (tempAdapter as any).loadCredentials?.();
-
-              if (creds?.accessToken && creds?.tokenTimestamp) {
-                // Check if token is valid for today (IST check for Indian brokers)
-                const isValid = BaseStockBrokerAdapter.isTokenValidForTodayIST(creds.tokenTimestamp);
-                if (isValid) {
-                  console.log(`[StockBrokerContext] Found valid session for: ${broker.id}`);
-                  setActiveBrokerState(broker.id);
-                  foundBroker = true;
-                  break;
-                }
-              }
-            } catch (err) {
-              // Skip broker if check fails
-            }
-          }
-
-          // If no broker found, set loading to false here
-          if (!foundBroker) {
-            setIsLoading(false);
-          }
+          // No saved broker - default to yfinance (paper trading, no auth needed)
+          console.log('[StockBrokerContext] No saved broker, defaulting to yfinance for paper trading');
+          setActiveBrokerState('yfinance');
         }
 
         console.log('[StockBrokerContext] Preferences loaded', {
@@ -384,62 +359,46 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           return;
         }
 
-        // For other brokers, load credentials from database
+        // For real brokers, just create the adapter and load credentials into memory
+        // but DON'T auto-authenticate - user must explicitly connect
         try {
-          console.log(`[StockBrokerContext] Loading credentials from database...`);
+          console.log(`[StockBrokerContext] Loading credentials from database (no auto-connect)...`);
           const storedCreds = await (newAdapter as any).loadCredentials();
 
           if (storedCreds && storedCreds.apiKey) {
             console.log(`[StockBrokerContext] Found stored credentials, loading into adapter memory...`);
 
-            // Set API credentials in adapter memory
+            // Set API credentials in adapter memory (for when user chooses to connect)
             if (newAdapter.setCredentials) {
               newAdapter.setCredentials(storedCreds.apiKey, storedCreds.apiSecret || '');
               console.log(`[StockBrokerContext] ✓ Credentials loaded into adapter memory`);
             }
 
-            // Attempt auto-restore or auto-authenticate
-            if (typeof (newAdapter as any).initFromStorage === 'function') {
-              console.log(`[StockBrokerContext] Attempting auto-restore/auto-authenticate...`);
-              const restored = await (newAdapter as any).initFromStorage();
+            // Check if we have a potentially valid token (basic timestamp check only, no API call)
+            // User can click "Connect" to actually validate and connect
+            const hasToken = !!storedCreds.accessToken;
+            const tokenTimestamp = storedCreds.tokenTimestamp ? new Date(storedCreds.tokenTimestamp) : null;
+            const isTokenFromToday = tokenTimestamp
+              ? BaseStockBrokerAdapter.isTokenValidForTodayIST(storedCreds.tokenTimestamp)
+              : false;
 
-              if (restored) {
-                console.log(`[StockBrokerContext] ✓ Session restored successfully`);
-
-                // CRITICAL: Set adapter BEFORE isAuthenticated to avoid race condition
-                setAdapter(newAdapter);
-                setIsAuthenticated(true);
-                setError(null);
-
-                // Initialize unified trading session
-                try {
-                  await initTradingSession(activeBroker, tradingMode);
-                  console.log(`[StockBrokerContext] ✓ Trading session initialized`);
-                } catch (sessionErr) {
-                  console.error('[StockBrokerContext] Failed to init trading session:', sessionErr);
-                }
-
-                // Success - skip setting adapter again below
-                setIsLoading(false);
-                return;
-              } else {
-                console.log(`[StockBrokerContext] Auto-restore failed - session expired or invalid`);
-                setAdapter(newAdapter);
-                setIsAuthenticated(false);
-                setError(`Session expired for ${activeBroker}. Please re-authenticate in the BROKERS tab.`);
-                setIsLoading(false);
-                return; // Don't set adapter again below
-              }
+            if (hasToken && isTokenFromToday) {
+              console.log(`[StockBrokerContext] Token appears valid (from today). User can click Connect to verify.`);
+              setError(null);
+            } else if (hasToken && !isTokenFromToday) {
+              console.log(`[StockBrokerContext] Token expired (not from today). User needs to re-authenticate.`);
+              setError(`Session expired for ${activeBroker}. Please click Connect to re-authenticate.`);
             } else {
-              console.log(`[StockBrokerContext] No initFromStorage method, manual OAuth required`);
-              setAdapter(newAdapter);
-              setIsAuthenticated(false);
-              setError(null); // No error - just needs manual auth
-              setIsLoading(false);
-              return;
+              console.log(`[StockBrokerContext] No token found. User needs to authenticate.`);
+              setError(null);
             }
+
+            setAdapter(newAdapter);
+            setIsAuthenticated(false); // Not authenticated until user explicitly connects
+            setIsLoading(false);
+            return;
           } else {
-            console.log(`[StockBrokerContext] No stored credentials found`);
+            console.log(`[StockBrokerContext] No stored credentials found - needs initial setup`);
             setAdapter(newAdapter);
             setIsAuthenticated(false);
             setError(null); // No error - just needs initial setup
@@ -668,6 +627,121 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
     },
     [activeBroker, tradingMode, adapter]
   );
+
+  /**
+   * Connect using stored credentials (calls initFromStorage on the adapter)
+   * This is the explicit user-triggered connection - won't happen automatically
+   */
+  const connect = useCallback(async (): Promise<AuthResponse> => {
+    if (!activeBroker) {
+      return {
+        success: false,
+        message: 'No broker selected',
+        errorCode: 'NO_BROKER',
+      };
+    }
+
+    if (!adapter) {
+      return {
+        success: false,
+        message: 'No adapter available. Please select a broker first.',
+        errorCode: 'NO_ADAPTER',
+      };
+    }
+
+    // Abort any existing connection
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      console.log(`[StockBrokerContext] User-initiated connect for: ${activeBroker}`);
+
+      // Try to restore session using stored credentials
+      if (typeof (adapter as any).initFromStorage === 'function') {
+        const restored = await (adapter as any).initFromStorage();
+
+        if (restored) {
+          console.log(`[StockBrokerContext] ✓ Session restored successfully via connect()`);
+
+          setIsAuthenticated(true);
+          setError(null);
+
+          // Initialize unified trading session
+          try {
+            await initTradingSession(activeBroker, tradingMode);
+            console.log(`[StockBrokerContext] ✓ Trading session initialized`);
+          } catch (sessionErr) {
+            console.error('[StockBrokerContext] Failed to init trading session:', sessionErr);
+          }
+
+          // Fetch initial data
+          await refreshAllData(adapter);
+
+          // Connect WebSocket for real-time data streaming
+          try {
+            await adapter.connectWebSocket();
+            console.log(`[StockBrokerContext] ✓ WebSocket connected for ${activeBroker}`);
+
+            // If in paper trading mode, set up tick handler to update paper positions
+            if (tradingMode === 'paper') {
+              const { invoke } = await import('@tauri-apps/api/core');
+              adapter.onTick(async (tick) => {
+                try {
+                  const symbol = `${tick.exchange}:${tick.symbol}`;
+                  await invoke('process_tick_for_paper_trading', {
+                    symbol,
+                    price: tick.lastPrice
+                  });
+                } catch (err) {
+                  console.error('[StockBrokerContext] Failed to process tick for paper trading:', err);
+                }
+              });
+              console.log(`[StockBrokerContext] ✓ Paper trading tick handler registered`);
+            }
+          } catch (wsErr) {
+            console.warn(`[StockBrokerContext] WebSocket connection failed for ${activeBroker}, will use REST polling:`, wsErr);
+          }
+
+          return {
+            success: true,
+            message: 'Connected successfully',
+          };
+        } else {
+          // Session restore failed - need re-authentication
+          const errorMsg = `Session expired for ${activeBroker}. Please re-authenticate in the BROKERS tab.`;
+          setError(errorMsg);
+          setIsAuthenticated(false);
+          return {
+            success: false,
+            message: errorMsg,
+            errorCode: 'SESSION_EXPIRED',
+          };
+        }
+      } else {
+        // No initFromStorage method - need manual auth
+        const errorMsg = `${activeBroker} requires manual authentication. Please configure in BROKERS tab.`;
+        setError(errorMsg);
+        return {
+          success: false,
+          message: errorMsg,
+          errorCode: 'AUTH_REQUIRED',
+        };
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Connection failed';
+      setError(errorMessage);
+      return {
+        success: false,
+        message: errorMessage,
+        errorCode: 'CONNECT_ERROR',
+      };
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [activeBroker, adapter, tradingMode]);
 
   const logout = useCallback(async () => {
     if (!adapter) return;
@@ -1216,6 +1290,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       // Authentication
       isAuthenticated,
       authenticate,
+      connect,
       logout,
       getAuthUrl,
 
@@ -1261,6 +1336,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       adapter,
       isAuthenticated,
       authenticate,
+      connect,
       logout,
       getAuthUrl,
       supportsFeature,
@@ -1348,6 +1424,7 @@ export function useStockBrokerAuth() {
   const {
     isAuthenticated,
     authenticate,
+    connect,
     logout,
     getAuthUrl,
     isConnecting,
@@ -1359,6 +1436,7 @@ export function useStockBrokerAuth() {
   return {
     isAuthenticated,
     authenticate,
+    connect, // Explicit connect using stored credentials
     logout,
     getAuthUrl,
     isConnecting,

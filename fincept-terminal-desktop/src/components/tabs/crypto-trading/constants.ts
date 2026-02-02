@@ -20,7 +20,7 @@ export const FINCEPT = {
 // Top 30 most traded crypto pairs
 export const DEFAULT_CRYPTO_WATCHLIST = [
   'BTC/USD', 'ETH/USD', 'BNB/USD', 'SOL/USD', 'XRP/USD',
-  'ADA/USD', 'DOGE/USD', 'AVAX/USD', 'DOT/USD', 'MATIC/USD',
+  'ADA/USD', 'DOGE/USD', 'AVAX/USD', 'DOT/USD', 'POL/USD',
   'LTC/USD', 'SHIB/USD', 'TRX/USD', 'LINK/USD', 'UNI/USD',
   'ATOM/USD', 'XLM/USD', 'ETC/USD', 'BCH/USD', 'NEAR/USD',
   'APT/USD', 'ARB/USD', 'OP/USD', 'LDO/USD', 'FIL/USD',

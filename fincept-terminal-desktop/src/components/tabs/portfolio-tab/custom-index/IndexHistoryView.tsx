@@ -25,6 +25,7 @@ import {
 } from '../finceptStyles';
 import { IndexSnapshot, CustomIndex } from './types';
 import { customIndexService } from '../../../../services/portfolio/customIndexService';
+import { showWarning, showSuccess, showError, showPrompt } from '@/utils/notifications';
 
 interface IndexHistoryViewProps {
   index: CustomIndex;
@@ -52,22 +53,28 @@ const IndexHistoryView: React.FC<IndexHistoryViewProps> = ({ index }) => {
   };
 
   const handleCleanup = async () => {
-    const days = prompt('Delete snapshots older than how many days?', '365');
+    const days = await showPrompt('Delete snapshots older than how many days?', {
+      title: 'Cleanup Snapshots',
+      defaultValue: '365',
+      placeholder: 'Enter number of days'
+    });
     if (!days) return;
 
     const daysNum = parseInt(days);
     if (isNaN(daysNum) || daysNum < 1) {
-      alert('Invalid number of days');
+      showWarning('Invalid number of days');
       return;
     }
 
     try {
       const deleted = await customIndexService.cleanupSnapshots(index.id, daysNum);
-      alert(`Deleted ${deleted} old snapshots`);
+      showSuccess('Snapshots deleted', [
+        { label: 'COUNT', value: `${deleted} old snapshots` }
+      ]);
       loadSnapshots();
     } catch (error) {
       console.error('Failed to cleanup snapshots:', error);
-      alert('Failed to cleanup snapshots');
+      showError('Failed to cleanup snapshots');
     }
   };
 

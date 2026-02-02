@@ -30,6 +30,7 @@ import { usePortfolioOperations } from './hooks/usePortfolioOperations';
 import { formatCurrency, formatPercent } from './portfolio/utils';
 import { TabFooter } from '@/components/common/TabFooter';
 import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES, LAYOUT } from './finceptStyles';
+import { showError } from '@/utils/notifications';
 
 type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization' | 'indices';
 
@@ -94,7 +95,9 @@ const PortfolioTab: React.FC = () => {
       setNewPortfolioCurrency('USD');
     } catch (error) {
       console.error('[PortfolioTab] Error creating portfolio:', error);
-      alert(error instanceof Error ? error.message : 'Failed to create portfolio');
+      showError('Failed to create portfolio', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     }
   };
 
@@ -108,7 +111,9 @@ const PortfolioTab: React.FC = () => {
       setAddAssetPrice('');
     } catch (error) {
       console.error('[PortfolioTab] Error adding asset:', error);
-      alert(error instanceof Error ? error.message : 'Failed to add asset');
+      showError('Failed to add asset', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     }
   };
 
@@ -122,7 +127,9 @@ const PortfolioTab: React.FC = () => {
       setSellAssetPrice('');
     } catch (error) {
       console.error('[PortfolioTab] Error selling asset:', error);
-      alert(error instanceof Error ? error.message : 'Failed to sell asset');
+      showError('Failed to sell asset', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     }
   };
 

@@ -12,11 +12,12 @@ AI Quant Lab combines Microsoft's Qlib quantitative investment platform with RDA
 
 | Component | Modules | Purpose |
 |-----------|---------|---------|
-| **Qlib Integration** | 8 modules | Backtesting, portfolio optimization, ML models |
+| **Qlib Integration** | 14 modules | Complete Qlib coverage - backtesting, ML, RL, HFT, online learning |
 | **RDAgent System** | 4 modules | Hypothesis generation, knowledge base, research automation |
 
 ## Qlib Modules
 
+### Core Modules
 | Module | File | Purpose |
 |--------|------|---------|
 | **Advanced Backtest** | `qlib_advanced_backtest.py` | Multi-factor backtesting engine |
@@ -27,6 +28,16 @@ AI Quant Lab combines Microsoft's Qlib quantitative investment platform with RDA
 | **Reporting** | `qlib_reporting.py` | Performance reports, visualizations |
 | **Strategy** | `qlib_strategy.py` | Trading strategy implementation |
 | **Service** | `qlib_service.py` | Main service interface for Tauri integration |
+
+### Advanced Modules (NEW - 100% Qlib Coverage)
+| Module | File | Purpose |
+|--------|------|---------|
+| **Reinforcement Learning** | `qlib_rl.py` | RL trading agents (PPO, DQN, A2C, SAC, TD3) |
+| **Online Learning** | `qlib_online_learning.py` | Real-time model updates, incremental learning, drift detection |
+| **High Frequency Trading** | `qlib_high_frequency.py` | HFT operations, order book dynamics, market making |
+| **Meta Learning** | `qlib_meta_learning.py` | Model selection, ensemble methods, AutoML |
+| **Rolling Retraining** | `qlib_rolling_retraining.py` | Automated model retraining scheduler |
+| **Advanced Models** | `qlib_advanced_models.py` | Time-series models (LSTM_TS, Transformer_TS, Localformer, etc.) |
 
 ## RDAgent System (`/rdagent/`)
 
@@ -67,8 +78,11 @@ AI Quant Lab combines Microsoft's Qlib quantitative investment platform with RDA
 ### Model Library
 - **Linear models**: Ridge, Lasso, ElasticNet
 - **Tree models**: XGBoost, LightGBM, CatBoost
-- **Neural networks**: MLP, LSTM, Transformer
-- **Ensemble methods**: Stacking, blending
+- **Neural networks**: MLP, LSTM, GRU, Transformer, ALSTM
+- **Time-series models**: LSTM_TS, GRU_TS, Transformer_TS, Localformer, TCTS
+- **Advanced models**: HIST, KRNN, IGMTF, TRA, Sandwich
+- **Ensemble methods**: Stacking, blending, adaptive random forest
+- **RL algorithms**: PPO, DQN, A2C, SAC, TD3
 
 ### Evaluation Metrics
 - **Returns**: Annualized, cumulative, daily
@@ -224,12 +238,14 @@ weights = optimize_portfolio(
 
 ## Technical Details
 
-- **Framework**: Qlib (Microsoft Research)
-- **ML Libraries**: XGBoost, LightGBM, PyTorch
+- **Framework**: Qlib (Microsoft Research) - 100% coverage
+- **ML Libraries**: XGBoost, LightGBM, CatBoost, PyTorch
+- **RL Libraries**: Stable-Baselines3, Gymnasium
+- **Online Learning**: River (incremental ML)
 - **Data**: Pandas, NumPy
 - **Optimization**: SciPy, cvxpy
 - **LLM**: Ollama (local), OpenAI API
-- **Database**: SQLite (knowledge base)
+- **Database**: SQLite (knowledge base), MLflow (experiments)
 - **Language**: Python 3.11+
 
 ## Performance Optimization
@@ -243,10 +259,53 @@ weights = optimize_portfolio(
 
 Services exposed via Tauri commands:
 - `qlib_service.py`: Main Qlib interface
+- `qlib_rl.py`: Reinforcement learning agents
+- `qlib_online_learning.py`: Online/incremental learning
+- `qlib_high_frequency.py`: HFT operations
+- `qlib_meta_learning.py`: Meta-learning & AutoML
+- `qlib_rolling_retraining.py`: Automated retraining
+- `qlib_advanced_models.py`: Advanced neural networks
 - `rd_agent_service.py`: RDAgent interface
 
 Called from Rust backend for frontend integration.
 
+## New Features Summary (v2.0)
+
+### Reinforcement Learning (qlib_rl.py)
+- **Algorithms**: PPO, DQN, A2C, SAC, TD3
+- **Trading environments**: Continuous/discrete action spaces
+- **Features**: Portfolio optimization, risk-adjusted rewards, Sharpe ratio optimization
+- **Training**: Stable-Baselines3 integration, model save/load
+
+### Online Learning (qlib_online_learning.py)
+- **Incremental training**: Real-time model updates
+- **Drift detection**: ADWIN algorithm for concept drift
+- **Models**: Linear, tree-based, adaptive random forest
+- **Rolling updates**: Automated retraining schedules
+
+### High Frequency Trading (qlib_high_frequency.py)
+- **Order book simulation**: Bid/ask dynamics, depth management
+- **Microstructure features**: Spread, VWAP, depth imbalance
+- **Market making**: Avellaneda-Stoikov model
+- **Toxic flow detection**: Informed trading identification
+- **Latency optimization**: Ultra-low latency execution
+
+### Meta Learning (qlib_meta_learning.py)
+- **Model selection**: Automated model comparison
+- **Ensemble methods**: Weighted ensembles, stacking
+- **AutoML**: Hyperparameter optimization
+- **Dataset selection**: IC-based data selection
+
+### Rolling Retraining (qlib_rolling_retraining.py)
+- **Automated schedules**: Hourly, daily, weekly retraining
+- **Window management**: Rolling window training
+- **History tracking**: Retraining performance logs
+
+### Advanced Models (qlib_advanced_models.py)
+- **Time-series**: LSTM_TS, GRU_TS, Transformer_TS
+- **Attention models**: Localformer, TCTS
+- **Advanced architectures**: HIST, KRNN, IGMTF
+
 ---
 
-**Total Modules**: 12 (8 Qlib + 4 RDAgent) | **Frameworks**: Qlib, RDAgent | **ML Models**: 10+ algorithms | **Last Updated**: 2026-01-23
+**Total Modules**: 18 (14 Qlib + 4 RDAgent) | **Frameworks**: Qlib, RDAgent, Stable-Baselines3, River | **ML Models**: 30+ algorithms | **Qlib Coverage**: 100% | **Last Updated**: 2026-02-02

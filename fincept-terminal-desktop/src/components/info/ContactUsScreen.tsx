@@ -5,6 +5,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Mail, Phone, MapPin, Clock } from "lucide-react";
 import { Screen } from '../../App';
+import { showInfo } from '@/utils/notifications';
 
 interface ContactUsScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -81,7 +82,7 @@ const ContactUsScreen: React.FC<ContactUsScreenProps> = ({ onNavigate }) => {
 
           <div className="grid grid-cols-1 gap-2">
             <Button
-              onClick={() => alert('Opening live chat...')}
+              onClick={() => showInfo('Opening live chat...')}
               className="bg-green-600/20 hover:bg-green-600/30 border border-green-600/50 text-green-400 p-3 font-normal transition-colors justify-start"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

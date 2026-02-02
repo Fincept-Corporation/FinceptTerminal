@@ -675,10 +675,19 @@ pub fn run() {
                 commands::edgar_cache::set_cache_db_path(edgar_cache_path);
             }
 
-            // Use tauri::async_runtime to spawn task in Tauri's runtime
+            // CRITICAL: Set router app handle SYNCHRONOUSLY before any commands can be called
+            // This ensures WebSocket events can be emitted to frontend immediately
+            {
+                let router_for_handle = router_clone.clone();
+                let handle_for_setup = app_handle.clone();
+                tauri::async_runtime::block_on(async move {
+                    router_for_handle.write().await.set_app_handle(handle_for_setup);
+                });
+            }
+
+            // Use tauri::async_runtime to spawn task in Tauri's runtime for other async setup
             tauri::async_runtime::spawn(async move {
-                // Set router app handle
-                router_clone.write().await.set_app_handle(app_handle.clone());
+                // Router app handle already set above synchronously
 
                 // Initialize monitoring service with proper database path
                 let mut services_guard = services_clone.write().await;
@@ -1510,6 +1519,8 @@ pub fn run() {
             commands::analytics::analyze_real_estate,
             commands::analytics::analyze_private_capital,
             commands::analytics::analyze_natural_resources,
+            commands::analytics::analyze_performance_metrics,
+            commands::analytics::analyze_investment_risk,
             commands::analytics::price_options,
             commands::analytics::analyze_arbitrage,
             commands::analytics::analyze_forward_commitments,
@@ -1662,6 +1673,40 @@ pub fn run() {
             commands::ai_quant_lab::rdagent_optimize_model,
             commands::ai_quant_lab::rdagent_analyze_document,
             commands::ai_quant_lab::rdagent_run_autonomous_research,
+            commands::ai_quant_lab::deepagent_check_status,
+            commands::ai_quant_lab::deepagent_get_capabilities,
+            commands::ai_quant_lab::deepagent_execute_task,
+            commands::ai_quant_lab::deepagent_resume_task,
+            commands::ai_quant_lab::deepagent_get_state,
+            // AI Quant Lab - Reinforcement Learning
+            commands::ai_quant_lab::qlib_rl_get_algorithms,
+            commands::ai_quant_lab::qlib_rl_create_environment,
+            commands::ai_quant_lab::qlib_rl_train_agent,
+            commands::ai_quant_lab::qlib_rl_evaluate_agent,
+            // AI Quant Lab - Online Learning
+            commands::ai_quant_lab::qlib_online_initialize,
+            commands::ai_quant_lab::qlib_online_incremental_train,
+            commands::ai_quant_lab::qlib_online_predict,
+            commands::ai_quant_lab::qlib_online_detect_drift,
+            // AI Quant Lab - High Frequency Trading
+            commands::ai_quant_lab::qlib_hft_initialize,
+            commands::ai_quant_lab::qlib_hft_create_orderbook,
+            commands::ai_quant_lab::qlib_hft_update_orderbook,
+            commands::ai_quant_lab::qlib_hft_market_making_quotes,
+            commands::ai_quant_lab::qlib_hft_detect_toxic,
+            commands::ai_quant_lab::qlib_hft_snapshot,
+            commands::ai_quant_lab::qlib_hft_latency_stats,
+            // AI Quant Lab - Meta Learning
+            commands::ai_quant_lab::qlib_meta_model_selection,
+            commands::ai_quant_lab::qlib_meta_create_ensemble,
+            commands::ai_quant_lab::qlib_meta_auto_tune,
+            // AI Quant Lab - Rolling Retraining
+            commands::ai_quant_lab::qlib_rolling_create_schedule,
+            commands::ai_quant_lab::qlib_rolling_retrain,
+            commands::ai_quant_lab::qlib_rolling_list_schedules,
+            // AI Quant Lab - Advanced Models
+            commands::ai_quant_lab::qlib_advanced_list_models,
+            commands::ai_quant_lab::qlib_advanced_create_model,
             // FFN Analytics - Portfolio Performance Analysis Commands
             commands::ffn_analytics::ffn_check_status,
             commands::ffn_analytics::ffn_calculate_performance,

@@ -3,6 +3,7 @@ import { RefreshCw, Trash2, HardDrive, Database } from 'lucide-react';
 import { cacheService, type CacheStats } from '@/services/cache/cacheService';
 import { LLMModelsService } from '@/services/llmModelsService';
 import type { SettingsColors } from '../types';
+import { showConfirm } from '@/utils/notifications';
 
 // Fincept Design System Colors
 const FINCEPT = {
@@ -52,9 +53,15 @@ export function StorageCacheSection({
   };
 
   const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to clear all cached data? This action cannot be undone.')) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      'This action cannot be undone.\n\nNote: Settings and saved data will not be affected.',
+      {
+        title: 'Clear all cached data?',
+        type: 'danger'
+      }
+    );
+    if (!confirmed) return;
+
     setClearingCache(true);
     try {
       const removed = await cacheService.clearAll();

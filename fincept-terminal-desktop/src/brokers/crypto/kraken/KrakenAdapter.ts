@@ -761,7 +761,7 @@ export class KrakenAdapter extends BaseExchangeAdapter {
       'XRP/USD',
       'SOL/USD',
       'ADA/USD',
-      'MATIC/USD',
+      'POL/USD',
       'AVAX/USD',
       'DOT/USD',
       'LINK/USD',

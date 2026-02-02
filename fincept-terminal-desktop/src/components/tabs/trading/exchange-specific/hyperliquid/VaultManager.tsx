@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
+import { showSuccess, showError } from '@/utils/notifications';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -37,9 +38,13 @@ export function HyperLiquidVaultManager() {
       (activeAdapter as any).setVaultAddress(vaultAddress);
       const balance = await (activeAdapter as any).fetchVaultBalance(vaultAddress);
       setVaultBalance(balance);
-      alert(`[OK] Vault connected: ${vaultAddress.slice(0, 8)}...`);
+      showSuccess('Vault connected successfully', [
+        { label: 'ADDRESS', value: `${vaultAddress.slice(0, 8)}...` }
+      ]);
     } catch (error) {
-      alert(`[FAIL] Vault connection failed: ${(error as Error).message}`);
+      showError('Vault connection failed', [
+        { label: 'ERROR', value: (error as Error).message }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -48,7 +53,9 @@ export function HyperLiquidVaultManager() {
   const handleSetSubAccount = () => {
     if (!subAccountAddress || !activeAdapter) return;
     (activeAdapter as any).setSubAccountAddress(subAccountAddress);
-    alert(`[OK] Subaccount set: ${subAccountAddress.slice(0, 8)}...`);
+    showSuccess('Subaccount set successfully', [
+      { label: 'ADDRESS', value: `${subAccountAddress.slice(0, 8)}...` }
+    ]);
   };
 
   return (

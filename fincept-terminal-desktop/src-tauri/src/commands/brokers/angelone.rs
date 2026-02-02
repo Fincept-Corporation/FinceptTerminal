@@ -271,12 +271,60 @@ pub async fn angelone_validate_token(
         .await
     {
         Ok(response) => {
-            let is_valid = response.status().is_success();
-            ApiResponse {
-                success: is_valid,
-                data: Some(is_valid),
-                error: if is_valid { None } else { Some("Token validation failed".to_string()) },
-                timestamp,
+            let status = response.status();
+
+            // Check HTTP status first
+            if !status.is_success() {
+                return ApiResponse {
+                    success: false,
+                    data: Some(false),
+                    error: Some(format!("HTTP error: {}", status)),
+                    timestamp,
+                };
+            }
+
+            // Parse response body to check for API-level errors
+            match response.text().await {
+                Ok(body) => {
+                    // Try to parse as JSON and check for error indicators
+                    if let Ok(json) = serde_json::from_str::<Value>(&body) {
+                        // Check for common error patterns in AngelOne API
+                        let is_error = json.get("status").map(|s| s.as_bool() == Some(false)).unwrap_or(false)
+                            || json.get("message").map(|m| {
+                                let msg = m.as_str().unwrap_or("");
+                                msg.contains("Invalid Token") ||
+                                msg.contains("Session expired") ||
+                                msg.contains("Unauthorized")
+                            }).unwrap_or(false)
+                            || json.get("errorcode").is_some();
+
+                        if is_error {
+                            let error_msg = json.get("message")
+                                .and_then(|m| m.as_str())
+                                .unwrap_or("Token validation failed");
+                            return ApiResponse {
+                                success: false,
+                                data: Some(false),
+                                error: Some(error_msg.to_string()),
+                                timestamp,
+                            };
+                        }
+                    }
+
+                    // If we got here, token is valid
+                    ApiResponse {
+                        success: true,
+                        data: Some(true),
+                        error: None,
+                        timestamp,
+                    }
+                }
+                Err(e) => ApiResponse {
+                    success: false,
+                    data: Some(false),
+                    error: Some(format!("Failed to read response: {}", e)),
+                    timestamp,
+                },
             }
         }
         Err(e) => ApiResponse {

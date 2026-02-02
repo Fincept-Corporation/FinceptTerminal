@@ -2,7 +2,6 @@
 use crate::python;
 
 /// Execute Yahoo Finance Python script command via subprocess
-/// Uses direct subprocess instead of worker pool to avoid deadlocks on Windows
 #[tauri::command]
 pub async fn execute_yfinance_command(
     app: tauri::AppHandle,
@@ -15,7 +14,6 @@ pub async fn execute_yfinance_command(
 
     eprintln!("[RUST] execute_yfinance_command: command={}, args={:?}", command, args);
 
-    // Execute Python script via subprocess (avoids worker pool deadlocks)
     let result = python::execute_sync(&app, "yfinance_data.py", cmd_args);
 
     match &result {

@@ -1,11 +1,22 @@
 // Hook for managing forum data and API calls
+// Uses: State machine, cleanup, timeout, validation
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '@/services/forum/forumApi';
 import { sqliteService, getSetting, saveSetting } from '@/services/core/sqliteService';
+import { withTimeout } from '@/services/core/apiUtils';
+import { sanitizeInput } from '@/services/core/validators';
 import type { ForumPost, ForumComment, ForumCategoryUI, TrendingTopic, RecentActivity, ForumColors } from '../types';
 import { CATEGORY_COLORS } from '../constants';
+import { showWarning, showSuccess, showError } from '@/utils/notifications';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const API_TIMEOUT_MS = 30000;
+const CACHE_TIMEOUT_MS = 5000;
 
 interface UseForumProps {
   colors: ForumColors;
@@ -61,38 +72,132 @@ export interface UseForumReturn {
   postsToday: number;
 }
 
+// ============================================================================
+// State Machine
+// ============================================================================
+
+type ForumStatus = 'idle' | 'loading' | 'refreshing' | 'ready' | 'error';
+
+interface ForumState {
+  status: ForumStatus;
+  categories: ForumCategoryUI[];
+  forumPosts: ForumPost[];
+  forumStats: ForumStats | null;
+  trendingTopics: TrendingTopic[];
+  recentActivity: RecentActivity[];
+  postComments: ForumComment[];
+  searchResults: ForumPost[];
+  userProfile: any;
+  activeCategory: string;
+  sortBy: string;
+  onlineUsers: number;
+  lastRefreshTime: Date | null;
+  selectedPost: ForumPost | null;
+  selectedUsername: string;
+  error: string | null;
+}
+
+type ForumAction =
+  | { type: 'START_LOADING' }
+  | { type: 'START_REFRESHING' }
+  | { type: 'SET_READY' }
+  | { type: 'SET_ERROR'; error: string }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_CATEGORIES'; categories: ForumCategoryUI[] }
+  | { type: 'SET_POSTS'; posts: ForumPost[] }
+  | { type: 'SET_STATS'; stats: ForumStats }
+  | { type: 'SET_ONLINE_USERS'; count: number }
+  | { type: 'SET_TRENDING'; topics: TrendingTopic[] }
+  | { type: 'SET_ACTIVITY'; activity: RecentActivity[] }
+  | { type: 'SET_COMMENTS'; comments: ForumComment[] }
+  | { type: 'SET_SEARCH_RESULTS'; results: ForumPost[] }
+  | { type: 'SET_PROFILE'; profile: any }
+  | { type: 'SET_ACTIVE_CATEGORY'; category: string }
+  | { type: 'SET_SORT_BY'; sortBy: string }
+  | { type: 'SET_SELECTED_POST'; post: ForumPost | null }
+  | { type: 'SET_SELECTED_USERNAME'; username: string }
+  | { type: 'REFRESH_COMPLETE'; time: Date };
+
+const initialState: ForumState = {
+  status: 'idle',
+  categories: [],
+  forumPosts: [],
+  forumStats: null,
+  trendingTopics: [],
+  recentActivity: [],
+  postComments: [],
+  searchResults: [],
+  userProfile: null,
+  activeCategory: 'ALL',
+  sortBy: 'latest',
+  onlineUsers: 0,
+  lastRefreshTime: null,
+  selectedPost: null,
+  selectedUsername: '',
+  error: null,
+};
+
+function forumReducer(state: ForumState, action: ForumAction): ForumState {
+  switch (action.type) {
+    case 'START_LOADING':
+      return { ...state, status: 'loading', error: null };
+    case 'START_REFRESHING':
+      return { ...state, status: 'refreshing', error: null };
+    case 'SET_READY':
+      return { ...state, status: 'ready' };
+    case 'SET_ERROR':
+      return { ...state, status: 'error', error: action.error };
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+    case 'SET_CATEGORIES':
+      return { ...state, categories: action.categories };
+    case 'SET_POSTS':
+      return { ...state, forumPosts: action.posts, status: 'ready' };
+    case 'SET_STATS':
+      return { ...state, forumStats: action.stats };
+    case 'SET_ONLINE_USERS':
+      return { ...state, onlineUsers: action.count };
+    case 'SET_TRENDING':
+      return { ...state, trendingTopics: action.topics };
+    case 'SET_ACTIVITY':
+      return { ...state, recentActivity: action.activity };
+    case 'SET_COMMENTS':
+      return { ...state, postComments: action.comments };
+    case 'SET_SEARCH_RESULTS':
+      return { ...state, searchResults: action.results };
+    case 'SET_PROFILE':
+      return { ...state, userProfile: action.profile };
+    case 'SET_ACTIVE_CATEGORY':
+      return { ...state, activeCategory: action.category };
+    case 'SET_SORT_BY':
+      return { ...state, sortBy: action.sortBy };
+    case 'SET_SELECTED_POST':
+      return { ...state, selectedPost: action.post };
+    case 'SET_SELECTED_USERNAME':
+      return { ...state, selectedUsername: action.username };
+    case 'REFRESH_COMPLETE':
+      return { ...state, status: 'ready', lastRefreshTime: action.time };
+    default:
+      return state;
+  }
+}
+
 export function useForum({ colors }: UseForumProps): UseForumReturn {
   const { session } = useAuth();
 
-  // Data states
-  const [categories, setCategories] = useState<ForumCategoryUI[]>([]);
-  const [forumPosts, setForumPosts] = useState<ForumPost[]>([]);
-  const [forumStats, setForumStats] = useState<ForumStats | null>(null);
-  const [trendingTopics, setTrendingTopics] = useState<TrendingTopic[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [postComments, setPostComments] = useState<ForumComment[]>([]);
-  const [searchResults, setSearchResults] = useState<ForumPost[]>([]);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  // State machine
+  const [state, dispatch] = useReducer(forumReducer, initialState);
 
-  // UI states
-  const [activeCategory, setActiveCategory] = useState('ALL');
-  const [sortBy, setSortBy] = useState('latest');
-  const [onlineUsers, setOnlineUsers] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
-
-  // Selected data
-  const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null);
-  const [selectedUsername, setSelectedUsername] = useState('');
-
-  // Auto-refresh interval ref
+  // Refs for cleanup
+  const mountedRef = useRef(true);
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchIdRef = useRef(0); // For race condition prevention
 
-  // Get API credentials
-  const getApiCredentials = useCallback(async () => {
-    const apiKey = session?.api_key || await getSetting('fincept_api_key') || undefined;
-    const deviceId = session?.device_id || await getSetting('fincept_device_id') || undefined;
+  // Get API credentials - centralized from AuthContext
+  // No fallback to getSetting needed as AuthContext is the single source of truth
+  const getApiCredentials = useCallback(() => {
+    const apiKey = session?.api_key || undefined;
+    const deviceId = session?.device_id || undefined;
     return { apiKey, deviceId };
   }, [session]);
 
@@ -138,19 +243,31 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     };
   }, []);
 
-  // Fetch forum categories
+  // Fetch forum categories with timeout
   const fetchCategories = useCallback(async (forceRefresh: boolean = false) => {
+    const currentFetchId = ++fetchIdRef.current;
+
     try {
       if (!forceRefresh) {
-        const cachedCategories = await sqliteService.getCachedForumCategories(5);
-        if (cachedCategories) {
-          setCategories(cachedCategories);
+        const cachedCategories = await withTimeout(
+          sqliteService.getCachedForumCategories(5),
+          CACHE_TIMEOUT_MS,
+          'Cache timeout'
+        );
+        if (cachedCategories && mountedRef.current && currentFetchId === fetchIdRef.current) {
+          dispatch({ type: 'SET_CATEGORIES', categories: cachedCategories });
           return;
         }
       }
 
-      const { apiKey, deviceId } = await getApiCredentials();
-      const response = await ForumApiService.getCategories(apiKey, deviceId);
+      const { apiKey, deviceId } = getApiCredentials();
+      const response = await withTimeout(
+        ForumApiService.getCategories(apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Categories fetch timeout'
+      );
+
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
 
       if (response.success && response.data?.data?.categories) {
         const apiCategories = response.data.data.categories;
@@ -166,26 +283,33 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
           }))
         ];
 
-        setCategories(formattedCategories);
+        dispatch({ type: 'SET_CATEGORIES', categories: formattedCategories });
         await sqliteService.cacheForumCategories(formattedCategories);
       }
     } catch (error) {
-      console.debug('Forum API not available (categories)');
+      console.debug('Forum API not available (categories):', error);
     }
   }, [getApiCredentials, colors]);
 
-  // Fetch forum posts
+  // Fetch forum posts with timeout
   const fetchPosts = useCallback(async (forceRefresh: boolean = false) => {
-    setIsLoading(true);
+    const currentFetchId = ++fetchIdRef.current;
+
+    dispatch({ type: 'START_LOADING' });
     try {
-      const categoryId = activeCategory === 'ALL' ? null : categories.find(c => c.name === activeCategory)?.id || null;
-      const { apiKey, deviceId } = await getApiCredentials();
+      const categoryId = state.activeCategory === 'ALL' ? null : state.categories.find(c => c.name === state.activeCategory)?.id || null;
+      const { apiKey, deviceId } = getApiCredentials();
       let response;
 
-      if (activeCategory === 'ALL') {
+      if (state.activeCategory === 'ALL') {
         const allPosts: any[] = [];
-        for (const cat of categories.filter(c => c.id !== undefined)) {
-          const catResponse = await ForumApiService.getPostsByCategory(cat.id, sortBy, 20, apiKey, deviceId);
+        for (const cat of state.categories.filter(c => c.id !== undefined)) {
+          const catResponse = await withTimeout(
+            ForumApiService.getPostsByCategory(cat.id, state.sortBy, 20, apiKey, deviceId),
+            API_TIMEOUT_MS,
+            'Posts fetch timeout'
+          );
+          if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
           if (catResponse?.success && catResponse.data) {
             const posts = (catResponse.data as any).data?.posts || [];
             allPosts.push(...posts);
@@ -194,9 +318,15 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
         response = { success: true, data: { data: { posts: allPosts } } };
       } else {
         if (categoryId) {
-          response = await ForumApiService.getPostsByCategory(categoryId, sortBy, 20, apiKey, deviceId);
+          response = await withTimeout(
+            ForumApiService.getPostsByCategory(categoryId, state.sortBy, 20, apiKey, deviceId),
+            API_TIMEOUT_MS,
+            'Posts fetch timeout'
+          );
         }
       }
+
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
 
       if (response?.success && response.data) {
         const responseData = response.data as any;
@@ -204,180 +334,239 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
 
         if (posts.length > 0) {
           const formattedPosts = posts.map(convertApiPostToUIFormat);
-          setForumPosts(formattedPosts);
-          await sqliteService.cacheForumPosts(categoryId, sortBy, formattedPosts);
+          dispatch({ type: 'SET_POSTS', posts: formattedPosts });
+          await sqliteService.cacheForumPosts(categoryId, state.sortBy, formattedPosts);
         } else {
-          setForumPosts([]);
+          dispatch({ type: 'SET_POSTS', posts: [] });
         }
+      } else {
+        dispatch({ type: 'SET_READY' });
       }
     } catch (error) {
-      console.debug('Forum API not available (posts)');
-    } finally {
-      setIsLoading(false);
+      if (mountedRef.current) {
+        console.debug('Forum API not available (posts):', error);
+        dispatch({ type: 'SET_READY' });
+      }
     }
-  }, [activeCategory, sortBy, categories, getApiCredentials, convertApiPostToUIFormat]);
+  }, [state.activeCategory, state.sortBy, state.categories, getApiCredentials, convertApiPostToUIFormat]);
 
-  // Fetch forum statistics
+  // Fetch forum statistics with timeout
   const fetchForumStats = useCallback(async (forceRefresh: boolean = false) => {
     try {
       if (!forceRefresh) {
-        const cachedStats = await sqliteService.getCachedForumStats(5);
-        if (cachedStats) {
-          setForumStats(cachedStats);
+        const cachedStats = await withTimeout(
+          sqliteService.getCachedForumStats(5),
+          CACHE_TIMEOUT_MS,
+          'Cache timeout'
+        );
+        if (cachedStats && mountedRef.current) {
+          dispatch({ type: 'SET_STATS', stats: cachedStats });
           if (cachedStats.active_users) {
-            setOnlineUsers(cachedStats.active_users);
+            dispatch({ type: 'SET_ONLINE_USERS', count: cachedStats.active_users });
           }
           return;
         }
       }
 
-      const { apiKey, deviceId } = await getApiCredentials();
-      const response = await ForumApiService.getForumStats(apiKey, deviceId);
+      const { apiKey, deviceId } = getApiCredentials();
+      const response = await withTimeout(
+        ForumApiService.getForumStats(apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Stats fetch timeout'
+      );
+
+      if (!mountedRef.current) return;
 
       if (response.success && response.data?.data) {
-        setForumStats(response.data.data);
+        dispatch({ type: 'SET_STATS', stats: response.data.data });
         if (response.data.data.active_users) {
-          setOnlineUsers(response.data.data.active_users);
+          dispatch({ type: 'SET_ONLINE_USERS', count: response.data.data.active_users });
         }
         await sqliteService.cacheForumStats(response.data.data);
       }
     } catch (error) {
-      console.debug('Forum API not available (stats)');
+      console.debug('Forum API not available (stats):', error);
     }
   }, [getApiCredentials]);
 
-  // Create new post
+  // Create new post with validation and timeout
   const handleCreatePost = useCallback(async (title: string, content: string): Promise<boolean> => {
-    if (!title.trim() || title.trim().length < 5 || title.trim().length > 500) {
-      alert('Post title must be between 5 and 500 characters');
+    // Sanitize inputs
+    const sanitizedTitle = sanitizeInput(title);
+    const sanitizedContent = sanitizeInput(content);
+
+    // Validate
+    if (!sanitizedTitle || sanitizedTitle.length < 5 || sanitizedTitle.length > 500) {
+      showWarning('Post title must be between 5 and 500 characters');
       return false;
     }
-    if (!content.trim() || content.trim().length < 10) {
-      alert('Post content must be at least 10 characters long');
+    if (!sanitizedContent || sanitizedContent.length < 10) {
+      showWarning('Post content must be at least 10 characters long');
       return false;
     }
 
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     if (!apiKey) {
-      alert('You must be logged in to create posts');
+      showWarning('You must be logged in to create posts');
       return false;
     }
 
-    const categoryId = categories.find(c => c.name === activeCategory)?.id || categories[1]?.id || 1;
+    const categoryId = state.categories.find(c => c.name === state.activeCategory)?.id || state.categories[1]?.id || 1;
 
     try {
-      const response = await ForumApiService.createPost(
-        categoryId,
-        { title: title.trim(), content: content.trim() },
-        apiKey,
-        deviceId
+      const response = await withTimeout(
+        ForumApiService.createPost(
+          categoryId,
+          { title: sanitizedTitle, content: sanitizedContent },
+          apiKey,
+          deviceId
+        ),
+        API_TIMEOUT_MS,
+        'Create post timeout'
       );
 
+      if (!mountedRef.current) return false;
+
       if (response.success) {
-        alert('Post created successfully!');
+        showSuccess('Post created successfully');
         fetchPosts(true);
         return true;
       } else {
-        alert(`Failed to create post: ${response.error || response.data?.message || 'Unknown error'}`);
+        showError('Failed to create post', [
+          { label: 'ERROR', value: response.error || response.data?.message || 'Unknown error' }
+        ]);
         return false;
       }
     } catch (error) {
-      alert('Error creating post');
+      if (mountedRef.current) {
+        showError('Error creating post');
+      }
       return false;
     }
-  }, [getApiCredentials, categories, activeCategory, fetchPosts]);
+  }, [getApiCredentials, state.categories, state.activeCategory, fetchPosts]);
 
-  // View post details with comments
+  // View post details with comments (with timeout)
   const handleViewPost = useCallback(async (post: ForumPost) => {
-    setSelectedPost(post);
+    dispatch({ type: 'SET_SELECTED_POST', post });
 
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     try {
-      const response = await ForumApiService.getPostDetails(post.id, apiKey, deviceId);
+      const response = await withTimeout(
+        ForumApiService.getPostDetails(post.id, apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Post details timeout'
+      );
+
+      if (!mountedRef.current) return;
 
       if (response.success && response.data?.data) {
         const comments = response.data.data.comments || [];
         const formattedComments = comments.map(convertApiCommentToUIFormat);
-        setPostComments(formattedComments);
+        dispatch({ type: 'SET_COMMENTS', comments: formattedComments });
       }
     } catch (error) {
-      console.debug('Forum API not available (post details)');
+      console.debug('Forum API not available (post details):', error);
     }
   }, [getApiCredentials, convertApiCommentToUIFormat]);
 
-  // Add comment to post
+  // Add comment to post (with validation and timeout)
   const handleAddComment = useCallback(async (comment: string): Promise<boolean> => {
-    if (!comment.trim() || !selectedPost) return false;
+    const sanitizedComment = sanitizeInput(comment);
+    if (!sanitizedComment || !state.selectedPost) return false;
 
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     if (!apiKey) {
-      alert('You must be logged in to comment');
+      showWarning('You must be logged in to comment');
       return false;
     }
 
     try {
-      const response = await ForumApiService.addComment(
-        selectedPost.id,
-        { content: comment },
-        apiKey,
-        deviceId
+      const response = await withTimeout(
+        ForumApiService.addComment(
+          state.selectedPost.id,
+          { content: sanitizedComment },
+          apiKey,
+          deviceId
+        ),
+        API_TIMEOUT_MS,
+        'Add comment timeout'
       );
 
+      if (!mountedRef.current) return false;
+
       if (response.success) {
-        handleViewPost(selectedPost);
+        handleViewPost(state.selectedPost);
         return true;
       } else {
-        alert(`Failed to add comment: ${response.error || 'Unknown error'}`);
+        showError('Failed to add comment', [
+          { label: 'ERROR', value: response.error || 'Unknown error' }
+        ]);
         return false;
       }
     } catch (error) {
-      alert('Error adding comment');
+      if (mountedRef.current) {
+        showError('Error adding comment');
+      }
       return false;
     }
-  }, [getApiCredentials, selectedPost, handleViewPost]);
+  }, [getApiCredentials, state.selectedPost, handleViewPost]);
 
-  // Vote on post
+  // Vote on post (with timeout)
   const handleVotePost = useCallback(async (postId: string, voteType: 'up' | 'down') => {
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     if (!apiKey) {
-      alert('You must be logged in to vote');
+      showWarning('You must be logged in to vote');
       return;
     }
 
     try {
-      const response = await ForumApiService.voteOnPost(postId, voteType, apiKey, deviceId);
+      const response = await withTimeout(
+        ForumApiService.voteOnPost(postId, voteType, apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Vote timeout'
+      );
+
+      if (!mountedRef.current) return;
 
       if (response.success) {
         fetchPosts(true);
-        if (selectedPost && selectedPost.id === postId) {
-          handleViewPost(selectedPost);
+        if (state.selectedPost && state.selectedPost.id === postId) {
+          handleViewPost(state.selectedPost);
         }
       } else {
-        alert(`Vote failed: ${response.error || 'Unknown error'}`);
+        showError('Vote failed', [
+          { label: 'ERROR', value: response.error || 'Unknown error' }
+        ]);
       }
     } catch (error) {
       // Silently handle error
     }
-  }, [getApiCredentials, fetchPosts, selectedPost, handleViewPost]);
+  }, [getApiCredentials, fetchPosts, state.selectedPost, handleViewPost]);
 
-  // Vote on comment
+  // Vote on comment (with timeout)
   const handleVoteComment = useCallback(async (commentId: string, voteType: 'up' | 'down') => {
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     if (!apiKey) {
-      alert('You must be logged in to vote');
+      showWarning('You must be logged in to vote');
       return;
     }
 
     try {
-      const response = await ForumApiService.voteOnComment(commentId, voteType, apiKey, deviceId);
+      const response = await withTimeout(
+        ForumApiService.voteOnComment(commentId, voteType, apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Vote timeout'
+      );
 
-      if (response.success && selectedPost) {
-        handleViewPost(selectedPost);
+      if (!mountedRef.current) return;
+
+      if (response.success && state.selectedPost) {
+        handleViewPost(state.selectedPost);
       }
     } catch (error) {
       // Silently handle error
     }
-  }, [getApiCredentials, selectedPost, handleViewPost]);
+  }, [getApiCredentials, state.selectedPost, handleViewPost]);
 
   // Unified vote handler (delegates to post or comment)
   const handleVote = useCallback(async (itemId: string, voteType: 'up' | 'down', itemType: 'post' | 'comment') => {
@@ -388,96 +577,138 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     }
   }, [handleVotePost, handleVoteComment]);
 
-  // Search forum
+  // Search forum (with validation and timeout)
   const handleSearch = useCallback(async (query: string) => {
-    if (!query.trim()) return;
+    const sanitizedQuery = sanitizeInput(query);
+    if (!sanitizedQuery) return;
 
-    const { apiKey, deviceId } = await getApiCredentials();
-    setIsLoading(true);
+    const { apiKey, deviceId } = getApiCredentials();
+    dispatch({ type: 'START_LOADING' });
 
     try {
-      const response = await ForumApiService.searchPosts(query, 'all', 20, apiKey, deviceId);
+      const response = await withTimeout(
+        ForumApiService.searchPosts(sanitizedQuery, 'all', 20, apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Search timeout'
+      );
+
+      if (!mountedRef.current) return;
 
       if (response.success && response.data?.data?.results?.posts) {
         const posts = response.data.data.results.posts;
         const formattedPosts = posts.map(convertApiPostToUIFormat);
-        setSearchResults(formattedPosts);
+        dispatch({ type: 'SET_SEARCH_RESULTS', results: formattedPosts });
       }
+      dispatch({ type: 'SET_READY' });
     } catch (error) {
-      // Silently handle error
-    } finally {
-      setIsLoading(false);
+      if (mountedRef.current) {
+        dispatch({ type: 'SET_READY' });
+      }
     }
   }, [getApiCredentials, convertApiPostToUIFormat]);
 
-  // View my profile
+  // View my profile (with timeout)
   const handleViewMyProfile = useCallback(async () => {
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     if (!apiKey) {
-      alert('You must be logged in to view profile');
+      showWarning('You must be logged in to view profile');
       return;
     }
 
     try {
-      const response = await ForumApiService.getMyProfile(apiKey, deviceId);
+      const response = await withTimeout(
+        ForumApiService.getMyProfile(apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Profile fetch timeout'
+      );
+
+      if (!mountedRef.current) return;
 
       if (response.success && response.data?.data) {
-        setUserProfile(response.data.data);
-        setSelectedUsername('');
+        dispatch({ type: 'SET_PROFILE', profile: response.data.data });
+        dispatch({ type: 'SET_SELECTED_USERNAME', username: '' });
       }
     } catch (error) {
-      alert('Error loading profile');
+      if (mountedRef.current) {
+        showError('Error loading profile');
+      }
     }
   }, [getApiCredentials]);
 
-  // View user profile
+  // View user profile (with timeout)
   const handleViewUserProfile = useCallback(async (username: string) => {
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     if (!apiKey) {
-      alert('You must be logged in to view profiles');
+      showWarning('You must be logged in to view profiles');
       return;
     }
 
-    setSelectedUsername(username);
+    dispatch({ type: 'SET_SELECTED_USERNAME', username });
 
     try {
-      const response = await ForumApiService.getUserProfile(username, apiKey, deviceId);
+      const response = await withTimeout(
+        ForumApiService.getUserProfile(username, apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Profile fetch timeout'
+      );
+
+      if (!mountedRef.current) return;
 
       if (response.success && response.data?.data) {
-        setUserProfile(response.data.data);
+        dispatch({ type: 'SET_PROFILE', profile: response.data.data });
       }
     } catch (error) {
-      alert('Error loading user profile');
+      if (mountedRef.current) {
+        showError('Error loading user profile');
+      }
     }
   }, [getApiCredentials]);
 
-  // Update profile
+  // Update profile (with validation and timeout)
   const handleUpdateProfile = useCallback(async (profileEdit: any): Promise<boolean> => {
-    const { apiKey, deviceId } = await getApiCredentials();
+    const { apiKey, deviceId } = getApiCredentials();
     if (!apiKey) return false;
 
+    // Sanitize profile fields
+    const sanitizedProfile = {
+      ...profileEdit,
+      display_name: sanitizeInput(profileEdit.display_name || ''),
+      bio: sanitizeInput(profileEdit.bio || ''),
+      signature: sanitizeInput(profileEdit.signature || ''),
+    };
+
     try {
-      const response = await ForumApiService.updateProfile(profileEdit, apiKey, deviceId);
+      const response = await withTimeout(
+        ForumApiService.updateProfile(sanitizedProfile, apiKey, deviceId),
+        API_TIMEOUT_MS,
+        'Profile update timeout'
+      );
+
+      if (!mountedRef.current) return false;
 
       if (response.success) {
-        alert('Profile updated successfully!');
+        showSuccess('Profile updated successfully');
         handleViewMyProfile();
         return true;
       } else {
-        alert(`Failed to update profile: ${response.error || 'Unknown error'}`);
+        showError('Failed to update profile', [
+          { label: 'ERROR', value: response.error || 'Unknown error' }
+        ]);
         return false;
       }
     } catch (error) {
-      alert('Error updating profile');
+      if (mountedRef.current) {
+        showError('Error updating profile');
+      }
       return false;
     }
   }, [getApiCredentials, handleViewMyProfile]);
 
-  // Manual refresh
+  // Manual refresh (with deduplication)
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) return;
+    if (state.status === 'refreshing') return; // Prevent duplicate refreshes
 
-    setIsRefreshing(true);
+    dispatch({ type: 'START_REFRESHING' });
 
     try {
       await Promise.all([
@@ -486,19 +717,21 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
         fetchPosts(true)
       ]);
 
-      setLastRefreshTime(new Date());
+      if (mountedRef.current) {
+        dispatch({ type: 'REFRESH_COMPLETE', time: new Date() });
+      }
     } catch (error) {
-      // Silently handle error
-    } finally {
-      setIsRefreshing(false);
+      if (mountedRef.current) {
+        dispatch({ type: 'SET_READY' });
+      }
     }
-  }, [isRefreshing, fetchCategories, fetchForumStats, fetchPosts]);
+  }, [state.status, fetchCategories, fetchForumStats, fetchPosts]);
 
   // Generate trending topics from posts
   const generateTrendingTopics = useCallback(() => {
     const topicsMap: { [key: string]: { count: number; sentiment: string } } = {};
 
-    forumPosts.forEach(post => {
+    state.forumPosts.forEach(post => {
       post.tags.forEach(tag => {
         const topic = `#${tag}`;
         if (!topicsMap[topic]) {
@@ -519,12 +752,12 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
       .sort((a, b) => b.mentions - a.mentions)
       .slice(0, 6);
 
-    setTrendingTopics(trending);
-  }, [forumPosts]);
+    dispatch({ type: 'SET_TRENDING', topics: trending });
+  }, [state.forumPosts]);
 
   // Generate recent activity from posts
   const generateRecentActivity = useCallback(() => {
-    const activities = forumPosts.slice(0, 5).map((post) => {
+    const activities = state.forumPosts.slice(0, 5).map((post) => {
       const postDate = new Date();
       const timeStr = post.time;
 
@@ -553,8 +786,16 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
       };
     });
 
-    setRecentActivity(activities);
-  }, [forumPosts]);
+    dispatch({ type: 'SET_ACTIVITY', activity: activities });
+  }, [state.forumPosts]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -563,22 +804,28 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
       fetchForumStats();
 
       const selectedPostId = await getSetting('forum_selected_post_id');
-      if (selectedPostId) {
+      if (selectedPostId && mountedRef.current) {
         await saveSetting('forum_selected_post_id', '', 'forum');
         setTimeout(async () => {
-          const post = forumPosts.find(p => p.id === selectedPostId);
+          if (!mountedRef.current) return;
+          const post = state.forumPosts.find(p => p.id === selectedPostId);
           if (post) {
             handleViewPost(post);
           } else {
             try {
-              const { apiKey, deviceId } = await getApiCredentials();
-              const response = await ForumApiService.getPostDetails(selectedPostId, apiKey, deviceId);
+              const { apiKey, deviceId } = getApiCredentials();
+              const response = await withTimeout(
+                ForumApiService.getPostDetails(selectedPostId, apiKey, deviceId),
+                API_TIMEOUT_MS,
+                'Post details timeout'
+              );
+              if (!mountedRef.current) return;
               if (response.success && response.data) {
                 const apiPost = (response.data as any).data?.post || (response.data as any).post;
                 const post = convertApiPostToUIFormat(apiPost);
-                setSelectedPost(post);
+                dispatch({ type: 'SET_SELECTED_POST', post });
                 const comments = ((response.data as any).data?.comments || (response.data as any).comments || []).map(convertApiCommentToUIFormat);
-                setPostComments(comments);
+                dispatch({ type: 'SET_COMMENTS', comments });
               }
             } catch (err) {
               // Silently handle error
@@ -592,25 +839,25 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
 
   // Fetch posts when category or sort changes
   useEffect(() => {
-    if (categories.length > 0) {
+    if (state.categories.length > 0) {
       fetchPosts();
     }
-  }, [activeCategory, sortBy, categories, fetchPosts]);
+  }, [state.activeCategory, state.sortBy, state.categories.length, fetchPosts]);
 
   // Generate derived data
   useEffect(() => {
-    if (forumPosts.length > 0) {
+    if (state.forumPosts.length > 0 && mountedRef.current) {
       generateTrendingTopics();
       generateRecentActivity();
     }
-  }, [forumPosts, generateTrendingTopics, generateRecentActivity]);
+  }, [state.forumPosts, generateTrendingTopics, generateRecentActivity]);
 
-  // Online users are updated from API stats only (removed fake random updates)
-
-  // Auto-refresh every 5 minutes
+  // Auto-refresh every 5 minutes with cleanup
   useEffect(() => {
     const autoRefreshInterval = setInterval(() => {
-      handleRefresh();
+      if (mountedRef.current) {
+        handleRefresh();
+      }
     }, 5 * 60 * 1000);
 
     autoRefreshIntervalRef.current = autoRefreshInterval;
@@ -618,40 +865,66 @@ export function useForum({ colors }: UseForumProps): UseForumReturn {
     return () => {
       if (autoRefreshIntervalRef.current) {
         clearInterval(autoRefreshIntervalRef.current);
+        autoRefreshIntervalRef.current = null;
       }
     };
   }, [handleRefresh]);
 
-  // Computed values
-  const filteredPosts = activeCategory === 'ALL'
-    ? forumPosts
-    : forumPosts.filter(post => post.category === activeCategory);
+  // Dispatch wrappers for setters
+  const setActiveCategory = useCallback((category: string) => {
+    dispatch({ type: 'SET_ACTIVE_CATEGORY', category });
+  }, []);
 
-  const totalPosts = forumStats?.total_posts || categories.find(c => c.name === 'ALL')?.count || 0;
-  const postsToday = forumStats?.posts_today || 0;
+  const setSortBy = useCallback((sortBy: string) => {
+    dispatch({ type: 'SET_SORT_BY', sortBy });
+  }, []);
+
+  const setSelectedPost = useCallback((post: ForumPost | null) => {
+    dispatch({ type: 'SET_SELECTED_POST', post });
+  }, []);
+
+  const setPostComments = useCallback((comments: ForumComment[]) => {
+    dispatch({ type: 'SET_COMMENTS', comments });
+  }, []);
+
+  const setSelectedUsername = useCallback((username: string) => {
+    dispatch({ type: 'SET_SELECTED_USERNAME', username });
+  }, []);
+
+  // Computed values
+  const filteredPosts = state.activeCategory === 'ALL'
+    ? state.forumPosts
+    : state.forumPosts.filter(post => post.category === state.activeCategory);
+
+  const totalPosts = state.forumStats?.total_posts || state.categories.find(c => c.name === 'ALL')?.count || 0;
+  const postsToday = state.forumStats?.posts_today || 0;
+
+  // Derived loading states for backward compatibility
+  const isLoading = state.status === 'loading';
+  const isRefreshing = state.status === 'refreshing';
 
   return {
-    categories,
-    forumPosts,
+    categories: state.categories,
+    forumPosts: state.forumPosts,
     filteredPosts,
-    forumStats,
-    trendingTopics,
-    recentActivity,
-    postComments,
-    searchResults,
-    userProfile,
-    activeCategory,
+    forumStats: state.forumStats,
+    trendingTopics: state.trendingTopics,
+    recentActivity: state.recentActivity,
+    postComments: state.postComments,
+    searchResults: state.searchResults,
+    userProfile: state.userProfile,
+    activeCategory: state.activeCategory,
     setActiveCategory,
-    sortBy,
+    sortBy: state.sortBy,
     setSortBy,
-    onlineUsers,
+    onlineUsers: state.onlineUsers,
     isLoading,
     isRefreshing,
-    lastRefreshTime,
-    selectedPost,
+    lastRefreshTime: state.lastRefreshTime,
+    selectedPost: state.selectedPost,
     setSelectedPost,
     setPostComments,
-    selectedUsername,
+    selectedUsername: state.selectedUsername,
     setSelectedUsername,
     fetchCategories,
     fetchPosts,

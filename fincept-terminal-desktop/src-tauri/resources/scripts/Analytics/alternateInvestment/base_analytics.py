@@ -1,34 +1,6 @@
-"""
-Alternative Investments Base Analytics Module
-============================================
+"""Alternative Investments Base Analytics Module
 
-Core financial mathematics foundation and abstract base classes for alternative
-investment analytics. Provides essential calculations including IRR, NPV, Sharpe
-ratios, VaR, and performance metrics compliant with CFA Institute standards
-for alternative investment analysis and portfolio management.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Cash flow series for IRR/NPV calculations
-  - Historical return data for performance metrics
-  - Market data for benchmarking and risk calculations
-  - Asset parameters for valuation models
-  - Time series data with datetime indexing
-
-OUTPUT:
-  - Financial metrics (IRR, NPV, ROI, MOIC, DPI)
-  - Risk-adjusted performance measures (Sharpe, Sortino, Calmar ratios)
-  - Value-at-Risk and Conditional VaR calculations
-  - Performance attribution and benchmark comparisons
-  - Portfolio level analytics and aggregations
-
-PARAMETERS:
-  - risk_free_rate: Risk-free rate for calculations (default: 0.02)
-  - confidence_level: VaR confidence level (default: 0.95)
-  - benchmark_period: Benchmark data period in years (default: 3)
-  - compounding_frequency: Compounding frequency (default: 'annual')
-  - decimal_precision: Decimal precision for calculations (default: 8)
-  - currency: Base currency for calculations (default: 'USD')
+Core financial mathematics and abstract base classes for alternative investment analytics.
 """
 
 import numpy as np
@@ -43,6 +15,12 @@ from config import (
     MarketData, CashFlow, Performance, AssetParameters, AssetClass,
     Constants, Config, ValidationRules
 )
+
+try:
+    from market_config import get_market_config, get_market_by_currency, MarketRegion
+    MARKET_CONFIG_AVAILABLE = True
+except ImportError:
+    MARKET_CONFIG_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +336,20 @@ class AlternativeInvestmentBase(ABC):
         self.performance_history: List[Performance] = []
         self.config = Config()
         self.math = FinancialMath()
+
+        # Load market-specific configuration if available
+        self.market_params = None
+        if MARKET_CONFIG_AVAILABLE:
+            if parameters.market_region:
+                try:
+                    region = MarketRegion(parameters.market_region)
+                    self.market_params = get_market_config(region)
+                except ValueError:
+                    logger.warning(f"Unknown market region: {parameters.market_region}, using currency fallback")
+                    self.market_params = get_market_by_currency(parameters.currency)
+            else:
+                self.market_params = get_market_by_currency(parameters.currency)
+
         self._validate_parameters()
 
     def _validate_parameters(self) -> None:

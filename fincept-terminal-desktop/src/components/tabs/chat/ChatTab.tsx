@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
@@ -13,6 +13,10 @@ import { notesMCPBridge } from '@/services/mcp/internal/NotesMCPBridge';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
 import ContextSelector from '@/components/common/ContextSelector';
 import FinancialSparklines from './FinancialSparklines';
+import { withTimeout } from '@/services/core/apiUtils';
+import { sanitizeInput } from '@/services/core/validators';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { showConfirm, showError } from '@/utils/notifications';
 
 // Fincept Terminal Design System Colors
 const FINCEPT = {
@@ -45,6 +49,8 @@ const MCP_RETRY_INTERVAL_MS = 10000;
 const MCP_MAX_RETRIES = 5;
 const CLOCK_UPDATE_INTERVAL_MS = 1000;
 const MCP_SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'deepseek', 'openrouter', 'fincept'];
+const API_TIMEOUT_MS = 30000;
+const DB_TIMEOUT_MS = 10000;
 
 const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab }) => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
@@ -89,12 +95,21 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const streamedContentRef = useRef<string>(''); // Track accumulated streaming content
   const retryTimeoutsRef = useRef<Set<NodeJS.Timeout>>(new Set()); // Track pending retry timeouts
   const llmSelectorRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true); // Track component mount state for cleanup
 
   // Check if current provider supports MCP tools
   const providerSupportsMCP = () => {
     if (!activeLLMConfig) return false;
     return MCP_SUPPORTED_PROVIDERS.includes(activeLLMConfig.provider.toLowerCase());
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Connect broker to MCP bridge
   useEffect(() => {
@@ -206,39 +221,62 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
-      const loadedSessions = await sqliteService.getChatSessions();
+      const loadedSessions = await withTimeout(
+        sqliteService.getChatSessions(),
+        DB_TIMEOUT_MS,
+        'Load sessions timeout'
+      );
+      if (!mountedRef.current) return;
       setSessions(loadedSessions);
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('Failed to load sessions:', error);
     }
-  };
+  }, []);
 
-  const loadStatistics = async () => {
+  const loadStatistics = useCallback(async () => {
     try {
       // Optimized: Use SQL aggregation instead of loading all messages
-      const stats = await sqliteService.getChatStatistics();
+      const stats = await withTimeout(
+        sqliteService.getChatStatistics(),
+        DB_TIMEOUT_MS,
+        'Load statistics timeout'
+      );
+      if (!mountedRef.current) return;
       setStatistics(stats);
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('[ChatTab] Failed to load statistics:', error);
       // Fallback to basic count
-      const sessions = await sqliteService.getChatSessions(1000);
-      setStatistics({
-        totalSessions: sessions.length,
-        totalMessages: 0,
-        totalTokens: 0
-      });
+      try {
+        const sessions = await sqliteService.getChatSessions(1000);
+        if (!mountedRef.current) return;
+        setStatistics({
+          totalSessions: sessions.length,
+          totalMessages: 0,
+          totalTokens: 0
+        });
+      } catch (fallbackError) {
+        console.error('[ChatTab] Fallback statistics also failed:', fallbackError);
+      }
     }
-  };
+  }, []);
 
-  const loadLLMConfiguration = async () => {
+  const loadLLMConfiguration = useCallback(async () => {
     try {
-      const [activeConfig, globalSettings, allConfigs] = await Promise.all([
-        sqliteService.getActiveLLMConfig(),
-        sqliteService.getLLMGlobalSettings(),
-        sqliteService.getLLMConfigs()
-      ]);
+      const [activeConfig, globalSettings, allConfigs] = await withTimeout(
+        Promise.all([
+          sqliteService.getActiveLLMConfig(),
+          sqliteService.getLLMGlobalSettings(),
+          sqliteService.getLLMConfigs()
+        ]),
+        DB_TIMEOUT_MS,
+        'Load LLM configuration timeout'
+      );
+
+      if (!mountedRef.current) return;
 
       setActiveLLMConfig(activeConfig);
       setAllLLMConfigs(allConfigs);
@@ -248,24 +286,32 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         setSystemStatus('WARNING: No active LLM provider configured');
       }
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('[ChatTab] Failed to load LLM configuration:', error);
       setSystemStatus('ERROR: Failed to load LLM configuration');
     }
-  };
+  }, []);
 
-  const switchLLMProvider = async (provider: string) => {
+  const switchLLMProvider = useCallback(async (provider: string) => {
     try {
       setSystemStatus('STATUS: SWITCHING LLM PROVIDER...');
-      await sqliteService.setActiveLLMProvider(provider);
+      await withTimeout(
+        sqliteService.setActiveLLMProvider(provider),
+        DB_TIMEOUT_MS,
+        'Switch provider timeout'
+      );
+      if (!mountedRef.current) return;
       await loadLLMConfiguration();
+      if (!mountedRef.current) return;
       setShowLLMSelector(false);
       setSystemStatus('STATUS: READY');
       console.log(`[ChatTab] Switched to LLM provider: ${provider}`);
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('[ChatTab] Failed to switch LLM provider:', error);
       setSystemStatus('ERROR: Failed to switch provider');
     }
-  };
+  }, [loadLLMConfiguration]);
 
   const loadMCPToolsCount = async (retryCount = 0, maxRetries = MCP_MAX_RETRIES) => {
     try {
@@ -349,110 +395,145 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     return title;
   };
 
-  const createNewSession = async (): Promise<string | null> => {
+  const createNewSession = useCallback(async (): Promise<string | null> => {
     try {
       const title = messageInput.trim() ?
         generateSmartTitle(messageInput) :
         `Chat ${new Date().toLocaleString()}`;
 
-      const newSession = await sqliteService.createChatSession(title);
+      const newSession = await withTimeout(
+        sqliteService.createChatSession(title),
+        DB_TIMEOUT_MS,
+        'Create session timeout'
+      );
+      if (!mountedRef.current) return null;
       setSessions(prev => [newSession, ...prev]);
       setCurrentSessionUuid(newSession.session_uuid);
       setMessages([]);
       await loadStatistics();
+      if (!mountedRef.current) return null;
       setSystemStatus('STATUS: NEW SESSION CREATED');
       return newSession.session_uuid;
     } catch (error) {
+      if (!mountedRef.current) return null;
       console.error('Failed to create session:', error);
       setSystemStatus('ERROR: Failed to create session');
       return null;
     }
-  };
+  }, [messageInput, loadStatistics]);
 
-  const selectSession = async (sessionUuid: string) => {
+  const selectSession = useCallback(async (sessionUuid: string) => {
     setCurrentSessionUuid(sessionUuid);
     await loadSessionMessages(sessionUuid);
-  };
+  }, []);
 
-  const deleteSession = async (sessionUuid: string) => {
+  const deleteSession = useCallback(async (sessionUuid: string) => {
     try {
-      await sqliteService.deleteChatSession(sessionUuid);
+      await withTimeout(
+        sqliteService.deleteChatSession(sessionUuid),
+        DB_TIMEOUT_MS,
+        'Delete session timeout'
+      );
+      if (!mountedRef.current) return;
       setSessions(prev => prev.filter(s => s.session_uuid !== sessionUuid));
       if (currentSessionUuid === sessionUuid) {
         setCurrentSessionUuid(null);
         setMessages([]);
       }
       await loadStatistics();
+      if (!mountedRef.current) return;
       setSystemStatus('STATUS: SESSION DELETED');
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('Failed to delete session:', error);
       setSystemStatus('ERROR: Failed to delete session');
     }
-  };
+  }, [currentSessionUuid, loadStatistics]);
 
-  const startRenaming = (sessionUuid: string, currentTitle: string) => {
+  const startRenaming = useCallback((sessionUuid: string, currentTitle: string) => {
     setRenamingSessionId(sessionUuid);
     setRenameValue(currentTitle);
-  };
+  }, []);
 
-  const saveRename = async (sessionUuid: string) => {
-    if (!renameValue.trim()) {
+  const saveRename = useCallback(async (sessionUuid: string) => {
+    const sanitizedName = sanitizeInput(renameValue);
+    if (!sanitizedName.trim()) {
       setRenamingSessionId(null);
       return;
     }
 
     try {
-      await sqliteService.updateChatSessionTitle(sessionUuid, renameValue.trim());
+      await withTimeout(
+        sqliteService.updateChatSessionTitle(sessionUuid, sanitizedName.trim()),
+        DB_TIMEOUT_MS,
+        'Rename session timeout'
+      );
+      if (!mountedRef.current) return;
       setSessions(prev => prev.map(s =>
-        s.session_uuid === sessionUuid ? { ...s, title: renameValue.trim() } : s
+        s.session_uuid === sessionUuid ? { ...s, title: sanitizedName.trim() } : s
       ));
       setRenamingSessionId(null);
       setSystemStatus('STATUS: SESSION RENAMED');
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('Failed to rename session:', error);
       setSystemStatus('ERROR: Failed to rename session');
     }
-  };
+  }, [renameValue]);
 
-  const cancelRename = () => {
+  const cancelRename = useCallback(() => {
     setRenamingSessionId(null);
     setRenameValue('');
-  };
+  }, []);
 
-  const clearCurrentChat = async () => {
+  const clearCurrentChat = useCallback(async () => {
     if (!currentSessionUuid) return;
 
     try {
-      await sqliteService.clearChatSessionMessages(currentSessionUuid);
+      await withTimeout(
+        sqliteService.clearChatSessionMessages(currentSessionUuid),
+        DB_TIMEOUT_MS,
+        'Clear chat timeout'
+      );
+      if (!mountedRef.current) return;
       setMessages([]);
       await loadSessions();
       await loadStatistics();
+      if (!mountedRef.current) return;
       setSystemStatus('STATUS: CHAT CLEARED');
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('Failed to clear chat:', error);
       setSystemStatus('ERROR: Failed to clear chat');
     }
-  };
+  }, [currentSessionUuid, loadSessions, loadStatistics]);
 
-  const deleteAllSessions = async () => {
-    if (!confirm('Delete ALL sessions and messages? This cannot be undone!')) {
+  const deleteAllSessions = useCallback(async () => {
+    const confirmed = await showConfirm('This action cannot be undone.', {
+      title: 'Delete ALL sessions and messages?',
+      type: 'danger'
+    });
+    if (!confirmed) {
       return;
     }
 
     try {
       for (const session of sessions) {
         await sqliteService.deleteChatSession(session.session_uuid);
+        if (!mountedRef.current) return;
       }
       setSessions([]);
       setMessages([]);
       setCurrentSessionUuid(null);
       await loadStatistics();
+      if (!mountedRef.current) return;
       setSystemStatus('STATUS: ALL SESSIONS DELETED');
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('Failed to delete all sessions:', error);
       setSystemStatus('ERROR: Failed to delete all sessions');
     }
-  };
+  }, [sessions, loadStatistics]);
 
   // Helper functions for handleSendMessage
   const validateLLMConfiguration = (): { valid: boolean; error?: string } => {
@@ -610,14 +691,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     setMessages(prev => [...prev, errorMessage]);
   };
 
-  const handleSendMessage = async () => {
-    if (!messageInput.trim()) return;
+  const handleSendMessage = useCallback(async () => {
+    // Sanitize user input
+    const sanitizedInput = sanitizeInput(messageInput);
+    if (!sanitizedInput.trim()) return;
 
     // Validate LLM configuration
     const validation = validateLLMConfiguration();
     if (!validation.valid) {
       setSystemStatus('ERROR: Invalid LLM configuration');
-      alert(validation.error);
+      showError('Invalid LLM configuration', [
+        { label: 'ERROR', value: validation.error || 'Unknown error' }
+      ]);
       onNavigateToSettings?.();
       return;
     }
@@ -629,7 +714,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       return;
     }
 
-    const userContent = messageInput.trim();
+    const userContent = sanitizedInput.trim();
     setMessageInput('');
     setIsTyping(true);
     setStreamingContent('');
@@ -703,6 +788,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       }
 
     } catch (error) {
+      if (!mountedRef.current) return;
       console.error('[ChatTab] Send message error:', error);
       await saveErrorMessage(
         sessionUuid,
@@ -712,7 +798,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       setStreamingContent('');
       setSystemStatus('ERROR: Request failed');
     }
-  };
+  }, [messageInput, activeLLMConfig, onNavigateToSettings, onNavigateToTab, loadSessions, loadStatistics, auth]);
 
   // Filter sessions by search query (searches in both title and message content)
   const filteredSessions = searchQuery
@@ -1365,6 +1451,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       </div>
 
       {/* Main Content */}
+      <ErrorBoundary name="ChatMainContent" variant="minimal">
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left Panel - Sessions */}
         <div style={{
@@ -1968,6 +2055,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           </div>
         </div>
       </div>
+      </ErrorBoundary>
 
       {/* Status Bar (Bottom) */}
       <div style={{

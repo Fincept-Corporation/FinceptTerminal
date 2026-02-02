@@ -31,11 +31,9 @@ let isInitialized = false;
  */
 export function initializeInternalMCP(): void {
   if (isInitialized) {
-    console.warn('[Internal MCP] Already initialized, skipping...');
     return;
   }
 
-  console.log('[Internal MCP] Initializing...');
 
   try {
     // Register all tool modules
@@ -55,19 +53,15 @@ export function initializeInternalMCP(): void {
     terminalMCPProvider.registerTools(edgarTools);
     terminalMCPProvider.registerTools(nodeEditorTools);
 
-    console.log(`[Internal MCP] Registered ${terminalMCPProvider.getToolCount()} tools`);
 
     // Initialize global bridge contexts
     reportBuilderMCPBridge.initializeGlobalContexts();
-    console.log('[Internal MCP] Report Builder bridge initialized');
 
     // Initialize Node Editor bridge contexts
     nodeEditorMCPBridge.initialize();
-    console.log('[Internal MCP] Node Editor bridge initialized');
 
     // Mark as initialized
     isInitialized = true;
-    console.log('[Internal MCP] Initialization complete');
   } catch (error) {
     console.error('[Internal MCP] Initialization failed:', error);
     throw error;

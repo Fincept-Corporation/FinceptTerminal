@@ -322,7 +322,7 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
     ).ok();
 
     if let Some(pos) = existing {
-        // Closing/reducing position
+        // Closing/reducing opposite position
         let close_qty = qty.min(pos.quantity);
         pnl = if pos.side == "long" { (fill_price - pos.entry_price) * close_qty } else { (pos.entry_price - fill_price) * close_qty };
 
@@ -332,7 +332,7 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
             conn.execute("UPDATE pt_positions SET quantity = quantity - ?1, realized_pnl = realized_pnl + ?2 WHERE id = ?3", params![close_qty, pnl, pos.id])?;
         }
 
-        // Open remaining as new position if qty > close_qty
+        // Open remaining as new position if qty > close_qty (flip position)
         if qty > close_qty {
             let new_qty = qty - close_qty;
             let pos_id = Uuid::new_v4().to_string();
@@ -350,12 +350,12 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
         ).ok();
 
         if let Some(pos) = same_pos {
-            // Average into position
+            // Average into existing position
             let new_qty = pos.quantity + qty;
             let new_entry = (pos.entry_price * pos.quantity + fill_price * qty) / new_qty;
             conn.execute("UPDATE pt_positions SET quantity = ?1, entry_price = ?2, current_price = ?3 WHERE id = ?4", params![new_qty, new_entry, fill_price, pos.id])?;
         } else {
-            // New position
+            // Brand new position
             let pos_id = Uuid::new_v4().to_string();
             conn.execute(
                 "INSERT INTO pt_positions (id, portfolio_id, symbol, side, quantity, entry_price, current_price, leverage, opened_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -364,7 +364,10 @@ pub fn fill_order(order_id: &str, fill_price: f64, fill_qty: Option<f64>) -> Res
         }
     }
 
-    // Update balance
+    // Update wallet balance (industry standard - Binance/Bybit style):
+    // Wallet balance only changes on: realized P&L and fees
+    // Opening positions does NOT affect wallet balance (margin is reserved from available balance)
+    // Closing positions adds/subtracts realized P&L minus fees
     let balance_change = pnl - fee;
     conn.execute("UPDATE pt_portfolios SET balance = balance + ?1 WHERE id = ?2", params![balance_change, order.portfolio_id])?;
 

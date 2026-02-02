@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { showPrompt } from '@/utils/notifications';
 import { ReportComponent } from '@/services/core/reportService';
 import { ComponentTemplate, brandKitService, BrandKit, HeaderFooterTemplate, ParagraphStyles } from '@/services/core/brandKitService';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -256,7 +257,10 @@ const ReportBuilderTab: React.FC = () => {
   // Save component as template
   const saveAsTemplate = useCallback(async () => {
     if (!selectedComp) return;
-    const templateName = prompt('Enter template name:', `${selectedComp.type} Template`);
+    const templateName = await showPrompt('Enter template name:', {
+      title: 'Save as Template',
+      defaultValue: `${selectedComp.type} Template`
+    });
     if (!templateName) return;
 
     const newTemplate: ComponentTemplate = {

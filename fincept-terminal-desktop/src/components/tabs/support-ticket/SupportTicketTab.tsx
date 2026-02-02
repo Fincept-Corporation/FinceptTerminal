@@ -1,12 +1,119 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useReducer, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SupportApiService } from '@/services/forum/supportApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { RefreshCw, Plus, ArrowLeft, Send, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { withTimeout } from '@/services/core/apiUtils';
+import { sanitizeInput } from '@/services/core/validators';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { showWarning, showSuccess, showError } from '@/utils/notifications';
 
+// ══════════════════════════════════════════════════════════════
+// STATE MACHINE & TYPES
+// ══════════════════════════════════════════════════════════════
 type SupportView = 'list' | 'create' | 'details';
+type SupportStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface SupportState {
+  status: SupportStatus;
+  currentView: SupportView;
+  tickets: any[];
+  selectedTicket: any | null;
+  stats: { total_tickets: number; open_tickets: number; resolved_tickets: number };
+  error: string | null;
+}
+
+type SupportAction =
+  | { type: 'SET_LOADING' }
+  | { type: 'SET_READY' }
+  | { type: 'SET_ERROR'; error: string }
+  | { type: 'SET_VIEW'; view: SupportView }
+  | { type: 'SET_TICKETS'; tickets: any[] }
+  | { type: 'SET_SELECTED_TICKET'; ticket: any | null }
+  | { type: 'SET_STATS'; stats: { total_tickets: number; open_tickets: number; resolved_tickets: number } }
+  | { type: 'RESET_ERROR' };
+
+// Demo ticket to show users how the system works
+const DEMO_TICKET = {
+  id: 'DEMO-001',
+  ticket_id: 'DEMO-001',
+  subject: 'Welcome to Fincept Support - Demo Ticket',
+  description: `This is a demonstration ticket to help you understand how our support system works.
+
+HOW TO USE SUPPORT:
+1. Click "+ CREATE TICKET" to submit a new support request
+2. Fill in the subject, category, priority, and detailed description
+3. Our support team will respond within 24 hours
+4. You can add messages to continue the conversation
+5. Close the ticket when your issue is resolved
+
+AVAILABLE CATEGORIES:
+- Technical Issue: For bugs, errors, or technical problems
+- Billing: Questions about payments, subscriptions, or invoices
+- Feature Request: Suggest new features or improvements
+- Bug Report: Report software bugs with detailed steps
+- Account: Account access, settings, or profile issues
+- Other: General inquiries
+
+This demo ticket shows you exactly how your real support tickets will appear. Feel free to explore and create your own ticket when you need assistance!`,
+  category: 'technical',
+  priority: 'medium',
+  status: 'open',
+  created_at: new Date().toISOString(),
+  messages: [
+    {
+      sender_type: 'support',
+      message: 'Welcome to Fincept Terminal Support! This is how our support team will respond to your tickets. We typically respond within 24 hours during business days.',
+      created_at: new Date(Date.now() - 3600000).toISOString()
+    },
+    {
+      sender_type: 'user',
+      message: 'Thank you! I understand how the system works now.',
+      created_at: new Date(Date.now() - 1800000).toISOString()
+    },
+    {
+      sender_type: 'support',
+      message: 'Great! Feel free to create a real ticket anytime you need help. Our team is here to assist you 24/7.',
+      created_at: new Date(Date.now() - 900000).toISOString()
+    }
+  ]
+};
+
+const initialState: SupportState = {
+  status: 'idle',
+  currentView: 'list',
+  tickets: [DEMO_TICKET],
+  selectedTicket: null,
+  stats: { total_tickets: 1, open_tickets: 1, resolved_tickets: 0 },
+  error: null
+};
+
+function supportReducer(state: SupportState, action: SupportAction): SupportState {
+  switch (action.type) {
+    case 'SET_LOADING':
+      return { ...state, status: 'loading', error: null };
+    case 'SET_READY':
+      return { ...state, status: 'ready', error: null };
+    case 'SET_ERROR':
+      return { ...state, status: 'error', error: action.error };
+    case 'SET_VIEW':
+      return { ...state, currentView: action.view };
+    case 'SET_TICKETS':
+      return { ...state, tickets: action.tickets };
+    case 'SET_SELECTED_TICKET':
+      return { ...state, selectedTicket: action.ticket };
+    case 'SET_STATS':
+      return { ...state, stats: action.stats };
+    case 'RESET_ERROR':
+      return { ...state, error: null };
+    default:
+      return state;
+  }
+}
+
+const API_TIMEOUT_MS = 30000;
 
 const SupportTicketTab: React.FC = () => {
   const { t } = useTranslation('support');
@@ -26,59 +133,15 @@ const SupportTicketTab: React.FC = () => {
   };
 
   const { session } = useAuth();
+  const [state, dispatch] = useReducer(supportReducer, initialState);
+  const { status, currentView, tickets, selectedTicket, stats, error } = state;
+
+  // Cleanup refs for race condition prevention
+  const mountedRef = useRef(true);
+  const fetchIdRef = useRef(0);
+
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [currentView, setCurrentView] = useState<SupportView>('list');
-  const [loading, setLoading] = useState(false);
-
-  // Demo ticket to show users how the system works
-  const DEMO_TICKET = {
-    id: 'DEMO-001',
-    ticket_id: 'DEMO-001',
-    subject: 'Welcome to Fincept Support - Demo Ticket',
-    description: `This is a demonstration ticket to help you understand how our support system works.
-
-HOW TO USE SUPPORT:
-1. Click "+ CREATE TICKET" to submit a new support request
-2. Fill in the subject, category, priority, and detailed description
-3. Our support team will respond within 24 hours
-4. You can add messages to continue the conversation
-5. Close the ticket when your issue is resolved
-
-AVAILABLE CATEGORIES:
-- Technical Issue: For bugs, errors, or technical problems
-- Billing: Questions about payments, subscriptions, or invoices
-- Feature Request: Suggest new features or improvements
-- Bug Report: Report software bugs with detailed steps
-- Account: Account access, settings, or profile issues
-- Other: General inquiries
-
-This demo ticket shows you exactly how your real support tickets will appear. Feel free to explore and create your own ticket when you need assistance!`,
-    category: 'technical',
-    priority: 'medium',
-    status: 'open',
-    created_at: new Date().toISOString(),
-    messages: [
-      {
-        sender_type: 'support',
-        message: 'Welcome to Fincept Terminal Support! This is how our support team will respond to your tickets. We typically respond within 24 hours during business days.',
-        created_at: new Date(Date.now() - 3600000).toISOString()
-      },
-      {
-        sender_type: 'user',
-        message: 'Thank you! I understand how the system works now.',
-        created_at: new Date(Date.now() - 1800000).toISOString()
-      },
-      {
-        sender_type: 'support',
-        message: 'Great! Feel free to create a real ticket anytime you need help. Our team is here to assist you 24/7.',
-        created_at: new Date(Date.now() - 900000).toISOString()
-      }
-    ]
-  };
-
-  const [tickets, setTickets] = useState<any[]>([DEMO_TICKET]);
-  const [selectedTicket, setSelectedTicket] = useState<any>(null);
-  const [stats, setStats] = useState<any>({ total_tickets: 1, open_tickets: 1, resolved_tickets: 0 });
+  const loading = status === 'loading';
 
   // Create ticket form
   const [newTicket, setNewTicket] = useState({
@@ -91,117 +154,258 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
   // Message form
   const [newMessage, setNewMessage] = useState('');
 
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Update clock
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Load tickets with race condition prevention
+  const loadTickets = useCallback(async () => {
+    if (!session?.api_key) return;
+
+    const currentFetchId = ++fetchIdRef.current;
+    dispatch({ type: 'SET_LOADING' });
+
+    try {
+      const result = await withTimeout(
+        SupportApiService.getUserTickets(session.api_key),
+        API_TIMEOUT_MS,
+        'Load tickets timeout'
+      );
+
+      // Prevent stale updates
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
+      if (result.success) {
+        const apiTickets = result.data?.tickets || result.data || [];
+        dispatch({ type: 'SET_TICKETS', tickets: [DEMO_TICKET, ...apiTickets] });
+        dispatch({ type: 'SET_READY' });
+      } else {
+        dispatch({ type: 'SET_TICKETS', tickets: [DEMO_TICKET] });
+        dispatch({ type: 'SET_READY' });
+      }
+    } catch (err) {
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+      dispatch({ type: 'SET_TICKETS', tickets: [DEMO_TICKET] });
+      dispatch({ type: 'SET_ERROR', error: err instanceof Error ? err.message : 'Failed to load tickets' });
+    }
+  }, [session?.api_key]);
+
+  // Load stats
+  const loadStats = useCallback(async () => {
+    if (!session?.api_key) return;
+
+    try {
+      const result = await withTimeout(
+        SupportApiService.getSupportStats(session.api_key),
+        API_TIMEOUT_MS,
+        'Load stats timeout'
+      );
+
+      if (!mountedRef.current) return;
+
+      if (result.success && result.data) {
+        dispatch({ type: 'SET_STATS', stats: result.data });
+      }
+    } catch (err) {
+      // Stats failure is non-critical, don't show error
+      console.error('[SupportTab] Failed to load stats:', err);
+    }
+  }, [session?.api_key]);
+
+  // Initial load
   useEffect(() => {
     if (session?.api_key) {
       loadTickets();
       loadStats();
     }
-  }, [session]);
+  }, [session?.api_key, loadTickets, loadStats]);
 
-  const loadTickets = async () => {
+  // Create ticket with validation
+  const createTicket = useCallback(async () => {
     if (!session?.api_key) return;
-    setLoading(true);
-    const result = await SupportApiService.getUserTickets(session.api_key);
-    if (result.success) {
-      const apiTickets = result.data?.tickets || result.data || [];
-      setTickets([DEMO_TICKET, ...apiTickets]);
-    } else {
-      setTickets([DEMO_TICKET]);
-    }
-    setLoading(false);
-  };
 
-  const loadStats = async () => {
-    if (!session?.api_key) return;
-    const result = await SupportApiService.getSupportStats(session.api_key);
-    if (result.success) {
-      setStats(result.data);
-    }
-  };
+    // Validate and sanitize inputs
+    const sanitizedSubject = sanitizeInput(newTicket.subject);
+    const sanitizedDescription = sanitizeInput(newTicket.description);
 
-  const createTicket = async () => {
-    if (!session?.api_key || !newTicket.subject || !newTicket.description) {
-      alert('Please fill in all required fields');
+    if (!sanitizedSubject || !sanitizedDescription) {
+      showWarning('Please fill in all required fields');
       return;
     }
 
-    setLoading(true);
-    const result = await SupportApiService.createTicket(session.api_key, newTicket);
-    setLoading(false);
+    dispatch({ type: 'SET_LOADING' });
 
-    if (result.success) {
-      alert('Ticket created successfully!');
-      setNewTicket({ subject: '', description: '', category: 'technical', priority: 'medium' });
-      setCurrentView('list');
-      loadTickets();
-    } else {
-      alert(`Failed to create ticket: ${result.error}`);
+    try {
+      const result = await withTimeout(
+        SupportApiService.createTicket(session.api_key, {
+          ...newTicket,
+          subject: sanitizedSubject,
+          description: sanitizedDescription
+        }),
+        API_TIMEOUT_MS,
+        'Create ticket timeout'
+      );
+
+      if (!mountedRef.current) return;
+
+      if (result.success) {
+        showSuccess('Ticket created successfully');
+        setNewTicket({ subject: '', description: '', category: 'technical', priority: 'medium' });
+        dispatch({ type: 'SET_VIEW', view: 'list' });
+        dispatch({ type: 'SET_READY' });
+        loadTickets();
+      } else {
+        dispatch({ type: 'SET_ERROR', error: result.error || 'Failed to create ticket' });
+        showError('Failed to create ticket', [
+          { label: 'ERROR', value: result.error || 'Unknown error' }
+        ]);
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const errorMsg = err instanceof Error ? err.message : 'Failed to create ticket';
+      dispatch({ type: 'SET_ERROR', error: errorMsg });
+      showError('Failed to create ticket', [
+        { label: 'ERROR', value: errorMsg }
+      ]);
     }
-  };
+  }, [session?.api_key, newTicket, loadTickets]);
 
-  const viewTicketDetails = async (ticketId: number | string) => {
+  // View ticket details
+  const viewTicketDetails = useCallback(async (ticketId: number | string) => {
     if (ticketId === 'DEMO-001') {
-      setSelectedTicket(DEMO_TICKET);
-      setCurrentView('details');
+      dispatch({ type: 'SET_SELECTED_TICKET', ticket: DEMO_TICKET });
+      dispatch({ type: 'SET_VIEW', view: 'details' });
       return;
     }
 
     if (!session?.api_key) return;
-    setLoading(true);
-    const result = await SupportApiService.getTicketDetails(session.api_key, ticketId as number);
-    setLoading(false);
 
-    if (result.success) {
-      setSelectedTicket(result.data);
-      setCurrentView('details');
-    } else {
-      alert(`Failed to load ticket details: ${result.error}`);
+    dispatch({ type: 'SET_LOADING' });
+
+    try {
+      const result = await withTimeout(
+        SupportApiService.getTicketDetails(session.api_key, ticketId as number),
+        API_TIMEOUT_MS,
+        'Load ticket details timeout'
+      );
+
+      if (!mountedRef.current) return;
+
+      if (result.success) {
+        dispatch({ type: 'SET_SELECTED_TICKET', ticket: result.data });
+        dispatch({ type: 'SET_VIEW', view: 'details' });
+        dispatch({ type: 'SET_READY' });
+      } else {
+        dispatch({ type: 'SET_ERROR', error: result.error || 'Failed to load ticket details' });
+        showError('Failed to load ticket details', [
+          { label: 'ERROR', value: result.error || 'Unknown error' }
+        ]);
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load ticket details';
+      dispatch({ type: 'SET_ERROR', error: errorMsg });
+      showError('Failed to load ticket details', [
+        { label: 'ERROR', value: errorMsg }
+      ]);
     }
-  };
+  }, [session?.api_key]);
 
-  const addMessage = async () => {
-    if (!session?.api_key || !selectedTicket || !newMessage.trim()) return;
-
-    setLoading(true);
-    const result = await SupportApiService.addTicketMessage(
-      session.api_key,
-      selectedTicket.id || selectedTicket.ticket_id,
-      newMessage
-    );
-    setLoading(false);
-
-    if (result.success) {
-      setNewMessage('');
-      viewTicketDetails(selectedTicket.id || selectedTicket.ticket_id);
-    } else {
-      alert(`Failed to add message: ${result.error}`);
-    }
-  };
-
-  const updateTicketStatus = async (status: string) => {
+  // Add message with validation
+  const addMessage = useCallback(async () => {
     if (!session?.api_key || !selectedTicket) return;
 
-    setLoading(true);
-    const result = await SupportApiService.updateTicket(
-      session.api_key,
-      selectedTicket.id || selectedTicket.ticket_id,
-      status
-    );
-    setLoading(false);
+    const sanitizedMessage = sanitizeInput(newMessage);
+    if (!sanitizedMessage.trim()) return;
 
-    if (result.success) {
-      viewTicketDetails(selectedTicket.id || selectedTicket.ticket_id);
-      loadTickets();
-    } else {
-      alert(`Failed to update ticket: ${result.error}`);
+    dispatch({ type: 'SET_LOADING' });
+
+    try {
+      const result = await withTimeout(
+        SupportApiService.addTicketMessage(
+          session.api_key,
+          selectedTicket.id || selectedTicket.ticket_id,
+          sanitizedMessage
+        ),
+        API_TIMEOUT_MS,
+        'Add message timeout'
+      );
+
+      if (!mountedRef.current) return;
+
+      if (result.success) {
+        setNewMessage('');
+        dispatch({ type: 'SET_READY' });
+        viewTicketDetails(selectedTicket.id || selectedTicket.ticket_id);
+      } else {
+        dispatch({ type: 'SET_ERROR', error: result.error || 'Failed to add message' });
+        showError('Failed to add message', [
+          { label: 'ERROR', value: result.error || 'Unknown error' }
+        ]);
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const errorMsg = err instanceof Error ? err.message : 'Failed to add message';
+      dispatch({ type: 'SET_ERROR', error: errorMsg });
+      showError('Failed to add message', [
+        { label: 'ERROR', value: errorMsg }
+      ]);
     }
-  };
+  }, [session?.api_key, selectedTicket, newMessage, viewTicketDetails]);
+
+  // Update ticket status
+  const updateTicketStatus = useCallback(async (newStatus: string) => {
+    if (!session?.api_key || !selectedTicket) return;
+
+    dispatch({ type: 'SET_LOADING' });
+
+    try {
+      const result = await withTimeout(
+        SupportApiService.updateTicket(
+          session.api_key,
+          selectedTicket.id || selectedTicket.ticket_id,
+          newStatus
+        ),
+        API_TIMEOUT_MS,
+        'Update ticket status timeout'
+      );
+
+      if (!mountedRef.current) return;
+
+      if (result.success) {
+        dispatch({ type: 'SET_READY' });
+        viewTicketDetails(selectedTicket.id || selectedTicket.ticket_id);
+        loadTickets();
+      } else {
+        dispatch({ type: 'SET_ERROR', error: result.error || 'Failed to update ticket' });
+        showError('Failed to update ticket', [
+          { label: 'ERROR', value: result.error || 'Unknown error' }
+        ]);
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update ticket';
+      dispatch({ type: 'SET_ERROR', error: errorMsg });
+      showError('Failed to update ticket', [
+        { label: 'ERROR', value: errorMsg }
+      ]);
+    }
+  }, [session?.api_key, selectedTicket, viewTicketDetails, loadTickets]);
+
+  // View change handler
+  const setCurrentView = useCallback((view: SupportView) => {
+    dispatch({ type: 'SET_VIEW', view });
+  }, []);
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'N/A';
@@ -214,8 +418,8 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
+  const getStatusColor = (ticketStatus: string) => {
+    switch (ticketStatus?.toLowerCase()) {
       case 'open':
       case 'in_progress':
         return C.CYAN;
@@ -243,8 +447,8 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status?.toLowerCase()) {
+  const getStatusIcon = (ticketStatus: string) => {
+    switch (ticketStatus?.toLowerCase()) {
       case 'open':
       case 'in_progress':
         return <Clock size={14} />;
@@ -410,6 +614,7 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
       </div>
 
       {/* Main Content */}
+      <ErrorBoundary name="SupportTicketContent" variant="minimal">
       <div style={{
         flex: 1,
         overflow: 'auto',
@@ -919,6 +1124,7 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
           </>
         )}
       </div>
+      </ErrorBoundary>
 
       <TabFooter
         tabName="SUPPORT CENTER"

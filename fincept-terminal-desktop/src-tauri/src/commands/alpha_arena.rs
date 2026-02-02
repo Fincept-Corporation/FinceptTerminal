@@ -80,7 +80,6 @@ async fn execute_alpha_arena_action(
 
     eprintln!("[Alpha Arena v2] Executing action: {}", action);
 
-    // Use the unified python module API - execute_sync bypasses worker pool
     let stdout = python::execute_sync(
         app,
         "alpha_arena/main.py",

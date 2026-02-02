@@ -224,10 +224,10 @@ export class PaymentApiService {
 
   // Get specific plan details
   static async getPlanDetails(planId: string): Promise<PaymentApiResponse<SubscriptionPlan>> {
-    return makePaymentApiRequest<SubscriptionPlan>('GET', `/payment/plans/${planId}`);
+    return makePaymentApiRequest<SubscriptionPlan>('GET', `/cashfree/plans/${planId}`);
   }
 
-  // Create checkout session - Updated to use /payment/create-order endpoint
+  // Create checkout session - Updated to use /cashfree/create-order endpoint
   static async createCheckoutSession(
     apiKey: string,
     request: CheckoutRequest
@@ -295,28 +295,20 @@ export class PaymentApiService {
 
   // Get user's current subscription - Updated to use new endpoint
   static async getUserSubscription(apiKey: string): Promise<PaymentApiResponse<UserSubscriptionResponse>> {
-    return makePaymentApiRequest<UserSubscriptionResponse>('GET', '/payment/subscription', undefined, {
+    return makePaymentApiRequest<UserSubscriptionResponse>('GET', '/cashfree/subscription', undefined, {
       'X-API-Key': apiKey
     });
   }
 
   // Get user's usage details
   static async getUserUsage(apiKey: string): Promise<PaymentApiResponse<any>> {
-    return makePaymentApiRequest('GET', '/user/usage', undefined, {
+    return makePaymentApiRequest('GET', '/cashfree/usage', undefined, {
       'X-API-Key': apiKey
     });
   }
 
-  // Cancel subscription - Updated to use new endpoint
-  // Cancels subscription in Polar, user keeps access until billing period ends
-  // Auto-downgrades to free plan when subscription expires via webhook
-  static async cancelSubscription(apiKey: string): Promise<PaymentApiResponse<any>> {
-    return makePaymentApiRequest('POST', '/payment/subscription/cancel', undefined, {
-      'X-API-Key': apiKey
-    });
-  }
 
-  // Get payment history (transactions) - Updated to use /payment/history endpoint
+  // Get payment history (transactions) - Updated to use /cashfree/payments endpoint
   static async getPaymentHistory(
     apiKey: string,
     page: number = 1,
@@ -324,7 +316,7 @@ export class PaymentApiService {
   ): Promise<PaymentApiResponse<PaymentHistoryResponse>> {
     return makePaymentApiRequest<PaymentHistoryResponse>(
       'GET',
-      `/payment/history?limit=${limit}`,
+      `/cashfree/payments?limit=${limit}`,
       undefined,
       { 'X-API-Key': apiKey }
     );
@@ -337,7 +329,7 @@ export class PaymentApiService {
   ): Promise<PaymentApiResponse<any>> {
     return makePaymentApiRequest(
       'GET',
-      `/payment/payments/${paymentUuid}`,
+      `/cashfree/payments/${paymentUuid}`,
       undefined,
       { 'X-API-Key': apiKey }
     );
@@ -350,7 +342,7 @@ export class PaymentApiService {
   ): Promise<PaymentApiResponse<any>> {
     return makePaymentApiRequest(
       'GET',
-      `/payment/order/${transactionId}`,
+      `/cashfree/order/${transactionId}`,
       undefined,
       { 'X-API-Key': apiKey }
     );
@@ -358,12 +350,12 @@ export class PaymentApiService {
 
   // Webhook validation (for future use)
   static async validateWebhook(webhookData: any): Promise<PaymentApiResponse<any>> {
-    return makePaymentApiRequest('POST', '/payment/webhook', webhookData);
+    return makePaymentApiRequest('POST', '/cashfree/webhook', webhookData);
   }
 
   // Debug function to test API key validity
   static async testApiKey(apiKey: string): Promise<PaymentApiResponse<any>> {
-    return await makePaymentApiRequest('GET', '/payment/subscription', undefined, {
+    return await makePaymentApiRequest('GET', '/cashfree/subscription', undefined, {
       'X-API-Key': apiKey
     });
   }
@@ -501,7 +493,8 @@ static validatePaymentUrl(url: string): boolean {
   ): Promise<boolean> {
     if (!this.validatePaymentUrl(checkoutUrl)) {
       console.error('Invalid checkout URL provided');
-      alert('Payment URL is invalid. Please try again or contact support.');
+      const { showError } = await import('@/utils/notifications');
+      showError('Payment URL is invalid. Please try again or contact support.');
       return false;
     }
 
@@ -522,7 +515,8 @@ static validatePaymentUrl(url: string): boolean {
   ): Promise<boolean> {
     if (!this.validatePaymentUrl(checkoutUrl)) {
       console.error('Invalid or suspicious payment URL');
-      alert('Invalid payment URL. Please contact support.');
+      const { showError } = await import('@/utils/notifications');
+      showError('Invalid payment URL. Please contact support.');
       return false;
     }
 
@@ -530,21 +524,29 @@ static validatePaymentUrl(url: string): boolean {
   }
 
   // Fallback method: Open external payment URL
-  private static openPaymentUrlExternal(checkoutUrl: string): boolean {
+  private static async openPaymentUrlExternal(checkoutUrl: string): Promise<boolean> {
     try {
       const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
 
       if (!newWindow) {
+        const { showWarning } = await import('@/utils/notifications');
 
         // Try to copy URL to clipboard as fallback
         if (navigator.clipboard && checkoutUrl !== 'undefined') {
-          navigator.clipboard.writeText(checkoutUrl).then(() => {
-            alert(`Popup blocked. Payment URL copied to clipboard: ${checkoutUrl}`);
-          }).catch(() => {
-            alert(`Please visit this URL to complete payment: ${checkoutUrl}`);
-          });
+          try {
+            await navigator.clipboard.writeText(checkoutUrl);
+            showWarning('Popup blocked. Payment URL copied to clipboard', [
+              { label: 'URL', value: checkoutUrl }
+            ]);
+          } catch {
+            showWarning('Please visit this URL to complete payment', [
+              { label: 'URL', value: checkoutUrl }
+            ]);
+          }
         } else {
-          alert(`Please visit this URL to complete payment: ${checkoutUrl}`);
+          showWarning('Please visit this URL to complete payment', [
+            { label: 'URL', value: checkoutUrl }
+          ]);
         }
 
         return false;
@@ -554,7 +556,10 @@ static validatePaymentUrl(url: string): boolean {
 
     } catch (error) {
       console.error('PaymentUtils: Failed to open external payment URL:', error);
-      alert(`Please visit this URL to complete payment: ${checkoutUrl}`);
+      const { showError } = await import('@/utils/notifications');
+      showError('Failed to open payment window', [
+        { label: 'URL', value: checkoutUrl }
+      ]);
       return false;
     }
   }

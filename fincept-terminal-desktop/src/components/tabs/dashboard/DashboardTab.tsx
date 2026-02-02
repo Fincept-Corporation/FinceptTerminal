@@ -1,11 +1,17 @@
-import React, { useState, useEffect } from 'react';
+// DashboardTab - Production-ready dashboard with widgets
+// Uses: State machine, cleanup, timeout, error boundaries
+
+import React, { useReducer, useEffect, useRef, useCallback } from 'react';
 import GridLayout, { Layout } from 'react-grid-layout';
-import { Plus, RotateCcw, Save, Info } from 'lucide-react';
+import { Plus, RotateCcw, Save, Info, AlertCircle } from 'lucide-react';
 import { createDashboardTabTour } from '@/components/tabs/tours/dashboardTabTour';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { sqliteService, saveSetting, getSetting } from '@/services/core/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { withTimeout } from '@/services/core/apiUtils';
+import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 import {
   NewsWidget,
   MarketDataWidget,
@@ -32,9 +38,50 @@ import { AddWidgetModal } from './AddWidgetModal';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+const STORAGE_KEY = 'dashboard-widgets';
+const DB_TIMEOUT_MS = 10000;
+const SAVE_TIMEOUT_MS = 5000;
+
 interface WidgetInstance extends WidgetConfig {
   layout: Layout;
 }
+
+// ============================================================================
+// State Machine
+// ============================================================================
+
+type DashboardStatus = 'initializing' | 'loading' | 'ready' | 'saving' | 'error';
+
+interface State {
+  status: DashboardStatus;
+  widgets: WidgetInstance[];
+  nextId: number;
+  showAddModal: boolean;
+  currentTime: Date;
+  containerWidth: number;
+  error: string | null;
+}
+
+type Action =
+  | { type: 'INIT_COMPLETE'; widgets: WidgetInstance[]; nextId: number }
+  | { type: 'INIT_ERROR'; error: string }
+  | { type: 'SET_WIDGETS'; widgets: WidgetInstance[] }
+  | { type: 'ADD_WIDGET'; widget: WidgetInstance }
+  | { type: 'REMOVE_WIDGET'; id: string }
+  | { type: 'UPDATE_LAYOUTS'; layouts: Layout[] }
+  | { type: 'SET_NEXT_ID'; nextId: number }
+  | { type: 'TOGGLE_MODAL'; show: boolean }
+  | { type: 'UPDATE_TIME'; time: Date }
+  | { type: 'SET_WIDTH'; width: number }
+  | { type: 'START_SAVING' }
+  | { type: 'SAVE_COMPLETE' }
+  | { type: 'SAVE_ERROR'; error: string }
+  | { type: 'RESET_LAYOUT'; widgets: WidgetInstance[] }
+  | { type: 'CLEAR_ERROR' };
 
 // Title keys map to translation keys in dashboard.json
 const DEFAULT_LAYOUT: WidgetInstance[] = [
@@ -106,7 +153,62 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
   }
 ];
 
-const STORAGE_KEY = 'dashboard-widgets';
+const initialState: State = {
+  status: 'initializing',
+  widgets: [],
+  nextId: 1,
+  showAddModal: false,
+  currentTime: new Date(),
+  containerWidth: 1200,
+  error: null,
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'INIT_COMPLETE':
+      return { ...state, status: 'ready', widgets: action.widgets, nextId: action.nextId, error: null };
+    case 'INIT_ERROR':
+      return { ...state, status: 'error', error: action.error };
+    case 'SET_WIDGETS':
+      return { ...state, widgets: action.widgets };
+    case 'ADD_WIDGET':
+      return { ...state, widgets: [...state.widgets, action.widget], nextId: state.nextId + 1 };
+    case 'REMOVE_WIDGET':
+      return { ...state, widgets: state.widgets.filter(w => w.id !== action.id) };
+    case 'UPDATE_LAYOUTS':
+      return {
+        ...state,
+        widgets: state.widgets.map(widget => {
+          const newLayout = action.layouts.find(l => l.i === widget.id);
+          return newLayout ? { ...widget, layout: newLayout } : widget;
+        }),
+      };
+    case 'SET_NEXT_ID':
+      return { ...state, nextId: action.nextId };
+    case 'TOGGLE_MODAL':
+      return { ...state, showAddModal: action.show };
+    case 'UPDATE_TIME':
+      return { ...state, currentTime: action.time };
+    case 'SET_WIDTH':
+      return { ...state, containerWidth: action.width };
+    case 'START_SAVING':
+      return { ...state, status: 'saving' };
+    case 'SAVE_COMPLETE':
+      return { ...state, status: 'ready', error: null };
+    case 'SAVE_ERROR':
+      return { ...state, status: 'ready', error: action.error };
+    case 'RESET_LAYOUT':
+      return { ...state, widgets: action.widgets, nextId: 1 };
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+    default:
+      return state;
+  }
+}
+
+// ============================================================================
+// Component
+// ============================================================================
 
 interface DashboardTabProps {
   onNavigateToTab?: (tabName: string) => void;
@@ -115,56 +217,60 @@ interface DashboardTabProps {
 const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   const { colors, fontSize } = useTerminalTheme();
   const { t } = useTranslation('dashboard');
-  const [widgets, setWidgets] = useState<WidgetInstance[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [nextId, setNextId] = useState(1);
-  const [containerWidth, setContainerWidth] = useState(1200);
-  const [dbInitialized, setDbInitialized] = useState(false);
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-  const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Initialize database for caching
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+
+  // Cleanup on unmount
   useEffect(() => {
-    const initDatabase = async () => {
-      try {
-        await sqliteService.initialize();
-        const healthCheck = await sqliteService.healthCheck();
-        if (healthCheck.healthy) {
-          setDbInitialized(true);
-        } else {
-          setDbInitialized(true); // Allow dashboard to load anyway
-        }
-      } catch (error) {
-        setDbInitialized(true); // Allow dashboard to load anyway
-      }
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
     };
-    initDatabase();
   }, []);
 
-  // Load widgets from storage on mount
+  // Initialize database and load widgets
   useEffect(() => {
-    const loadWidgets = async () => {
+    const init = async () => {
       try {
-        const saved = await getSetting(STORAGE_KEY);
+        // Initialize DB with timeout
+        await withTimeout(sqliteService.initialize(), DB_TIMEOUT_MS, 'Database init timeout');
+
+        if (!mountedRef.current) return;
+
+        // Load saved widgets with timeout
+        const saved = await withTimeout(getSetting(STORAGE_KEY), DB_TIMEOUT_MS, 'Load settings timeout');
+
+        if (!mountedRef.current) return;
+
         if (saved) {
-          const parsed = JSON.parse(saved);
-          setWidgets(parsed.widgets);
-          setNextId(parsed.nextId || 1);
+          try {
+            const parsed = JSON.parse(saved);
+            dispatch({ type: 'INIT_COMPLETE', widgets: parsed.widgets || DEFAULT_LAYOUT, nextId: parsed.nextId || 1 });
+          } catch {
+            dispatch({ type: 'INIT_COMPLETE', widgets: DEFAULT_LAYOUT, nextId: 1 });
+          }
         } else {
-          setWidgets(DEFAULT_LAYOUT);
+          dispatch({ type: 'INIT_COMPLETE', widgets: DEFAULT_LAYOUT, nextId: 1 });
         }
       } catch (error) {
-        setWidgets(DEFAULT_LAYOUT);
+        if (!mountedRef.current) return;
+        console.error('[DashboardTab] Init error:', error);
+        // Still load with defaults on error
+        dispatch({ type: 'INIT_COMPLETE', widgets: DEFAULT_LAYOUT, nextId: 1 });
       }
     };
-    loadWidgets();
+
+    init();
   }, []);
 
   // Update time
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
+      if (mountedRef.current) {
+        dispatch({ type: 'UPDATE_TIME', time: new Date() });
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -172,28 +278,19 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   // Handle responsive width
   useEffect(() => {
     const updateWidth = () => {
-      if (containerRef.current) {
-        const width = containerRef.current.offsetWidth;
-        setContainerWidth(width);
+      if (containerRef.current && mountedRef.current) {
+        dispatch({ type: 'SET_WIDTH', width: containerRef.current.offsetWidth });
       }
     };
 
-    // Initial width
     updateWidth();
-
-    // Update on window resize
     window.addEventListener('resize', updateWidth);
 
-    // Use ResizeObserver for more accurate tracking
-    const resizeObserver = new ResizeObserver(() => {
-      updateWidth();
-    });
-
+    const resizeObserver = new ResizeObserver(updateWidth);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
 
-    // Also check after a short delay (for initial render)
     const timeout = setTimeout(updateWidth, 100);
 
     return () => {
@@ -204,57 +301,75 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   }, []);
 
   // Save layout to storage
-  const saveLayout = async () => {
+  const saveLayout = useCallback(async () => {
+    if (state.status === 'saving') return; // Prevent duplicate saves
+
+    dispatch({ type: 'START_SAVING' });
+
     try {
-      await saveSetting(STORAGE_KEY, JSON.stringify({ widgets, nextId }), 'dashboard');
-      alert(t('messages.layoutSaved'));
+      await withTimeout(
+        saveSetting(STORAGE_KEY, JSON.stringify({ widgets: state.widgets, nextId: state.nextId }), 'dashboard'),
+        SAVE_TIMEOUT_MS,
+        'Save timeout'
+      );
+
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SAVE_COMPLETE' });
+      showSuccess(t('messages.layoutSaved'));
     } catch (error) {
-      alert('Failed to save layout');
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SAVE_ERROR', error: 'Failed to save layout' });
+      showError('Failed to save layout');
     }
-  };
+  }, [state.status, state.widgets, state.nextId, t]);
 
   // Reset to default layout
-  const resetLayout = async () => {
-    if (confirm(t('messages.resetConfirm'))) {
-      setWidgets(DEFAULT_LAYOUT);
-      await saveSetting(STORAGE_KEY, '', 'dashboard');
+  const resetLayout = useCallback(async () => {
+    const confirmed = await showConfirm('', {
+      title: t('messages.resetConfirm'),
+      type: 'warning'
+    });
+    if (!confirmed) return;
+
+    dispatch({ type: 'RESET_LAYOUT', widgets: DEFAULT_LAYOUT });
+
+    try {
+      await withTimeout(saveSetting(STORAGE_KEY, '', 'dashboard'), SAVE_TIMEOUT_MS, 'Reset timeout');
+    } catch (error) {
+      console.error('[DashboardTab] Reset save error:', error);
     }
-  };
+  }, [t]);
 
   // Add new widget
-  const handleAddWidget = (widgetType: WidgetType, config?: any) => {
+  const handleAddWidget = useCallback((widgetType: WidgetType, config?: any) => {
     const newWidget: WidgetInstance = {
-      id: `${widgetType}-${nextId}`,
+      id: `${widgetType}-${state.nextId}`,
       type: widgetType,
-      title: config.watchlistName || config.marketCategory || config.newsCategory || config.forumCategoryName || widgetType,
-      config,
+      title: config?.watchlistName || config?.marketCategory || config?.newsCategory || config?.forumCategoryName || widgetType,
+      config: config || {},
       layout: {
-        i: `${widgetType}-${nextId}`,
-        x: (widgets.length * 3) % 12,
-        y: Infinity, // Put at bottom
+        i: `${widgetType}-${state.nextId}`,
+        x: (state.widgets.length * 3) % 12,
+        y: Infinity,
         w: 4,
         h: 4,
         minW: 2,
-        minH: 3
-      }
+        minH: 3,
+      },
     };
 
-    setWidgets([...widgets, newWidget]);
-    setNextId(nextId + 1);
-  };
+    dispatch({ type: 'ADD_WIDGET', widget: newWidget });
+  }, [state.nextId, state.widgets.length]);
 
   // Remove widget
-  const handleRemoveWidget = (id: string) => {
-    setWidgets(widgets.filter(w => w.id !== id));
-  };
+  const handleRemoveWidget = useCallback((id: string) => {
+    dispatch({ type: 'REMOVE_WIDGET', id });
+  }, []);
 
   // Handle layout change
-  const handleLayoutChange = (layout: Layout[]) => {
-    setWidgets(widgets.map(widget => {
-      const newLayout = layout.find(l => l.i === widget.id);
-      return newLayout ? { ...widget, layout: newLayout } : widget;
-    }));
-  };
+  const handleLayoutChange = useCallback((layouts: Layout[]) => {
+    dispatch({ type: 'UPDATE_LAYOUTS', layouts });
+  }, []);
 
   // Render widget based on type
   const renderWidget = (widget: WidgetInstance) => {
@@ -410,8 +525,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
     }
   };
 
-  // Show loading screen while database initializes
-  if (!dbInitialized) {
+  // Destructure state for easier access
+  const { status, widgets, nextId, showAddModal, currentTime, containerWidth, error } = state;
+
+  // Show loading screen while initializing
+  if (status === 'initializing') {
     return (
       <div style={{
         height: '100%',
@@ -438,10 +556,39 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
           <p style={{ color: colors.textMuted, fontSize: fontSize.subheading, lineHeight: '1.5' }}>
             {t('loading.description')}
           </p>
-          <p style={{ color: colors.textMuted, fontSize: fontSize.body, marginTop: '10px' }}>
-            {t('loading.note')}
-          </p>
         </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // Show error screen
+  if (status === 'error' && !widgets.length) {
+    return (
+      <div style={{
+        height: '100%',
+        backgroundColor: colors.background,
+        color: colors.text,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '20px'
+      }}>
+        <AlertCircle size={48} color={colors.alert} />
+        <div style={{ color: colors.alert, fontSize: fontSize.subheading }}>{error || 'Failed to load dashboard'}</div>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            backgroundColor: colors.primary,
+            color: '#000',
+            border: 'none',
+            padding: '8px 24px',
+            cursor: 'pointer',
+          }}
+        >
+          Reload
+        </button>
       </div>
     );
   }
@@ -566,7 +713,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             </button>
             <button
               id="dashboard-add-widget"
-              onClick={() => setShowAddModal(true)}
+              onClick={() => dispatch({ type: 'TOGGLE_MODAL', show: true })}
               style={{
                 background: colors.secondary,
                 color: 'black',
@@ -587,14 +734,15 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             <button
               id="dashboard-save"
               onClick={saveLayout}
+              disabled={status === 'saving'}
               style={{
-                background: colors.primary,
+                background: status === 'saving' ? colors.textMuted : colors.primary,
                 color: 'black',
                 border: 'none',
                 padding: '6px 12px',
                 fontSize: fontSize.small,
                 fontWeight: 'bold',
-                cursor: 'pointer',
+                cursor: status === 'saving' ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
@@ -602,7 +750,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
               }}
             >
               <Save size={12} />
-              {t('buttons.saveLayout')}
+              {status === 'saving' ? 'Saving...' : t('buttons.saveLayout')}
             </button>
             <button
               id="dashboard-reset"
@@ -669,7 +817,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
               {t('empty.noWidgets')}
             </div>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => dispatch({ type: 'TOGGLE_MODAL', show: true })}
               style={{
                 background: colors.primary,
                 color: 'black',
@@ -700,7 +848,9 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
           >
             {widgets.map(widget => (
               <div key={widget.id} className={`widget-${widget.type}`}>
-                {renderWidget(widget)}
+                <ErrorBoundary name={widget.title || widget.type} variant="minimal">
+                  {renderWidget(widget)}
+                </ErrorBoundary>
               </div>
             ))}
           </GridLayout>
@@ -718,7 +868,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         statusInfo={
           <>
             {t('status.label')}: <span style={{ color: colors.secondary }}>{t('status.active')}</span>
-            {dbInitialized && (
+            {status === 'ready' && (
               <span style={{ marginLeft: '8px', color: colors.secondary }}>
                 | {t('status.cache')}
               </span>
@@ -732,7 +882,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
       {/* Add Widget Modal */}
       <AddWidgetModal
         isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => dispatch({ type: 'TOGGLE_MODAL', show: false })}
         onAdd={handleAddWidget}
       />
     </div>

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { ForumApiService } from '../../../../services/forum/forumApi';
-import { getSetting, saveSetting } from '@/services/core/sqliteService';
+import { saveSetting } from '@/services/core/sqliteService';
+import { useAuth } from '@/contexts/AuthContext';
 
 
 interface ForumPost {
@@ -33,16 +34,19 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
   onNavigateToTab
 }) => {
   const { t } = useTranslation('dashboard');
+  const { session } = useAuth(); // Centralized API key access
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const loadPosts = async () => {
     setLoading(true);
     setError(null);
     try {
-      const apiKey = await getSetting('fincept_api_key') || undefined;
-      const deviceId = await getSetting('fincept_device_id') || undefined;
+      // Use centralized session from AuthContext - automatically updates when key changes
+      const apiKey = session?.api_key || undefined;
+      const deviceId = session?.device_id || undefined;
       const targetCategoryId = categoryId || 3;
 
       const response = await ForumApiService.getPostsByCategory(targetCategoryId, 'latest', limit, apiKey, deviceId);
@@ -70,11 +74,21 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
     }
   };
 
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     loadPosts();
-    const interval = setInterval(loadPosts, 10 * 60 * 1000); // Refresh every 10 minutes
+    const interval = setInterval(() => {
+      if (mountedRef.current) loadPosts();
+    }, 10 * 60 * 1000); // Refresh every 10 minutes
     return () => clearInterval(interval);
-  }, [categoryId, limit]);
+  }, [categoryId, limit, session?.api_key]); // Re-fetch when API key changes
 
 
   return (

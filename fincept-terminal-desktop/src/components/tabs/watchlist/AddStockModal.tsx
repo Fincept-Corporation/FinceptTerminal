@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FINCEPT, FONT_FAMILY } from './utils';
+import { showWarning, showError } from '@/utils/notifications';
 
 interface AddStockModalProps {
   onClose: () => void;
@@ -15,11 +16,11 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
   const handleAdd = async () => {
     const trimmedSymbol = symbol.trim().toUpperCase();
     if (!trimmedSymbol) {
-      alert('Please enter a stock symbol');
+      showWarning('Please enter a stock symbol');
       return;
     }
     if (existingSymbols.includes(trimmedSymbol)) {
-      alert(`${trimmedSymbol} is already in this watchlist`);
+      showWarning(`${trimmedSymbol} is already in this watchlist`);
       return;
     }
     setLoading(true);
@@ -28,7 +29,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({ onClose, onAdd, existingS
       onClose();
     } catch (error) {
       console.error('Error adding stock:', error);
-      alert(error instanceof Error ? error.message : 'Failed to add stock');
+      showError(error instanceof Error ? error.message : 'Failed to add stock');
     } finally {
       setLoading(false);
     }

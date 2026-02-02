@@ -13,6 +13,7 @@ import { APP_VERSION } from '@/constants/version';
 import { invoke } from '@tauri-apps/api/core';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { showConfirm, showSuccess } from '@/utils/notifications';
 import {
   Search, TrendingUp, TrendingDown, Activity, RefreshCw, AlertCircle, Database,
   Globe, BarChart3, DollarSign, Building2, Zap, Clock, ChevronDown, ChevronUp,
@@ -231,7 +232,11 @@ const AsiaMarketsTab: React.FC = () => {
       const lastUpdate = new Date(dbStatus.lastUpdated);
       const today = new Date();
       if (lastUpdate.toDateString() === today.toDateString()) {
-        if (!window.confirm(`Database was already built today.\nRebuild anyway? (10-15 minutes)`)) return;
+        const confirmed = await showConfirm(
+          'Database was already built today. Rebuild anyway? (10-15 minutes)',
+          { title: 'Rebuild Database?', type: 'warning' }
+        );
+        if (!confirmed) return;
       }
     }
 
@@ -240,7 +245,7 @@ const AsiaMarketsTab: React.FC = () => {
     try {
       await invoke('build_akshare_database');
       await checkDatabaseStatus();
-      alert('Database built successfully!');
+      showSuccess('Database built successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to build database');
     } finally {

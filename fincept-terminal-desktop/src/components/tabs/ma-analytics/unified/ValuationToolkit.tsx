@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { Calculator, TrendingUp, Building2, BarChart3, PlayCircle } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 import { MAAnalyticsService } from '@/services/maAnalyticsService';
+import { showSuccess, showError, showWarning } from '@/utils/notifications';
 
 type ValuationMethod = 'dcf' | 'lbo' | 'comps';
 
@@ -71,9 +72,13 @@ export const ValuationToolkit: React.FC = () => {
         shares_outstanding: dcfInputs.shares * 1000000,
       });
       setResult(res);
-      alert(`✓ DCF Complete!\nEquity Value/Share: $${res.equity_value_per_share?.toFixed(2)}`);
+      showSuccess('DCF Complete', [
+        { label: 'EQUITY VALUE/SHARE', value: `$${res.equity_value_per_share?.toFixed(2)}` }
+      ]);
     } catch (error) {
-      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('DCF calculation failed', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -89,9 +94,14 @@ export const ValuationToolkit: React.FC = () => {
         lboInputs.holdingPeriod
       );
       setResult(res);
-      alert(`✓ LBO Complete!\nIRR: ${res.irr?.toFixed(1)}%\nMOIC: ${res.moic?.toFixed(2)}x`);
+      showSuccess('LBO Complete', [
+        { label: 'IRR', value: `${res.irr?.toFixed(1)}%` },
+        { label: 'MOIC', value: `${res.moic?.toFixed(2)}x` }
+      ]);
     } catch (error) {
-      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('LBO calculation failed', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -99,7 +109,7 @@ export const ValuationToolkit: React.FC = () => {
 
   const handleRunComps = async () => {
     if (!compsInputs.targetTicker.trim()) {
-      alert('Please enter a target ticker');
+      showWarning('Please enter a target ticker');
       return;
     }
     setLoading(true);
@@ -109,9 +119,11 @@ export const ValuationToolkit: React.FC = () => {
         compsInputs.compTickers.split(',').map(t => t.trim())
       );
       setResult(res);
-      alert('✓ Trading Comps Complete!');
+      showSuccess('Trading Comps Complete');
     } catch (error) {
-      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('Trading Comps calculation failed', [
+        { label: 'ERROR', value: error instanceof Error ? error.message : 'Unknown error' }
+      ]);
     } finally {
       setLoading(false);
     }

@@ -95,6 +95,7 @@ fortitudo.tech==1.2
 # Quant libraries
 pyqlib==0.9.7
 rdagent==0.8.0
+deepagents==0.1.4
 gs-quant==1.4.67
 
 # Visualization

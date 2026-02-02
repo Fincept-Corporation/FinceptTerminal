@@ -1,37 +1,4 @@
-"""
-Natural Resources Analytics Module
-==================================
-
-Comprehensive analysis framework for natural resource investments including commodities, timberland, farmland, raw land, and energy projects. Provides specialized valuation methodologies for biological assets, commodity derivatives, and resource extraction investments.
-
-===== DATA SOURCES REQUIRED =====
-INPUT:
-  - Commodity spot and futures price data
-  - Storage costs and convenience yields for commodities
-  - Land acreage and acquisition costs
-  - Timber volume and growth rates
-  - Energy production data and reserves
-  - Operating costs and revenue projections
-
-OUTPUT:
-  - Commodity futures basis and roll yield analysis
-  - Natural resource valuation using specialized models
-  - Total return decomposition for commodities
-  - Land investment valuation (timberland, farmland, raw land)
-  - Energy project valuation (oil & gas, renewable)
-
-PARAMETERS:
-  - commodity_sector: Sector classification (ENERGY, METALS, AGRICULTURE, LIVESTOCK)
-  - spot_price: Current spot price of commodity
-  - futures_prices: Dictionary of futures contract prices by expiry
-  - storage_cost: Annual storage cost percentage - default: Config.COMMODITY_STORAGE_COST_TYPICAL
-  - convenience_yield: Convenience yield rate - default: 0
-  - contract_size: Contract size multiplier - default: 1
-  - land_type: Type of land investment (timberland, farmland, raw_land)
-  - acres: Total acreage of land investment
-  - energy_type: Energy investment type (oil_gas, renewable)
-  - proved_reserves: Reserves or capacity (barrels or MW)
-"""
+"""natural_resources Module"""
 
 import numpy as np
 import pandas as pd

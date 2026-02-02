@@ -223,9 +223,15 @@ impl WebSocketManager {
         )))
     }
 
-    /// Check if provider is connected
+    /// Check if actually connected (verifies adapter's connection state, not just map existence)
     pub fn is_connected(&self, provider: &str) -> bool {
-        self.connections.contains_key(provider)
+        if let Some(adapter) = self.connections.get(provider) {
+            // Use try_read to avoid blocking - if we can't get lock, assume disconnected
+            if let Ok(guard) = adapter.try_read() {
+                return guard.is_connected();
+            }
+        }
+        false
     }
 
     // ========================================================================

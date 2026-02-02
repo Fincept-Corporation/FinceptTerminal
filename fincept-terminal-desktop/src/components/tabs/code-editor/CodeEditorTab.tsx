@@ -9,6 +9,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { FinScriptOutputPanel, FinScriptExecutionResult } from './FinScriptOutputPanel';
+import { showConfirm } from '@/utils/notifications';
 
 // ─── Design System Constants ────────────────────────────────────────────────
 const F = {
@@ -1337,8 +1338,16 @@ export default function CodeEditorTab() {
     setActiveFileId(newId);
   };
 
-  const closeFile = (id: string) => {
+  const closeFile = async (id: string) => {
     if (files.length === 1) return;
+    const fileToClose = files.find(f => f.id === id);
+    if (fileToClose?.unsaved) {
+      const confirmed = await showConfirm(
+        'You have unsaved changes.',
+        { title: 'Close file without saving?', type: 'warning' }
+      );
+      if (!confirmed) return;
+    }
     const newFiles = files.filter(f => f.id !== id);
     setFiles(newFiles);
     if (activeFileId === id) {

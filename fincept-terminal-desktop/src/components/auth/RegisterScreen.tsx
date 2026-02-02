@@ -1,7 +1,8 @@
 // File: src/components/auth/RegisterScreen.tsx
 // User registration screen with country code selector and complete form validation
+// Production-ready: State machine, cleanup, timeout, validation
 
-import React, { useState, useEffect } from 'react';
+import React, { useReducer, useEffect, useRef, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,68 +10,150 @@ import { ArrowLeft, User, Mail, Lock, Key, Check, X } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import PhoneInput, { getCountryCallingCode as getCallingCode } from 'react-phone-number-input';
+import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import './phone-input.css';
 import { CompactLanguageSelector } from './CompactLanguageSelector';
+import { withTimeout } from '@/services/core/apiUtils';
+import { validateEmail, sanitizeInput } from '@/services/core/validators';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const AUTH_TIMEOUT_MS = 30000;
+
+// ============================================================================
+// Types & State Machine
+// ============================================================================
+
+type RegisterStep = 'form' | 'otp-verification';
+type RegisterStatus = 'idle' | 'loading' | 'success';
+
+interface FormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
+interface PasswordValidation {
+  minLength: boolean;
+  hasUpperCase: boolean;
+  hasLowerCase: boolean;
+  hasNumber: boolean;
+  hasSpecialChar: boolean;
+}
+
+interface State {
+  step: RegisterStep;
+  status: RegisterStatus;
+  formData: FormData;
+  phoneNumber: string | undefined;
+  otp: string;
+  error: string | null;
+  isVerificationComplete: boolean;
+  passwordValidation: PasswordValidation;
+  usernameValidation: { isValid: boolean; length: number; message: string };
+  emailValidation: { isValid: boolean; message: string };
+  phoneValidation: { isValid: boolean; message: string };
+}
+
+type Action =
+  | { type: 'SET_FORM_FIELD'; field: keyof FormData; value: string }
+  | { type: 'SET_PHONE'; value: string | undefined }
+  | { type: 'SET_OTP'; value: string }
+  | { type: 'SET_STEP'; step: RegisterStep }
+  | { type: 'START_LOADING' }
+  | { type: 'STOP_LOADING' }
+  | { type: 'SET_ERROR'; error: string }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'VERIFICATION_COMPLETE' }
+  | { type: 'SET_PASSWORD_VALIDATION'; validation: PasswordValidation }
+  | { type: 'SET_USERNAME_VALIDATION'; validation: { isValid: boolean; length: number; message: string } }
+  | { type: 'SET_EMAIL_VALIDATION'; validation: { isValid: boolean; message: string } }
+  | { type: 'SET_PHONE_VALIDATION'; validation: { isValid: boolean; message: string } };
+
+const initialState: State = {
+  step: 'form',
+  status: 'idle',
+  formData: { firstName: '', lastName: '', email: '', password: '', confirmPassword: '' },
+  phoneNumber: undefined,
+  otp: '',
+  error: null,
+  isVerificationComplete: false,
+  passwordValidation: { minLength: false, hasUpperCase: false, hasLowerCase: false, hasNumber: false, hasSpecialChar: false },
+  usernameValidation: { isValid: false, length: 0, message: '' },
+  emailValidation: { isValid: false, message: '' },
+  phoneValidation: { isValid: false, message: '' },
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'SET_FORM_FIELD':
+      return { ...state, formData: { ...state.formData, [action.field]: action.value }, error: null };
+    case 'SET_PHONE':
+      return { ...state, phoneNumber: action.value, error: null };
+    case 'SET_OTP':
+      return { ...state, otp: action.value, error: null };
+    case 'SET_STEP':
+      return { ...state, step: action.step, error: null };
+    case 'START_LOADING':
+      return { ...state, status: 'loading', error: null };
+    case 'STOP_LOADING':
+      return { ...state, status: 'idle' };
+    case 'SET_ERROR':
+      return { ...state, status: 'idle', error: action.error };
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+    case 'VERIFICATION_COMPLETE':
+      return { ...state, status: 'success', isVerificationComplete: true };
+    case 'SET_PASSWORD_VALIDATION':
+      return { ...state, passwordValidation: action.validation };
+    case 'SET_USERNAME_VALIDATION':
+      return { ...state, usernameValidation: action.validation };
+    case 'SET_EMAIL_VALIDATION':
+      return { ...state, emailValidation: action.validation };
+    case 'SET_PHONE_VALIDATION':
+      return { ...state, phoneValidation: action.validation };
+    default:
+      return state;
+  }
+}
+
+// ============================================================================
+// Component
+// ============================================================================
 
 interface RegisterScreenProps {
   onNavigate: (screen: Screen) => void;
 }
 
-type RegisterStep = 'form' | 'otp-verification';
-
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
   const { signup, verifyOtp, session } = useAuth();
   const { t } = useTranslation('auth');
-  const [step, setStep] = useState<RegisterStep>('form');
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    confirmPassword: ""
-  });
-  const [phoneNumber, setPhoneNumber] = useState<string | undefined>();
-  const [otp, setOtp] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [isVerificationComplete, setIsVerificationComplete] = useState(false);
 
-  // Password validation state
-  const [passwordValidation, setPasswordValidation] = useState({
-    minLength: false,
-    hasUpperCase: false,
-    hasLowerCase: false,
-    hasNumber: false,
-    hasSpecialChar: false
-  });
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const mountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Username validation state
-  const [usernameValidation, setUsernameValidation] = useState({
-    isValid: false,
-    length: 0,
-    message: ''
-  });
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
-  // Email validation state
-  const [emailValidation, setEmailValidation] = useState({
-    isValid: false,
-    message: ''
-  });
-
-  // Phone validation state
-  const [phoneValidation, setPhoneValidation] = useState({
-    isValid: false,
-    message: ''
-  });
+  const isLoading = state.status === 'loading';
 
   // Handle navigation after successful authentication
   useEffect(() => {
-    if (session?.authenticated && session?.user_type === 'registered' && isVerificationComplete) {
+    if (session?.authenticated && session?.user_type === 'registered' && state.isVerificationComplete) {
       console.log('Registration complete, navigating based on account type:', session.user_info?.account_type);
 
-      // Check if user has subscription
       if (session.subscription?.has_subscription) {
         console.log('User has subscription, redirecting to dashboard');
         onNavigate('dashboard' as Screen);
@@ -79,142 +162,126 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         onNavigate('pricing' as Screen);
       }
     }
-  }, [session, isVerificationComplete, onNavigate]);
+  }, [session, state.isVerificationComplete, onNavigate]);
 
-  const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (error) setError("");
+  const handleChange = useCallback((field: keyof FormData, value: string) => {
+    dispatch({ type: 'SET_FORM_FIELD', field, value });
 
     // Real-time password validation
     if (field === 'password') {
-      setPasswordValidation({
-        minLength: value.length >= 8,
-        hasUpperCase: /[A-Z]/.test(value),
-        hasLowerCase: /[a-z]/.test(value),
-        hasNumber: /[0-9]/.test(value),
-        hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(value)
+      dispatch({
+        type: 'SET_PASSWORD_VALIDATION',
+        validation: {
+          minLength: value.length >= 8,
+          hasUpperCase: /[A-Z]/.test(value),
+          hasLowerCase: /[a-z]/.test(value),
+          hasNumber: /[0-9]/.test(value),
+          hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(value),
+        },
       });
     }
 
-    // Real-time email validation
+    // Real-time email validation using shared validator
     if (field === 'email') {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const isValid = emailRegex.test(value);
-      setEmailValidation({
-        isValid: isValid || value === '',
-        message: value && !isValid ? 'Invalid email format' : ''
+      const result = validateEmail(value);
+      dispatch({
+        type: 'SET_EMAIL_VALIDATION',
+        validation: {
+          isValid: result.valid || value === '',
+          message: value && !result.valid ? (result.error || 'Invalid email format') : '',
+        },
       });
     }
+  }, []);
 
-    // Real-time username validation (firstName or lastName changes)
-    if (field === 'firstName' || field === 'lastName') {
-      const updatedFormData = { ...formData, [field]: value };
-      const username = `${updatedFormData.firstName.trim()}${updatedFormData.lastName.trim()}`.toLowerCase();
-      const length = username.length;
+  // Update username validation when names change
+  useEffect(() => {
+    const { firstName, lastName } = state.formData;
+    const username = `${firstName.trim()}${lastName.trim()}`.toLowerCase();
+    const length = username.length;
 
-      if (updatedFormData.firstName || updatedFormData.lastName) {
-        if (length < 3) {
-          setUsernameValidation({
-            isValid: false,
-            length,
-            message: `Username too short (${length}/3 min)`
-          });
-        } else if (length > 50) {
-          setUsernameValidation({
-            isValid: false,
-            length,
-            message: `Username too long (${length}/50 max)`
-          });
-        } else {
-          setUsernameValidation({
-            isValid: true,
-            length,
-            message: `Username valid (${length} characters)`
-          });
-        }
+    if (firstName || lastName) {
+      if (length < 3) {
+        dispatch({ type: 'SET_USERNAME_VALIDATION', validation: { isValid: false, length, message: `Username too short (${length}/3 min)` } });
+      } else if (length > 50) {
+        dispatch({ type: 'SET_USERNAME_VALIDATION', validation: { isValid: false, length, message: `Username too long (${length}/50 max)` } });
       } else {
-        setUsernameValidation({
-          isValid: false,
-          length: 0,
-          message: ''
-        });
-      }
-    }
-  };
-
-  const handlePhoneChange = (value: string | undefined) => {
-    setPhoneNumber(value);
-    if (error) setError("");
-
-    // Real-time phone validation
-    if (value) {
-      // Basic validation - check if it has enough digits (minimum 7)
-      const digitsOnly = value.replace(/\D/g, '');
-      if (digitsOnly.length < 7) {
-        setPhoneValidation({
-          isValid: false,
-          message: 'Phone number too short'
-        });
-      } else if (digitsOnly.length > 15) {
-        setPhoneValidation({
-          isValid: false,
-          message: 'Phone number too long'
-        });
-      } else {
-        setPhoneValidation({
-          isValid: true,
-          message: 'Valid phone number'
-        });
+        dispatch({ type: 'SET_USERNAME_VALIDATION', validation: { isValid: true, length, message: `Username valid (${length} characters)` } });
       }
     } else {
-      setPhoneValidation({
-        isValid: false,
-        message: 'Phone number required'
-      });
+      dispatch({ type: 'SET_USERNAME_VALIDATION', validation: { isValid: false, length: 0, message: '' } });
     }
-  };
+  }, [state.formData.firstName, state.formData.lastName]);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handlePhoneChange = useCallback((value: string | undefined) => {
+    dispatch({ type: 'SET_PHONE', value });
+
+    if (value) {
+      const digitsOnly = value.replace(/\D/g, '');
+      if (digitsOnly.length < 7) {
+        dispatch({ type: 'SET_PHONE_VALIDATION', validation: { isValid: false, message: 'Phone number too short' } });
+      } else if (digitsOnly.length > 15) {
+        dispatch({ type: 'SET_PHONE_VALIDATION', validation: { isValid: false, message: 'Phone number too long' } });
+      } else {
+        dispatch({ type: 'SET_PHONE_VALIDATION', validation: { isValid: true, message: 'Valid phone number' } });
+      }
+    } else {
+      dispatch({ type: 'SET_PHONE_VALIDATION', validation: { isValid: false, message: 'Phone number required' } });
+    }
+  }, []);
+
+  const handleRegister = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Prevent duplicate submissions
+    if (state.status === 'loading') return;
+
+    const { formData, phoneNumber } = state;
+
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
-      setError(t('register.errors.requiredFields'));
+      dispatch({ type: 'SET_ERROR', error: t('register.errors.requiredFields') });
+      return;
+    }
+
+    // Validate email using shared validator
+    const emailResult = validateEmail(formData.email);
+    if (!emailResult.valid) {
+      dispatch({ type: 'SET_ERROR', error: emailResult.error || 'Invalid email format' });
       return;
     }
 
     if (!phoneNumber) {
-      setError('Phone number is required');
+      dispatch({ type: 'SET_ERROR', error: 'Phone number is required' });
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError(t('register.errors.passwordMismatch'));
+      dispatch({ type: 'SET_ERROR', error: t('register.errors.passwordMismatch') });
       return;
     }
 
     if (formData.password.length < 8) {
-      setError(t('register.errors.passwordLength'));
+      dispatch({ type: 'SET_ERROR', error: t('register.errors.passwordLength') });
       return;
     }
 
-    setIsLoading(true);
-    setError("");
+    // Abort previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
+    dispatch({ type: 'START_LOADING' });
 
     try {
-      console.log('Registration attempt for:', formData.email);
+      // Sanitize inputs
+      const sanitizedEmail = sanitizeInput(formData.email.trim().toLowerCase());
+      const username = sanitizeInput(`${formData.firstName.trim()}${formData.lastName.trim()}`).toLowerCase();
 
-      // Create username from first and last name, ensuring no spaces
-      const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
-      console.log('Generated username:', username);
-
-      // Validate username length (3-50 characters as per API requirement)
       if (username.length < 3 || username.length > 50) {
-        setError('Username must be between 3 and 50 characters. Please use shorter first/last names.');
-        setIsLoading(false);
+        dispatch({ type: 'SET_ERROR', error: 'Username must be between 3 and 50 characters.' });
         return;
       }
 
-      // Parse phone number if provided
+      // Parse phone number
       let phone = '';
       let country = '';
       let countryCode = '';
@@ -231,79 +298,81 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         }
       }
 
-      const result = await signup(username, formData.email, formData.password, phone, country, countryCode);
+      const result = await withTimeout(
+        signup(username, sanitizedEmail, formData.password, phone, country, countryCode),
+        AUTH_TIMEOUT_MS,
+        'Registration request timed out'
+      );
+
+      if (!mountedRef.current) return;
 
       if (result.success) {
-        console.log('Registration successful, OTP sent to:', formData.email);
-        // Note: Backend handles re-registration for unverified accounts automatically
-        // A fresh OTP is sent even if the user previously registered but didn't verify
-        setStep('otp-verification');
+        dispatch({ type: 'SET_STEP', step: 'otp-verification' });
+        dispatch({ type: 'STOP_LOADING' });
       } else {
-        console.log('Registration failed:', result.error);
-        // Enhanced error handling for common scenarios
         const errorMessage = result.error || 'Registration failed. Please try again.';
-
-        // If the error indicates an already verified account, show helpful message
-        if (errorMessage.toLowerCase().includes('already exists') ||
-            errorMessage.toLowerCase().includes('already registered')) {
-          setError(t('register.errors.alreadyExists'));
+        if (errorMessage.toLowerCase().includes('already exists') || errorMessage.toLowerCase().includes('already registered')) {
+          dispatch({ type: 'SET_ERROR', error: t('register.errors.alreadyExists') });
         } else {
-          setError(errorMessage);
+          dispatch({ type: 'SET_ERROR', error: errorMessage });
         }
       }
     } catch (err) {
-      console.error('Registration error:', err);
-      setError(t('register.errors.unexpectedError'));
-    } finally {
-      setIsLoading(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SET_ERROR', error: t('register.errors.unexpectedError') });
     }
-  };
+  }, [state.status, state.formData, state.phoneNumber, signup, t]);
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyOtp = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!otp) {
-      setError(t('register.errors.verificationCode'));
+    // Prevent duplicate submissions
+    if (state.status === 'loading' || state.isVerificationComplete) return;
+
+    if (!state.otp) {
+      dispatch({ type: 'SET_ERROR', error: t('register.errors.verificationCode') });
       return;
     }
 
-    if (isLoading || isVerificationComplete) {
-      console.log('Verification already in progress or complete, skipping');
-      return;
-    }
+    // Abort previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
 
-    setIsLoading(true);
-    setError("");
+    dispatch({ type: 'START_LOADING' });
 
     try {
-      console.log('OTP verification for:', formData.email);
+      const sanitizedEmail = sanitizeInput(state.formData.email.trim().toLowerCase());
+      const sanitizedOtp = sanitizeInput(state.otp.trim());
 
-      const result = await verifyOtp(formData.email, otp);
+      const result = await withTimeout(
+        verifyOtp(sanitizedEmail, sanitizedOtp),
+        AUTH_TIMEOUT_MS,
+        'Verification request timed out'
+      );
+
+      if (!mountedRef.current) return;
 
       if (result.success) {
-        console.log('OTP verification successful');
-        setIsVerificationComplete(true);
-        // Navigation will be handled by useEffect
+        dispatch({ type: 'VERIFICATION_COMPLETE' });
       } else {
-        console.log('OTP verification failed:', result.error);
-        setError(result.error || t('register.errors.verificationFailed'));
+        dispatch({ type: 'SET_ERROR', error: result.error || t('register.errors.verificationFailed') });
       }
     } catch (err) {
-      console.error('OTP verification error:', err);
-      setError(t('register.errors.unexpectedError'));
-    } finally {
-      setIsLoading(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SET_ERROR', error: t('register.errors.unexpectedError') });
     }
-  };
+  }, [state.status, state.isVerificationComplete, state.otp, state.formData.email, verifyOtp, t]);
 
-  const handleResendOtp = async () => {
-    setIsLoading(true);
-    setError("");
+  const handleResendOtp = useCallback(async () => {
+    if (state.status === 'loading') return;
+
+    dispatch({ type: 'START_LOADING' });
 
     try {
-      const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
+      const { formData, phoneNumber } = state;
+      const username = sanitizeInput(`${formData.firstName.trim()}${formData.lastName.trim()}`).toLowerCase();
+      const sanitizedEmail = sanitizeInput(formData.email.trim().toLowerCase());
 
-      // Parse phone number if provided
       let phone = '';
       let country = '';
       let countryCode = '';
@@ -320,23 +389,31 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         }
       }
 
-      const result = await signup(username, formData.email, formData.password, phone, country, countryCode);
+      const result = await withTimeout(
+        signup(username, sanitizedEmail, formData.password, phone, country, countryCode),
+        AUTH_TIMEOUT_MS,
+        'Resend request timed out'
+      );
+
+      if (!mountedRef.current) return;
 
       if (result.success) {
-        setError(""); // Clear any previous errors
-        console.log('OTP resent successfully');
+        dispatch({ type: 'CLEAR_ERROR' });
+        dispatch({ type: 'STOP_LOADING' });
       } else {
-        setError(result.error || t('register.errors.resendFailed'));
+        dispatch({ type: 'SET_ERROR', error: result.error || t('register.errors.resendFailed') });
       }
     } catch (err) {
-      setError(t('register.errors.resendFailed'));
-    } finally {
-      setIsLoading(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SET_ERROR', error: t('register.errors.resendFailed') });
     }
-  };
+  }, [state.status, state.formData, state.phoneNumber, signup, t]);
+
+  // Destructure for easier access
+  const { formData, phoneNumber, otp, error, step, passwordValidation, usernameValidation, emailValidation, phoneValidation } = state;
 
   // Prevent double submission
-  if (isVerificationComplete) {
+  if (state.isVerificationComplete) {
     return (
       <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
         <div className="text-center">
@@ -385,7 +462,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                   type="text"
                   placeholder={t('register.firstNamePlaceholder')}
                   value={formData.firstName}
-                  onChange={(e) => handleChange("firstName", e.target.value)}
+                  onChange={(e) => handleChange('firstName', e.target.value)}
                   className={`bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 ${
                     formData.firstName && formData.firstName.length < 1 ? 'border-red-500' : ''
                   }`}
@@ -620,7 +697,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         <div className="mb-6">
           <div className="flex items-center mb-3">
             <button
-              onClick={() => setStep('form')}
+              onClick={() => dispatch({ type: 'SET_STEP', step: 'form' })}
               className="text-zinc-400 hover:text-white transition-colors mr-3"
               disabled={isLoading}
             >
@@ -649,10 +726,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                 type="text"
                 placeholder={t('register.verification.codePlaceholder')}
                 value={otp}
-                onChange={(e) => {
-                  setOtp(e.target.value);
-                  if (error) setError("");
-                }}
+                onChange={(e) => dispatch({ type: 'SET_OTP', value: e.target.value })}
                 className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
                 disabled={isLoading}
                 required
@@ -670,7 +744,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             <Button
               type="submit"
               className="bg-zinc-700 hover:bg-zinc-600 text-white px-6 py-1.5 text-sm font-normal transition-colors disabled:opacity-50"
-              disabled={isLoading || isVerificationComplete}
+              disabled={isLoading || state.isVerificationComplete}
             >
               {isLoading ? (
                 <div className="flex items-center">

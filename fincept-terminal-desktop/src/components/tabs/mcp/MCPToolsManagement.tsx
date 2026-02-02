@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { mcpToolService } from '@/services/mcp/mcpToolService';
 import { INTERNAL_SERVER_ID } from '@/services/mcp/internal';
+import { showWarning } from '@/utils/notifications';
 
 interface MCPToolWithStatus {
   serverId: string;
@@ -130,7 +131,7 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
 
   const handleToggleTool = async (tool: MCPToolWithStatus) => {
     if (!tool.isInternal) {
-      alert('External tools are managed through their MCP servers. Stop the server to disable all its tools.');
+      showWarning('External tools are managed through their MCP servers. Stop the server to disable all its tools.');
       return;
     }
 

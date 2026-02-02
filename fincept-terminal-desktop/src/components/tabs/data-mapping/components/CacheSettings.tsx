@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, Shield, Clock, Database } from 'lucide-react';
 import { mappingDatabase } from '../services/MappingDatabase';
 import { encryptionService } from '../services/EncryptionService';
+import { showConfirm, showSuccess, showError, showInfo } from '@/utils/notifications';
 
 interface CacheSettingsProps {
   cacheEnabled: boolean;
@@ -38,50 +39,56 @@ export function CacheSettings({
       setEncryptionEnabled(enabled);
 
       // Show user notification
-      alert(
-        enabled
-          ? 'Encryption enabled. New mappings will encrypt credentials.'
-          : 'Encryption disabled. Credentials will be stored in plain text.'
-      );
+      if (enabled) {
+        showInfo('Encryption enabled. New mappings will encrypt credentials.');
+      } else {
+        showInfo('Encryption disabled. Credentials will be stored in plain text.');
+      }
     } catch (error) {
       console.error('Failed to toggle encryption:', error);
-      alert('Failed to update encryption setting');
+      showError('Failed to update encryption setting');
     }
   };
 
   const handleClearCache = async () => {
-    if (!confirm('Clear cache for this mapping? This cannot be undone.')) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      'This action cannot be undone.',
+      {
+        title: 'Clear cache for this mapping?',
+        type: 'warning'
+      }
+    );
+    if (!confirmed) return;
 
     setIsClearing(true);
     try {
       await mappingDatabase.clearCache(mappingId);
-      alert('Cache cleared successfully');
+      showSuccess('Cache cleared successfully');
     } catch (error) {
       console.error('Failed to clear cache:', error);
-      alert('Failed to clear cache');
+      showError('Failed to clear cache');
     } finally {
       setIsClearing(false);
     }
   };
 
   const handleClearAllCache = async () => {
-    if (
-      !confirm(
-        'Clear ALL cached responses for all mappings? This cannot be undone.'
-      )
-    ) {
-      return;
-    }
+    const confirmed = await showConfirm(
+      'This will clear ALL cached responses for all mappings. This action cannot be undone.',
+      {
+        title: 'Clear all cache?',
+        type: 'danger'
+      }
+    );
+    if (!confirmed) return;
 
     setIsClearing(true);
     try {
       await mappingDatabase.clearCache();
-      alert('All cache cleared successfully');
+      showSuccess('All cache cleared successfully');
     } catch (error) {
       console.error('Failed to clear all cache:', error);
-      alert('Failed to clear all cache');
+      showError('Failed to clear all cache');
     } finally {
       setIsClearing(false);
     }

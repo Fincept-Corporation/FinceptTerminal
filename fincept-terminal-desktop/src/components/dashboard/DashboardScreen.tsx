@@ -65,6 +65,7 @@ const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/trade-v
 const MAAnalyticsTab = React.lazy(() => import('@/components/tabs/MAAnalyticsTab'));
 const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena'));
 const NotesTab = React.lazy(() => import('@/components/tabs/notes').then(m => ({ default: m.NotesTab })));
+const AlternativeInvestmentsTab = React.lazy(() => import('@/components/tabs/alternative-investments').then(m => ({ default: m.AlternativeInvestmentsTab })));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -547,6 +548,7 @@ function FinxeptTerminalContent() {
     { label: 'Alpha Arena', action: () => setActiveTab('alpha-arena') },
     { label: 'Polymarket', action: () => setActiveTab('polymarket') },
     { label: 'Derivatives Pricing', action: () => setActiveTab('derivatives') },
+    { label: 'Alternative Investments', action: () => setActiveTab('alternative-investments') },
     { label: 'Watchlist', action: () => setActiveTab('watchlist') },
     // Research & Intelligence
     { label: 'Research & Intelligence', header: true },
@@ -884,6 +886,13 @@ function FinxeptTerminalContent() {
                   M&A Analytics
                 </TabsTrigger>
                 <TabsTrigger
+                  value="alternative-investments"
+                  style={activeTab === 'alternative-investments' ? tabStyles.active : tabStyles.default}
+                  title="Alternative Investments"
+                >
+                  Alternative Investments
+                </TabsTrigger>
+                <TabsTrigger
                   value="profile"
                   style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
                   title="Profile (F12)"
@@ -1085,6 +1094,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="ma-analytics" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <MAAnalyticsTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="alternative-investments" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <AlternativeInvestmentsTab />
               </React.Suspense>
             </TabsContent>
           </Tabs>

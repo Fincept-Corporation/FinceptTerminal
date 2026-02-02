@@ -315,7 +315,7 @@ class MarketDataBridgeClass {
     try {
       // Dynamic import based on provider
       const adapterPath = this.getAdapterPath(provider);
-      const module = await import(adapterPath);
+      const module = await import(/* @vite-ignore */ adapterPath);
 
       // Get the adapter class and create instance
       const AdapterClass = module.default || Object.values(module)[0];

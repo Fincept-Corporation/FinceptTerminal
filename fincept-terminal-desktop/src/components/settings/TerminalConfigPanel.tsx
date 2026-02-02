@@ -7,6 +7,7 @@ import { TabConfiguration, MenuSection, DEFAULT_TABS, DEFAULT_TAB_CONFIG } from 
 import { GripVertical, Plus, Trash2, RotateCcw, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 
 const SortableTab = ({ id, label, colors }: { id: string; label: string; colors: any }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -162,10 +163,20 @@ export const TerminalConfigPanel: React.FC = () => {
   };
 
   const resetToDefault = async () => {
-    if (confirm('Reset tab configuration to default? This cannot be undone.')) {
+    const confirmed = await showConfirm(
+      'Reset tab configuration to default?\n\nAll custom tab visibility settings will be lost. This cannot be undone.',
+      { title: 'Reset Configuration', type: 'warning', confirmText: 'Reset' }
+    );
+
+    if (!confirmed) return;
+
+    try {
       await tabConfigService.resetToDefault();
       const loadedConfig = await tabConfigService.getConfiguration();
       setConfig(loadedConfig);
+      showSuccess('Configuration reset to default');
+    } catch (error) {
+      showError('Failed to reset configuration');
     }
   };
 

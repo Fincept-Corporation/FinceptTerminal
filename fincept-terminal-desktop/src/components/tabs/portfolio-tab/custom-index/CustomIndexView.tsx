@@ -42,6 +42,7 @@ import {
 } from './types';
 import { customIndexService } from '../../../../services/portfolio/customIndexService';
 import IndexPerformanceChart from './IndexPerformanceChart';
+import { showConfirm, showSuccess, showError } from '@/utils/notifications';
 
 interface CustomIndexViewProps {
   portfolioId?: string;
@@ -127,7 +128,11 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
   }, [selectedIndex]);
 
   const handleDeleteIndex = async (indexId: string) => {
-    if (!confirm('Are you sure you want to delete this index?')) return;
+    const confirmed = await showConfirm('This action cannot be undone.', {
+      title: 'Delete this index?',
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       await customIndexService.deleteIndex(indexId);
@@ -145,10 +150,10 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
 
     try {
       await customIndexService.saveDailySnapshot(selectedIndex.id);
-      alert('Snapshot saved successfully!');
+      showSuccess('Snapshot saved successfully');
     } catch (error) {
       console.error('Failed to save snapshot:', error);
-      alert('Failed to save snapshot');
+      showError('Failed to save snapshot');
     }
   };
 
@@ -206,7 +211,12 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
   };
 
   const handleRemoveConstituent = async (symbol: string) => {
-    if (!selectedIndex || !confirm(`Remove ${symbol} from index?`)) return;
+    if (!selectedIndex) return;
+    const confirmed = await showConfirm('', {
+      title: `Remove ${symbol} from index?`,
+      type: 'warning'
+    });
+    if (!confirmed) return;
 
     try {
       await customIndexService.removeConstituent(selectedIndex.id, symbol);
