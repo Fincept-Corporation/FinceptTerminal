@@ -122,64 +122,11 @@ class RDAgentService:
     """
 
     def __init__(self):
-        self.initialized = False
         self.config: Dict[str, Any] = {}
         self.task_manager = TaskManager()
         self.active_loops: Dict[str, Any] = {}
         self.discovered_factors: Dict[str, List[Dict]] = {}
         self.optimized_models: Dict[str, Dict] = {}
-
-    def initialize(self, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Initialize RD-Agent service with configuration.
-
-        Args:
-            config: Configuration dict containing:
-                - api_keys: Dict of API keys (openai, anthropic, etc.)
-                - llm_provider: LLM provider to use ('openai', 'anthropic', 'deepseek')
-                - workspace_dir: Directory for experiment workspace
-                - log_level: Logging level
-        """
-        if not RD_AGENT_AVAILABLE:
-            return {
-                "success": False,
-                "error": f"RD-Agent not installed: {RD_AGENT_ERROR}. Install with: pip install rdagent"
-            }
-
-        try:
-            self.config = config or {}
-
-            # Set environment variables for API keys if provided
-            api_keys = self.config.get("api_keys", {})
-            if "openai" in api_keys:
-                os.environ["OPENAI_API_KEY"] = api_keys["openai"]
-            if "anthropic" in api_keys:
-                os.environ["ANTHROPIC_API_KEY"] = api_keys["anthropic"]
-
-            self.initialized = True
-
-            return {
-                "success": True,
-                "message": "RD-Agent initialized successfully",
-                "rdagent_available": RD_AGENT_AVAILABLE,
-                "factor_loop_available": FACTOR_LOOP_AVAILABLE,
-                "model_loop_available": MODEL_LOOP_AVAILABLE,
-                "experiment_available": EXPERIMENT_AVAILABLE,
-                "features": [
-                    "Autonomous factor mining",
-                    "Model hyperparameter optimization",
-                    "Financial document analysis",
-                    "Multi-agent research system",
-                    "Experiment checkpointing",
-                    "Cost tracking"
-                ],
-                "supported_llms": ["GPT-4", "GPT-4-Turbo", "Claude-3", "DeepSeek"]
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to initialize RD-Agent: {str(e)}"
-            }
 
     def get_capabilities(self) -> Dict[str, Any]:
         """Get detailed RD-Agent capabilities"""
@@ -338,9 +285,6 @@ class RDAgentService:
             llm_provider: LLM provider to use
             workspace_dir: Directory for experiment workspace
         """
-        if not self.initialized:
-            return {"success": False, "error": "RD-Agent not initialized. Call initialize() first."}
-
         if not FACTOR_LOOP_AVAILABLE:
             return {"success": False, "error": "FactorRDLoop not available. Check RD-Agent installation."}
 
@@ -666,9 +610,6 @@ class RDAgentService:
             max_iterations: Maximum optimization iterations
             budget: Maximum budget in USD
         """
-        if not self.initialized:
-            return {"success": False, "error": "RD-Agent not initialized"}
-
         try:
             task_id = f"model_opt_{model_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -800,9 +741,6 @@ class RDAgentService:
             api_keys: API keys for LLM
             extraction_types: Types of extraction to perform
         """
-        if not self.initialized:
-            return {"success": False, "error": "RD-Agent not initialized"}
-
         try:
             task_id = f"doc_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -907,9 +845,6 @@ class RDAgentService:
             iterations: Number of research iterations
             scope: Research scope ('factor', 'model', 'full')
         """
-        if not self.initialized:
-            return {"success": False, "error": "RD-Agent not initialized"}
-
         try:
             task_id = f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -1063,22 +998,13 @@ def main():
     service = RDAgentService()
 
     try:
-        if command == "initialize":
-            config = json.loads(sys.argv[2]) if len(sys.argv) > 2 else None
-            result = service.initialize(config)
-
-        elif command == "check_status":
-            # RD-Agent doesn't need persistent state - if it's available, consider it initialized
-            # (It's a library, not a stateful service like Qlib)
-            rdagent_initialized = RD_AGENT_AVAILABLE
-
+        if command == "check_status":
             result = {
                 "success": True,
                 "rdagent_available": RD_AGENT_AVAILABLE,
                 "factor_loop_available": FACTOR_LOOP_AVAILABLE,
                 "model_loop_available": MODEL_LOOP_AVAILABLE,
-                "experiment_available": EXPERIMENT_AVAILABLE,
-                "initialized": rdagent_initialized
+                "experiment_available": EXPERIMENT_AVAILABLE
             }
 
         elif command == "get_capabilities":

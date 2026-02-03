@@ -10,11 +10,11 @@
 //! Supports both live and paper trading modes.
 
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use serde::{Deserialize, Serialize};
+// serde::{Deserialize, Serialize} removed - not used directly
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use super::common::{ApiResponse, OrderPlaceResponse};
+use super::common::ApiResponse;
 
 // ============================================================================
 // Alpaca API Configuration
@@ -1957,8 +1957,8 @@ pub async fn alpaca_get_asset(
 /// Connect to Alpaca WebSocket
 #[tauri::command]
 pub async fn alpaca_ws_connect(
-    api_key: String,
-    api_secret: String,
+    _api_key: String,
+    _api_secret: String,
     is_paper: bool,
 ) -> Result<ApiResponse<bool>, String> {
     eprintln!("[alpaca_ws_connect] WebSocket connection request (paper: {})", is_paper);

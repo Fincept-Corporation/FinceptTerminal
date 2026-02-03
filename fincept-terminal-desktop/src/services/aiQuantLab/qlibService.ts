@@ -17,16 +17,7 @@ export interface QlibModel {
 export interface QlibStatusResponse {
   success: boolean;
   qlib_available: boolean;
-  initialized: boolean;
   version?: string;
-  error?: string;
-}
-
-export interface QlibInitializeResponse {
-  success: boolean;
-  message?: string;
-  provider_uri?: string;
-  region?: string;
   error?: string;
 }
 
@@ -100,37 +91,7 @@ class QlibService {
       return {
         success: false,
         qlib_available: false,
-        initialized: false,
         error: String(error)
-      };
-    }
-  }
-
-  /**
-   * Initialize Qlib with data provider
-   * @param providerUri - Path to Qlib data directory
-   * @param region - Market region ('cn', 'us', etc.)
-   */
-  async initialize(
-    providerUri?: string,
-    region?: string
-  ): Promise<QlibInitializeResponse> {
-    console.log('[QlibService] initialize() called with:', { providerUri, region });
-    try {
-      console.log('[QlibService] Invoking qlib_initialize command...');
-      const result = await invoke<string>('qlib_initialize', {
-        provider_uri: providerUri,
-        region
-      });
-      console.log('[QlibService] Initialize raw result:', result);
-      const parsed = JSON.parse(result);
-      console.log('[QlibService] Initialize parsed result:', parsed);
-      return parsed;
-    } catch (error) {
-      console.error('[QlibService] initialize error:', error);
-      return {
-        success: false,
-        error: error as string
       };
     }
   }

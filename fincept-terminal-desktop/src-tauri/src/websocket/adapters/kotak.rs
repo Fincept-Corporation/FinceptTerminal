@@ -9,7 +9,7 @@ use super::WebSocketAdapter;
 use crate::websocket::types::*;
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;

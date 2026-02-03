@@ -1,81 +1,165 @@
 import React from 'react';
 import { InvestmentVerdict } from '@/services/alternativeInvestments/api/types';
 
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  GREEN: '#00D66F',
+  RED: '#FF4444',
+  YELLOW: '#FFD700',
+};
+
 interface VerdictPanelProps {
   verdict: InvestmentVerdict;
-  className?: string;
 }
 
-/**
- * VerdictPanel - Displays investment analysis verdict
- * Shows category (GOOD/BAD/FLAWED/UGLY), rating, and recommendations
- */
-export const VerdictPanel: React.FC<VerdictPanelProps> = ({ verdict, className = '' }) => {
+export const VerdictPanel: React.FC<VerdictPanelProps> = ({ verdict }) => {
   const categoryConfig = getCategoryConfig(verdict.category);
 
   return (
-    <div className={`verdict-panel bg-gray-800 rounded-lg border-2 ${categoryConfig.borderColor} ${className}`}>
-      {/* Header with Category Badge */}
-      <div className={`p-6 ${categoryConfig.bgColor} border-b-2 ${categoryConfig.borderColor}`}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <span className="text-4xl">{categoryConfig.icon}</span>
-            <div>
-              <h3 className="text-2xl font-bold">{verdict.category}</h3>
-              <p className="text-sm text-gray-300 mt-1">{verdict.analysis_summary}</p>
-            </div>
+    <div style={{
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `2px solid ${categoryConfig.borderColor}`,
+      borderRadius: '2px',
+      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '16px',
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `2px solid ${categoryConfig.borderColor}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: categoryConfig.textColor, letterSpacing: '0.5px' }}>
+            {verdict.category}
           </div>
-          <div className={`text-3xl font-bold ${categoryConfig.textColor}`}>
-            {verdict.rating}
+          <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginTop: '4px' }}>
+            {verdict.analysis_summary}
           </div>
+        </div>
+        <div style={{ fontSize: '20px', fontWeight: 700, color: categoryConfig.textColor }}>
+          {verdict.rating}
         </div>
       </div>
 
-      {/* Key Findings */}
-      <div className="p-6 space-y-6">
-        <div>
-          <h4 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <span>📋</span> Key Findings
-          </h4>
-          <ul className="space-y-2">
-            {verdict.key_findings.map((finding, index) => (
-              <li key={index} className="flex items-start gap-2 text-gray-300">
-                <span className="text-gray-500 mt-1">•</span>
-                <span>{finding}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Recommendation */}
-        <div className={`p-4 rounded-lg ${categoryConfig.recommendationBg} border ${categoryConfig.borderColor}`}>
-          <h4 className="font-semibold mb-2 flex items-center gap-2">
-            <span>💡</span> Recommendation
-          </h4>
-          <p className="text-gray-200">{verdict.recommendation}</p>
-        </div>
-
-        {/* When Acceptable (if provided) */}
-        {verdict.when_acceptable && (
-          <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-            <h4 className="font-semibold mb-2 text-yellow-400">⚠️ When It Might Be Acceptable</h4>
-            <p className="text-gray-300 text-sm">{verdict.when_acceptable}</p>
+      {/* Content */}
+      <div style={{ padding: '16px' }}>
+        {/* Key Findings */}
+        {verdict.key_findings && verdict.key_findings.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GRAY,
+              letterSpacing: '0.5px',
+              marginBottom: '8px',
+            }}>
+              KEY FINDINGS
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {verdict.key_findings.map((finding, index) => (
+                <div key={index} style={{
+                  fontSize: '10px',
+                  color: FINCEPT.WHITE,
+                  paddingLeft: '8px',
+                  borderLeft: `2px solid ${FINCEPT.BORDER}`,
+                }}>
+                  {finding}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Better Alternatives (if provided) */}
-        {verdict.better_alternatives && (
-          <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-            <h4 className="font-semibold mb-3 text-green-400">✅ Better Alternatives</h4>
-            <p className="text-gray-300 mb-3 font-medium">{verdict.better_alternatives.portfolio}</p>
-            <ul className="space-y-1">
+        {/* Recommendation */}
+        <div style={{
+          padding: '12px',
+          backgroundColor: categoryConfig.bgColor,
+          border: `1px solid ${categoryConfig.borderColor}`,
+          borderRadius: '2px',
+          marginBottom: '16px',
+        }}>
+          <div style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            color: FINCEPT.GRAY,
+            letterSpacing: '0.5px',
+            marginBottom: '8px',
+          }}>
+            RECOMMENDATION
+          </div>
+          <div style={{ fontSize: '10px', color: FINCEPT.WHITE }}>
+            {verdict.recommendation}
+          </div>
+        </div>
+
+        {/* When Acceptable */}
+        {verdict.when_acceptable && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.DARK_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '2px',
+            marginBottom: '16px',
+          }}>
+            <div style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.YELLOW,
+              letterSpacing: '0.5px',
+              marginBottom: '8px',
+            }}>
+              WHEN IT MIGHT BE ACCEPTABLE
+            </div>
+            <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>
+              {verdict.when_acceptable}
+            </div>
+          </div>
+        )}
+
+        {/* Better Alternatives */}
+        {verdict.better_alternatives && verdict.better_alternatives.benefits && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.DARK_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '2px',
+          }}>
+            <div style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GREEN,
+              letterSpacing: '0.5px',
+              marginBottom: '8px',
+            }}>
+              BETTER ALTERNATIVES
+            </div>
+            <div style={{ fontSize: '10px', color: FINCEPT.WHITE, marginBottom: '8px', fontWeight: 600 }}>
+              {verdict.better_alternatives.portfolio}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {verdict.better_alternatives.benefits.map((benefit, index) => (
-                <li key={index} className="flex items-start gap-2 text-gray-400 text-sm">
-                  <span className="text-green-500">→</span>
-                  <span>{benefit}</span>
-                </li>
+                <div key={index} style={{
+                  fontSize: '9px',
+                  color: FINCEPT.GRAY,
+                  paddingLeft: '8px',
+                  borderLeft: `2px solid ${FINCEPT.GREEN}`,
+                }}>
+                  {benefit}
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </div>
@@ -83,45 +167,32 @@ export const VerdictPanel: React.FC<VerdictPanelProps> = ({ verdict, className =
   );
 };
 
-/**
- * Get configuration for each verdict category
- */
 function getCategoryConfig(category: string) {
   const configs = {
     'THE GOOD': {
-      icon: '✅',
-      borderColor: 'border-green-500',
-      bgColor: 'bg-green-900/20',
-      textColor: 'text-green-400',
-      recommendationBg: 'bg-green-900/20',
+      borderColor: FINCEPT.GREEN,
+      bgColor: `${FINCEPT.GREEN}10`,
+      textColor: FINCEPT.GREEN,
     },
     'THE BAD': {
-      icon: '⚠️',
-      borderColor: 'border-orange-500',
-      bgColor: 'bg-orange-900/20',
-      textColor: 'text-orange-400',
-      recommendationBg: 'bg-orange-900/20',
+      borderColor: FINCEPT.ORANGE,
+      bgColor: `${FINCEPT.ORANGE}10`,
+      textColor: FINCEPT.ORANGE,
     },
     'THE FLAWED': {
-      icon: '❌',
-      borderColor: 'border-yellow-500',
-      bgColor: 'bg-yellow-900/20',
-      textColor: 'text-yellow-400',
-      recommendationBg: 'bg-yellow-900/20',
+      borderColor: FINCEPT.YELLOW,
+      bgColor: `${FINCEPT.YELLOW}10`,
+      textColor: FINCEPT.YELLOW,
     },
     'THE UGLY': {
-      icon: '🚫',
-      borderColor: 'border-red-500',
-      bgColor: 'bg-red-900/20',
-      textColor: 'text-red-400',
-      recommendationBg: 'bg-red-900/20',
+      borderColor: FINCEPT.RED,
+      bgColor: `${FINCEPT.RED}10`,
+      textColor: FINCEPT.RED,
     },
     MIXED: {
-      icon: '⚖️',
-      borderColor: 'border-blue-500',
-      bgColor: 'bg-blue-900/20',
-      textColor: 'text-blue-400',
-      recommendationBg: 'bg-blue-900/20',
+      borderColor: FINCEPT.CYAN,
+      bgColor: `${FINCEPT.CYAN}10`,
+      textColor: FINCEPT.CYAN,
     },
   };
 

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use once_cell::sync::Lazy;
 use tauri::Emitter;
-use chrono::Datelike;
+// chrono::Datelike removed - not used
 
 use crate::websocket::types::MarketMessage;
 use crate::websocket::types::ProviderConfig;
@@ -1157,7 +1157,7 @@ static FYERS_WS: Lazy<Arc<RwLock<Option<crate::websocket::adapters::FyersAdapter
 #[tauri::command]
 pub async fn fyers_ws_connect(
     app: tauri::AppHandle,
-    api_key: String,
+    _api_key: String,
     access_token: String,
 ) -> Result<ApiResponse<bool>, String> {
     eprintln!("[fyers_ws_connect] WebSocket connection request");

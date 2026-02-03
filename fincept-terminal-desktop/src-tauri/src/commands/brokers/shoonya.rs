@@ -13,7 +13,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
 use sha2::{Sha256, Digest};
-use chrono::{NaiveDate, NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime};
 
 use super::common::{ApiResponse, TokenExchangeResponse, OrderPlaceResponse};
 
@@ -1112,7 +1112,7 @@ fn parse_fo_symbol(fields: &[&str], exchange: &str) -> Option<ShoonyaSymbol> {
     let name = fields.get(3)?.trim().to_string();
     let br_symbol = fields.get(4)?.trim().to_string();
     let expiry_str = fields.get(5)?.trim();
-    let instrument = fields.get(6)?.trim();
+    let _instrument = fields.get(6)?.trim();
     let option_type = fields.get(7)?.trim();
     let strike_str = fields.get(8)?.trim();
     let tick_size = fields.get(9)?.trim().parse::<f64>().unwrap_or(0.05);

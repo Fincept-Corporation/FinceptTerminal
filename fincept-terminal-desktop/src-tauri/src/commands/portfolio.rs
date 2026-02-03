@@ -24,7 +24,7 @@ pub async fn calculate_portfolio_metrics(
     }
 
     // Calculate priority: active tab = HIGH (0), inactive = NORMAL (1)
-    let priority = if is_active_tab.unwrap_or(false) { 0 } else { 1 };
+    let _priority = if is_active_tab.unwrap_or(false) { 0 } else { 1 };
 
     python::execute(&app, "Analytics/portfolioManagement/portfolio_analytics.py", args).await
 }

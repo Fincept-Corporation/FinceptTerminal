@@ -405,8 +405,8 @@ impl ZerodhaAdapter {
         // Parse Quote mode fields (44 bytes)
         if packet.len() >= PACKET_SIZE_QUOTE {
             // Fields: token(4), ltp(4), qty(4), avg(4), vol(4), buy_qty(4), sell_qty(4), open(4), high(4), low(4), close(4)
-            let last_qty = i32::from_be_bytes([packet[8], packet[9], packet[10], packet[11]]);
-            let avg_price = i32::from_be_bytes([packet[12], packet[13], packet[14], packet[15]]) as f64 / 100.0;
+            let _last_qty = i32::from_be_bytes([packet[8], packet[9], packet[10], packet[11]]);
+            let _avg_price = i32::from_be_bytes([packet[12], packet[13], packet[14], packet[15]]) as f64 / 100.0;
             let volume = i32::from_be_bytes([packet[16], packet[17], packet[18], packet[19]]) as u64;
             let buy_qty = i32::from_be_bytes([packet[20], packet[21], packet[22], packet[23]]);
             let sell_qty = i32::from_be_bytes([packet[24], packet[25], packet[26], packet[27]]);
@@ -575,7 +575,7 @@ impl WebSocketAdapter for ZerodhaAdapter {
         Ok(())
     }
 
-    async fn unsubscribe(&mut self, symbol: &str, channel: &str) -> anyhow::Result<()> {
+    async fn unsubscribe(&mut self, symbol: &str, _channel: &str) -> anyhow::Result<()> {
         // Find token for symbol
         let token = {
             let map = self.token_symbol_map.read().await;

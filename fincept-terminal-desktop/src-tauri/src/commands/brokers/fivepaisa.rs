@@ -267,7 +267,7 @@ pub async fn fivepaisa_place_order(
     client_id: String,
     access_token: String,
     exchange: String,
-    symbol: String,
+    _symbol: String,
     scrip_code: i64,
     side: String,
     quantity: i32,

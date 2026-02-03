@@ -4,6 +4,32 @@ use crate::python;
 
 
 #[tauri::command]
+pub async fn execute_python_command(
+    app: tauri::AppHandle,
+    script: String,
+    args: Vec<String>,
+) -> Result<String, String> {
+    eprintln!("[execute_python_command] Script: {}", script);
+    eprintln!("[execute_python_command] Args: {:?}", args);
+
+    let result = python::execute(&app, &script, args).await;
+
+    match &result {
+        Ok(output) => {
+            eprintln!("[execute_python_command] Success - Output length: {}", output.len());
+            eprintln!("[execute_python_command] Output preview: {}",
+                if output.len() > 200 { &output[..200] } else { output });
+        }
+        Err(e) => {
+            eprintln!("[execute_python_command] Error: {}", e);
+        }
+    }
+
+    result
+}
+
+
+#[tauri::command]
 pub async fn execute_technical_indicators(
     app: tauri::AppHandle,
     command: String,

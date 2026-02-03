@@ -3,10 +3,16 @@ Fincept Terminal - DeepAgents Integration
 Complete wrapper for hierarchical agentic automation with LangGraph
 """
 
-from .deep_agent_wrapper import DeepAgentWrapper
-from .fincept_llm_adapter import FinceptLLMAdapter
-from .agent_factory import create_fincept_deep_agent
-from .subagent_templates import (
+import sys
+import os
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from deep_agent_wrapper import DeepAgentWrapper
+from fincept_llm_adapter import FinceptLLMAdapter
+from agent_factory import create_fincept_deep_agent
+from subagent_templates import (
     create_research_subagent,
     create_data_analyst_subagent,
     create_trading_subagent,

@@ -1510,6 +1510,7 @@ pub fn run() {
             commands::ckan::get_ckan_dataset_resources,
             commands::ckan::get_ckan_resource_details,
             // Analytics Commands
+            commands::analytics::execute_python_command,
             commands::analytics::execute_technical_indicators,
             commands::analytics::execute_pyportfolioopt,
             commands::analytics::execute_riskfolio,
@@ -1655,8 +1656,6 @@ pub fn run() {
             commands::alpha_arena::create_alpha_styled_agents,
             commands::alpha_arena::run_alpha_action,
             // AI Quant Lab - Qlib
-            commands::ai_quant_lab::qlib_initialize,
-            commands::ai_quant_lab::qlib_check_status,
             commands::ai_quant_lab::qlib_list_models,
             commands::ai_quant_lab::qlib_get_factor_library,
             commands::ai_quant_lab::qlib_get_data,
@@ -1664,8 +1663,6 @@ pub fn run() {
             commands::ai_quant_lab::qlib_run_backtest,
             commands::ai_quant_lab::qlib_optimize_portfolio,
             // AI Quant Lab - RD-Agent
-            commands::ai_quant_lab::rdagent_initialize,
-            commands::ai_quant_lab::rdagent_check_status,
             commands::ai_quant_lab::rdagent_get_capabilities,
             commands::ai_quant_lab::rdagent_start_factor_mining,
             commands::ai_quant_lab::rdagent_get_factor_mining_status,

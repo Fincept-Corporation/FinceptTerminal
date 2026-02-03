@@ -188,70 +188,8 @@ class QlibService:
     """
 
     def __init__(self):
-        self.initialized = False
-        self.provider_uri = None
-        self.region = None
         self.trained_models = {}
         self.experiment_manager = None
-
-    def initialize(self,
-                   provider_uri: str = "~/.qlib/qlib_data/cn_data",
-                   region: str = "cn",
-                   exp_manager_config: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Initialize Qlib with data provider and experiment manager.
-
-        Args:
-            provider_uri: Path to Qlib data (e.g., ~/.qlib/qlib_data/cn_data)
-            region: Market region ('cn' for China, 'us' for US)
-            exp_manager_config: Optional MLflow experiment manager config
-        """
-        if not QLIB_AVAILABLE:
-            return {
-                "success": False,
-                "error": f"Qlib not installed: {QLIB_ERROR}. Install with: pip install pyqlib"
-            }
-
-        try:
-            # Expand user path
-            provider_uri = os.path.expanduser(provider_uri)
-
-            # Check if data exists
-            data_exists = os.path.exists(provider_uri)
-
-            # Initialize Qlib (will work without data for model inspection)
-            try:
-                qlib.init(provider_uri=provider_uri, region=region)
-                self.initialized = True
-                self.provider_uri = provider_uri
-                self.region = region
-            except Exception as init_error:
-                # If data missing, initialize without provider (limited functionality)
-                qlib.init(provider_uri=None, region=region)
-                self.initialized = True
-                self.provider_uri = None
-                self.region = region
-
-            # Setup experiment manager if config provided
-            if exp_manager_config:
-                self.experiment_manager = MLflowExpManager(**exp_manager_config)
-
-            return {
-                "success": True,
-                "message": "Qlib initialized successfully" if data_exists else "Qlib initialized (no data - download required for full functionality)",
-                "provider_uri": self.provider_uri,
-                "region": region,
-                "version": qlib.__version__,
-                "data_available": data_exists,
-                "models_available": sum(MODELS_AVAILABLE.values()),
-                "handlers_available": list(HANDLERS_AVAILABLE.keys()),
-                "backtest_available": BACKTEST_AVAILABLE if 'BACKTEST_AVAILABLE' in dir() else False
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to initialize Qlib: {str(e)}"
-            }
 
     def list_models(self) -> Dict[str, Any]:
         """List all available pre-trained models with detailed information"""
@@ -575,9 +513,6 @@ class QlibService:
             fields: List of fields (e.g., ["$close", "$volume"])
             freq: Data frequency ('day', 'min')
         """
-        if not self.initialized:
-            return {"success": False, "error": "Qlib not initialized"}
-
         try:
             if fields is None:
                 fields = ["$open", "$high", "$low", "$close", "$volume", "$vwap", "$factor"]
@@ -1166,29 +1101,10 @@ def main():
     service = QlibService()
 
     try:
-        if command == "initialize":
-            provider_uri = sys.argv[2] if len(sys.argv) > 2 else "~/.qlib/qlib_data/cn_data"
-            region = sys.argv[3] if len(sys.argv) > 3 else "cn"
-            result = service.initialize(provider_uri, region)
-
-        elif command == "check_status":
-            # Check if Qlib data exists (indicates it's been initialized at least once)
-            qlib_initialized = False
-            if QLIB_AVAILABLE:
-                try:
-                    # Check if default Qlib data directory exists
-                    default_data_path = os.path.expanduser("~/.qlib/qlib_data/cn_data")
-                    us_data_path = os.path.expanduser("~/.qlib/qlib_data/us_data")
-
-                    # If either data path exists, consider Qlib initialized
-                    qlib_initialized = os.path.exists(default_data_path) or os.path.exists(us_data_path)
-                except:
-                    pass
-
+        if command == "check_status":
             result = {
                 "success": True,
                 "qlib_available": QLIB_AVAILABLE,
-                "initialized": qlib_initialized,
                 "version": qlib.__version__ if QLIB_AVAILABLE else None,
                 "models_available": MODELS_AVAILABLE,
                 "handlers_available": list(HANDLERS_AVAILABLE.keys()),

@@ -796,7 +796,7 @@ pub async fn aliceblue_get_quote(
 /// Get historical candle data
 #[tauri::command]
 pub async fn aliceblue_get_historical(
-    api_secret: String,
+    _api_secret: String,
     session_id: String,
     user_id: String,
     token: String,

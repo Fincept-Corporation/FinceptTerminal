@@ -429,7 +429,7 @@ impl WebSocketAdapter for DhanAdapter {
         // Start message handler
         let ws_stream = self.ws_stream.clone();
         let is_connected = self.is_connected.clone();
-        let security_symbol_map = self.security_symbol_map.clone();
+        let _security_symbol_map = self.security_symbol_map.clone();
 
         tokio::spawn(async move {
             loop {
@@ -489,7 +489,7 @@ impl WebSocketAdapter for DhanAdapter {
         &mut self,
         symbol: &str,
         channel: &str,
-        params: Option<Value>,
+        _params: Option<Value>,
     ) -> anyhow::Result<()> {
         let mode = match channel {
             "full" | "depth" => DhanMode::Full,

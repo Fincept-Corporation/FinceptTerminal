@@ -202,6 +202,13 @@ export class AlternativeInvestmentApi {
     return this.executePythonAnalysis('eia', params, method);
   }
 
+  static async analyzeInflationAnnuity(
+    params: any,
+    method: 'inflation_protection' | 'real_return' | 'costs' | 'verdict' = 'verdict'
+  ): Promise<AnalysisResult> {
+    return this.executePythonAnalysis('inflation-annuity', params, method);
+  }
+
   // ============================================================================
   // Structured Products
   // ============================================================================
@@ -275,6 +282,20 @@ export class AlternativeInvestmentApi {
     method: 'performance' | 'screening' | 'expenses' | 'approaches' | 'verdict' = 'verdict'
   ): Promise<AnalysisResult> {
     return this.executePythonAnalysis('sri', params, method);
+  }
+
+  static async analyzePerformance(
+    params: any,
+    method: 'attribution' | 'metrics' | 'comparison' | 'verdict' = 'verdict'
+  ): Promise<AnalysisResult> {
+    return this.executePythonAnalysis('performance', params, method);
+  }
+
+  static async analyzeRisk(
+    params: any,
+    method: 'var' | 'cvar' | 'stress' | 'metrics' | 'verdict' = 'verdict'
+  ): Promise<AnalysisResult> {
+    return this.executePythonAnalysis('risk', params, method);
   }
 
   // ============================================================================

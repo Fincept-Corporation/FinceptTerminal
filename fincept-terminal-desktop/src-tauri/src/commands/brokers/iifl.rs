@@ -1132,7 +1132,7 @@ pub async fn iifl_download_master_contract(
 #[tauri::command]
 pub async fn iifl_search_symbol(
     query: String,
-    exchange: Option<String>,
+    _exchange: Option<String>,
 ) -> Result<ApiResponse<Vec<Value>>, String> {
     eprintln!("[iifl_search_symbol] Searching for: {}", query);
 

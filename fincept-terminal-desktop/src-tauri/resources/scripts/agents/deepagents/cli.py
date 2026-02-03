@@ -5,15 +5,20 @@ Exposes DeepAgents functionality to Tauri/Rust backend
 
 import json
 import sys
+import os
 from typing import Dict, Any, Optional
 
-from .agent_factory import (
+# Add parent directory to path for imports when run as script
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from agent_factory import (
     create_fincept_deep_agent,
     create_agent_by_type,
     AGENT_FACTORIES
 )
-from .deep_agent_wrapper import check_availability
-from .subagent_templates import list_available_templates
+from deep_agent_wrapper import check_availability
+from subagent_templates import list_available_templates
 
 
 def check_status() -> Dict[str, Any]:
@@ -100,12 +105,17 @@ def execute_task(params: Dict[str, Any]) -> Dict[str, Any]:
         - context: Optional context dict
         - config: Agent configuration
     """
+    import traceback
     try:
+        # Ensure params is a dict
+        if isinstance(params, str):
+            params = json.loads(params)
+
         agent_type = params.get("agent_type", "general")
         task = params.get("task")
-        thread_id = params.get("thread_id")
+        thread_id = params.get("thread_id", "default-thread")  # Default thread_id if not provided
         context = params.get("context")
-        config = params.get("config", {})
+        config = params.get("config", {}) if isinstance(params.get("config"), dict) else {}
 
         if not task:
             return {"success": False, "error": "No task provided"}
@@ -147,7 +157,8 @@ def execute_task(params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "details": traceback.format_exc()
         }
 
 
@@ -163,6 +174,10 @@ def stream_task(params: Dict[str, Any]) -> None:
         - config: Agent configuration
     """
     try:
+        # Ensure params is a dict
+        if isinstance(params, str):
+            params = json.loads(params)
+
         agent_type = params.get("agent_type", "general")
         task = params.get("task")
         thread_id = params.get("thread_id")

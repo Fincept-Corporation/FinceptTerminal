@@ -8,7 +8,6 @@ import {
   Brain,
   Sparkles,
   Play,
-  Pause,
   CheckCircle2,
   Clock,
   AlertCircle,
@@ -17,8 +16,9 @@ import {
   GitBranch,
   Zap,
   FileText,
-  RotateCcw,
-  Loader2
+  Loader2,
+  Cpu,
+  Network
 } from 'lucide-react';
 import { deepAgentService, ExecuteTaskRequest, Todo } from '@/services/aiQuantLab/deepAgentService';
 
@@ -29,16 +29,20 @@ const FINCEPT = {
   RED: '#FF3B3B',
   CYAN: '#00E5FF',
   YELLOW: '#FFD700',
+  PURPLE: '#9D4EDD',
   BORDER: '#2A2A2A',
   PANEL_BG: '#0F0F0F',
-  HOVER: '#1F1F1F'
+  DARK_BG: '#000000',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
 };
 
 interface AgentType {
   id: string;
   name: string;
   description: string;
-  icon: React.ReactNode;
+  icon: React.ComponentType<any>;
+  color: string;
   subagents: string[];
 }
 
@@ -47,35 +51,40 @@ const AGENT_TYPES: AgentType[] = [
     id: 'research',
     name: 'Research Agent',
     description: 'Autonomous research, data analysis, and report generation',
-    icon: <FileText className="w-5 h-5" />,
+    icon: FileText,
+    color: FINCEPT.CYAN,
     subagents: ['data_analyst', 'reporter']
   },
   {
     id: 'trading_strategy',
     name: 'Strategy Builder',
     description: 'Design, backtest, and validate trading strategies',
-    icon: <Zap className="w-5 h-5" />,
+    icon: Zap,
+    color: FINCEPT.YELLOW,
     subagents: ['data_analyst', 'trading', 'backtester', 'risk_analyzer', 'reporter']
   },
   {
     id: 'portfolio_management',
     name: 'Portfolio Manager',
     description: 'Optimize portfolios with risk management',
-    icon: <GitBranch className="w-5 h-5" />,
+    icon: GitBranch,
+    color: FINCEPT.GREEN,
     subagents: ['data_analyst', 'portfolio_optimizer', 'risk_analyzer', 'reporter']
   },
   {
     id: 'risk_assessment',
     name: 'Risk Analyzer',
     description: 'Comprehensive risk assessment and stress testing',
-    icon: <AlertCircle className="w-5 h-5" />,
+    icon: AlertCircle,
+    color: FINCEPT.RED,
     subagents: ['data_analyst', 'risk_analyzer', 'reporter']
   },
   {
     id: 'general',
     name: 'General Agent',
     description: 'Full-featured agent with all specialists',
-    icon: <Brain className="w-5 h-5" />,
+    icon: Brain,
+    color: FINCEPT.PURPLE,
     subagents: ['research', 'data_analyst', 'trading', 'risk_analyzer', 'portfolio_optimizer', 'backtester', 'reporter']
   }
 ];
@@ -116,20 +125,14 @@ export function DeepAgentPanel() {
   const [threadId, setThreadId] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [expandedTodos, setExpandedTodos] = useState<Set<string>>(new Set());
-  const [status, setStatus] = useState({ available: false, initialized: false });
+  const [status, setStatus] = useState({ available: false });
+  const [executionLog, setExecutionLog] = useState<string[]>([]);
 
   const resultRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    checkStatus();
-  }, []);
-
-  const checkStatus = async () => {
-    const statusRes = await deepAgentService.checkStatus();
-    setStatus({
-      available: statusRes.available || false,
-      initialized: statusRes.success || false
-    });
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setExecutionLog(prev => [...prev, `[${timestamp}] ${message}`]);
   };
 
   const handleExecute = async () => {
@@ -139,11 +142,16 @@ export function DeepAgentPanel() {
     setError('');
     setResult('');
     setTodos([]);
+    setExecutionLog([]);
 
     const newThreadId = `thread-${Date.now()}`;
     setThreadId(newThreadId);
 
+    addLog(`Starting ${selectedAgentInfo?.name} execution...`);
+    addLog(`Task: ${task.substring(0, 60)}${task.length > 60 ? '...' : ''}`);
+
     try {
+      addLog('Creating agent configuration...');
       const request: ExecuteTaskRequest = {
         agent_type: selectedAgent,
         task: task,
@@ -155,19 +163,27 @@ export function DeepAgentPanel() {
         }
       };
 
+      addLog('Invoking DeepAgent backend...');
       const response = await deepAgentService.executeTask(request);
 
       if (response.success) {
+        addLog('✓ Task completed successfully');
         setResult(response.result || 'Task completed successfully');
         setTodos(response.todos || []);
         setThreadId(response.thread_id || newThreadId);
+        if (response.todos && response.todos.length > 0) {
+          addLog(`Generated ${response.todos.length} task(s)`);
+        }
       } else {
+        addLog(`✗ Error: ${response.error}`);
         setError(response.error || 'Unknown error occurred');
       }
     } catch (err) {
+      addLog(`✗ Exception: ${String(err)}`);
       setError(String(err));
     } finally {
       setIsExecuting(false);
+      addLog('Execution finished');
     }
   };
 
@@ -191,40 +207,47 @@ export function DeepAgentPanel() {
     const isExpanded = expandedTodos.has(todo.id);
     const hasSubtasks = todo.subtasks && todo.subtasks.length > 0;
 
+    const statusColors = {
+      pending: FINCEPT.MUTED,
+      in_progress: FINCEPT.YELLOW,
+      completed: FINCEPT.GREEN
+    };
+
     const statusIcon = {
-      pending: <Clock className="w-4 h-4" style={{ color: FINCEPT.YELLOW }} />,
-      in_progress: <Loader2 className="w-4 h-4 animate-spin" style={{ color: FINCEPT.CYAN }} />,
-      completed: <CheckCircle2 className="w-4 h-4" style={{ color: FINCEPT.GREEN }} />
+      pending: <Clock size={12} />,
+      in_progress: <Loader2 size={12} className="animate-spin" />,
+      completed: <CheckCircle2 size={12} />
     }[todo.status];
 
     return (
-      <div key={todo.id} style={{ marginLeft: depth > 0 ? '20px' : '0' }}>
+      <div key={todo.id} style={{ marginLeft: depth > 0 ? '16px' : '0' }}>
         <div
           style={{
-            padding: '8px 12px',
-            backgroundColor: FINCEPT.PANEL_BG,
-            border: `1px solid ${FINCEPT.BORDER}`,
-            borderRadius: '6px',
-            marginBottom: '6px',
+            padding: '6px 10px',
+            backgroundColor: FINCEPT.DARK_BG,
+            border: `1px solid ${statusColors[todo.status]}`,
+            marginBottom: '4px',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            cursor: hasSubtasks ? 'pointer' : 'default'
+            cursor: hasSubtasks ? 'pointer' : 'default',
+            fontSize: '11px',
+            fontFamily: 'monospace'
           }}
           onClick={() => hasSubtasks && toggleTodo(todo.id)}
         >
           {hasSubtasks && (
             isExpanded ?
-              <ChevronDown className="w-4 h-4" style={{ color: FINCEPT.ORANGE }} /> :
-              <ChevronRight className="w-4 h-4" style={{ color: FINCEPT.ORANGE }} />
+              <ChevronDown size={10} style={{ color: FINCEPT.ORANGE }} /> :
+              <ChevronRight size={10} style={{ color: FINCEPT.ORANGE }} />
           )}
-          {statusIcon}
-          <span style={{ flex: 1, fontSize: '13px', color: FINCEPT.WHITE }}>
+          <span style={{ color: statusColors[todo.status] }}>{statusIcon}</span>
+          <span style={{ flex: 1, color: FINCEPT.WHITE }}>
             {todo.task}
           </span>
         </div>
         {hasSubtasks && isExpanded && (
-          <div style={{ marginLeft: '20px' }}>
+          <div style={{ marginLeft: '12px' }}>
             {todo.subtasks!.map(subtask => renderTodo(subtask, depth + 1))}
           </div>
         )}
@@ -234,266 +257,341 @@ export function DeepAgentPanel() {
 
   const selectedAgentInfo = AGENT_TYPES.find(a => a.id === selectedAgent);
   const examples = EXAMPLE_TASKS[selectedAgent as keyof typeof EXAMPLE_TASKS] || [];
+  const AgentIcon = selectedAgentInfo?.icon || Brain;
 
   return (
     <div style={{
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      padding: '20px',
-      gap: '20px',
-      overflow: 'auto'
+      backgroundColor: FINCEPT.DARK_BG
     }}>
-      {/* Header */}
+      {/* Terminal-style Header */}
       <div style={{
+        padding: '12px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
-        paddingBottom: '20px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`
+        gap: '12px'
       }}>
-        <Sparkles style={{ color: FINCEPT.ORANGE }} className="w-6 h-6" />
-        <div>
-          <h2 style={{ color: FINCEPT.WHITE, fontSize: '20px', fontWeight: 600, margin: 0 }}>
-            DeepAgent Automation
-          </h2>
-          <p style={{ color: FINCEPT.CYAN, fontSize: '13px', margin: '4px 0 0 0' }}>
-            Autonomous multi-step workflows with hierarchical task delegation
-          </p>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div style={{
-            padding: '4px 12px',
-            backgroundColor: status.available ? FINCEPT.GREEN + '20' : FINCEPT.RED + '20',
-            border: `1px solid ${status.available ? FINCEPT.GREEN : FINCEPT.RED}`,
-            borderRadius: '12px',
-            fontSize: '11px',
-            color: status.available ? FINCEPT.GREEN : FINCEPT.RED
-          }}>
-            {status.available ? '● Available' : '● Unavailable'}
-          </div>
+        <Network size={16} color={FINCEPT.ORANGE} />
+        <span style={{
+          color: FINCEPT.ORANGE,
+          fontSize: '12px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          fontFamily: 'monospace'
+        }}>
+          DEEPAGENT AUTOMATION
+        </span>
+        <div style={{ flex: 1 }} />
+        <div style={{
+          fontSize: '10px',
+          fontFamily: 'monospace',
+          padding: '3px 8px',
+          backgroundColor: FINCEPT.GREEN + '20',
+          border: `1px solid ${FINCEPT.GREEN}`,
+          color: FINCEPT.GREEN
+        }}>
+          READY
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0 }}>
-        {/* Left: Agent Selection */}
-        <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h3 style={{ color: FINCEPT.WHITE, fontSize: '14px', fontWeight: 600, margin: 0 }}>
-            Agent Type
-          </h3>
-          {AGENT_TYPES.map(agent => (
-            <div
-              key={agent.id}
-              onClick={() => setSelectedAgent(agent.id)}
-              style={{
-                padding: '12px',
-                backgroundColor: selectedAgent === agent.id ? FINCEPT.ORANGE + '20' : FINCEPT.PANEL_BG,
-                border: `1px solid ${selectedAgent === agent.id ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                if (selectedAgent !== agent.id) {
-                  e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (selectedAgent !== agent.id) {
-                  e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
-                }
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <div style={{ color: selectedAgent === agent.id ? FINCEPT.ORANGE : FINCEPT.CYAN }}>
-                  {agent.icon}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* Left Sidebar - Agent Selection */}
+        <div style={{
+          width: '240px',
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <div style={{
+            padding: '10px 12px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            color: FINCEPT.MUTED,
+            fontFamily: 'monospace',
+            letterSpacing: '0.5px'
+          }}>
+            AGENT TYPE
+          </div>
+          <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
+            {AGENT_TYPES.map(agent => {
+              const Icon = agent.icon;
+              const isSelected = selectedAgent === agent.id;
+              return (
+                <div
+                  key={agent.id}
+                  onClick={() => setSelectedAgent(agent.id)}
+                  style={{
+                    padding: '10px',
+                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
+                    border: `1px solid ${isSelected ? agent.color : FINCEPT.BORDER}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                      e.currentTarget.style.borderColor = agent.color;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Icon size={14} style={{ color: agent.color }} />
+                    <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
+                      {agent.name}
+                    </span>
+                  </div>
+                  <p style={{ color: FINCEPT.MUTED, fontSize: '9px', margin: '0 0 6px 0', lineHeight: '1.3' }}>
+                    {agent.description}
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                    {agent.subagents.slice(0, 2).map(sub => (
+                      <span
+                        key={sub}
+                        style={{
+                          padding: '1px 4px',
+                          backgroundColor: FINCEPT.DARK_BG,
+                          fontSize: '8px',
+                          color: agent.color,
+                          fontFamily: 'monospace'
+                        }}
+                      >
+                        {sub}
+                      </span>
+                    ))}
+                    {agent.subagents.length > 2 && (
+                      <span style={{ fontSize: '8px', color: FINCEPT.MUTED, fontFamily: 'monospace' }}>
+                        +{agent.subagents.length - 2}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span style={{ color: FINCEPT.WHITE, fontSize: '13px', fontWeight: 500 }}>
-                  {agent.name}
-                </span>
-              </div>
-              <p style={{ color: FINCEPT.CYAN, fontSize: '11px', margin: '0 0 8px 0' }}>
-                {agent.description}
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                {agent.subagents.slice(0, 3).map(sub => (
-                  <span
-                    key={sub}
-                    style={{
-                      padding: '2px 6px',
-                      backgroundColor: FINCEPT.BORDER,
-                      borderRadius: '4px',
-                      fontSize: '9px',
-                      color: FINCEPT.CYAN
-                    }}
-                  >
-                    {sub}
-                  </span>
-                ))}
-                {agent.subagents.length > 3 && (
-                  <span style={{ fontSize: '9px', color: FINCEPT.CYAN }}>
-                    +{agent.subagents.length - 3} more
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Middle: Task Input */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
-          <div>
-            <h3 style={{ color: FINCEPT.WHITE, fontSize: '14px', fontWeight: 600, margin: '0 0 8px 0' }}>
-              Task Description
-            </h3>
+        {/* Main Content Area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          {/* Task Input Section */}
+          <div style={{
+            padding: '16px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {AgentIcon && <AgentIcon size={14} style={{ color: selectedAgentInfo?.color }} />}
+              <span style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
+                {selectedAgentInfo?.name.toUpperCase()}
+              </span>
+              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>•</span>
+              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>
+                {selectedAgentInfo?.subagents.length} SUBAGENTS
+              </span>
+            </div>
+
             <textarea
               value={task}
               onChange={(e) => setTask(e.target.value)}
-              placeholder={`Describe your task for ${selectedAgentInfo?.name}...\n\nThe agent will autonomously break it down, delegate to specialists, and execute until completion.`}
+              placeholder={`> Enter task for ${selectedAgentInfo?.name}...\n\nThe agent will autonomously break down the task, delegate to specialists, and execute until completion.`}
               style={{
                 width: '100%',
-                height: '120px',
-                padding: '12px',
-                backgroundColor: FINCEPT.PANEL_BG,
+                height: '100px',
+                padding: '10px',
+                backgroundColor: FINCEPT.DARK_BG,
                 border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '8px',
                 color: FINCEPT.WHITE,
-                fontSize: '13px',
-                fontFamily: 'inherit',
+                fontSize: '11px',
+                fontFamily: 'monospace',
                 resize: 'vertical'
               }}
             />
+
+            <button
+              onClick={handleExecute}
+              disabled={isExecuting || !task.trim()}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: selectedAgentInfo?.color || FINCEPT.ORANGE,
+                border: 'none',
+                color: FINCEPT.DARK_BG,
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: isExecuting ? 'not-allowed' : 'pointer',
+                opacity: isExecuting || !task.trim() ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px'
+              }}
+            >
+              {isExecuting ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  EXECUTING...
+                </>
+              ) : (
+                <>
+                  <Play size={12} />
+                  EXECUTE TASK
+                </>
+              )}
+            </button>
           </div>
 
-          {/* Examples */}
-          <div>
-            <h4 style={{ color: FINCEPT.CYAN, fontSize: '12px', fontWeight: 500, margin: '0 0 8px 0' }}>
-              Example Tasks:
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {/* Examples Section */}
+          <div style={{
+            padding: '12px 16px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            backgroundColor: FINCEPT.PANEL_BG
+          }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, marginBottom: '8px', fontFamily: 'monospace' }}>
+              EXAMPLE TASKS
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {examples.map((example, idx) => (
                 <button
                   key={idx}
                   onClick={() => loadExample(example)}
                   style={{
-                    padding: '8px 12px',
-                    backgroundColor: FINCEPT.PANEL_BG,
+                    padding: '6px 8px',
+                    backgroundColor: FINCEPT.DARK_BG,
                     border: `1px solid ${FINCEPT.BORDER}`,
-                    borderRadius: '6px',
-                    color: FINCEPT.CYAN,
-                    fontSize: '11px',
+                    color: selectedAgentInfo?.color || FINCEPT.CYAN,
+                    fontSize: '10px',
                     textAlign: 'left',
                     cursor: 'pointer',
-                    transition: 'all 0.2s'
+                    fontFamily: 'monospace',
+                    transition: 'all 0.15s'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                    e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                    e.currentTarget.style.borderColor = selectedAgentInfo?.color || FINCEPT.CYAN;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+                    e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
                     e.currentTarget.style.borderColor = FINCEPT.BORDER;
                   }}
                 >
-                  {example}
+                  › {example}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Execute Button */}
-          <button
-            onClick={handleExecute}
-            disabled={isExecuting || !task.trim() || !status.available}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: FINCEPT.ORANGE,
-              border: 'none',
-              borderRadius: '8px',
-              color: FINCEPT.WHITE,
-              fontSize: '14px',
-              fontWeight: 600,
-              cursor: isExecuting || !status.available ? 'not-allowed' : 'pointer',
-              opacity: isExecuting || !status.available ? 0.5 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.2s'
-            }}
-          >
-            {isExecuting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Executing...
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4" />
-                Execute Task
-              </>
-            )}
-          </button>
-
-          {/* Error */}
-          {error && (
-            <div style={{
-              padding: '12px',
-              backgroundColor: FINCEPT.RED + '20',
-              border: `1px solid ${FINCEPT.RED}`,
-              borderRadius: '8px',
-              color: FINCEPT.RED,
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <AlertCircle className="w-4 h-4" />
-              {error}
-            </div>
-          )}
-
-          {/* Todos */}
-          {todos.length > 0 && (
-            <div>
-              <h3 style={{ color: FINCEPT.WHITE, fontSize: '14px', fontWeight: 600, margin: '0 0 8px 0' }}>
-                Task Breakdown
-              </h3>
-              <div style={{
-                maxHeight: '200px',
-                overflowY: 'auto',
-                paddingRight: '8px'
-              }}>
-                {todos.map(todo => renderTodo(todo))}
-              </div>
-            </div>
-          )}
-
-          {/* Result */}
-          {result && (
-            <div>
-              <h3 style={{ color: FINCEPT.WHITE, fontSize: '14px', fontWeight: 600, margin: '0 0 8px 0' }}>
-                Result
-              </h3>
-              <div
-                ref={resultRef}
-                style={{
-                  padding: '16px',
+          {/* Results Area */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            {/* Execution Log */}
+            {executionLog.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: FINCEPT.MUTED,
+                  marginBottom: '8px',
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px'
+                }}>
+                  EXECUTION LOG
+                </div>
+                <div style={{
+                  padding: '8px',
                   backgroundColor: FINCEPT.PANEL_BG,
                   border: `1px solid ${FINCEPT.BORDER}`,
-                  borderRadius: '8px',
-                  color: FINCEPT.WHITE,
-                  fontSize: '13px',
-                  lineHeight: '1.6',
-                  maxHeight: '300px',
+                  maxHeight: '150px',
                   overflowY: 'auto',
-                  whiteSpace: 'pre-wrap'
-                }}
-              >
-                {result}
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  color: FINCEPT.CYAN
+                }}>
+                  {executionLog.map((log, idx) => (
+                    <div key={idx} style={{ marginBottom: '2px' }}>
+                      {log}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {error && (
+              <div style={{
+                padding: '10px',
+                backgroundColor: FINCEPT.RED + '15',
+                border: `1px solid ${FINCEPT.RED}`,
+                color: FINCEPT.RED,
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontFamily: 'monospace',
+                marginBottom: '12px'
+              }}>
+                <AlertCircle size={14} />
+                {error}
+              </div>
+            )}
+
+            {todos.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: FINCEPT.MUTED,
+                  marginBottom: '8px',
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px'
+                }}>
+                  TASK BREAKDOWN
+                </div>
+                {todos.map(todo => renderTodo(todo))}
+              </div>
+            )}
+
+            {result && (
+              <div>
+                <div style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: FINCEPT.MUTED,
+                  marginBottom: '8px',
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px'
+                }}>
+                  RESULT
+                </div>
+                <div
+                  ref={resultRef}
+                  style={{
+                    padding: '12px',
+                    backgroundColor: FINCEPT.PANEL_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    color: FINCEPT.WHITE,
+                    fontSize: '11px',
+                    lineHeight: '1.6',
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'monospace'
+                  }}
+                >
+                  {result}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

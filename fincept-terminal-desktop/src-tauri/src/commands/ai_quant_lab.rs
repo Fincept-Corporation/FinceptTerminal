@@ -7,27 +7,6 @@ use crate::python;
 // QLIB COMMANDS
 // ============================================================================
 
-/// Initialize Qlib with data provider
-#[tauri::command]
-pub async fn qlib_initialize(
-    app: tauri::AppHandle,
-    provider_uri: Option<String>,
-    region: Option<String>,
-) -> Result<String, String> {
-    let uri = provider_uri.unwrap_or_else(|| "~/.qlib/qlib_data/cn_data".to_string());
-    let reg = region.unwrap_or_else(|| "cn".to_string());
-
-    let args = vec!["initialize".to_string(), uri, reg];
-    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
-}
-
-/// Check Qlib status and availability
-#[tauri::command]
-pub async fn qlib_check_status(app: tauri::AppHandle) -> Result<String, String> {
-    let args = vec!["check_status".to_string()];
-    python::execute_sync(&app, "ai_quant_lab/qlib_service.py", args)
-}
-
 /// List available pre-trained models
 #[tauri::command]
 pub async fn qlib_list_models(app: tauri::AppHandle) -> Result<String, String> {
@@ -115,28 +94,6 @@ pub async fn qlib_optimize_portfolio(
 // ============================================================================
 // RD-AGENT COMMANDS
 // ============================================================================
-
-/// Initialize RD-Agent
-#[tauri::command]
-pub async fn rdagent_initialize(
-    app: tauri::AppHandle,
-    config: Option<String>,
-) -> Result<String, String> {
-    let args = if let Some(cfg) = config {
-        vec!["initialize".to_string(), cfg]
-    } else {
-        vec!["initialize".to_string()]
-    };
-
-    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
-}
-
-/// Check RD-Agent status and availability
-#[tauri::command]
-pub async fn rdagent_check_status(app: tauri::AppHandle) -> Result<String, String> {
-    let args = vec!["check_status".to_string()];
-    python::execute_sync(&app, "ai_quant_lab/rd_agent_service.py", args)
-}
 
 /// Get RD-Agent capabilities
 #[tauri::command]

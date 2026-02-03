@@ -37,7 +37,6 @@ export interface RDAgentCapabilities {
 export interface RDAgentStatusResponse {
   success: boolean;
   rdagent_available: boolean;
-  initialized: boolean;
   error?: string;
 }
 
@@ -169,31 +168,7 @@ class RDAgentService {
       return {
         success: false,
         rdagent_available: false,
-        initialized: false,
         error: String(error)
-      };
-    }
-  }
-
-  /**
-   * Initialize RD-Agent with optional configuration
-   */
-  async initialize(config?: any): Promise<any> {
-    console.log('[RDAgentService] initialize() called with config:', config);
-    try {
-      console.log('[RDAgentService] Invoking rdagent_initialize command...');
-      const result = await invoke<string>('rdagent_initialize', {
-        config: config ? JSON.stringify(config) : null
-      });
-      console.log('[RDAgentService] Initialize raw result:', result);
-      const parsed = JSON.parse(result);
-      console.log('[RDAgentService] Initialize parsed result:', parsed);
-      return parsed;
-    } catch (error) {
-      console.error('[RDAgentService] initialize error:', error);
-      return {
-        success: false,
-        error: error as string
       };
     }
   }

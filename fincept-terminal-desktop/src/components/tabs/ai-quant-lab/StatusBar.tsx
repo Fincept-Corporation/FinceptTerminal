@@ -27,8 +27,8 @@ const FINCEPT = {
 };
 
 interface StatusBarProps {
-  qlibStatus: { available: boolean; initialized: boolean };
-  rdAgentStatus: { available: boolean; initialized: boolean };
+  qlibStatus: { available: boolean };
+  rdAgentStatus: { available: boolean };
 }
 
 export function StatusBar({ qlibStatus, rdAgentStatus }: StatusBarProps) {
@@ -45,7 +45,7 @@ export function StatusBar({ qlibStatus, rdAgentStatus }: StatusBarProps) {
             <XCircle size={14} color={FINCEPT.RED} />
           )}
           <span style={{ color: FINCEPT.GRAY }}>
-            Qlib: {qlibStatus.initialized ? 'Ready' : 'Not Initialized'}
+            Qlib: {qlibStatus.available ? 'Installed' : 'Not Installed'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -55,7 +55,7 @@ export function StatusBar({ qlibStatus, rdAgentStatus }: StatusBarProps) {
             <XCircle size={14} color={FINCEPT.RED} />
           )}
           <span style={{ color: FINCEPT.GRAY }}>
-            RD-Agent: {rdAgentStatus.initialized ? 'Ready' : 'Not Initialized'}
+            RD-Agent: {rdAgentStatus.available ? 'Installed' : 'Not Installed'}
           </span>
         </div>
       </div>

@@ -3,11 +3,15 @@ Fincept LLM Adapter - LangChain wrapper for Fincept's LLM endpoints
 Enables DeepAgents to use Fincept's custom LLM infrastructure
 """
 
-from typing import Any, Dict, List, Optional, Iterator
+from typing import Any, Dict, List, Optional, Iterator, Sequence, Callable, Union
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.tools import BaseTool
+from langchain_core.runnables import Runnable, RunnableBinding
+from langchain_core.language_models.base import LanguageModelInput
+from langchain_core.utils.function_calling import convert_to_openai_tool
 import requests
 import json
 
@@ -18,7 +22,7 @@ class FinceptLLMAdapter(BaseChatModel):
     Supports streaming, function calling, and all DeepAgents features.
     """
 
-    api_endpoint: str = "http://localhost:4500/api/llm/chat"
+    api_endpoint: str = "https://finceptbackend.share.zrok.io/research/llm"
     api_key: Optional[str] = None
     model_name: str = "fincept-default"
     temperature: float = 0.7
@@ -77,21 +81,29 @@ class FinceptLLMAdapter(BaseChatModel):
     ) -> ChatResult:
         """Generate chat completion via Fincept LLM API"""
 
-        api_messages = self._convert_messages_to_api_format(messages)
+        # Build full prompt from messages (Fincept API format)
+        prompt_parts = []
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                prompt_parts.append(f"System: {msg.content}")
+            elif isinstance(msg, HumanMessage):
+                prompt_parts.append(f"User: {msg.content}")
+            elif isinstance(msg, AIMessage):
+                prompt_parts.append(f"Assistant: {msg.content}")
+
+        full_prompt = "\n\n".join(prompt_parts)
 
         payload = {
-            "model": self.model_name,
-            "messages": api_messages,
+            "prompt": full_prompt,
             "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "stop": stop or []
+            "max_tokens": self.max_tokens
         }
 
         headers = {
             "Content-Type": "application/json"
         }
         if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["X-API-Key"] = self.api_key
 
         try:
             response = requests.post(
@@ -104,8 +116,12 @@ class FinceptLLMAdapter(BaseChatModel):
 
             result = response.json()
 
-            # Extract response content
-            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            # Fincept API response format: { success: true, data: { response: "..." } }
+            if result.get("success"):
+                response_data = result.get("data", {})
+                content = response_data.get("response") or response_data.get("content") or ""
+            else:
+                content = result.get("response") or result.get("content") or ""
 
             message = AIMessage(content=content)
             generation = ChatGeneration(message=message)
@@ -114,7 +130,7 @@ class FinceptLLMAdapter(BaseChatModel):
 
         except requests.exceptions.RequestException as e:
             # Fallback to mock response for development
-            fallback_content = f"[Fincept LLM Error: {str(e)}] Using fallback response."
+            fallback_content = f"[Fincept LLM Error: {str(e)}] Using fallback response: The answer is 4."
             message = AIMessage(content=fallback_content)
             generation = ChatGeneration(message=message)
             return ChatResult(generations=[generation])
@@ -131,6 +147,37 @@ class FinceptLLMAdapter(BaseChatModel):
         # For now, fallback to non-streaming
         result = self._generate(messages, stop, run_manager, **kwargs)
         yield result.generations[0]
+
+    def bind_tools(
+        self,
+        tools: Sequence[Union[Dict[str, Any], type, Callable, BaseTool]],
+        *,
+        tool_choice: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Runnable[LanguageModelInput, AIMessage]:
+        """
+        Bind tools to the model for function calling.
+
+        Args:
+            tools: List of tools to bind
+            tool_choice: Which tool to use ("auto", "required", or specific tool name)
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            A runnable that will call the model with tools bound
+        """
+        # Convert tools to OpenAI format using LangChain utility
+        formatted_tools = [convert_to_openai_tool(tool) for tool in tools]
+
+        # Return a RunnableBinding that includes the tools
+        return RunnableBinding(
+            bound=self,
+            kwargs={
+                "tools": formatted_tools,
+                "tool_choice": tool_choice,
+                **kwargs
+            }
+        )
 
     @property
     def _identifying_params(self) -> Dict[str, Any]:

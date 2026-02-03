@@ -296,7 +296,7 @@ pub fn search_symbols(keyword: &str, exchange: Option<&str>, limit: i32) -> Resu
 
     let search_pattern = format!("%{}%", keyword.to_uppercase());
 
-    let query = if let Some(exch) = exchange {
+    let query = if let Some(_exch) = exchange {
         "SELECT symbol, br_symbol, name, exchange, token, instrument_type, lot_size,
                 CASE
                     WHEN UPPER(symbol) = UPPER(?) THEN 100.0

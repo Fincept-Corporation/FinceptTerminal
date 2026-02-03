@@ -17,7 +17,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 // Directory names of scripts requiring NumPy 1.x venv.
 // Matched against path components (directory/file names), not arbitrary substrings.
 const NUMPY1_SCRIPTS: &[&str] = &[
-    "vectorbt", "backtesting", "gluonts", "functime", "pyportfolioopt", "financepy",
+    "vectorbt", "backtesting", "gluonts", "functime", "pyportfolioopt", "financepy", "ffn",
 ];
 
 // ============================================================================

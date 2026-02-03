@@ -10,9 +10,7 @@
 //! Supports both live (production) and paper (sandbox) trading modes.
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::collections::HashMap;
+use serde_json::Value;
 
 use super::common::ApiResponse;
 
@@ -1060,7 +1058,7 @@ pub async fn tradier_get_stream_session(
 #[tauri::command]
 pub async fn tradier_ws_connect(
     session_id: String,
-    is_paper: bool,
+    _is_paper: bool,
 ) -> Result<ApiResponse<bool>, String> {
     eprintln!("[tradier_ws_connect] Connecting to WebSocket with session: {}", session_id);
 
@@ -1079,7 +1077,7 @@ pub async fn tradier_ws_connect(
 /// Subscribe to symbols on WebSocket
 #[tauri::command]
 pub async fn tradier_ws_subscribe(
-    session_id: String,
+    _session_id: String,
     symbols: Vec<String>,
 ) -> Result<ApiResponse<bool>, String> {
     eprintln!("[tradier_ws_subscribe] Subscribing to: {:?}", symbols);
@@ -1098,7 +1096,7 @@ pub async fn tradier_ws_subscribe(
 /// Unsubscribe from symbols on WebSocket
 #[tauri::command]
 pub async fn tradier_ws_unsubscribe(
-    session_id: String,
+    _session_id: String,
     symbols: Vec<String>,
 ) -> Result<ApiResponse<bool>, String> {
     eprintln!("[tradier_ws_unsubscribe] Unsubscribing from: {:?}", symbols);

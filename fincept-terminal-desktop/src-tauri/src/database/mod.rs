@@ -25,22 +25,22 @@ pub async fn initialize() -> Result<()> {
     init_database().await?;
 
     // Initialize cache database (separate file: fincept_cache.db)
-    if let Err(e) = init_cache_database().await {
+    if let Err(_e) = init_cache_database().await {
     } else {
     }
 
     // Initialize paper trading tables
-    if let Err(e) = crate::paper_trading::init_tables() {
+    if let Err(_e) = crate::paper_trading::init_tables() {
     } else {
     }
 
     // Initialize Fyers symbols table
-    if let Err(e) = fyers_symbols::init_fyers_symbols_table() {
+    if let Err(_e) = fyers_symbols::init_fyers_symbols_table() {
     } else {
     }
 
     // Initialize Shoonya symbols table
-    if let Err(e) = shoonya_symbols::init_shoonya_symbols_table() {
+    if let Err(_e) = shoonya_symbols::init_shoonya_symbols_table() {
     } else {
     }
 

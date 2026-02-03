@@ -3,10 +3,16 @@ DeepAgent Wrapper - Complete wrapper around DeepAgents library
 Provides simplified interface for Fincept Terminal integration
 """
 
+import sys
+import os
 from typing import Any, Dict, List, Optional, Callable
 from datetime import datetime
 import json
 import logging
+
+# Add current directory to path for imports
+if __name__ == "__main__" or "." not in __name__:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from deepagents import create_deep_agent, SubAgent, CompiledSubAgent
@@ -22,7 +28,7 @@ except ImportError as e:
     DEEPAGENTS_AVAILABLE = False
     IMPORT_ERROR = str(e)
 
-from .fincept_llm_adapter import FinceptLLMAdapter
+from fincept_llm_adapter import FinceptLLMAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +129,8 @@ Available tools: write_todos, read_file, write_file, edit_file, ls, call_subagen
         subagent = {
             "name": name,
             "description": description,
-            "prompt": prompt
+            "prompt": prompt,
+            "system_prompt": prompt  # DeepAgents library expects this key
         }
 
         if tools:
@@ -156,19 +163,22 @@ Available tools: write_todos, read_file, write_file, edit_file, ls, call_subagen
         checkpointer = MemorySaver() if self.enable_checkpointing else None
 
         # Build middleware stack
+        # NOTE: SummarizationMiddleware causes duplicate middleware error
+        # DeepAgents may add it automatically, so we don't add it manually
         middleware = list(self.middleware)
-        if self.enable_summarization:
-            middleware.append(SummarizationMiddleware())
 
         # Create agent
+        # Note: memory parameter is a list of memory types in newer deepagents versions
+        memory_config = ["longterm"] if self.enable_longterm_memory else None
+
         self.agent = create_deep_agent(
             model=self.model,
             tools=self.custom_tools if self.custom_tools else None,
             system_prompt=self.system_prompt,
-            middleware=middleware,
+            middleware=tuple(middleware) if middleware else (),  # Empty tuple if no middleware
             subagents=self.subagents if self.subagents else None,
             checkpointer=checkpointer,
-            use_longterm_memory=self.enable_longterm_memory,
+            memory=memory_config,
             debug=False
         )
 
@@ -223,10 +233,13 @@ Available tools: write_todos, read_file, write_file, edit_file, ls, call_subagen
             }
 
         except Exception as e:
-            logger.error(f"Agent execution error: {str(e)}")
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Agent execution error: {str(e)}\n{error_details}")
             return {
                 "success": False,
                 "error": str(e),
+                "details": error_details,
                 "thread_id": thread_id
             }
 

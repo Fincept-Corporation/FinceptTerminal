@@ -272,7 +272,7 @@ impl WebSocketAdapter for BinanceAdapter {
                         *connected.write().await = false;
                         break;
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         *connected.write().await = false;
                         break;
                     }

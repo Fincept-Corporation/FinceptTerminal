@@ -1445,7 +1445,7 @@ pub async fn zerodha_calculate_margin(
 #[tauri::command]
 pub async fn zerodha_search_symbols(
     query: String,
-    exchange: Option<String>,
+    _exchange: Option<String>,
 ) -> Result<ApiResponse<Vec<Value>>, String> {
     eprintln!("[zerodha_search_symbols] Searching for: {}", query);
 

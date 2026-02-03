@@ -219,7 +219,7 @@ pub fn delete_portfolio(id: &str) -> Result<()> {
 }
 
 pub fn reset_portfolio(id: &str) -> Result<Portfolio> {
-    let portfolio = get_portfolio(id)?;
+    let _portfolio = get_portfolio(id)?;
     let pool = get_pool()?;
     let conn = pool.get()?;
     conn.execute("DELETE FROM pt_trades WHERE portfolio_id = ?1", params![id])?;

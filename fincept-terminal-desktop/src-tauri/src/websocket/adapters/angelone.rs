@@ -459,7 +459,7 @@ impl WebSocketAdapter for AngelOneAdapter {
             .header("Sec-WebSocket-Key", tokio_tungstenite::tungstenite::handshake::client::generate_key())
             .body(())?;
 
-        let (ws_stream, response) = connect_async_with_config(request, None, false).await?;
+        let (ws_stream, _response) = connect_async_with_config(request, None, false).await?;
 
         *self.ws_stream.write().await = Some(ws_stream);
         *self.is_connected.write().await = true;
@@ -471,7 +471,7 @@ impl WebSocketAdapter for AngelOneAdapter {
         let token_map_clone = self.token_symbol_map.clone();
 
         tokio::spawn(async move {
-            let mut msg_count: u64 = 0;
+            let mut _msg_count: u64 = 0;
             loop {
                 // Use a short timeout to avoid holding the lock indefinitely
                 // This allows subscribe() to acquire the lock between reads
@@ -499,7 +499,7 @@ impl WebSocketAdapter for AngelOneAdapter {
                 if let Some(msg_result) = message {
                     match msg_result {
                         Ok(Message::Binary(data)) => {
-                            msg_count += 1;
+                            _msg_count += 1;
 
                             if let Some(tick) = AngelOneAdapter::parse_binary_data(&data) {
                                 let map = token_map_clone.read().await;
@@ -523,14 +523,14 @@ impl WebSocketAdapter for AngelOneAdapter {
                         Ok(Message::Ping(data)) => {
                             // Send pong - need to reacquire lock
                             if let Some(ref mut ws) = *ws_stream_clone.write().await {
-                                if let Err(e) = ws.send(Message::Pong(data)).await {
+                                if let Err(_e) = ws.send(Message::Pong(data)).await {
                                 }
                             }
                         }
                         Ok(Message::Pong(_)) => {
                             // pong response to our ping
                         }
-                        Err(e) => {
+                        Err(_e) => {
                             *is_connected_clone.write().await = false;
                             break;
                         }
@@ -550,7 +550,7 @@ impl WebSocketAdapter for AngelOneAdapter {
                     break;
                 }
                 if let Some(ref mut ws) = *ws_stream_hb.write().await {
-                    if let Err(e) = ws.send(Message::Text("ping".to_string())).await {
+                    if let Err(_e) = ws.send(Message::Text("ping".to_string())).await {
                         break;
                     }
                 }

@@ -20,10 +20,7 @@ def create_research_subagent(
     - Economic indicator research
     """
 
-    return {
-        "name": "research_agent",
-        "description": "Conducts financial research, analyzes market trends, and synthesizes information from multiple sources. Use for research-heavy tasks.",
-        "prompt": """You are a financial research specialist.
+    prompt_text = """You are a financial research specialist.
 
 Your expertise:
 - Financial literature review and synthesis
@@ -39,7 +36,13 @@ Approach:
 4. Synthesize findings into actionable insights
 5. Provide properly cited conclusions
 
-Maintain CFA-level research standards.""",
+Maintain CFA-level research standards."""
+
+    return {
+        "name": "research_agent",
+        "description": "Conducts financial research, analyzes market trends, and synthesizes information from multiple sources. Use for research-heavy tasks.",
+        "prompt": prompt_text,
+        "system_prompt": prompt_text,
         "model": model,
         "tools": tools
     }
@@ -59,10 +62,7 @@ def create_data_analyst_subagent(
     - Performance metrics computation
     """
 
-    return {
-        "name": "data_analyst",
-        "description": "Performs quantitative analysis, data processing, statistical calculations, and factor engineering. Use for data-heavy analytical tasks.",
-        "prompt": """You are a quantitative data analyst specializing in financial data.
+    prompt_text = """You are a quantitative data analyst specializing in financial data.
 
 Your expertise:
 - Data cleaning, validation, and preprocessing
@@ -79,7 +79,13 @@ Approach:
 4. Identify patterns and anomalies
 5. Present findings with proper context
 
-Use industry-standard methodologies.""",
+Use industry-standard methodologies."""
+
+    return {
+        "name": "data_analyst",
+        "description": "Performs quantitative analysis, data processing, statistical calculations, and factor engineering. Use for data-heavy analytical tasks.",
+        "prompt": prompt_text,
+        "system_prompt": prompt_text,
         "model": model,
         "tools": tools
     }
@@ -99,10 +105,7 @@ def create_trading_subagent(
     - Execution planning
     """
 
-    return {
-        "name": "trading_agent",
-        "description": "Develops trading strategies, generates signals, and plans trade execution. Use for strategy development and trading logic.",
-        "prompt": """You are a quantitative trading strategist.
+    prompt_text = """You are a quantitative trading strategist.
 
 Your expertise:
 - Trading strategy design and optimization
@@ -119,7 +122,13 @@ Approach:
 4. Plan execution to minimize costs
 5. Consider transaction costs and slippage
 
-Balance alpha generation with risk management.""",
+Balance alpha generation with risk management."""
+
+    return {
+        "name": "trading_agent",
+        "description": "Develops trading strategies, generates signals, and plans trade execution. Use for strategy development and trading logic.",
+        "prompt": prompt_text,
+        "system_prompt": prompt_text,
         "model": model,
         "tools": tools
     }
@@ -139,10 +148,7 @@ def create_risk_analyzer_subagent(
     - Drawdown analysis
     """
 
-    return {
-        "name": "risk_analyzer",
-        "description": "Analyzes risk metrics, exposures, and portfolio vulnerabilities. Use for risk assessment and management tasks.",
-        "prompt": """You are a quantitative risk analyst.
+    prompt_text = """You are a quantitative risk analyst.
 
 Your expertise:
 - Risk metric calculation (VaR, CVaR, volatility)
@@ -159,7 +165,13 @@ Approach:
 4. Stress test under various scenarios
 5. Recommend risk mitigation strategies
 
-Prioritize downside protection and capital preservation.""",
+Prioritize downside protection and capital preservation."""
+
+    return {
+        "name": "risk_analyzer",
+        "description": "Analyzes risk metrics, exposures, and portfolio vulnerabilities. Use for risk assessment and management tasks.",
+        "prompt": prompt_text,
+        "system_prompt": prompt_text,
         "model": model,
         "tools": tools
     }
@@ -179,10 +191,7 @@ def create_reporter_subagent(
     - Documentation
     """
 
-    return {
-        "name": "reporter",
-        "description": "Generates professional reports, summaries, and documentation. Use for report writing and presentation tasks.",
-        "prompt": """You are a financial report writer and communicator.
+    prompt_text = """You are a financial report writer and communicator.
 
 Your expertise:
 - Clear, professional financial writing
@@ -199,7 +208,13 @@ Approach:
 4. Highlight key insights and recommendations
 5. Maintain professional tone and accuracy
 
-Make complex analysis accessible to stakeholders.""",
+Make complex analysis accessible to stakeholders."""
+
+    return {
+        "name": "reporter",
+        "description": "Generates professional reports, summaries, and documentation. Use for report writing and presentation tasks.",
+        "prompt": prompt_text,
+        "system_prompt": prompt_text,
         "model": model,
         "tools": tools
     }
@@ -219,10 +234,7 @@ def create_portfolio_optimizer_subagent(
     - Rebalancing strategies
     """
 
-    return {
-        "name": "portfolio_optimizer",
-        "description": "Optimizes portfolio weights, performs asset allocation, and designs rebalancing strategies. Use for portfolio construction tasks.",
-        "prompt": """You are a portfolio optimization specialist.
+    prompt_text = """You are a portfolio optimization specialist.
 
 Your expertise:
 - Mean-variance optimization
@@ -239,7 +251,13 @@ Approach:
 4. Consider transaction costs
 5. Validate solution robustness
 
-Balance theory with practical implementation.""",
+Balance theory with practical implementation."""
+
+    return {
+        "name": "portfolio_optimizer",
+        "description": "Optimizes portfolio weights, performs asset allocation, and designs rebalancing strategies. Use for portfolio construction tasks.",
+        "prompt": prompt_text,
+        "system_prompt": prompt_text,
         "model": model,
         "tools": tools
     }
@@ -259,10 +277,7 @@ def create_backtester_subagent(
     - Walk-forward analysis
     """
 
-    return {
-        "name": "backtester",
-        "description": "Performs rigorous backtesting, validates strategies, and analyzes historical performance. Use for strategy testing tasks.",
-        "prompt": """You are a quantitative backtesting specialist.
+    prompt_text = """You are a quantitative backtesting specialist.
 
 Your expertise:
 - Rigorous historical simulation
@@ -279,7 +294,13 @@ Approach:
 4. Validate on out-of-sample data
 5. Test for robustness and stability
 
-Avoid look-ahead bias and overfitting.""",
+Avoid look-ahead bias and overfitting."""
+
+    return {
+        "name": "backtester",
+        "description": "Performs rigorous backtesting, validates strategies, and analyzes historical performance. Use for strategy testing tasks.",
+        "prompt": prompt_text,
+        "system_prompt": prompt_text,
         "model": model,
         "tools": tools
     }

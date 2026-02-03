@@ -3,10 +3,17 @@ Agent Factory - High-level factory functions for creating configured DeepAgents
 Simplified agent creation for common Fincept Terminal use cases
 """
 
+import sys
+import os
 from typing import Optional, List, Any, Dict
-from .deep_agent_wrapper import DeepAgentWrapper
-from .fincept_llm_adapter import create_fincept_llm
-from .subagent_templates import (
+
+# Add current directory to path for imports
+if __name__ == "__main__" or "." not in __name__:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from deep_agent_wrapper import DeepAgentWrapper
+from fincept_llm_adapter import create_fincept_llm
+from subagent_templates import (
     create_research_subagent,
     create_data_analyst_subagent,
     create_trading_subagent,
@@ -76,7 +83,8 @@ def create_fincept_deep_agent(
         for subagent_name in subagents:
             if subagent_name in template_map:
                 subagent_config = template_map[subagent_name]()
-                agent.add_subagent(**subagent_config)
+                # Add subagent directly to list (includes system_prompt key)
+                agent.subagents.append(subagent_config)
 
     return agent
 

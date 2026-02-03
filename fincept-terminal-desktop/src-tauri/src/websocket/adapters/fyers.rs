@@ -193,15 +193,15 @@ impl FyersAdapter {
                             }
                         }
                         if let Some(invalid) = json.get("invalidSymbol").and_then(|v| v.as_array()) {
-                            for sym in invalid {
+                            for _sym in invalid {
                             }
                         }
                     } else {
-                        let msg = json.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
+                        let _msg = json.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
                     }
                 }
             }
-            Err(e) => {
+            Err(_e) => {
             }
         }
 
@@ -597,12 +597,12 @@ impl FyersAdapter {
         // Get multiplier and precision
         let multiplier = u16::from_be_bytes([data[offset], data[offset + 1]]);
         offset += 2;
-        let precision = data[offset];
+        let _precision = data[offset];
         offset += 1;
 
         // Parse string fields: exchange, exchange_token, symbol
         let mut exchange = String::new();
-        let mut exchange_token = String::new();
+        let mut _exchange_token = String::new();
         let mut symbol = String::new();
 
         for field_name in &["exchange", "exchange_token", "symbol"] {
@@ -622,7 +622,7 @@ impl FyersAdapter {
 
             match *field_name {
                 "exchange" => exchange = string_value,
-                "exchange_token" => exchange_token = string_value,
+                "exchange_token" => _exchange_token = string_value,
                 "symbol" => symbol = string_value,
                 _ => {}
             }
@@ -660,7 +660,7 @@ impl FyersAdapter {
         // Calculate change
         let tick = {
             let mut t = tick;
-            if let (Some(ltp), Some(close)) = (t.price.into(), t.close) {
+            if let (Some(_ltp), Some(close)) = (t.price.into(), t.close) {
                 let change = t.price - close;
                 let change_pct = if close > 0.0 { (change / close) * 100.0 } else { 0.0 };
                 t.change = Some(change);
@@ -1092,7 +1092,7 @@ impl FyersAdapter {
                         *auth = true;
                     }
                 }
-                Some(Ok(Message::Text(text))) => {
+                Some(Ok(Message::Text(_text))) => {
                     // Unexpected text message
                 }
                 Some(Ok(Message::Ping(data))) => {
@@ -1104,13 +1104,13 @@ impl FyersAdapter {
                 Some(Ok(Message::Pong(_))) => {
                     // Pong received, connection is alive
                 }
-                Some(Ok(Message::Close(frame))) => {
+                Some(Ok(Message::Close(_frame))) => {
                     break;
                 }
                 Some(Ok(Message::Frame(_))) => {
                     // Raw frame, ignore
                 }
-                Some(Err(e)) => {
+                Some(Err(_e)) => {
                     break;
                 }
                 None => {
@@ -1155,7 +1155,7 @@ impl WebSocketAdapter for FyersAdapter {
             .header("Sec-WebSocket-Key", tokio_tungstenite::tungstenite::handshake::client::generate_key())
             .body(())?;
 
-        let (ws_stream, response) = connect_async(request).await
+        let (ws_stream, _response) = connect_async(request).await
             .map_err(|e| anyhow::anyhow!("WebSocket connection failed: {}", e))?;
 
 
@@ -1368,7 +1368,7 @@ impl FyersAdapter {
         }
 
 
-        let start_time = std::time::Instant::now();
+        let _start_time = std::time::Instant::now();
 
         // Step 1: Batch fetch ALL fytokens in one API call (FAST!)
         let fytokens = self.fetch_fytokens(symbols).await;

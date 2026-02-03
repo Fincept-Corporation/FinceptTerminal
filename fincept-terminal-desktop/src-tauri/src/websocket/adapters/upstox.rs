@@ -136,7 +136,7 @@ impl UpstoxAdapter {
 
         // Simple protobuf field parsing
         // Field 1 (feeds) is a map of instrument_key -> FeedData
-        let mut ticks = Vec::new();
+        let ticks = Vec::new();
 
         // This is a placeholder - actual implementation would use prost
         // to properly decode the FeedResponse protobuf message
@@ -278,7 +278,7 @@ impl WebSocketAdapter for UpstoxAdapter {
         &mut self,
         symbol: &str,
         channel: &str,
-        params: Option<Value>,
+        _params: Option<Value>,
     ) -> anyhow::Result<()> {
         let mode = match channel {
             "full" | "depth" => UpstoxMode::Full,
