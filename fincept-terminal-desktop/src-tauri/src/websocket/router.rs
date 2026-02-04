@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Message Router - Event-driven message distribution
 //
 // Routes parsed WebSocket messages to multiple consumers:
@@ -183,6 +184,36 @@ impl MessageRouter {
         // 2. Emit to frontend if subscribed
         if self.has_frontend_subscriber(&data.provider, &data.symbol, "ticker") {
             self.emit_to_frontend("ws_ticker", &data);
+        }
+
+        // 3. Update strategy price cache in SQLite (for live strategy runner)
+        Self::update_price_cache(&data);
+    }
+
+    /// Write latest tick price to strategy_price_cache table for Python live runner
+    fn update_price_cache(data: &TickerData) {
+        use crate::database::pool::get_pool;
+        if let Ok(pool) = get_pool() {
+            if let Ok(conn) = pool.get() {
+                let _ = conn.execute(
+                    "INSERT OR REPLACE INTO strategy_price_cache
+                     (symbol, provider, price, bid, ask, volume, high, low, open, change_percent, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    rusqlite::params![
+                        data.symbol,
+                        data.provider,
+                        data.price,
+                        data.bid,
+                        data.ask,
+                        data.volume,
+                        data.high,
+                        data.low,
+                        data.open,
+                        data.change_percent,
+                        data.timestamp,
+                    ],
+                );
+            }
         }
     }
 

@@ -115,6 +115,9 @@ pub mod ai_quant_lab;
 // FFN Analytics - Portfolio Performance Analysis
 pub mod ffn_analytics;
 
+// QuantStats - Portfolio Performance & Risk Analytics
+pub mod quantstats;
+
 // Fortitudo.tech Analytics - Portfolio Risk Analytics
 pub mod fortitudo_analytics;
 
@@ -162,3 +165,6 @@ pub mod custom_index;
 
 // M&A Analytics - Complete M&A and Financial Advisory System
 pub mod ma_analytics;
+
+// Strategy Engine - 400+ algorithmic trading strategies
+pub mod strategies;

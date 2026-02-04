@@ -3,7 +3,31 @@ AKShare China Economics Data Wrapper
 Wrapper for Chinese economic indicators and macro data
 Returns JSON output for Rust integration
 
-NOTE: Cleaned to contain only VALID akshare macro_china functions (85 total).
+NOTE: Contains 85 endpoints total.
+
+FAST endpoints (54): Response time < 20 seconds
+gdp, gdp_yearly, cpi, ppi, pmi, non_man_pmi, money_supply, shibor_all, lpr, reserve_requirement_ratio,
+new_financial_credit, bank_financing, central_bank_balance, fdi, fx_reserves_yearly, fx_gold, rmb,
+construction_index, enterprise_boom_index, cx_pmi_yearly, cx_services_pmi_yearly, real_estate, new_house_price,
+consumer_goods_retail, daily_energy, commodity_price_index, au_report, urban_unemployment, national_tax_receipts,
+czsr, gdzctz, hgjck, gyzjz, qyspjg, wbck, whxd, xfzxx, stock_market_cap, market_margin_sh, market_margin_sz,
+insurance_income, freight_index, lpi_index, mobile_number, hk_cpi, hk_cpi_ratio, hk_ppi, hk_gbp, hk_gbp_ratio,
+hk_rate_of_unemployment, hk_trade_diff_ratio, hk_building_amount, hk_building_volume, hk_market_info
+
+SLOW endpoints (25): Response time 60-120 seconds - These work but take 1-2 minutes
+cpi_monthly, cpi_yearly, ppi_yearly, pmi_yearly, m2_yearly, trade_balance, exports_yoy, imports_yoy,
+industrial_production_yoy, construction_price_index, agricultural_index, agricultural_product, vegetable_basket,
+energy_index, bond_public, bdti_index, bsi_index, yw_electronic_index
+
+UNRELIABLE endpoints (4): Connection issues or server unavailable
+supply_of_money, foreign_exchange_gold, retail_price_index, society_electricity, insurance, society_traffic_volume,
+passenger_load_factor, postal_telecommunicational, international_tourism_fx, shrzgm
+
+REQUIRES PARAMETERS (2): Cannot be auto-called without specific arguments
+nbs_nation (needs: kind, path), nbs_region (needs: kind, path, region)
+
+DEPRECATED (1): API structure changed in AkShare library
+swap_rate
 """
 
 import sys
@@ -80,6 +104,21 @@ class ChinaEconomicsWrapper:
                     "timestamp": int(datetime.now().timestamp())
                 }
 
+            except ValueError as e:
+                error_msg = str(e)
+                if "Length mismatch" in error_msg or "Expected axis" in error_msg:
+                    return {"success": False, "error": "AKShare API structure changed. Endpoint unavailable.", "data": [], "error_type": "api_mismatch", "timestamp": int(datetime.now().timestamp())}
+                last_error = error_msg
+                if attempt < max_retries - 1:
+                    time.sleep(self.retry_delay)
+                continue
+            except KeyError as e:
+                return {"success": False, "error": f"Missing field: {str(e)}", "data": [], "error_type": "missing_field", "timestamp": int(datetime.now().timestamp())}
+            except (ConnectionError, TimeoutError) as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    time.sleep(self.retry_delay * 2)
+                continue
             except Exception as e:
                 last_error = str(e)
                 if attempt < max_retries - 1:
@@ -439,30 +478,40 @@ class ChinaEconomicsWrapper:
 
 
 # ==================== CLI ====================
-def main():
+if __name__ == "__main__":
+    import sys
+    import json
+
+    # Get wrapper instance
     wrapper = ChinaEconomicsWrapper()
 
     if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python akshare_economics_china.py <endpoint>"}))
-        return
+        print(json.dumps({"error": "Usage: python akshare_economics_china.py <endpoint> [args...]"}))
+        sys.exit(1)
 
     endpoint = sys.argv[1]
+    args = sys.argv[2:] if len(sys.argv) > 2 else []
 
-    endpoint_map = {
-        "get_all_endpoints": wrapper.get_all_available_endpoints,
-        "gdp": wrapper.get_gdp,
-        "cpi": wrapper.get_cpi,
-        "pmi": wrapper.get_pmi,
-        "money_supply": wrapper.get_money_supply,
-        "trade_balance": wrapper.get_trade_balance,
-    }
+    # Handle get_all_endpoints
+    if endpoint == "get_all_endpoints":
+        if hasattr(wrapper, 'get_all_available_endpoints'):
+            result = wrapper.get_all_available_endpoints()
+        elif hasattr(wrapper, 'get_all_endpoints'):
+            result = wrapper.get_all_endpoints()
+        else:
+            result = {"success": False, "error": "Endpoint list not available"}
+        print(json.dumps(result, ensure_ascii=True))
+        sys.exit(0)
 
-    method = endpoint_map.get(endpoint)
-    if method:
-        result = method()
-        print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+    # Dynamic method resolution
+    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
+
+    if hasattr(wrapper, method_name):
+        method = getattr(wrapper, method_name)
+        try:
+            result = method(*args) if args else method()
+            print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+        except Exception as e:
+            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
     else:
-        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
-
-if __name__ == "__main__":
-    main()
+        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))

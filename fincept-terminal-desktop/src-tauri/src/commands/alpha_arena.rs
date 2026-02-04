@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /**
  * Alpha Arena Tauri Commands
  * Rust commands for AI trading competition (refactored v2)
@@ -29,6 +30,7 @@ fn extract_json_from_output(output: &str) -> Result<String, String> {
                 brace_count += 1;
             }
             '}' => {
+                if brace_count <= 0 { continue; }
                 brace_count -= 1;
                 if brace_count == 0 {
                     if let Some(start) = json_start {
@@ -62,7 +64,8 @@ pub struct AlphaArenaProgress {
     pub details: Option<Value>,
 }
 
-/// Execute Python alpha_arena main.py with JSON payload
+/// Execute Python alpha_arena main.py with JSON payload.
+/// Uses spawn_blocking to avoid blocking the Tauri async runtime.
 async fn execute_alpha_arena_action(
     app: &AppHandle,
     action: &str,
@@ -80,11 +83,17 @@ async fn execute_alpha_arena_action(
 
     eprintln!("[Alpha Arena v2] Executing action: {}", action);
 
-    let stdout = python::execute_sync(
-        app,
-        "alpha_arena/main.py",
-        vec![payload_str]
-    )?;
+    // Run Python subprocess on a blocking thread to avoid stalling the async runtime
+    let app_clone = app.clone();
+    let stdout = tokio::task::spawn_blocking(move || {
+        python::execute_sync(
+            &app_clone,
+            "alpha_arena/main.py",
+            vec![payload_str]
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))??;
 
     eprintln!("[Alpha Arena v2] Output received, length: {} chars", stdout.len());
 
@@ -202,7 +211,7 @@ fn emit_progress(app: &AppHandle, event_type: &str, step: u32, total_steps: u32,
 
 /// Run a single competition cycle (with streaming progress)
 #[command]
-pub async fn run_alpha_cycle(app: AppHandle, competition_id: Option<String>) -> Result<Value, String> {
+pub async fn run_alpha_cycle(app: AppHandle, competition_id: Option<String>, api_keys: Option<HashMap<String, String>>) -> Result<Value, String> {
     eprintln!("[Alpha Arena v2] run_alpha_cycle called");
 
     emit_progress(&app, "step", 1, 4, "Fetching latest market data...", None);
@@ -216,7 +225,7 @@ pub async fn run_alpha_cycle(app: AppHandle, competition_id: Option<String>) -> 
 
     emit_progress(&app, "step", 3, 4, "Executing trading decisions...", None);
 
-    let result = execute_alpha_arena_action(&app, "run_cycle", params, None).await;
+    let result = execute_alpha_arena_action(&app, "run_cycle", params, api_keys).await;
 
     match &result {
         Ok(value) => {
@@ -332,21 +341,40 @@ pub async fn get_alpha_evaluation(
 pub async fn get_alpha_api_keys() -> Result<Value, String> {
     eprintln!("[Alpha Arena v2] get_alpha_api_keys called");
 
-    // Return masked keys from environment or storage
-    let providers = vec!["openai", "anthropic", "google", "deepseek", "groq"];
-    let mut keys: HashMap<String, String> = HashMap::new();
+    let conn = crate::database::pool::get_db()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-    for provider in providers {
-        let env_var = format!("{}_API_KEY", provider.to_uppercase());
-        if let Ok(key) = std::env::var(&env_var) {
+    // Create table if not exists
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS api_keys (
+            provider TEXT PRIMARY KEY,
+            api_key TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create api_keys table: {}", e))?;
+
+    // Fetch all keys and mask them for display
+    let mut stmt = conn
+        .prepare("SELECT provider, api_key FROM api_keys")
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    let mut keys: HashMap<String, String> = HashMap::new();
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| format!("Failed to query api_keys: {}", e))?;
+
+    for row in rows {
+        if let Ok((provider, key)) = row {
             if !key.is_empty() {
-                // Return masked key for display
                 let masked = if key.len() > 8 {
                     format!("{}...{}", &key[..4], &key[key.len()-4..])
                 } else {
                     "*".repeat(key.len())
                 };
-                keys.insert(provider.to_string(), masked);
+                keys.insert(provider, masked);
             }
         }
     }
@@ -357,20 +385,36 @@ pub async fn get_alpha_api_keys() -> Result<Value, String> {
     }))
 }
 
-/// Save API keys to environment/storage
+/// Save API keys to database
 #[command]
 pub async fn save_alpha_api_keys(keys: HashMap<String, String>) -> Result<Value, String> {
     eprintln!("[Alpha Arena v2] save_alpha_api_keys called");
 
-    // Set environment variables for the current session
+    let conn = crate::database::pool::get_db()
+        .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    // Create table if not exists
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS api_keys (
+            provider TEXT PRIMARY KEY,
+            api_key TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create api_keys table: {}", e))?;
+
+    // Insert/update each key
     for (provider, key) in &keys {
-        let env_var = format!("{}_API_KEY", provider.to_uppercase());
-        std::env::set_var(&env_var, key);
+        conn.execute(
+            "INSERT OR REPLACE INTO api_keys (provider, api_key) VALUES (?1, ?2)",
+            rusqlite::params![provider, key],
+        )
+        .map_err(|e| format!("Failed to save api key for {}: {}", provider, e))?;
     }
 
     Ok(json!({
         "success": true,
-        "message": "API keys saved for current session"
+        "message": format!("Saved {} API keys to database", keys.len())
     }))
 }
 
@@ -511,7 +555,7 @@ pub async fn update_alpha_hitl_rule(
 pub async fn get_alpha_portfolio_metrics(
     app: AppHandle,
     competition_id: String,
-    model_name: String
+    model_name: Option<String>
 ) -> Result<Value, String> {
     eprintln!("[Alpha Arena] get_alpha_portfolio_metrics called");
 
@@ -528,7 +572,7 @@ pub async fn get_alpha_portfolio_metrics(
 pub async fn get_alpha_equity_curve(
     app: AppHandle,
     competition_id: String,
-    model_name: String
+    model_name: Option<String>
 ) -> Result<Value, String> {
     eprintln!("[Alpha Arena] get_alpha_equity_curve called");
 
@@ -681,7 +725,7 @@ pub async fn get_alpha_broker_ticker(
 
     let params = json!({
         "symbol": symbol,
-        "broker_id": broker_id.unwrap_or_else(|| "kraken".to_string())
+        "broker_id": broker_id.unwrap_or_else(|| "binance".to_string())
     });
 
     execute_alpha_arena_action(&app, "get_broker_ticker", params, None).await

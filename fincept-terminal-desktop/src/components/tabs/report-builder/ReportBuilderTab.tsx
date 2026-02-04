@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   FolderOpen,
   Settings as SettingsIcon,
@@ -7,7 +8,7 @@ import {
   MessageCircle,
   History,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 import { useTranslation } from 'react-i18next';
 import { showPrompt } from '@/utils/notifications';
 import { ReportComponent } from '@/services/core/reportService';
@@ -150,6 +151,23 @@ const ReportBuilderTab: React.FC = () => {
     'ctrl+f': () => setShowFindReplace(true),
     'ctrl+shift+/': () => setShowShortcuts(true),
   });
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    pageTheme,
+    fontFamily,
+    defaultFontSize,
+    rightPanelView,
+  }), [pageTheme, fontFamily, defaultFontSize, rightPanelView]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.pageTheme === 'string') setPageTheme(state.pageTheme as PageTheme);
+    if (typeof state.fontFamily === 'string') setFontFamily(state.fontFamily);
+    if (typeof state.defaultFontSize === 'number') setDefaultFontSize(state.defaultFontSize);
+    if (typeof state.rightPanelView === 'string') setRightPanelView(state.rightPanelView as RightPanelView);
+  }, []);
+
+  useWorkspaceTabState('report-builder', getWorkspaceState, setWorkspaceState);
 
   // Sync template when undo/redo changes history (only when user triggers undo/redo)
   const prevHistoryRef = useRef(templateHistory);

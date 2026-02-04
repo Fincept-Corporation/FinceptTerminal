@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /**
  * Kotak Neo Broker Commands
  *

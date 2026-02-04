@@ -19,7 +19,11 @@ import {
   StopCircle, XCircle, Shield, Newspaper, Grid3X3, FileSearch, Building,
 } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import { sqliteService, type LLMModelConfig, type LLMConfig } from '@/services/core/sqliteService';
+import { withTimeout } from '@/services/core/apiUtils';
+import { validateString } from '@/services/core/validators';
+import { useCache, cacheKey } from '@/hooks/useCache';
 import alphaArenaService, { type StoredCompetition } from './services/alphaArenaService';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -32,6 +36,7 @@ import {
   ResearchPanel,
   BrokerSelector,
 } from './components';
+import { alphaArenaEnhancedService } from './services/alphaArenaEnhancedService';
 
 // Extended model type for Alpha Arena with API key
 interface AlphaArenaModel {
@@ -60,6 +65,13 @@ import type {
 } from './types';
 import { formatCurrency, formatPercent, getModelColor } from './types';
 
+// Competition data shape for useCache
+interface CompetitionData {
+  leaderboard: LeaderboardEntry[];
+  decisions: ModelDecision[];
+  snapshots: PerformanceSnapshot[];
+}
+
 // =============================================================================
 // Design Constants - Fincept Terminal Style
 // =============================================================================
@@ -86,9 +98,34 @@ const COLORS = {
 const TRADING_SYMBOLS = [
   { value: 'BTC/USD', label: 'Bitcoin (BTC/USD)' },
   { value: 'ETH/USD', label: 'Ethereum (ETH/USD)' },
+  { value: 'BNB/USD', label: 'BNB (BNB/USD)' },
   { value: 'SOL/USD', label: 'Solana (SOL/USD)' },
   { value: 'XRP/USD', label: 'Ripple (XRP/USD)' },
+  { value: 'ADA/USD', label: 'Cardano (ADA/USD)' },
   { value: 'DOGE/USD', label: 'Dogecoin (DOGE/USD)' },
+  { value: 'AVAX/USD', label: 'Avalanche (AVAX/USD)' },
+  { value: 'DOT/USD', label: 'Polkadot (DOT/USD)' },
+  { value: 'POL/USD', label: 'Polygon (POL/USD)' },
+  { value: 'LTC/USD', label: 'Litecoin (LTC/USD)' },
+  { value: 'SHIB/USD', label: 'Shiba Inu (SHIB/USD)' },
+  { value: 'TRX/USD', label: 'TRON (TRX/USD)' },
+  { value: 'LINK/USD', label: 'Chainlink (LINK/USD)' },
+  { value: 'UNI/USD', label: 'Uniswap (UNI/USD)' },
+  { value: 'ATOM/USD', label: 'Cosmos (ATOM/USD)' },
+  { value: 'XLM/USD', label: 'Stellar (XLM/USD)' },
+  { value: 'ETC/USD', label: 'Ethereum Classic (ETC/USD)' },
+  { value: 'BCH/USD', label: 'Bitcoin Cash (BCH/USD)' },
+  { value: 'NEAR/USD', label: 'NEAR Protocol (NEAR/USD)' },
+  { value: 'APT/USD', label: 'Aptos (APT/USD)' },
+  { value: 'ARB/USD', label: 'Arbitrum (ARB/USD)' },
+  { value: 'OP/USD', label: 'Optimism (OP/USD)' },
+  { value: 'LDO/USD', label: 'Lido DAO (LDO/USD)' },
+  { value: 'FIL/USD', label: 'Filecoin (FIL/USD)' },
+  { value: 'ICP/USD', label: 'Internet Computer (ICP/USD)' },
+  { value: 'INJ/USD', label: 'Injective (INJ/USD)' },
+  { value: 'STX/USD', label: 'Stacks (STX/USD)' },
+  { value: 'MKR/USD', label: 'Maker (MKR/USD)' },
+  { value: 'AAVE/USD', label: 'Aave (AAVE/USD)' },
 ];
 
 const COMPETITION_MODES: { value: CompetitionMode; label: string; desc: string }[] = [
@@ -133,13 +170,9 @@ const AlphaArenaTab: React.FC = () => {
   type RightPanelTab = 'decisions' | 'hitl' | 'sentiment' | 'metrics' | 'grid' | 'research' | 'broker';
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>('decisions');
   const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
+  const [latestPrice, setLatestPrice] = useState<number | null>(null);
 
-  // Abort controller for cancelling operations
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Past competitions state
-  const [pastCompetitions, setPastCompetitions] = useState<StoredCompetition[]>([]);
-  const [loadingPastCompetitions, setLoadingPastCompetitions] = useState(false);
+  // Past competitions - managed by useCache (declared below after mountedRef)
 
   // Progress tracking state
   const [progressSteps, setProgressSteps] = useState<AlphaArenaProgress[]>([]);
@@ -153,11 +186,22 @@ const AlphaArenaTab: React.FC = () => {
   const [initialCapital, setInitialCapital] = useState(10000);
   const [cycleInterval, setCycleInterval] = useState(150);
 
+  // Component mounted ref for async safety
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Auto-run ref
   const autoRunIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Track if a cycle is currently running (to prevent overlapping cycles)
   const cycleInProgressRef = useRef(false);
+
+  // Ref to always hold the latest handleRunCycle to avoid stale closures in setInterval
+  const handleRunCycleRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   // =============================================================================
   // Load LLM Models from Settings (llm_model_configs table)
@@ -166,18 +210,12 @@ const AlphaArenaTab: React.FC = () => {
   const loadLLMConfigs = useCallback(async () => {
     try {
       // Auto-fix any Google model IDs with incorrect format
-      const fixResult = await sqliteService.fixGoogleModelIds();
-      if (fixResult.success) {
-        console.log('[AlphaArena] Google model IDs check:', fixResult.message);
-      }
+      await withTimeout(sqliteService.fixGoogleModelIds(), 15000);
 
       // Load from llm_model_configs table (individual models configured in Settings)
-      const modelConfigs = await sqliteService.getLLMModelConfigs();
+      const modelConfigs = await withTimeout(sqliteService.getLLMModelConfigs(), 15000);
       // Load provider configs for API key fallback and for fincept (which is auto-configured)
-      const providerConfigs = await sqliteService.getLLMConfigs();
-
-      console.log('[AlphaArena] Loaded model configs:', modelConfigs);
-      console.log('[AlphaArena] Loaded provider configs:', providerConfigs);
+      const providerConfigs = await withTimeout(sqliteService.getLLMConfigs(), 15000);
 
       // Process models - filter and validate
       const validModels: AlphaArenaModel[] = [];
@@ -195,14 +233,12 @@ const AlphaArenaTab: React.FC = () => {
           api_key: finceptApiKey || undefined,
           is_enabled: true,
         });
-        console.log('[AlphaArena] Added Fincept LLM (auto-configured) with API key:', finceptApiKey ? 'present' : 'missing');
       }
 
       // Then process models from llm_model_configs table
       for (const model of modelConfigs) {
         // Skip disabled models
         if (!model.is_enabled) {
-          console.log(`[AlphaArena] Skipping ${model.display_name} - disabled`);
           continue;
         }
 
@@ -216,14 +252,12 @@ const AlphaArenaTab: React.FC = () => {
           );
           if (providerConfig?.api_key && providerConfig.api_key.trim() !== '') {
             apiKey = providerConfig.api_key;
-            console.log(`[AlphaArena] Using provider API key for ${model.display_name}`);
           }
         }
 
         // Skip if no API key (except ollama and fincept which may not need one in the same way)
         const noApiKeyRequired = providerLower === 'ollama' || providerLower === 'fincept';
         if ((!apiKey || apiKey.trim() === '') && !noApiKeyRequired) {
-          console.log(`[AlphaArena] Skipping ${model.display_name} - no API key`);
           continue;
         }
 
@@ -235,11 +269,9 @@ const AlphaArenaTab: React.FC = () => {
           api_key: apiKey || undefined,
           is_enabled: model.is_enabled,
         });
-
-        console.log(`[AlphaArena] Added model: ${model.display_name}`);
       }
 
-      console.log(`[AlphaArena] Total valid models: ${validModels.length}`);
+      if (!mountedRef.current) return;
       setConfiguredLLMs(validModels);
 
       // Pre-select first 2 models
@@ -251,6 +283,7 @@ const AlphaArenaTab: React.FC = () => {
         setSelectedModels([]);
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       console.error('[AlphaArena] Failed to load LLM configs:', err);
     }
   }, [session?.api_key]);
@@ -260,27 +293,25 @@ const AlphaArenaTab: React.FC = () => {
   }, [loadLLMConfigs]);
 
   // =============================================================================
-  // Load Past Competitions from Database
+  // Past Competitions (useCache)
   // =============================================================================
 
-  const loadPastCompetitions = useCallback(async () => {
-    setLoadingPastCompetitions(true);
-    try {
+  const pastCompetitionsCache = useCache<StoredCompetition[]>({
+    key: cacheKey('alpha-arena', 'past-competitions'),
+    category: 'alpha-arena',
+    fetcher: async () => {
       const result = await alphaArenaService.listCompetitions(20);
       if (result.success && result.competitions) {
-        setPastCompetitions(result.competitions);
+        return result.competitions;
       }
-    } catch (err) {
-      console.error('[AlphaArena] Failed to load past competitions:', err);
-    } finally {
-      setLoadingPastCompetitions(false);
-    }
-  }, []);
+      return [];
+    },
+    ttl: 120,
+    staleWhileRevalidate: true,
+  });
 
-  // Load past competitions on mount
-  useEffect(() => {
-    loadPastCompetitions();
-  }, [loadPastCompetitions]);
+  const pastCompetitions = pastCompetitionsCache.data || [];
+  const loadingPastCompetitions = pastCompetitionsCache.isLoading;
 
   // Resume a past competition
   const handleResumeCompetition = async (comp: StoredCompetition) => {
@@ -295,19 +326,19 @@ const AlphaArenaTab: React.FC = () => {
       setStatus(comp.status as CompetitionStatus);
       setShowPastCompetitions(false);
       setSuccess(`Loaded competition: ${comp.config.competition_name}`);
-      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
 
-      // Fetch competition data - pass ID directly since state hasn't updated yet
-      await fetchCompetitionData(comp.competition_id);
+      // Competition data will auto-fetch via useCache when competitionId changes
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to resume competition');
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   };
 
   // Delete a competition
-  const handleDeleteCompetition = async (competitionId: string, e: React.MouseEvent) => {
+  const handleDeleteCompetition = async (targetId: string, e: React.MouseEvent) => {
     e.stopPropagation();
 
     const confirmed = await showConfirm(
@@ -317,15 +348,26 @@ const AlphaArenaTab: React.FC = () => {
     if (!confirmed) return;
 
     try {
-      const result = await alphaArenaService.deleteCompetition(competitionId);
+      const result = await alphaArenaService.deleteCompetition(targetId);
+      if (!mountedRef.current) return;
       if (result.success) {
-        setPastCompetitions(prev => prev.filter(c => c.competition_id !== competitionId));
+        pastCompetitionsCache.invalidate();
+        // If deleting the active competition, reset state
+        if (competitionId === targetId) {
+          setCompetitionId(null);
+          setStatus(null);
+          setCycleCount(0);
+          setLeaderboard([]);
+          setDecisions([]);
+          setSnapshots([]);
+        }
         setSuccess('Competition deleted');
-        setTimeout(() => setSuccess(null), 3000);
+        setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
       } else {
         setError(result.error || 'Failed to delete competition');
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to delete competition');
     }
   };
@@ -341,8 +383,6 @@ const AlphaArenaTab: React.FC = () => {
         'alpha-arena-progress',
         (event) => {
           const progress = event.payload;
-          console.log('[AlphaArena] Progress:', progress);
-
           setCurrentProgress(progress);
           setProgressSteps(prev => {
             // Avoid duplicates
@@ -378,62 +418,72 @@ const AlphaArenaTab: React.FC = () => {
   }, []);
 
   // =============================================================================
-  // Competition Data
+  // Competition Data (useCache with auto-refresh)
   // =============================================================================
 
-  const fetchCompetitionData = useCallback(async (overrideCompetitionId?: string) => {
-    const targetCompetitionId = overrideCompetitionId || competitionId;
-    if (!targetCompetitionId) return;
+  const compDataCache = useCache<CompetitionData>({
+    key: cacheKey('alpha-arena', 'comp-data', competitionId || 'none'),
+    category: 'alpha-arena',
+    fetcher: async () => {
+      const targetId = competitionId;
+      if (!targetId) return { leaderboard: [], decisions: [], snapshots: [] };
 
-    try {
-      console.log('[AlphaArena] Fetching competition data for:', targetCompetitionId);
       const [leaderboardResult, decisionsResult, snapshotsResult] = await Promise.all([
-        alphaArenaService.getLeaderboard(targetCompetitionId),
-        alphaArenaService.getDecisions(targetCompetitionId),
-        alphaArenaService.getSnapshots(targetCompetitionId),
+        alphaArenaService.getLeaderboard(targetId),
+        alphaArenaService.getDecisions(targetId),
+        alphaArenaService.getSnapshots(targetId),
       ]);
 
-      console.log('[AlphaArena] Leaderboard result:', leaderboardResult);
-      console.log('[AlphaArena] Decisions result:', decisionsResult);
-      console.log('[AlphaArena] Snapshots result:', snapshotsResult);
+      return {
+        leaderboard: leaderboardResult.success && leaderboardResult.leaderboard
+          ? leaderboardResult.leaderboard : [],
+        decisions: decisionsResult.success && decisionsResult.decisions
+          ? decisionsResult.decisions : [],
+        snapshots: snapshotsResult.success && snapshotsResult.snapshots
+          ? snapshotsResult.snapshots : [],
+      };
+    },
+    ttl: 30,
+    enabled: !!competitionId,
+    staleWhileRevalidate: true,
+    refetchInterval: 15000,
+  });
 
-      if (leaderboardResult.success && leaderboardResult.leaderboard) {
-        console.log('[AlphaArena] Setting leaderboard:', leaderboardResult.leaderboard.length, 'entries');
-        setLeaderboard(leaderboardResult.leaderboard);
-      } else {
-        console.warn('[AlphaArena] Leaderboard not available:', leaderboardResult.error || 'no data');
-      }
-      if (decisionsResult.success && decisionsResult.decisions) {
-        console.log('[AlphaArena] Setting decisions:', decisionsResult.decisions.length, 'entries');
-        setDecisions(decisionsResult.decisions);
-      } else {
-        console.warn('[AlphaArena] Decisions not available:', decisionsResult.error || 'no data');
-      }
-      if (snapshotsResult.success && snapshotsResult.snapshots) {
-        console.log('[AlphaArena] Setting snapshots:', snapshotsResult.snapshots.length, 'entries');
-        setSnapshots(snapshotsResult.snapshots);
-      } else {
-        console.warn('[AlphaArena] Snapshots not available:', snapshotsResult.error || 'no data');
-      }
-    } catch (err) {
-      console.error('[AlphaArena] Failed to fetch data:', err);
-    }
-  }, [competitionId]);
-
+  // Sync cache data to local state for use in render functions
   useEffect(() => {
-    if (!competitionId) return;
-    fetchCompetitionData();
-    const interval = setInterval(fetchCompetitionData, 5000);
-    return () => clearInterval(interval);
-  }, [competitionId, fetchCompetitionData]);
+    if (compDataCache.data) {
+      setLeaderboard(compDataCache.data.leaderboard);
+      setDecisions(compDataCache.data.decisions);
+      setSnapshots(compDataCache.data.snapshots);
+    }
+  }, [compDataCache.data]);
+
+  // Convenience function: refresh competition data (used after actions)
+  const refreshCompetitionData = useCallback(() => {
+    compDataCache.refresh();
+  }, [compDataCache]);
 
   // =============================================================================
   // Competition Actions
   // =============================================================================
 
   const handleCreateCompetition = async () => {
+    // Input validation
+    const nameCheck = validateString(competitionName, { minLength: 1, maxLength: 200 });
+    if (!nameCheck.valid) {
+      setError(`Competition name: ${nameCheck.error}`);
+      return;
+    }
     if (selectedModels.length < 2) {
       setError('Select at least 2 AI models from your configured models in Settings');
+      return;
+    }
+    if (!Number.isFinite(initialCapital) || initialCapital < 100) {
+      setError('Initial capital must be at least $100');
+      return;
+    }
+    if (!Number.isFinite(cycleInterval) || cycleInterval < 10) {
+      setError('Cycle interval must be at least 10 seconds');
       return;
     }
 
@@ -458,65 +508,80 @@ const AlphaArenaTab: React.FC = () => {
         cycle_interval_seconds: cycleInterval,
       });
 
+      if (!mountedRef.current) return;
       if (result.success && result.competition_id) {
         setCompetitionId(result.competition_id);
         setStatus('created');
         setShowCreatePanel(false);
         setSuccess('Competition created successfully');
-        setTimeout(() => setSuccess(null), 3000);
+        setTimeout(() => { if (mountedRef.current) setSuccess(null); }, 3000);
       } else {
         setError(result.error || 'Failed to create competition');
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   };
 
   const handleRunCycle = useCallback(async () => {
     if (!competitionId) return;
 
-    // Prevent overlapping cycles - use ref to allow auto-run to continue
+    // Prevent overlapping cycles
     if (cycleInProgressRef.current) {
-      console.log('[AlphaArena] Cycle already in progress, skipping...');
       return;
     }
 
     cycleInProgressRef.current = true;
     setIsLoading(true);
     setError(null);
-    setProgressSteps([]); // Reset progress
+    setProgressSteps([]);
     setCurrentProgress(null);
 
     try {
-      const currentCompetitionId = competitionId; // Capture before async
-      console.log('[AlphaArena] Running cycle for competition:', currentCompetitionId);
-      const result = await alphaArenaService.runCycle(currentCompetitionId);
+      // Capture current values before async operation to prevent stale closures
+      const currentCompetitionId = competitionId;
+      const currentModels = [...selectedModels];
+      // Build API keys map from selected models for the Python backend
+      const apiKeys: Record<string, string> = {};
+      for (const model of currentModels) {
+        if (model.api_key && !apiKeys[model.provider]) {
+          apiKeys[model.provider] = model.api_key;
+        }
+      }
+      const result = await alphaArenaService.runCycle(currentCompetitionId, Object.keys(apiKeys).length > 0 ? apiKeys : undefined);
 
+      if (!mountedRef.current) return;
       if (result.success) {
-        console.log('[AlphaArena] Cycle completed successfully, cycle_number:', result.cycle_number);
-        setCycleCount(result.cycle_number || cycleCount + 1);
+        setCycleCount(prev => result.cycle_number || prev + 1);
         setStatus('running');
-        // Pass ID explicitly to avoid stale closure issues
-        await fetchCompetitionData(currentCompetitionId);
+        refreshCompetitionData();
+        // Surface any decision save warnings
+        if (result.warnings && result.warnings.length > 0) {
+          setError(`Cycle completed with warnings: ${result.warnings[0]}`);
+          setTimeout(() => { if (mountedRef.current) setError(null); }, 5000);
+        }
       } else {
-        console.error('[AlphaArena] Cycle failed:', result.error);
         setError(result.error || 'Cycle failed');
       }
     } catch (err) {
-      console.error('[AlphaArena] Cycle error:', err);
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       cycleInProgressRef.current = false;
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
-  }, [competitionId, cycleCount, fetchCompetitionData]);
+  }, [competitionId, selectedModels, refreshCompetitionData]);
+
+  // Keep ref in sync so setInterval always calls the latest version
+  useEffect(() => {
+    handleRunCycleRef.current = handleRunCycle;
+  }, [handleRunCycle]);
 
   const handleToggleAutoRun = useCallback(() => {
     if (isAutoRunning) {
-      // Stop auto-run
-      console.log('[AlphaArena] Stopping auto-run');
       if (autoRunIntervalRef.current) {
         clearInterval(autoRunIntervalRef.current);
         autoRunIntervalRef.current = null;
@@ -524,23 +589,18 @@ const AlphaArenaTab: React.FC = () => {
       setIsAutoRunning(false);
       setStatus('paused');
     } else {
-      // Start auto-run
-      console.log('[AlphaArena] Starting auto-run with interval:', cycleInterval, 'seconds');
       setIsAutoRunning(true);
       setStatus('running');
 
       // Run first cycle immediately
-      handleRunCycle();
+      handleRunCycleRef.current();
 
-      // Then schedule subsequent cycles
-      // The interval will call handleRunCycle which checks cycleInProgressRef
-      // to prevent overlapping cycles
+      // Use ref in interval to always call the latest handleRunCycle
       autoRunIntervalRef.current = setInterval(() => {
-        console.log('[AlphaArena] Auto-run interval triggered');
-        handleRunCycle();
+        handleRunCycleRef.current();
       }, cycleInterval * 1000);
     }
-  }, [isAutoRunning, handleRunCycle, cycleInterval]);
+  }, [isAutoRunning, cycleInterval]);
 
   const handleReset = useCallback(() => {
     if (autoRunIntervalRef.current) {
@@ -548,10 +608,6 @@ const AlphaArenaTab: React.FC = () => {
       autoRunIntervalRef.current = null;
     }
     // Cancel any ongoing operation
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
     // Reset cycle in progress flag
     cycleInProgressRef.current = false;
     setCompetitionId(null);
@@ -579,12 +635,6 @@ const AlphaArenaTab: React.FC = () => {
       setIsAutoRunning(false);
     }
 
-    // Abort any ongoing fetch/operation
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-
     // Reset cycle in progress flag
     cycleInProgressRef.current = false;
 
@@ -605,6 +655,28 @@ const AlphaArenaTab: React.FC = () => {
       }
     };
   }, []);
+
+  // Continuous Binance price polling when competition is active (every 7s)
+  useEffect(() => {
+    if (!competitionId || !symbol) return;
+    let cancelled = false;
+
+    const fetchPrice = () => {
+      alphaArenaEnhancedService.getBrokerTicker(symbol).then(result => {
+        if (!cancelled && mountedRef.current && result.success && result.ticker) {
+          setLatestPrice(result.ticker.price);
+        }
+      }).catch(() => {});
+    };
+
+    fetchPrice();
+    const intervalId = setInterval(fetchPrice, 7000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [competitionId, symbol]);
 
   const toggleModelSelection = (model: AlphaArenaModel) => {
     setSelectedModels(prev => {
@@ -767,7 +839,7 @@ const AlphaArenaTab: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => loadPastCompetitions()}
+            onClick={() => pastCompetitionsCache.refresh()}
             disabled={loadingPastCompetitions}
             className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
             title="Refresh"
@@ -957,11 +1029,10 @@ const AlphaArenaTab: React.FC = () => {
           <div>
             <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Initial Capital (USD)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={initialCapital}
-              onChange={e => setInitialCapital(Number(e.target.value))}
-              min={1000}
-              step={1000}
+              onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setInitialCapital(Number(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm"
               style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
             />
@@ -969,12 +1040,10 @@ const AlphaArenaTab: React.FC = () => {
           <div>
             <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Cycle Interval (seconds)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={cycleInterval}
-              onChange={e => setCycleInterval(Number(e.target.value))}
-              min={30}
-              max={600}
-              step={30}
+              onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setCycleInterval(Math.min(Number(v) || 0, 600)); }}
               className="w-full px-3 py-2 rounded text-sm"
               style={{ backgroundColor: COLORS.CARD_BG, color: COLORS.WHITE, border: `1px solid ${COLORS.BORDER}` }}
             />
@@ -1140,7 +1209,6 @@ const AlphaArenaTab: React.FC = () => {
   // =============================================================================
 
   const renderLeaderboard = () => {
-    console.log('[AlphaArena] Rendering leaderboard, entries:', leaderboard.length, leaderboard);
     return (
     <div className="rounded-lg overflow-hidden" style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
       <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
@@ -1228,7 +1296,6 @@ const AlphaArenaTab: React.FC = () => {
   // =============================================================================
 
   const renderDecisions = () => {
-    console.log('[AlphaArena] Rendering decisions, entries:', decisions.length, decisions);
     return (
     <div className="h-full flex flex-col" style={{ backgroundColor: COLORS.CARD_BG }}>
       <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.BORDER }}>
@@ -1474,7 +1541,7 @@ const AlphaArenaTab: React.FC = () => {
               <div className="p-3">
                 <HITLApprovalPanel
                   competitionId={competitionId || undefined}
-                  onApprovalChange={() => fetchCompetitionData()}
+                  onApprovalChange={() => refreshCompetitionData()}
                 />
               </div>
             )}
@@ -1503,7 +1570,7 @@ const AlphaArenaTab: React.FC = () => {
               <div className="p-3">
                 <GridStrategyPanel
                   symbol={symbol.split('/')[0]}
-                  currentPrice={50000} // This would come from real price data
+                  currentPrice={latestPrice || undefined}
                 />
               </div>
             )}
@@ -1553,4 +1620,4 @@ const AlphaArenaTab: React.FC = () => {
   );
 };
 
-export default AlphaArenaTab;
+export default withErrorBoundary(AlphaArenaTab, { name: 'AlphaArena' });

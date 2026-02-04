@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Common types and utilities for Indian broker integrations
 
 use reqwest::header::{HeaderMap, HeaderValue};

@@ -1,11 +1,13 @@
+#![allow(dead_code)]
 // Monitoring Service - Real-time market data monitoring and alerting
 //
 // Monitors WebSocket data streams against user-defined conditions
 // and triggers alerts when conditions are met.
 
+use crate::database::pool::get_pool;
 use crate::websocket::types::*;
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -114,18 +116,30 @@ pub struct MonitorAlert {
 // MONITORING SERVICE
 // ============================================================================
 
+/// Per-condition state for crossing detection
+#[derive(Debug, Clone)]
+struct ConditionState {
+    /// Last observed value for this condition (to detect crossing)
+    prev_value: Option<f64>,
+    /// Whether the condition was matching on the previous tick
+    was_matching: bool,
+    /// Whether the condition has already fired (fire-once)
+    fired: bool,
+}
+
 pub struct MonitoringService {
     conditions: Arc<RwLock<Vec<MonitorCondition>>>,
-    db_path: String,
     app_handle: Option<tauri::AppHandle>,
+    /// Per-condition crossing state: condition_id → ConditionState
+    condition_states: Arc<RwLock<std::collections::HashMap<i64, ConditionState>>>,
 }
 
 impl MonitoringService {
-    pub fn new(db_path: String) -> Self {
+    pub fn new() -> Self {
         Self {
             conditions: Arc::new(RwLock::new(Vec::new())),
-            db_path,
             app_handle: None,
+            condition_states: Arc::new(RwLock::new(std::collections::HashMap::new())),
         }
     }
 
@@ -140,49 +154,56 @@ impl MonitoringService {
         mut ticker_rx: tokio::sync::broadcast::Receiver<TickerData>,
     ) {
         let conditions = self.conditions.clone();
-        let db_path = self.db_path.clone();
         let app_handle = self.app_handle.clone();
+        let condition_states = self.condition_states.clone();
+
+        println!("[MonitoringService] start_monitoring called — waiting for WebSocket ticker data...");
 
         tokio::spawn(async move {
+            println!("[MonitoringService] Monitoring task spawned, listening on broadcast channel");
             loop {
                 match ticker_rx.recv().await {
                     Ok(ticker) => {
                         // Create temporary service to check conditions
                         let service = MonitoringService {
                             conditions: conditions.clone(),
-                            db_path: db_path.clone(),
                             app_handle: app_handle.clone(),
+                            condition_states: condition_states.clone(),
                         };
 
                         let alerts = service.check_ticker(&ticker).await;
 
-                        // Emit alerts to frontend
-                        if !alerts.is_empty() && app_handle.is_some() {
-                            for alert in alerts {
-                                let _ = app_handle.as_ref().unwrap().emit("monitor_alert", &alert);
+                        if !alerts.is_empty() {
+                            println!(
+                                "[MonitoringService] {} alert(s) triggered — provider={} symbol={} price={}",
+                                alerts.len(), ticker.provider, ticker.symbol, ticker.price
+                            );
+                            if app_handle.is_some() {
+                                for alert in alerts {
+                                    let _ = app_handle.as_ref().unwrap().emit("monitor_alert", &alert);
+                                }
                             }
                         }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                        // Channel lagged, continue
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        println!("[MonitoringService] Channel lagged, skipped {} messages", n);
                         continue;
                     }
-                    Err(_) => {
-                        // Channel closed
+                    Err(e) => {
+                        println!("[MonitoringService] Channel closed: {:?} — stopping monitoring", e);
                         break;
                     }
                 }
             }
+            println!("[MonitoringService] Monitoring loop exited");
         });
     }
 
-    /// Load all enabled conditions from database
+    /// Load all enabled conditions from database (uses shared connection pool)
     pub async fn load_conditions(&self) -> Result<()> {
-        let db_path = self.db_path.clone();
-
-        // Use spawn_blocking for SQLite operations
         let conditions = tokio::task::spawn_blocking(move || -> Result<Vec<MonitorCondition>> {
-            let conn = Connection::open(&db_path)?;
+            let pool = get_pool()?;
+            let conn = pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
 
             let mut stmt = conn.prepare(
                 "SELECT id, provider, symbol, field, operator, value, value2, enabled
@@ -205,23 +226,53 @@ impl MonitoringService {
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
 
+            println!("[MonitoringService] Loaded {} enabled conditions from DB", conditions.len());
             Ok(conditions)
         })
         .await
         .map_err(|e| anyhow::anyhow!("Join error: {}", e))??;
 
         *self.conditions.write().await = conditions;
+        // Clear crossing state so reloaded/new conditions start fresh
+        self.condition_states.write().await.clear();
         Ok(())
     }
 
-    /// Check ticker data against all conditions
+    /// Check ticker data against all conditions using crossing detection.
+    ///
+    /// Crossing logic:
+    /// - On the FIRST tick for a condition, we record whether it matches or not (no alert).
+    /// - If the price is already on the "matching" side, we wait for it to go to the
+    ///   "non-matching" side first, then cross back → trigger.
+    /// - Once triggered, the condition is marked `fired` and never fires again.
     pub async fn check_ticker(&self, ticker: &TickerData) -> Vec<MonitorAlert> {
         let conditions = self.conditions.read().await;
+        let mut states = self.condition_states.write().await;
         let mut alerts = Vec::new();
 
+        // Capture the exact time NOW before any processing
+        let trigger_time = Self::now();
+
         for condition in conditions.iter() {
+            let cond_id = match condition.id {
+                Some(id) => id,
+                None => continue,
+            };
+
             // Filter by provider and symbol
             if condition.provider != ticker.provider || condition.symbol != ticker.symbol {
+                continue;
+            }
+
+            // Get or create state for this condition
+            let state = states.entry(cond_id).or_insert(ConditionState {
+                prev_value: None,
+                was_matching: false,
+                fired: false,
+            });
+
+            // Already fired — skip forever
+            if state.fired {
                 continue;
             }
 
@@ -240,27 +291,68 @@ impl MonitoringService {
             };
 
             if let Some(value) = field_value {
-                if self.check_condition(value, condition) {
-                    // Condition matched - create alert
+                let is_matching = self.check_condition(value, condition);
+
+                if state.prev_value.is_none() {
+                    // First tick — just record state, don't trigger
+                    // If already matching, we wait for it to go non-matching first
+                    state.prev_value = Some(value);
+                    state.was_matching = is_matching;
+                    continue;
+                }
+
+                // Crossing detection: was NOT matching → now IS matching
+                if !state.was_matching && is_matching {
+                    state.fired = true;
                     alerts.push(MonitorAlert {
                         id: None,
-                        condition_id: condition.id.unwrap(),
+                        condition_id: cond_id,
                         provider: ticker.provider.clone(),
                         symbol: ticker.symbol.clone(),
                         field: condition.field.clone(),
                         triggered_value: value,
-                        triggered_at: Self::now(),
+                        triggered_at: trigger_time,
                     });
                 }
+
+                // Update state
+                state.prev_value = Some(value);
+                state.was_matching = is_matching;
             }
         }
 
-        // Save alerts to database
+        // Save alerts and delete triggered conditions
         if !alerts.is_empty() {
             let _ = self.save_alerts(&alerts).await;
+
+            // Collect triggered condition IDs
+            let fired_ids: Vec<i64> = alerts.iter().map(|a| a.condition_id).collect();
+
+            // Delete triggered conditions from DB
+            let _ = Self::delete_conditions_from_db(&fired_ids).await;
+
+            // Remove from in-memory list (need write lock on conditions)
+            drop(conditions); // release read lock
+            let mut conds = self.conditions.write().await;
+            conds.retain(|c| c.id.map_or(true, |id| !fired_ids.contains(&id)));
         }
 
         alerts
+    }
+
+    /// Delete conditions from the database by their IDs
+    async fn delete_conditions_from_db(ids: &[i64]) -> Result<()> {
+        let ids_owned: Vec<i64> = ids.to_vec();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let pool = get_pool()?;
+            let conn = pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
+            for id in &ids_owned {
+                conn.execute("DELETE FROM monitor_conditions WHERE id = ?1", params![id])?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {}", e))?
     }
 
     /// Check if a value matches a condition
@@ -281,24 +373,32 @@ impl MonitoringService {
         }
     }
 
-    /// Save alerts to database
+    /// Save alerts to database (uses shared connection pool)
     async fn save_alerts(&self, alerts: &[MonitorAlert]) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let alerts_owned: Vec<MonitorAlert> = alerts.to_vec();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let pool = get_pool()?;
+            let conn = pool.get().map_err(|e| anyhow::anyhow!("Pool error: {}", e))?;
 
-        for alert in alerts {
-            conn.execute(
-                "INSERT INTO monitor_alerts (condition_id, provider, symbol, field, triggered_value, triggered_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![
-                    alert.condition_id,
-                    &alert.provider,
-                    &alert.symbol,
-                    alert.field.as_str(),
-                    alert.triggered_value,
-                    alert.triggered_at as i64,
-                ],
-            )?;
-        }
+            for alert in &alerts_owned {
+                conn.execute(
+                    "INSERT INTO monitor_alerts (condition_id, provider, symbol, field, triggered_value, triggered_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        alert.condition_id,
+                        &alert.provider,
+                        &alert.symbol,
+                        alert.field.as_str(),
+                        alert.triggered_value,
+                        alert.triggered_at as i64,
+                    ],
+                )?;
+            }
+
+            Ok(())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Join error: {}", e))??;
 
         Ok(())
     }
@@ -313,6 +413,6 @@ impl MonitoringService {
 
 impl Default for MonitoringService {
     fn default() -> Self {
-        Self::new("fincept_terminal.db".to_string())
+        Self::new()
     }
 }

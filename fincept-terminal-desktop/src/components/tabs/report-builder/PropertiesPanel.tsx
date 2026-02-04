@@ -413,15 +413,18 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   />
                   <div className="flex gap-2">
                     <input
-                      type="number"
-                      step="0.1"
-                      value={kpi.change || 0}
+                      type="text"
+                      inputMode="decimal"
+                      value={String(kpi.change || 0)}
                       onChange={(e) => {
-                        const newKpis = [...(selectedComponent.config.kpis || [])];
-                        newKpis[idx] = { ...newKpis[idx], change: Number(e.target.value) };
-                        onUpdateComponent(selectedComponent.id, {
-                          config: { ...selectedComponent.config, kpis: newKpis }
-                        });
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                          const newKpis = [...(selectedComponent.config.kpis || [])];
+                          newKpis[idx] = { ...newKpis[idx], change: v === '' ? 0 : Number(v) };
+                          onUpdateComponent(selectedComponent.id, {
+                            config: { ...selectedComponent.config, kpis: newKpis }
+                          });
+                        }
                       }}
                       className="flex-1 px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
                       style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
@@ -578,14 +581,18 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       placeholder="Label"
                     />
                     <input
-                      type="number"
-                      value={item.value || 0}
+                      type="text"
+                      inputMode="decimal"
+                      value={String(item.value || 0)}
                       onChange={(e) => {
-                        const newData = [...(selectedComponent.config.data as any[] || [])];
-                        newData[idx] = { ...newData[idx], value: Number(e.target.value) };
-                        onUpdateComponent(selectedComponent.id, {
-                          config: { ...selectedComponent.config, data: newData }
-                        });
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                          const newData = [...(selectedComponent.config.data as any[] || [])];
+                          newData[idx] = { ...newData[idx], value: v === '' ? 0 : Number(v) };
+                          onUpdateComponent(selectedComponent.id, {
+                            config: { ...selectedComponent.config, data: newData }
+                          });
+                        }
                       }}
                       className="w-20 px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
                       style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}

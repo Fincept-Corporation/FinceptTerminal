@@ -865,7 +865,23 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_index_snapshots_index ON index_snapshots(index_id);
         CREATE INDEX IF NOT EXISTS idx_index_snapshots_date ON index_snapshots(snapshot_date DESC);
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_index_snapshots_unique ON index_snapshots(index_id, snapshot_date)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_index_snapshots_unique ON index_snapshots(index_id, snapshot_date);
+
+        -- Price cache for strategy engine (updated by WebSocket ticks)
+        CREATE TABLE IF NOT EXISTS strategy_price_cache (
+            symbol TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT '',
+            price REAL NOT NULL,
+            bid REAL,
+            ask REAL,
+            volume REAL,
+            high REAL,
+            low REAL,
+            open REAL,
+            change_percent REAL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (symbol)
+        )
         ",
     )?;
 

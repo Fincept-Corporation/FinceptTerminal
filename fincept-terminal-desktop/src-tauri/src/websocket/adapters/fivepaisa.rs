@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // 5Paisa WebSocket Adapter
 //
 // 5Paisa uses WebSocket for real-time market data:

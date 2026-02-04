@@ -138,9 +138,15 @@ const MCPToolNode: React.FC<MCPToolNodeProps> = ({ data, selected }) => {
           />
         ) : type === 'number' ? (
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={value}
-            onChange={(e) => handleParameterChange(key, parseFloat(e.target.value))}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                handleParameterChange(key, v === '' ? '' : parseFloat(v));
+              }
+            }}
             disabled={isProvidedByConnection}
             style={{
               width: '100%',

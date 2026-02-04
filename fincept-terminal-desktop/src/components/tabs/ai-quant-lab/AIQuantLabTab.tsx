@@ -46,7 +46,7 @@ import { FunctimePanel } from './FunctimePanel';
 import { FortitudoPanel } from './FortitudoPanel';
 import { StatsmodelsPanel } from './StatsmodelsPanel';
 import { CFAQuantPanel } from './CFAQuantPanel';
-import { DeepAgentPanel } from './DeepAgentPanel';
+import { DeepAgentPanel, DeepAgentOutput, formatResultText } from './DeepAgentPanel';
 import { RLTradingPanel } from './RLTradingPanel';
 import { OnlineLearningPanel } from './OnlineLearningPanel';
 import { HFTPanel } from './HFTPanel';
@@ -68,6 +68,7 @@ const FINCEPT = {
   YELLOW: '#FFD700',
   BLUE: '#0088FF',
   PURPLE: '#9D4EDD',
+  MAGENTA: '#E91E8C',
   BORDER: '#2A2A2A',
   HOVER: '#1F1F1F',
   MUTED: '#4A4A4A'
@@ -188,6 +189,7 @@ export default function AIQuantLabTab() {
   // State management with useReducer (atomic updates)
   const [state, dispatch] = useReducer(aiQuantLabReducer, initialState);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [deepAgentOutput, setDeepAgentOutput] = useState<DeepAgentOutput | null>(null);
 
   // Modules organized by category
   const modules: ModuleItem[] = [
@@ -201,7 +203,7 @@ export default function AIQuantLabTab() {
     { id: 'deep_agent', label: 'Deep Agent', shortLabel: 'AGENT', icon: Brain, category: 'AI/ML', color: FINCEPT.CYAN },
     { id: 'rl_trading', label: 'RL Trading', shortLabel: 'RL', icon: Target, category: 'AI/ML', color: FINCEPT.PURPLE },
     { id: 'online_learning', label: 'Online Learning', shortLabel: 'ONLINE', icon: Zap, category: 'AI/ML', color: FINCEPT.YELLOW },
-    { id: 'meta_learning', label: 'Meta Learning', shortLabel: 'META', icon: Layers, category: 'AI/ML', color: FINCEPT.BLUE },
+    { id: 'meta_learning', label: 'Meta Learning', shortLabel: 'META', icon: Layers, category: 'AI/ML', color: FINCEPT.MAGENTA },
 
     // Advanced
     { id: 'hft', label: 'High Frequency Trading', shortLabel: 'HFT', icon: Activity, category: 'Advanced', color: FINCEPT.RED },
@@ -506,7 +508,7 @@ export default function AIQuantLabTab() {
           {/* Content Area */}
           <div className="flex-1 overflow-hidden">
             {state.activeView === 'factor_discovery' && <FactorDiscoveryPanel />}
-            {state.activeView === 'deep_agent' && <DeepAgentPanel />}
+            {state.activeView === 'deep_agent' && <DeepAgentPanel onOutputChange={setDeepAgentOutput} />}
             {state.activeView === 'model_library' && <ModelLibraryPanel />}
             {state.activeView === 'backtesting' && <BacktestingPanel />}
             {state.activeView === 'live_signals' && <LiveSignalsPanel />}
@@ -531,13 +533,14 @@ export default function AIQuantLabTab() {
             style={{
               backgroundColor: FINCEPT.PANEL_BG,
               borderColor: FINCEPT.BORDER,
-              width: '220px'
+              width: state.activeView === 'deep_agent' ? '340px' : '220px',
+              transition: 'width 0.2s ease'
             }}
           >
             {/* Panel Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: FINCEPT.BORDER }}>
               <span className="text-[11px] font-bold tracking-wider" style={{ color: FINCEPT.MUTED }}>
-                SYSTEM STATUS
+                {state.activeView === 'deep_agent' ? 'AGENT OUTPUT' : 'SYSTEM STATUS'}
               </span>
               <button
                 onClick={() => dispatch({ type: 'TOGGLE_RIGHT_PANEL' })}
@@ -548,152 +551,233 @@ export default function AIQuantLabTab() {
               </button>
             </div>
 
-            {/* System Metrics */}
+            {/* Panel Content */}
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              {/* Loading State */}
-              {state.systemStatus.status === 'loading' && (
-                <div className="p-2.5" style={{ backgroundColor: FINCEPT.DARK_BG, border: `1px solid ${FINCEPT.YELLOW}` }}>
-                  <div className="flex items-center gap-2">
-                    <RefreshCw size={14} color={FINCEPT.YELLOW} className="animate-spin" />
-                    <span className="text-xs" style={{ color: FINCEPT.YELLOW }}>Loading...</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Error State */}
-              {state.systemStatus.status === 'error' && (
-                <div className="p-2.5" style={{ backgroundColor: `${FINCEPT.RED}15`, border: `1px solid ${FINCEPT.RED}` }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle size={14} color={FINCEPT.RED} />
-                    <span className="text-[11px] font-bold" style={{ color: FINCEPT.RED }}>ERROR</span>
-                  </div>
-                  <div className="text-[10px]" style={{ color: FINCEPT.GRAY }}>{state.systemStatus.message}</div>
-                </div>
-              )}
-
-              {/* Ready State */}
-              {state.systemStatus.status === 'ready' && (
+              {/* === DeepAgent Output (when deep_agent view is active) === */}
+              {state.activeView === 'deep_agent' && (
                 <>
-                  {/* Qlib Status */}
+                  {/* Execution status */}
+                  {deepAgentOutput?.isExecuting && (
+                    <div className="p-2.5" style={{ backgroundColor: FINCEPT.DARK_BG, border: `1px solid ${FINCEPT.YELLOW}` }}>
+                      <div className="flex items-center gap-2">
+                        <RefreshCw size={14} color={FINCEPT.YELLOW} className="animate-spin" />
+                        <span className="text-xs font-mono" style={{ color: FINCEPT.YELLOW }}>Executing...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {deepAgentOutput?.error && (
+                    <div className="p-2.5" style={{ backgroundColor: `${FINCEPT.RED}15`, border: `1px solid ${FINCEPT.RED}` }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle size={14} color={FINCEPT.RED} />
+                        <span className="text-[11px] font-bold" style={{ color: FINCEPT.RED }}>ERROR</span>
+                      </div>
+                      <div className="text-[10px] font-mono" style={{ color: FINCEPT.GRAY, lineHeight: '1.4' }}>{deepAgentOutput.error}</div>
+                    </div>
+                  )}
+
+                  {/* Execution Log */}
+                  {deepAgentOutput && deepAgentOutput.executionLog.length > 0 && (
+                    <div className="p-2.5" style={{ backgroundColor: FINCEPT.DARK_BG, border: `1px solid ${FINCEPT.CYAN}` }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Cpu size={14} color={FINCEPT.CYAN} />
+                        <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>Execution Log</span>
+                      </div>
+                      <div className="space-y-0.5" style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                        {deepAgentOutput.executionLog.map((log, idx) => (
+                          <div key={idx} className="text-[10px] font-mono" style={{ color: FINCEPT.CYAN, lineHeight: '1.4' }}>
+                            {log}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Result */}
+                  {deepAgentOutput?.result && (
+                    <div
+                      className="p-2.5"
+                      style={{
+                        backgroundColor: FINCEPT.DARK_BG,
+                        border: `1px solid ${FINCEPT.GREEN}`,
+                        borderLeft: `3px solid ${FINCEPT.GREEN}`
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles size={14} color={FINCEPT.GREEN} />
+                        <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>Result</span>
+                      </div>
+                      <div className="text-[11px] font-mono" style={{ color: FINCEPT.WHITE, lineHeight: '1.6' }}>
+                        {formatResultText(deepAgentOutput.result)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Empty state */}
+                  {!deepAgentOutput?.isExecuting && !deepAgentOutput?.result && !deepAgentOutput?.error && (
+                    <div className="p-2.5" style={{ backgroundColor: FINCEPT.DARK_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Brain size={14} color={FINCEPT.CYAN} />
+                        <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>DeepAgent</span>
+                      </div>
+                      <div className="text-[10px]" style={{ color: FINCEPT.GRAY, lineHeight: '1.5' }}>
+                        Select an agent type, enter a task, and click Execute to see results here.
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* === System Status (for all other views) === */}
+              {state.activeView !== 'deep_agent' && (
+                <>
+                  {/* Loading State */}
+                  {state.systemStatus.status === 'loading' && (
+                    <div className="p-2.5" style={{ backgroundColor: FINCEPT.DARK_BG, border: `1px solid ${FINCEPT.YELLOW}` }}>
+                      <div className="flex items-center gap-2">
+                        <RefreshCw size={14} color={FINCEPT.YELLOW} className="animate-spin" />
+                        <span className="text-xs" style={{ color: FINCEPT.YELLOW }}>Loading...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error State */}
+                  {state.systemStatus.status === 'error' && (
+                    <div className="p-2.5" style={{ backgroundColor: `${FINCEPT.RED}15`, border: `1px solid ${FINCEPT.RED}` }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle size={14} color={FINCEPT.RED} />
+                        <span className="text-[11px] font-bold" style={{ color: FINCEPT.RED }}>ERROR</span>
+                      </div>
+                      <div className="text-[10px]" style={{ color: FINCEPT.GRAY }}>{state.systemStatus.message}</div>
+                    </div>
+                  )}
+
+                  {/* Ready State */}
+                  {state.systemStatus.status === 'ready' && (
+                    <>
+                      {/* Qlib Status */}
+                      <div
+                        className="p-2.5"
+                        style={{
+                          backgroundColor: FINCEPT.DARK_BG,
+                          border: `1px solid ${state.systemStatus.qlib.available ? FINCEPT.GREEN : FINCEPT.RED}`
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Cpu size={14} color={state.systemStatus.qlib.available ? FINCEPT.GREEN : FINCEPT.RED} />
+                          <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>
+                            Microsoft Qlib
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px]">
+                            <span style={{ color: FINCEPT.GRAY }}>Status:</span>
+                            <span style={{ color: state.systemStatus.qlib.available ? FINCEPT.GREEN : FINCEPT.RED }}>
+                              {state.systemStatus.qlib.available ? 'INSTALLED' : 'NOT INSTALLED'}
+                            </span>
+                          </div>
+                          {state.systemStatus.qlib.version && (
+                            <div className="flex justify-between text-[10px]">
+                              <span style={{ color: FINCEPT.GRAY }}>Version:</span>
+                              <span style={{ color: FINCEPT.WHITE }}>{state.systemStatus.qlib.version}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-[10px]">
+                            <span style={{ color: FINCEPT.GRAY }}>Models:</span>
+                            <span style={{ color: FINCEPT.WHITE }}>15+</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RD-Agent Status */}
+                      <div
+                        className="p-2.5"
+                        style={{
+                          backgroundColor: FINCEPT.DARK_BG,
+                          border: `1px solid ${state.systemStatus.rdagent.available ? FINCEPT.CYAN : FINCEPT.RED}`
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Server size={14} color={state.systemStatus.rdagent.available ? FINCEPT.CYAN : FINCEPT.RED} />
+                          <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>
+                            RD-Agent
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px]">
+                            <span style={{ color: FINCEPT.GRAY }}>Status:</span>
+                            <span style={{ color: state.systemStatus.rdagent.available ? FINCEPT.CYAN : FINCEPT.RED }}>
+                              {state.systemStatus.rdagent.available ? 'INSTALLED' : 'NOT INSTALLED'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span style={{ color: FINCEPT.GRAY }}>Factor Loop:</span>
+                            <span style={{ color: state.systemStatus.rdagent.factor_loop_available ? FINCEPT.GREEN : FINCEPT.RED }}>
+                              {state.systemStatus.rdagent.factor_loop_available ? 'YES' : 'NO'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span style={{ color: FINCEPT.GRAY }}>Model Loop:</span>
+                            <span style={{ color: state.systemStatus.rdagent.model_loop_available ? FINCEPT.GREEN : FINCEPT.RED }}>
+                              {state.systemStatus.rdagent.model_loop_available ? 'YES' : 'NO'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Module Info */}
                   <div
                     className="p-2.5"
                     style={{
                       backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${state.systemStatus.qlib.available ? FINCEPT.GREEN : FINCEPT.RED}`
+                      border: `1px solid ${activeModule.color}`
                     }}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <Cpu size={14} color={state.systemStatus.qlib.available ? FINCEPT.GREEN : FINCEPT.RED} />
+                      <activeModule.icon size={14} color={activeModule.color} />
                       <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>
-                        Microsoft Qlib
+                        Active Module
                       </span>
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between text-[10px]">
-                        <span style={{ color: FINCEPT.GRAY }}>Status:</span>
-                        <span style={{ color: state.systemStatus.qlib.available ? FINCEPT.GREEN : FINCEPT.RED }}>
-                          {state.systemStatus.qlib.available ? 'INSTALLED' : 'NOT INSTALLED'}
-                        </span>
+                        <span style={{ color: FINCEPT.GRAY }}>Name:</span>
+                        <span style={{ color: activeModule.color }}>{activeModule.shortLabel}</span>
                       </div>
-                      {state.systemStatus.qlib.version && (
-                        <div className="flex justify-between text-[10px]">
-                          <span style={{ color: FINCEPT.GRAY }}>Version:</span>
-                          <span style={{ color: FINCEPT.WHITE }}>{state.systemStatus.qlib.version}</span>
-                        </div>
-                      )}
                       <div className="flex justify-between text-[10px]">
-                        <span style={{ color: FINCEPT.GRAY }}>Models:</span>
-                        <span style={{ color: FINCEPT.WHITE }}>15+</span>
+                        <span style={{ color: FINCEPT.GRAY }}>Category:</span>
+                        <span style={{ color: FINCEPT.WHITE }}>{activeModule.category}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* RD-Agent Status */}
-                  <div
-                    className="p-2.5"
-                    style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${state.systemStatus.rdagent.available ? FINCEPT.CYAN : FINCEPT.RED}`
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Server size={14} color={state.systemStatus.rdagent.available ? FINCEPT.CYAN : FINCEPT.RED} />
-                      <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>
-                        RD-Agent
-                      </span>
+                  {/* Quick Actions */}
+                  <div className="pt-2 border-t" style={{ borderColor: FINCEPT.BORDER }}>
+                    <div className="text-[10px] font-bold tracking-wider mb-2" style={{ color: FINCEPT.MUTED }}>
+                      QUICK ACTIONS
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px]">
-                        <span style={{ color: FINCEPT.GRAY }}>Status:</span>
-                        <span style={{ color: state.systemStatus.rdagent.available ? FINCEPT.CYAN : FINCEPT.RED }}>
-                          {state.systemStatus.rdagent.available ? 'INSTALLED' : 'NOT INSTALLED'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span style={{ color: FINCEPT.GRAY }}>Factor Loop:</span>
-                        <span style={{ color: state.systemStatus.rdagent.factor_loop_available ? FINCEPT.GREEN : FINCEPT.RED }}>
-                          {state.systemStatus.rdagent.factor_loop_available ? 'YES' : 'NO'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span style={{ color: FINCEPT.GRAY }}>Model Loop:</span>
-                        <span style={{ color: state.systemStatus.rdagent.model_loop_available ? FINCEPT.GREEN : FINCEPT.RED }}>
-                          {state.systemStatus.rdagent.model_loop_available ? 'YES' : 'NO'}
-                        </span>
-                      </div>
+                    <div className="space-y-1.5">
+                      <button
+                        onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] transition-colors"
+                        style={{
+                          backgroundColor: FINCEPT.DARK_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                          color: FINCEPT.WHITE
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = FINCEPT.HOVER}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG}
+                      >
+                        <Settings size={12} />
+                        <span>Configuration</span>
+                      </button>
                     </div>
                   </div>
                 </>
               )}
-
-              {/* Module Info */}
-              <div
-                className="p-2.5"
-                style={{
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${activeModule.color}`
-                }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <activeModule.icon size={14} color={activeModule.color} />
-                  <span className="text-[11px] font-bold" style={{ color: FINCEPT.WHITE }}>
-                    Active Module
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[10px]">
-                    <span style={{ color: FINCEPT.GRAY }}>Name:</span>
-                    <span style={{ color: activeModule.color }}>{activeModule.shortLabel}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px]">
-                    <span style={{ color: FINCEPT.GRAY }}>Category:</span>
-                    <span style={{ color: FINCEPT.WHITE }}>{activeModule.category}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="pt-2 border-t" style={{ borderColor: FINCEPT.BORDER }}>
-                <div className="text-[10px] font-bold tracking-wider mb-2" style={{ color: FINCEPT.MUTED }}>
-                  QUICK ACTIONS
-                </div>
-                <div className="space-y-1.5">
-                  <button
-                    onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[10px] transition-colors"
-                    style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      color: FINCEPT.WHITE
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = FINCEPT.HOVER}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG}
-                  >
-                    <Settings size={12} />
-                    <span>Configuration</span>
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         )}

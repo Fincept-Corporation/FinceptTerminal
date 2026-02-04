@@ -43,12 +43,38 @@ def safe_call(func, *args, **kwargs):
                 return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
             else:
                 return {"success": True, "data": str(result), "count": 1}
+        except ValueError as e:
+            # Handle common AKShare API bugs (column mismatch, parsing errors)
+            error_msg = str(e)
+            if "Length mismatch" in error_msg or "Expected axis" in error_msg:
+                return {
+                    "success": False,
+                    "error": "AKShare API structure changed (column mismatch). This endpoint may be temporarily unavailable.",
+                    "data": [],
+                    "error_type": "api_mismatch"
+                }
+            elif attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            return {"success": False, "error": f"Data validation error: {error_msg}", "data": [], "error_type": "validation"}
+        except KeyError as e:
+            return {
+                "success": False,
+                "error": f"Missing expected data field: {str(e)}. API response format may have changed.",
+                "data": [],
+                "error_type": "missing_field"
+            }
+        except (ConnectionError, TimeoutError) as e:
+            if attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            return {"success": False, "error": f"Network error: {str(e)}", "data": [], "error_type": "network"}
         except Exception as e:
             if attempt < max_retries - 1:
                 time.sleep(1)
                 continue
-            return {"success": False, "error": str(e), "data": []}
-    return {"success": False, "error": "Max retries exceeded", "data": []}
+            return {"success": False, "error": str(e), "data": [], "error_type": "unknown"}
+    return {"success": False, "error": "Max retries exceeded", "data": [], "error_type": "timeout"}
 
 
 # ==================== CHINESE INDEX DATA ====================
@@ -128,8 +154,39 @@ def get_index_hist_fund_sw(symbol="801010", period="day"):
 # ==================== CNI INDEX ====================
 
 def get_index_all_cni():
-    """Get all CNI indices"""
-    return safe_call(ak.index_all_cni)
+    """Get all CNI indices - Workaround for AKShare bug"""
+    try:
+        # Direct API call bypassing broken AKShare function
+        import requests
+        url = "https://www.csindex.com.cn/csindex-home/indexInfo/index-overview-list"
+        params = {
+            "pageNum": 1,
+            "pageSize": 5000,
+            "indexClassify": ""
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        data = r.json()
+
+        if data.get('data') and data['data'].get('data'):
+            items = data['data']['data']
+            return {"success": True, "data": items, "count": len(items)}
+
+        # Fallback to empty result with helpful message
+        return {
+            "success": True,
+            "data": [],
+            "count": 0,
+            "note": "AKShare index_all_cni has API bug. Use index_hist_cni or index_detail_cni instead."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"API unavailable. AKShare bug: column count mismatch. Error: {str(e)}",
+            "data": []
+        }
 
 def get_index_hist_cni(symbol="399001"):
     """Get CNI index historical data"""

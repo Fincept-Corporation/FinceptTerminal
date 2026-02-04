@@ -60,6 +60,10 @@ const CreateIndexModal: React.FC<CreateIndexModalProps> = ({
   const [usePortfolioStocks, setUsePortfolioStocks] = useState(false);
   const [selectedPortfolioStocks, setSelectedPortfolioStocks] = useState<Set<string>>(new Set());
 
+  // Stable reference for preSelectedSymbols
+  const preSelectedKey = preSelectedSymbols.join(',');
+  const holdingsKey = portfolioSummary?.holdings?.map(h => h.symbol).join(',') ?? '';
+
   // Initialize with pre-selected symbols
   useEffect(() => {
     if (isOpen && preSelectedSymbols.length > 0) {
@@ -70,7 +74,8 @@ const CreateIndexModal: React.FC<CreateIndexModalProps> = ({
       }));
       setForm(prev => ({ ...prev, constituents }));
     }
-  }, [isOpen, preSelectedSymbols]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, preSelectedKey]);
 
   // Initialize portfolio stock selection
   useEffect(() => {
@@ -82,7 +87,8 @@ const CreateIndexModal: React.FC<CreateIndexModalProps> = ({
       );
       setSelectedPortfolioStocks(stockSet);
     }
-  }, [portfolioSummary, preSelectedSymbols]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holdingsKey, preSelectedKey]);
 
   if (!isOpen) return null;
 
@@ -650,12 +656,10 @@ const CreateIndexModal: React.FC<CreateIndexModalProps> = ({
             <div>
               <label style={COMMON_STYLES.dataLabel}>BASE VALUE</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.base_value}
-                onChange={e =>
-                  setForm(prev => ({ ...prev, base_value: parseFloat(e.target.value) || 100 }))
-                }
-                min={1}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setForm(prev => ({ ...prev, base_value: parseFloat(v) || 100 })); }}
                 style={{ ...COMMON_STYLES.inputField, marginTop: SPACING.TINY }}
                 {...focusHandlers}
               />
@@ -741,13 +745,10 @@ const CreateIndexModal: React.FC<CreateIndexModalProps> = ({
             <div style={{ marginBottom: SPACING.LARGE }}>
               <label style={COMMON_STYLES.dataLabel}>MAX WEIGHT PER CONSTITUENT (%)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.cap_weight}
-                onChange={e =>
-                  setForm(prev => ({ ...prev, cap_weight: parseFloat(e.target.value) || 0 }))
-                }
-                min={0}
-                max={100}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setForm(prev => ({ ...prev, cap_weight: parseFloat(v) || 0 })); }}
                 placeholder="e.g., 10 for 10% max"
                 style={{ ...COMMON_STYLES.inputField, marginTop: SPACING.TINY, width: '150px' }}
                 {...focusHandlers}
@@ -934,16 +935,10 @@ const CreateIndexModal: React.FC<CreateIndexModalProps> = ({
                       {selectedMethod === 'price_weighted' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '80px' }}>
                           <input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             value={constituent.shares || 1}
-                            onChange={e =>
-                              handleConstituentChange(
-                                constituent.symbol,
-                                'shares',
-                                parseFloat(e.target.value) || 1
-                              )
-                            }
-                            min={1}
+                            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) handleConstituentChange(constituent.symbol, 'shares', parseFloat(v) || 1); }}
                             style={{
                               ...COMMON_STYLES.inputField,
                               width: '60px',
@@ -956,18 +951,10 @@ const CreateIndexModal: React.FC<CreateIndexModalProps> = ({
                       {/* Always show weight input field */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100px' }}>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           value={constituent.weight !== undefined ? constituent.weight.toFixed(2) : '0.00'}
-                          onChange={e =>
-                            handleConstituentChange(
-                              constituent.symbol,
-                              'weight',
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          min={0}
-                          max={100}
-                          step={0.01}
+                          onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) handleConstituentChange(constituent.symbol, 'weight', parseFloat(v) || 0); }}
                           style={{
                             ...COMMON_STYLES.inputField,
                             width: '70px',

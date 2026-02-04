@@ -122,34 +122,31 @@ export const IndicatorControls: React.FC<IndicatorControlsProps> = ({
           <div>
             <label className="text-xs text-gray-400 block mb-1">Period</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={rsiParams.period}
-              onChange={(e) => updateParam('rsi', 'period', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('rsi', 'period', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="2"
-              max="100"
             />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">Overbought</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={rsiParams.overbought}
-              onChange={(e) => updateParam('rsi', 'overbought', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('rsi', 'overbought', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="50"
-              max="100"
             />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">Oversold</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={rsiParams.oversold}
-              onChange={(e) => updateParam('rsi', 'oversold', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('rsi', 'oversold', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="0"
-              max="50"
             />
           </div>
         </div>
@@ -175,34 +172,31 @@ export const IndicatorControls: React.FC<IndicatorControlsProps> = ({
           <div>
             <label className="text-xs text-gray-400 block mb-1">Fast Period</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={macdParams.fast_period}
-              onChange={(e) => updateParam('macd', 'fast_period', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('macd', 'fast_period', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="2"
-              max="50"
             />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">Slow Period</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={macdParams.slow_period}
-              onChange={(e) => updateParam('macd', 'slow_period', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('macd', 'slow_period', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="2"
-              max="100"
             />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">Signal Period</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={macdParams.signal_period}
-              onChange={(e) => updateParam('macd', 'signal_period', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('macd', 'signal_period', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="2"
-              max="50"
             />
           </div>
         </div>
@@ -228,45 +222,41 @@ export const IndicatorControls: React.FC<IndicatorControlsProps> = ({
           <div>
             <label className="text-xs text-gray-400 block mb-1">K Period</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={stochParams.k_period}
-              onChange={(e) => updateParam('stochastic', 'k_period', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('stochastic', 'k_period', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="2"
-              max="50"
             />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">D Period</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={stochParams.d_period}
-              onChange={(e) => updateParam('stochastic', 'd_period', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('stochastic', 'd_period', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="2"
-              max="20"
             />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">Overbought</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={stochParams.overbought}
-              onChange={(e) => updateParam('stochastic', 'overbought', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('stochastic', 'overbought', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="50"
-              max="100"
             />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">Oversold</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={stochParams.oversold}
-              onChange={(e) => updateParam('stochastic', 'oversold', parseInt(e.target.value))}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam('stochastic', 'oversold', parseInt(v) || 0); }}
               className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-              min="0"
-              max="50"
             />
           </div>
         </div>
@@ -302,12 +292,11 @@ export const IndicatorControls: React.FC<IndicatorControlsProps> = ({
                 {key.replace(/_/g, ' ')}
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={(indicatorParams as any)[key]}
-                onChange={(e) => updateParam(indicator, key, parseInt(e.target.value))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) updateParam(indicator, key, parseInt(v) || 0); }}
                 className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-2 py-1 text-sm text-white"
-                min="1"
-                max="200"
               />
             </div>
           ))}

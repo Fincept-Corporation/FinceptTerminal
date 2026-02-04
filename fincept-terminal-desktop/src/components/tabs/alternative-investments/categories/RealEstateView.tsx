@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import { AlternativeInvestmentApi } from '@/services/alternativeInvestments/api/analyticsApi';
 import { RealEstateParams, REITParams, RealEstateType } from '@/services/alternativeInvestments/api/types';
+import { withTimeout } from '@/services/core/apiUtils';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -23,32 +25,51 @@ const TYPES = [
   { id: 'reit', name: 'REITs' },
 ];
 
+type AnalysisState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; message: string };
+type AnalysisAction =
+  | { type: 'START' }
+  | { type: 'SUCCESS'; payload: any }
+  | { type: 'ERROR'; payload: string }
+  | { type: 'RESET' };
+function analysisReducer(state: AnalysisState, action: AnalysisAction): AnalysisState {
+  switch (action.type) {
+    case 'START': return { status: 'loading' };
+    case 'SUCCESS': return { status: 'success', data: action.payload };
+    case 'ERROR': return { status: 'error', message: action.payload };
+    case 'RESET': return { status: 'idle' };
+    default: return state;
+  }
+}
+
 export const RealEstateView: React.FC = () => {
   const [selected, setSelected] = useState<RealEstateInvestmentType>('real-estate');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(analysisReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const handleAnalyze = async (data: any) => {
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
+    if (state.status === 'loading') return;
+    dispatch({ type: 'START' });
 
     try {
       let result;
       switch (selected) {
         case 'real-estate':
-          result = await AlternativeInvestmentApi.analyzeRealEstate(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeRealEstate(data), 30000);
           break;
         case 'reit':
-          result = await AlternativeInvestmentApi.analyzeREIT(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeREIT(data), 30000);
           break;
       }
-      setAnalysis(result);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SUCCESS', payload: result });
     } catch (err: any) {
-      setError(err.message || 'Analysis failed');
-    } finally {
-      setIsAnalyzing(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'ERROR', payload: err.message || 'Analysis failed' });
     }
   };
 
@@ -67,8 +88,7 @@ export const RealEstateView: React.FC = () => {
                 key={type.id}
                 onClick={() => {
                   setSelected(type.id as RealEstateInvestmentType);
-                  setAnalysis(null);
-                  setError(null);
+                  dispatch({ type: 'RESET' });
                 }}
                 style={{
                   padding: '8px 10px',
@@ -104,8 +124,8 @@ export const RealEstateView: React.FC = () => {
               </span>
             </div>
             <div style={{ padding: '20px' }}>
-              {selected === 'real-estate' && <RealEstateForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
-              {selected === 'reit' && <REITForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
+              {selected === 'real-estate' && <RealEstateForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
+              {selected === 'reit' && <REITForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
             </div>
           </div>
         </div>
@@ -120,32 +140,32 @@ export const RealEstateView: React.FC = () => {
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-          {error && (
+          {state.status === 'error' && (
             <div style={{ backgroundColor: '#FF444410', border: '1px solid #FF4444', borderRadius: '2px', padding: '16px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.RED, marginBottom: '6px', letterSpacing: '0.5px' }}>ERROR</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{error}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{state.status === 'error' && state.message}</div>
             </div>
           )}
 
-          {analysis && analysis.success && analysis.metrics && (
+          {state.status === 'success' && state.data?.success && state.data?.metrics && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{
                 padding: '12px 20px',
-                backgroundColor: analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
-                                 analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
+                backgroundColor: state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
+                                 state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
                                  FINCEPT.RED + '20',
-                border: `2px solid ${analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                                     analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                border: `2px solid ${state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                                     state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                                      FINCEPT.RED}`,
                 borderRadius: '2px',
                 textAlign: 'center',
               }}>
                 <div style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '1.5px', color:
-                  analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                  analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                  state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                  state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                   FINCEPT.RED
                 }}>
-                  {analysis.metrics.analysis_category}
+                  {state.data.metrics.analysis_category}
                 </div>
               </div>
 
@@ -154,17 +174,17 @@ export const RealEstateView: React.FC = () => {
                   RECOMMENDATION
                 </div>
                 <div style={{ fontSize: '12px', color: FINCEPT.WHITE, lineHeight: '1.6' }}>
-                  {analysis.metrics.analysis_recommendation}
+                  {state.data.metrics.analysis_recommendation}
                 </div>
               </div>
 
-              {analysis.metrics.key_problems && analysis.metrics.key_problems.length > 0 && (
+              {state.data.metrics.key_problems && state.data.metrics.key_problems.length > 0 && (
                 <div style={{ padding: '16px', backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px' }}>
                   <div style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, marginBottom: '12px', letterSpacing: '0.5px' }}>
                     KEY CONCERNS
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {analysis.metrics.key_problems.map((problem: string, i: number) => (
+                    {state.data.metrics.key_problems.map((problem: string, i: number) => (
                       <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                         <div style={{
                           fontSize: '11px',
@@ -187,7 +207,7 @@ export const RealEstateView: React.FC = () => {
             </div>
           )}
 
-          {!analysis && !isAnalyzing && !error && (
+          {state.status === 'idle' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -201,7 +221,7 @@ export const RealEstateView: React.FC = () => {
             </div>
           )}
 
-          {isAnalyzing && (
+          {state.status === 'loading' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -269,19 +289,19 @@ const RealEstateForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onSubmi
         </div>
         <div>
           <label style={labelStyle}>LTV RATIO</label>
-          <input type="number" step="0.01" value={formData.ltv_ratio} onChange={(e) => setFormData({...formData, ltv_ratio: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.ltv_ratio} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, ltv_ratio: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>ACQUISITION PRICE ($)</label>
-          <input type="number" value={formData.acquisition_price} onChange={(e) => setFormData({...formData, acquisition_price: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.acquisition_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, acquisition_price: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>CURRENT MARKET VALUE ($)</label>
-          <input type="number" value={formData.current_market_value} onChange={(e) => setFormData({...formData, current_market_value: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.current_market_value} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, current_market_value: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>ANNUAL NOI ($)</label>
-          <input type="number" value={formData.annual_noi} onChange={(e) => setFormData({...formData, annual_noi: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.annual_noi} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, annual_noi: Number(v) || 0}); } }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -340,19 +360,19 @@ const REITForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onSubmit, isL
         </div>
         <div>
           <label style={labelStyle}>SHARE PRICE ($)</label>
-          <input type="number" value={formData.share_price} onChange={(e) => setFormData({...formData, share_price: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.share_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, share_price: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>DIVIDEND YIELD (%)</label>
-          <input type="number" step="0.001" value={formData.dividend_yield * 100} onChange={(e) => setFormData({...formData, dividend_yield: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={String((formData.dividend_yield * 100).toFixed(1))} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, dividend_yield: (Number(v) || 0) / 100}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>FFO PER SHARE ($)</label>
-          <input type="number" step="0.1" value={formData.ffo_per_share} onChange={(e) => setFormData({...formData, ffo_per_share: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.ffo_per_share} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, ffo_per_share: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>OCCUPANCY RATE (%)</label>
-          <input type="number" step="0.01" value={formData.occupancy_rate * 100} onChange={(e) => setFormData({...formData, occupancy_rate: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={String((formData.occupancy_rate * 100).toFixed(1))} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, occupancy_rate: (Number(v) || 0) / 100}); } }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -373,4 +393,10 @@ const REITForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onSubmit, isL
   );
 };
 
-export default RealEstateView;
+const RealEstateViewWithBoundary: React.FC = () => (
+  <ErrorBoundary name="RealEstateView">
+    <RealEstateView />
+  </ErrorBoundary>
+);
+
+export default RealEstateViewWithBoundary;

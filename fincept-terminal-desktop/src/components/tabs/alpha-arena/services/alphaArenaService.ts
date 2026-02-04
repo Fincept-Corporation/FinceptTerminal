@@ -7,6 +7,8 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { withTimeout, deduplicatedFetch } from '@/services/core/apiUtils';
+import { validateString } from '@/services/core/validators';
 import agentService, {
   type TradeDecision as AgentTradeDecision,
 } from '@/services/agentService';
@@ -20,6 +22,16 @@ import type {
   ListAgentsResponse,
   ModelDecision,
 } from '../types';
+
+// =============================================================================
+// Error Extraction Helper
+// =============================================================================
+
+function extractError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  return 'Unknown error';
+}
 
 // =============================================================================
 // API Key Management
@@ -36,21 +48,13 @@ interface ApiKeysResponse {
  */
 export async function getApiKeys(): Promise<ApiKeysResponse> {
   try {
-    const result = await invoke<ApiKeysResponse>('get_alpha_api_keys');
+    const result = await deduplicatedFetch('alpha:getApiKeys', () =>
+      withTimeout(invoke<ApiKeysResponse>('get_alpha_api_keys'), 15000, 'Get API keys timeout')
+    );
     return result;
   } catch (error) {
     console.error('Error getting API keys:', error);
-
-    // Fallback to localStorage
-    const stored = localStorage.getItem('alpha_arena_api_keys');
-    if (stored) {
-      return { success: true, keys: JSON.parse(stored) };
-    }
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -61,25 +65,14 @@ export async function saveApiKeys(
   keys: Record<string, string>
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const result = await invoke<{ success: boolean; message?: string }>(
-      'save_alpha_api_keys',
-      { keys }
+    const result = await withTimeout(
+      invoke<{ success: boolean; message?: string }>('save_alpha_api_keys', { keys }),
+      30000, 'Save API keys timeout'
     );
-
-    // Also save to localStorage as backup
-    localStorage.setItem('alpha_arena_api_keys', JSON.stringify(keys));
-
     return { success: result.success };
   } catch (error) {
     console.error('Error saving API keys:', error);
-
-    // Fallback to localStorage only
-    localStorage.setItem('alpha_arena_api_keys', JSON.stringify(keys));
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -95,17 +88,14 @@ export async function createCompetition(
 ): Promise<CreateCompetitionResponse> {
   try {
     const configJson = JSON.stringify(request);
-    const result = await invoke<CreateCompetitionResponse>(
-      'create_alpha_competition',
-      { configJson }
+    const result = await withTimeout(
+      invoke<CreateCompetitionResponse>('create_alpha_competition', { configJson }),
+      30000, 'Create competition timeout'
     );
     return result;
   } catch (error) {
     console.error('Error creating competition:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -115,18 +105,18 @@ export async function createCompetition(
 export async function startCompetition(
   competitionId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    const result = await invoke<{ success: boolean; error?: string }>(
-      'start_alpha_competition',
-      { competitionId }
+    const result = await withTimeout(
+      invoke<{ success: boolean; error?: string }>('start_alpha_competition', { competitionId }),
+      30000, 'Start competition timeout'
     );
     return result;
   } catch (error) {
     console.error('Error starting competition:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -149,16 +139,16 @@ export type PortfolioUpdateCallback = (update: {
   timestamp: string;
 }) => void;
 
-// Store for real-time portfolio update callbacks
-let portfolioUpdateCallbacks: PortfolioUpdateCallback[] = [];
+// Store for real-time portfolio update callbacks (Set avoids duplicate registrations)
+const portfolioUpdateCallbacks = new Set<PortfolioUpdateCallback>();
 
 /**
  * Subscribe to real-time portfolio updates during cycle execution
  */
 export function onPortfolioUpdate(callback: PortfolioUpdateCallback): () => void {
-  portfolioUpdateCallbacks.push(callback);
+  portfolioUpdateCallbacks.add(callback);
   return () => {
-    portfolioUpdateCallbacks = portfolioUpdateCallbacks.filter(cb => cb !== callback);
+    portfolioUpdateCallbacks.delete(callback);
   };
 }
 
@@ -167,11 +157,18 @@ export function onPortfolioUpdate(callback: PortfolioUpdateCallback): () => void
  * Now also saves decisions to the repository for persistence
  * AND emits real-time portfolio updates
  */
-export async function runCycle(competitionId: string): Promise<RunCycleResponse> {
+export async function runCycle(competitionId: string, apiKeys?: Record<string, string>): Promise<RunCycleResponse> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    const result = await invoke<RunCycleResponse>('run_alpha_cycle', {
-      competitionId,
-    });
+    const result = await withTimeout(
+      invoke<RunCycleResponse>('run_alpha_cycle', {
+        competitionId,
+        apiKeys: apiKeys || null,
+      }),
+      120000, 'Run cycle timeout'
+    );
 
     // If cycle was successful, process events
     if (result.success && result.events) {
@@ -201,8 +198,8 @@ export async function runCycle(competitionId: string): Promise<RunCycleResponse>
             timestamp: (meta.timestamp as string) || new Date().toISOString(),
           };
 
-          // Notify all subscribers immediately
-          for (const callback of portfolioUpdateCallbacks) {
+          // Notify all subscribers immediately (snapshot copy to avoid mutation during iteration)
+          for (const callback of [...portfolioUpdateCallbacks]) {
             try {
               callback(update);
             } catch (err) {
@@ -217,6 +214,7 @@ export async function runCycle(competitionId: string): Promise<RunCycleResponse>
         e => e.event === 'decision_completed' && e.metadata
       );
 
+      const saveWarnings: string[] = [];
       for (const event of decisionEvents) {
         const meta = event.metadata as Record<string, unknown>;
         if (meta?.model_name && meta?.action && meta?.symbol) {
@@ -233,19 +231,22 @@ export async function runCycle(competitionId: string): Promise<RunCycleResponse>
               confidence: (meta.confidence as number) || 0,
             });
           } catch (err) {
-            console.warn('Failed to save decision to repository:', err);
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn('Failed to save decision to repository:', msg);
+            saveWarnings.push(`Decision save failed for ${meta.model_name}: ${msg}`);
           }
         }
+      }
+
+      if (saveWarnings.length > 0) {
+        result.warnings = saveWarnings;
       }
     }
 
     return result;
   } catch (error) {
     console.error('Error running cycle:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -255,18 +256,18 @@ export async function runCycle(competitionId: string): Promise<RunCycleResponse>
 export async function stopCompetition(
   competitionId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    const result = await invoke<{ success: boolean; error?: string }>(
-      'stop_alpha_competition',
-      { competitionId }
+    const result = await withTimeout(
+      invoke<{ success: boolean; error?: string }>('stop_alpha_competition', { competitionId }),
+      30000, 'Stop competition timeout'
     );
     return result;
   } catch (error) {
     console.error('Error stopping competition:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -280,27 +281,20 @@ export async function stopCompetition(
 export async function getLeaderboard(
   competitionId: string
 ): Promise<LeaderboardResponse> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    console.log('[alphaArenaService] getLeaderboard called for:', competitionId);
-    const rawResult = await invoke<unknown>('get_alpha_leaderboard', {
-      competitionId,
-    });
-    console.log('[alphaArenaService] getLeaderboard raw result type:', typeof rawResult);
-    console.log('[alphaArenaService] getLeaderboard raw result:', JSON.stringify(rawResult, null, 2));
-
-    // Handle potential type issues - cast to expected type
-    const result = rawResult as LeaderboardResponse;
-    console.log('[alphaArenaService] getLeaderboard success:', result.success);
-    console.log('[alphaArenaService] getLeaderboard leaderboard:', result.leaderboard);
-    console.log('[alphaArenaService] getLeaderboard leaderboard length:', result.leaderboard?.length);
-
+    const result = await deduplicatedFetch(`alpha:leaderboard:${competitionId}`, () =>
+      withTimeout(
+        invoke<LeaderboardResponse>('get_alpha_leaderboard', { competitionId }),
+        15000, 'Get leaderboard timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('[alphaArenaService] Error getting leaderboard:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -311,27 +305,24 @@ export async function getDecisions(
   competitionId: string,
   modelName?: string
 ): Promise<DecisionsResponse> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    console.log('[alphaArenaService] getDecisions called for:', competitionId, 'model:', modelName);
-    // Try to get from Alpha Arena first
-    const result = await invoke<DecisionsResponse>('get_alpha_model_decisions', {
-      competitionId,
-      modelName: modelName || null,
-    });
-
-    console.log('[alphaArenaService] getDecisions raw result:', result);
-    console.log('[alphaArenaService] getDecisions success:', result.success);
-    console.log('[alphaArenaService] getDecisions decisions:', result.decisions);
-    console.log('[alphaArenaService] getDecisions decisions length:', result.decisions?.length);
-
-    // Skip repository merging for now - just return the result
+    const key = `alpha:decisions:${competitionId}:${modelName || 'all'}`;
+    const result = await deduplicatedFetch(key, () =>
+      withTimeout(
+        invoke<DecisionsResponse>('get_alpha_model_decisions', {
+          competitionId,
+          modelName: modelName || null,
+        }),
+        15000, 'Get decisions timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('[alphaArenaService] Error getting decisions:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -341,22 +332,20 @@ export async function getDecisions(
 export async function getSnapshots(
   competitionId: string
 ): Promise<SnapshotsResponse> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    console.log('[alphaArenaService] getSnapshots called for:', competitionId);
-    const result = await invoke<SnapshotsResponse>('get_alpha_snapshots', {
-      competitionId,
-    });
-    console.log('[alphaArenaService] getSnapshots raw result:', result);
-    console.log('[alphaArenaService] getSnapshots success:', result.success);
-    console.log('[alphaArenaService] getSnapshots snapshots:', result.snapshots);
-    console.log('[alphaArenaService] getSnapshots snapshots length:', result.snapshots?.length);
+    const result = await deduplicatedFetch(`alpha:snapshots:${competitionId}`, () =>
+      withTimeout(
+        invoke<SnapshotsResponse>('get_alpha_snapshots', { competitionId }),
+        15000, 'Get snapshots timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('[alphaArenaService] Error getting snapshots:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -365,14 +354,13 @@ export async function getSnapshots(
  */
 export async function listAgents(): Promise<ListAgentsResponse> {
   try {
-    const result = await invoke<ListAgentsResponse>('list_alpha_agents');
+    const result = await deduplicatedFetch('alpha:listAgents', () =>
+      withTimeout(invoke<ListAgentsResponse>('list_alpha_agents'), 15000, 'List agents timeout')
+    );
     return result;
   } catch (error) {
     console.error('Error listing agents:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -383,18 +371,22 @@ export async function getEvaluation(
   competitionId: string,
   modelName: string
 ): Promise<{ success: boolean; metrics?: Record<string, number>; error?: string }> {
+  const v1 = validateString(competitionId, { minLength: 1 });
+  if (!v1.valid) return { success: false, error: `Invalid competitionId: ${v1.error}` };
+  const v2 = validateString(modelName, { minLength: 1 });
+  if (!v2.valid) return { success: false, error: `Invalid modelName: ${v2.error}` };
+
   try {
-    const result = await invoke<{ success: boolean; metrics?: Record<string, number> }>(
-      'get_alpha_evaluation',
-      { competitionId, modelName }
+    const result = await deduplicatedFetch(`alpha:eval:${competitionId}:${modelName}`, () =>
+      withTimeout(
+        invoke<{ success: boolean; metrics?: Record<string, number> }>('get_alpha_evaluation', { competitionId, modelName }),
+        15000, 'Get evaluation timeout'
+      )
     );
     return result;
   } catch (error) {
     console.error('Error getting evaluation:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -585,16 +577,16 @@ export interface GetCompetitionResponse {
  */
 export async function listCompetitions(limit: number = 50): Promise<ListCompetitionsResponse> {
   try {
-    const result = await invoke<ListCompetitionsResponse>('list_alpha_competitions', {
-      limit,
-    });
+    const result = await deduplicatedFetch(`alpha:listCompetitions:${limit}`, () =>
+      withTimeout(
+        invoke<ListCompetitionsResponse>('list_alpha_competitions', { limit }),
+        15000, 'List competitions timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('Error listing competitions:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -602,17 +594,20 @@ export async function listCompetitions(limit: number = 50): Promise<ListCompetit
  * Get a specific competition by ID
  */
 export async function getCompetition(competitionId: string): Promise<GetCompetitionResponse> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    const result = await invoke<GetCompetitionResponse>('get_alpha_competition', {
-      competitionId,
-    });
+    const result = await deduplicatedFetch(`alpha:getCompetition:${competitionId}`, () =>
+      withTimeout(
+        invoke<GetCompetitionResponse>('get_alpha_competition', { competitionId }),
+        15000, 'Get competition timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('Error getting competition:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -620,17 +615,18 @@ export async function getCompetition(competitionId: string): Promise<GetCompetit
  * Delete a competition
  */
 export async function deleteCompetition(competitionId: string): Promise<{ success: boolean; error?: string }> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    const result = await invoke<{ success: boolean; error?: string }>('delete_alpha_competition', {
-      competitionId,
-    });
+    const result = await withTimeout(
+      invoke<{ success: boolean; error?: string }>('delete_alpha_competition', { competitionId }),
+      30000, 'Delete competition timeout'
+    );
     return result;
   } catch (error) {
     console.error('Error deleting competition:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -725,14 +721,13 @@ export interface CreateStyledAgentsResponse {
  */
 export async function listTradingStyles(): Promise<ListTradingStylesResponse> {
   try {
-    const result = await invoke<ListTradingStylesResponse>('list_alpha_trading_styles');
+    const result = await deduplicatedFetch('alpha:listTradingStyles', () =>
+      withTimeout(invoke<ListTradingStylesResponse>('list_alpha_trading_styles'), 15000, 'List trading styles timeout')
+    );
     return result;
   } catch (error) {
     console.error('Error listing trading styles:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -751,20 +746,22 @@ export async function createStyledAgents(
   styles?: string[],
   initialCapital: number = 10000
 ): Promise<CreateStyledAgentsResponse> {
+  const v1 = validateString(provider, { minLength: 1 });
+  if (!v1.valid) return { success: false, error: `Invalid provider: ${v1.error}` };
+  const v2 = validateString(modelId, { minLength: 1 });
+  if (!v2.valid) return { success: false, error: `Invalid modelId: ${v2.error}` };
+
   try {
-    const result = await invoke<CreateStyledAgentsResponse>('create_alpha_styled_agents', {
-      provider,
-      modelId,
-      styles,
-      initialCapital,
-    });
+    const result = await withTimeout(
+      invoke<CreateStyledAgentsResponse>('create_alpha_styled_agents', {
+        provider, modelId, styles, initialCapital,
+      }),
+      30000, 'Create styled agents timeout'
+    );
     return result;
   } catch (error) {
     console.error('Error creating styled agents:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -819,41 +816,8 @@ export async function createStyledCompetition(params: {
     return await createCompetition(competitionRequest);
   } catch (error) {
     console.error('Error creating styled competition:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
-}
-
-// =============================================================================
-// Auto-Run Management
-// =============================================================================
-
-let autoRunInterval: ReturnType<typeof setInterval> | null = null;
-
-export function startAutoRun(
-  competitionId: string,
-  intervalSeconds: number,
-  onCycleComplete: (result: RunCycleResponse) => void
-): void {
-  stopAutoRun();
-
-  autoRunInterval = setInterval(async () => {
-    const result = await runCycle(competitionId);
-    onCycleComplete(result);
-  }, intervalSeconds * 1000);
-}
-
-export function stopAutoRun(): void {
-  if (autoRunInterval) {
-    clearInterval(autoRunInterval);
-    autoRunInterval = null;
-  }
-}
-
-export function isAutoRunning(): boolean {
-  return autoRunInterval !== null;
 }
 
 // =============================================================================
@@ -897,11 +861,6 @@ export const alphaArenaService = {
   listTradingStyles,
   createStyledAgents,
   createStyledCompetition,
-
-  // Auto-Run
-  startAutoRun,
-  stopAutoRun,
-  isAutoRunning,
 };
 
 export default alphaArenaService;

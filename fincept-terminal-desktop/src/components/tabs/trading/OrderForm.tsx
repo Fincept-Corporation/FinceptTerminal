@@ -206,10 +206,10 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             QUANTITY
           </label>
           <input
-            type="number"
-            step="0.0001"
+            type="text"
+            inputMode="decimal"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setQuantity(v); }}
             placeholder="0.0000"
             style={{
               width: '100%',
@@ -241,10 +241,10 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
               LIMIT PRICE
             </label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setPrice(v); }}
               placeholder={currentPrice?.toFixed(2) || '0.00'}
               style={{
                 width: '100%',
@@ -277,10 +277,10 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
               STOP PRICE
             </label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={stopPrice}
-              onChange={(e) => setStopPrice(e.target.value)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStopPrice(v); }}
               placeholder={currentPrice?.toFixed(2) || '0.00'}
               style={{
                 width: '100%',
@@ -340,10 +340,10 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
                 TAKE PROFIT
               </label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={takeProfitPrice}
-                onChange={(e) => setTakeProfitPrice(e.target.value)}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setTakeProfitPrice(v); }}
                 placeholder="Optional"
                 style={{
                   width: '100%',
@@ -373,10 +373,10 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
                 STOP LOSS
               </label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={stopLossPrice}
-                onChange={(e) => setStopLossPrice(e.target.value)}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStopLossPrice(v); }}
                 placeholder="Optional"
                 style={{
                   width: '100%',

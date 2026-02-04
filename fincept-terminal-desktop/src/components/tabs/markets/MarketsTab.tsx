@@ -1,7 +1,8 @@
 // MarketsTab - Production-ready Markets Terminal
 // Uses shared utilities: apiUtils, validators, ErrorBoundary
 
-import React, { useState, useEffect, useCallback, useMemo, useReducer } from 'react';
+import React, { useState, useEffect, useCallback, useReducer } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { Edit2, Info, RefreshCw, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
@@ -357,6 +358,19 @@ const MarketsTab: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [collectedData, setCollectedData] = useState<Record<string, QuoteData[]>>({});
   const [initError, setInitError] = useState<string | null>(null);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    autoUpdate: state.autoUpdate,
+    updateInterval: state.updateInterval,
+  }), [state.autoUpdate, state.updateInterval]);
+
+  const setWorkspaceState = useCallback((restored: Record<string, unknown>) => {
+    if (typeof restored.autoUpdate === 'boolean') dispatch({ type: 'SET_AUTO_UPDATE', payload: restored.autoUpdate });
+    if (typeof restored.updateInterval === 'number') dispatch({ type: 'SET_UPDATE_INTERVAL', payload: restored.updateInterval });
+  }, []);
+
+  useWorkspaceTabState('markets', getWorkspaceState, setWorkspaceState);
 
   const effectiveRefetchInterval = state.autoUpdate ? state.updateInterval : 0;
 

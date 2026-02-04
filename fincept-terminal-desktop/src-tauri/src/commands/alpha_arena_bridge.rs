@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /**
  * Alpha Arena Bridge Commands
  * Tauri commands to connect Alpha Arena Python service with Rust paper trading
@@ -122,8 +123,8 @@ pub async fn alpha_arena_record_decision(
     let conn = pool.get().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT INTO alpha_decision_logs
-         (id, competition_id, model_name, cycle_number, action, symbol, quantity, confidence, reasoning,
+        "INSERT INTO alpha_arena_decisions
+         (id, competition_id, model_name, cycle_number, symbol, action, quantity, confidence, reasoning,
           trade_executed, price_at_decision, portfolio_value_before, portfolio_value_after, timestamp)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
@@ -131,12 +132,12 @@ pub async fn alpha_arena_record_decision(
             competition_id,
             model_name,
             0,
-            side.to_uppercase(),
             symbol,
+            side.to_uppercase(),
             quantity,
             confidence,
             reasoning,
-            true,
+            1,
             price,
             0.0,
             0.0,

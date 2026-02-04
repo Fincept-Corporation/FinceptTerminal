@@ -37,6 +37,7 @@ const FINCEPT = {
   YELLOW: '#FFD700',
   BLUE: '#0088FF',
   PURPLE: '#9D4EDD',
+  TEAL: '#00C9A7', // Unique theme color for Statsmodels
   BORDER: '#2A2A2A',
   HOVER: '#1F1F1F',
   MUTED: '#4A4A4A'
@@ -451,345 +452,635 @@ export function StatsmodelsPanel() {
   };
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
-      <div
-        className="w-80 flex-shrink-0 border-r overflow-y-auto"
-        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-      >
-        <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Activity size={16} color={FINCEPT.ORANGE} />
-            <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>DATA SOURCE</span>
-          </div>
-
-          <div className="flex gap-2 mb-3">
-            <button
-              onClick={() => setDataSourceType('symbol')}
-              className="flex-1 py-1.5 text-xs font-semibold rounded"
-              style={{
-                backgroundColor: dataSourceType === 'symbol' ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
-                color: dataSourceType === 'symbol' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`
-              }}
-            >
-              SYMBOL
-            </button>
-            <button
-              onClick={() => setDataSourceType('manual')}
-              className="flex-1 py-1.5 text-xs font-semibold rounded"
-              style={{
-                backgroundColor: dataSourceType === 'manual' ? FINCEPT.ORANGE : FINCEPT.DARK_BG,
-                color: dataSourceType === 'manual' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`
-              }}
-            >
-              MANUAL
-            </button>
-          </div>
-
-          {dataSourceType === 'symbol' ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={symbolInput}
-                  onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-                  placeholder="AAPL"
-                  className="flex-1 px-2 py-1.5 text-xs font-mono rounded"
-                  style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`
-                  }}
-                />
-                <button
-                  onClick={fetchSymbolData}
-                  disabled={priceDataLoading}
-                  className="px-3 py-1.5 rounded"
-                  style={{ backgroundColor: FINCEPT.BLUE, color: FINCEPT.WHITE }}
-                >
-                  {priceDataLoading ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: FINCEPT.GRAY }}>Days:</span>
-                <select
-                  value={historicalDays}
-                  onChange={(e) => setHistoricalDays(parseInt(e.target.value))}
-                  className="flex-1 px-2 py-1 text-xs rounded"
-                  style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`
-                  }}
-                >
-                  <option value={30}>30 Days</option>
-                  <option value={90}>90 Days</option>
-                  <option value={180}>180 Days</option>
-                  <option value={365}>1 Year</option>
-                  <option value={730}>2 Years</option>
-                  <option value={1825}>5 Years</option>
-                </select>
-              </div>
-              {priceData.length > 0 && (
-                <div className="text-xs" style={{ color: FINCEPT.GREEN }}>
-                  Loaded {priceData.length} data points
-                </div>
-              )}
-            </div>
-          ) : (
-            <textarea
-              value={manualData}
-              onChange={(e) => setManualData(e.target.value)}
-              placeholder="Enter comma-separated values..."
-              rows={4}
-              className="w-full px-2 py-1.5 text-xs font-mono rounded"
-              style={{
-                backgroundColor: FINCEPT.DARK_BG,
-                color: FINCEPT.WHITE,
-                border: `1px solid ${FINCEPT.BORDER}`
-              }}
-            />
-          )}
-        </div>
-
-        <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
-          <div className="flex items-center gap-2 mb-3">
-            <BarChart2 size={16} color={FINCEPT.ORANGE} />
-            <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>CATEGORY</span>
-          </div>
-          <select
-            value={selectedCategory}
-            onChange={(e) => {
-              const cat = e.target.value as AnalysisCategory;
-              setSelectedCategory(cat);
-              const first = analysisTypes.find(a => a.category === cat);
-              if (first) {
-                setSelectedAnalysis(first.id);
-                setAnalysisParams({});
-              }
-            }}
-            className="w-full px-2 py-1.5 text-xs rounded"
-            style={{
-              backgroundColor: FINCEPT.DARK_BG,
-              color: FINCEPT.WHITE,
-              border: `1px solid ${FINCEPT.BORDER}`
-            }}
-          >
-            {Object.entries(categoryLabels).map(([key, { label }]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Calculator size={16} color={FINCEPT.ORANGE} />
-            <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>ANALYSIS</span>
-          </div>
-          <select
-            value={selectedAnalysis}
-            onChange={(e) => {
-              setSelectedAnalysis(e.target.value);
-              setAnalysisParams({});
-            }}
-            className="w-full px-2 py-1.5 text-xs rounded"
-            style={{
-              backgroundColor: FINCEPT.DARK_BG,
-              color: FINCEPT.WHITE,
-              border: `1px solid ${FINCEPT.BORDER}`
-            }}
-          >
-            {analysisTypes
-              .filter(a => a.category === selectedCategory)
-              .map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-          </select>
-          <div className="mt-2 text-xs" style={{ color: FINCEPT.GRAY }}>
-            {analysisTypes.find(a => a.id === selectedAnalysis)?.description}
-          </div>
-          {selectedAnalysis === 'logit' && (
-            <div className="mt-2 p-2 rounded text-xs" style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.ORANGE }}>
-              <strong>Note:</strong> Logit models binary outcomes (0/1). Price data will be auto-converted to returns direction (up=1, down=0).
-            </div>
-          )}
-        </div>
-
-        {getParamFields(selectedAnalysis).length > 0 && (
-          <div className="p-4 border-b" style={{ borderColor: FINCEPT.BORDER }}>
-            <div className="flex items-center gap-2 mb-3">
-              <ChevronDown size={16} color={FINCEPT.ORANGE} />
-              <span className="text-xs font-bold" style={{ color: FINCEPT.ORANGE }}>PARAMETERS</span>
-            </div>
-            <div className="space-y-3">
-              {getParamFields(selectedAnalysis).map(field => (
-                <div key={field.key}>
-                  <label className="text-xs block mb-1" style={{ color: FINCEPT.GRAY }}>{field.label}</label>
-                  {field.type === 'select' ? (
-                    <select
-                      value={analysisParams[field.key] || ''}
-                      onChange={(e) => setAnalysisParams(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      className="w-full px-2 py-1.5 text-xs rounded"
-                      style={{
-                        backgroundColor: FINCEPT.DARK_BG,
-                        color: FINCEPT.WHITE,
-                        border: `1px solid ${FINCEPT.BORDER}`
-                      }}
-                    >
-                      {field.options?.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={field.type}
-                      value={analysisParams[field.key] || ''}
-                      onChange={(e) => setAnalysisParams(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                      className="w-full px-2 py-1.5 text-xs font-mono rounded"
-                      style={{
-                        backgroundColor: FINCEPT.DARK_BG,
-                        color: FINCEPT.WHITE,
-                        border: `1px solid ${FINCEPT.BORDER}`
-                      }}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="p-4">
-          <button
-            onClick={runAnalysis}
-            disabled={isLoading}
-            className="w-full py-2.5 text-xs font-bold rounded flex items-center justify-center gap-2"
-            style={{
-              backgroundColor: isLoading ? FINCEPT.MUTED : FINCEPT.ORANGE,
-              color: FINCEPT.DARK_BG
-            }}
-          >
-            {isLoading ? (
-              <>
-                <RefreshCw size={14} className="animate-spin" />
-                RUNNING...
-              </>
-            ) : (
-              <>
-                <Play size={14} />
-                RUN ANALYSIS
-              </>
-            )}
-          </button>
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: FINCEPT.DARK_BG
+    }}>
+      {/* Terminal-style Header */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <Activity size={16} color={FINCEPT.TEAL} />
+        <span style={{
+          color: FINCEPT.TEAL,
+          fontSize: '12px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          fontFamily: 'monospace'
+        }}>
+          STATSMODELS ANALYTICS
+        </span>
+        <div style={{ flex: 1 }} />
+        <div style={{
+          fontSize: '10px',
+          fontFamily: 'monospace',
+          padding: '3px 8px',
+          backgroundColor: analysisResult ? FINCEPT.GREEN + '20' : FINCEPT.TEAL + '20',
+          border: `1px solid ${analysisResult ? FINCEPT.GREEN : FINCEPT.TEAL}`,
+          color: analysisResult ? FINCEPT.GREEN : FINCEPT.TEAL
+        }}>
+          {analysisResult ? 'RESULTS READY' : 'READY'}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-bold mb-1" style={{ color: FINCEPT.WHITE }}>
-            STATSMODELS ANALYTICS
-          </h2>
-          <p className="text-xs" style={{ color: FINCEPT.GRAY }}>
-            Statistical modeling and econometric analysis powered by statsmodels library
-          </p>
-        </div>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* Left Sidebar - Configuration */}
+        <div style={{
+          width: '320px',
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {/* Data Source Section */}
+            <div style={{
+              padding: '10px 12px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              fontSize: '10px',
+              fontWeight: 700,
+              color: FINCEPT.TEAL,
+              fontFamily: 'monospace',
+              letterSpacing: '0.5px'
+            }}>
+              DATA SOURCE
+            </div>
 
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          {Object.entries(categoryLabels).map(([key, { label, icon: Icon }]) => {
-            const count = analysisTypes.filter(a => a.category === key).length;
-            const isSelected = selectedCategory === key;
-            return (
-              <button
-                key={key}
-                onClick={() => {
-                  setSelectedCategory(key as AnalysisCategory);
-                  const first = analysisTypes.find(a => a.category === key);
+            <div style={{ padding: '12px' }}>
+              <div style={{ display: 'flex', gap: '0', marginBottom: '12px' }}>
+                <button
+                  onClick={() => setDataSourceType('symbol')}
+                  style={{
+                    flex: 1,
+                    padding: '8px 14px',
+                    backgroundColor: dataSourceType === 'symbol' ? FINCEPT.TEAL : FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    color: dataSourceType === 'symbol' ? '#000000' : FINCEPT.WHITE,
+                    opacity: dataSourceType === 'symbol' ? 1 : 0.7,
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.5px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  SYMBOL
+                </button>
+                <button
+                  onClick={() => setDataSourceType('manual')}
+                  style={{
+                    flex: 1,
+                    padding: '8px 14px',
+                    backgroundColor: dataSourceType === 'manual' ? FINCEPT.TEAL : FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderLeft: '0',
+                    marginLeft: '-1px',
+                    color: dataSourceType === 'manual' ? '#000000' : FINCEPT.WHITE,
+                    opacity: dataSourceType === 'manual' ? 1 : 0.7,
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.5px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  MANUAL
+                </button>
+              </div>
+
+              {dataSourceType === 'symbol' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={symbolInput}
+                      onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
+                      placeholder="AAPL"
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      onClick={fetchSymbolData}
+                      disabled={priceDataLoading}
+                      style={{
+                        padding: '8px 12px',
+                        backgroundColor: FINCEPT.TEAL,
+                        border: 'none',
+                        color: '#000000',
+                        cursor: priceDataLoading ? 'not-allowed' : 'pointer',
+                        opacity: priceDataLoading ? 0.5 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {priceDataLoading ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
+                    </button>
+                  </div>
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: '9px',
+                      marginBottom: '6px',
+                      color: FINCEPT.WHITE,
+                      fontFamily: 'monospace',
+                      letterSpacing: '0.5px',
+                      opacity: 0.7
+                    }}>
+                      HISTORICAL DAYS
+                    </label>
+                    <select
+                      value={historicalDays}
+                      onChange={(e) => setHistoricalDays(parseInt(e.target.value))}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        backgroundColor: FINCEPT.DARK_BG,
+                        color: FINCEPT.WHITE,
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        outline: 'none'
+                      }}
+                    >
+                      <option value={30}>30 Days</option>
+                      <option value={90}>90 Days</option>
+                      <option value={180}>180 Days</option>
+                      <option value={365}>1 Year</option>
+                      <option value={730}>2 Years</option>
+                      <option value={1825}>5 Years</option>
+                    </select>
+                  </div>
+                  {priceData.length > 0 && (
+                    <div style={{
+                      fontSize: '10px',
+                      fontFamily: 'monospace',
+                      color: FINCEPT.GREEN,
+                      padding: '6px 10px',
+                      backgroundColor: FINCEPT.GREEN + '20',
+                      border: `1px solid ${FINCEPT.GREEN}`
+                    }}>
+                      Loaded {priceData.length} data points
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <textarea
+                  value={manualData}
+                  onChange={(e) => setManualData(e.target.value)}
+                  placeholder="Enter comma-separated values..."
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    fontSize: '11px',
+                    fontFamily: 'monospace',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    outline: 'none',
+                    resize: 'vertical'
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Category Section */}
+            <div style={{
+              padding: '10px 12px',
+              borderTop: `1px solid ${FINCEPT.BORDER}`,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              fontSize: '10px',
+              fontWeight: 700,
+              color: FINCEPT.TEAL,
+              fontFamily: 'monospace',
+              letterSpacing: '0.5px'
+            }}>
+              CATEGORY
+            </div>
+            <div style={{ padding: '12px' }}>
+              <select
+                value={selectedCategory}
+                onChange={(e) => {
+                  const cat = e.target.value as AnalysisCategory;
+                  setSelectedCategory(cat);
+                  const first = analysisTypes.find(a => a.category === cat);
                   if (first) {
                     setSelectedAnalysis(first.id);
                     setAnalysisParams({});
                   }
                 }}
-                className="p-3 rounded text-left transition-all"
                 style={{
-                  backgroundColor: isSelected ? FINCEPT.ORANGE : FINCEPT.PANEL_BG,
-                  border: `1px solid ${isSelected ? FINCEPT.ORANGE : FINCEPT.BORDER}`
+                  width: '100%',
+                  padding: '8px 10px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  outline: 'none'
                 }}
               >
-                <Icon size={16} color={isSelected ? FINCEPT.DARK_BG : FINCEPT.GRAY} />
-                <div
-                  className="text-xs font-semibold mt-2"
-                  style={{ color: isSelected ? FINCEPT.DARK_BG : FINCEPT.WHITE }}
-                >
-                  {label}
+                {Object.entries(categoryLabels).map(([key, { label }]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Analysis Type Section */}
+            <div style={{
+              padding: '10px 12px',
+              borderTop: `1px solid ${FINCEPT.BORDER}`,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              fontSize: '10px',
+              fontWeight: 700,
+              color: FINCEPT.TEAL,
+              fontFamily: 'monospace',
+              letterSpacing: '0.5px'
+            }}>
+              ANALYSIS TYPE
+            </div>
+            <div style={{ padding: '12px' }}>
+              <select
+                value={selectedAnalysis}
+                onChange={(e) => {
+                  setSelectedAnalysis(e.target.value);
+                  setAnalysisParams({});
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  outline: 'none',
+                  marginBottom: '10px'
+                }}
+              >
+                {analysisTypes
+                  .filter(a => a.category === selectedCategory)
+                  .map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+              </select>
+              <div style={{
+                fontSize: '10px',
+                color: FINCEPT.WHITE,
+                opacity: 0.6,
+                lineHeight: '1.5',
+                fontFamily: 'monospace'
+              }}>
+                {analysisTypes.find(a => a.id === selectedAnalysis)?.description}
+              </div>
+              {selectedAnalysis === 'logit' && (
+                <div style={{
+                  marginTop: '10px',
+                  padding: '10px',
+                  fontSize: '10px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.TEAL}`,
+                  borderLeft: `3px solid ${FINCEPT.TEAL}`,
+                  color: FINCEPT.WHITE,
+                  lineHeight: '1.5',
+                  fontFamily: 'monospace'
+                }}>
+                  <strong>Note:</strong> Logit models binary outcomes (0/1). Price data will be auto-converted to returns direction.
                 </div>
-                <div
-                  className="text-xs"
-                  style={{ color: isSelected ? FINCEPT.DARK_BG : FINCEPT.MUTED }}
-                >
-                  {count} analyses
+              )}
+            </div>
+
+            {/* Parameters Section */}
+            {getParamFields(selectedAnalysis).length > 0 && (
+              <>
+                <div style={{
+                  padding: '10px 12px',
+                  borderTop: `1px solid ${FINCEPT.BORDER}`,
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: FINCEPT.TEAL,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px'
+                }}>
+                  PARAMETERS
                 </div>
-              </button>
-            );
-          })}
+                <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {getParamFields(selectedAnalysis).map(field => (
+                    <div key={field.key}>
+                      <label style={{
+                        display: 'block',
+                        fontSize: '9px',
+                        marginBottom: '6px',
+                        color: FINCEPT.WHITE,
+                        fontFamily: 'monospace',
+                        letterSpacing: '0.5px',
+                        opacity: 0.7
+                      }}>
+                        {field.label}
+                      </label>
+                      {field.type === 'select' ? (
+                        <select
+                          value={analysisParams[field.key] || ''}
+                          onChange={(e) => setAnalysisParams(prev => ({ ...prev, [field.key]: e.target.value }))}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            fontSize: '11px',
+                            fontFamily: 'monospace',
+                            backgroundColor: FINCEPT.DARK_BG,
+                            color: FINCEPT.WHITE,
+                            border: `1px solid ${FINCEPT.BORDER}`,
+                            outline: 'none'
+                          }}
+                        >
+                          {field.options?.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={field.type}
+                          value={analysisParams[field.key] || ''}
+                          onChange={(e) => setAnalysisParams(prev => ({ ...prev, [field.key]: e.target.value }))}
+                          placeholder={field.placeholder}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            fontSize: '11px',
+                            fontFamily: 'monospace',
+                            backgroundColor: FINCEPT.DARK_BG,
+                            color: FINCEPT.WHITE,
+                            border: `1px solid ${FINCEPT.BORDER}`,
+                            outline: 'none'
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Run Button */}
+          <div style={{ borderTop: `1px solid ${FINCEPT.BORDER}`, padding: '12px' }}>
+            <button
+              onClick={runAnalysis}
+              disabled={isLoading}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                backgroundColor: FINCEPT.TEAL,
+                border: 'none',
+                color: '#000000',
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.6 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                letterSpacing: '0.5px',
+                transition: 'all 0.15s'
+              }}
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw size={14} className="animate-spin" />
+                  RUNNING...
+                </>
+              ) : (
+                <>
+                  <Play size={14} />
+                  RUN ANALYSIS
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="mb-6">
-          <div className="text-xs font-bold mb-3" style={{ color: FINCEPT.ORANGE }}>
-            AVAILABLE IN {categoryLabels[selectedCategory].label.toUpperCase()}
+        {/* Right Panel - Main Content */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            color: FINCEPT.TEAL,
+            fontFamily: 'monospace',
+            letterSpacing: '0.5px',
+            backgroundColor: FINCEPT.PANEL_BG
+          }}>
+            STATISTICAL MODELING & ECONOMETRIC ANALYSIS
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {analysisTypes
-              .filter(a => a.category === selectedCategory)
-              .map(a => (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    setSelectedAnalysis(a.id);
-                    setAnalysisParams({});
-                  }}
-                  className="p-2.5 rounded text-left"
-                  style={{
-                    backgroundColor: selectedAnalysis === a.id ? FINCEPT.BLUE : FINCEPT.HEADER_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`
-                  }}
-                >
-                  <div className="text-xs font-semibold" style={{ color: FINCEPT.WHITE }}>{a.name}</div>
-                  <div className="text-xs mt-1" style={{ color: FINCEPT.GRAY }}>{a.description}</div>
-                </button>
-              ))}
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            {/* Category Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+              {Object.entries(categoryLabels).map(([key, { label, icon: Icon }]) => {
+                const count = analysisTypes.filter(a => a.category === key).length;
+                const isSelected = selectedCategory === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setSelectedCategory(key as AnalysisCategory);
+                      const first = analysisTypes.find(a => a.category === key);
+                      if (first) {
+                        setSelectedAnalysis(first.id);
+                        setAnalysisParams({});
+                      }
+                    }}
+                    style={{
+                      padding: '12px',
+                      backgroundColor: isSelected ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
+                      border: `1px solid ${isSelected ? FINCEPT.TEAL : FINCEPT.BORDER}`,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                        e.currentTarget.style.borderColor = FINCEPT.TEAL;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+                        e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      }
+                    }}
+                  >
+                    <Icon size={16} color={FINCEPT.TEAL} />
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      marginTop: '8px',
+                      color: FINCEPT.WHITE,
+                      fontFamily: 'monospace'
+                    }}>
+                      {label}
+                    </div>
+                    <div style={{
+                      fontSize: '9px',
+                      color: FINCEPT.WHITE,
+                      opacity: 0.5,
+                      marginTop: '4px',
+                      fontFamily: 'monospace'
+                    }}>
+                      {count} analyses
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Available Analysis Types */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                marginBottom: '12px',
+                color: FINCEPT.TEAL,
+                letterSpacing: '0.5px',
+                fontFamily: 'monospace'
+              }}>
+                AVAILABLE IN {categoryLabels[selectedCategory].label.toUpperCase()}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                {analysisTypes
+                  .filter(a => a.category === selectedCategory)
+                  .map(a => {
+                    const isSelected = selectedAnalysis === a.id;
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() => {
+                          setSelectedAnalysis(a.id);
+                          setAnalysisParams({});
+                        }}
+                        style={{
+                          padding: '10px',
+                          backgroundColor: isSelected ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
+                          border: `1px solid ${isSelected ? FINCEPT.TEAL : FINCEPT.BORDER}`,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                            e.currentTarget.style.borderColor = FINCEPT.TEAL;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+                            e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                          }
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: isSelected ? FINCEPT.TEAL : FINCEPT.WHITE,
+                          fontFamily: 'monospace',
+                          marginBottom: '4px'
+                        }}>
+                          {a.name}
+                        </div>
+                        <div style={{
+                          fontSize: '10px',
+                          color: FINCEPT.WHITE,
+                          opacity: 0.6,
+                          lineHeight: '1.4',
+                          fontFamily: 'monospace'
+                        }}>
+                          {a.description}
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+              <div style={{
+                padding: '12px 14px',
+                backgroundColor: FINCEPT.RED + '15',
+                border: `1px solid ${FINCEPT.RED}`,
+                borderLeft: `3px solid ${FINCEPT.RED}`,
+                color: FINCEPT.RED,
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontFamily: 'monospace',
+                marginBottom: '16px',
+                lineHeight: '1.5'
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                {error}
+              </div>
+            )}
+
+            {/* Results */}
+            {renderResult()}
+
+            {/* Empty State */}
+            {!analysisResult && !error && (
+              <div style={{
+                padding: '40px 20px',
+                textAlign: 'center',
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`
+              }}>
+                <Database size={48} color={FINCEPT.MUTED} style={{ margin: '0 auto 16px' }} />
+                <div style={{
+                  fontSize: '11px',
+                  color: FINCEPT.WHITE,
+                  marginBottom: '8px',
+                  fontFamily: 'monospace'
+                }}>
+                  Select an analysis and click RUN ANALYSIS to begin
+                </div>
+                <div style={{
+                  fontSize: '10px',
+                  color: FINCEPT.WHITE,
+                  opacity: 0.5,
+                  fontFamily: 'monospace'
+                }}>
+                  {getDataArray().length > 0
+                    ? `${getDataArray().length} data points ready`
+                    : 'No data loaded - fetch symbol data or enter manual values'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {error && (
-          <div
-            className="p-3 rounded mb-4 flex items-center gap-2"
-            style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.RED}` }}
-          >
-            <AlertCircle size={16} color={FINCEPT.RED} />
-            <span className="text-xs" style={{ color: FINCEPT.RED }}>{error}</span>
-          </div>
-        )}
-
-        {renderResult()}
-
-        {!analysisResult && !error && (
-          <div
-            className="p-8 rounded text-center"
-            style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}
-          >
-            <Database size={48} color={FINCEPT.MUTED} className="mx-auto mb-4" />
-            <div className="text-sm" style={{ color: FINCEPT.GRAY }}>
-              Select an analysis and click RUN ANALYSIS to begin
-            </div>
-            <div className="text-xs mt-2" style={{ color: FINCEPT.MUTED }}>
-              {getDataArray().length > 0
-                ? `${getDataArray().length} data points ready`
-                : 'No data loaded - fetch symbol data or enter manual values'}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

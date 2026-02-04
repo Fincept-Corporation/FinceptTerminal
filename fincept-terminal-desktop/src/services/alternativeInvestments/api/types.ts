@@ -21,7 +21,13 @@ export type AssetClass =
   | 'digital_assets'
   | 'fixed_income'
   | 'equity'
-  | 'alternative';
+  | 'alternative'
+  | 'annuity'
+  | 'structured_product'
+  | 'leveraged_fund'
+  | 'natural_resources'
+  | 'managed_futures'
+  | 'market_neutral';
 
 export type InvestmentMethod = 'direct' | 'co_investment' | 'fund';
 
@@ -240,12 +246,16 @@ export interface StableValueParams extends AssetParameters {
 // ============================================================================
 
 export interface PrivateEquityParams extends AssetParameters {
-  investment_type: 'venture' | 'growth' | 'buyout' | 'distressed';
+  investment_type?: 'venture' | 'growth' | 'buyout' | 'distressed';
   fund_size?: number;
   vintage_year?: number;
   capital_called?: number;
+  called_capital?: number;
   distributions?: number;
   nav?: number; // Net Asset Value
+  commitment?: number;
+  carried_interest?: number;
+  fund_age_years?: number;
 }
 
 // ============================================================================
@@ -254,18 +264,23 @@ export interface PrivateEquityParams extends AssetParameters {
 
 export interface FixedAnnuityParams extends AssetParameters {
   premium: number;
-  fixed_rate: number;
+  fixed_rate?: number;
+  guaranteed_rate?: number;
   term_years: number;
   surrender_period?: number;
   surrender_charge?: number;
+  surrender_charge_years?: number;
 }
 
 export interface VariableAnnuityParams extends AssetParameters {
   premium: number;
-  me_fee: number; // Mortality & Expense
-  investment_fee: number;
-  admin_fee: number;
-  surrender_period: number;
+  me_fee?: number; // Mortality & Expense
+  investment_fee?: number;
+  admin_fee?: number;
+  surrender_period?: number;
+  annual_fee?: number;
+  subaccount_returns?: number;
+  mortality_expense?: number;
 }
 
 export interface EquityIndexedAnnuityParams extends AssetParameters {
@@ -273,7 +288,8 @@ export interface EquityIndexedAnnuityParams extends AssetParameters {
   participation_rate: number;
   cap_rate?: number;
   floor_rate?: number;
-  term_years: number;
+  term_years?: number;
+  annual_fee?: number;
 }
 
 // ============================================================================
@@ -282,18 +298,24 @@ export interface EquityIndexedAnnuityParams extends AssetParameters {
 
 export interface StructuredProductParams extends AssetParameters {
   principal: number;
-  participation_rate: number;
+  participation_rate?: number;
   cap_rate?: number;
-  maturity_years: number;
+  maturity_years?: number;
+  term_years?: number;
+  coupon_rate?: number;
+  barrier_level?: number;
+  issuer_credit_rating?: string;
   underlying_index?: string;
   protection_level?: number; // % of principal protected
 }
 
 export interface LeveragedFundParams extends AssetParameters {
-  leverage_multiple: number; // 2x, 3x, etc.
-  daily_volatility: number;
+  leverage_multiple?: number; // 2x, 3x, etc.
+  leverage_ratio?: number;
+  daily_volatility?: number;
   expense_ratio: number;
   underlying_index: string;
+  daily_reset?: boolean;
 }
 
 // ============================================================================
@@ -324,7 +346,8 @@ export interface CoveredCallParams extends AssetParameters {
   stock_price: number;
   shares_owned: number;
   strike_price: number;
-  option_premium: number;
+  option_premium?: number;
+  premium_received?: number;
   days_to_expiration: number;
 }
 
@@ -341,6 +364,9 @@ export interface SRIFundParams extends AssetParameters {
   benchmark_expense?: number;
   fund_return?: number;
   benchmark_return?: number;
+  annual_return?: number;
+  esg_rating?: number;
+  tracking_error?: number;
   num_holdings?: number;
   benchmark_holdings?: number;
   negative_screens?: string[];
@@ -352,9 +378,13 @@ export interface SRIFundParams extends AssetParameters {
 // ============================================================================
 
 export interface DigitalAssetParams extends AssetParameters {
-  asset_type: 'cryptocurrency' | 'token' | 'nft' | 'defi';
+  asset_type: string;
   current_price: number;
+  purchase_price?: number;
+  amount_held?: number;
+  volatility?: number;
   market_cap?: number;
+  market_cap_billions?: number;
   circulating_supply?: number;
   max_supply?: number;
   blockchain?: string;

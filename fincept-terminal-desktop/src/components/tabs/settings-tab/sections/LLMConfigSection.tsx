@@ -1028,11 +1028,15 @@ export function LLMConfigSection({
                   MAX TOKENS (Response Length)
                 </label>
                 <input
-                  type="number"
-                  min="1"
-                  max="32000"
-                  value={llmGlobalSettings.max_tokens}
-                  onChange={(e) => setLlmGlobalSettings({ ...llmGlobalSettings, max_tokens: parseInt(e.target.value) || 2048 })}
+                  type="text"
+                  inputMode="numeric"
+                  value={String(llmGlobalSettings.max_tokens)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || /^\d+$/.test(v)) {
+                      setLlmGlobalSettings({ ...llmGlobalSettings, max_tokens: v === '' ? 2048 : parseInt(v) });
+                    }
+                  }}
                   style={{
                     width: '100%',
                     background: '#000',

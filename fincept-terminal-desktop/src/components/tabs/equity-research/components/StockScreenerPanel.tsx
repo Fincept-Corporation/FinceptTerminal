@@ -494,39 +494,45 @@ const FilterConditionRow: React.FC<FilterConditionRowProps> = ({
       {isBetween ? (
         <div className="flex items-center gap-2">
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={(value as { min: number; max: number }).min}
-            onChange={(e) =>
-              handleValueChange({
-                min: parseFloat(e.target.value) || 0,
-                max: (value as { min: number; max: number }).max,
-              })
-            }
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '' || /^\d*\.?\d*$/.test(v))
+                handleValueChange({
+                  min: parseFloat(v) || 0,
+                  max: (value as { min: number; max: number }).max,
+                });
+            }}
             className="w-24 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white focus:outline-none focus:border-blue-500"
             placeholder="Min"
           />
           <span className="text-gray-400">to</span>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={(value as { min: number; max: number }).max}
-            onChange={(e) =>
-              handleValueChange({
-                min: (value as { min: number; max: number }).min,
-                max: parseFloat(e.target.value) || 0,
-              })
-            }
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '' || /^\d*\.?\d*$/.test(v))
+                handleValueChange({
+                  min: (value as { min: number; max: number }).min,
+                  max: parseFloat(v) || 0,
+                });
+            }}
             className="w-24 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white focus:outline-none focus:border-blue-500"
             placeholder="Max"
           />
         </div>
       ) : (
         <input
-          type="number"
+          type="text"
+          inputMode="decimal"
           value={value as number}
-          onChange={(e) => handleValueChange(parseFloat(e.target.value) || 0)}
+          onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) handleValueChange(parseFloat(v) || 0); }}
           className="w-32 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white focus:outline-none focus:border-blue-500"
           placeholder="Value"
-          step="0.01"
         />
       )}
 

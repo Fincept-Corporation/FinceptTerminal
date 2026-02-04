@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ReportTemplate, ReportComponent } from '@/services/core/reportService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 
 // ============ Undo/Redo History Hook ============
 interface HistoryState<T> {

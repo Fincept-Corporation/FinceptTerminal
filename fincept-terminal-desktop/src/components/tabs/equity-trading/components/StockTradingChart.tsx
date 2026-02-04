@@ -5,12 +5,13 @@
  * Fetches historical OHLCV data from stock broker adapters (Fyers, Zerodha, etc.)
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2, AlertCircle, RefreshCw, Clock } from 'lucide-react';
 
 import type { StockExchange, TimeFrame, OHLCV } from '@/brokers/stocks/types';
 import { useStockBrokerContext } from '@/contexts/StockBrokerContext';
 import { ProChartWithToolkit } from '../../trading/charts/ProChartWithToolkit';
+import { withTimeout } from '@/services/core/apiUtils';
 
 interface LiveQuote {
   lastPrice: number;
@@ -102,6 +103,8 @@ export function StockTradingChart({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedInterval, setSelectedInterval] = useState<TimeFrame>(initialInterval);
+  const mountedRef = useRef(true);
+  const fetchIdRef = useRef(0);
   const [chartData, setChartData] = useState<Array<{
     time: number;
     open: number;
@@ -111,7 +114,12 @@ export function StockTradingChart({
     volume: number;
   }>>([]);
 
-  const { adapter, isAuthenticated } = useStockBrokerContext();
+  const { adapter, isAuthenticated, isLoading: contextLoading, isConnecting } = useStockBrokerContext();
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Sync selectedInterval when initialInterval prop changes (e.g., broker switch)
   useEffect(() => {
@@ -121,8 +129,10 @@ export function StockTradingChart({
 
   // Fetch historical data with retry for race condition handling
   const fetchHistoricalData = useCallback(async (retryCount = 0) => {
-    const MAX_RETRIES = 5;
-    const RETRY_DELAY = 800; // ms
+    const INIT_MAX_RETRIES = 5;   // retries for adapter/auth readiness
+    const INIT_RETRY_DELAY = 800; // ms
+    const FETCH_MAX_RETRIES = 2;  // retries for actual API call failures
+    const FETCH_TIMEOUT = 45000;  // 45s per attempt (Rust timeout is 15s, plus overhead)
 
     if (!symbol || !exchange) {
       console.log('[StockTradingChart] No symbol or exchange selected');
@@ -132,22 +142,18 @@ export function StockTradingChart({
     }
 
     if (!adapter || !isAuthenticated) {
-      if (retryCount < MAX_RETRIES) {
-        console.log(`[StockTradingChart] Adapter or auth not ready, retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY}ms...`);
-        setTimeout(() => fetchHistoricalData(retryCount + 1), RETRY_DELAY);
-        return;
-      }
-      setError('Please authenticate with your broker to view charts');
-      setIsLoading(false);
+      // Don't retry with setTimeout — the stale closure captures the same null adapter.
+      // Instead, just return. The useEffect will re-call us when adapter/isAuthenticated change.
+      console.log(`[StockTradingChart] DEBUG: Waiting for auth — adapter=${!!adapter}, isAuthenticated=${isAuthenticated}`);
+      // Keep isLoading true so the spinner shows while we wait
       return;
     }
 
     // Check if adapter is actually connected (internal state)
-    // This handles the race condition where isAuthenticated is true but adapter._isConnected is not yet
     if (!adapter.isConnected) {
-      if (retryCount < MAX_RETRIES) {
-        console.log(`[StockTradingChart] Adapter not connected yet, retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY}ms...`);
-        setTimeout(() => fetchHistoricalData(retryCount + 1), RETRY_DELAY);
+      if (retryCount < INIT_MAX_RETRIES) {
+        console.log(`[StockTradingChart] DEBUG: adapter.isConnected=${adapter.isConnected}, brokerId=${adapter.brokerId}, retry ${retryCount + 1}/${INIT_MAX_RETRIES} in ${INIT_RETRY_DELAY}ms...`);
+        setTimeout(() => fetchHistoricalData(retryCount + 1), INIT_RETRY_DELAY);
         return;
       }
       console.warn('[StockTradingChart] Adapter still not connected after retries');
@@ -157,14 +163,13 @@ export function StockTradingChart({
     }
 
     // Check if master contract/instrument lookup is ready (for brokers that need it)
-    // This prevents fetching with token='0' which returns empty data
     if (typeof adapter.getInstrument === 'function') {
       try {
         const instrument = await adapter.getInstrument(symbol, exchange);
         if (!instrument || !instrument.token || instrument.token === '0') {
-          if (retryCount < MAX_RETRIES) {
-            console.log(`[StockTradingChart] Instrument token not ready for ${symbol}, retry ${retryCount + 1}/${MAX_RETRIES} in ${RETRY_DELAY}ms...`);
-            setTimeout(() => fetchHistoricalData(retryCount + 1), RETRY_DELAY);
+          if (retryCount < INIT_MAX_RETRIES) {
+            console.log(`[StockTradingChart] Instrument token not ready for ${symbol}, retry ${retryCount + 1}/${INIT_MAX_RETRIES} in ${INIT_RETRY_DELAY}ms...`);
+            setTimeout(() => fetchHistoricalData(retryCount + 1), INIT_RETRY_DELAY);
             return;
           }
           console.warn('[StockTradingChart] Instrument token still not available after retries');
@@ -175,7 +180,6 @@ export function StockTradingChart({
         console.log(`[StockTradingChart] Instrument token ready: ${symbol} -> ${instrument.token}`);
       } catch (err) {
         console.warn('[StockTradingChart] getInstrument check failed:', err);
-        // Continue anyway - some brokers may not need this
       }
     }
 
@@ -190,18 +194,49 @@ export function StockTradingChart({
       const from = new Date();
       from.setDate(from.getDate() - timeframeToDays(selectedInterval));
 
-      console.log(`[StockTradingChart] Date range: ${from.toISOString()} to ${to.toISOString()}`);
+      console.log(`[StockTradingChart] DEBUG: Date range: ${from.toISOString()} to ${to.toISOString()}, days=${timeframeToDays(selectedInterval)}, timeout=${FETCH_TIMEOUT}ms`);
+      console.log(`[StockTradingChart] DEBUG: adapter.brokerId=${adapter.brokerId}, adapter.isConnected=${adapter.isConnected}`);
 
-      // Fetch OHLCV data from stock broker adapter (Fyers, Zerodha, etc.)
-      // Use a timeout to prevent infinite loading
-      const fetchTimeout = new Promise<OHLCV[]>((_, reject) =>
-        setTimeout(() => reject(new Error('Data fetch timeout - broker may be rate limited')), 60000) // 60 second timeout
-      );
+      // Fetch OHLCV data with timeout + retry for transient network failures
+      let ohlcvData: OHLCV[] = [];
+      let lastFetchError: unknown = null;
 
-      const ohlcvData: OHLCV[] = await Promise.race([
-        adapter.getOHLCV(symbol, exchange, selectedInterval, from, to),
-        fetchTimeout
-      ]);
+      for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
+        const attemptStart = Date.now();
+        try {
+          if (attempt > 0) {
+            console.log(`[StockTradingChart] Retry attempt ${attempt}/${FETCH_MAX_RETRIES}...`);
+            await new Promise(r => setTimeout(r, 1000 * attempt));
+          }
+          console.log(`[StockTradingChart] DEBUG: Starting getOHLCV attempt ${attempt + 1}/${FETCH_MAX_RETRIES + 1} at ${new Date().toISOString()}`);
+          ohlcvData = await withTimeout(
+            adapter.getOHLCV(symbol, exchange, selectedInterval, from, to),
+            FETCH_TIMEOUT
+          );
+          const elapsed = Date.now() - attemptStart;
+          console.log(`[StockTradingChart] DEBUG: getOHLCV succeeded in ${elapsed}ms, got ${ohlcvData.length} candles`);
+          lastFetchError = null;
+          break; // success
+        } catch (err) {
+          const elapsed = Date.now() - attemptStart;
+          lastFetchError = err;
+          const msg = err instanceof Error ? err.message : String(err);
+          const stack = err instanceof Error ? err.stack : '';
+          console.error(`[StockTradingChart] DEBUG: Fetch attempt ${attempt + 1} failed after ${elapsed}ms:`, {
+            message: msg,
+            stack,
+            errorType: err?.constructor?.name,
+            error: err,
+          });
+          if (attempt === FETCH_MAX_RETRIES) break;
+        }
+      }
+
+      if (lastFetchError) {
+        throw lastFetchError;
+      }
+
+      if (!mountedRef.current) return;
 
       console.log(`[StockTradingChart] Fetched ${ohlcvData.length} candles from ${adapter.brokerId}`);
 
@@ -248,14 +283,27 @@ export function StockTradingChart({
       setChartData(uniqueData);
       setIsLoading(false);
     } catch (err) {
-      console.error('[StockTradingChart] Failed to fetch historical data:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const errStack = err instanceof Error ? err.stack : '';
+      console.error('[StockTradingChart] FINAL ERROR - Failed to fetch historical data:', {
+        message: errMsg,
+        stack: errStack,
+        errorType: err?.constructor?.name,
+        symbol,
+        exchange,
+        interval: selectedInterval,
+        brokerId: adapter?.brokerId,
+        adapterConnected: adapter?.isConnected,
+        isAuthenticated,
+        error: err,
+      });
 
       // If we have existing data, keep showing it with a warning
       if (chartData.length > 0) {
         console.warn('[StockTradingChart] Keeping existing chart data visible despite error');
         setError('Failed to update chart. Showing previous data.');
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to load chart data. Try again or select a different timeframe.');
+        setError(errMsg || 'Failed to load chart data. Try again or select a different timeframe.');
       }
 
       setIsLoading(false);
@@ -272,26 +320,26 @@ export function StockTradingChart({
     fetchHistoricalData();
   };
 
-  // Not authenticated state
-  if (!isAuthenticated) {
+  // Loading state — show spinner while context is initializing or data is being fetched
+  if ((isLoading || contextLoading) && chartData.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-[#0A0A0A]" style={{ height: height || '100%', minHeight: height || 300 }}>
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 mx-auto mb-4 text-[#FF8800] animate-spin" />
+          <p className="text-sm text-gray-400">Loading chart data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated state — only show after context has finished loading
+  if (!isAuthenticated && !contextLoading && !isConnecting && chartData.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-[#0A0A0A]" style={{ height: height || '100%', minHeight: height || 300 }}>
         <div className="text-center">
           <AlertCircle className="w-16 h-16 mx-auto mb-4 text-[#FF8800]" />
           <p className="text-lg text-white mb-2">Connect Your Broker</p>
           <p className="text-sm text-gray-500">Authenticate to view historical charts</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Loading state
-  if (isLoading && chartData.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-[#0A0A0A]" style={{ height: height || '100%', minHeight: height || 300 }}>
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 mx-auto mb-4 text-[#FF8800] animate-spin" />
-          <p className="text-sm text-gray-400">Loading chart data...</p>
         </div>
       </div>
     );

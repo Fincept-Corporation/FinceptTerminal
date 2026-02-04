@@ -6,14 +6,41 @@
 use tauri::AppHandle;
 use crate::python;
 
-/// Extract JSON from output that may contain log lines
+/// Extract the last valid JSON object from output that may contain log lines
 fn extract_json(output: &str) -> Option<String> {
-    if let Some(json_start) = output.find('{') {
-        if let Some(json_end) = output.rfind('}') {
-            return Some(output[json_start..=json_end].to_string());
+    let mut brace_count: i32 = 0;
+    let mut json_start: Option<usize> = None;
+    let mut last_valid_json: Option<String> = None;
+
+    let chars: Vec<char> = output.chars().collect();
+
+    for (i, ch) in chars.iter().enumerate() {
+        match ch {
+            '{' => {
+                if brace_count == 0 {
+                    json_start = Some(i);
+                }
+                brace_count += 1;
+            }
+            '}' => {
+                if brace_count > 0 {
+                    brace_count -= 1;
+                    if brace_count == 0 {
+                        if let Some(start) = json_start {
+                            let candidate: String = chars[start..=i].iter().collect();
+                            if serde_json::from_str::<serde_json::Value>(&candidate).is_ok() {
+                                last_valid_json = Some(candidate);
+                            }
+                            json_start = None;
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
-    None
+
+    last_valid_json
 }
 
 /// Execute an Alpha Arena action

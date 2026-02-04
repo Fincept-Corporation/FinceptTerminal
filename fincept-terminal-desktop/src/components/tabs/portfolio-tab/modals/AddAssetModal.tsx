@@ -140,13 +140,13 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
             QUANTITY *
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={formState.quantity}
-            onChange={(e) => onQuantityChange(e.target.value)}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) onQuantityChange(v); }}
             style={COMMON_STYLES.inputField}
             {...createFocusHandlers()}
             placeholder="100"
-            step="0.0001"
           />
         </div>
 
@@ -177,16 +177,16 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
             )}
           </div>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={formState.price}
-            onChange={(e) => onPriceChange(e.target.value)}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) onPriceChange(v); }}
             style={{
               ...COMMON_STYLES.inputField,
               borderColor: fetchingPrice ? FINCEPT.YELLOW : FINCEPT.BORDER
             }}
             {...createFocusHandlers()}
             placeholder="150.00"
-            step="0.01"
           />
         </div>
 

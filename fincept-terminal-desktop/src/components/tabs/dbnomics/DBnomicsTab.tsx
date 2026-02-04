@@ -6,6 +6,7 @@ import { useDBnomicsData } from './hooks';
 import { SelectionPanel, DBnomicsChart, DataTable } from './components';
 import { CHART_TYPES } from './constants';
 import type { ChartType } from './types';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 // Fincept Design System Colors
 const FINCEPT = {
@@ -606,4 +607,10 @@ function DBnomicsTab() {
   );
 }
 
-export default memo(DBnomicsTab);
+const DBnomicsTabWithBoundary: React.FC = () => (
+  <ErrorBoundary name="DBnomicsTab" variant="default">
+    <DBnomicsTab />
+  </ErrorBoundary>
+);
+
+export default memo(DBnomicsTabWithBoundary);

@@ -31,97 +31,147 @@ export const PortfolioRiskMode: React.FC<PortfolioRiskModeProps> = ({
   runPortfolioAnalysis
 }) => {
   return (
-    <>
-      {/* Configuration */}
-      <div
-        className="rounded border"
-        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-      >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Configuration Panel */}
+      <div style={{
+        backgroundColor: FINCEPT.PANEL_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderLeft: `3px solid ${FINCEPT.BLUE}`
+      }}>
         <button
           onClick={() => toggleSection('config')}
-          className="w-full flex items-center justify-between p-3"
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            backgroundColor: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = FINCEPT.HOVER}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
-          <div className="flex items-center gap-2">
-            <Settings size={16} color={FINCEPT.ORANGE} />
-            <span
-              className="text-sm font-bold uppercase"
-              style={{ color: FINCEPT.WHITE }}
-            >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Settings size={14} color={FINCEPT.BLUE} />
+            <span style={{
+              color: FINCEPT.WHITE,
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              fontFamily: 'monospace'
+            }}>
               CONFIGURATION
             </span>
           </div>
           {expandedSections.config ? (
-            <ChevronUp size={16} color={FINCEPT.GRAY} />
+            <ChevronUp size={14} color={FINCEPT.GRAY} />
           ) : (
-            <ChevronDown size={16} color={FINCEPT.GRAY} />
+            <ChevronDown size={14} color={FINCEPT.GRAY} />
           )}
         </button>
 
         {expandedSections.config && (
-          <div
-            className="p-4 border-t space-y-4"
-            style={{ borderColor: FINCEPT.BORDER }}
-          >
-            <div className="grid grid-cols-3 gap-4">
+          <div style={{
+            padding: '16px',
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
               <div>
-                <label
-                  className="block text-xs font-mono mb-1"
-                  style={{ color: FINCEPT.GRAY }}
-                >
+                <label style={{
+                  display: 'block',
+                  fontSize: '10px',
+                  marginBottom: '6px',
+                  color: FINCEPT.GRAY,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px'
+                }}>
                   PORTFOLIO WEIGHTS
                 </label>
                 <input
                   type="text"
                   value={weights}
                   onChange={(e) => setWeights(e.target.value)}
-                  className="w-full px-3 py-2 rounded text-sm font-mono border"
+                  placeholder="0.3,0.4,0.3"
                   style={{
+                    width: '100%',
+                    padding: '8px 10px',
                     backgroundColor: FINCEPT.DARK_BG,
-                    borderColor: FINCEPT.BORDER,
-                    color: FINCEPT.WHITE
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    color: FINCEPT.WHITE,
+                    fontSize: '11px',
+                    fontFamily: 'monospace'
                   }}
                 />
               </div>
               <div>
-                <label
-                  className="block text-xs font-mono mb-1"
-                  style={{ color: FINCEPT.GRAY }}
-                >
+                <label style={{
+                  display: 'block',
+                  fontSize: '10px',
+                  marginBottom: '6px',
+                  color: FINCEPT.GRAY,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px'
+                }}>
                   ALPHA (VaR/CVaR)
                 </label>
                 <input
-                  type="number"
-                  value={alpha}
-                  onChange={(e) => setAlpha(parseFloat(e.target.value))}
-                  step="0.01"
-                  min="0.01"
-                  max="0.50"
-                  className="w-full px-3 py-2 rounded text-sm font-mono border"
+                  type="text"
+                  inputMode="decimal"
+                  value={String(alpha)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                      setAlpha(parseFloat(v) || 0);
+                    }
+                  }}
+                  placeholder="0.05"
                   style={{
+                    width: '100%',
+                    padding: '8px 10px',
                     backgroundColor: FINCEPT.DARK_BG,
-                    borderColor: FINCEPT.BORDER,
-                    color: FINCEPT.WHITE
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    color: FINCEPT.WHITE,
+                    fontSize: '11px',
+                    fontFamily: 'monospace'
                   }}
                 />
               </div>
               <div>
-                <label
-                  className="block text-xs font-mono mb-1"
-                  style={{ color: FINCEPT.GRAY }}
-                >
+                <label style={{
+                  display: 'block',
+                  fontSize: '10px',
+                  marginBottom: '6px',
+                  color: FINCEPT.GRAY,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px'
+                }}>
                   HALF-LIFE (DAYS)
                 </label>
                 <input
-                  type="number"
-                  value={halfLife}
-                  onChange={(e) => setHalfLife(parseInt(e.target.value))}
-                  min="20"
-                  max="504"
-                  className="w-full px-3 py-2 rounded text-sm font-mono border"
+                  type="text"
+                  inputMode="numeric"
+                  value={String(halfLife)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || /^\d+$/.test(v)) {
+                      setHalfLife(parseInt(v) || 0);
+                    }
+                  }}
+                  placeholder="252"
                   style={{
+                    width: '100%',
+                    padding: '8px 10px',
                     backgroundColor: FINCEPT.DARK_BG,
-                    borderColor: FINCEPT.BORDER,
-                    color: FINCEPT.WHITE
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    color: FINCEPT.WHITE,
+                    fontSize: '11px',
+                    fontFamily: 'monospace'
                   }}
                 />
               </div>
@@ -130,15 +180,36 @@ export const PortfolioRiskMode: React.FC<PortfolioRiskModeProps> = ({
             <button
               onClick={runPortfolioAnalysis}
               disabled={isLoading}
-              className="w-full py-2.5 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                backgroundColor: FINCEPT.BLUE,
+                border: 'none',
+                color: FINCEPT.DARK_BG,
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.6 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                transition: 'all 0.15s'
+              }}
             >
               {isLoading ? (
-                <RefreshCw size={16} className="animate-spin" />
+                <>
+                  <RefreshCw size={14} className="animate-spin" />
+                  ANALYZING...
+                </>
               ) : (
-                <Play size={16} />
+                <>
+                  <Play size={14} />
+                  RUN PORTFOLIO ANALYSIS
+                </>
               )}
-              RUN PORTFOLIO ANALYSIS
             </button>
           </div>
         )}
@@ -146,39 +217,62 @@ export const PortfolioRiskMode: React.FC<PortfolioRiskModeProps> = ({
 
       {/* Results */}
       {analysisResult && (
-        <div
-          className="rounded border"
-          style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-        >
+        <div style={{
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderLeft: `3px solid ${FINCEPT.GREEN}`
+        }}>
           <button
             onClick={() => toggleSection('metrics')}
-            className="w-full flex items-center justify-between p-3"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background-color 0.15s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = FINCEPT.HOVER}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
-            <div className="flex items-center gap-2">
-              <BarChart2 size={16} color={FINCEPT.CYAN} />
-              <span
-                className="text-sm font-bold uppercase"
-                style={{ color: FINCEPT.WHITE }}
-              >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BarChart2 size={14} color={FINCEPT.GREEN} />
+              <span style={{
+                color: FINCEPT.WHITE,
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                fontFamily: 'monospace'
+              }}>
                 RISK METRICS
               </span>
             </div>
             {expandedSections.metrics ? (
-              <ChevronUp size={16} color={FINCEPT.GRAY} />
+              <ChevronUp size={14} color={FINCEPT.GRAY} />
             ) : (
-              <ChevronDown size={16} color={FINCEPT.GRAY} />
+              <ChevronDown size={14} color={FINCEPT.GRAY} />
             )}
           </button>
 
           {expandedSections.metrics && (
-            <div className="p-4 border-t" style={{ borderColor: FINCEPT.BORDER }}>
-              <div className="grid grid-cols-2 gap-6">
+            <div style={{
+              padding: '16px',
+              borderTop: `1px solid ${FINCEPT.BORDER}`
+            }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 {/* Equal Weight Metrics */}
                 <div>
-                  <h3
-                    className="text-xs font-bold uppercase mb-3"
-                    style={{ color: FINCEPT.ORANGE }}
-                  >
+                  <h3 style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    marginBottom: '12px',
+                    color: FINCEPT.ORANGE,
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.5px'
+                  }}>
                     EQUAL WEIGHT SCENARIOS
                   </h3>
                   {analysisResult.metrics_equal_weight && (
@@ -223,10 +317,14 @@ export const PortfolioRiskMode: React.FC<PortfolioRiskModeProps> = ({
 
                 {/* Exp Decay Metrics */}
                 <div>
-                  <h3
-                    className="text-xs font-bold uppercase mb-3"
-                    style={{ color: FINCEPT.CYAN }}
-                  >
+                  <h3 style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    marginBottom: '12px',
+                    color: FINCEPT.CYAN,
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.5px'
+                  }}>
                     EXP DECAY WEIGHTED ({halfLife}d)
                   </h3>
                   {analysisResult.metrics_exp_decay && (
@@ -269,26 +367,34 @@ export const PortfolioRiskMode: React.FC<PortfolioRiskModeProps> = ({
               </div>
 
               {/* Summary */}
-              <div
-                className="mt-4 p-3 rounded"
-                style={{ backgroundColor: FINCEPT.DARK_BG }}
-              >
-                <div className="flex items-center gap-6 text-xs font-mono">
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                backgroundColor: FINCEPT.DARK_BG,
+                border: `1px solid ${FINCEPT.BORDER}`
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '24px',
+                  fontSize: '10px',
+                  fontFamily: 'monospace'
+                }}>
                   <span style={{ color: FINCEPT.GRAY }}>
                     Scenarios:{' '}
-                    <span style={{ color: FINCEPT.WHITE }}>
+                    <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
                       {analysisResult.n_scenarios}
                     </span>
                   </span>
                   <span style={{ color: FINCEPT.GRAY }}>
                     Assets:{' '}
-                    <span style={{ color: FINCEPT.WHITE }}>
+                    <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
                       {analysisResult.n_assets}
                     </span>
                   </span>
                   <span style={{ color: FINCEPT.GRAY }}>
                     Alpha:{' '}
-                    <span style={{ color: FINCEPT.WHITE }}>{alpha}</span>
+                    <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>{alpha}</span>
                   </span>
                 </div>
               </div>
@@ -296,6 +402,6 @@ export const PortfolioRiskMode: React.FC<PortfolioRiskModeProps> = ({
           )}
         </div>
       )}
-    </>
+    </div>
   );
 };

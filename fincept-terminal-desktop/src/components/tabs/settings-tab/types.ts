@@ -10,7 +10,8 @@ export type SettingsSection =
   | 'backtesting'
   | 'stockSymbols'
   | 'language'
-  | 'storage';
+  | 'storage'
+  | 'notifications';
 
 export interface SettingsMessage {
   type: 'success' | 'error';

@@ -190,9 +190,15 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
         <Hash size={14} />
       </div>
       <input
-        type="number"
-        value={Number(value || 0)}
-        onChange={(e) => onChange(Number(e.target.value))}
+        type="text"
+        inputMode="decimal"
+        value={String(value || '')}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === '' || /^\d*\.?\d*$/.test(v)) {
+            onChange(v);
+          }
+        }}
         disabled={disabled}
         placeholder={parameter.placeholder}
         onFocus={() => setIsFocused(true)}

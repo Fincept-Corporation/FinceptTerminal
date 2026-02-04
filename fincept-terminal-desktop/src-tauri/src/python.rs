@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Unified Python Runtime Module
 // Provides Python script execution via subprocess
 // Public API: execute(), execute_sync(), execute_with_stdin(), initialize(), get_bun_path()
@@ -17,7 +18,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 // Directory names of scripts requiring NumPy 1.x venv.
 // Matched against path components (directory/file names), not arbitrary substrings.
 const NUMPY1_SCRIPTS: &[&str] = &[
-    "vectorbt", "backtesting", "gluonts", "functime", "pyportfolioopt", "financepy", "ffn",
+    "vectorbt", "backtesting", "gluonts", "functime", "pyportfolioopt", "financepy", "ffn", "ffn_wrapper",
 ];
 
 // ============================================================================
@@ -82,15 +83,13 @@ fn resolve_python_path(app: &tauri::AppHandle, script: &str) -> Result<PathBuf, 
         return Ok(clean_path(python));
     }
 
-    #[cfg(debug_assertions)]
-    {
-        let sys = if cfg!(target_os = "windows") { "python" } else { "python3" };
-        if Command::new(sys).arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
-            return Ok(PathBuf::from(sys));
-        }
+    // Fallback to system Python (both debug and production)
+    let sys = if cfg!(target_os = "windows") { "python" } else { "python3" };
+    if Command::new(sys).arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
+        return Ok(PathBuf::from(sys));
     }
 
-    Err(format!("Python not found at: {}", python.display()))
+    Err(format!("Python not found at: {} (and no system Python available)", python.display()))
 }
 
 fn resolve_script_path(app: &tauri::AppHandle, script: &str) -> Result<PathBuf, String> {

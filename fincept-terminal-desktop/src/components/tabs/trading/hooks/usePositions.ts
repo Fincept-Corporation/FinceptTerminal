@@ -18,6 +18,11 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
 
   // Track price subscriptions for cleanup
   const priceUnsubscribersRef = useRef<Map<string, () => void>>(new Map());
+  // Use ref to track whether we have positions (avoids stale closure in fetchPositions)
+  const hasPositionsRef = useRef(false);
+  hasPositionsRef.current = positions.length > 0;
+  // Keep a ref to fetchPositions so intervals always call the latest version
+  const fetchPositionsRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   const fetchPositions = useCallback(async () => {
     // Quick early exit if no adapter - don't set loading state
@@ -27,8 +32,8 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
       return;
     }
 
-    // Set loading only if we don't have positions yet
-    if (positions.length === 0) {
+    // Set loading only if we don't have positions yet (read from ref to avoid dependency)
+    if (!hasPositionsRef.current) {
       setIsLoading(true);
     }
     setError(null);
@@ -97,7 +102,11 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
     }
   }, [activeAdapter, symbol, activeBroker]);
 
+  fetchPositionsRef.current = fetchPositions;
+
   // Subscribe to price updates for position symbols
+  // Use a stable key to avoid re-running when position values (P&L) change but symbols don't
+  const positionSymbolsKey = positions.map(p => p.symbol).sort().join(',');
   useEffect(() => {
     if (positions.length === 0) return;
 
@@ -117,19 +126,22 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
 
     // Cleanup subscriptions for symbols no longer in positions
     const positionSymbols = new Set(positions.map(p => p.symbol));
-    for (const [symbol, unsubscribe] of currentUnsubscribers) {
-      if (!positionSymbols.has(symbol)) {
+    for (const [sym, unsubscribe] of currentUnsubscribers) {
+      if (!positionSymbols.has(sym)) {
         unsubscribe();
-        currentUnsubscribers.delete(symbol);
+        currentUnsubscribers.delete(sym);
       }
     }
 
     return () => {
       // Don't cleanup here - we want to maintain subscriptions across refreshes
     };
-  }, [positions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positionSymbolsKey]);
 
   // Auto-refresh - clear positions when broker changes
+  // Use activeBroker as the key for broker changes to avoid object-identity issues
+  const activeBrokerKey = activeBroker ?? '';
   useEffect(() => {
     // Clear positions when switching brokers
     setPositions([]);
@@ -141,13 +153,16 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
     }
     currentUnsubscribers.clear();
 
-    fetchPositions();
+    // Initial fetch
+    fetchPositionsRef.current?.();
 
     if (!autoRefresh) return;
 
-    const interval = setInterval(fetchPositions, refreshInterval);
+    // Use ref in interval so it always calls the latest version
+    const interval = setInterval(() => fetchPositionsRef.current?.(), refreshInterval);
     return () => clearInterval(interval);
-  }, [fetchPositions, autoRefresh, refreshInterval, activeBroker]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrokerKey, autoRefresh, refreshInterval]);
 
   // Cleanup subscriptions on unmount
   useEffect(() => {

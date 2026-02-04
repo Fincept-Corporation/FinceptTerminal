@@ -9,7 +9,7 @@ export interface QlibModel {
   id: string;
   name: string;
   description: string;
-  type: 'tree_based' | 'neural_network';
+  type: 'tree_based' | 'neural_network' | 'linear' | 'ensemble';
   features: string[];
   use_cases: string[];
 }

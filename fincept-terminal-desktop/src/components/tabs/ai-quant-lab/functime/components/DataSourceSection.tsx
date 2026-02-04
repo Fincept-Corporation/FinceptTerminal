@@ -145,11 +145,15 @@ export const DataSourceSection: React.FC<DataSourceSectionProps> = ({
                 HISTORICAL DAYS
               </label>
               <input
-                type="number"
-                min={30}
-                max={1825}
+                type="text"
+                inputMode="numeric"
                 value={historicalDays}
-                onChange={(e) => setHistoricalDays(parseInt(e.target.value) || 365)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || /^\d+$/.test(v)) {
+                    setHistoricalDays(parseInt(v) || 365);
+                  }
+                }}
                 className="w-full p-2 rounded text-xs font-mono"
                 style={{
                   backgroundColor: FINCEPT.DARK_BG,

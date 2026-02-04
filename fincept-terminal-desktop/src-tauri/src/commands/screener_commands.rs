@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Stock Screener Tauri Commands
 // Advanced equity screening based on fundamental and technical metrics
 

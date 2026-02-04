@@ -35,7 +35,7 @@ import {
   ParagraphStyles,
 } from '@/services/core/brandKitService';
 import { open } from '@tauri-apps/plugin-dialog';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 
 // Fincept color palette
 const FINCEPT_COLORS = {
@@ -936,22 +936,30 @@ const HeaderFooterTab: React.FC<HeaderFooterTabProps> = ({ brandKit, onUpdate })
                 <div className="space-y-1">
                   <label className="text-[10px] text-gray-500">Font Size (pt)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={template.fontSize || 10}
-                    onChange={(e) => updateTemplate({ fontSize: Number(e.target.value) })}
-                    min={6}
-                    max={16}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                        updateTemplate({ fontSize: v === '' ? 10 : Number(v) });
+                      }
+                    }}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none text-white"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] text-gray-500">Height (px)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={template.height || 30}
-                    onChange={(e) => updateTemplate({ height: Number(e.target.value) })}
-                    min={20}
-                    max={100}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                        updateTemplate({ height: v === '' ? 30 : Number(v) });
+                      }
+                    }}
                     className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none text-white"
                   />
                 </div>

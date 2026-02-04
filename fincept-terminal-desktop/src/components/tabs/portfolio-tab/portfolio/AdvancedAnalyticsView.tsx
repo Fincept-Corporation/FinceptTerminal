@@ -199,9 +199,10 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div>
               <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>AGE</div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={age}
-                onChange={(e) => setAge(Number(e.target.value))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setAge(parseInt(v) || 0); }}
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
@@ -234,9 +235,10 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div>
               <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>YEARS TO RET</div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={yearsToRetirement}
-                onChange={(e) => setYearsToRetirement(Number(e.target.value))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setYearsToRetirement(parseInt(v) || 0); }}
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
@@ -310,9 +312,10 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div>
               <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>CURRENT AGE</div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={currentAge}
-                onChange={(e) => setCurrentAge(Number(e.target.value))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setCurrentAge(parseInt(v) || 0); }}
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
@@ -326,9 +329,10 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div>
               <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>RETIREMENT AGE</div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={retirementAge}
-                onChange={(e) => setRetirementAge(Number(e.target.value))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setRetirementAge(parseInt(v) || 0); }}
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
@@ -342,9 +346,10 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div>
               <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>CURRENT SAVINGS</div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={currentSavings}
-                onChange={(e) => setCurrentSavings(Number(e.target.value))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setCurrentSavings(parseInt(v) || 0); }}
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
@@ -358,9 +363,10 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div>
               <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>ANNUAL CONTRIB</div>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={annualContribution}
-                onChange={(e) => setAnnualContribution(Number(e.target.value))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setAnnualContribution(parseInt(v) || 0); }}
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',

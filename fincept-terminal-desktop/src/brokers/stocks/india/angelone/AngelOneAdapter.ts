@@ -191,6 +191,13 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
       this.userId = response.data.user_id || this.clientCode;
       this._isConnected = true;
 
+      console.log('[AngelOne] authenticate: login response', {
+        hasAccessToken: !!this.accessToken,
+        hasFeedToken: !!this.feedToken,
+        feedTokenValue: this.feedToken ? `${this.feedToken.substring(0, 10)}...` : 'NULL',
+        userId: this.userId,
+      });
+
       // Store credentials including password, totpSecret, and feedToken for auto-re-auth + WS
       await this.storeCredentials({
         apiKey: this.apiKey!,
@@ -258,8 +265,20 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
    */
   async initFromStorage(): Promise<boolean> {
     try {
+      console.log('[AngelOne] initFromStorage: loading credentials...');
       const credentials = await this.loadCredentials();
-      if (!credentials) return false;
+      if (!credentials) {
+        console.log('[AngelOne] initFromStorage: no stored credentials found');
+        return false;
+      }
+
+      console.log('[AngelOne] initFromStorage: credentials loaded', {
+        hasApiKey: !!credentials.apiKey,
+        hasAccessToken: !!credentials.accessToken,
+        hasApiSecret: !!credentials.apiSecret,
+        userId: credentials.userId,
+        apiSecretLen: credentials.apiSecret?.length,
+      });
 
       this.apiKey = credentials.apiKey;
       this.accessToken = credentials.accessToken || null;
@@ -273,8 +292,14 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
           this.totpSecret = secretData.totpSecret || null;
           this.feedToken = secretData.feedToken || null;
           this.clientCode = credentials.userId || null;
+          console.log('[AngelOne] initFromStorage: parsed apiSecret JSON', {
+            hasPassword: !!this.password,
+            hasTotpSecret: !!this.totpSecret,
+            hasFeedToken: !!this.feedToken,
+            clientCode: this.clientCode,
+          });
         } catch {
-          // apiSecret is not JSON, ignore
+          console.warn('[AngelOne] initFromStorage: apiSecret is not JSON, ignoring');
         }
       }
 
@@ -316,22 +341,27 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
         }
 
         // If feedToken is missing (old credentials format), re-authenticate to get it
-        if (!this.feedToken && this.apiKey && this.clientCode && this.password && this.totpSecret) {
-          const authResult = await this.authenticate({
-            apiKey: this.apiKey,
-            userId: this.clientCode,
-            password: this.password,
-            totpSecret: this.totpSecret,
-          });
-          if (authResult.success) {
-            console.log('[AngelOne] ✓ Re-authenticated, feedToken now available');
-            return true;
+        if (!this.feedToken) {
+          console.warn('[AngelOne] feedToken is missing — WebSocket will not work without it');
+          if (this.apiKey && this.clientCode && this.password && this.totpSecret) {
+            console.log('[AngelOne] Attempting re-auth to obtain feedToken...');
+            const authResult = await this.authenticate({
+              apiKey: this.apiKey,
+              userId: this.clientCode,
+              password: this.password,
+              totpSecret: this.totpSecret,
+            });
+            if (authResult.success) {
+              console.log(`[AngelOne] ✓ Re-authenticated, feedToken=${!!this.feedToken}`);
+              return true;
+            }
+            console.warn('[AngelOne] Re-auth for feedToken failed, WS will be unavailable');
+          } else {
+            console.warn('[AngelOne] Cannot re-auth: missing apiKey/clientCode/password/totpSecret');
           }
-          // Fall through — session is still valid for REST even without feedToken
-          console.warn('[AngelOne] Re-auth for feedToken failed, WS will be unavailable');
         }
 
-        console.log('[AngelOne] Token is valid, session restored');
+        console.log(`[AngelOne] Token is valid, session restored (feedToken=${!!this.feedToken})`);
         this._isConnected = true;
         return true;
       }
@@ -925,12 +955,19 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     from: Date,
     to: Date
   ): Promise<OHLCV[]> {
+    const overallStart = Date.now();
+    console.log(`[AngelOne] getOHLCVInternal called:`, { symbol, exchange, timeframe, from: from.toISOString(), to: to.toISOString() });
+
     // Get instrument token
+    const instrumentStart = Date.now();
     const instrument = await this.getInstrument(symbol, exchange);
     const token = instrument?.token || '0';
+    console.log(`[AngelOne] getInstrument took ${Date.now() - instrumentStart}ms, token=${token}`);
 
     const interval = toAngelOneInterval(timeframe);
     const chunkDays = ANGELONE_INTERVAL_LIMITS[timeframe] || 30;
+
+    console.log(`[AngelOne] DEBUG: interval=${interval}, chunkDays=${chunkDays}, apiKey=${this.apiKey ? 'set' : 'MISSING'}, accessToken=${this.accessToken ? 'set' : 'MISSING'}`);
 
     const allCandles: OHLCV[] = [];
     let currentStart = new Date(from);
@@ -942,17 +979,26 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
     if (exchange === 'BSE_INDEX') apiExchange = 'BSE';
 
     const MAX_RETRIES = 3;
+    const MAX_CHUNKS = 50; // Safety limit to prevent runaway loops
+    let chunkIndex = 0;
 
-    while (currentStart <= endDate) {
+    while (currentStart <= endDate && chunkIndex < MAX_CHUNKS) {
       const currentEnd = new Date(currentStart);
       currentEnd.setDate(currentEnd.getDate() + chunkDays - 1);
       if (currentEnd > endDate) currentEnd.setTime(endDate.getTime());
 
       let chunkSuccess = false;
       let chunkRetries = 0;
+      chunkIndex++;
+
+      const fromDateStr = this.formatDateIST(currentStart);
+      const toDateStr = this.formatDateIST(currentEnd);
+      console.log(`[AngelOne] Chunk ${chunkIndex}: ${fromDateStr} -> ${toDateStr} (exchange=${apiExchange}, token=${token})`);
 
       while (!chunkSuccess && chunkRetries < MAX_RETRIES) {
+        const chunkStart = Date.now();
         try {
+          console.log(`[AngelOne] DEBUG: Invoking angelone_get_historical (chunk ${chunkIndex}, attempt ${chunkRetries + 1})...`);
           const response = await invoke<{
             success: boolean;
             data?: unknown[][];
@@ -963,8 +1009,15 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
             exchange: apiExchange,
             symbolToken: token,
             interval,
-            fromDate: this.formatDateIST(currentStart),
-            toDate: this.formatDateIST(currentEnd),
+            fromDate: fromDateStr,
+            toDate: toDateStr,
+          });
+
+          const chunkElapsed = Date.now() - chunkStart;
+          console.log(`[AngelOne] DEBUG: Invoke returned in ${chunkElapsed}ms:`, {
+            success: response.success,
+            dataLength: response.data?.length ?? 0,
+            error: response.error || null,
           });
 
           if (response.success && response.data) {
@@ -972,31 +1025,59 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
             allCandles.push(...candles);
             chunkSuccess = true;
           } else {
-            // Check if error is rate limit related
-            const isRateLimit = response.error?.includes('Try After Sometime') ||
-                               response.error?.includes('rate limit');
+            // Check if error is retryable (rate limit or timeout)
+            const errorMsg = response.error || '';
+            const isRetryable = errorMsg.includes('Try After Sometime') ||
+                               errorMsg.includes('rate limit') ||
+                               errorMsg.includes('exceeding access rate') ||
+                               errorMsg.includes('Access denied') ||
+                               errorMsg.includes('timeout') ||
+                               errorMsg.includes('Request failed');
 
-            if (isRateLimit && chunkRetries < MAX_RETRIES - 1) {
-              // Exponential backoff: 1s, 2s, 4s
+            if (isRetryable && chunkRetries < MAX_RETRIES - 1) {
               const backoffDelay = Math.pow(2, chunkRetries) * 1000;
+              console.warn(`[AngelOne] Historical data chunk failed (${errorMsg}), retry in ${backoffDelay}ms...`);
               await new Promise(resolve => setTimeout(resolve, backoffDelay));
               chunkRetries++;
             } else {
+              if (errorMsg) {
+                console.warn(`[AngelOne] Skipping chunk after error: ${errorMsg}`);
+              }
               chunkSuccess = true; // Skip this chunk and continue
             }
           }
         } catch (error) {
-          chunkSuccess = true; // Skip this chunk and continue
+          const chunkElapsed = Date.now() - chunkStart;
+          console.error(`[AngelOne] DEBUG: Invoke threw exception after ${chunkElapsed}ms:`, error);
+          if (chunkRetries < MAX_RETRIES - 1) {
+            const backoffDelay = Math.pow(2, chunkRetries) * 1000;
+            console.warn(`[AngelOne] Historical data chunk exception, retry in ${backoffDelay}ms...`, error);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            chunkRetries++;
+          } else {
+            chunkSuccess = true; // Skip this chunk after exhausting retries
+          }
         }
       }
 
-      currentStart.setDate(currentEnd.getDate() + 1);
+      // Advance currentStart to day after currentEnd
+      // NOTE: Must create new Date from currentEnd to avoid month-boundary bugs
+      // (setDate with day-of-month can wrap backwards across month boundaries)
+      currentStart = new Date(currentEnd.getTime());
+      currentStart.setDate(currentStart.getDate() + 1);
 
       // Rate limit delay between chunks (reduced to 300ms for faster loading)
       if (currentStart <= endDate) {
         await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
+
+    if (chunkIndex >= MAX_CHUNKS) {
+      console.warn(`[AngelOne] getOHLCVInternal hit MAX_CHUNKS safety limit (${MAX_CHUNKS}). Stopping.`);
+    }
+
+    const totalElapsed = Date.now() - overallStart;
+    console.log(`[AngelOne] getOHLCVInternal complete: ${allCandles.length} candles in ${totalElapsed}ms (${chunkIndex} chunks)`);
 
     // Sort and dedupe
     return allCandles
@@ -1052,10 +1133,25 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
   protected async connectWebSocketInternal(config: WebSocketConfig): Promise<void> {
     this.ensureConnected();
 
+    console.log('[AngelOne WS] connectWebSocketInternal called', {
+      hasAccessToken: !!this.accessToken,
+      hasApiKey: !!this.apiKey,
+      hasFeedToken: !!this.feedToken,
+      clientCode: this.clientCode,
+      userId: this.userId,
+    });
+
     try {
       // Try real WebSocket connection via Rust backend
       await this.connectRealWebSocket();
+      console.log('[AngelOne WS] ✓ Real WebSocket connected successfully');
     } catch (error) {
+      console.warn('[AngelOne WS] ✗ Real WebSocket FAILED, falling back to polling:', (error as Error).message);
+      console.warn('[AngelOne WS] Auth state at failure:', {
+        accessToken: this.accessToken ? `${this.accessToken.substring(0, 10)}...` : 'NULL',
+        apiKey: this.apiKey ? `${this.apiKey.substring(0, 4)}...` : 'NULL',
+        feedToken: this.feedToken ? `${this.feedToken.substring(0, 10)}...` : 'NULL',
+      });
       this.usePollingFallback = true;
       this.startQuotePolling();
     }
@@ -1319,9 +1415,11 @@ export class AngelOneAdapter extends BaseStockBrokerAdapter {
         const wsExchange = ANGELONE_EXCHANGE_MAP[exchange] || exchange;
 
         // Rust adapter expects "EXCHANGE:TOKEN" format (e.g. "NSE:2885")
+        // Also pass human-readable name so monitoring conditions can match
         await invoke('angelone_ws_subscribe', {
           symbol: `${wsExchange}:${token}`,
           mode: wsMode,
+          symbolName: symbol,
         });
       } catch (error) {
         if (!this.usePollingFallback) {

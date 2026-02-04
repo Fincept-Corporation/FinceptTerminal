@@ -8,7 +8,7 @@
  * - Check token expiry and re-authenticate
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Settings,
   CheckCircle2,
@@ -35,6 +35,7 @@ import {
   useStockBrokerAuth,
 } from '@/contexts/StockBrokerContext';
 import { createStockBrokerAdapter } from '@/brokers/stocks';
+import { withTimeout } from '@/services/core/apiUtils';
 import type { BrokerCredentials, StockBrokerMetadata, Region } from '@/brokers/stocks/types';
 
 // Fincept color palette
@@ -116,6 +117,12 @@ export function BrokersManagementPanel() {
 
   // Get broker statuses
   const [brokerStatuses, setBrokerStatuses] = useState<Map<string, BrokerStatus>>(new Map());
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Selected broker metadata
   const selectedBroker = useMemo(() => {
@@ -163,7 +170,11 @@ export function BrokersManagementPanel() {
 
         try {
           const tempAdapter = createStockBrokerAdapter(broker.id);
-          const storedCreds = await (tempAdapter as any).loadCredentials?.();
+          const storedCreds: any = await withTimeout(
+            (tempAdapter as any).loadCredentials?.() ?? Promise.resolve(null),
+            10000
+          );
+          if (isCancelled || !mountedRef.current) break;
 
           let status: ConnectionStatus = 'not_configured';
           let hasCredentials = false;
@@ -191,7 +202,9 @@ export function BrokersManagementPanel() {
           });
 
           // Update state incrementally
-          setBrokerStatuses(new Map(statuses));
+          if (mountedRef.current && !isCancelled) {
+            setBrokerStatuses(new Map(statuses));
+          }
         } catch (err) {
           statuses.set(broker.id, {
             brokerId: broker.id,
@@ -207,7 +220,9 @@ export function BrokersManagementPanel() {
         }
       }
 
-      setBrokerStatuses(statuses);
+      if (mountedRef.current && !isCancelled) {
+        setBrokerStatuses(statuses);
+      }
     };
 
     checkBrokerStatuses();
@@ -231,7 +246,11 @@ export function BrokersManagementPanel() {
 
       try {
         const tempAdapter = createStockBrokerAdapter(selectedBrokerId);
-        const storedCreds = await (tempAdapter as any).loadCredentials?.();
+        const storedCreds: any = await withTimeout(
+          (tempAdapter as any).loadCredentials?.() ?? Promise.resolve(null),
+          10000
+        );
+        if (!mountedRef.current) return;
 
         if (storedCreds) {
           const restoredConfig: any = {
@@ -258,7 +277,9 @@ export function BrokersManagementPanel() {
           setConfig({ apiKey: '', apiSecret: '' });
         }
       } catch (err) {
-        setConfig({ apiKey: '', apiSecret: '' });
+        if (mountedRef.current) {
+          setConfig({ apiKey: '', apiSecret: '' });
+        }
       }
     };
 
@@ -276,7 +297,7 @@ export function BrokersManagementPanel() {
 
     // Also set as active broker in context
     try {
-      await setActiveBroker(brokerId);
+      await withTimeout(setActiveBroker(brokerId), 10000);
     } catch (err) {
       console.error('Failed to set active broker:', err);
     }
@@ -347,7 +368,8 @@ export function BrokersManagementPanel() {
       }
 
       // Store credentials
-      await (tempAdapter as any).storeCredentials(credentials);
+      await withTimeout((tempAdapter as any).storeCredentials(credentials), 10000);
+      if (!mountedRef.current) return;
 
       // Set on adapter
       if (tempAdapter.setCredentials) {
@@ -374,7 +396,8 @@ export function BrokersManagementPanel() {
           totpCode: (config as any).totpCode || '',
         };
 
-        const authResult = await tempAdapter.authenticate(shoonyaCredentials);
+        const authResult = await withTimeout(tempAdapter.authenticate(shoonyaCredentials), 30000);
+        if (!mountedRef.current) return;
 
         if (!authResult.success) {
           setConfigError(authResult.message || 'Shoonya authentication failed');
@@ -392,7 +415,7 @@ export function BrokersManagementPanel() {
         });
 
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setTimeout(() => { if (mountedRef.current) setSaveSuccess(false); }, 3000);
         return;
       }
 
@@ -406,10 +429,12 @@ export function BrokersManagementPanel() {
         };
 
         // Set this as the active broker BEFORE authenticating via context
-        setActiveBroker(selectedBroker.id);
+        await withTimeout(setActiveBroker(selectedBroker.id), 10000);
+        if (!mountedRef.current) return;
 
         // Use the context's authenticate() so the global state is updated
-        const authResult = await authenticate(angeloneCredentials);
+        const authResult = await withTimeout(authenticate(angeloneCredentials), 30000);
+        if (!mountedRef.current) return;
 
         if (!authResult.success) {
           setConfigError(authResult.message || 'Angel One authentication failed');
@@ -427,7 +452,7 @@ export function BrokersManagementPanel() {
         });
 
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setTimeout(() => { if (mountedRef.current) setSaveSuccess(false); }, 3000);
         return;
       }
 
@@ -440,7 +465,8 @@ export function BrokersManagementPanel() {
           encKey: (config as any).encryptionKey || '', // Adapter expects 'encKey' field
         };
 
-        const authResult = await tempAdapter.authenticate(aliceblueCredentials);
+        const authResult = await withTimeout(tempAdapter.authenticate(aliceblueCredentials), 30000);
+        if (!mountedRef.current) return;
 
         if (!authResult.success) {
           setConfigError(authResult.message || 'AliceBlue authentication failed');
@@ -457,7 +483,7 @@ export function BrokersManagementPanel() {
         });
 
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setTimeout(() => { if (mountedRef.current) setSaveSuccess(false); }, 3000);
         return;
       }
 
@@ -471,7 +497,8 @@ export function BrokersManagementPanel() {
           totp: (config as any).totpCode || '', // Adapter expects 'totp' field
         };
 
-        const authResult = await tempAdapter.authenticate(fivepaisaCredentials);
+        const authResult = await withTimeout(tempAdapter.authenticate(fivepaisaCredentials), 30000);
+        if (!mountedRef.current) return;
 
         if (!authResult.success) {
           setConfigError(authResult.message || '5Paisa authentication failed');
@@ -488,7 +515,7 @@ export function BrokersManagementPanel() {
         });
 
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setTimeout(() => { if (mountedRef.current) setSaveSuccess(false); }, 3000);
         return;
       }
 
@@ -503,7 +530,8 @@ export function BrokersManagementPanel() {
           totpSecret: (config as any).totpCode || '', // Adapter expects 'totpSecret' field
         };
 
-        const authResult = await tempAdapter.authenticate(motilalCredentials);
+        const authResult = await withTimeout(tempAdapter.authenticate(motilalCredentials), 30000);
+        if (!mountedRef.current) return;
 
         if (!authResult.success) {
           setConfigError(authResult.message || 'Motilal Oswal authentication failed');
@@ -520,36 +548,45 @@ export function BrokersManagementPanel() {
         });
 
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setTimeout(() => { if (mountedRef.current) setSaveSuccess(false); }, 3000);
         return;
       }
 
       // Update broker statuses
-      setBrokerStatuses(prev => {
-        const newMap = new Map(prev);
-        const existing = newMap.get(selectedBrokerId!);
-        if (existing) {
-          newMap.set(selectedBrokerId!, { ...existing, status: 'configured', hasCredentials: true });
-        }
-        return newMap;
-      });
+      if (mountedRef.current) {
+        setBrokerStatuses(prev => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(selectedBrokerId!);
+          if (existing) {
+            newMap.set(selectedBrokerId!, { ...existing, status: 'configured', hasCredentials: true });
+          }
+          return newMap;
+        });
 
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+        setSaveSuccess(true);
+        setTimeout(() => { if (mountedRef.current) setSaveSuccess(false); }, 3000);
+      }
     } catch (err) {
-      setConfigError(err instanceof Error ? err.message : 'Failed to save configuration');
+      if (mountedRef.current) {
+        setConfigError(err instanceof Error ? err.message : 'Failed to save configuration');
+      }
     } finally {
-      setIsSaving(false);
+      if (mountedRef.current) {
+        setIsSaving(false);
+      }
     }
   };
 
   // Handle OAuth login
   const handleOAuthLogin = async () => {
     try {
-      const authUrl = await getAuthUrl();
+      const authUrl = await withTimeout(getAuthUrl(), 15000);
+      if (!mountedRef.current) return;
       if (authUrl) {
         await open(authUrl);
-        setShowCallbackInput(true);
+        if (mountedRef.current) {
+          setShowCallbackInput(true);
+        }
       }
     } catch (err) {
       console.error('Failed to get auth URL:', err);
@@ -584,7 +621,8 @@ export function BrokersManagementPanel() {
         authCredentials.accessToken = token;
       }
 
-      const response = await authenticate(authCredentials);
+      const response = await withTimeout(authenticate(authCredentials), 30000);
+      if (!mountedRef.current) return;
 
       if (response.success) {
         setShowCallbackInput(false);
@@ -601,13 +639,21 @@ export function BrokersManagementPanel() {
         });
       }
     } catch (err) {
-      setConfigError('Failed to process callback URL');
+      if (mountedRef.current) {
+        setConfigError('Failed to process callback URL');
+      }
     }
   };
 
   // Handle logout/disconnect
   const handleDisconnect = async () => {
-    await logout();
+    try {
+      await withTimeout(logout(), 10000);
+    } catch (err) {
+      console.error('Disconnect timeout:', err);
+    }
+
+    if (!mountedRef.current) return;
 
     // Update broker status
     setBrokerStatuses(prev => {
@@ -627,7 +673,8 @@ export function BrokersManagementPanel() {
     setIsCheckingToken(true);
     try {
       // Try to fetch funds - if it fails, token is expired
-      await adapter.getFunds();
+      await withTimeout(adapter.getFunds(), 15000);
+      if (!mountedRef.current) return;
 
       // Update status to connected
       setBrokerStatuses(prev => {
@@ -639,6 +686,7 @@ export function BrokersManagementPanel() {
         return newMap;
       });
     } catch (err) {
+      if (!mountedRef.current) return;
       // Token expired
       setBrokerStatuses(prev => {
         const newMap = new Map(prev);
@@ -650,7 +698,9 @@ export function BrokersManagementPanel() {
       });
       setConfigError('Session expired. Please re-authenticate.');
     } finally {
-      setIsCheckingToken(false);
+      if (mountedRef.current) {
+        setIsCheckingToken(false);
+      }
     }
   };
 

@@ -5,7 +5,7 @@ import { llmApiService, ChatMessage as APIMessage } from '@/services/chat/llmApi
 import { brandKitService, BrandKit } from '@/services/core/brandKitService';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 import { arrayMove } from '@dnd-kit/sortable';
 import { DragEndEvent } from '@dnd-kit/core';
 import { AIMessage, AIModel, AdvancedStyles, TOCItem } from './types';

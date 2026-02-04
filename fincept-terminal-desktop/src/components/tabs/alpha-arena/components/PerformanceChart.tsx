@@ -16,6 +16,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { TrendingUp } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import type { PerformanceSnapshot, ChartData } from '../types';
 import { formatCurrency, MODEL_COLORS } from '../types';
 
@@ -32,7 +33,8 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({
 }) => {
   // Transform snapshots into chart data
   const { chartData, modelNames } = useMemo(() => {
-    if (!snapshots.length) {
+    // Defensive guard: ensure snapshots is a valid array
+    if (!Array.isArray(snapshots) || !snapshots.length) {
       return { chartData: [], modelNames: [] };
     }
 
@@ -43,15 +45,16 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({
     snapshots.forEach((snap) => {
       models.add(snap.model_name);
 
-      if (!cycleData.has(snap.cycle_number)) {
-        cycleData.set(snap.cycle_number, {
-          cycle: snap.cycle_number,
+      const cycleNum = Number.isFinite(snap.cycle_number) ? snap.cycle_number : 0;
+      if (!cycleData.has(cycleNum)) {
+        cycleData.set(cycleNum, {
+          cycle: cycleNum,
           timestamp: snap.timestamp,
         });
       }
 
-      const data = cycleData.get(snap.cycle_number)!;
-      data[snap.model_name] = snap.portfolio_value;
+      const data = cycleData.get(cycleNum)!;
+      data[snap.model_name] = Number.isFinite(snap.portfolio_value) ? snap.portfolio_value : 0;
     });
 
     // Sort by cycle and convert to array
@@ -146,4 +149,4 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({
   );
 };
 
-export default PerformanceChart;
+export default withErrorBoundary(PerformanceChart, { name: 'AlphaArena.PerformanceChart' });

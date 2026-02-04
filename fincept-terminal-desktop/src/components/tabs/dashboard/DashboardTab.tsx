@@ -2,6 +2,7 @@
 // Uses: State machine, cleanup, timeout, error boundaries
 
 import React, { useReducer, useEffect, useRef, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { Plus, RotateCcw, Save, Info, AlertCircle } from 'lucide-react';
 import { createDashboardTabTour } from '@/components/tabs/tours/dashboardTabTour';
@@ -221,6 +222,15 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const containerRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
+
+  // Workspace tab state (widgets persist via SQLite, so just a marker)
+  const getWorkspaceState = useCallback(() => ({
+    widgetLayoutKey: "dashboard-widgets",
+  }), []);
+  const setWorkspaceState = useCallback((_state: Record<string, unknown>) => {
+    // Widget layouts are persisted separately in SQLite
+  }, []);
+  useWorkspaceTabState("dashboard", getWorkspaceState, setWorkspaceState);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -486,7 +496,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
           <AlertsWidget
             id={widget.id}
             onRemove={() => handleRemoveWidget(widget.id)}
-            onNavigate={() => onNavigateToTab?.('monitoring')}
+            onNavigate={() => onNavigateToTab?.('equity-trading')}
           />
         );
       case 'calendar':

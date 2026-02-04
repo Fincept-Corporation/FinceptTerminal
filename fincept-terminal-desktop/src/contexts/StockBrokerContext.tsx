@@ -383,18 +383,57 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
               : false;
 
             if (hasToken && isTokenFromToday) {
-              console.log(`[StockBrokerContext] Token appears valid (from today). User can click Connect to verify.`);
+              console.log(`[StockBrokerContext] Token is valid (from today). Restoring session...`);
+
+              // Restore access token to adapter so API calls work
+              (newAdapter as any).accessToken = storedCreds.accessToken;
+              (newAdapter as any)._isConnected = true;
+              if (storedCreds.userId) {
+                (newAdapter as any).userId = storedCreds.userId;
+                (newAdapter as any).clientCode = storedCreds.userId;
+              }
+
+              // Restore feedToken, password, totpSecret from apiSecret JSON
+              // These are needed for WebSocket connection (feedToken) and re-auth
+              if (storedCreds.apiSecret) {
+                try {
+                  const secretData = JSON.parse(storedCreds.apiSecret);
+                  if (secretData.feedToken) (newAdapter as any).feedToken = secretData.feedToken;
+                  if (secretData.password) (newAdapter as any).password = secretData.password;
+                  if (secretData.totpSecret) (newAdapter as any).totpSecret = secretData.totpSecret;
+                  console.log(`[StockBrokerContext] Restored auth fields from apiSecret: feedToken=${!!secretData.feedToken}, password=${!!secretData.password}, totpSecret=${!!secretData.totpSecret}`);
+                } catch {
+                  // apiSecret is not JSON
+                }
+              }
+
+              setAdapter(newAdapter);
+              setIsAuthenticated(true);
               setError(null);
+
+              // Initialize trading session and fetch data in background
+              try {
+                await initTradingSession(activeBroker, tradingMode);
+              } catch (sessionErr) {
+                console.error('[StockBrokerContext] Failed to init trading session:', sessionErr);
+              }
+              refreshAllData(newAdapter).catch(err => {
+                console.warn('[StockBrokerContext] Background data refresh failed:', err);
+              });
+
+              console.log(`[StockBrokerContext] Session restored for ${activeBroker}`);
+              setIsLoading(false);
+              return;
             } else if (hasToken && !isTokenFromToday) {
               console.log(`[StockBrokerContext] Token expired (not from today). User needs to re-authenticate.`);
-              setError(`Session expired for ${activeBroker}. Please click Connect to re-authenticate.`);
+              setError(`Session expired for ${activeBroker}. Please re-authenticate.`);
             } else {
               console.log(`[StockBrokerContext] No token found. User needs to authenticate.`);
               setError(null);
             }
 
             setAdapter(newAdapter);
-            setIsAuthenticated(false); // Not authenticated until user explicitly connects
+            setIsAuthenticated(false);
             setIsLoading(false);
             return;
           } else {

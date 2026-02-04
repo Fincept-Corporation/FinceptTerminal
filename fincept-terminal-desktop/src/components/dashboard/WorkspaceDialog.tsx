@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 interface WorkspaceDialogProps {
   mode: 'save' | 'open' | 'new' | 'export' | 'import';
@@ -150,7 +151,7 @@ const WorkspaceDialog: React.FC<WorkspaceDialogProps> = ({ mode, activeTab, onCl
                   <div>
                     <div style={{ color: '#e5e5e5', fontWeight: 500 }}>{ws.name}</div>
                     <div style={{ color: '#737373', fontSize: '10px', marginTop: '2px' }}>
-                      Tab: {ws.activeTab} | Settings: {Object.keys(ws.settings || {}).length} keys
+                      Tab: {ws.activeTab} | Settings: {Object.keys(ws.settings || {}).length} | Tab configs: {Object.keys(ws.tabStates || {}).length}
                     </div>
                   </div>
                 </div>
@@ -190,7 +191,7 @@ const WorkspaceDialog: React.FC<WorkspaceDialogProps> = ({ mode, activeTab, onCl
                   <div>
                     <div style={{ color: '#e5e5e5', fontWeight: 500 }}>{ws.name}</div>
                     <div style={{ color: '#737373', fontSize: '10px', marginTop: '2px' }}>
-                      Tab: {ws.activeTab} | Settings: {Object.keys(ws.settings || {}).length} keys
+                      Tab: {ws.activeTab} | Settings: {Object.keys(ws.settings || {}).length} | Tab configs: {Object.keys(ws.tabStates || {}).length}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '4px' }}>
@@ -232,7 +233,7 @@ const WorkspaceDialog: React.FC<WorkspaceDialogProps> = ({ mode, activeTab, onCl
         </div>
         {mode === 'save' && (
           <div style={{ marginBottom: '12px', color: '#737373', fontSize: '10px' }}>
-            Saves current tab ({activeTab}) + general settings (theme, timezone, language, market prefs)
+            Saves current tab ({activeTab}) + general settings + tab configurations
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -244,4 +245,10 @@ const WorkspaceDialog: React.FC<WorkspaceDialogProps> = ({ mode, activeTab, onCl
   );
 };
 
-export default WorkspaceDialog;
+const WorkspaceDialogWithBoundary: React.FC<WorkspaceDialogProps> = (props) => (
+  <ErrorBoundary name="WorkspaceDialog" variant="minimal">
+    <WorkspaceDialog {...props} />
+  </ErrorBoundary>
+);
+
+export default WorkspaceDialogWithBoundary;

@@ -1267,6 +1267,7 @@ dependencies = [
  "nix 0.29.0",
  "once_cell",
  "parking_lot",
+ "pbkdf2",
  "printpdf",
  "quick-xml 0.37.5",
  "r2d2",

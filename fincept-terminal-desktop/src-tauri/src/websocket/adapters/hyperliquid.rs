@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // HyperLiquid WebSocket Adapter
 // WebSocket URL: wss://api.hyperliquid.xyz/ws
 // Documentation: https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket

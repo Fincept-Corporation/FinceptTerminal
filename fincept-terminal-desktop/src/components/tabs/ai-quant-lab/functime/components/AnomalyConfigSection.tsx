@@ -53,12 +53,15 @@ export const AnomalyConfigSection: React.FC<AnomalyConfigProps> = ({
             THRESHOLD
           </label>
           <input
-            type="number"
-            step="0.5"
-            min={1}
-            max={5}
+            type="text"
+            inputMode="decimal"
             value={anomalyThreshold}
-            onChange={(e) => setAnomalyThreshold(parseFloat(e.target.value) || 3.0)}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                setAnomalyThreshold(v === '' ? 3.0 : parseFloat(v) || 3.0);
+              }
+            }}
             className="w-full p-2 rounded text-xs font-mono"
             style={{
               backgroundColor: FINCEPT.DARK_BG,

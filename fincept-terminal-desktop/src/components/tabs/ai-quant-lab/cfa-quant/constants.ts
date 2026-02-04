@@ -15,32 +15,33 @@ import {
 } from 'lucide-react';
 import type { AnalysisConfig } from './types';
 
-// Fincept-style color palette
+// Fincept-style color palette - AMBER THEME for CFA Quant
 export const BB = {
   // Core Fincept colors
   black: '#000000',
-  darkBg: '#0a0a0a',
-  panelBg: '#121212',
-  cardBg: '#1a1a1a',
-  borderDark: '#2a2a2a',
+  darkBg: '#0F0F0F',
+  panelBg: '#0F0F0F',
+  cardBg: '#1F1F1F',
+  borderDark: '#2A2A2A',
   borderLight: '#3a3a3a',
+  hover: '#1F1F1F',
 
-  // Accent colors
-  amber: '#FF8C00',
+  // Accent colors - AMBER THEME
+  amber: '#FF8800',      // Primary theme color (matching FINCEPT.ORANGE)
   amberLight: '#FFA500',
   amberDim: '#CC7000',
 
   // Status colors
-  green: '#00C853',
+  green: '#00D66F',
   greenDim: '#00A040',
-  red: '#FF3D00',
+  red: '#FF3B3B',
   redDim: '#CC3000',
 
   // Text colors
   textPrimary: '#FFFFFF',
   textSecondary: '#B0B0B0',
-  textMuted: '#707070',
-  textAmber: '#FF9500',
+  textMuted: '#787878',
+  textAmber: '#FF8800',
 
   // Chart colors
   chartLine: '#00D4FF',
@@ -48,7 +49,7 @@ export const BB = {
   chartGrid: '#1f1f1f',
 
   // Fincept blue
-  blue: '#0066CC',
+  blue: '#0088FF',
   blueLight: '#0088FF',
 };
 

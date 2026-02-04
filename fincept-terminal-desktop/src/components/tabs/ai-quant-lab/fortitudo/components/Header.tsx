@@ -1,6 +1,6 @@
 /**
  * Header Component
- * Top header bar with title and status
+ * Terminal-style header bar with title and status
  */
 
 import React from 'react';
@@ -9,31 +9,38 @@ import { FINCEPT } from '../constants';
 
 export const Header: React.FC = () => {
   return (
-    <div
-      className="flex items-center justify-between p-3 rounded border"
-      style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-    >
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded" style={{ backgroundColor: FINCEPT.ORANGE }}>
-          <Shield size={20} color={FINCEPT.DARK_BG} />
-        </div>
-        <div>
-          <h2
-            className="font-bold text-sm uppercase tracking-wide"
-            style={{ color: FINCEPT.WHITE }}
-          >
-            FORTITUDO.TECH RISK ANALYTICS
-          </h2>
-          <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
-            VaR, CVaR, Option Pricing, Entropy Pooling
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <CheckCircle2 size={16} color={FINCEPT.GREEN} />
-        <span className="text-xs font-mono" style={{ color: FINCEPT.GREEN }}>
-          READY
-        </span>
+    <div style={{
+      padding: '12px 16px',
+      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+      backgroundColor: FINCEPT.PANEL_BG,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    }}>
+      <Shield size={16} color={FINCEPT.BLUE} />
+      <span style={{
+        color: FINCEPT.BLUE,
+        fontSize: '12px',
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        fontFamily: 'monospace'
+      }}>
+        FORTITUDO.TECH RISK ANALYTICS
+      </span>
+      <div style={{ flex: 1 }} />
+      <div style={{
+        fontSize: '10px',
+        fontFamily: 'monospace',
+        padding: '3px 8px',
+        backgroundColor: FINCEPT.GREEN + '20',
+        border: `1px solid ${FINCEPT.GREEN}`,
+        color: FINCEPT.GREEN,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px'
+      }}>
+        <CheckCircle2 size={12} />
+        READY
       </div>
     </div>
   );

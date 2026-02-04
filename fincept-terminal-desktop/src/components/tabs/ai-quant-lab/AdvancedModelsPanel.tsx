@@ -1,11 +1,11 @@
 /**
  * Advanced Models Panel - Time-Series & Advanced Neural Networks
- * Showcase for LSTM_TS, Transformer_TS, Localformer, TCTS, HIST, KRNN
- * Fincept Professional Design
+ * REFACTORED: Terminal-style UI with joined square design
+ * Purple theme throughout - matches RL Trading style
  */
 
 import React, { useState } from 'react';
-import { Layers, TrendingUp, Zap, BarChart3, Brain, Info } from 'lucide-react';
+import { Layers, Zap, Info, Play, FileText } from 'lucide-react';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -16,7 +16,8 @@ const FINCEPT = {
   PANEL_BG: '#0F0F0F',
   BORDER: '#2A2A2A',
   PURPLE: '#9D4EDD',
-  MUTED: '#4A4A4A'
+  MUTED: '#4A4A4A',
+  HOVER: '#1F1F1F'
 };
 
 interface ModelInfo {
@@ -76,117 +77,325 @@ export function AdvancedModelsPanel() {
   const [selectedModel, setSelectedModel] = useState<ModelInfo>(models[0]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center space-x-3">
-        <div className="p-2 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
-          <Layers size={24} style={{ color: FINCEPT.PURPLE }} />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold" style={{ color: FINCEPT.WHITE }}>
-            Advanced Models
-          </h2>
-          <p className="text-sm" style={{ color: FINCEPT.MUTED }}>
-            Time-series & advanced neural network architectures
-          </p>
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: FINCEPT.DARK_BG
+    }}>
+      {/* Terminal-style Header */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <Layers size={16} color={FINCEPT.PURPLE} />
+        <span style={{
+          color: FINCEPT.PURPLE,
+          fontSize: '12px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          fontFamily: 'monospace'
+        }}>
+          ADVANCED NEURAL MODELS
+        </span>
+        <div style={{ flex: 1 }} />
+        <div style={{
+          fontSize: '10px',
+          fontFamily: 'monospace',
+          padding: '3px 8px',
+          backgroundColor: FINCEPT.PURPLE + '20',
+          border: `1px solid ${FINCEPT.PURPLE}`,
+          color: FINCEPT.PURPLE
+        }}>
+          {models.length} MODELS AVAILABLE
         </div>
       </div>
 
-      {/* Model Grid */}
-      <div className="grid grid-cols-3 gap-4">
-        {models.map(model => (
-          <button
-            key={model.id}
-            onClick={() => setSelectedModel(model)}
-            className="p-4 rounded-lg text-left transition-all"
-            style={{
-              backgroundColor: selectedModel.id === model.id ? FINCEPT.ORANGE + '30' : FINCEPT.PANEL_BG,
-              border: `2px solid ${selectedModel.id === model.id ? FINCEPT.ORANGE : FINCEPT.BORDER}`
-            }}
-          >
-            <div className="font-bold mb-1" style={{ color: FINCEPT.WHITE }}>
-              {model.name}
-            </div>
-            <div className="text-xs mb-2 px-2 py-1 rounded inline-block" style={{ backgroundColor: FINCEPT.ORANGE + '30', color: FINCEPT.ORANGE }}>
-              {model.category}
-            </div>
-            <div className="text-xs mt-2" style={{ color: FINCEPT.MUTED }}>
-              {model.desc}
-            </div>
-          </button>
-        ))}
-      </div>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* Left Panel - Model Selection */}
+        <div style={{
+          width: '320px',
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <div style={{
+            padding: '10px 12px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            color: FINCEPT.PURPLE,
+            fontFamily: 'monospace',
+            letterSpacing: '0.5px',
+            backgroundColor: FINCEPT.PANEL_BG
+          }}>
+            SELECT MODEL ARCHITECTURE
+          </div>
 
-      {/* Model Details */}
-      <div className="p-6 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold" style={{ color: FINCEPT.ORANGE }}>
-            Model Details: {selectedModel.name}
-          </h3>
-          <div className="px-3 py-1 rounded-lg text-sm" style={{ backgroundColor: FINCEPT.PURPLE + '30', color: FINCEPT.PURPLE }}>
-            {selectedModel.category}
+          {/* Model List - Joined Square Design */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+            {models.map((model, idx) => {
+              const isSelected = selectedModel.id === model.id;
+              return (
+                <div
+                  key={model.id}
+                  onClick={() => setSelectedModel(model)}
+                  style={{
+                    padding: '12px',
+                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
+                    border: `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
+                    borderTop: idx === 0 ? `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}` : '0',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    marginTop: idx === 0 ? '0' : '-1px'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                      e.currentTarget.style.borderColor = FINCEPT.PURPLE;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{
+                      color: FINCEPT.WHITE,
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      fontFamily: 'monospace'
+                    }}>
+                      {model.name}
+                    </span>
+                    <div style={{
+                      fontSize: '8px',
+                      fontFamily: 'monospace',
+                      padding: '2px 6px',
+                      backgroundColor: FINCEPT.PURPLE + '30',
+                      border: `1px solid ${FINCEPT.PURPLE}`,
+                      color: FINCEPT.PURPLE
+                    }}>
+                      {model.category.toUpperCase()}
+                    </div>
+                  </div>
+                  <div style={{
+                    color: FINCEPT.WHITE,
+                    opacity: 0.6,
+                    fontSize: '10px',
+                    lineHeight: '1.5',
+                    fontFamily: 'monospace'
+                  }}>
+                    {model.desc}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        <p className="mb-4" style={{ color: FINCEPT.GRAY }}>
-          {selectedModel.desc}
-        </p>
-
-        <div className="grid grid-cols-2 gap-6 mb-6">
-          <div>
-            <h4 className="text-sm font-bold mb-2" style={{ color: FINCEPT.ORANGE }}>
-              Key Features
-            </h4>
-            <ul className="space-y-2">
-              {selectedModel.features.map((feature, idx) => (
-                <li key={idx} className="flex items-start space-x-2 text-sm">
-                  <div className="w-1.5 h-1.5 rounded-full mt-1.5" style={{ backgroundColor: FINCEPT.PURPLE }} />
-                  <span style={{ color: FINCEPT.WHITE }}>{feature}</span>
-                </li>
-              ))}
-            </ul>
+        {/* Right Panel - Model Details */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            color: FINCEPT.PURPLE,
+            fontFamily: 'monospace',
+            letterSpacing: '0.5px',
+            backgroundColor: FINCEPT.PANEL_BG
+          }}>
+            MODEL DETAILS: {selectedModel.name}
           </div>
 
-          <div>
-            <h4 className="text-sm font-bold mb-2" style={{ color: FINCEPT.ORANGE }}>
-              Architecture Info
-            </h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span style={{ color: FINCEPT.GRAY }}>Input Type:</span>
-                <span style={{ color: FINCEPT.WHITE }}>Time-series</span>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            {/* Model Description */}
+            <div style={{
+              padding: '14px',
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              borderLeft: `3px solid ${FINCEPT.PURPLE}`,
+              marginBottom: '16px'
+            }}>
+              <div style={{
+                fontSize: '9px',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                fontFamily: 'monospace',
+                marginBottom: '6px',
+                letterSpacing: '0.5px'
+              }}>
+                DESCRIPTION
               </div>
-              <div className="flex justify-between">
-                <span style={{ color: FINCEPT.GRAY }}>Output:</span>
-                <span style={{ color: FINCEPT.WHITE }}>Predictions</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: FINCEPT.GRAY }}>Framework:</span>
-                <span style={{ color: FINCEPT.WHITE }}>PyTorch</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: FINCEPT.GRAY }}>Training:</span>
-                <span style={{ color: FINCEPT.GREEN }}>Available</span>
+              <div style={{
+                color: FINCEPT.WHITE,
+                fontSize: '11px',
+                lineHeight: '1.6',
+                fontFamily: 'monospace',
+                opacity: 0.8
+              }}>
+                {selectedModel.desc}
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="flex space-x-4">
-          <button
-            className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold"
-            style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.WHITE }}
-          >
-            <Zap size={16} />
-            <span>Train Model</span>
-          </button>
-          <button
-            className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold"
-            style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, color: FINCEPT.WHITE }}
-          >
-            <Info size={16} />
-            <span>View Documentation</span>
-          </button>
+            {/* Two Column Layout */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              {/* Key Features */}
+              <div style={{
+                padding: '14px',
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`
+              }}>
+                <div style={{
+                  fontSize: '10px',
+                  color: FINCEPT.PURPLE,
+                  fontFamily: 'monospace',
+                  marginBottom: '12px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px'
+                }}>
+                  KEY FEATURES
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selectedModel.features.map((feature, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                      <div style={{
+                        width: '4px',
+                        height: '4px',
+                        backgroundColor: FINCEPT.PURPLE,
+                        marginTop: '6px',
+                        flexShrink: 0
+                      }} />
+                      <span style={{
+                        color: FINCEPT.WHITE,
+                        fontSize: '10px',
+                        lineHeight: '1.5',
+                        fontFamily: 'monospace',
+                        opacity: 0.8
+                      }}>
+                        {feature}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Architecture Info */}
+              <div style={{
+                padding: '14px',
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`
+              }}>
+                <div style={{
+                  fontSize: '10px',
+                  color: FINCEPT.PURPLE,
+                  fontFamily: 'monospace',
+                  marginBottom: '12px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px'
+                }}>
+                  ARCHITECTURE INFO
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[
+                    { label: 'INPUT TYPE', value: 'Time-series' },
+                    { label: 'OUTPUT', value: 'Predictions' },
+                    { label: 'FRAMEWORK', value: 'PyTorch' },
+                    { label: 'STATUS', value: 'AVAILABLE', color: FINCEPT.GREEN }
+                  ].map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{
+                        color: FINCEPT.WHITE,
+                        opacity: 0.5,
+                        fontSize: '9px',
+                        fontFamily: 'monospace',
+                        letterSpacing: '0.5px'
+                      }}>
+                        {item.label}
+                      </span>
+                      <span style={{
+                        color: item.color || FINCEPT.WHITE,
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        opacity: item.color ? 1 : 0.8
+                      }}>
+                        {item.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  backgroundColor: FINCEPT.PURPLE,
+                  border: 'none',
+                  color: '#000000',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '0.9';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                }}
+              >
+                <Play size={14} />
+                TRAIN MODEL
+              </button>
+              <button
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${FINCEPT.PURPLE}`,
+                  color: FINCEPT.PURPLE,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = FINCEPT.PURPLE + '20';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <FileText size={14} />
+                DOCUMENTATION
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

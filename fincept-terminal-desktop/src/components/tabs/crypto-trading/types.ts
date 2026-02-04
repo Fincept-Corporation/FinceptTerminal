@@ -63,7 +63,7 @@ export interface WatchlistPrice {
 }
 
 // UI State Types
-export type CenterViewType = 'chart' | 'depth' | 'trades';
+export type CenterViewType = 'chart' | 'depth' | 'trades' | 'algo';
 export type RightPanelViewType = 'orderbook' | 'volume' | 'modelchat';
 export type LeftSidebarViewType = 'watchlist' | 'ai-agents' | 'leaderboard';
-export type BottomPanelTabType = 'positions' | 'orders' | 'history' | 'trades' | 'stats' | 'features' | 'cross-exchange' | 'grid-trading';
+export type BottomPanelTabType = 'positions' | 'orders' | 'history' | 'trades' | 'stats' | 'features' | 'cross-exchange' | 'grid-trading' | 'monitoring';

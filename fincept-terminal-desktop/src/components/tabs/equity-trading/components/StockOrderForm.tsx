@@ -70,18 +70,41 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
   const [error, setError] = useState<string | null>(null);
   const [marginRequired, setMarginRequired] = useState<MarginRequired | null>(null);
   const [isCalculatingMargin, setIsCalculatingMargin] = useState(false);
+  const [priceInitialized, setPriceInitialized] = useState(false);
 
-  // Update price when lastPrice changes
+  // Set initial price once when switching to a non-market order type
   useEffect(() => {
-    if (lastPrice && orderType !== 'MARKET') {
+    if (orderType !== 'MARKET' && !priceInitialized && lastPrice && lastPrice > 0) {
       setPrice(lastPrice.toFixed(2));
+      setPriceInitialized(true);
     }
-  }, [lastPrice, orderType]);
+  }, [orderType, priceInitialized, lastPrice]);
+
+  // Reset initialized flag when switching to market order
+  useEffect(() => {
+    if (orderType === 'MARKET') {
+      setPriceInitialized(false);
+      setPrice('');
+    } else {
+      setPriceInitialized(false);
+    }
+  }, [orderType]);
 
   // Calculate margin when order params change
   useEffect(() => {
     const calculateMargin = async () => {
       if (!adapter || !isAuthenticated || !quantity || Number(quantity) <= 0) {
+        setMarginRequired(null);
+        return;
+      }
+
+      // Don't calculate margin if price is required but missing
+      if (orderType !== 'MARKET' && (!price || Number(price) <= 0)) {
+        setMarginRequired(null);
+        return;
+      }
+
+      if (['STOP', 'STOP_LIMIT'].includes(orderType) && (!triggerPrice || Number(triggerPrice) <= 0)) {
         setMarginRequired(null);
         return;
       }
@@ -161,6 +184,10 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
         setTriggerPrice('');
         setSquareOffTarget('');
         setStopLoss('');
+        if (orderType !== 'MARKET' && lastPrice) {
+          setPrice(lastPrice.toFixed(2));
+          setPriceInitialized(true);
+        }
 
         // Refresh data
         await Promise.all([refreshOrders(), refreshPositions(), refreshFunds()]);
@@ -179,8 +206,9 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
     }
   };
 
-  // Estimated order value
-  const estimatedValue = Number(quantity) * (orderType === 'MARKET' ? (lastPrice || 0) : Number(price) || 0);
+  // Estimated order value — don't fallback to lastPrice for limit orders when price is empty
+  const effectivePrice = orderType === 'MARKET' ? (lastPrice || 0) : (Number(price) || 0);
+  const estimatedValue = Number(quantity) * effectivePrice;
 
   // Fincept color constants
   const COLORS = {
@@ -337,11 +365,14 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
             QUANTITY
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '' || /^\d+$/.test(val)) setQuantity(val);
+            }}
             placeholder="0"
-            min="1"
             style={{
               width: '100%',
               padding: '8px 10px',
@@ -364,11 +395,14 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
               PRICE
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || /^\d*\.?\d*$/.test(val)) setPrice(val);
+              }}
               placeholder="0.00"
-              step="0.05"
               style={{
                 width: '100%',
                 padding: '8px 10px',
@@ -392,11 +426,14 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
               TRIGGER PRICE
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={triggerPrice}
-              onChange={(e) => setTriggerPrice(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '' || /^\d*\.?\d*$/.test(val)) setTriggerPrice(val);
+              }}
               placeholder="0.00"
-              step="0.05"
               style={{
                 width: '100%',
                 padding: '8px 10px',
@@ -482,9 +519,13 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
                     TARGET
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={squareOffTarget}
-                    onChange={(e) => setSquareOffTarget(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) setSquareOffTarget(val);
+                    }}
                     placeholder="0.00"
                     style={{
                       width: '100%',
@@ -503,9 +544,13 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
                     STOP LOSS
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={stopLoss}
-                    onChange={(e) => setStopLoss(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) setStopLoss(val);
+                    }}
                     placeholder="0.00"
                     style={{
                       width: '100%',
@@ -572,13 +617,24 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
       <div style={{ padding: '8px', borderTop: `1px solid ${COLORS.BORDER}` }}>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || !isAuthenticated || !quantity}
+          disabled={
+            isSubmitting ||
+            !isAuthenticated ||
+            !quantity ||
+            Number(quantity) <= 0 ||
+            (orderType !== 'MARKET' && (!price || Number(price) <= 0)) ||
+            (['STOP', 'STOP_LIMIT'].includes(orderType) && (!triggerPrice || Number(triggerPrice) <= 0))
+          }
           style={{
             width: '100%',
             padding: '12px',
             fontWeight: 700,
             fontSize: '12px',
-            cursor: isSubmitting || !isAuthenticated || !quantity ? 'not-allowed' : 'pointer',
+            cursor: (
+              isSubmitting || !isAuthenticated || !quantity || Number(quantity) <= 0 ||
+              (orderType !== 'MARKET' && (!price || Number(price) <= 0)) ||
+              (['STOP', 'STOP_LIMIT'].includes(orderType) && (!triggerPrice || Number(triggerPrice) <= 0))
+            ) ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -586,7 +642,11 @@ export function StockOrderForm({ symbol, exchange, lastPrice, onOrderPlaced }: S
             border: 'none',
             backgroundColor: side === 'BUY' ? COLORS.GREEN : COLORS.RED,
             color: side === 'BUY' ? COLORS.DARK_BG : COLORS.WHITE,
-            opacity: isSubmitting || !isAuthenticated || !quantity ? 0.5 : 1,
+            opacity: (
+              isSubmitting || !isAuthenticated || !quantity || Number(quantity) <= 0 ||
+              (orderType !== 'MARKET' && (!price || Number(price) <= 0)) ||
+              (['STOP', 'STOP_LIMIT'].includes(orderType) && (!triggerPrice || Number(triggerPrice) <= 0))
+            ) ? 0.5 : 1,
             transition: 'all 0.15s'
           }}
         >

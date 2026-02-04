@@ -50,14 +50,14 @@ export function ModelLibraryPanel() {
   const [models, setModels] = useState<QlibModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<QlibModel | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState<'all' | 'tree_based' | 'neural_network'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'tree_based' | 'neural_network' | 'linear' | 'ensemble'>('all');
   const [isPredicting, setIsPredicting] = useState(false);
   const [predictionResult, setPredictionResult] = useState<any>(null);
 
   // Prediction settings
-  const [instruments, setInstruments] = useState('AAPL,MSFT,GOOGL,AMZN,TSLA');
-  const [startDate, setStartDate] = useState('2024-01-01');
-  const [endDate, setEndDate] = useState('2024-12-31');
+  const [instruments, setInstruments] = useState('sp500');
+  const [startDate, setStartDate] = useState('2016-01-01');
+  const [endDate, setEndDate] = useState('2020-10-31');
 
   useEffect(() => {
     loadModels();
@@ -170,6 +170,8 @@ export function ModelLibraryPanel() {
               <option value="all">All Models</option>
               <option value="tree_based">Tree-Based</option>
               <option value="neural_network">Neural Networks</option>
+              <option value="linear">Linear</option>
+              <option value="ensemble">Ensemble</option>
             </select>
           </div>
 
@@ -207,11 +209,17 @@ export function ModelLibraryPanel() {
                     <span
                       className="text-xs px-1.5 py-0.5 rounded uppercase font-bold"
                       style={{
-                        backgroundColor: model.type === 'tree_based' ? FINCEPT.GREEN : FINCEPT.CYAN,
+                        backgroundColor: model.type === 'tree_based' ? FINCEPT.GREEN
+                          : model.type === 'linear' ? FINCEPT.YELLOW
+                          : model.type === 'ensemble' ? FINCEPT.PURPLE
+                          : FINCEPT.CYAN,
                         color: FINCEPT.DARK_BG
                       }}
                     >
-                      {model.type === 'tree_based' ? 'TREE' : 'NEURAL'}
+                      {model.type === 'tree_based' ? 'TREE'
+                        : model.type === 'linear' ? 'LINEAR'
+                        : model.type === 'ensemble' ? 'ENSEMBLE'
+                        : 'NEURAL'}
                     </span>
                   </div>
                   <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
@@ -245,11 +253,24 @@ export function ModelLibraryPanel() {
             <div className="flex items-center gap-3">
               <div
                 className="flex items-center gap-2 px-4 py-2 rounded"
-                style={{ backgroundColor: FINCEPT.PANEL_BG, borderLeft: `3px solid ${selectedModel.type === 'tree_based' ? FINCEPT.GREEN : FINCEPT.CYAN}` }}
+                style={{ backgroundColor: FINCEPT.PANEL_BG, borderLeft: `3px solid ${
+                  selectedModel.type === 'tree_based' ? FINCEPT.GREEN
+                  : selectedModel.type === 'linear' ? FINCEPT.YELLOW
+                  : selectedModel.type === 'ensemble' ? FINCEPT.PURPLE
+                  : FINCEPT.CYAN
+                }` }}
               >
-                <Cpu size={16} color={selectedModel.type === 'tree_based' ? FINCEPT.GREEN : FINCEPT.CYAN} />
+                <Cpu size={16} color={
+                  selectedModel.type === 'tree_based' ? FINCEPT.GREEN
+                  : selectedModel.type === 'linear' ? FINCEPT.YELLOW
+                  : selectedModel.type === 'ensemble' ? FINCEPT.PURPLE
+                  : FINCEPT.CYAN
+                } />
                 <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
-                  {selectedModel.type === 'tree_based' ? 'GRADIENT BOOSTING' : 'DEEP LEARNING'}
+                  {selectedModel.type === 'tree_based' ? 'GRADIENT BOOSTING'
+                    : selectedModel.type === 'linear' ? 'LINEAR REGRESSION'
+                    : selectedModel.type === 'ensemble' ? 'ENSEMBLE MODEL'
+                    : 'DEEP LEARNING'}
                 </span>
               </div>
             </div>

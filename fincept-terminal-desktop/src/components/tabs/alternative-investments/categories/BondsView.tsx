@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import { AlternativeInvestmentApi } from '@/services/alternativeInvestments/api/analyticsApi';
 import { HighYieldBondParams, EmergingMarketBondParams, ConvertibleBondParams, PreferredStockParams, CreditRating } from '@/services/alternativeInvestments/api/types';
+import { withTimeout } from '@/services/core/apiUtils';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -25,38 +27,57 @@ const BOND_TYPES = [
   { id: 'preferred-stock', name: 'Preferred Stocks', desc: 'Hybrid equity with fixed dividends' },
 ];
 
+type AnalysisState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; message: string };
+type AnalysisAction =
+  | { type: 'START' }
+  | { type: 'SUCCESS'; payload: any }
+  | { type: 'ERROR'; payload: string }
+  | { type: 'RESET' };
+function analysisReducer(state: AnalysisState, action: AnalysisAction): AnalysisState {
+  switch (action.type) {
+    case 'START': return { status: 'loading' };
+    case 'SUCCESS': return { status: 'success', data: action.payload };
+    case 'ERROR': return { status: 'error', message: action.payload };
+    case 'RESET': return { status: 'idle' };
+    default: return state;
+  }
+}
+
 export const BondsView: React.FC = () => {
   const [selectedBond, setSelectedBond] = useState<BondType>('high-yield');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(analysisReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const handleAnalyze = async (data: any) => {
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
+    if (state.status === 'loading') return;
+    dispatch({ type: 'START' });
 
     try {
       let result;
       switch (selectedBond) {
         case 'high-yield':
-          result = await AlternativeInvestmentApi.analyzeHighYieldBond(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeHighYieldBond(data), 30000);
           break;
         case 'emerging-market':
-          result = await AlternativeInvestmentApi.analyzeEmergingMarketBond(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeEmergingMarketBond(data), 30000);
           break;
         case 'convertible':
-          result = await AlternativeInvestmentApi.analyzeConvertibleBond(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeConvertibleBond(data), 30000);
           break;
         case 'preferred-stock':
-          result = await AlternativeInvestmentApi.analyzePreferredStock(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzePreferredStock(data), 30000);
           break;
       }
-      setAnalysis(result);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SUCCESS', payload: result });
     } catch (err: any) {
-      setError(err.message || 'Analysis failed');
-    } finally {
-      setIsAnalyzing(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'ERROR', payload: err.message || 'Analysis failed' });
     }
   };
 
@@ -75,8 +96,7 @@ export const BondsView: React.FC = () => {
                 key={type.id}
                 onClick={() => {
                   setSelectedBond(type.id as BondType);
-                  setAnalysis(null);
-                  setError(null);
+                  dispatch({ type: 'RESET' });
                 }}
                 style={{
                   padding: '8px 10px',
@@ -112,10 +132,10 @@ export const BondsView: React.FC = () => {
               </span>
             </div>
             <div style={{ padding: '20px' }}>
-              {selectedBond === 'high-yield' && <HighYieldBondForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
-              {selectedBond === 'emerging-market' && <EmergingMarketBondForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
-              {selectedBond === 'convertible' && <ConvertibleBondForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
-              {selectedBond === 'preferred-stock' && <PreferredStockForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
+              {selectedBond === 'high-yield' && <HighYieldBondForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
+              {selectedBond === 'emerging-market' && <EmergingMarketBondForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
+              {selectedBond === 'convertible' && <ConvertibleBondForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
+              {selectedBond === 'preferred-stock' && <PreferredStockForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
             </div>
           </div>
         </div>
@@ -131,35 +151,35 @@ export const BondsView: React.FC = () => {
 
         <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
           {/* Error */}
-          {error && (
+          {state.status === 'error' && (
             <div style={{ backgroundColor: '#FF444410', border: '1px solid #FF4444', borderRadius: '2px', padding: '16px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.RED, marginBottom: '6px', letterSpacing: '0.5px' }}>ERROR</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{error}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{state.status === 'error' && state.message}</div>
             </div>
           )}
 
           {/* Analysis Result */}
-          {analysis && analysis.success && analysis.metrics && (
+          {state.status === 'success' && state.data?.success && state.data?.metrics && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
               {/* Verdict Badge */}
               <div style={{
                 padding: '12px 20px',
-                backgroundColor: analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
-                                 analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
+                backgroundColor: state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
+                                 state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
                                  FINCEPT.RED + '20',
-                border: `2px solid ${analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                                     analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                border: `2px solid ${state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                                     state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                                      FINCEPT.RED}`,
                 borderRadius: '2px',
                 textAlign: 'center',
               }}>
                 <div style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '1.5px', color:
-                  analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                  analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                  state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                  state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                   FINCEPT.RED
                 }}>
-                  {analysis.metrics.analysis_category}
+                  {state.data.metrics.analysis_category}
                 </div>
               </div>
 
@@ -169,18 +189,18 @@ export const BondsView: React.FC = () => {
                   RECOMMENDATION
                 </div>
                 <div style={{ fontSize: '12px', color: FINCEPT.WHITE, lineHeight: '1.6' }}>
-                  {analysis.metrics.analysis_recommendation}
+                  {state.data.metrics.analysis_recommendation}
                 </div>
               </div>
 
               {/* Key Problems */}
-              {analysis.metrics.key_problems && analysis.metrics.key_problems.length > 0 && (
+              {state.data.metrics.key_problems && state.data.metrics.key_problems.length > 0 && (
                 <div style={{ padding: '16px', backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px' }}>
                   <div style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, marginBottom: '12px', letterSpacing: '0.5px' }}>
                     KEY CONCERNS
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {analysis.metrics.key_problems.map((problem: string, i: number) => (
+                    {state.data.metrics.key_problems.map((problem: string, i: number) => (
                       <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                         <div style={{
                           fontSize: '11px',
@@ -207,29 +227,29 @@ export const BondsView: React.FC = () => {
                   BOND METRICS
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {analysis.metrics.credit_rating && (
+                  {state.data.metrics.credit_rating && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                       <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Credit Rating</div>
-                      <div style={{ fontSize: '12px', color: FINCEPT.WHITE, fontWeight: 600 }}>{analysis.metrics.credit_rating}</div>
+                      <div style={{ fontSize: '12px', color: FINCEPT.WHITE, fontWeight: 600 }}>{state.data.metrics.credit_rating}</div>
                     </div>
                   )}
-                  {analysis.metrics.yield_to_maturity && (
+                  {state.data.metrics.yield_to_maturity && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                       <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Yield to Maturity</div>
-                      <div style={{ fontSize: '12px', color: FINCEPT.WHITE, fontWeight: 600 }}>{(analysis.metrics.yield_to_maturity * 100).toFixed(2)}%</div>
+                      <div style={{ fontSize: '12px', color: FINCEPT.WHITE, fontWeight: 600 }}>{(state.data.metrics.yield_to_maturity * 100).toFixed(2)}%</div>
                     </div>
                   )}
-                  {analysis.metrics.maturity_years && (
+                  {state.data.metrics.maturity_years && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
                       <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Maturity</div>
-                      <div style={{ fontSize: '12px', color: FINCEPT.WHITE, fontWeight: 600 }}>{analysis.metrics.maturity_years} years</div>
+                      <div style={{ fontSize: '12px', color: FINCEPT.WHITE, fontWeight: 600 }}>{state.data.metrics.maturity_years} years</div>
                     </div>
                   )}
-                  {analysis.metrics.default_analysis && (
+                  {state.data.metrics.default_analysis && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
                       <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Default Risk (5yr)</div>
                       <div style={{ fontSize: '12px', color: FINCEPT.RED, fontWeight: 600 }}>
-                        {(analysis.metrics.default_analysis.default_probability_5yr * 100).toFixed(2)}%
+                        {(state.data.metrics.default_analysis.default_probability_5yr * 100).toFixed(2)}%
                       </div>
                     </div>
                   )}
@@ -240,7 +260,7 @@ export const BondsView: React.FC = () => {
           )}
 
           {/* Help Text */}
-          {!analysis && !isAnalyzing && !error && (
+          {state.status === 'idle' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -255,7 +275,7 @@ export const BondsView: React.FC = () => {
           )}
 
           {/* Loading State */}
-          {isAnalyzing && (
+          {state.status === 'loading' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -314,15 +334,15 @@ const HighYieldBondForm: React.FC<{ onSubmit: any; isLoading: boolean }> = ({ on
         </div>
         <div>
           <label style={labelStyle}>FACE VALUE ($)</label>
-          <input type="number" value={formData.face_value} onChange={(e) => setFormData({ ...formData, face_value: Number(e.target.value) })} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.face_value} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, face_value: Number(v) }); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>COUPON RATE (%)</label>
-          <input type="number" step="0.01" value={formData.coupon_rate * 100} onChange={(e) => setFormData({ ...formData, coupon_rate: Number(e.target.value) / 100 })} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.coupon_rate * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, coupon_rate: (Number(v) || 0) / 100 }); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>CURRENT PRICE ($)</label>
-          <input type="number" value={formData.current_price} onChange={(e) => setFormData({ ...formData, current_price: Number(e.target.value) })} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.current_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, current_price: Number(v) }); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>CREDIT RATING</label>
@@ -335,7 +355,7 @@ const HighYieldBondForm: React.FC<{ onSubmit: any; isLoading: boolean }> = ({ on
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>MATURITY (YEARS)</label>
-          <input type="number" value={formData.maturity_years} onChange={(e) => setFormData({ ...formData, maturity_years: Number(e.target.value) })} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.maturity_years} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, maturity_years: Number(v) }); }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -365,10 +385,10 @@ const EmergingMarketBondForm: React.FC<{ onSubmit: any; isLoading: boolean }> = 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
         <div><label style={labelStyle}>BOND NAME</label><input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} style={inputStyle} /></div>
         <div><label style={labelStyle}>COUNTRY</label><input type="text" value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>FACE VALUE ($)</label><input type="number" value={formData.face_value} onChange={(e) => setFormData({ ...formData, face_value: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>COUPON RATE (%)</label><input type="number" step="0.01" value={formData.coupon_rate * 100} onChange={(e) => setFormData({ ...formData, coupon_rate: Number(e.target.value) / 100 })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>CURRENT PRICE ($)</label><input type="number" value={formData.current_price} onChange={(e) => setFormData({ ...formData, current_price: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>MATURITY (YEARS)</label><input type="number" value={formData.maturity_years} onChange={(e) => setFormData({ ...formData, maturity_years: Number(e.target.value) })} style={inputStyle} /></div>
+        <div><label style={labelStyle}>FACE VALUE ($)</label><input type="text" inputMode="decimal" value={formData.face_value} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, face_value: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>COUPON RATE (%)</label><input type="text" inputMode="decimal" value={formData.coupon_rate * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, coupon_rate: (Number(v) || 0) / 100 }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>CURRENT PRICE ($)</label><input type="text" inputMode="decimal" value={formData.current_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, current_price: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>MATURITY (YEARS)</label><input type="text" inputMode="decimal" value={formData.maturity_years} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, maturity_years: Number(v) }); }} style={inputStyle} /></div>
       </div>
       <button type="submit" disabled={isLoading} style={{ width: '100%', backgroundColor: isLoading ? FINCEPT.MUTED : FINCEPT.ORANGE, color: FINCEPT.WHITE, fontWeight: 700, padding: '16px', borderRadius: '2px', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '12px', letterSpacing: '0.5px' }}>{isLoading ? 'ANALYZING...' : 'ANALYZE BOND'}</button>
     </form>
@@ -383,12 +403,12 @@ const ConvertibleBondForm: React.FC<{ onSubmit: any; isLoading: boolean }> = ({ 
     <form onSubmit={(e) => { e.preventDefault(); onSubmit({ ...formData, asset_class: 'fixed_income', currency: 'USD' }); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
         <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>BOND NAME</label><input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>FACE VALUE ($)</label><input type="number" value={formData.face_value} onChange={(e) => setFormData({ ...formData, face_value: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>COUPON RATE (%)</label><input type="number" step="0.01" value={formData.coupon_rate * 100} onChange={(e) => setFormData({ ...formData, coupon_rate: Number(e.target.value) / 100 })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>CURRENT PRICE ($)</label><input type="number" value={formData.current_price} onChange={(e) => setFormData({ ...formData, current_price: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>CONVERSION RATIO</label><input type="number" value={formData.conversion_ratio} onChange={(e) => setFormData({ ...formData, conversion_ratio: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>STOCK PRICE ($)</label><input type="number" value={formData.stock_price} onChange={(e) => setFormData({ ...formData, stock_price: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>MATURITY (YEARS)</label><input type="number" value={formData.maturity_years} onChange={(e) => setFormData({ ...formData, maturity_years: Number(e.target.value) })} style={inputStyle} /></div>
+        <div><label style={labelStyle}>FACE VALUE ($)</label><input type="text" inputMode="decimal" value={formData.face_value} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, face_value: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>COUPON RATE (%)</label><input type="text" inputMode="decimal" value={formData.coupon_rate * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, coupon_rate: (Number(v) || 0) / 100 }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>CURRENT PRICE ($)</label><input type="text" inputMode="decimal" value={formData.current_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, current_price: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>CONVERSION RATIO</label><input type="text" inputMode="decimal" value={formData.conversion_ratio} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, conversion_ratio: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>STOCK PRICE ($)</label><input type="text" inputMode="decimal" value={formData.stock_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, stock_price: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>MATURITY (YEARS)</label><input type="text" inputMode="decimal" value={formData.maturity_years} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, maturity_years: Number(v) }); }} style={inputStyle} /></div>
       </div>
       <button type="submit" disabled={isLoading} style={{ width: '100%', backgroundColor: isLoading ? FINCEPT.MUTED : FINCEPT.ORANGE, color: FINCEPT.WHITE, fontWeight: 700, padding: '16px', borderRadius: '2px', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '12px', letterSpacing: '0.5px' }}>{isLoading ? 'ANALYZING...' : 'ANALYZE BOND'}</button>
     </form>
@@ -403,15 +423,21 @@ const PreferredStockForm: React.FC<{ onSubmit: any; isLoading: boolean }> = ({ o
     <form onSubmit={(e) => { e.preventDefault(); onSubmit({ ...formData, asset_class: 'equity', currency: 'USD' }); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
         <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>STOCK NAME</label><input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>PAR VALUE ($)</label><input type="number" value={formData.par_value} onChange={(e) => setFormData({ ...formData, par_value: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>DIVIDEND RATE (%)</label><input type="number" step="0.01" value={formData.dividend_rate * 100} onChange={(e) => setFormData({ ...formData, dividend_rate: Number(e.target.value) / 100 })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>CURRENT PRICE ($)</label><input type="number" value={formData.current_price} onChange={(e) => setFormData({ ...formData, current_price: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>CALL PRICE ($)</label><input type="number" value={formData.call_price} onChange={(e) => setFormData({ ...formData, call_price: Number(e.target.value) })} style={inputStyle} /></div>
-        <div><label style={labelStyle}>YEARS TO CALL</label><input type="number" value={formData.years_to_call} onChange={(e) => setFormData({ ...formData, years_to_call: Number(e.target.value) })} style={inputStyle} /></div>
+        <div><label style={labelStyle}>PAR VALUE ($)</label><input type="text" inputMode="decimal" value={formData.par_value} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, par_value: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>DIVIDEND RATE (%)</label><input type="text" inputMode="decimal" value={formData.dividend_rate * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, dividend_rate: (Number(v) || 0) / 100 }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>CURRENT PRICE ($)</label><input type="text" inputMode="decimal" value={formData.current_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, current_price: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>CALL PRICE ($)</label><input type="text" inputMode="decimal" value={formData.call_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, call_price: Number(v) }); }} style={inputStyle} /></div>
+        <div><label style={labelStyle}>YEARS TO CALL</label><input type="text" inputMode="decimal" value={formData.years_to_call} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({ ...formData, years_to_call: Number(v) }); }} style={inputStyle} /></div>
       </div>
       <button type="submit" disabled={isLoading} style={{ width: '100%', backgroundColor: isLoading ? FINCEPT.MUTED : FINCEPT.ORANGE, color: FINCEPT.WHITE, fontWeight: 700, padding: '16px', borderRadius: '2px', border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '12px', letterSpacing: '0.5px' }}>{isLoading ? 'ANALYZING...' : 'ANALYZE STOCK'}</button>
     </form>
   );
 };
 
-export default BondsView;
+const BondsViewWithBoundary: React.FC = () => (
+  <ErrorBoundary name="BondsView">
+    <BondsView />
+  </ErrorBoundary>
+);
+
+export default BondsViewWithBoundary;

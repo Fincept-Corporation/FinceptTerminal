@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // WebSocket Adapters - Provider-specific implementations
 
 use super::types::*;

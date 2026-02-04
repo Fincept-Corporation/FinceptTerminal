@@ -553,5 +553,42 @@ def main():
     else:
         print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
 
+# ==================== CLI ====================
 if __name__ == "__main__":
-    main()
+    import sys
+    import json
+
+    # Get wrapper instance
+    wrapper = ExpandedFundsWrapper()
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_funds_expanded.py <endpoint> [args...]"}))
+        sys.exit(1)
+
+    endpoint = sys.argv[1]
+    args = sys.argv[2:] if len(sys.argv) > 2 else []
+
+    # Handle get_all_endpoints
+    if endpoint == "get_all_endpoints":
+        if hasattr(wrapper, 'get_all_available_endpoints'):
+            result = wrapper.get_all_available_endpoints()
+        elif hasattr(wrapper, 'get_all_endpoints'):
+            result = wrapper.get_all_endpoints()
+        else:
+            result = {"success": False, "error": "Endpoint list not available"}
+        print(json.dumps(result, ensure_ascii=True))
+        sys.exit(0)
+
+    # Dynamic method resolution
+    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
+
+    if hasattr(wrapper, method_name):
+        method = getattr(wrapper, method_name)
+        try:
+            result = method(*args) if args else method()
+            print(json.dumps(result, ensure_ascii=True))
+        except Exception as e:
+            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
+    else:
+        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
+

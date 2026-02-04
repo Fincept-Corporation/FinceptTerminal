@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { TabFooter } from '@/components/common/TabFooter';
@@ -276,6 +277,17 @@ const SurfaceAnalyticsTab: React.FC = () => {
 
   // State
   const [activeChart, setActiveChart] = useState<ChartType>('volatility');
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeChart,
+  }), [activeChart]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.activeChart === "string") setActiveChart(state.activeChart as any);
+  }, []);
+
+  useWorkspaceTabState("surface-analytics", getWorkspaceState, setWorkspaceState);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [config, setConfig] = useState<SurfaceAnalyticsConfig>(DEFAULT_CONFIG);

@@ -43,9 +43,10 @@ export const OptionPricingMode: React.FC<OptionPricingModeProps> = ({
               SPOT PRICE
             </label>
             <input
-              type="number"
-              value={spotPrice}
-              onChange={(e) => setSpotPrice(parseFloat(e.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={String(spotPrice)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSpotPrice(parseFloat(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -62,9 +63,10 @@ export const OptionPricingMode: React.FC<OptionPricingModeProps> = ({
               STRIKE
             </label>
             <input
-              type="number"
-              value={strike}
-              onChange={(e) => setStrike(parseFloat(e.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={String(strike)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStrike(parseFloat(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -81,10 +83,10 @@ export const OptionPricingMode: React.FC<OptionPricingModeProps> = ({
               VOLATILITY
             </label>
             <input
-              type="number"
-              value={volatility}
-              onChange={(e) => setVolatility(parseFloat(e.target.value))}
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              value={String(volatility)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setVolatility(parseFloat(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -101,10 +103,10 @@ export const OptionPricingMode: React.FC<OptionPricingModeProps> = ({
               RISK-FREE RATE
             </label>
             <input
-              type="number"
-              value={riskFreeRate}
-              onChange={(e) => setRiskFreeRate(parseFloat(e.target.value))}
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              value={String(riskFreeRate)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setRiskFreeRate(parseFloat(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -121,10 +123,10 @@ export const OptionPricingMode: React.FC<OptionPricingModeProps> = ({
               DIV YIELD
             </label>
             <input
-              type="number"
-              value={dividendYield}
-              onChange={(e) => setDividendYield(parseFloat(e.target.value))}
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              value={String(dividendYield)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setDividendYield(parseFloat(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -141,10 +143,10 @@ export const OptionPricingMode: React.FC<OptionPricingModeProps> = ({
               TIME (YEARS)
             </label>
             <input
-              type="number"
-              value={timeToMaturity}
-              onChange={(e) => setTimeToMaturity(parseFloat(e.target.value))}
-              step="0.1"
+              type="text"
+              inputMode="decimal"
+              value={String(timeToMaturity)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setTimeToMaturity(parseFloat(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,

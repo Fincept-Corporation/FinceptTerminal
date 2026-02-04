@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Kotak Securities WebSocket Adapter
 //
 // Kotak uses Neo API WebSocket for market data streaming:

@@ -196,9 +196,15 @@ const BacktestNode: React.FC<BacktestNodeProps> = ({ data, selected }) => {
               Initial Capital ($)
             </label>
             <input
-              type="number"
-              value={localConfig.initialCapital}
-              onChange={(e) => setLocalConfig({ ...localConfig, initialCapital: Number(e.target.value) })}
+              type="text"
+              inputMode="decimal"
+              value={String(localConfig.initialCapital)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                  setLocalConfig({ ...localConfig, initialCapital: v === '' ? 0 : Number(v) });
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '6px',

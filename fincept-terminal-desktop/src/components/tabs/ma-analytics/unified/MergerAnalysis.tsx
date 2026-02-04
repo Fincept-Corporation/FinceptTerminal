@@ -204,36 +204,40 @@ export const MergerAnalysis: React.FC = () => {
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Revenue</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.acquirerRevenue}
-                    onChange={(e) => setAccretionInputs({ ...accretionInputs, acquirerRevenue: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAccretionInputs({ ...accretionInputs, acquirerRevenue: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Net Income</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.acquirerNetIncome}
-                    onChange={(e) => setAccretionInputs({ ...accretionInputs, acquirerNetIncome: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAccretionInputs({ ...accretionInputs, acquirerNetIncome: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Shares (M)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.acquirerShares}
-                    onChange={(e) => setAccretionInputs({ ...accretionInputs, acquirerShares: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAccretionInputs({ ...accretionInputs, acquirerShares: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EPS</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.acquirerEPS}
-                    onChange={(e) => setAccretionInputs({ ...accretionInputs, acquirerEPS: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAccretionInputs({ ...accretionInputs, acquirerEPS: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -246,39 +250,40 @@ export const MergerAnalysis: React.FC = () => {
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Revenue</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.targetRevenue}
-                    onChange={(e) => setAccretionInputs({ ...accretionInputs, targetRevenue: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAccretionInputs({ ...accretionInputs, targetRevenue: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Net Income</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.targetNetIncome}
-                    onChange={(e) => setAccretionInputs({ ...accretionInputs, targetNetIncome: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAccretionInputs({ ...accretionInputs, targetNetIncome: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Purchase Price</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.purchasePrice}
-                    onChange={(e) => setAccretionInputs({ ...accretionInputs, purchasePrice: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAccretionInputs({ ...accretionInputs, purchasePrice: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Cash %</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={accretionInputs.cashPct}
-                    onChange={(e) => {
-                      const cash = parseFloat(e.target.value);
-                      setAccretionInputs({ ...accretionInputs, cashPct: cash, stockPct: 100 - cash });
-                    }}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { const cash = parseFloat(v) || 0; setAccretionInputs({ ...accretionInputs, cashPct: cash, stockPct: 100 - cash }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -321,9 +326,10 @@ export const MergerAnalysis: React.FC = () => {
                     Base Revenue ($M)
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={synergiesInputs.baseRevenue}
-                    onChange={(e) => setSynergiesInputs({ ...synergiesInputs, baseRevenue: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSynergiesInputs({ ...synergiesInputs, baseRevenue: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -332,10 +338,10 @@ export const MergerAnalysis: React.FC = () => {
                     Cross-Sell Rate
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={synergiesInputs.crossSellRate}
-                    onChange={(e) => setSynergiesInputs({ ...synergiesInputs, crossSellRate: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSynergiesInputs({ ...synergiesInputs, crossSellRate: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -344,9 +350,10 @@ export const MergerAnalysis: React.FC = () => {
                     Projection Years
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={synergiesInputs.years}
-                    onChange={(e) => setSynergiesInputs({ ...synergiesInputs, years: parseInt(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*$/.test(v)) setSynergiesInputs({ ...synergiesInputs, years: parseInt(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -365,9 +372,10 @@ export const MergerAnalysis: React.FC = () => {
                     Purchase Price
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={structureInputs.purchasePrice}
-                    onChange={(e) => setStructureInputs({ ...structureInputs, purchasePrice: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStructureInputs({ ...structureInputs, purchasePrice: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -376,9 +384,10 @@ export const MergerAnalysis: React.FC = () => {
                     Cash %
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={structureInputs.cashPct}
-                    onChange={(e) => setStructureInputs({ ...structureInputs, cashPct: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStructureInputs({ ...structureInputs, cashPct: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -387,9 +396,10 @@ export const MergerAnalysis: React.FC = () => {
                     Acquirer Cash Available
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={structureInputs.acquirerCash}
-                    onChange={(e) => setStructureInputs({ ...structureInputs, acquirerCash: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStructureInputs({ ...structureInputs, acquirerCash: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -398,9 +408,10 @@ export const MergerAnalysis: React.FC = () => {
                     Debt Capacity
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={structureInputs.debtCapacity}
-                    onChange={(e) => setStructureInputs({ ...structureInputs, debtCapacity: parseFloat(e.target.value) })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStructureInputs({ ...structureInputs, debtCapacity: parseFloat(v) || 0 }); }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>

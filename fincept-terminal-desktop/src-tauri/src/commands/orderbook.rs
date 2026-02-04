@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // High-Performance OrderBook Processing Module
 // Optimized for real-time trading with minimal allocations and maximum throughput
 

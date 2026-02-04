@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Tradier (US) Broker Integration
 //!
 //! Complete API implementation for Tradier Brokerage API including:

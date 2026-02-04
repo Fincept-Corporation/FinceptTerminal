@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Fyers Symbol Master Database
 // Stores individual Fyers symbols with token mapping for fast lookup
 

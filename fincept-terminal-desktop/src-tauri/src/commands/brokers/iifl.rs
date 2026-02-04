@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! IIFL Broker Integration (XTS API)
 //!
 //! Complete API implementation for IIFL broker including:

@@ -237,11 +237,10 @@ export function BacktestingPanel() {
                   Top K Positions
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={topK}
-                  onChange={(e) => setTopK(Number(e.target.value))}
-                  min={1}
-                  max={50}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) { setTopK(Number(v) || 0) } }}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                   style={{
                     backgroundColor: FINCEPT.DARK_BG,
@@ -266,11 +265,10 @@ export function BacktestingPanel() {
                   Initial Capital (USD)
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={initialCapital}
-                  onChange={(e) => setInitialCapital(Number(e.target.value))}
-                  min={10000}
-                  step={10000}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setInitialCapital(Number(v) || 0) } }}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                   style={{
                     backgroundColor: FINCEPT.DARK_BG,
@@ -304,10 +302,10 @@ export function BacktestingPanel() {
                     Commission (%)
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={commission * 100}
-                    onChange={(e) => setCommission(Number(e.target.value) / 100)}
-                    step={0.01}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setCommission((Number(v) || 0) / 100) } }}
                     className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                     style={{
                       backgroundColor: FINCEPT.DARK_BG,
@@ -321,10 +319,10 @@ export function BacktestingPanel() {
                     Slippage (%)
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={slippage * 100}
-                    onChange={(e) => setSlippage(Number(e.target.value) / 100)}
-                    step={0.01}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setSlippage((Number(v) || 0) / 100) } }}
                     className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                     style={{
                       backgroundColor: FINCEPT.DARK_BG,

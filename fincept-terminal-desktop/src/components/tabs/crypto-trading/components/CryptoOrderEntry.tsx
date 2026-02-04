@@ -50,12 +50,28 @@ export function CryptoOrderEntry({
   const quantityInputRef = useRef<HTMLInputElement>(null);
   const priceInputRef = useRef<HTMLInputElement>(null);
 
-  // Update price when currentPrice changes (for limit orders)
+  // Track if user has manually interacted with price field
+  const [priceInitialized, setPriceInitialized] = useState(false);
+
+  // Set initial price when switching to limit or stop-limit order type
   useEffect(() => {
-    if (orderType === 'limit' && !price) {
+    if ((orderType === 'limit' || orderType === 'stop-limit') && !priceInitialized && currentPrice > 0) {
       setPrice(currentPrice.toFixed(2));
+      setPriceInitialized(true);
     }
-  }, [currentPrice, orderType, price]);
+  }, [orderType, priceInitialized, currentPrice]);
+
+  // Reset fields when order type changes
+  useEffect(() => {
+    if (orderType === 'market') {
+      setPriceInitialized(false);
+      setPrice('');
+      setStopPrice('');
+    } else {
+      // Re-initialize price for limit/stop-limit if needed
+      setPriceInitialized(false);
+    }
+  }, [orderType]);
 
   // Get active adapter
   const adapter = tradingMode === 'paper' ? paperAdapter : realAdapter;
@@ -63,12 +79,14 @@ export function CryptoOrderEntry({
 
   // Parse values
   const quantityNum = parseFloat(quantity) || 0;
-  const priceNum = orderType === 'market' ? currentPrice : (parseFloat(price) || currentPrice);
+  const parsedPrice = parseFloat(price) || 0;
+  const priceNum = orderType === 'market' ? currentPrice : parsedPrice;
   const total = quantityNum * priceNum;
 
-  // Calculate max quantity
+  // Calculate max quantity — use priceNum if set, else currentPrice for display
   const baseAsset = selectedSymbol.split('/')[0];
-  const maxBuyQuantity = balance > 0 && priceNum > 0 ? balance / priceNum : 0;
+  const effectivePriceForMax = priceNum > 0 ? priceNum : currentPrice;
+  const maxBuyQuantity = balance > 0 && effectivePriceForMax > 0 ? balance / effectivePriceForMax : 0;
 
   // Format helpers
   const formatNum = (num: number, decimals = 2) => {
@@ -87,20 +105,29 @@ export function CryptoOrderEntry({
   const validation = useMemo(() => {
     const errors: string[] = [];
     if (quantityNum <= 0) errors.push('Enter quantity');
-    if (orderType === 'limit' && priceNum <= 0) errors.push('Enter price');
+    if ((orderType === 'limit' || orderType === 'stop-limit') && priceNum <= 0) errors.push('Enter price');
     if (orderType === 'stop-limit' && (!stopPrice || parseFloat(stopPrice) <= 0)) errors.push('Enter stop price');
-    if (side === 'buy' && total > balance) errors.push('Insufficient balance');
+    if (side === 'buy' && total > balance && total > 0) errors.push('Insufficient balance');
     return { valid: errors.length === 0, errors };
   }, [quantityNum, priceNum, orderType, stopPrice, side, total, balance]);
 
   // Handle percentage buttons
   const handlePercentage = useCallback((percent: number) => {
+    const effectivePrice = priceNum > 0 ? priceNum : currentPrice;
+    if (effectivePrice <= 0) return;
+
     if (side === 'buy') {
-      const maxQty = balance / priceNum;
+      // Buy: how much base asset can we afford with balance
+      const maxQty = balance / effectivePrice;
       const qty = maxQty * percent;
       setQuantity(qty > 0 ? qty.toFixed(6) : '');
+    } else {
+      // Sell: percentage of balance (balance here is USD, not holdings)
+      // For sell side the percentage is of available holdings, not USD balance
+      const qty = balance * percent / effectivePrice;
+      setQuantity(qty > 0 ? qty.toFixed(6) : '');
     }
-  }, [balance, priceNum, side]);
+  }, [balance, currentPrice, priceNum, side]);
 
   // Handle order submission
   const handleSubmit = useCallback(async () => {
@@ -108,35 +135,43 @@ export function CryptoOrderEntry({
 
     setIsPlacing(true);
     try {
-      // Place order through adapter
-      const orderParams = {
-        symbol: selectedSymbol,
-        type: orderType,
-        side,
-        amount: quantityNum,
-        price: orderType !== 'market' ? priceNum : undefined,
-      };
+      const parsedStopLoss = parseFloat(stopLoss) || undefined;
+      const parsedTakeProfit = parseFloat(takeProfit) || undefined;
+      const parsedStopPrice = parseFloat(stopPrice) || undefined;
+
+      // Build params object for advanced options
+      const params: Record<string, any> = {};
+      if (parsedStopLoss) params.stopLoss = parsedStopLoss;
+      if (parsedTakeProfit) params.takeProfit = parsedTakeProfit;
+      if (orderType === 'stop-limit' && parsedStopPrice) params.stopPrice = parsedStopPrice;
 
       if (typeof adapter.createOrder === 'function') {
         await adapter.createOrder(
-          orderParams.symbol,
-          orderParams.type,
-          orderParams.side,
-          orderParams.amount,
-          orderParams.price
+          selectedSymbol,
+          orderType,
+          side,
+          quantityNum,
+          orderType !== 'market' ? priceNum : undefined,
+          Object.keys(params).length > 0 ? params : undefined
         );
       }
 
       // Reset form on success
       setQuantity('');
-      if (orderType === 'limit') setPrice(currentPrice.toFixed(2));
+      setStopLoss('');
+      setTakeProfit('');
+      setStopPrice('');
+      if (orderType === 'limit' || orderType === 'stop-limit') {
+        setPrice(currentPrice.toFixed(2));
+        setPriceInitialized(true);
+      }
 
     } catch (err) {
       console.error('[OrderEntry] Order failed:', err);
     } finally {
       setIsPlacing(false);
     }
-  }, [validation.valid, adapter, isPlacing, selectedSymbol, orderType, side, quantityNum, priceNum, currentPrice]);
+  }, [validation.valid, adapter, isPlacing, selectedSymbol, orderType, side, quantityNum, priceNum, currentPrice, stopLoss, takeProfit, stopPrice]);
 
   // Handle retry connection
   const handleRetryConnection = useCallback(() => {
@@ -363,7 +398,7 @@ export function CryptoOrderEntry({
           <div style={{ marginBottom: '12px' }}>
             <div className="oe-label">
               <span>Price</span>
-              <span style={{ color: FINCEPT.ORANGE, cursor: 'pointer' }} onClick={() => setPrice(currentPrice.toFixed(2))}>
+              <span style={{ color: FINCEPT.ORANGE, cursor: 'pointer' }} onClick={() => { setPrice(currentPrice.toFixed(2)); setPriceInitialized(true); }}>
                 Market: ${formatPrice(currentPrice)}
               </span>
             </div>

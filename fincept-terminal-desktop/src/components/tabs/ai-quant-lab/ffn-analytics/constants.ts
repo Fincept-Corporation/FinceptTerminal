@@ -1,28 +1,25 @@
 /**
  * FFN Analytics Constants
  * Color palette and sample data
+ * GREEN THEME
  */
 
-// Fincept Professional Color Palette
+// Fincept Terminal Color Palette - GREEN THEME for FFN Analytics
 export const FINCEPT = {
-  ORANGE: '#FF8800',
+  GREEN: '#00D66F',    // Primary theme color for FFN Analytics
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
+  ORANGE: '#FF8800',
+  DARK_BG: '#0F0F0F',
   PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
   CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
   BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
   BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
+  HOVER: '#1F1F1F'
 };
 
-// Sample price data for demonstration
+// Sample price data for demonstration (kept for backward compatibility)
+// Note: Default behavior now uses live yfinance data
 export const SAMPLE_PRICES: Record<string, number> = {
   '2023-01-03': 100.0,
   '2023-01-04': 101.2,

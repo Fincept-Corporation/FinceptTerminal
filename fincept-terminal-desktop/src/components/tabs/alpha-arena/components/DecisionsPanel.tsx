@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Brain, TrendingUp, TrendingDown, Pause, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import type { ModelDecision } from '../types';
 import { formatCurrency, getModelColor } from '../types';
 
@@ -20,7 +21,9 @@ const DecisionsPanel: React.FC<DecisionsPanelProps> = ({
   maxItems = 10,
   isLoading = false,
 }) => {
-  const displayDecisions = decisions.slice(0, maxItems);
+  // Defensive guard: ensure decisions is an array
+  const safeDecisions = Array.isArray(decisions) ? decisions : [];
+  const displayDecisions = safeDecisions.slice(0, maxItems);
 
   if (isLoading) {
     return (
@@ -59,7 +62,7 @@ const DecisionsPanel: React.FC<DecisionsPanelProps> = ({
           <Brain className="w-5 h-5 text-[#FF8800]" />
           <h3 className="text-white font-semibold">Recent Decisions</h3>
         </div>
-        <span className="text-sm text-[#787878]">{decisions.length} total</span>
+        <span className="text-sm text-[#787878]">{safeDecisions.length} total</span>
       </div>
 
       <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
@@ -77,6 +80,11 @@ interface DecisionCardProps {
 
 const DecisionCard: React.FC<DecisionCardProps> = ({ decision }) => {
   const modelColor = getModelColor(decision.model_name);
+  const confidence = Number.isFinite(decision.confidence) ? decision.confidence : 0;
+  const quantity = Number.isFinite(decision.quantity) ? decision.quantity : 0;
+  const priceAtDecision = decision.price_at_decision != null && Number.isFinite(decision.price_at_decision)
+    ? decision.price_at_decision
+    : undefined;
 
   const getActionIcon = (action: string) => {
     switch (action.toLowerCase()) {
@@ -104,9 +112,9 @@ const DecisionCard: React.FC<DecisionCardProps> = ({ decision }) => {
     }
   };
 
-  const confidenceColor = decision.confidence >= 0.7
+  const confidenceColor = confidence >= 0.7
     ? 'text-[#00D66F]'
-    : decision.confidence >= 0.5
+    : confidence >= 0.5
       ? 'text-[#FF8800]'
       : 'text-[#FF3B3B]';
 
@@ -141,14 +149,14 @@ const DecisionCard: React.FC<DecisionCardProps> = ({ decision }) => {
           {/* Details */}
           <div className="flex items-center gap-4 text-xs text-[#787878] mb-2">
             <span>{decision.symbol}</span>
-            {decision.quantity > 0 && (
-              <span>Qty: {decision.quantity.toFixed(4)}</span>
+            {quantity > 0 && (
+              <span>Qty: {quantity.toFixed(4)}</span>
             )}
-            {decision.price_at_decision && (
-              <span>@ {formatCurrency(decision.price_at_decision)}</span>
+            {priceAtDecision !== undefined && (
+              <span>@ {formatCurrency(priceAtDecision)}</span>
             )}
             <span className={confidenceColor}>
-              {(decision.confidence * 100).toFixed(0)}% confidence
+              {(confidence * 100).toFixed(0)}% confidence
             </span>
           </div>
 
@@ -178,4 +186,4 @@ const DecisionCard: React.FC<DecisionCardProps> = ({ decision }) => {
   );
 };
 
-export default DecisionsPanel;
+export default withErrorBoundary(DecisionsPanel, { name: 'AlphaArena.DecisionsPanel' });

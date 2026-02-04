@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect , useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { Search, TrendingUp, BarChart3, FileText, Users, Newspaper, RefreshCw, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +50,19 @@ const EquityResearchTab: React.FC = () => {
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>('6M');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    currentSymbol, chartPeriod, activeTab,
+  }), [currentSymbol, chartPeriod, activeTab]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.currentSymbol === 'string') setCurrentSymbol(state.currentSymbol);
+    if (typeof state.chartPeriod === 'string') setChartPeriod(state.chartPeriod as any);
+    if (typeof state.activeTab === 'string') setActiveTab(state.activeTab as any);
+  }, []);
+
+  useWorkspaceTabState('equity-research', getWorkspaceState, setWorkspaceState);
 
   // Custom hooks
   const {

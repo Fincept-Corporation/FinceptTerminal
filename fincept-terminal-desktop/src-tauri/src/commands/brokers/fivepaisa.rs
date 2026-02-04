@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! 5Paisa Broker Commands
 //!
 //! REST API integration for 5Paisa Trading API

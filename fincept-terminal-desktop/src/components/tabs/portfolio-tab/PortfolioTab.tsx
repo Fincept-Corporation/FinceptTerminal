@@ -3,7 +3,8 @@
  * Three-panel terminal layout with professional portfolio tracking and analytics
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   Briefcase, TrendingUp, TrendingDown, DollarSign, BarChart3,
   RefreshCw, Plus, Download, Trash2, PieChart, Activity,
@@ -19,6 +20,7 @@ import PerformanceView from './portfolio/PerformanceView';
 import RiskMetricsView from './portfolio/RiskMetricsView';
 import ReportsView from './portfolio/ReportsView';
 import AlertsView from './portfolio/AlertsView';
+import QuantStatsView from './portfolio/QuantStatsView';
 import ActiveManagementView from './portfolio/ActiveManagementView';
 import PortfolioOptimizationView from './portfolio/PortfolioOptimizationView';
 import { CustomIndexView, CreateIndexModal } from './custom-index';
@@ -32,7 +34,7 @@ import { TabFooter } from '@/components/common/TabFooter';
 import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES, LAYOUT } from './finceptStyles';
 import { showError } from '@/utils/notifications';
 
-type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization' | 'indices';
+type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization' | 'indices' | 'quantstats';
 
 const PortfolioTab: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -76,6 +78,17 @@ const PortfolioTab: React.FC = () => {
     refreshPortfolioData,
     exportToCSV
   } = usePortfolioOperations();
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeSubTab,
+  }), [activeSubTab]);
+
+  const setWorkspaceState = useCallback((state: any) => {
+    if (typeof state.activeSubTab === "string") setActiveSubTab(state.activeSubTab);
+  }, []);
+
+  useWorkspaceTabState("portfolio", getWorkspaceState, setWorkspaceState);
 
   // Update time
   useEffect(() => {
@@ -167,6 +180,7 @@ const PortfolioTab: React.FC = () => {
     { id: 'risk' as SubTab, label: 'RISK', icon: AlertCircle },
     { id: 'optimization' as SubTab, label: 'OPTIMIZATION', icon: Target },
     { id: 'active-mgmt' as SubTab, label: 'ACTIVE MGMT', icon: Activity },
+    { id: 'quantstats' as SubTab, label: 'QUANTSTATS', icon: Activity },
     { id: 'reports' as SubTab, label: 'REPORTS', icon: BarChart3 },
     { id: 'alerts' as SubTab, label: 'ALERTS', icon: AlertCircle }
   ];
@@ -544,6 +558,7 @@ const PortfolioTab: React.FC = () => {
               {activeSubTab === 'performance' && <div id="performance-view" style={{ height: '100%' }}><PerformanceView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'risk' && <div id="risk-view" style={{ height: '100%' }}><RiskMetricsView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'optimization' && <div id="optimization-view" style={{ height: '100%' }}><PortfolioOptimizationView portfolioSummary={portfolioSummary} /></div>}
+              {activeSubTab === 'quantstats' && <div id="quantstats-view" style={{ height: '100%' }}><QuantStatsView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'reports' && <div id="reports-view" style={{ height: '100%' }}><ReportsView portfolioSummary={portfolioSummary} transactions={transactions} /></div>}
               {activeSubTab === 'alerts' && <div id="alerts-view" style={{ height: '100%' }}><AlertsView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'active-mgmt' && (

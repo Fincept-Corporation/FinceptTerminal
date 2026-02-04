@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Lock, Bot, Database, Terminal, Activity, Globe, TrendingUp, Briefcase, HardDrive } from 'lucide-react';
+import { Settings as SettingsIcon, Lock, Bot, Database, Terminal, Activity, Globe, TrendingUp, Briefcase, HardDrive, Bell } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +20,7 @@ import {
   LLMConfigSection,
   TerminalAppearanceSection,
   StorageCacheSection,
+  NotificationsSection,
 } from './sections';
 
 // Hooks and types
@@ -96,6 +97,7 @@ export default function SettingsTab() {
     { id: 'terminal' as SettingsSection, icon: Terminal, label: t('sidebar.appearance') },
     { id: 'language' as SettingsSection, icon: Globe, label: t('sidebar.language') },
     { id: 'storage' as SettingsSection, icon: HardDrive, label: t('sidebar.storage') },
+    { id: 'notifications' as SettingsSection, icon: Bell, label: t('sidebar.notifications') },
   ];
 
   return (
@@ -369,6 +371,16 @@ export default function SettingsTab() {
             {activeSection === 'storage' && (
               <StorageCacheSection
                 colors={settingsColors}
+                showMessage={showMessage}
+              />
+            )}
+
+            {/* Notifications Section */}
+            {activeSection === 'notifications' && (
+              <NotificationsSection
+                colors={settingsColors}
+                loading={loading}
+                setLoading={setLoading}
                 showMessage={showMessage}
               />
             )}

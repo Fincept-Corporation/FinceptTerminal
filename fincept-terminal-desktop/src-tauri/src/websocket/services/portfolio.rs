@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Portfolio Tracking Service (Stub - to be fully implemented)
 
 use crate::websocket::types::*;

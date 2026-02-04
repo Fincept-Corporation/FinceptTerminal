@@ -84,11 +84,15 @@ export const ForecastConfigSection: React.FC<ForecastConfigProps> = ({
               FORECAST HORIZON
             </label>
             <input
-              type="number"
-              min={1}
-              max={365}
+              type="text"
+              inputMode="numeric"
               value={horizon}
-              onChange={(e) => setHorizon(parseInt(e.target.value) || 7)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d+$/.test(v)) {
+                  setHorizon(v ? parseInt(v) : 7);
+                }
+              }}
               className="w-full p-2 rounded text-xs font-mono"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -128,11 +132,15 @@ export const ForecastConfigSection: React.FC<ForecastConfigProps> = ({
                 ALPHA (REGULARIZATION)
               </label>
               <input
-                type="number"
-                step="0.1"
-                min={0}
+                type="text"
+                inputMode="decimal"
                 value={alpha}
-                onChange={(e) => setAlpha(parseFloat(e.target.value) || 1.0)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                    setAlpha(v ? parseFloat(v) : 1.0);
+                  }
+                }}
                 className="w-full p-2 rounded text-xs font-mono"
                 style={{
                   backgroundColor: FINCEPT.DARK_BG,
@@ -149,10 +157,15 @@ export const ForecastConfigSection: React.FC<ForecastConfigProps> = ({
               TEST SIZE (FOR EVALUATION)
             </label>
             <input
-              type="number"
-              min={1}
+              type="text"
+              inputMode="numeric"
               value={testSize}
-              onChange={(e) => setTestSize(parseInt(e.target.value) || 5)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d+$/.test(v)) {
+                  setTestSize(v ? parseInt(v) : 5);
+                }
+              }}
               className="w-full p-2 rounded text-xs font-mono"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,

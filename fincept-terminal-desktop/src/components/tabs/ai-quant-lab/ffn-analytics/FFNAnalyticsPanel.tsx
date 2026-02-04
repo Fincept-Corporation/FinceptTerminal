@@ -2,9 +2,11 @@
  * FFNAnalyticsPanel - Main Component
  * Portfolio Performance Analysis
  * Integrated with FFN library via PyO3
+ * GREEN THEME
  */
 
 import React from 'react';
+import { TrendingUp } from 'lucide-react';
 import { FINCEPT } from './constants';
 import { useFFNState } from './hooks';
 import {
@@ -54,12 +56,51 @@ export function FFNAnalyticsPanel() {
   );
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
-      {/* Left Panel - Input */}
-      <div
-        className="w-80 flex flex-col border-r overflow-auto"
-        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-      >
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: FINCEPT.DARK_BG }}>
+      {/* Terminal-style Header */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <TrendingUp size={16} color={FINCEPT.GREEN} />
+        <span style={{
+          color: FINCEPT.GREEN,
+          fontSize: '12px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          fontFamily: 'monospace'
+        }}>
+          FFN PORTFOLIO ANALYTICS
+        </span>
+        <div style={{ flex: 1 }} />
+        {hasResults && (
+          <div style={{
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            padding: '3px 8px',
+            backgroundColor: FINCEPT.GREEN + '20',
+            border: `1px solid ${FINCEPT.GREEN}`,
+            color: FINCEPT.GREEN
+          }}>
+            RESULTS READY
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left Panel - Input */}
+        <div style={{
+          width: '320px',
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto'
+        }}>
         {/* Data Source Section */}
         <DataSourceSection
           dataSourceType={state.dataSourceType}
@@ -123,89 +164,105 @@ export function FFNAnalyticsPanel() {
         />
       </div>
 
-      {/* Right Panel - Results */}
-      <div className="flex-1 overflow-auto p-4">
-        {state.error && <ErrorDisplay error={state.error} />}
+        {/* Right Panel - Results */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.DARK_BG }}>
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            color: FINCEPT.GREEN,
+            fontFamily: 'monospace',
+            letterSpacing: '0.5px',
+            backgroundColor: FINCEPT.PANEL_BG
+          }}>
+            ANALYSIS RESULTS
+          </div>
 
-        {!hasResults && !state.error && (
-          <EmptyState analysisMode={state.analysisMode} />
-        )}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            {state.error && <ErrorDisplay error={state.error} />}
 
-        {state.analysisResult && (
-          <div className="space-y-4">
-            {/* Performance Metrics Section */}
-            {state.analysisResult.performance && (
-              <PerformanceResults
-                performance={state.analysisResult.performance}
-                expanded={state.expandedSections.performance}
-                toggleSection={() => state.toggleSection('performance')}
-              />
+            {!hasResults && !state.error && (
+              <EmptyState analysisMode={state.analysisMode} />
             )}
 
-            {/* Drawdowns Section */}
-            {state.analysisResult.drawdowns && (
-              <DrawdownResults
-                drawdowns={state.analysisResult.drawdowns}
-                expanded={state.expandedSections.drawdowns}
-                toggleSection={() => state.toggleSection('drawdowns')}
-              />
-            )}
+            {state.analysisResult && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Performance Metrics Section */}
+                {state.analysisResult.performance && (
+                  <PerformanceResults
+                    performance={state.analysisResult.performance}
+                    expanded={state.expandedSections.performance}
+                    toggleSection={() => state.toggleSection('performance')}
+                  />
+                )}
 
-            {/* Risk Metrics Section */}
-            {state.analysisResult.riskMetrics && (
-              <RiskResults
-                riskMetrics={state.analysisResult.riskMetrics}
-                expanded={state.expandedSections.risk}
-                toggleSection={() => state.toggleSection('risk')}
-              />
-            )}
+                {/* Drawdowns Section */}
+                {state.analysisResult.drawdowns && (
+                  <DrawdownResults
+                    drawdowns={state.analysisResult.drawdowns}
+                    expanded={state.expandedSections.drawdowns}
+                    toggleSection={() => state.toggleSection('drawdowns')}
+                  />
+                )}
 
-            {/* Monthly Returns Heatmap */}
-            {state.analysisResult.monthlyReturns && (
-              <MonthlyResults
-                monthlyReturns={state.analysisResult.monthlyReturns}
-                expanded={state.expandedSections.monthly}
-                toggleSection={() => state.toggleSection('monthly')}
-              />
-            )}
+                {/* Risk Metrics Section */}
+                {state.analysisResult.riskMetrics && (
+                  <RiskResults
+                    riskMetrics={state.analysisResult.riskMetrics}
+                    expanded={state.expandedSections.risk}
+                    toggleSection={() => state.toggleSection('risk')}
+                  />
+                )}
 
-            {/* Rolling Metrics */}
-            {state.analysisResult.rollingMetrics && (
-              <RollingResults
-                rollingMetrics={state.analysisResult.rollingMetrics}
-                expanded={state.expandedSections.rolling}
-                toggleSection={() => state.toggleSection('rolling')}
-              />
-            )}
+                {/* Monthly Returns Heatmap */}
+                {state.analysisResult.monthlyReturns && (
+                  <MonthlyResults
+                    monthlyReturns={state.analysisResult.monthlyReturns}
+                    expanded={state.expandedSections.monthly}
+                    toggleSection={() => state.toggleSection('monthly')}
+                  />
+                )}
 
-            {/* Asset Comparison */}
-            {state.analysisResult.comparison && state.analysisResult.comparison.success && (
-              <ComparisonResults
-                comparison={state.analysisResult.comparison}
-                expanded={state.expandedSections.comparison}
-                toggleSection={() => state.toggleSection('comparison')}
-              />
-            )}
+                {/* Rolling Metrics */}
+                {state.analysisResult.rollingMetrics && (
+                  <RollingResults
+                    rollingMetrics={state.analysisResult.rollingMetrics}
+                    expanded={state.expandedSections.rolling}
+                    toggleSection={() => state.toggleSection('rolling')}
+                  />
+                )}
 
-            {/* Portfolio Optimization Results */}
-            {state.analysisResult.optimization && state.analysisResult.optimization.success && (
-              <OptimizationResults
-                optimization={state.analysisResult.optimization}
-                expanded={state.expandedSections.optimization}
-                toggleSection={() => state.toggleSection('optimization')}
-              />
-            )}
+                {/* Asset Comparison */}
+                {state.analysisResult.comparison && state.analysisResult.comparison.success && (
+                  <ComparisonResults
+                    comparison={state.analysisResult.comparison}
+                    expanded={state.expandedSections.comparison}
+                    toggleSection={() => state.toggleSection('comparison')}
+                  />
+                )}
 
-            {/* Benchmark Comparison Results */}
-            {state.analysisResult.benchmark && state.analysisResult.benchmark.success && (
-              <BenchmarkResults
-                benchmark={state.analysisResult.benchmark}
-                expanded={state.expandedSections.benchmark}
-                toggleSection={() => state.toggleSection('benchmark')}
-              />
+                {/* Portfolio Optimization Results */}
+                {state.analysisResult.optimization && state.analysisResult.optimization.success && (
+                  <OptimizationResults
+                    optimization={state.analysisResult.optimization}
+                    expanded={state.expandedSections.optimization}
+                    toggleSection={() => state.toggleSection('optimization')}
+                  />
+                )}
+
+                {/* Benchmark Comparison Results */}
+                {state.analysisResult.benchmark && state.analysisResult.benchmark.success && (
+                  <BenchmarkResults
+                    benchmark={state.analysisResult.benchmark}
+                    expanded={state.expandedSections.benchmark}
+                    toggleSection={() => state.toggleSection('benchmark')}
+                  />
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

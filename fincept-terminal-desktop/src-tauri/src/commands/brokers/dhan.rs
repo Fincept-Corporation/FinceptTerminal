@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Dhan Broker Integration
 //!
 //! Complete API integration for Dhan broker.

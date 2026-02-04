@@ -91,6 +91,7 @@ py_vollib==1.0.1
 pypme==0.6.2
 ffn==1.1.2
 fortitudo.tech==1.2
+quantstats>=0.0.62
 
 # Quant libraries
 pyqlib==0.9.7
@@ -125,7 +126,7 @@ tables>=3.8.0
 selenium>=4.0.0
 pyarrow>=16.0.0
 pandarallel>=1.6.0
-gym>=0.26.0
+gymnasium>=1.0.0
 
 # MLflow
 mlflow>=2.0.0

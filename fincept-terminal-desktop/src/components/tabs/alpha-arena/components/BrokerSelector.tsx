@@ -5,12 +5,15 @@
  * trading in Alpha Arena. Supports multiple broker types.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useReducer, useRef } from 'react';
 import {
   Building, RefreshCw, Check, AlertTriangle, Loader2,
   Globe, DollarSign, Percent, Zap, Settings, ChevronDown,
   ChevronRight, Search, Star, StarOff,
 } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useCache, cacheKey } from '@/hooks/useCache';
+import { validateString } from '@/services/core/validators';
 import {
   alphaArenaEnhancedService,
   type BrokerInfo,
@@ -53,19 +56,43 @@ interface BrokerSelectorProps {
   filterRegion?: 'global' | 'us' | 'india' | 'europe' | 'asia';
 }
 
+// Ticker fetch state machine
+type TickerState =
+  | { status: 'idle'; data: TickerData | null }
+  | { status: 'loading'; data: TickerData | null }
+  | { status: 'success'; data: TickerData }
+  | { status: 'error'; data: TickerData | null; error: string };
+
+type TickerAction =
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS'; data: TickerData }
+  | { type: 'FETCH_ERROR'; error: string }
+  | { type: 'RESET' };
+
+function tickerReducer(state: TickerState, action: TickerAction): TickerState {
+  switch (action.type) {
+    case 'FETCH_START':
+      return { status: 'loading', data: state.data };
+    case 'FETCH_SUCCESS':
+      return { status: 'success', data: action.data };
+    case 'FETCH_ERROR':
+      return { status: 'error', data: state.data, error: action.error };
+    case 'RESET':
+      return { status: 'idle', data: null };
+    default:
+      return state;
+  }
+}
+
 const BrokerSelector: React.FC<BrokerSelectorProps> = ({
   selectedBrokerId,
   onBrokerSelect,
   filterType,
   filterRegion,
 }) => {
-  const [brokers, setBrokers] = useState<BrokerInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBroker, setSelectedBroker] = useState<BrokerInfo | null>(null);
-  const [tickerData, setTickerData] = useState<TickerData | null>(null);
-  const [isLoadingTicker, setIsLoadingTicker] = useState(false);
+  const [tickerState, dispatchTicker] = useReducer(tickerReducer, { status: 'idle', data: null });
   const [expandedBroker, setExpandedBroker] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<string[]>(() => {
     const saved = localStorage.getItem('alpha-arena-favorite-brokers');
@@ -73,39 +100,45 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
   });
   const [typeFilter, setTypeFilter] = useState<'crypto' | 'stocks' | 'forex' | null>(filterType || null);
   const [regionFilter, setRegionFilter] = useState<string | null>(filterRegion || null);
+  const mountedRef = useRef(true);
 
-  const fetchBrokers = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Cache: broker list keyed on filters
+  const brokersCache = useCache<BrokerInfo[]>({
+    key: cacheKey('alpha-arena', 'brokers', typeFilter || 'all', regionFilter || 'all'),
+    category: 'alpha-arena',
+    fetcher: async () => {
       const result = await alphaArenaEnhancedService.listBrokers(
         typeFilter || undefined,
         regionFilter as 'global' | 'us' | 'india' | 'europe' | 'asia' | undefined
       );
-
       if (result.success && result.brokers) {
-        setBrokers(result.brokers);
-
-        // Auto-select if selectedBrokerId is provided
-        if (selectedBrokerId) {
-          const broker = result.brokers.find(b => b.id === selectedBrokerId);
-          if (broker) {
-            setSelectedBroker(broker);
-          }
-        }
-      } else {
-        setError(result.error || 'Failed to fetch brokers');
+        return result.brokers;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch brokers');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [typeFilter, regionFilter, selectedBrokerId]);
+      throw new Error(result.error || 'Failed to fetch brokers');
+    },
+    ttl: 300,
+    enabled: true,
+    staleWhileRevalidate: true,
+  });
 
+  const brokers = brokersCache.data || [];
+  const isLoading = brokersCache.isLoading;
+  const error = brokersCache.error;
+
+  // Auto-select broker when data loads and selectedBrokerId is provided
   useEffect(() => {
-    fetchBrokers();
-  }, [fetchBrokers]);
+    if (selectedBrokerId && brokers.length > 0 && !selectedBroker) {
+      const broker = brokers.find(b => b.id === selectedBrokerId);
+      if (broker) {
+        setSelectedBroker(broker);
+      }
+    }
+  }, [selectedBrokerId, brokers, selectedBroker]);
 
   useEffect(() => {
     localStorage.setItem('alpha-arena-favorite-brokers', JSON.stringify(favorites));
@@ -117,19 +150,21 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
 
     // Fetch sample ticker data
     if (broker.default_symbols.length > 0) {
-      setIsLoadingTicker(true);
+      dispatchTicker({ type: 'FETCH_START' });
       try {
         const result = await alphaArenaEnhancedService.getBrokerTicker(
           broker.default_symbols[0],
           broker.id
         );
+        if (!mountedRef.current) return;
         if (result.success && result.ticker) {
-          setTickerData(result.ticker);
+          dispatchTicker({ type: 'FETCH_SUCCESS', data: result.ticker });
+        } else {
+          dispatchTicker({ type: 'FETCH_ERROR', error: result.error || 'Failed to fetch ticker' });
         }
       } catch (err) {
-        console.error('Error fetching ticker:', err);
-      } finally {
-        setIsLoadingTicker(false);
+        if (!mountedRef.current) return;
+        dispatchTicker({ type: 'FETCH_ERROR', error: err instanceof Error ? err.message : 'Failed to fetch ticker' });
       }
     }
   };
@@ -186,6 +221,9 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
     </div>
   );
 
+  const tickerData = tickerState.data;
+  const isLoadingTicker = tickerState.status === 'loading';
+
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -208,7 +246,7 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
           )}
         </div>
         <button
-          onClick={fetchBrokers}
+          onClick={() => brokersCache.refresh()}
           disabled={isLoading}
           className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
         >
@@ -241,7 +279,7 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
           {/* Type Filter */}
           <select
             value={typeFilter || ''}
-            onChange={(e) => setTypeFilter(e.target.value as 'crypto' | 'stocks' | 'forex' || null)}
+            onChange={(e) => setTypeFilter(e.target.value ? e.target.value as 'crypto' | 'stocks' | 'forex' : null)}
             className="flex-1 px-2 py-1 rounded text-xs"
             style={{
               backgroundColor: COLORS.CARD_BG,
@@ -279,7 +317,7 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
       {error && (
         <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
           <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-          <span className="text-xs" style={{ color: COLORS.RED }}>{error}</span>
+          <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
         </div>
       )}
 
@@ -450,4 +488,4 @@ const BrokerSelector: React.FC<BrokerSelectorProps> = ({
   );
 };
 
-export default BrokerSelector;
+export default withErrorBoundary(BrokerSelector, { name: 'AlphaArena.BrokerSelector' });

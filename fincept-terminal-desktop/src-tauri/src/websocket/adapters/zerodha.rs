@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Zerodha KiteTicker WebSocket Adapter
 //
 // Implements Zerodha's KiteTicker WebSocket API for real-time market data

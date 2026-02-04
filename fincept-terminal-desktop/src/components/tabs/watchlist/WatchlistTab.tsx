@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { RefreshCw, Download, WifiOff, Plus, BarChart3 } from 'lucide-react';
 import {
   watchlistService,
@@ -58,6 +59,17 @@ const WatchlistTab: React.FC = () => {
     enabled: !!selectedWatchlist,
     refetchInterval: 10 * 60 * 1000
   });
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    sortBy: sortBy || 'CHANGE',
+  }), [sortBy]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.sortBy === 'string') setSortBy(state.sortBy as SortCriteria);
+  }, []);
+
+  useWorkspaceTabState('watchlist', getWorkspaceState, setWorkspaceState);
 
   const refreshWatchlistData = useCallback(async () => {
     await Promise.all([refreshStocks(), refreshMovers(), refreshVolume()]);

@@ -199,11 +199,10 @@ export function AdvancedOrdersPanel({ symbol }: AdvancedOrdersPanelProps) {
           </div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={timeoutSeconds}
-              onChange={(e) => setTimeoutSeconds(parseInt(e.target.value) || 0)}
-              min={10}
-              max={3600}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setTimeoutSeconds(Math.min(parseInt(v) || 0, 3600)); }}
               style={{
                 flex: 1,
                 padding: '8px',

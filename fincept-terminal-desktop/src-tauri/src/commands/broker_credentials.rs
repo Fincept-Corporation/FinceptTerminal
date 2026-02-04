@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Broker Credentials Tauri Commands
 // Expose secure credential storage to the frontend
 

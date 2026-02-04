@@ -201,9 +201,10 @@ export const ValuationToolkit: React.FC = () => {
                     EBIT ($M)
                   </label>
                   <input
-                    type="number"
-                    value={dcfInputs.ebit}
-                    onChange={(e) => setDcfInputs({ ...dcfInputs, ebit: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={dcfInputs.ebit || dcfInputs.ebit === 0 ? String(dcfInputs.ebit) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setDcfInputs({ ...dcfInputs, ebit: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -212,10 +213,10 @@ export const ValuationToolkit: React.FC = () => {
                     Tax Rate
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={dcfInputs.taxRate}
-                    onChange={(e) => setDcfInputs({ ...dcfInputs, taxRate: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={dcfInputs.taxRate || dcfInputs.taxRate === 0 ? String(dcfInputs.taxRate) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setDcfInputs({ ...dcfInputs, taxRate: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -224,10 +225,10 @@ export const ValuationToolkit: React.FC = () => {
                     Risk-Free Rate
                   </label>
                   <input
-                    type="number"
-                    step="0.001"
-                    value={dcfInputs.riskFreeRate}
-                    onChange={(e) => setDcfInputs({ ...dcfInputs, riskFreeRate: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={dcfInputs.riskFreeRate || dcfInputs.riskFreeRate === 0 ? String(dcfInputs.riskFreeRate) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setDcfInputs({ ...dcfInputs, riskFreeRate: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -236,10 +237,10 @@ export const ValuationToolkit: React.FC = () => {
                     Beta
                   </label>
                   <input
-                    type="number"
-                    step="0.1"
-                    value={dcfInputs.beta}
-                    onChange={(e) => setDcfInputs({ ...dcfInputs, beta: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={dcfInputs.beta || dcfInputs.beta === 0 ? String(dcfInputs.beta) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setDcfInputs({ ...dcfInputs, beta: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -248,10 +249,10 @@ export const ValuationToolkit: React.FC = () => {
                     Terminal Growth
                   </label>
                   <input
-                    type="number"
-                    step="0.001"
-                    value={dcfInputs.terminalGrowth}
-                    onChange={(e) => setDcfInputs({ ...dcfInputs, terminalGrowth: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={dcfInputs.terminalGrowth || dcfInputs.terminalGrowth === 0 ? String(dcfInputs.terminalGrowth) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setDcfInputs({ ...dcfInputs, terminalGrowth: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -260,9 +261,10 @@ export const ValuationToolkit: React.FC = () => {
                     Shares Outstanding (M)
                   </label>
                   <input
-                    type="number"
-                    value={dcfInputs.shares}
-                    onChange={(e) => setDcfInputs({ ...dcfInputs, shares: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={dcfInputs.shares || dcfInputs.shares === 0 ? String(dcfInputs.shares) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setDcfInputs({ ...dcfInputs, shares: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -281,9 +283,10 @@ export const ValuationToolkit: React.FC = () => {
                     Entry Valuation
                   </label>
                   <input
-                    type="number"
-                    value={lboInputs.entryValuation}
-                    onChange={(e) => setLboInputs({ ...lboInputs, entryValuation: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={lboInputs.entryValuation || lboInputs.entryValuation === 0 ? String(lboInputs.entryValuation) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setLboInputs({ ...lboInputs, entryValuation: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -292,9 +295,10 @@ export const ValuationToolkit: React.FC = () => {
                     Exit Valuation
                   </label>
                   <input
-                    type="number"
-                    value={lboInputs.exitValuation}
-                    onChange={(e) => setLboInputs({ ...lboInputs, exitValuation: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={lboInputs.exitValuation || lboInputs.exitValuation === 0 ? String(lboInputs.exitValuation) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setLboInputs({ ...lboInputs, exitValuation: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -303,9 +307,10 @@ export const ValuationToolkit: React.FC = () => {
                     Equity Invested
                   </label>
                   <input
-                    type="number"
-                    value={lboInputs.equityInvested}
-                    onChange={(e) => setLboInputs({ ...lboInputs, equityInvested: parseFloat(e.target.value) })}
+                    type="text"
+                    inputMode="decimal"
+                    value={lboInputs.equityInvested || lboInputs.equityInvested === 0 ? String(lboInputs.equityInvested) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setLboInputs({ ...lboInputs, equityInvested: parseFloat(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>
@@ -314,9 +319,10 @@ export const ValuationToolkit: React.FC = () => {
                     Holding Period (Years)
                   </label>
                   <input
-                    type="number"
-                    value={lboInputs.holdingPeriod}
-                    onChange={(e) => setLboInputs({ ...lboInputs, holdingPeriod: parseInt(e.target.value) })}
+                    type="text"
+                    inputMode="numeric"
+                    value={lboInputs.holdingPeriod || lboInputs.holdingPeriod === 0 ? String(lboInputs.holdingPeriod) : ''}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) { setLboInputs({ ...lboInputs, holdingPeriod: parseInt(v) || 0 }); } }}
                     style={COMMON_STYLES.inputField}
                   />
                 </div>

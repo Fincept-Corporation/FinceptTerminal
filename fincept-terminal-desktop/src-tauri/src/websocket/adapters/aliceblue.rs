@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Alice Blue WebSocket Adapter
 //
 // Alice Blue (ANT) uses WebSocket for market data:

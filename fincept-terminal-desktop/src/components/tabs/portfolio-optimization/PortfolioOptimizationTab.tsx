@@ -652,10 +652,10 @@ const PortfolioOptimizationTab: React.FC = () => {
                 RISK-FREE RATE (%)
               </label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={config.risk_free_rate * 100}
-                onChange={(e) => setConfig({ ...config, risk_free_rate: parseFloat(e.target.value) / 100 })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, risk_free_rate: (parseFloat(v) || 0) / 100 }); }}
                 style={{
                   width: '100%',
                   padding: '8px',
@@ -675,10 +675,10 @@ const PortfolioOptimizationTab: React.FC = () => {
                   MIN WEIGHT (%)
                 </label>
                 <input
-                  type="number"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={config.weight_bounds_min * 100}
-                  onChange={(e) => setConfig({ ...config, weight_bounds_min: parseFloat(e.target.value) / 100 })}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, weight_bounds_min: (parseFloat(v) || 0) / 100 }); }}
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -695,10 +695,10 @@ const PortfolioOptimizationTab: React.FC = () => {
                   MAX WEIGHT (%)
                 </label>
                 <input
-                  type="number"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={config.weight_bounds_max * 100}
-                  onChange={(e) => setConfig({ ...config, weight_bounds_max: parseFloat(e.target.value) / 100 })}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, weight_bounds_max: (parseFloat(v) || 0) / 100 }); }}
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -718,10 +718,10 @@ const PortfolioOptimizationTab: React.FC = () => {
                 L2 REGULARIZATION (Gamma)
               </label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={config.gamma}
-                onChange={(e) => setConfig({ ...config, gamma: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, gamma: parseFloat(v) || 0 }); }}
                 style={{
                   width: '100%',
                   padding: '8px',
@@ -740,10 +740,10 @@ const PortfolioOptimizationTab: React.FC = () => {
                 TOTAL PORTFOLIO VALUE ($)
               </label>
               <input
-                type="number"
-                step="1000"
+                type="text"
+                inputMode="decimal"
                 value={config.total_portfolio_value}
-                onChange={(e) => setConfig({ ...config, total_portfolio_value: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, total_portfolio_value: parseFloat(v) || 0 }); }}
                 style={{
                   width: '100%',
                   padding: '8px',

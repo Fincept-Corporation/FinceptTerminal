@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Shoonya Symbol Master Database
 // Stores Shoonya symbols with token mapping for fast lookup
 // Based on Fyers symbols pattern but adapted for Shoonya's data structure

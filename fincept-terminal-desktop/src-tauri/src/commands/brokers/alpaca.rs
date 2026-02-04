@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Alpaca (US) Broker Integration
 //!
 //! Complete API implementation for Alpaca Trading API including:

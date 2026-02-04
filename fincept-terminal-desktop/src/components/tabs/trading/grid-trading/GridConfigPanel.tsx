@@ -187,11 +187,11 @@ export function GridConfigPanel({
           <label className="block text-xs text-[#787878] mb-1">Upper Price</label>
           <div className="relative">
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={upperPrice}
-              onChange={e => setUpperPrice(parseFloat(e.target.value) || 0)}
+              onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setUpperPrice(parseFloat(v) || 0); }}
               className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
-              step="0.01"
             />
             <ArrowUpRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#00D66F]" />
           </div>
@@ -203,11 +203,11 @@ export function GridConfigPanel({
           <label className="block text-xs text-[#787878] mb-1">Lower Price</label>
           <div className="relative">
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={lowerPrice}
-              onChange={e => setLowerPrice(parseFloat(e.target.value) || 0)}
+              onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setLowerPrice(parseFloat(v) || 0); }}
               className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
-              step="0.01"
             />
             <ArrowDownRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#FF3B3B]" />
           </div>
@@ -222,11 +222,10 @@ export function GridConfigPanel({
         <div>
           <label className="block text-xs text-[#787878] mb-1">Grid Levels</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={gridLevels}
-            onChange={e => setGridLevels(parseInt(e.target.value) || 2)}
-            min={2}
-            max={200}
+            onChange={e => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setGridLevels(Math.min(parseInt(v) || 2, 200)); }}
             className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
           />
         </div>
@@ -248,11 +247,11 @@ export function GridConfigPanel({
         <label className="block text-xs text-[#787878] mb-1">Total Investment</label>
         <div className="relative">
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={totalInvestment}
-            onChange={e => setTotalInvestment(parseFloat(e.target.value) || 0)}
+            onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setTotalInvestment(parseFloat(v) || 0); }}
             className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF8800] focus:outline-none"
-            step="10"
           />
           <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#787878]" />
         </div>
@@ -306,23 +305,23 @@ export function GridConfigPanel({
         <div>
           <label className="block text-xs text-[#787878] mb-1">Stop Loss (Optional)</label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={stopLoss || ''}
-            onChange={e => setStopLoss(e.target.value ? parseFloat(e.target.value) : undefined)}
+            onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setStopLoss(v ? parseFloat(v) : undefined); }}
             placeholder={`< ${lowerPrice.toFixed(2)}`}
             className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#FF3B3B] focus:outline-none placeholder-[#4A4A4A]"
-            step="0.01"
           />
         </div>
         <div>
           <label className="block text-xs text-[#787878] mb-1">Take Profit (Optional)</label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={takeProfit || ''}
-            onChange={e => setTakeProfit(e.target.value ? parseFloat(e.target.value) : undefined)}
+            onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setTakeProfit(v ? parseFloat(v) : undefined); }}
             placeholder={`> ${upperPrice.toFixed(2)}`}
             className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded px-3 py-2 text-white text-sm focus:border-[#00D66F] focus:outline-none placeholder-[#4A4A4A]"
-            step="0.01"
           />
         </div>
       </div>

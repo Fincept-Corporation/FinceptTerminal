@@ -5,7 +5,7 @@
  * Can be used in Settings or as a dedicated panel.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Database, Download, RefreshCw, Check, AlertCircle, Trash2, Clock } from 'lucide-react';
 import {
   masterContractService,
@@ -13,6 +13,7 @@ import {
   type DownloadResult,
   getBrokerDisplayName,
 } from '@/services/trading/masterContractService';
+import { withTimeout } from '@/services/core/apiUtils';
 
 // Fincept Professional Color Palette
 const FINCEPT = {
@@ -54,16 +55,27 @@ export function MasterContractManager({
 }: MasterContractManagerProps) {
   const [brokerStatus, setBrokerStatus] = useState<Record<string, BrokerSymbolStatus>>({});
   const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Load initial status for all brokers
   useEffect(() => {
+    let cancelled = false;
+
     const loadStatus = async () => {
       const status: Record<string, BrokerSymbolStatus> = {};
 
       for (const brokerId of brokers) {
+        if (cancelled || !mountedRef.current) break;
         try {
-          const count = await masterContractService.getSymbolCount(brokerId);
-          const cache = await masterContractService.getMasterContractCache(brokerId);
+          const count = await withTimeout(masterContractService.getSymbolCount(brokerId), 10000);
+          if (cancelled || !mountedRef.current) break;
+          const cache = await withTimeout(masterContractService.getMasterContractCache(brokerId), 10000);
+          if (cancelled || !mountedRef.current) break;
 
           status[brokerId] = {
             brokerId,
@@ -83,10 +95,14 @@ export function MasterContractManager({
         }
       }
 
-      setBrokerStatus(status);
+      if (mountedRef.current && !cancelled) {
+        setBrokerStatus(status);
+      }
     };
 
     loadStatus();
+
+    return () => { cancelled = true; };
   }, [brokers]);
 
   // Update a single broker
@@ -97,8 +113,9 @@ export function MasterContractManager({
     }));
 
     try {
-      const result = await masterContractService.downloadMasterContract(brokerId);
+      const result = await withTimeout(masterContractService.downloadMasterContract(brokerId), 120000);
 
+      if (!mountedRef.current) return;
       setBrokerStatus(prev => ({
         ...prev,
         [brokerId]: {
@@ -112,6 +129,7 @@ export function MasterContractManager({
 
       onUpdate?.(brokerId, result);
     } catch (error: any) {
+      if (!mountedRef.current) return;
       setBrokerStatus(prev => ({
         ...prev,
         [brokerId]: {
@@ -128,10 +146,13 @@ export function MasterContractManager({
     setIsUpdatingAll(true);
 
     for (const brokerId of brokers) {
+      if (!mountedRef.current) break;
       await handleUpdateBroker(brokerId);
     }
 
-    setIsUpdatingAll(false);
+    if (mountedRef.current) {
+      setIsUpdatingAll(false);
+    }
   };
 
   // Format last updated time

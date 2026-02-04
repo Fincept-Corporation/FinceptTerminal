@@ -247,8 +247,8 @@ pub async fn check_akshare_db_status() -> Result<DbStatusResponse, String> {
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| {
                 let secs = d.as_secs();
-                chrono::NaiveDateTime::from_timestamp_opt(secs as i64, 0)
-                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                chrono::DateTime::from_timestamp(secs as i64, 0)
+                    .map(|dt| dt.naive_utc().format("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_default()
             })
     } else {
@@ -267,31 +267,3 @@ pub async fn build_akshare_database(app: tauri::AppHandle) -> Result<String, Str
         .map(|_| "Database built successfully".to_string())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TranslateResponse {
-    pub success: bool,
-    pub translations: Option<Vec<Translation>>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Translation {
-    pub original: String,
-    pub translated: String,
-    pub detected_lang: String,
-}
-
-#[command]
-pub async fn translate_batch(app: tauri::AppHandle, texts: Vec<String>, target_lang: String) -> Result<TranslateResponse, String> {
-    let texts_json = serde_json::to_string(&texts)
-        .map_err(|e| format!("Failed to serialize texts: {}", e))?;
-
-    let output = python::execute_sync(
-        &app,
-        "translate_text.py",
-        vec!["batch".to_string(), texts_json, "auto".to_string(), target_lang]
-    )?;
-
-    serde_json::from_str(&output)
-        .map_err(|e| format!("Failed to parse translation response: {}", e))
-}

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Kraken WebSocket Adapter
 //
 // Implements Kraken WebSocket API v2
@@ -6,22 +7,27 @@
 use super::WebSocketAdapter;
 use crate::websocket::types::*;
 use async_trait::async_trait;
+use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 const KRAKEN_WS_URL: &str = "wss://ws.kraken.com/v2";
+
+type WsStream = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+type WsSink = SplitSink<WsStream, Message>;
 
 /// Callback type for connection errors (used to trigger reconnection)
 type ErrorCallback = Box<dyn Fn(String) + Send + Sync>;
 
 pub struct KrakenAdapter {
     config: ProviderConfig,
-    ws: Option<Arc<RwLock<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>>,
+    // Write half of the split stream — used by subscribe/unsubscribe/disconnect
+    ws_sink: Option<Arc<Mutex<WsSink>>>,
     message_callback: Option<Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>>,
     error_callback: Option<Arc<ErrorCallback>>,
     connected: Arc<AtomicBool>,
@@ -32,7 +38,7 @@ impl KrakenAdapter {
     pub fn new(config: ProviderConfig) -> Self {
         Self {
             config,
-            ws: None,
+            ws_sink: None,
             message_callback: None,
             error_callback: None,
             connected: Arc::new(AtomicBool::new(false)),
@@ -57,19 +63,17 @@ impl KrakenAdapter {
         symbol.replace("XBT", "BTC").replace('/', "")
     }
 
-    /// Message receiver loop with error propagation
+    /// Message receiver loop — only holds the read half, never blocks writes
     async fn receive_loop(
-        ws: Arc<RwLock<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
+        mut read_stream: futures_util::stream::SplitStream<WsStream>,
+        write_sink: Arc<Mutex<WsSink>>,
         callback: Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>,
         error_callback: Option<Arc<ErrorCallback>>,
         connected: Arc<AtomicBool>,
         last_message_time: Arc<RwLock<u64>>,
     ) {
         loop {
-            let msg_result = {
-                let mut ws_lock = ws.write().await;
-                ws_lock.next().await
-            };
+            let msg_result = read_stream.next().await;
 
             match msg_result {
                 Some(Ok(msg)) => {
@@ -78,7 +82,6 @@ impl KrakenAdapter {
 
                     match &msg {
                         Message::Text(text) => {
-                            // Handle text message in separate task to avoid blocking
                             let cb = callback.clone();
                             let text_clone = text.clone();
                             tokio::spawn(async move {
@@ -88,11 +91,10 @@ impl KrakenAdapter {
                             });
                         }
                         Message::Ping(data) => {
-                            // Auto-respond to pings with pong
-                            let ws_clone = ws.clone();
+                            let sink = write_sink.clone();
                             let pong_data = data.clone();
                             tokio::spawn(async move {
-                                let _ = ws_clone.write().await.send(Message::Pong(pong_data)).await;
+                                let _ = sink.lock().await.send(Message::Pong(pong_data)).await;
                             });
                         }
                         Message::Pong(_) => {
@@ -116,7 +118,6 @@ impl KrakenAdapter {
                     let error_msg = format!("WebSocket error: {}", e);
                     connected.store(false, Ordering::SeqCst);
 
-                    // Emit error status via message callback
                     callback(MarketMessage::Status(StatusData {
                         provider: "kraken".to_string(),
                         status: ConnectionStatus::Error,
@@ -124,7 +125,6 @@ impl KrakenAdapter {
                         timestamp: Self::now(),
                     }));
 
-                    // Notify error callback for reconnection handling
                     if let Some(err_cb) = &error_callback {
                         err_cb(error_msg);
                     }
@@ -134,7 +134,6 @@ impl KrakenAdapter {
                     let error_msg = "WebSocket connection closed unexpectedly".to_string();
                     connected.store(false, Ordering::SeqCst);
 
-                    // Emit disconnected status
                     callback(MarketMessage::Status(StatusData {
                         provider: "kraken".to_string(),
                         status: ConnectionStatus::Disconnected,
@@ -142,7 +141,6 @@ impl KrakenAdapter {
                         timestamp: Self::now(),
                     }));
 
-                    // Notify error callback for reconnection handling
                     if let Some(err_cb) = &error_callback {
                         err_cb(error_msg);
                     }
@@ -208,10 +206,10 @@ impl KrakenAdapter {
             volume: ticker_data.get("volume").and_then(|v| v.as_f64()),
             high: ticker_data.get("high").and_then(|v| v.as_f64()),
             low: ticker_data.get("low").and_then(|v| v.as_f64()),
-            open: ticker_data.get("vwap").and_then(|v| v.as_f64()),
+            open: ticker_data.get("open").and_then(|v| v.as_f64()),
             close: Some(last),
-            change: None,
-            change_percent: None,
+            change: ticker_data.get("change").and_then(|v| v.as_f64()),
+            change_percent: ticker_data.get("change_pct").and_then(|v| v.as_f64()),
             timestamp: Self::now(),
         })
     }
@@ -247,37 +245,35 @@ impl KrakenAdapter {
     }
 
     fn parse_trade_static(data: &Value) -> Option<Vec<TradeData>> {
-        let trade_data = data.get("data")?.as_array()?.get(0)?;
-        let symbol = trade_data.get("symbol")?.as_str()?;
+        let trades_array = data.get("data")?.as_array()?;
+        if trades_array.is_empty() {
+            return None;
+        }
 
-        // Kraken v2 format: data array contains trade objects
-        let trades = if let Some(trades_array) = data.get("data").and_then(|d| d.as_array()) {
-            trades_array.iter()
-                .filter_map(|trade| {
-                    let price = trade.get("price")?.as_f64()?;
-                    let qty = trade.get("qty")?.as_f64()?;
-                    let side_str = trade.get("side")?.as_str()?;
+        let trades: Vec<TradeData> = trades_array.iter()
+            .filter_map(|trade| {
+                let symbol = trade.get("symbol")?.as_str()?;
+                let price = trade.get("price")?.as_f64()?;
+                let qty = trade.get("qty")?.as_f64()?;
+                let side_str = trade.get("side")?.as_str()?;
 
-                    let side = match side_str {
-                        "buy" => TradeSide::Buy,
-                        "sell" => TradeSide::Sell,
-                        _ => TradeSide::Unknown,
-                    };
+                let side = match side_str {
+                    "buy" => TradeSide::Buy,
+                    "sell" => TradeSide::Sell,
+                    _ => TradeSide::Unknown,
+                };
 
-                    Some(TradeData {
-                        provider: "kraken".to_string(),
-                        symbol: Self::normalize_kraken_symbol(symbol),
-                        trade_id: trade.get("trade_id").and_then(|v| v.as_str()).map(String::from),
-                        price,
-                        quantity: qty,
-                        side,
-                        timestamp: Self::now(),
-                    })
+                Some(TradeData {
+                    provider: "kraken".to_string(),
+                    symbol: Self::normalize_kraken_symbol(symbol),
+                    trade_id: trade.get("trade_id").and_then(|v| v.as_str()).map(String::from),
+                    price,
+                    quantity: qty,
+                    side,
+                    timestamp: Self::now(),
                 })
-                .collect()
-        } else {
-            vec![]
-        };
+            })
+            .collect();
 
         if trades.is_empty() { None } else { Some(trades) }
     }
@@ -320,18 +316,20 @@ impl WebSocketAdapter for KrakenAdapter {
 
         eprintln!("[Kraken] ✓ WebSocket connected successfully");
 
-        let ws = Arc::new(RwLock::new(ws_stream));
-        self.ws = Some(ws.clone());
+        // Split into independent read/write halves
+        let (write_half, read_half) = ws_stream.split();
+        let sink = Arc::new(Mutex::new(write_half));
+        self.ws_sink = Some(sink.clone());
         self.connected.store(true, Ordering::SeqCst);
 
-        // Start receive loop with error callback
+        // Start receive loop with only the read half — subscribe/unsubscribe won't block
         if let Some(callback) = self.message_callback.clone() {
             let connected = self.connected.clone();
             let error_callback = self.error_callback.clone();
             let last_message_time = self.last_message_time.clone();
             eprintln!("[Kraken] Starting receive loop");
             tokio::spawn(async move {
-                Self::receive_loop(ws, callback, error_callback, connected, last_message_time).await;
+                Self::receive_loop(read_half, sink, callback, error_callback, connected, last_message_time).await;
                 eprintln!("[Kraken] Receive loop ended");
             });
         } else {
@@ -344,11 +342,11 @@ impl WebSocketAdapter for KrakenAdapter {
     async fn disconnect(&mut self) -> anyhow::Result<()> {
         self.connected.store(false, Ordering::SeqCst);
 
-        if let Some(ws) = &self.ws {
-            let _ = ws.write().await.close(None).await;
+        if let Some(sink) = &self.ws_sink {
+            let _ = sink.lock().await.close().await;
         }
 
-        self.ws = None;
+        self.ws_sink = None;
         Ok(())
     }
 
@@ -361,14 +359,13 @@ impl WebSocketAdapter for KrakenAdapter {
         eprintln!("[Kraken] subscribe called: symbol={}, channel={}, connected={}",
                   symbol, channel, self.connected.load(Ordering::SeqCst));
 
-        // Check if actually connected first
         if !self.connected.load(Ordering::SeqCst) {
             return Err(anyhow::anyhow!("WebSocket not connected"));
         }
 
-        let ws = self.ws.as_ref()
+        let sink = self.ws_sink.as_ref()
             .ok_or_else(|| {
-                eprintln!("[Kraken] subscribe failed: ws is None");
+                eprintln!("[Kraken] subscribe failed: ws_sink is None");
                 anyhow::anyhow!("Not connected")
             })?;
 
@@ -397,14 +394,13 @@ impl WebSocketAdapter for KrakenAdapter {
         let msg_str = serde_json::to_string(&sub_msg)?;
         eprintln!("[Kraken] Sending subscription: {}", msg_str);
 
-        match ws.write().await.send(Message::Text(msg_str)).await {
+        match sink.lock().await.send(Message::Text(msg_str)).await {
             Ok(_) => {
                 eprintln!("[Kraken] ✓ Subscription sent successfully for {} {}", symbol, channel);
                 Ok(())
             }
             Err(e) => {
                 eprintln!("[Kraken] ✗ Failed to send subscription: {}", e);
-                // Mark as disconnected since send failed
                 self.connected.store(false, Ordering::SeqCst);
                 Err(anyhow::anyhow!("Failed to send subscription: {}", e))
             }
@@ -412,7 +408,7 @@ impl WebSocketAdapter for KrakenAdapter {
     }
 
     async fn unsubscribe(&mut self, symbol: &str, channel: &str) -> anyhow::Result<()> {
-        let ws = self.ws.as_ref()
+        let sink = self.ws_sink.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not connected"))?;
 
         let unsub_msg = serde_json::json!({
@@ -424,7 +420,7 @@ impl WebSocketAdapter for KrakenAdapter {
         });
 
         let msg_str = serde_json::to_string(&unsub_msg)?;
-        ws.write().await.send(Message::Text(msg_str)).await?;
+        sink.lock().await.send(Message::Text(msg_str)).await?;
 
         Ok(())
     }
@@ -438,7 +434,6 @@ impl WebSocketAdapter for KrakenAdapter {
     }
 
     fn is_connected(&self) -> bool {
-        // Use AtomicBool for lock-free, non-blocking check
         self.connected.load(Ordering::SeqCst)
     }
 }

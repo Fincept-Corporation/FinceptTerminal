@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // PyPortfolioOpt - Portfolio Optimization using Worker Pool
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

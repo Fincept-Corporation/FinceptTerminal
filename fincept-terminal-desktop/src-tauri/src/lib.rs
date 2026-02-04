@@ -21,6 +21,7 @@ mod python;
 mod websocket;
 mod services;
 mod paper_trading;
+mod market_sim;
 
 // MCP Server Process with communication channels
 struct MCPProcess {
@@ -35,12 +36,13 @@ struct MCPState {
 }
 
 // Global state for WebSocket manager
-struct WebSocketState {
-    manager: Arc<tokio::sync::RwLock<websocket::WebSocketManager>>,
-    router: Arc<tokio::sync::RwLock<websocket::MessageRouter>>,
-    services: Arc<tokio::sync::RwLock<WebSocketServices>>,
+pub struct WebSocketState {
+    pub manager: Arc<tokio::sync::RwLock<websocket::WebSocketManager>>,
+    pub router: Arc<tokio::sync::RwLock<websocket::MessageRouter>>,
+    pub services: Arc<tokio::sync::RwLock<WebSocketServices>>,
 }
 
+#[allow(dead_code)]
 struct WebSocketServices {
     paper_trading: websocket::services::PaperTradingService,
     arbitrage: websocket::services::ArbitrageService,
@@ -664,11 +666,6 @@ pub fn run() {
             let router_clone = router.clone();
             let services_clone = services.clone();
 
-            // Get database path
-            let db_path = app.path().app_data_dir()
-                .map(|p| p.join("fincept_terminal.db").to_string_lossy().to_string())
-                .unwrap_or_else(|_| "fincept_terminal.db".to_string());
-
             // Initialize edgar cache database
             if let Ok(app_data_dir) = app.path().app_data_dir() {
                 let edgar_cache_path = app_data_dir.join("edgar_company_cache.db");
@@ -689,9 +686,9 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 // Router app handle already set above synchronously
 
-                // Initialize monitoring service with proper database path
+                // Initialize monitoring service
                 let mut services_guard = services_clone.write().await;
-                services_guard.monitoring = websocket::services::MonitoringService::new(db_path);
+                services_guard.monitoring = websocket::services::MonitoringService::new();
                 services_guard.monitoring.set_app_handle(app_handle.clone());
 
                 // Subscribe to ticker stream and start monitoring
@@ -1673,6 +1670,9 @@ pub fn run() {
             commands::ai_quant_lab::deepagent_check_status,
             commands::ai_quant_lab::deepagent_get_capabilities,
             commands::ai_quant_lab::deepagent_execute_task,
+            commands::ai_quant_lab::deepagent_create_plan,
+            commands::ai_quant_lab::deepagent_execute_step,
+            commands::ai_quant_lab::deepagent_synthesize_results,
             commands::ai_quant_lab::deepagent_resume_task,
             commands::ai_quant_lab::deepagent_get_state,
             // AI Quant Lab - Reinforcement Learning
@@ -1716,6 +1716,8 @@ pub fn run() {
             commands::ffn_analytics::ffn_full_analysis,
             commands::ffn_analytics::ffn_portfolio_optimization,
             commands::ffn_analytics::ffn_benchmark_comparison,
+            // QuantStats - Portfolio Performance & Risk Analytics
+            commands::quantstats::run_quantstats_analysis,
             // Fortitudo.tech Analytics - Portfolio Risk Analytics Commands
             commands::fortitudo_analytics::fortitudo_check_status,
             commands::fortitudo_analytics::fortitudo_portfolio_metrics,
@@ -2356,7 +2358,6 @@ pub fn run() {
             // AKShare Commands (Free Chinese & Global market data)
             commands::akshare::akshare_query,
             commands::akshare::akshare_get_endpoints,
-            commands::akshare::translate_batch,
             commands::akshare::get_stock_cn_spot,
             commands::akshare::get_stock_us_spot,
             commands::akshare::get_stock_hk_spot,
@@ -2432,7 +2433,26 @@ pub fn run() {
             commands::ma_analytics::rank_deals,
             commands::ma_analytics::benchmark_deal_premium,
             commands::ma_analytics::analyze_payment_structures,
-            commands::ma_analytics::analyze_industry_deals
+            commands::ma_analytics::analyze_industry_deals,
+            // Market Simulation Engine Commands
+            market_sim::commands::market_sim_start,
+            market_sim::commands::market_sim_step,
+            market_sim::commands::market_sim_run,
+            market_sim::commands::market_sim_snapshot,
+            market_sim::commands::market_sim_analytics,
+            market_sim::commands::market_sim_orderbook,
+            market_sim::commands::market_sim_inject_news,
+            market_sim::commands::market_sim_stop,
+            market_sim::commands::market_sim_events,
+            // Strategy Engine
+            commands::strategies::list_strategies,
+            commands::strategies::read_strategy_source,
+            commands::strategies::execute_fincept_strategy,
+            commands::strategies::deploy_strategy,
+            commands::strategies::stop_strategy,
+            commands::strategies::stop_all_strategies,
+            commands::strategies::list_deployed_strategies,
+            commands::strategies::update_strategy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

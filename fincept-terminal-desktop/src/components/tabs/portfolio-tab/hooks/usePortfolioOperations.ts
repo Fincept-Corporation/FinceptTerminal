@@ -173,7 +173,7 @@ export const usePortfolioOperations = () => {
       if (!refreshTimer) {
         refreshTimer = setInterval(() => {
           refreshPortfolioData();
-        }, 60000);
+        }, 10000);
       }
     };
 

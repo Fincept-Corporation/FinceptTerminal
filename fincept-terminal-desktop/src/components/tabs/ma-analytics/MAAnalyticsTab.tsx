@@ -7,7 +7,8 @@
  * 3. Deal Database - Track and save deals
  */
 
-import React, { useState } from 'react';
+import React, { useState , useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { Calculator, GitMerge, Database, TrendingUp, Building2, Zap } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../portfolio-tab/finceptStyles';
 
@@ -20,6 +21,17 @@ type MainTab = 'valuation' | 'merger' | 'database';
 
 const MAAnalyticsTabNew: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MainTab>('valuation');
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeTab,
+  }), [activeTab]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.activeTab === "string") setActiveTab(state.activeTab as any);
+  }, []);
+
+  useWorkspaceTabState("ma-analytics", getWorkspaceState, setWorkspaceState);
 
   const TABS = [
     {

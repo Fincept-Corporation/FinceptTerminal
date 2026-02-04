@@ -1,6 +1,7 @@
 /**
  * AnalysisModeSelector Component
- * Grid of analysis mode buttons
+ * Joined square design analysis mode buttons
+ * GREEN THEME
  */
 
 import React from 'react';
@@ -18,16 +19,16 @@ import type { AnalysisModeSelectorProps, AnalysisMode } from '../types';
 interface ModeOption {
   mode: AnalysisMode;
   label: string;
-  icon: React.ReactNode;
+  Icon: any;
 }
 
 const MODE_OPTIONS: ModeOption[] = [
-  { mode: 'performance', label: 'Performance', icon: <Activity size={12} /> },
-  { mode: 'monthly', label: 'Monthly', icon: <Calendar size={12} /> },
-  { mode: 'rolling', label: 'Rolling', icon: <LineChart size={12} /> },
-  { mode: 'comparison', label: 'Compare', icon: <Layers size={12} /> },
-  { mode: 'optimize', label: 'Optimize', icon: <Scale size={12} /> },
-  { mode: 'benchmark', label: 'Benchmark', icon: <GitCompare size={12} /> }
+  { mode: 'performance', label: 'Performance', Icon: Activity },
+  { mode: 'monthly', label: 'Monthly', Icon: Calendar },
+  { mode: 'rolling', label: 'Rolling', Icon: LineChart },
+  { mode: 'comparison', label: 'Compare', Icon: Layers },
+  { mode: 'optimize', label: 'Optimize', Icon: Scale },
+  { mode: 'benchmark', label: 'Benchmark', Icon: GitCompare }
 ];
 
 export function AnalysisModeSelector({
@@ -35,26 +36,64 @@ export function AnalysisModeSelector({
   setAnalysisMode
 }: AnalysisModeSelectorProps) {
   return (
-    <div className="px-2 py-2">
-      <label className="block text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
+    <div style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+      <div style={{
+        padding: '10px 12px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        fontSize: '10px',
+        fontWeight: 700,
+        color: FINCEPT.GREEN,
+        fontFamily: 'monospace',
+        letterSpacing: '0.5px'
+      }}>
         ANALYSIS MODE
-      </label>
-      <div className="grid grid-cols-2 gap-1">
-        {MODE_OPTIONS.map(({ mode, label, icon }) => (
-          <button
-            key={mode}
-            onClick={() => setAnalysisMode(mode)}
-            className="px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
-            style={{
-              backgroundColor: analysisMode === mode ? FINCEPT.ORANGE : 'transparent',
-              color: analysisMode === mode ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-              border: `1px solid ${FINCEPT.BORDER}`
-            }}
-          >
-            {icon}
-            {label}
-          </button>
-        ))}
+      </div>
+      <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+        {MODE_OPTIONS.map(({ mode, label, Icon }, idx) => {
+          const isActive = analysisMode === mode;
+          return (
+            <button
+              key={mode}
+              onClick={() => setAnalysisMode(mode)}
+              style={{
+                padding: '10px 12px',
+                backgroundColor: isActive ? FINCEPT.HOVER : 'transparent',
+                border: `1px solid ${isActive ? FINCEPT.GREEN : FINCEPT.BORDER}`,
+                borderTop: idx === 0 ? `1px solid ${isActive ? FINCEPT.GREEN : FINCEPT.BORDER}` : '0',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                marginTop: idx === 0 ? '0' : '-1px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                  e.currentTarget.style.borderColor = FINCEPT.GREEN;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                }
+              }}
+            >
+              <Icon size={14} color={FINCEPT.GREEN} />
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: isActive ? 1 : 0.7,
+                letterSpacing: '0.5px'
+              }}>
+                {label.toUpperCase()}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

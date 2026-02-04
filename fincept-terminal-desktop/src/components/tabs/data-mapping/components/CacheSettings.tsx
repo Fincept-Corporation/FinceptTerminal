@@ -130,11 +130,15 @@ export function CacheSettings({
                 Cache Duration (seconds)
               </label>
               <input
-                type="number"
-                value={cacheTTL}
-                onChange={(e) => onCacheTTLChange(Number(e.target.value))}
-                min="0"
-                step="60"
+                type="text"
+                inputMode="numeric"
+                value={String(cacheTTL)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || /^\d+$/.test(v)) {
+                    onCacheTTLChange(v === '' ? 0 : Number(v));
+                  }
+                }}
                 className="w-full bg-zinc-800 border border-zinc-700 text-gray-300 px-3 py-2 text-sm rounded focus:outline-none focus:border-orange-500"
               />
               <div className="text-xs text-gray-500 mt-2">

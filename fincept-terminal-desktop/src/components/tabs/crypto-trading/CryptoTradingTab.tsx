@@ -1,5 +1,6 @@
 // CryptoTradingTab.tsx - Professional Fincept Terminal-Grade Crypto Trading Interface
 import React, { useState, useEffect, useCallback, useReducer, useRef } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -172,6 +173,22 @@ export function CryptoTradingTab() {
   const [leftSidebarView, setLeftSidebarView] = useState<LeftSidebarViewType>('watchlist');
   const [activeBottomTab, setActiveBottomTab] = useState<BottomPanelTabType>('positions');
   const [isBottomPanelMinimized, setIsBottomPanelMinimized] = useState(false);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    selectedSymbol, selectedView, rightPanelView, leftSidebarView, activeBottomTab, isBottomPanelMinimized,
+  }), [selectedSymbol, selectedView, rightPanelView, leftSidebarView, activeBottomTab, isBottomPanelMinimized]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.selectedSymbol === "string") setSelectedSymbol(state.selectedSymbol);
+    if (typeof state.selectedView === "string") setSelectedView(state.selectedView as any);
+    if (typeof state.rightPanelView === "string") setRightPanelView(state.rightPanelView as any);
+    if (typeof state.leftSidebarView === "string") setLeftSidebarView(state.leftSidebarView as any);
+    if (typeof state.activeBottomTab === "string") setActiveBottomTab(state.activeBottomTab as any);
+    if (typeof state.isBottomPanelMinimized === "boolean") setIsBottomPanelMinimized(state.isBottomPanelMinimized);
+  }, []);
+
+  useWorkspaceTabState("crypto-trading", getWorkspaceState, setWorkspaceState);
   const [showSettings, setShowSettings] = useState(false);
 
   // Trading settings
@@ -758,6 +775,9 @@ export function CryptoTradingTab() {
               selectedView={selectedView}
               tradesData={state.tradesData}
               isBottomPanelMinimized={isBottomPanelMinimized}
+              currentPrice={currentPrice}
+              activeBroker={activeBroker}
+              isPaper={tradingMode === 'paper'}
               onViewChange={setSelectedView}
             />
           </ErrorBoundary>

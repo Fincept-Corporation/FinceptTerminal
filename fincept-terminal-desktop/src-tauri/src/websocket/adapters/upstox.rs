@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Upstox WebSocket Adapter (V3 API with Protobuf)
 //
 // Upstox uses protobuf-encoded market data over WebSocket:

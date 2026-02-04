@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { notesService, Note, NoteTemplate } from '@/services/core/notesService';
 import { noteReminderService } from '@/services/core/noteReminderService.tsx';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 import { showWarning, showError } from '@/utils/notifications';
 import type { EditorState } from '../types';
 import { DEFAULT_EDITOR_STATE } from '../constants';

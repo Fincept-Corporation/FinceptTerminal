@@ -5,12 +5,13 @@
  * Grid trading places buy/sell orders at regular price intervals.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useReducer, useRef } from 'react';
 import {
   Grid3X3, Settings, RefreshCw, Play, Pause, AlertTriangle,
   TrendingUp, TrendingDown, DollarSign, Loader2, Info,
   ChevronDown, ChevronUp, Plus, Trash2, Check,
 } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
 import {
   alphaArenaEnhancedService,
   type GridConfig,
@@ -48,15 +49,42 @@ interface GridAgentStatus {
   isActive: boolean;
 }
 
+// Create state machine
+type CreateState =
+  | { status: 'idle' }
+  | { status: 'creating' }
+  | { status: 'success'; message: string }
+  | { status: 'error'; error: string };
+
+type CreateAction =
+  | { type: 'CREATE_START' }
+  | { type: 'CREATE_SUCCESS'; message: string }
+  | { type: 'CREATE_ERROR'; error: string }
+  | { type: 'RESET' };
+
+function createReducer(_state: CreateState, action: CreateAction): CreateState {
+  switch (action.type) {
+    case 'CREATE_START': return { status: 'creating' };
+    case 'CREATE_SUCCESS': return { status: 'success', message: action.message };
+    case 'CREATE_ERROR': return { status: 'error', error: action.error };
+    case 'RESET': return { status: 'idle' };
+    default: return _state;
+  }
+}
+
 const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
   symbol = 'BTC',
   currentPrice = 50000,
   onGridCreated,
 }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [createState, dispatchCreate] = useReducer(createReducer, { status: 'idle' });
   const [activeGrids, setActiveGrids] = useState<GridAgentStatus[]>([]);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [expandedGrid, setExpandedGrid] = useState<string | null>(null);
 
@@ -83,7 +111,8 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
 
   const calculateGridSpacing = () => {
     const range = gridConfig.upper_price - gridConfig.lower_price;
-    return range / (gridConfig.num_grids - 1);
+    const divisor = Math.max(gridConfig.num_grids - 1, 1);
+    return range / divisor;
   };
 
   const calculateTotalInvestment = () => {
@@ -100,20 +129,34 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
   };
 
   const handleCreateGrid = async () => {
+    if (createState.status === 'creating') return;
+
+    // Validate grid config
     if (!gridName.trim()) {
-      setError('Please enter a name for the grid strategy');
+      dispatchCreate({ type: 'CREATE_ERROR', error: 'Please enter a name for the grid strategy' });
+      return;
+    }
+    if (gridConfig.lower_price >= gridConfig.upper_price) {
+      dispatchCreate({ type: 'CREATE_ERROR', error: 'Lower price must be less than upper price' });
+      return;
+    }
+    if (!Number.isInteger(gridConfig.num_grids) || gridConfig.num_grids < 2) {
+      dispatchCreate({ type: 'CREATE_ERROR', error: 'Number of grids must be an integer >= 2' });
+      return;
+    }
+    if (gridConfig.quantity_per_grid <= 0) {
+      dispatchCreate({ type: 'CREATE_ERROR', error: 'Quantity per grid must be positive' });
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
+    dispatchCreate({ type: 'CREATE_START' });
 
     try {
       const result = await alphaArenaEnhancedService.createGridAgent(gridName, gridConfig);
+      if (!mountedRef.current) return;
 
       if (result.success) {
-        setSuccess(`Grid strategy "${gridName}" created successfully!`);
+        dispatchCreate({ type: 'CREATE_SUCCESS', message: `Grid strategy "${gridName}" created successfully!` });
         setShowCreateForm(false);
         setGridName('');
         onGridCreated?.(gridName);
@@ -130,28 +173,28 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
           isActive: true,
         }]);
       } else {
-        setError(result.error || 'Failed to create grid strategy');
+        dispatchCreate({ type: 'CREATE_ERROR', error: result.error || 'Failed to create grid strategy' });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create grid strategy');
-    } finally {
-      setIsLoading(false);
+      if (!mountedRef.current) return;
+      dispatchCreate({ type: 'CREATE_ERROR', error: err instanceof Error ? err.message : 'Failed to create grid strategy' });
     }
   };
 
   const fetchGridStatus = async (name: string) => {
     try {
       const result = await alphaArenaEnhancedService.getGridStatus(name);
-      if (result.success && result.grid_status) {
+      const gs = result.grid_status;
+      if (result.success && gs) {
         setActiveGrids(prev => prev.map(grid =>
           grid.name === name
             ? {
                 ...grid,
-                gridLevels: result.grid_status!.grid_levels,
-                triggeredLevels: result.grid_status!.triggered_levels,
-                activeOrders: result.grid_status!.active_orders,
-                totalProfit: result.grid_status!.total_profit,
-                tradesExecuted: result.grid_status!.trades_executed,
+                gridLevels: gs.grid_levels ?? grid.gridLevels,
+                triggeredLevels: gs.triggered_levels ?? grid.triggeredLevels,
+                activeOrders: gs.active_orders ?? grid.activeOrders,
+                totalProfit: gs.total_profit ?? grid.totalProfit,
+                tradesExecuted: gs.trades_executed ?? grid.tradesExecuted,
               }
             : grid
         ));
@@ -246,16 +289,16 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
       </div>
 
       {/* Messages */}
-      {error && (
+      {createState.status === 'error' && (
         <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
           <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-          <span className="text-xs" style={{ color: COLORS.RED }}>{error}</span>
+          <span className="text-xs" style={{ color: COLORS.RED }}>{createState.error}</span>
         </div>
       )}
-      {success && (
+      {createState.status === 'success' && (
         <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.GREEN + '10' }}>
           <Check size={14} style={{ color: COLORS.GREEN }} />
-          <span className="text-xs" style={{ color: COLORS.GREEN }}>{success}</span>
+          <span className="text-xs" style={{ color: COLORS.GREEN }}>{createState.message}</span>
         </div>
       )}
 
@@ -286,9 +329,10 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
             <div>
               <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Lower Price</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={gridConfig.lower_price}
-                onChange={(e) => setGridConfig(prev => ({ ...prev, lower_price: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setGridConfig(prev => ({ ...prev, lower_price: parseFloat(v) || 0 })); }}
                 className="w-full px-2 py-1.5 rounded text-xs"
                 style={{
                   backgroundColor: COLORS.DARK_BG,
@@ -300,9 +344,10 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
             <div>
               <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Upper Price</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={gridConfig.upper_price}
-                onChange={(e) => setGridConfig(prev => ({ ...prev, upper_price: parseFloat(e.target.value) || 0 }))}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setGridConfig(prev => ({ ...prev, upper_price: parseFloat(v) || 0 })); }}
                 className="w-full px-2 py-1.5 rounded text-xs"
                 style={{
                   backgroundColor: COLORS.DARK_BG,
@@ -318,11 +363,10 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
             <div>
               <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Number of Grids</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={gridConfig.num_grids}
-                onChange={(e) => setGridConfig(prev => ({ ...prev, num_grids: parseInt(e.target.value) || 5 }))}
-                min={3}
-                max={50}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setGridConfig(prev => ({ ...prev, num_grids: Math.min(parseInt(v) || 5, 50) })); }}
                 className="w-full px-2 py-1.5 rounded text-xs"
                 style={{
                   backgroundColor: COLORS.DARK_BG,
@@ -334,10 +378,10 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
             <div>
               <label className="text-xs mb-1 block" style={{ color: COLORS.GRAY }}>Qty per Grid</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={gridConfig.quantity_per_grid}
-                onChange={(e) => setGridConfig(prev => ({ ...prev, quantity_per_grid: parseFloat(e.target.value) || 0.001 }))}
-                step={0.001}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setGridConfig(prev => ({ ...prev, quantity_per_grid: parseFloat(v) || 0.001 })); }}
                 className="w-full px-2 py-1.5 rounded text-xs"
                 style={{
                   backgroundColor: COLORS.DARK_BG,
@@ -382,15 +426,15 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
             </button>
             <button
               onClick={handleCreateGrid}
-              disabled={isLoading}
+              disabled={createState.status === 'creating'}
               className="flex-1 py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1"
               style={{
                 backgroundColor: COLORS.BLUE,
                 color: COLORS.WHITE,
-                opacity: isLoading ? 0.5 : 1,
+                opacity: createState.status === 'creating' ? 0.5 : 1,
               }}
             >
-              {isLoading ? (
+              {createState.status === 'creating' ? (
                 <Loader2 size={12} className="animate-spin" />
               ) : (
                 <Play size={12} />
@@ -490,4 +534,4 @@ const GridStrategyPanel: React.FC<GridStrategyPanelProps> = ({
   );
 };
 
-export default GridStrategyPanel;
+export default withErrorBoundary(GridStrategyPanel, { name: 'AlphaArena.GridStrategyPanel' });

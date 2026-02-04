@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // WebSocket Type Definitions
 // Normalized message formats for all providers
 

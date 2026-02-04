@@ -5,12 +5,15 @@
  * risk metrics (Sharpe, Sortino), and performance statistics.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   TrendingUp, TrendingDown, BarChart3, RefreshCw,
   Target, AlertTriangle, Award, Percent, Loader2,
   ChevronDown, ChevronUp, Info,
 } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useCache, cacheKey } from '@/hooks/useCache';
+import { validateString } from '@/services/core/validators';
 import {
   alphaArenaEnhancedService,
   type PortfolioMetrics,
@@ -93,49 +96,65 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
   modelName,
   onModelSelect,
 }) => {
-  const [metrics, setMetrics] = useState<PortfolioMetrics | null>(null);
-  const [allMetrics, setAllMetrics] = useState<Record<string, PortfolioMetrics> | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(modelName || null);
   const [expandedSection, setExpandedSection] = useState<string | null>('returns');
 
-  const fetchMetrics = useCallback(async () => {
-    if (!competitionId) return;
+  // Cache: all models overview (enabled when no model selected)
+  const allModelsCache = useCache<Record<string, PortfolioMetrics>>({
+    key: cacheKey('alpha-arena', 'metrics', competitionId, 'all'),
+    category: 'alpha-arena',
+    fetcher: async () => {
+      const validId = validateString(competitionId, { minLength: 1 });
+      if (!validId.valid) throw new Error(validId.error);
+      const result = await alphaArenaEnhancedService.getPortfolioMetrics(competitionId, undefined);
+      if (result.success && result.metrics && typeof result.metrics === 'object') {
+        return result.metrics as Record<string, PortfolioMetrics>;
+      }
+      throw new Error(result.error || 'Failed to fetch metrics');
+    },
+    ttl: 300,
+    enabled: !!competitionId && !selectedModel,
+    staleWhileRevalidate: true,
+  });
 
-    setIsLoading(true);
-    setError(null);
-    try {
+  // Cache: single model metrics (enabled when a model is selected)
+  const singleModelCache = useCache<PortfolioMetrics>({
+    key: cacheKey('alpha-arena', 'metrics', competitionId, selectedModel || ''),
+    category: 'alpha-arena',
+    fetcher: async () => {
+      const validId = validateString(competitionId, { minLength: 1 });
+      if (!validId.valid) throw new Error(validId.error);
       const result = await alphaArenaEnhancedService.getPortfolioMetrics(
         competitionId,
         selectedModel || undefined
       );
-
-      if (result.success && result.metrics) {
-        if (selectedModel) {
-          setMetrics(result.metrics as PortfolioMetrics);
-          setAllMetrics(null);
-        } else {
-          setAllMetrics(result.metrics as Record<string, PortfolioMetrics>);
-          setMetrics(null);
-        }
-      } else {
-        setError(result.error || 'Failed to fetch metrics');
+      if (result.success && result.metrics && typeof result.metrics === 'object') {
+        return result.metrics as PortfolioMetrics;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch metrics');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [competitionId, selectedModel]);
+      throw new Error(result.error || 'Failed to fetch metrics');
+    },
+    ttl: 300,
+    enabled: !!competitionId && !!selectedModel,
+    staleWhileRevalidate: true,
+  });
 
-  useEffect(() => {
-    fetchMetrics();
-  }, [fetchMetrics]);
+  const metrics = singleModelCache.data;
+  const allMetrics = allModelsCache.data;
+  const isLoading = selectedModel ? singleModelCache.isLoading : allModelsCache.isLoading;
+  const error = selectedModel ? singleModelCache.error : allModelsCache.error;
+
+  const handleRefresh = () => {
+    if (selectedModel) {
+      singleModelCache.refresh();
+    } else {
+      allModelsCache.refresh();
+    }
+  };
 
   const handleModelChange = (model: string | null) => {
-    setSelectedModel(model);
-    onModelSelect?.(model || '');
+    const normalizedModel = model && model.length > 0 ? model : null;
+    setSelectedModel(normalizedModel);
+    onModelSelect?.(normalizedModel || '');
   };
 
   const toggleSection = (section: string) => {
@@ -328,7 +347,7 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
           </span>
         </div>
         <button
-          onClick={fetchMetrics}
+          onClick={handleRefresh}
           disabled={isLoading}
           className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
         >
@@ -366,7 +385,7 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
         {error && (
           <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
             <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-            <span className="text-xs" style={{ color: COLORS.RED }}>{error}</span>
+            <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
           </div>
         )}
 
@@ -422,4 +441,4 @@ const PortfolioMetricsPanel: React.FC<PortfolioMetricsPanelProps> = ({
   );
 };
 
-export default PortfolioMetricsPanel;
+export default withErrorBoundary(PortfolioMetricsPanel, { name: 'AlphaArena.PortfolioMetricsPanel' });

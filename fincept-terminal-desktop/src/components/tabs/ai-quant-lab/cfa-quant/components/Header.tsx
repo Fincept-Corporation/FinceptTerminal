@@ -19,66 +19,115 @@ export function Header({
 }: HeaderProps) {
   const steps: Step[] = ['data', 'analysis', 'results'];
   const labels: Record<Step, string> = {
-    data: '1 DATA',
-    analysis: '2 MODEL',
-    results: '3 OUTPUT'
+    data: 'DATA',
+    analysis: 'ANALYSIS',
+    results: 'RESULTS'
   };
 
   return (
-    <div
-      className="flex items-center justify-between px-4 py-2"
-      style={{ backgroundColor: BB.black, borderBottom: `1px solid ${BB.borderDark}` }}
-    >
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Activity size={18} style={{ color: BB.amber }} />
-          <span className="text-sm font-bold tracking-wider" style={{ color: BB.textAmber }}>
-            CFA QUANT ANALYTICS
-          </span>
-        </div>
-        <div className="h-4 w-px" style={{ backgroundColor: BB.borderLight }} />
-        <div className="flex items-center gap-2">
-          {steps.map((step, idx) => {
-            const isActive = currentStep === step;
-            const isPast = steps.indexOf(currentStep) > idx;
-            return (
-              <React.Fragment key={step}>
-                <button
-                  onClick={() => {
-                    if (step === 'results' && !analysisResult) return;
-                    setCurrentStep(step);
-                  }}
-                  className="px-3 py-1 text-xs font-mono transition-colors"
-                  style={{
-                    backgroundColor: isActive ? BB.amber : 'transparent',
-                    color: isActive ? BB.black : isPast ? BB.textAmber : BB.textMuted,
-                    cursor: step === 'results' && !analysisResult ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {labels[step]}
-                </button>
-                {idx < 2 && <span style={{ color: BB.textMuted }}>›</span>}
-              </React.Fragment>
-            );
-          })}
-        </div>
+    <div style={{
+      padding: '12px 16px',
+      borderBottom: `1px solid ${BB.borderDark}`,
+      backgroundColor: BB.panelBg,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    }}>
+      <Activity size={16} color={BB.amber} />
+      <span style={{
+        color: BB.amber,
+        fontSize: '12px',
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        fontFamily: 'monospace'
+      }}>
+        CFA QUANT ANALYTICS
+      </span>
+      <div style={{
+        height: '14px',
+        width: '1px',
+        backgroundColor: BB.borderDark,
+        marginLeft: '4px',
+        marginRight: '4px'
+      }} />
+
+      {/* Step Navigation - Joined Square Design */}
+      <div style={{ display: 'flex', gap: '0' }}>
+        {steps.map((step, idx) => {
+          const isActive = currentStep === step;
+          const isPast = steps.indexOf(currentStep) > idx;
+          const isDisabled = step === 'results' && !analysisResult;
+
+          return (
+            <button
+              key={step}
+              onClick={() => {
+                if (!isDisabled) setCurrentStep(step);
+              }}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: isActive ? BB.amber : BB.darkBg,
+                border: `1px solid ${BB.borderDark}`,
+                borderLeft: idx === 0 ? `1px solid ${BB.borderDark}` : '0',
+                marginLeft: idx === 0 ? '0' : '-1px',
+                color: isActive ? '#000000' : isPast ? BB.amber : BB.textMuted,
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                opacity: isDisabled ? 0.5 : 1,
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive && !isDisabled) {
+                  e.currentTarget.style.backgroundColor = BB.hover;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = BB.darkBg;
+                }
+              }}
+            >
+              {labels[step]}
+            </button>
+          );
+        })}
       </div>
+
+      <div style={{ flex: 1 }} />
+
+      {/* Symbol Info */}
       {dataSourceType === 'symbol' && symbolInput && (
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-mono font-bold" style={{ color: BB.textPrimary }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{
+            fontSize: '11px',
+            fontFamily: 'monospace',
+            fontWeight: 700,
+            color: BB.textPrimary
+          }}>
             {symbolInput.toUpperCase()}
           </span>
           {dataStats && (
             <>
-              <span className="text-sm font-mono" style={{ color: BB.textSecondary }}>
+              <span style={{
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                color: BB.textSecondary
+              }}>
                 {formatPrice(dataStats.mean)}
               </span>
-              <span
-                className="text-sm font-mono"
-                style={{ color: dataStats.changePercent >= 0 ? BB.green : BB.red }}
-              >
+              <div style={{
+                fontSize: '10px',
+                fontFamily: 'monospace',
+                padding: '3px 8px',
+                backgroundColor: dataStats.changePercent >= 0 ? BB.green + '20' : BB.red + '20',
+                border: `1px solid ${dataStats.changePercent >= 0 ? BB.green : BB.red}`,
+                color: dataStats.changePercent >= 0 ? BB.green : BB.red
+              }}>
                 {dataStats.changePercent >= 0 ? '▲' : '▼'} {Math.abs(dataStats.changePercent).toFixed(2)}%
-              </span>
+              </div>
             </>
           )}
         </div>

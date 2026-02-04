@@ -318,16 +318,6 @@ export const COMMANDS: Command[] = [
     action: 'contexts',
     keywords: ['contexts', 'recorded', 'history', 'sessions']
   },
-  {
-    id: 'monitor',
-    name: 'Monitoring',
-    description: 'System monitoring',
-    aliases: ['monitor', 'monitoring', 'system'],
-    category: 'system',
-    action: 'monitoring',
-    keywords: ['monitoring', 'system', 'performance', 'status']
-  },
-
   // Community
   {
     id: 'forum',
@@ -429,6 +419,33 @@ export const COMMANDS: Command[] = [
     category: 'navigation',
     action: 'alpha-arena',
     keywords: ['alpha', 'arena', 'competition', 'trading', 'leaderboard']
+  },
+  {
+    id: 'ma',
+    name: 'M&A Analytics',
+    description: 'Mergers and acquisitions analysis',
+    aliases: ['ma', 'mna', 'mergers', 'acquisitions'],
+    category: 'navigation',
+    action: 'ma-analytics',
+    keywords: ['ma', 'mergers', 'acquisitions', 'mna', 'deal', 'analysis']
+  },
+  {
+    id: 'marketsim',
+    name: 'Market Simulation',
+    description: 'Market simulation and modeling',
+    aliases: ['marketsim', 'sim', 'simulation', 'model'],
+    category: 'tool',
+    action: 'market-sim',
+    keywords: ['market', 'simulation', 'modeling', 'sim', 'scenario']
+  },
+  {
+    id: 'strat',
+    name: 'Strategy Engine',
+    description: 'Trading strategy development and management',
+    aliases: ['strat', 'strategies', 'strategy', 'engine'],
+    category: 'tool',
+    action: 'strategies',
+    keywords: ['strategy', 'strategies', 'engine', 'trading', 'algo', 'algorithm']
   }
 ];
 

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Peer Comparison Tauri Commands
 // CFA-compliant peer analysis and benchmarking commands
 

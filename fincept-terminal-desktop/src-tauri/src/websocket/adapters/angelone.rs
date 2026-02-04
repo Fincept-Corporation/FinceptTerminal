@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Angel One (SmartAPI) WebSocket Adapter v2
 //
 // Official spec: https://smartapi.angelone.in/docs/WebSocket2
@@ -593,7 +594,14 @@ impl WebSocketAdapter for AngelOneAdapter {
         let exchange_type = Self::parse_exchange_type(exchange);
 
         // Store token → symbol mapping for resolving in tick messages
-        self.token_symbol_map.write().await.insert(token.clone(), symbol.to_string());
+        // If a human-readable name was provided via params, use that instead of "NSE:TOKEN"
+        let display_symbol = _params
+            .as_ref()
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str())
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| symbol.to_string());
+        self.token_symbol_map.write().await.insert(token.clone(), display_symbol);
 
         let request = SubscriptionRequest {
             correlation_id: uuid::Uuid::new_v4().to_string()[..10].to_string(),

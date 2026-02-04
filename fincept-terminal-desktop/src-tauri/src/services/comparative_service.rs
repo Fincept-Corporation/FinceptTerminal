@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Comparative Analysis Service
 // Implements QoQ, YoY, MoM, TTM comparative calculations and percentile rankings
 

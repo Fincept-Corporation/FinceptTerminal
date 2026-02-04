@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect , useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { TrendingDown, Building2, Shield, Gem, Lock, Calendar, Package, ShieldCheck, Target, Bitcoin, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { BondsView } from './categories/BondsView';
 import { RealEstateView } from './categories/RealEstateView';
 import { HedgeFundsView } from './categories/HedgeFundsView';
@@ -57,6 +59,18 @@ const CATEGORIES: CategoryItem[] = [
 export const AlternativeInvestmentsTab: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<CategoryView>('bonds');
   const [isLeftPanelMinimized, setIsLeftPanelMinimized] = useState(false);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeCategory, isLeftPanelMinimized,
+  }), [activeCategory, isLeftPanelMinimized]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.activeCategory === "string") setActiveCategory(state.activeCategory as any);
+    if (typeof state.isLeftPanelMinimized === "boolean") setIsLeftPanelMinimized(state.isLeftPanelMinimized);
+  }, []);
+
+  useWorkspaceTabState("alternative-investments", getWorkspaceState, setWorkspaceState);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const activeItem = CATEGORIES.find(c => c.id === activeCategory) || CATEGORIES[0];
@@ -225,4 +239,10 @@ export const AlternativeInvestmentsTab: React.FC = () => {
   );
 };
 
-export default AlternativeInvestmentsTab;
+const AlternativeInvestmentsTabWithBoundary: React.FC = () => (
+  <ErrorBoundary name="AlternativeInvestmentsTab" variant="minimal">
+    <AlternativeInvestmentsTab />
+  </ErrorBoundary>
+);
+
+export default AlternativeInvestmentsTabWithBoundary;

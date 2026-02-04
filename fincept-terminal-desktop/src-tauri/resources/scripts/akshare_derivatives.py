@@ -79,6 +79,35 @@ class DerivativesWrapper:
                     "timestamp": int(datetime.now().timestamp())
                 }
 
+            except ValueError as e:
+                error_msg = str(e)
+                if "Length mismatch" in error_msg or "Expected axis" in error_msg:
+                    return {
+                        "success": False,
+                        "error": "AKShare API structure changed (column mismatch). Endpoint temporarily unavailable.",
+                        "data": [],
+                        "error_type": "api_mismatch",
+                        "timestamp": int(datetime.now().timestamp())
+                    }
+                last_error = error_msg
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(self.retry_delay)
+                continue
+            except KeyError as e:
+                return {
+                    "success": False,
+                    "error": f"Missing data field: {str(e)}. API format may have changed.",
+                    "data": [],
+                    "error_type": "missing_field",
+                    "timestamp": int(datetime.now().timestamp())
+                }
+            except (ConnectionError, TimeoutError) as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(self.retry_delay * 2)
+                continue
             except Exception as e:
                 last_error = str(e)
                 if attempt < max_retries - 1:
@@ -322,5 +351,42 @@ def main():
     else:
         print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
 
+# ==================== CLI ====================
 if __name__ == "__main__":
-    main()
+    import sys
+    import json
+
+    # Get wrapper instance
+    wrapper = DerivativesWrapper()
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_derivatives.py <endpoint> [args...]"}))
+        sys.exit(1)
+
+    endpoint = sys.argv[1]
+    args = sys.argv[2:] if len(sys.argv) > 2 else []
+
+    # Handle get_all_endpoints
+    if endpoint == "get_all_endpoints":
+        if hasattr(wrapper, 'get_all_available_endpoints'):
+            result = wrapper.get_all_available_endpoints()
+        elif hasattr(wrapper, 'get_all_endpoints'):
+            result = wrapper.get_all_endpoints()
+        else:
+            result = {"success": False, "error": "Endpoint list not available"}
+        print(json.dumps(result, ensure_ascii=True))
+        sys.exit(0)
+
+    # Dynamic method resolution
+    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
+
+    if hasattr(wrapper, method_name):
+        method = getattr(wrapper, method_name)
+        try:
+            result = method(*args) if args else method()
+            print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+        except Exception as e:
+            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
+    else:
+        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
+

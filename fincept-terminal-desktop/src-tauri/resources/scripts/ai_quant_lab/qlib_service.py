@@ -105,11 +105,132 @@ if QLIB_AVAILABLE:
         MODEL_CLASSES['tabnet'] = TabnetModel
     except: MODELS_AVAILABLE['tabnet'] = False
 
+    # SFM_Model is a raw nn.Module - wrap it with fit/predict interface
     try:
         from qlib.contrib.model.pytorch_sfm import SFM_Model
+        import torch
+        import torch.nn as nn
+        import numpy as np
+        import pandas as pd
+        import copy
+        from qlib.data.dataset.handler import DataHandlerLP
+        from qlib.utils import get_or_create_path
+        from qlib.log import get_module_logger
+
+        class SFMWrapper:
+            """Wrapper around SFM_Model to provide qlib-compatible fit/predict interface"""
+            def __init__(self, d_feat=6, output_dim=1, freq_dim=10, hidden_size=64,
+                         n_epochs=200, lr=0.001, batch_size=2000, early_stop=20,
+                         metric='', loss='mse', optimizer='adam', GPU=0, seed=None, **kwargs):
+                self.logger = get_module_logger("SFM")
+                self.d_feat = d_feat
+                self.output_dim = output_dim
+                self.freq_dim = freq_dim
+                self.hidden_size = hidden_size
+                self.n_epochs = n_epochs
+                self.lr = lr
+                self.batch_size = batch_size
+                self.early_stop = early_stop
+                self.metric = metric
+                self.optimizer = optimizer.lower()
+                self.loss = loss
+                self.fitted = False
+                self.device = torch.device("cuda:%d" % GPU if torch.cuda.is_available() and GPU >= 0 else "cpu")
+                if seed is not None:
+                    np.random.seed(seed)
+                    torch.manual_seed(seed)
+                self.sfm_model = SFM_Model(d_feat=d_feat, output_dim=output_dim, freq_dim=freq_dim,
+                                           hidden_size=hidden_size, device=self.device).to(self.device)
+                if self.optimizer == 'adam':
+                    self.train_optimizer = torch.optim.Adam(self.sfm_model.parameters(), lr=self.lr)
+                else:
+                    self.train_optimizer = torch.optim.SGD(self.sfm_model.parameters(), lr=self.lr)
+                self.loss_fn = nn.MSELoss()
+
+            def fit(self, dataset, evals_result=dict(), save_path=None):
+                df_train, df_valid = dataset.prepare(["train", "valid"], col_set=["feature", "label"], data_key=DataHandlerLP.DK_L)
+                if df_train.empty or df_valid.empty:
+                    raise ValueError("Empty data")
+                x_train, y_train = df_train["feature"], df_train["label"]
+                x_valid, y_valid = df_valid["feature"], df_valid["label"]
+                save_path = get_or_create_path(save_path)
+                best_score, best_epoch, stop_steps = -np.inf, 0, 0
+                self.fitted = True
+                best_param = copy.deepcopy(self.sfm_model.state_dict())
+                for step in range(self.n_epochs):
+                    self.logger.info("Epoch%d:", step)
+                    self._train_epoch(x_train, y_train)
+                    train_score = self._eval_epoch(x_train, y_train)
+                    val_score = self._eval_epoch(x_valid, y_valid)
+                    self.logger.info("train %.6f, valid %.6f" % (train_score, val_score))
+                    if val_score > best_score:
+                        best_score = val_score
+                        stop_steps = 0
+                        best_epoch = step
+                        best_param = copy.deepcopy(self.sfm_model.state_dict())
+                    else:
+                        stop_steps += 1
+                        if stop_steps >= self.early_stop:
+                            self.logger.info("early stop")
+                            break
+                self.logger.info("best score: %.6lf @ %d" % (best_score, best_epoch))
+                self.sfm_model.load_state_dict(best_param)
+                torch.save(best_param, save_path)
+
+            def predict(self, dataset, segment="test"):
+                if not self.fitted:
+                    raise ValueError("model is not fitted yet!")
+                x_test = dataset.prepare(segment, col_set="feature", data_key=DataHandlerLP.DK_I)
+                index = x_test.index
+                self.sfm_model.eval()
+                x_values = x_test.values
+                preds = []
+                for begin in range(len(x_values))[::self.batch_size]:
+                    end = min(begin + self.batch_size, len(x_values))
+                    x_batch = torch.from_numpy(x_values[begin:end]).float().to(self.device)
+                    with torch.no_grad():
+                        pred = self.sfm_model(x_batch).detach().cpu().numpy()
+                    preds.append(pred)
+                return pd.Series(np.concatenate(preds), index=index)
+
+            def _train_epoch(self, x_train, y_train):
+                self.sfm_model.train()
+                x_vals = x_train.values
+                y_vals = np.squeeze(y_train.values)
+                indices = np.arange(len(x_vals))
+                np.random.shuffle(indices)
+                for i in range(len(indices))[::self.batch_size]:
+                    if len(indices) - i < self.batch_size:
+                        break
+                    batch = indices[i:i+self.batch_size]
+                    feature = torch.from_numpy(x_vals[batch]).float().to(self.device)
+                    label = torch.from_numpy(y_vals[batch]).float().to(self.device)
+                    pred = self.sfm_model(feature)
+                    loss = self.loss_fn(pred, label)
+                    self.train_optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_value_(self.sfm_model.parameters(), 3.0)
+                    self.train_optimizer.step()
+
+            def _eval_epoch(self, x, y):
+                self.sfm_model.eval()
+                x_vals = x.values
+                y_vals = np.squeeze(y.values)
+                preds = []
+                for begin in range(len(x_vals))[::self.batch_size]:
+                    end = min(begin + self.batch_size, len(x_vals))
+                    feature = torch.from_numpy(x_vals[begin:end]).float().to(self.device)
+                    with torch.no_grad():
+                        pred = self.sfm_model(feature).detach().cpu().numpy()
+                    preds.append(pred)
+                preds = np.concatenate(preds)
+                score = -np.mean((preds - y_vals) ** 2)  # negative MSE (higher is better)
+                return score
+
         MODELS_AVAILABLE['sfm'] = True
-        MODEL_CLASSES['sfm'] = SFM_Model
-    except: MODELS_AVAILABLE['sfm'] = False
+        MODEL_CLASSES['sfm'] = SFMWrapper
+    except Exception:
+        MODELS_AVAILABLE['sfm'] = False
 
     try:
         from qlib.contrib.model.pytorch_gats import GATs
@@ -187,9 +308,20 @@ class QlibService:
     - Experiment management with MLflow
     """
 
-    def __init__(self):
+    def __init__(self, provider_uri: str = "~/.qlib/qlib_data/us_data", region: str = "us"):
         self.trained_models = {}
         self.experiment_manager = None
+        self.initialized = False
+
+        if QLIB_AVAILABLE:
+            try:
+                reg = REG_US if region.lower() == "us" else REG_CN
+                qlib.init(provider_uri=provider_uri, region=reg)
+                self.initialized = True
+            except Exception as e:
+                # qlib.init may fail if data is not downloaded yet
+                self.init_error = str(e)
+                self.initialized = False
 
     def list_models(self) -> Dict[str, Any]:
         """List all available pre-trained models with detailed information"""
@@ -321,24 +453,24 @@ class QlibService:
             {
                 "id": "adarnn",
                 "name": "AdaRNN (Adaptive RNN)",
-                "description": "Adaptive RNN that handles distribution shift in financial data",
+                "description": "Adaptive RNN for distribution shift (auto-uses Alpha360 handler)",
                 "type": "neural_network",
                 "available": MODELS_AVAILABLE.get('adarnn', False),
-                "features": ["Adaptive learning", "Distribution shift handling", "Market dynamics"],
+                "features": ["Adaptive learning", "Distribution shift handling", "Alpha360 handler"],
                 "use_cases": ["Regime changes", "Non-stationary data", "Dynamic markets"],
                 "hyperparameters": {
                     "hidden_size": 64,
-                    "num_layers": 3
+                    "num_layers": 2
                 }
             },
             {
                 "id": "hist",
                 "name": "HIST (Historical Attention)",
-                "description": "Historical attention model specialized for stock prediction",
+                "description": "Historical attention model - requires CSI300 stock2concept data (CN market)",
                 "type": "neural_network",
                 "available": MODELS_AVAILABLE.get('hist', False),
-                "features": ["Historical attention", "Concept-oriented", "High performance"],
-                "use_cases": ["Stock prediction", "Alpha generation", "Research"],
+                "features": ["Historical attention", "Concept-oriented", "CSI300 market"],
+                "use_cases": ["Chinese market prediction", "Alpha generation", "Research"],
                 "hyperparameters": {
                     "hidden_size": 64,
                     "num_layers": 2
@@ -361,26 +493,40 @@ class QlibService:
             {
                 "id": "sfm",
                 "name": "SFM (State Frequency Memory)",
-                "description": "Frequency domain analysis for financial time-series",
+                "description": "Frequency domain analysis for financial time-series (auto-uses Alpha360 handler)",
                 "type": "neural_network",
                 "available": MODELS_AVAILABLE.get('sfm', False),
-                "features": ["Frequency analysis", "State memory", "Unique approach"],
+                "features": ["Frequency analysis", "State memory", "Alpha360 handler"],
                 "use_cases": ["Cyclical patterns", "Seasonality", "Multi-frequency"],
                 "hyperparameters": {
-                    "hidden_size": 64
+                    "hidden_size": 64,
+                    "freq_dim": 10
                 }
             },
             {
                 "id": "gats",
                 "name": "GATs (Graph Attention Networks)",
-                "description": "Graph neural network for stock relationship modeling",
+                "description": "Graph neural network for stock relationships (auto-uses Alpha360 handler)",
                 "type": "neural_network",
                 "available": MODELS_AVAILABLE.get('gats', False),
-                "features": ["Graph structure", "Relationship modeling", "Attention"],
+                "features": ["Graph structure", "Relationship modeling", "Alpha360 handler"],
                 "use_cases": ["Stock relationships", "Sector analysis", "Network effects"],
                 "hyperparameters": {
                     "hidden_size": 64,
-                    "num_heads": 4
+                    "num_layers": 2
+                }
+            },
+            {
+                "id": "add",
+                "name": "ADD (Adversarial Decomposition)",
+                "description": "Adversarial decomposition model separating excess/market returns (auto-uses Alpha360 handler)",
+                "type": "neural_network",
+                "available": MODELS_AVAILABLE.get('add', False),
+                "features": ["Return decomposition", "Adversarial training", "Alpha360 handler"],
+                "use_cases": ["Alpha extraction", "Market-neutral signals", "Excess return prediction"],
+                "hyperparameters": {
+                    "hidden_size": 64,
+                    "num_layers": 2
                 }
             },
             {
@@ -405,7 +551,7 @@ class QlibService:
             "model_types": {
                 "tree_based": ["lightgbm", "xgboost", "catboost"],
                 "linear": ["linear"],
-                "neural_network": ["lstm", "gru", "alstm", "transformer", "tcn", "adarnn", "hist", "tabnet", "sfm", "gats"],
+                "neural_network": ["lstm", "gru", "alstm", "transformer", "tcn", "adarnn", "hist", "tabnet", "sfm", "gats", "add"],
                 "ensemble": ["densemble"]
             }
         }
@@ -637,7 +783,7 @@ class QlibService:
             experiment_name: Name for experiment tracking
         """
         if not self.initialized:
-            return {"success": False, "error": "Qlib not initialized"}
+            return {"success": False, "error": "Qlib not initialized. Ensure qlib data is downloaded to ~/.qlib/qlib_data/us_data"}
 
         model_type_lower = model_type.lower()
         if model_type_lower not in MODEL_CLASSES:
@@ -646,7 +792,37 @@ class QlibService:
                 "error": f"Model type '{model_type}' not available. Available: {list(MODEL_CLASSES.keys())}"
             }
 
+        # Normalize instruments: lowercase individual tickers, keep pool names as-is
+        pool_names = {"sp500", "nasdaq100", "all", "csi300", "csi500", "csi100"}
+        if isinstance(instruments, str):
+            if instruments.lower() not in pool_names:
+                instruments = instruments.lower()
+            else:
+                instruments = instruments.lower()
+        elif isinstance(instruments, list):
+            instruments = [i.lower() for i in instruments]
+
         try:
+            # Models that require Alpha360 handler (they reshape features as d_feat=6, len_seq=60)
+            ALPHA360_MODELS = {'adarnn', 'gats', 'add', 'sfm'}
+            if model_type_lower in ALPHA360_MODELS:
+                handler_type = 'Alpha360'
+
+            # HIST requires CSI300 stock2concept mapping
+            stock2concept_path = os.path.expanduser('~/.qlib/qlib_data/stock2concept.npy')
+            stock_index_path = os.path.expanduser('~/.qlib/qlib_data/stock_index.npy')
+
+            # Build handler kwargs
+            handler_kwargs = {
+                "instruments": instruments,
+                "start_time": train_start,
+                "end_time": valid_end
+            }
+            # Alpha360 requires fit_start_time and fit_end_time
+            if handler_type in ('Alpha360', 'Alpha360vwap'):
+                handler_kwargs["fit_start_time"] = train_start
+                handler_kwargs["fit_end_time"] = train_end
+
             # Create dataset
             dataset_config = {
                 "class": "DatasetH",
@@ -655,15 +831,12 @@ class QlibService:
                     "handler": {
                         "class": handler_type,
                         "module_path": "qlib.contrib.data.handler",
-                        "kwargs": {
-                            "instruments": instruments,
-                            "start_time": train_start,
-                            "end_time": valid_end
-                        }
+                        "kwargs": handler_kwargs
                     },
                     "segments": {
                         "train": (train_start, train_end),
-                        "valid": (valid_start, valid_end)
+                        "valid": (valid_start, valid_end),
+                        "test": (valid_start, valid_end)
                     }
                 }
             }
@@ -672,11 +845,31 @@ class QlibService:
 
             # Initialize model
             model_class = MODEL_CLASSES[model_type_lower]
+            # d_feat must match handler: Alpha158=158, Alpha360 time-series models use d_feat=6
+            if model_type_lower in ALPHA360_MODELS:
+                d_feat = 6
+            elif handler_type in ('Alpha158', 'Alpha158vwap'):
+                d_feat = 158
+            else:
+                d_feat = 360
             default_configs = {
                 'lightgbm': {'num_leaves': 210, 'max_depth': 8, 'learning_rate': 0.05},
                 'xgboost': {'max_depth': 6, 'learning_rate': 0.1},
-                'lstm': {'hidden_size': 64, 'num_layers': 2},
-                'transformer': {'d_model': 64, 'nhead': 4}
+                'catboost': {'depth': 6, 'learning_rate': 0.03, 'iterations': 1000},
+                'linear': {'alpha': 0.001},
+                'lstm': {'d_feat': d_feat, 'hidden_size': 64, 'num_layers': 2, 'batch_size': 2048, 'n_epochs': 50},
+                'gru': {'d_feat': d_feat, 'hidden_size': 64, 'num_layers': 2, 'batch_size': 2048, 'n_epochs': 50},
+                'alstm': {'d_feat': d_feat, 'hidden_size': 64, 'num_layers': 2, 'batch_size': 2048, 'n_epochs': 50},
+                'transformer': {'d_feat': d_feat, 'd_model': 64, 'nhead': 4, 'batch_size': 2048, 'n_epochs': 50},
+                'tcn': {'num_input': d_feat, 'output_size': 1},
+                'adarnn': {'d_feat': 6, 'hidden_size': 64, 'num_layers': 2, 'n_epochs': 50, 'batch_size': 2048, 'len_seq': 60},
+                'hist': {'d_feat': d_feat, 'hidden_size': 64, 'num_layers': 2, 'n_epochs': 50, 'base_model': 'GRU',
+                         'stock2concept': stock2concept_path, 'stock_index': stock_index_path},
+                'tabnet': {'d_feat': d_feat, 'out_dim': 64, 'final_out_dim': 1, 'n_epochs': 50, 'batch_size': 4096, 'pretrain': False},
+                'sfm': {'d_feat': 6, 'output_dim': 1, 'freq_dim': 10, 'hidden_size': 64, 'n_epochs': 50, 'batch_size': 2048},
+                'gats': {'d_feat': 6, 'hidden_size': 64, 'num_layers': 2, 'n_epochs': 50, 'base_model': 'GRU'},
+                'add': {'d_feat': 6, 'hidden_size': 64, 'num_layers': 2, 'n_epochs': 50, 'batch_size': 2048, 'base_model': 'GRU'},
+                'densemble': {},
             }
 
             config = default_configs.get(model_type_lower, {})
@@ -688,7 +881,7 @@ class QlibService:
             # Train the model
             model.fit(dataset)
 
-            # Generate predictions on validation set
+            # Generate predictions on test set
             predictions = model.predict(dataset)
 
             # Store trained model
@@ -1142,15 +1335,43 @@ def main():
 
         elif command == "train_model":
             params = json.loads(sys.argv[2])
+            # dataset_config may be a JSON string from the frontend
+            dataset_config = params.get("dataset_config")
+            if isinstance(dataset_config, str):
+                dataset_config = json.loads(dataset_config)
+            elif not dataset_config:
+                dataset_config = {}
+            # model_config may also be a JSON string
+            model_config = params.get("model_config")
+            if isinstance(model_config, str):
+                model_config = json.loads(model_config)
+            # Extract instruments and dates from dataset_config or params
+            instruments = dataset_config.get("instruments") or params.get("instruments") or []
+            start_time = dataset_config.get("start_time") or params.get("train_start")
+            end_time = dataset_config.get("end_time") or params.get("train_end")
+            # Compute 80/20 train/valid split if no explicit split provided
+            train_start = params.get("train_start") or start_time
+            valid_end = params.get("valid_end") or end_time
+            if params.get("train_end") and params.get("valid_start"):
+                train_end = params["train_end"]
+                valid_start = params["valid_start"]
+            else:
+                # Auto-split: 80% train, 20% validation
+                from datetime import datetime as dt
+                d_start = dt.strptime(train_start, "%Y-%m-%d")
+                d_end = dt.strptime(valid_end, "%Y-%m-%d")
+                split_point = d_start + (d_end - d_start) * 0.8
+                train_end = split_point.strftime("%Y-%m-%d")
+                valid_start = split_point.strftime("%Y-%m-%d")
             result = service.train_model(
                 params.get("model_type"),
-                params.get("instruments"),
-                params.get("train_start"),
-                params.get("train_end"),
-                params.get("valid_start"),
-                params.get("valid_end"),
+                instruments,
+                train_start,
+                train_end,
+                valid_start,
+                valid_end,
                 params.get("handler_type", "Alpha158"),
-                params.get("model_config"),
+                model_config,
                 params.get("experiment_name")
             )
 

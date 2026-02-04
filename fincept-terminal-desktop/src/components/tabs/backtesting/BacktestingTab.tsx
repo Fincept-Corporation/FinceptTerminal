@@ -1,17 +1,16 @@
 /**
  * Backtesting Tab
  *
- * 100% Feature Coverage:
- * - vectorbt_provider.py: ALL 20 public methods (13 commands including browse/convert functions)
- * - vbt_strategies.py: ALL 22 strategies + custom code support
- * - Full yfinance integration for historical data
- * - Browse strategies/indicators catalogs
- * - Labels to signals conversion
+ * Multi-provider backtesting with clear separation:
+ * - VECTORBT: Full 13-command coverage (backtest, optimize, walk-forward, data, indicators, signals, labels, splits, returns, browse, convert)
+ * - BACKTESTING.PY: 8-command coverage (backtest, optimize, walk-forward, data, indicators, signals, browse)
+ * - FAST-TRADE: Focused backtest-only provider
  *
- * UI Design System Compliant
+ * Each provider uses its own strategies, commands, and command mappings with zero mixing.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   Activity, Play, Loader, TrendingUp, Settings, BarChart3, Database, Zap, Target, Tag, Split,
   DollarSign, AlertCircle, CheckCircle, XCircle, ChevronRight, Save, RefreshCw, TrendingDown,
@@ -19,6 +18,13 @@ import {
   PieChart, BarChart, Maximize2, Minimize2, Eye, EyeOff, Filter, Search, X, Plus
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import {
+  PROVIDER_CONFIGS,
+  PROVIDER_OPTIONS,
+  ALL_COMMANDS,
+  type BacktestingProviderSlug,
+  type CommandType,
+} from './backtestingProviderConfigs';
 
 // ============================================================================
 // FINCEPT DESIGN SYSTEM
@@ -31,277 +37,15 @@ const FINCEPT = {
   YELLOW: '#FFD700', BLUE: '#0088FF', PURPLE: '#9D4EDD',
 };
 
-// ============================================================================
-// STRATEGY DEFINITIONS (vbt_strategies.py - 100% coverage)
-// ============================================================================
-
-interface StrategyParam {
-  name: string;
-  label: string;
-  default: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  type?: 'number' | 'range';
-}
-
-interface Strategy {
-  id: string;
-  name: string;
-  description: string;
-  params: StrategyParam[];
-}
-
-const STRATEGIES: Record<string, Strategy[]> = {
-  trend: [
-    {
-      id: 'sma_crossover',
-      name: 'SMA Crossover',
-      description: 'Fast SMA crosses Slow SMA',
-      params: [
-        { name: 'fastPeriod', label: 'Fast Period', default: 10, min: 2, max: 100 },
-        { name: 'slowPeriod', label: 'Slow Period', default: 20, min: 5, max: 200 },
-      ],
-    },
-    {
-      id: 'ema_crossover',
-      name: 'EMA Crossover',
-      description: 'Fast EMA crosses Slow EMA',
-      params: [
-        { name: 'fastPeriod', label: 'Fast Period', default: 10, min: 2, max: 100 },
-        { name: 'slowPeriod', label: 'Slow Period', default: 20, min: 5, max: 200 },
-      ],
-    },
-    {
-      id: 'macd',
-      name: 'MACD Crossover',
-      description: 'MACD line crosses Signal line',
-      params: [
-        { name: 'fastPeriod', label: 'Fast Period', default: 12, min: 2, max: 50 },
-        { name: 'slowPeriod', label: 'Slow Period', default: 26, min: 10, max: 100 },
-        { name: 'signalPeriod', label: 'Signal Period', default: 9, min: 2, max: 50 },
-      ],
-    },
-    {
-      id: 'adx_trend',
-      name: 'ADX Trend Filter',
-      description: 'ADX-based trend following',
-      params: [
-        { name: 'adxPeriod', label: 'ADX Period', default: 14, min: 5, max: 50 },
-        { name: 'adxThreshold', label: 'ADX Threshold', default: 25, min: 10, max: 50 },
-      ],
-    },
-    {
-      id: 'keltner_breakout',
-      name: 'Keltner Channel',
-      description: 'Keltner channel breakout',
-      params: [
-        { name: 'period', label: 'Period', default: 20, min: 5, max: 100 },
-        { name: 'atrMultiplier', label: 'ATR Multiplier', default: 2.0, min: 0.5, max: 5.0, step: 0.1 },
-      ],
-    },
-    {
-      id: 'triple_ma',
-      name: 'Triple MA',
-      description: 'Three moving average system',
-      params: [
-        { name: 'fastPeriod', label: 'Fast Period', default: 10, min: 2, max: 50 },
-        { name: 'mediumPeriod', label: 'Medium Period', default: 20, min: 5, max: 100 },
-        { name: 'slowPeriod', label: 'Slow Period', default: 50, min: 10, max: 200 },
-      ],
-    },
-  ],
-  meanReversion: [
-    {
-      id: 'mean_reversion',
-      name: 'Z-Score Reversion',
-      description: 'Z-score mean reversion',
-      params: [
-        { name: 'window', label: 'Window', default: 20, min: 5, max: 100 },
-        { name: 'threshold', label: 'Z-Score Threshold', default: 2.0, min: 0.5, max: 5.0, step: 0.1 },
-      ],
-    },
-    {
-      id: 'bollinger_bands',
-      name: 'Bollinger Bands',
-      description: 'Bollinger band mean reversion',
-      params: [
-        { name: 'period', label: 'Period', default: 20, min: 5, max: 100 },
-        { name: 'stdDev', label: 'Std Dev', default: 2.0, min: 1.0, max: 4.0, step: 0.1 },
-      ],
-    },
-    {
-      id: 'rsi',
-      name: 'RSI Mean Reversion',
-      description: 'RSI oversold/overbought',
-      params: [
-        { name: 'period', label: 'Period', default: 14, min: 2, max: 50 },
-        { name: 'oversold', label: 'Oversold', default: 30, min: 10, max: 40 },
-        { name: 'overbought', label: 'Overbought', default: 70, min: 60, max: 90 },
-      ],
-    },
-    {
-      id: 'stochastic',
-      name: 'Stochastic',
-      description: 'Stochastic oscillator',
-      params: [
-        { name: 'kPeriod', label: 'K Period', default: 14, min: 5, max: 50 },
-        { name: 'dPeriod', label: 'D Period', default: 3, min: 2, max: 20 },
-        { name: 'oversold', label: 'Oversold', default: 20, min: 10, max: 30 },
-        { name: 'overbought', label: 'Overbought', default: 80, min: 70, max: 90 },
-      ],
-    },
-  ],
-  momentum: [
-    {
-      id: 'momentum',
-      name: 'Momentum (ROC)',
-      description: 'Rate of change momentum',
-      params: [
-        { name: 'period', label: 'Period', default: 12, min: 5, max: 50 },
-        { name: 'threshold', label: 'Threshold', default: 0.02, min: 0.01, max: 0.1, step: 0.01 },
-      ],
-    },
-    {
-      id: 'dual_momentum',
-      name: 'Dual Momentum',
-      description: 'Absolute + relative momentum',
-      params: [
-        { name: 'absolutePeriod', label: 'Absolute Period', default: 12, min: 3, max: 24 },
-        { name: 'relativePeriod', label: 'Relative Period', default: 12, min: 3, max: 24 },
-      ],
-    },
-  ],
-  breakout: [
-    {
-      id: 'breakout',
-      name: 'Donchian Breakout',
-      description: 'Donchian channel breakout',
-      params: [
-        { name: 'period', label: 'Period', default: 20, min: 5, max: 100 },
-      ],
-    },
-    {
-      id: 'volatility_breakout',
-      name: 'Volatility Breakout',
-      description: 'ATR-based volatility breakout',
-      params: [
-        { name: 'atrPeriod', label: 'ATR Period', default: 14, min: 5, max: 50 },
-        { name: 'atrMultiplier', label: 'ATR Multiplier', default: 2.0, min: 0.5, max: 5.0, step: 0.1 },
-      ],
-    },
-  ],
-  multiIndicator: [
-    {
-      id: 'rsi_macd',
-      name: 'RSI + MACD',
-      description: 'RSI and MACD confluence',
-      params: [
-        { name: 'rsiPeriod', label: 'RSI Period', default: 14, min: 5, max: 30 },
-        { name: 'macdFast', label: 'MACD Fast', default: 12, min: 5, max: 30 },
-        { name: 'macdSlow', label: 'MACD Slow', default: 26, min: 10, max: 50 },
-      ],
-    },
-    {
-      id: 'macd_adx',
-      name: 'MACD + ADX Filter',
-      description: 'MACD with ADX trend filter',
-      params: [
-        { name: 'macdFast', label: 'MACD Fast', default: 12, min: 5, max: 30 },
-        { name: 'macdSlow', label: 'MACD Slow', default: 26, min: 10, max: 50 },
-        { name: 'adxPeriod', label: 'ADX Period', default: 14, min: 5, max: 30 },
-      ],
-    },
-    {
-      id: 'bollinger_rsi',
-      name: 'Bollinger + RSI',
-      description: 'Bollinger bands with RSI',
-      params: [
-        { name: 'bbPeriod', label: 'BB Period', default: 20, min: 10, max: 50 },
-        { name: 'rsiPeriod', label: 'RSI Period', default: 14, min: 5, max: 30 },
-      ],
-    },
-  ],
-  other: [
-    {
-      id: 'williams_r',
-      name: 'Williams %R',
-      description: 'Williams %R oscillator',
-      params: [
-        { name: 'period', label: 'Period', default: 14, min: 5, max: 50 },
-        { name: 'oversold', label: 'Oversold', default: -80, min: -90, max: -70 },
-        { name: 'overbought', label: 'Overbought', default: -20, min: -30, max: -10 },
-      ],
-    },
-    {
-      id: 'cci',
-      name: 'CCI',
-      description: 'Commodity Channel Index',
-      params: [
-        { name: 'period', label: 'Period', default: 20, min: 5, max: 50 },
-        { name: 'threshold', label: 'Threshold', default: 100, min: 50, max: 200 },
-      ],
-    },
-    {
-      id: 'obv_trend',
-      name: 'OBV Trend',
-      description: 'On-Balance Volume trend',
-      params: [
-        { name: 'maPeriod', label: 'MA Period', default: 20, min: 5, max: 100 },
-      ],
-    },
-  ],
-  custom: [
-    {
-      id: 'code',
-      name: 'Custom Code',
-      description: 'Python custom strategy',
-      params: [],
-    },
-  ],
+// Provider accent colors for visual separation
+const PROVIDER_COLORS: Record<BacktestingProviderSlug, string> = {
+  fincept: FINCEPT.ORANGE,
+  vectorbt: FINCEPT.CYAN,
+  backtestingpy: FINCEPT.GREEN,
+  fasttrade: FINCEPT.YELLOW,
+  zipline: '#E91E63',
+  bt: '#FF6B35',
 };
-
-const CATEGORY_INFO = {
-  trend: { label: 'Trend Following', icon: TrendingUp, color: FINCEPT.BLUE },
-  meanReversion: { label: 'Mean Reversion', icon: Target, color: FINCEPT.PURPLE },
-  momentum: { label: 'Momentum', icon: Zap, color: FINCEPT.YELLOW },
-  breakout: { label: 'Breakout', icon: BarChart3, color: FINCEPT.GREEN },
-  multiIndicator: { label: 'Multi-Indicator', icon: Activity, color: FINCEPT.CYAN },
-  other: { label: 'Other', icon: Settings, color: FINCEPT.GRAY },
-  custom: { label: 'Custom', icon: Code, color: FINCEPT.ORANGE },
-};
-
-// ============================================================================
-// COMMAND DEFINITIONS (vectorbt_provider.py - all 10 commands)
-// ============================================================================
-
-type CommandType = 'backtest' | 'optimize' | 'walk_forward' | 'data' | 'indicator' |
-                   'indicator_signals' | 'signals' | 'labels' | 'splits' | 'returns' |
-                   'browse_strategies' | 'browse_indicators' | 'labels_to_signals';
-
-interface Command {
-  id: CommandType;
-  label: string;
-  icon: React.ElementType;
-  description: string;
-  color: string;
-}
-
-const COMMANDS: Command[] = [
-  { id: 'backtest', label: 'Backtest', icon: Play, description: 'Run strategy backtest', color: FINCEPT.ORANGE },
-  { id: 'optimize', label: 'Optimize', icon: Target, description: 'Parameter optimization', color: FINCEPT.GREEN },
-  { id: 'walk_forward', label: 'Walk Forward', icon: ChevronRight, description: 'Walk-forward validation', color: FINCEPT.BLUE },
-  { id: 'data', label: 'Data', icon: Database, description: 'Download market data', color: FINCEPT.CYAN },
-  { id: 'indicator', label: 'Indicators', icon: Activity, description: 'Calculate indicators', color: FINCEPT.PURPLE },
-  { id: 'indicator_signals', label: 'Ind. Signals', icon: Zap, description: 'Indicator signals', color: FINCEPT.YELLOW },
-  { id: 'signals', label: 'Signals', icon: TrendingUp, description: 'Generate signals', color: FINCEPT.GREEN },
-  { id: 'labels', label: 'Labels', icon: Tag, description: 'ML label generation', color: FINCEPT.BLUE },
-  { id: 'splits', label: 'Splits', icon: Split, description: 'Cross-validation', color: FINCEPT.PURPLE },
-  { id: 'returns', label: 'Returns', icon: DollarSign, description: 'Returns analysis', color: FINCEPT.CYAN },
-  { id: 'browse_strategies', label: 'Browse Strategies', icon: Search, description: 'View strategy catalog', color: FINCEPT.GREEN },
-  { id: 'browse_indicators', label: 'Browse Indicators', icon: Filter, description: 'View indicator catalog', color: FINCEPT.PURPLE },
-  { id: 'labels_to_signals', label: 'Labels→Signals', icon: ChevronRight, description: 'Convert labels to signals', color: FINCEPT.YELLOW },
-];
 
 // ============================================================================
 // DATA SOURCE OPTIONS
@@ -402,10 +146,13 @@ const POSITION_SIZING = [
 // ============================================================================
 
 const BacktestingTab: React.FC = () => {
+  // --- Provider State ---
+  const [selectedProvider, setSelectedProvider] = useState<BacktestingProviderSlug>('vectorbt');
+
   // --- Core State ---
   const [activeCommand, setActiveCommand] = useState<CommandType>('backtest');
   const [selectedCategory, setSelectedCategory] = useState<string>('trend');
-  const [selectedStrategy, setSelectedStrategy] = useState<string>('sma_crossover');
+  const [selectedStrategy, setSelectedStrategy] = useState<string>('');
   const [strategyParams, setStrategyParams] = useState<Record<string, any>>({});
   const [customCode, setCustomCode] = useState<string>('# Custom strategy code\n');
 
@@ -415,9 +162,87 @@ const BacktestingTab: React.FC = () => {
   const [endDate, setEndDate] = useState(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [initialCapital, setInitialCapital] = useState(100000);
   const [commission, setCommission] = useState(0.001);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    selectedProvider, activeCommand, selectedCategory, selectedStrategy, symbols, startDate, endDate, initialCapital, commission,
+  }), [selectedProvider, activeCommand, selectedCategory, selectedStrategy, symbols, startDate, endDate, initialCapital, commission]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.selectedProvider === "string" && state.selectedProvider in PROVIDER_CONFIGS) setSelectedProvider(state.selectedProvider as BacktestingProviderSlug);
+    if (typeof state.activeCommand === "string") setActiveCommand(state.activeCommand as CommandType);
+    if (typeof state.selectedCategory === "string") setSelectedCategory(state.selectedCategory);
+    if (typeof state.selectedStrategy === "string") setSelectedStrategy(state.selectedStrategy);
+    if (typeof state.symbols === "string") setSymbols(state.symbols);
+    if (typeof state.startDate === "string") setStartDate(state.startDate);
+    if (typeof state.endDate === "string") setEndDate(state.endDate);
+    if (typeof state.initialCapital === "number") setInitialCapital(state.initialCapital);
+    if (typeof state.commission === "number") setCommission(state.commission);
+  }, []);
+
+  useWorkspaceTabState("backtesting", getWorkspaceState, setWorkspaceState);
+
+  // --- Derived provider config (single source of truth) ---
+  const providerConfig = useMemo(() => PROVIDER_CONFIGS[selectedProvider], [selectedProvider]);
+  const providerColor = PROVIDER_COLORS[selectedProvider];
+  const providerCommands = useMemo(() =>
+    ALL_COMMANDS.filter(cmd => providerConfig.commands.includes(cmd.id)),
+    [providerConfig]
+  );
+  const [providerStrategies, setProviderStrategies] = useState(providerConfig.strategies);
+  const providerCategoryInfo = providerConfig.categoryInfo;
+
+  // --- Load Fincept strategies dynamically ---
+  useEffect(() => {
+    if (selectedProvider === 'fincept') {
+      invoke<string>('list_strategies')
+        .then((response) => {
+          const parsed = JSON.parse(response);
+          if (parsed.success && parsed.data) {
+            // Group strategies by category
+            const grouped: Record<string, any[]> = {};
+            parsed.data.forEach((strategy: any) => {
+              const category = strategy.category.toLowerCase();
+              if (!grouped[category]) {
+                grouped[category] = [];
+              }
+              grouped[category].push({
+                id: strategy.id,
+                name: strategy.name,
+                description: `${strategy.category} strategy`,
+                params: [] // Fincept strategies don't have UI params
+              });
+            });
+            setProviderStrategies(grouped);
+          }
+        })
+        .catch((err) => console.error('Failed to load Fincept strategies:', err));
+    } else {
+      setProviderStrategies(providerConfig.strategies);
+    }
+  }, [selectedProvider, providerConfig.strategies]);
+
+  // Reset command/strategy when switching providers
+  useEffect(() => {
+    // Reset to first available command
+    const firstCmd = providerConfig.commands[0] || 'backtest';
+    setActiveCommand(firstCmd);
+    // Reset to first available category
+    const categories = Object.keys(providerStrategies);
+    const firstCategory = categories[0] || 'trend';
+    setSelectedCategory(firstCategory);
+    // Reset to first strategy in that category
+    const firstStrategies = providerStrategies[firstCategory];
+    if (firstStrategies && firstStrategies.length > 0) {
+      setSelectedStrategy(firstStrategies[0].id);
+    }
+    // Clear results on provider switch
+    setResult(null);
+    setError(null);
+  }, [selectedProvider, providerStrategies]); // eslint-disable-line react-hooks/exhaustive-deps
   const [slippage, setSlippage] = useState(0.0005);
 
-  // --- Advanced Config (ALL vectorbt_provider.py features) ---
+  // --- Advanced Config ---
   const [leverage, setLeverage] = useState(1.0);
   const [margin, setMargin] = useState(1.0);
   const [stopLoss, setStopLoss] = useState<number | null>(null);
@@ -475,11 +300,11 @@ const BacktestingTab: React.FC = () => {
     advanced: false,
   });
 
-  // Get current strategy
+  // Get current strategy from the active provider's strategies only
   const currentStrategy = useMemo(() => {
-    const categoryStrategies = STRATEGIES[selectedCategory] || [];
+    const categoryStrategies = providerStrategies[selectedCategory] || [];
     return categoryStrategies.find(s => s.id === selectedStrategy) || categoryStrategies[0];
-  }, [selectedCategory, selectedStrategy]);
+  }, [providerStrategies, selectedCategory, selectedStrategy]);
 
   // Initialize strategy params when strategy changes
   useEffect(() => {
@@ -512,24 +337,8 @@ const BacktestingTab: React.FC = () => {
         initialCapital,
       };
 
-      // Map UI command names to Python command names
-      const commandMap: Record<CommandType, string> = {
-        'backtest': 'run_backtest',
-        'optimize': 'optimize',
-        'walk_forward': 'walk_forward',
-        'data': 'get_historical_data',
-        'indicator': 'indicator_param_sweep',
-        'indicator_signals': 'indicator_signals',
-        'signals': 'generate_signals',
-        'labels': 'generate_labels',
-        'splits': 'generate_splits',
-        'returns': 'analyze_returns',
-        'browse_strategies': 'get_strategies',
-        'browse_indicators': 'get_indicators',
-        'labels_to_signals': 'labels_to_signals',
-      };
-
-      const pythonCommand = commandMap[activeCommand];
+      // Use provider-specific command mapping (no cross-provider mixing)
+      const pythonCommand = providerConfig.commandMap[activeCommand] || activeCommand;
 
       // Build request based on active command
       switch (activeCommand) {
@@ -700,7 +509,7 @@ const BacktestingTab: React.FC = () => {
       console.log('[BACKTEST] Args object:', JSON.stringify(commandArgs, null, 2));
 
       const response = await invoke<string>('execute_python_backtest', {
-        provider: 'vectorbt',
+        provider: selectedProvider,
         command: pythonCommand,
         args: argsJson,
       });
@@ -741,11 +550,12 @@ const BacktestingTab: React.FC = () => {
       setIsRunning(false);
     }
   }, [
-    activeCommand, symbols, startDate, endDate, initialCapital, selectedStrategy, strategyParams,
-    customCode, commission, slippage, leverage, margin, stopLoss, takeProfit, trailingStop,
-    positionSizing, positionSizeValue, allowShort, benchmarkSymbol, enableBenchmark, randomBenchmark,
-    optimizeObjective, optimizeMethod, maxIterations, paramRanges, wfSplits, wfTrainRatio,
-    dataSource, timeframe, selectedIndicator, indicatorParams, selectedSignalGen, signalParams,
+    selectedProvider, providerConfig, activeCommand, symbols, startDate, endDate, initialCapital,
+    selectedStrategy, strategyParams, customCode, commission, slippage, leverage, margin,
+    stopLoss, takeProfit, trailingStop, positionSizing, positionSizeValue, allowShort,
+    benchmarkSymbol, enableBenchmark, randomBenchmark, optimizeObjective, optimizeMethod,
+    maxIterations, paramRanges, wfSplits, wfTrainRatio, dataSource, timeframe,
+    selectedIndicator, indicatorParams, selectedSignalGen, signalParams,
     selectedLabelGen, labelParams, selectedSplitter, splitParams
   ]);
 
@@ -760,15 +570,15 @@ const BacktestingTab: React.FC = () => {
   const renderTopNav = () => (
     <div style={{
       backgroundColor: FINCEPT.HEADER_BG,
-      borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+      borderBottom: `2px solid ${providerColor}`,
       padding: '8px 16px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`,
+      boxShadow: `0 2px 8px ${providerColor}20`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <Activity size={16} color={FINCEPT.ORANGE} />
+        <Activity size={16} color={providerColor} />
         <span style={{
           fontSize: '12px',
           fontWeight: 700,
@@ -776,8 +586,43 @@ const BacktestingTab: React.FC = () => {
           fontFamily: '"IBM Plex Mono", monospace',
           letterSpacing: '0.5px',
         }}>
-          BACKTESTING - VECTORBT
+          BACKTESTING
         </span>
+        <div style={{ display: 'flex', gap: '2px', marginLeft: '4px' }}>
+          {PROVIDER_OPTIONS.map(p => (
+            <button
+              key={p.slug}
+              onClick={() => setSelectedProvider(p.slug)}
+              style={{
+                padding: '4px 10px',
+                backgroundColor: selectedProvider === p.slug ? PROVIDER_COLORS[p.slug] : 'transparent',
+                color: selectedProvider === p.slug ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                border: `1px solid ${selectedProvider === p.slug ? PROVIDER_COLORS[p.slug] : FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: '"IBM Plex Mono", monospace',
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => {
+                if (selectedProvider !== p.slug) {
+                  e.currentTarget.style.borderColor = PROVIDER_COLORS[p.slug];
+                  e.currentTarget.style.color = PROVIDER_COLORS[p.slug];
+                }
+              }}
+              onMouseLeave={e => {
+                if (selectedProvider !== p.slug) {
+                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                  e.currentTarget.style.color = FINCEPT.GRAY;
+                }
+              }}
+            >
+              {p.displayName}
+            </button>
+          ))}
+        </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <button
@@ -836,13 +681,13 @@ const BacktestingTab: React.FC = () => {
           letterSpacing: '0.5px',
           fontFamily: '"IBM Plex Mono", monospace',
         }}>
-          COMMANDS ({COMMANDS.length})
+          COMMANDS ({providerCommands.length})
         </span>
       </div>
 
-      {/* Command List */}
+      {/* Command List (provider-specific) */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {COMMANDS.map(cmd => {
+        {providerCommands.map(cmd => {
           const Icon = cmd.icon;
           const isActive = activeCommand === cmd.id;
 
@@ -886,7 +731,7 @@ const BacktestingTab: React.FC = () => {
         })}
       </div>
 
-      {/* Strategy Categories (for strategy-based commands) */}
+      {/* Strategy Categories (provider-specific) */}
       {['backtest', 'optimize', 'walk_forward'].includes(activeCommand) && (
         <>
           <div style={{
@@ -906,10 +751,10 @@ const BacktestingTab: React.FC = () => {
             </span>
           </div>
           <div style={{ overflowY: 'auto', maxHeight: '300px' }}>
-            {Object.entries(CATEGORY_INFO).map(([key, info]) => {
+            {Object.entries(providerCategoryInfo).map(([key, info]) => {
               const Icon = info.icon;
               const isActive = selectedCategory === key;
-              const count = STRATEGIES[key]?.length || 0;
+              const count = providerStrategies[key]?.length || 0;
 
               return (
                 <div
@@ -1041,7 +886,7 @@ const BacktestingTab: React.FC = () => {
   // ============================================================================
 
   const renderBacktestConfig = () => {
-    const categoryStrategies = STRATEGIES[selectedCategory] || [];
+    const categoryStrategies = providerStrategies[selectedCategory] || [];
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1055,8 +900,8 @@ const BacktestingTab: React.FC = () => {
           </div>
         ))}
 
-        {/* Strategy Selection */}
-        {renderSection('strategy', `${CATEGORY_INFO[selectedCategory as keyof typeof CATEGORY_INFO]?.label.toUpperCase()} STRATEGIES`, Activity, (
+        {/* Strategy Selection (provider-specific) */}
+        {renderSection('strategy', `${providerCategoryInfo[selectedCategory]?.label.toUpperCase() || 'STRATEGIES'}`, Activity, (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' }}>
               {categoryStrategies.map(strategy => (
@@ -1352,7 +1197,7 @@ const BacktestingTab: React.FC = () => {
 
       {renderSection('strategy', 'STRATEGY', Target, (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-          {(STRATEGIES[selectedCategory] || []).map(strategy => (
+          {(providerStrategies[selectedCategory] || []).map(strategy => (
             <button
               key={strategy.id}
               onClick={() => setSelectedStrategy(strategy.id)}
@@ -2168,7 +2013,7 @@ const BacktestingTab: React.FC = () => {
       fontFamily: '"IBM Plex Mono", monospace',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <span>PROVIDER: VectorBT v0.25.0</span>
+        <span>PROVIDER: {providerConfig.displayName}</span>
         <span>•</span>
         <span>COMMAND: {activeCommand.toUpperCase()}</span>
         {currentStrategy && (

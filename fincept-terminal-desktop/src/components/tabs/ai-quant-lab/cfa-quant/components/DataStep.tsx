@@ -114,9 +114,15 @@ export function DataStep({
             <div>
               <label className="block text-xs font-mono mb-1" style={{ color: BB.textMuted }}>LOOKBACK (DAYS)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={historicalDays}
-                onChange={(e) => setHistoricalDays(parseInt(e.target.value) || 365)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || /^\d+$/.test(v)) {
+                    setHistoricalDays(v === '' ? 365 : parseInt(v));
+                  }
+                }}
                 className="w-full px-3 py-2 text-sm font-mono"
                 style={{
                   backgroundColor: BB.black,

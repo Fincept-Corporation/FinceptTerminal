@@ -4,12 +4,13 @@
  * Displays open orders and order history with actions
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   RefreshCw, X, Clock, CheckCircle2, XCircle, AlertCircle,
   Loader2, Edit2, Filter, FileText
 } from 'lucide-react';
 import { useStockTradingData, useStockBrokerContext } from '@/contexts/StockBrokerContext';
+import { withTimeout } from '@/services/core/apiUtils';
 import type { Order, OrderStatus } from '@/brokers/stocks/types';
 
 // Fincept color palette
@@ -53,6 +54,12 @@ export function OrdersPanel({ showHistory = false, onModifyOrder }: OrdersPanelP
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [isCancellingAll, setIsCancellingAll] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Filter orders
   const filteredOrders = React.useMemo(() => {
@@ -88,14 +95,15 @@ export function OrdersPanel({ showHistory = false, onModifyOrder }: OrdersPanelP
     setCancellingOrderId(orderId);
 
     try {
-      const response = await adapter.cancelOrder(orderId);
+      const response = await withTimeout(adapter.cancelOrder(orderId), 15000);
+      if (!mountedRef.current) return;
       if (response.success) {
-        await refreshOrders();
+        await withTimeout(refreshOrders(), 15000).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to cancel order:', err);
     } finally {
-      setCancellingOrderId(null);
+      if (mountedRef.current) setCancellingOrderId(null);
     }
   };
 
@@ -106,14 +114,15 @@ export function OrdersPanel({ showHistory = false, onModifyOrder }: OrdersPanelP
     setIsCancellingAll(true);
 
     try {
-      const result = await adapter.cancelAllOrders();
+      const result = await withTimeout(adapter.cancelAllOrders(), 30000);
+      if (!mountedRef.current) return;
       if (result.success) {
-        await refreshOrders();
+        await withTimeout(refreshOrders(), 15000).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to cancel all orders:', err);
     } finally {
-      setIsCancellingAll(false);
+      if (mountedRef.current) setIsCancellingAll(false);
     }
   };
 

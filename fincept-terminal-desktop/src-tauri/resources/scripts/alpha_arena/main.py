@@ -112,6 +112,9 @@ async def handle_action(action: str, params: Dict, api_keys: Dict) -> Dict[str, 
         elif action == "system_info":
             return get_system_info()
 
+        elif action == "get_evaluation":
+            return await get_evaluation_handler(params)
+
         # HITL (Human-in-the-Loop) actions
         elif action == "check_approval":
             return await check_approval_handler(params)
@@ -617,6 +620,60 @@ async def get_agent_handler(params: Dict) -> Dict[str, Any]:
     return {"success": False, "error": f"Agent not found: {name}"}
 
 
+async def get_evaluation_handler(params: Dict) -> Dict[str, Any]:
+    """Get evaluation metrics for a specific model in a competition."""
+    competition_id = params.get("competition_id")
+    model_name = params.get("model_name")
+
+    if not competition_id:
+        return {"success": False, "error": "Missing competition_id"}
+    if not model_name:
+        return {"success": False, "error": "Missing model_name"}
+
+    # Try live competition first
+    competition = get_competition(competition_id)
+    if competition:
+        leaderboard = competition.get_leaderboard()
+        for entry in leaderboard:
+            if entry.model_name == model_name:
+                metrics = entry.model_dump()
+                return {
+                    "success": True,
+                    "metrics": {
+                        "total_return": metrics.get("return_pct", 0),
+                        "portfolio_value": metrics.get("portfolio_value", 0),
+                        "total_trades": metrics.get("total_trades", 0),
+                        "win_rate": metrics.get("win_rate", 0),
+                        "sharpe_ratio": metrics.get("sharpe_ratio", 0),
+                        "max_drawdown": metrics.get("max_drawdown", 0),
+                    },
+                }
+        return {"success": False, "error": f"Model not found in competition: {model_name}"}
+
+    # Fall back to database
+    db = get_database()
+    leaderboard = db.get_latest_leaderboard(competition_id)
+    if leaderboard:
+        for entry in leaderboard:
+            entry_name = entry.get("model_name", "") if isinstance(entry, dict) else getattr(entry, "model_name", "")
+            if entry_name == model_name:
+                if isinstance(entry, dict):
+                    return {
+                        "success": True,
+                        "metrics": {
+                            "total_return": entry.get("return_pct", 0),
+                            "portfolio_value": entry.get("portfolio_value", 0),
+                            "total_trades": entry.get("total_trades", 0),
+                            "win_rate": entry.get("win_rate", 0),
+                            "sharpe_ratio": entry.get("sharpe_ratio", 0),
+                            "max_drawdown": entry.get("max_drawdown", 0),
+                        },
+                    }
+        return {"success": False, "error": f"Model not found in leaderboard: {model_name}"}
+
+    return {"success": False, "error": f"Competition not found: {competition_id}"}
+
+
 def get_system_info() -> Dict[str, Any]:
     """Get system information."""
     # Get available trading styles
@@ -910,13 +967,13 @@ async def create_grid_agent_handler(params: Dict) -> Dict[str, Any]:
         name = params.get("name", "GridAgent")
         symbol = params.get("symbol", "BTC/USD")
 
-        # Grid configuration
+        # Grid configuration - support both flat params (from Rust) and nested grid_config
         grid_params = params.get("grid_config", {})
         config = GridConfig(
             symbol=symbol,
-            lower_price=grid_params.get("lower_price", 90000),
-            upper_price=grid_params.get("upper_price", 110000),
-            num_grids=grid_params.get("num_grids", 10),
+            lower_price=params.get("lower_price") or grid_params.get("lower_price", 90000),
+            upper_price=params.get("upper_price") or grid_params.get("upper_price", 110000),
+            num_grids=params.get("grid_levels") or grid_params.get("num_grids", 10),
             quantity_per_grid=grid_params.get("quantity_per_grid", 0.001),
             take_profit_pct=grid_params.get("take_profit_pct"),
             stop_loss_pct=grid_params.get("stop_loss_pct"),
@@ -1149,7 +1206,7 @@ async def get_broker_ticker_handler(params: Dict) -> Dict[str, Any]:
         from alpha_arena.core.broker_adapter import get_multi_exchange_provider
 
         symbol = params.get("symbol")
-        broker_id = params.get("broker_id", "kraken")
+        broker_id = params.get("broker_id", "binance")
 
         if not symbol:
             return {"success": False, "error": "Missing symbol"}

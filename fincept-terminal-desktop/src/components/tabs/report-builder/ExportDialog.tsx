@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { ReportTemplate } from '@/services/core/reportService';
 import { BrandKit } from '@/services/core/brandKitService';
 import { reportExportService, ExportFormat } from '@/services/core/reportExportService';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 
 interface ExportDialogProps {
   open: boolean;

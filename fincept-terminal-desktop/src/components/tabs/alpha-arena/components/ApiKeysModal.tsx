@@ -4,8 +4,10 @@
  * Modal for configuring LLM provider API keys.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useReducer, useRef } from 'react';
 import { X, Key, Eye, EyeOff, Save, Loader2, AlertCircle } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
+import { withTimeout } from '@/services/core/apiUtils';
 import alphaArenaService from '../services/alphaArenaService';
 
 interface ApiKeysModalProps {
@@ -54,15 +56,62 @@ const DEFAULT_PROVIDERS: Omit<ApiKeyConfig, 'value'>[] = [
   },
 ];
 
+// State machine for load/save operations
+type LoadState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success' }
+  | { status: 'error'; error: string };
+
+type SaveState =
+  | { status: 'idle' }
+  | { status: 'saving' }
+  | { status: 'saved' }
+  | { status: 'error'; error: string };
+
+type LoadAction =
+  | { type: 'LOAD_START' }
+  | { type: 'LOAD_SUCCESS' }
+  | { type: 'LOAD_ERROR'; error: string };
+
+type SaveAction =
+  | { type: 'SAVE_START' }
+  | { type: 'SAVE_SUCCESS' }
+  | { type: 'SAVE_ERROR'; error: string }
+  | { type: 'SAVE_RESET' };
+
+function loadReducer(_state: LoadState, action: LoadAction): LoadState {
+  switch (action.type) {
+    case 'LOAD_START': return { status: 'loading' };
+    case 'LOAD_SUCCESS': return { status: 'success' };
+    case 'LOAD_ERROR': return { status: 'error', error: action.error };
+    default: return _state;
+  }
+}
+
+function saveReducer(_state: SaveState, action: SaveAction): SaveState {
+  switch (action.type) {
+    case 'SAVE_START': return { status: 'saving' };
+    case 'SAVE_SUCCESS': return { status: 'saved' };
+    case 'SAVE_ERROR': return { status: 'error', error: action.error };
+    case 'SAVE_RESET': return { status: 'idle' };
+    default: return _state;
+  }
+}
+
 const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(
     DEFAULT_PROVIDERS.map((p) => ({ ...p, value: '' }))
   );
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [loadState, dispatchLoad] = useReducer(loadReducer, { status: 'loading' });
+  const [saveState, dispatchSave] = useReducer(saveReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Load existing keys on mount
   useEffect(() => {
@@ -72,11 +121,11 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
   }, [isOpen]);
 
   const loadApiKeys = async () => {
-    setIsLoading(true);
-    setError(null);
+    dispatchLoad({ type: 'LOAD_START' });
 
     try {
       const result = await alphaArenaService.getApiKeys();
+      if (!mountedRef.current) return;
       if (result.success && result.keys) {
         setApiKeys((prev) =>
           prev.map((key) => ({
@@ -85,10 +134,10 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
           }))
         );
       }
+      dispatchLoad({ type: 'LOAD_SUCCESS' });
     } catch (err) {
-      console.error('Failed to load API keys:', err);
-    } finally {
-      setIsLoading(false);
+      if (!mountedRef.current) return;
+      dispatchLoad({ type: 'LOAD_ERROR', error: err instanceof Error ? err.message : 'Failed to load API keys' });
     }
   };
 
@@ -96,7 +145,9 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
     setApiKeys((prev) =>
       prev.map((key) => (key.provider === provider ? { ...key, value } : key))
     );
-    setSuccess(false);
+    if (saveState.status === 'saved') {
+      dispatchSave({ type: 'SAVE_RESET' });
+    }
   };
 
   const toggleVisibility = (provider: string) => {
@@ -107,9 +158,8 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleSave = async () => {
-    setIsSaving(true);
-    setError(null);
-    setSuccess(false);
+    if (saveState.status === 'saving') return;
+    dispatchSave({ type: 'SAVE_START' });
 
     try {
       const keysToSave: Record<string, string> = {};
@@ -120,18 +170,25 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
       });
 
       const result = await alphaArenaService.saveApiKeys(keysToSave);
+      if (!mountedRef.current) return;
       if (result.success) {
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
+        dispatchSave({ type: 'SAVE_SUCCESS' });
+        setTimeout(() => {
+          if (mountedRef.current) dispatchSave({ type: 'SAVE_RESET' });
+        }, 3000);
       } else {
-        setError(result.error || 'Failed to save API keys');
+        dispatchSave({ type: 'SAVE_ERROR', error: result.error || 'Failed to save API keys' });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setIsSaving(false);
+      if (!mountedRef.current) return;
+      dispatchSave({ type: 'SAVE_ERROR', error: err instanceof Error ? err.message : 'Unknown error' });
     }
   };
+
+  const isLoading = loadState.status === 'loading';
+  const isSaving = saveState.status === 'saving';
+  const error = loadState.status === 'error' ? loadState.error : saveState.status === 'error' ? saveState.error : null;
+  const success = saveState.status === 'saved';
 
   if (!isOpen) return null;
 
@@ -243,4 +300,4 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
   );
 };
 
-export default ApiKeysModal;
+export default withErrorBoundary(ApiKeysModal, { name: 'AlphaArena.ApiKeysModal' });

@@ -1,5 +1,6 @@
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { RefreshCw, Download, Globe, TrendingUp, BarChart3, PieChart } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import bisDataService from '@/services/data-sources/bisDataService';
@@ -61,6 +62,22 @@ export default function EconomicsTab() {
     return date.toISOString().split('T')[0];
   });
   const [bisEndDate, setBisEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    dataSource, view, selectedIndicator, selectedCountry, selectedTransform, bisDataType,
+  }), [dataSource, view, selectedIndicator, selectedCountry, selectedTransform, bisDataType]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (state.dataSource === "econdb" || state.dataSource === "bis") setDataSource(state.dataSource);
+    if (state.view === "indicator" || state.view === "profile" || state.view === "countries") setView(state.view);
+    if (typeof state.selectedIndicator === "string") setSelectedIndicator(state.selectedIndicator);
+    if (typeof state.selectedCountry === "string") setSelectedCountry(state.selectedCountry);
+    if (typeof state.selectedTransform === "string") setSelectedTransform(state.selectedTransform);
+    if (typeof state.bisDataType === "string") setBisDataType(state.bisDataType as any);
+  }, []);
+
+  useWorkspaceTabState("economics", getWorkspaceState, setWorkspaceState);
 
   // BIS available countries (only major economies with data)
   const bisCountries = [

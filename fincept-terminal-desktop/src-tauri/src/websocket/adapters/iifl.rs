@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(non_snake_case)]
 // IIFL Securities WebSocket Adapter
 //
 // IIFL uses XTS API WebSocket for market data:

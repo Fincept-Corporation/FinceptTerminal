@@ -2,10 +2,11 @@
 // Professional Fincept Terminal-Grade Financial Note-Taking Interface
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { notesService, Note, NoteTemplate } from '../../../services/core/notesService';
 import { noteReminderService } from '../../../services/core/noteReminderService.tsx';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 
@@ -34,6 +35,17 @@ export function NotesTab() {
   const [showFilters, setShowFilters] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
   const [isRightPanelMinimized, setIsRightPanelMinimized] = useState(false);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    isRightPanelMinimized,
+  }), [isRightPanelMinimized]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.isRightPanelMinimized === "boolean") setIsRightPanelMinimized(state.isRightPanelMinimized);
+  }, []);
+
+  useWorkspaceTabState("notes", getWorkspaceState, setWorkspaceState);
 
   // Use custom hooks
   const {

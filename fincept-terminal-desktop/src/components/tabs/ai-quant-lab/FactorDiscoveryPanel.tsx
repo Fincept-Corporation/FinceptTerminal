@@ -1,7 +1,8 @@
 /**
- * Factor Discovery Panel - Fincept Professional Design
+ * Factor Discovery Panel - Fincept Terminal Design
  * RD-Agent powered autonomous factor mining with full backend integration
  * Real-world finance application with working features
+ * PURPLE THEME
  */
 
 import React, { useState, useEffect } from 'react';
@@ -26,23 +27,18 @@ import {
 import { rdAgentService, type DiscoveredFactor } from '@/services/aiQuantLab/rdAgentService';
 import { showError, showWarning, showSuccess } from '@/utils/notifications';
 
-// Fincept Professional Color Palette
+// Fincept Terminal Color Palette - PURPLE THEME
 const FINCEPT = {
-  ORANGE: '#FF8800',
+  PURPLE: '#9D4EDD',   // Primary theme color for Factor Discovery
   WHITE: '#FFFFFF',
   RED: '#FF3B3B',
   GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
+  ORANGE: '#FF8800',
+  DARK_BG: '#0F0F0F',
   PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
   CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
   BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
+  HOVER: '#1F1F1F'
 };
 
 export function FactorDiscoveryPanel() {
@@ -190,303 +186,605 @@ export function FactorDiscoveryPanel() {
   };
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
-      {/* Left Panel - Configuration */}
-      <div
-        className="w-96 border-r overflow-auto flex-shrink-0"
-        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-      >
-        <div className="p-4 space-y-4">
-          {/* Header */}
-          <div className="pb-3 border-b" style={{ borderColor: FINCEPT.BORDER }}>
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles size={18} color={FINCEPT.ORANGE} />
-              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
-                AUTONOMOUS FACTOR MINING
-              </h2>
-            </div>
-            <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
-              AI-powered discovery of profitable trading factors
-            </p>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: FINCEPT.DARK_BG }}>
+      {/* Terminal-style Header */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <Sparkles size={16} color={FINCEPT.PURPLE} />
+        <span style={{
+          color: FINCEPT.PURPLE,
+          fontSize: '12px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          fontFamily: 'monospace'
+        }}>
+          AUTONOMOUS FACTOR MINING
+        </span>
+        <div style={{ flex: 1 }} />
+        {isRunning && (
+          <div style={{
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            padding: '3px 8px',
+            backgroundColor: FINCEPT.PURPLE + '20',
+            border: `1px solid ${FINCEPT.PURPLE}`,
+            color: FINCEPT.PURPLE,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <div style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: FINCEPT.PURPLE,
+              animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+            }} />
+            MINING IN PROGRESS
           </div>
-
-          {/* Task Description */}
-          <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
-              Research Objective
-            </label>
-            <textarea
-              value={taskDescription}
-              onChange={(e) => setTaskDescription(e.target.value)}
-              placeholder="Describe the type of factors you want to discover..."
-              rows={4}
-              className="w-full px-3 py-2 rounded text-xs font-mono outline-none resize-none"
-              style={{
-                backgroundColor: FINCEPT.DARK_BG,
-                color: FINCEPT.WHITE,
-                border: `1px solid ${FINCEPT.BORDER}`
-              }}
-            />
-            <div className="mt-2 space-y-1">
-              <p className="text-xs font-bold uppercase" style={{ color: FINCEPT.GRAY }}>
-                Examples:
-              </p>
-              {examplePrompts.map((prompt, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setTaskDescription(prompt)}
-                  className="block text-xs hover:underline text-left font-mono"
-                  style={{ color: FINCEPT.ORANGE }}
-                >
-                  • {prompt}
-                </button>
-              ))}
-            </div>
+        )}
+        {discoveredFactors.length > 0 && (
+          <div style={{
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            padding: '3px 8px',
+            backgroundColor: FINCEPT.GREEN + '20',
+            border: `1px solid ${FINCEPT.GREEN}`,
+            color: FINCEPT.GREEN
+          }}>
+            {discoveredFactors.length} FACTORS DISCOVERED
           </div>
-
-          {/* API Key */}
-          <div>
-            <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
-              OpenAI API Key
-            </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-proj-..."
-              className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
-              style={{
-                backgroundColor: FINCEPT.DARK_BG,
-                color: FINCEPT.WHITE,
-                border: `1px solid ${FINCEPT.BORDER}`
-              }}
-            />
-            <p className="text-xs font-mono mt-1" style={{ color: FINCEPT.GRAY }}>
-              Required for AI-powered factor generation
-            </p>
-          </div>
-
-          {/* Settings */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
-                Target Market
-              </label>
-              <select
-                value={targetMarket}
-                onChange={(e) => setTargetMarket(e.target.value)}
-                className="w-full px-3 py-2 rounded text-xs font-mono outline-none uppercase"
-                style={{
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`
-                }}
-              >
-                <option value="US">US Markets</option>
-                <option value="CN">China (A-shares)</option>
-                <option value="CRYPTO">Cryptocurrency</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
-                Budget (USD)
-              </label>
-              <input
-                type="number"
-                value={budget}
-                onChange={(e) => setBudget(Number(e.target.value))}
-                min={5}
-                max={100}
-                className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
-                style={{
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Control Buttons */}
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleStartMining}
-              disabled={isRunning || !taskDescription || !apiKey}
-              className="flex-1 py-2.5 rounded font-bold uppercase text-xs tracking-wide flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
-            >
-              {isRunning ? (
-                <>
-                  <RefreshCw size={14} className="animate-spin" />
-                  MINING...
-                </>
-              ) : (
-                <>
-                  <Play size={14} />
-                  START
-                </>
-              )}
-            </button>
-            {isRunning && (
-              <button
-                onClick={handleStop}
-                className="px-4 py-2.5 rounded font-bold uppercase text-xs tracking-wide hover:bg-opacity-90 transition-colors"
-                style={{ backgroundColor: FINCEPT.RED, color: FINCEPT.WHITE }}
-              >
-                <Square size={14} />
-              </button>
-            )}
-          </div>
-
-          {/* Real-time Status */}
-          {taskStatus && (
-            <div
-              className="p-4 rounded border space-y-3"
-              style={{ backgroundColor: FINCEPT.DARK_BG, borderColor: FINCEPT.BORDER }}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
-                  TASK STATUS
-                </span>
-                <span
-                  className="text-xs px-2 py-0.5 rounded uppercase font-bold"
-                  style={{
-                    backgroundColor: taskStatus.status === 'completed' ? FINCEPT.GREEN :
-                                   taskStatus.status === 'running' ? FINCEPT.ORANGE : FINCEPT.RED,
-                    color: FINCEPT.DARK_BG
-                  }}
-                >
-                  {taskStatus.status}
-                </span>
-              </div>
-              <div className="space-y-2 text-xs font-mono">
-                {taskStatus.progress !== undefined && (
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span style={{ color: FINCEPT.GRAY }}>PROGRESS</span>
-                      <span style={{ color: FINCEPT.WHITE }}>{taskStatus.progress}%</span>
-                    </div>
-                    <div className="w-full h-1.5 rounded overflow-hidden" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
-                      <div
-                        className="h-full transition-all duration-300"
-                        style={{
-                          width: `${taskStatus.progress}%`,
-                          backgroundColor: FINCEPT.ORANGE
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-                {taskStatus.factors_generated !== undefined && (
-                  <div className="flex justify-between">
-                    <span style={{ color: FINCEPT.GRAY }}>FACTORS GENERATED</span>
-                    <span style={{ color: FINCEPT.GREEN }}>{taskStatus.factors_generated}</span>
-                  </div>
-                )}
-                {taskStatus.factors_tested !== undefined && (
-                  <div className="flex justify-between">
-                    <span style={{ color: FINCEPT.GRAY }}>FACTORS TESTED</span>
-                    <span style={{ color: FINCEPT.WHITE }}>{taskStatus.factors_tested}</span>
-                  </div>
-                )}
-                {taskStatus.best_ic !== undefined && taskStatus.best_ic !== null && (
-                  <div className="flex justify-between">
-                    <span style={{ color: FINCEPT.GRAY }}>BEST IC</span>
-                    <span style={{ color: FINCEPT.GREEN }}>{taskStatus.best_ic.toFixed(4)}</span>
-                  </div>
-                )}
-                {taskStatus.elapsed_time && (
-                  <div className="flex justify-between">
-                    <span style={{ color: FINCEPT.GRAY }}>ELAPSED TIME</span>
-                    <span style={{ color: FINCEPT.WHITE }}>{taskStatus.elapsed_time}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Right Panel - Results */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {discoveredFactors.length > 0 ? (
-          <div className="flex h-full">
-            {/* Factor List */}
-            <div
-              className="w-80 border-r overflow-auto flex-shrink-0"
-              style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-            >
-              <div className="p-3">
-                <div className="flex items-center justify-between mb-3 pb-2 border-b" style={{ borderColor: FINCEPT.BORDER }}>
-                  <h3 className="text-xs font-bold uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
-                    DISCOVERED FACTORS
-                  </h3>
-                  <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}>
-                    {discoveredFactors.length}
-                  </span>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left Panel - Configuration */}
+        <div style={{
+          width: '360px',
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto'
+        }}>
+          <div style={{
+            padding: '10px 12px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            color: FINCEPT.PURPLE,
+            fontFamily: 'monospace',
+            letterSpacing: '0.5px'
+          }}>
+            CONFIGURATION
+          </div>
+
+          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+            {/* Task Description */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '9px',
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                marginBottom: '8px',
+                letterSpacing: '0.5px'
+              }}>
+                RESEARCH OBJECTIVE
+              </label>
+              <textarea
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                placeholder="Describe the type of factors you want to discover..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                  resize: 'none'
+                }}
+              />
+              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{
+                  fontSize: '9px',
+                  fontFamily: 'monospace',
+                  color: FINCEPT.WHITE,
+                  opacity: 0.5,
+                  letterSpacing: '0.5px'
+                }}>
+                  EXAMPLES:
                 </div>
-                <div className="space-y-2">
-                  {discoveredFactors.map((factor) => (
-                    <button
-                      key={factor.factor_id}
-                      onClick={() => setSelectedFactor(factor)}
-                      className="w-full p-3 rounded text-left transition-all hover:bg-opacity-80"
-                      style={{
-                        backgroundColor: selectedFactor?.factor_id === factor.factor_id ? FINCEPT.DARK_BG : FINCEPT.HEADER_BG,
-                        border: selectedFactor?.factor_id === factor.factor_id ? `1px solid ${FINCEPT.ORANGE}` : `1px solid ${FINCEPT.BORDER}`
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="font-bold text-xs uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
-                          {factor.name}
-                        </span>
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded font-bold"
-                          style={{ backgroundColor: FINCEPT.GREEN, color: FINCEPT.DARK_BG }}
-                        >
-                          IC: {factor.ic.toFixed(4)}
-                        </span>
-                      </div>
-                      <p className="text-xs font-mono mb-2" style={{ color: FINCEPT.GRAY }}>
-                        {factor.description}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs font-mono">
-                        <span style={{ color: FINCEPT.GRAY }}>
-                          SHARPE: <span style={{ color: FINCEPT.WHITE }}>{factor.sharpe.toFixed(2)}</span>
-                        </span>
-                        <span style={{ color: FINCEPT.GRAY }}>
-                          RET: <span style={{ color: FINCEPT.GREEN }}>{factor.performance_metrics.annual_return.toFixed(1)}%</span>
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {examplePrompts.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setTaskDescription(prompt)}
+                    style={{
+                      textAlign: 'left',
+                      fontSize: '9px',
+                      fontFamily: 'monospace',
+                      color: FINCEPT.PURPLE,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '2px 0',
+                      transition: 'opacity 0.15s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = '0.7';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = '1';
+                    }}
+                  >
+                    • {prompt}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Factor Details */}
-            {selectedFactor && (
-              <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: FINCEPT.DARK_BG }}>
-                <div className="space-y-6 max-w-5xl">
-                  {/* Header */}
-                  <div>
-                    <h2 className="text-xl font-bold mb-2 uppercase tracking-wide flex items-center gap-3" style={{ color: FINCEPT.WHITE }}>
-                      {selectedFactor.name}
-                      <span className="text-sm px-3 py-1 rounded font-bold" style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}>
-                        FACTOR ID: {selectedFactor.factor_id}
-                      </span>
-                    </h2>
-                    <p className="font-mono text-sm" style={{ color: FINCEPT.GRAY }}>
-                      {selectedFactor.description}
-                    </p>
-                  </div>
+            {/* API Key */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '9px',
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                marginBottom: '8px',
+                letterSpacing: '0.5px'
+              }}>
+                OPENAI API KEY
+              </label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-proj-..."
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  outline: 'none'
+                }}
+              />
+              <div style={{
+                fontSize: '9px',
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                marginTop: '6px'
+              }}>
+                Required for AI-powered factor generation
+              </div>
+            </div>
 
-                  {/* Performance Metrics */}
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: FINCEPT.GRAY }}>
-                      PERFORMANCE METRICS
-                    </h3>
-                    <div className="grid grid-cols-4 gap-3">
+            {/* Settings */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '9px',
+                  fontFamily: 'monospace',
+                  color: FINCEPT.WHITE,
+                  opacity: 0.5,
+                  marginBottom: '8px',
+                  letterSpacing: '0.5px'
+                }}>
+                  TARGET MARKET
+                </label>
+                <select
+                  value={targetMarket}
+                  onChange={(e) => setTargetMarket(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    fontWeight: 700,
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="US">US MARKETS</option>
+                  <option value="CN">CHINA (A-SHARES)</option>
+                  <option value="CRYPTO">CRYPTOCURRENCY</option>
+                </select>
+              </div>
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '9px',
+                  fontFamily: 'monospace',
+                  color: FINCEPT.WHITE,
+                  opacity: 0.5,
+                  marginBottom: '8px',
+                  letterSpacing: '0.5px'
+                }}>
+                  BUDGET (USD)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={String(budget)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                      setBudget(v === '' ? 10 : Number(v));
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    color: FINCEPT.WHITE,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    fontWeight: 700,
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Control Buttons */}
+            <div style={{ display: 'flex', gap: '8px', paddingTop: '8px' }}>
+              <button
+                onClick={handleStartMining}
+                disabled={isRunning || !taskDescription || !apiKey}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  backgroundColor: (!taskDescription || !apiKey) ? FINCEPT.DARK_BG : FINCEPT.PURPLE,
+                  border: 'none',
+                  color: (!taskDescription || !apiKey) ? FINCEPT.WHITE : '#000000',
+                  opacity: (!taskDescription || !apiKey) ? 0.5 : 1,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px',
+                  cursor: (!taskDescription || !apiKey) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={(e) => {
+                  if (taskDescription && apiKey && !isRunning) {
+                    e.currentTarget.style.opacity = '0.9';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (taskDescription && apiKey) {
+                    e.currentTarget.style.opacity = '1';
+                  }
+                }}
+              >
+                {isRunning ? (
+                  <>
+                    <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    MINING...
+                  </>
+                ) : (
+                  <>
+                    <Play size={14} />
+                    START MINING
+                  </>
+                )}
+              </button>
+              {isRunning && (
+                <button
+                  onClick={handleStop}
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: FINCEPT.RED,
+                    border: 'none',
+                    color: FINCEPT.WHITE,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    cursor: 'pointer',
+                    transition: 'opacity 0.15s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = '0.9';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = '1';
+                  }}
+                >
+                  <Square size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Real-time Status */}
+            {taskStatus && (
+              <div style={{
+                padding: '14px',
+                backgroundColor: FINCEPT.DARK_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderLeft: `3px solid ${FINCEPT.PURPLE}`
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '12px'
+                }}>
+                  <span style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    color: FINCEPT.WHITE,
+                    letterSpacing: '0.5px'
+                  }}>
+                    TASK STATUS
+                  </span>
+                  <div style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    padding: '3px 8px',
+                    backgroundColor: taskStatus.status === 'completed' ? FINCEPT.GREEN :
+                                   taskStatus.status === 'running' ? FINCEPT.PURPLE : FINCEPT.RED,
+                    color: '#000000',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {taskStatus.status.toUpperCase()}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '10px', fontFamily: 'monospace' }}>
+                  {taskStatus.progress !== undefined && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>PROGRESS</span>
+                        <span style={{ color: FINCEPT.WHITE, fontWeight: 700 }}>{taskStatus.progress}%</span>
+                      </div>
+                      <div style={{
+                        width: '100%',
+                        height: '3px',
+                        backgroundColor: FINCEPT.PANEL_BG,
+                        overflow: 'hidden',
+                        border: `1px solid ${FINCEPT.BORDER}`
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${taskStatus.progress}%`,
+                          backgroundColor: FINCEPT.PURPLE,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                    </div>
+                  )}
+                  {taskStatus.factors_generated !== undefined && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>FACTORS GENERATED</span>
+                      <span style={{ color: FINCEPT.GREEN, fontWeight: 700 }}>{taskStatus.factors_generated}</span>
+                    </div>
+                  )}
+                  {taskStatus.factors_tested !== undefined && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>FACTORS TESTED</span>
+                      <span style={{ color: FINCEPT.WHITE, fontWeight: 700 }}>{taskStatus.factors_tested}</span>
+                    </div>
+                  )}
+                  {taskStatus.best_ic !== undefined && taskStatus.best_ic !== null && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>BEST IC</span>
+                      <span style={{ color: FINCEPT.GREEN, fontWeight: 700 }}>{taskStatus.best_ic.toFixed(4)}</span>
+                    </div>
+                  )}
+                  {taskStatus.elapsed_time && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>ELAPSED TIME</span>
+                      <span style={{ color: FINCEPT.WHITE, fontWeight: 700 }}>{taskStatus.elapsed_time}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel - Results */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {discoveredFactors.length > 0 ? (
+            <div style={{ display: 'flex', flex: 1 }}>
+              {/* Factor List */}
+              <div style={{
+                width: '340px',
+                borderRight: `1px solid ${FINCEPT.BORDER}`,
+                backgroundColor: FINCEPT.PANEL_BG,
+                display: 'flex',
+                flexDirection: 'column'
+              }}>
+                <div style={{
+                  padding: '10px 12px',
+                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    color: FINCEPT.PURPLE,
+                    letterSpacing: '0.5px'
+                  }}>
+                    DISCOVERED FACTORS
+                  </span>
+                  <div style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    fontFamily: 'monospace',
+                    padding: '3px 8px',
+                    backgroundColor: FINCEPT.PURPLE + '20',
+                    border: `1px solid ${FINCEPT.PURPLE}`,
+                    color: FINCEPT.PURPLE
+                  }}>
+                    {discoveredFactors.length}
+                  </div>
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+                  {discoveredFactors.map((factor, idx) => {
+                    const isSelected = selectedFactor?.factor_id === factor.factor_id;
+                    return (
+                      <button
+                        key={factor.factor_id}
+                        onClick={() => setSelectedFactor(factor)}
+                        style={{
+                          padding: '12px',
+                          backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
+                          border: `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
+                          borderTop: idx === 0 ? `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}` : '0',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          marginTop: idx === 0 ? '0' : '-1px',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                            e.currentTarget.style.borderColor = FINCEPT.PURPLE;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                          }
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            fontFamily: 'monospace',
+                            color: FINCEPT.WHITE
+                          }}>
+                            {factor.name}
+                          </span>
+                          <div style={{
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            fontFamily: 'monospace',
+                            padding: '2px 6px',
+                            backgroundColor: FINCEPT.GREEN + '20',
+                            border: `1px solid ${FINCEPT.GREEN}`,
+                            color: FINCEPT.GREEN
+                          }}>
+                            IC: {factor.ic.toFixed(4)}
+                          </div>
+                        </div>
+                        <div style={{
+                          fontSize: '9px',
+                          fontFamily: 'monospace',
+                          color: FINCEPT.WHITE,
+                          opacity: 0.6,
+                          marginBottom: '8px',
+                          lineHeight: '1.4'
+                        }}>
+                          {factor.description}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '9px', fontFamily: 'monospace' }}>
+                          <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>
+                            SHARPE: <span style={{ color: FINCEPT.WHITE, opacity: 1, fontWeight: 700 }}>{factor.sharpe.toFixed(2)}</span>
+                          </span>
+                          <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>
+                            RET: <span style={{ color: FINCEPT.GREEN, opacity: 1, fontWeight: 700 }}>{factor.performance_metrics.annual_return.toFixed(1)}%</span>
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Factor Details */}
+              {selectedFactor && (
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', backgroundColor: FINCEPT.DARK_BG }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
+                    {/* Header */}
+                    <div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        marginBottom: '12px'
+                      }}>
+                        <h2 style={{
+                          fontSize: '18px',
+                          fontWeight: 700,
+                          fontFamily: 'monospace',
+                          color: FINCEPT.WHITE,
+                          letterSpacing: '0.5px'
+                        }}>
+                          {selectedFactor.name}
+                        </h2>
+                        <div style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          fontFamily: 'monospace',
+                          padding: '4px 10px',
+                          backgroundColor: FINCEPT.PURPLE + '20',
+                          border: `1px solid ${FINCEPT.PURPLE}`,
+                          color: FINCEPT.PURPLE
+                        }}>
+                          FACTOR ID: {selectedFactor.factor_id}
+                        </div>
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        color: FINCEPT.WHITE,
+                        opacity: 0.6,
+                        lineHeight: '1.5'
+                      }}>
+                        {selectedFactor.description}
+                      </div>
+                    </div>
+
+                    {/* Performance Metrics */}
+                    <div>
+                      <div style={{
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        fontFamily: 'monospace',
+                        color: FINCEPT.PURPLE,
+                        letterSpacing: '0.5px',
+                        marginBottom: '12px'
+                      }}>
+                        PERFORMANCE METRICS
+                      </div>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: '12px'
+                      }}>
                       <MetricCard
                         label="Information Coefficient"
                         value={selectedFactor.ic.toFixed(4)}
@@ -521,74 +819,175 @@ export function FactorDiscoveryPanel() {
                     </div>
                   </div>
 
-                  {/* Factor Code */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Code size={16} color={FINCEPT.ORANGE} />
-                        <h3 className="font-bold uppercase text-xs tracking-wide" style={{ color: FINCEPT.WHITE }}>
-                          FACTOR IMPLEMENTATION
-                        </h3>
+                    {/* Factor Code */}
+                    <div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: '12px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Code size={16} color={FINCEPT.PURPLE} />
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            fontFamily: 'monospace',
+                            color: FINCEPT.WHITE,
+                            letterSpacing: '0.5px'
+                          }}>
+                            FACTOR IMPLEMENTATION
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(selectedFactor.code)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '8px 12px',
+                            backgroundColor: 'transparent',
+                            border: `1px solid ${FINCEPT.PURPLE}`,
+                            color: FINCEPT.PURPLE,
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            fontFamily: 'monospace',
+                            letterSpacing: '0.5px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = FINCEPT.PURPLE + '20';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                        >
+                          <Copy size={12} />
+                          COPY
+                        </button>
                       </div>
-                      <button
-                        onClick={() => copyToClipboard(selectedFactor.code)}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold uppercase hover:bg-opacity-80 transition-colors"
-                        style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE }}
-                      >
-                        <Copy size={12} />
-                        COPY
-                      </button>
-                    </div>
-                    <pre
-                      className="p-4 rounded text-xs overflow-x-auto font-mono border"
-                      style={{
+                      <pre style={{
+                        padding: '14px',
                         backgroundColor: FINCEPT.PANEL_BG,
                         color: FINCEPT.WHITE,
-                        borderColor: FINCEPT.BORDER
-                      }}
-                    >
-                      <code>{selectedFactor.code}</code>
-                    </pre>
-                  </div>
+                        border: `1px solid ${FINCEPT.BORDER}`,
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
+                        overflowX: 'auto',
+                        lineHeight: '1.5'
+                      }}>
+                        <code>{selectedFactor.code}</code>
+                      </pre>
+                    </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t" style={{ borderColor: FINCEPT.BORDER }}>
-                    <button
-                      className="flex-1 py-3 rounded font-bold uppercase text-sm tracking-wide hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
-                      style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
-                    >
-                      <Zap size={16} />
-                      DEPLOY TO LIVE TRADING
-                    </button>
-                    <button
-                      className="px-6 py-3 rounded font-bold uppercase text-sm tracking-wide hover:bg-opacity-80 transition-colors flex items-center justify-center gap-2"
-                      style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE }}
-                    >
-                      <Download size={16} />
-                      EXPORT
-                    </button>
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '12px', paddingTop: '16px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
+                      <button
+                        style={{
+                          flex: 1,
+                          padding: '12px 16px',
+                          backgroundColor: FINCEPT.PURPLE,
+                          border: 'none',
+                          color: '#000000',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          fontFamily: 'monospace',
+                          letterSpacing: '0.5px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          transition: 'opacity 0.15s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.opacity = '0.9';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.opacity = '1';
+                        }}
+                      >
+                        <Zap size={14} />
+                        DEPLOY TO LIVE TRADING
+                      </button>
+                      <button
+                        style={{
+                          padding: '12px 24px',
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${FINCEPT.PURPLE}`,
+                          color: FINCEPT.PURPLE,
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          fontFamily: 'monospace',
+                          letterSpacing: '0.5px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = FINCEPT.PURPLE + '20';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        <Download size={14} />
+                        EXPORT
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
-              <Sparkles size={64} color={FINCEPT.GRAY} className="mx-auto mb-4" />
-              <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: FINCEPT.WHITE }}>
-                NO FACTORS DISCOVERED YET
-              </h3>
-              <p className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
-                Configure your research objective and start factor mining<br/>
-                to discover profitable trading signals automatically
-              </p>
+              )}
             </div>
-          </div>
-        )}
+          ) : (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 1,
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <Sparkles size={32} color={FINCEPT.BORDER} />
+              <div style={{
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                textAlign: 'center',
+                letterSpacing: '0.5px'
+              }}>
+                NO FACTORS DISCOVERED YET
+                <br />
+                CONFIGURE AND START MINING
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+// Add keyframe animations
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+`;
+if (!document.querySelector('[data-factor-discovery-animations]')) {
+  style.setAttribute('data-factor-discovery-animations', 'true');
+  document.head.appendChild(style);
 }
 
 function MetricCard({
@@ -605,21 +1004,45 @@ function MetricCard({
   color: string;
 }) {
   return (
-    <div
-      className="p-3 rounded border"
-      style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs uppercase font-mono" style={{ color: FINCEPT.GRAY }}>
-          {label}
+    <div style={{
+      padding: '12px',
+      backgroundColor: FINCEPT.PANEL_BG,
+      border: `1px solid ${FINCEPT.BORDER}`,
+      borderLeft: `3px solid ${color}`
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '8px'
+      }}>
+        <span style={{
+          fontSize: '9px',
+          fontFamily: 'monospace',
+          color: FINCEPT.WHITE,
+          opacity: 0.5,
+          letterSpacing: '0.5px'
+        }}>
+          {label.toUpperCase()}
         </span>
         <div style={{ color }}>{icon}</div>
       </div>
-      <div className="text-xl font-bold font-mono" style={{ color }}>
+      <div style={{
+        fontSize: '18px',
+        fontWeight: 700,
+        fontFamily: 'monospace',
+        color
+      }}>
         {value}
       </div>
       {subtext && (
-        <div className="text-xs font-mono mt-1" style={{ color: FINCEPT.GRAY }}>
+        <div style={{
+          fontSize: '9px',
+          fontFamily: 'monospace',
+          color: FINCEPT.WHITE,
+          opacity: 0.5,
+          marginTop: '4px'
+        }}>
           {subtext}
         </div>
       )}

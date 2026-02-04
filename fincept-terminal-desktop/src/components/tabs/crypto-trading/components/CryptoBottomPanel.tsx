@@ -10,7 +10,8 @@ import {
   BarChart3,
   Sparkles,
   Globe,
-  Grid3X3
+  Grid3X3,
+  Bell
 } from 'lucide-react';
 import { FINCEPT } from '../constants';
 import type { BottomPanelTabType, Position } from '../types';
@@ -20,6 +21,7 @@ import { AccountStats, FeesDisplay, MarginPanel } from '../../trading/core/Accou
 import { StakingPanel, FuturesPanel } from '../../trading/exchange-specific/kraken';
 import { PortfolioAggregator, ArbitrageDetector } from '../../trading/cross-exchange';
 import { GridTradingPanel } from '../../trading/grid-trading';
+import { MonitoringPanel } from '../../trading/monitoring/MonitoringPanel';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 interface CryptoBottomPanelProps {
@@ -45,6 +47,7 @@ const TAB_CONFIG: { id: BottomPanelTabType; label: string; icon: React.ReactNode
   { id: 'features', label: 'FEATURES', icon: <Sparkles size={11} /> },
   { id: 'cross-exchange', label: 'CROSS-EX', icon: <Globe size={11} /> },
   { id: 'grid-trading', label: 'GRID', icon: <Grid3X3 size={11} /> },
+  { id: 'monitoring', label: 'MONITOR', icon: <Bell size={11} /> },
 ];
 
 export function CryptoBottomPanel({
@@ -405,6 +408,20 @@ export function CryptoBottomPanel({
               </ErrorBoundary>
             </div>
           )}
+
+          {/* Monitoring Tab */}
+          {activeTab === 'monitoring' && (
+            <div style={{ height: '100%', overflow: 'hidden' }}>
+              <ErrorBoundary name="MonitoringPanel" variant="minimal">
+                <MonitoringPanel
+                  provider={activeBroker || 'kraken'}
+                  symbol={selectedSymbol}
+                  assetType="crypto"
+                />
+              </ErrorBoundary>
+            </div>
+          )}
+
         </div>
       )}
     </div>

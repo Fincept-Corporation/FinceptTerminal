@@ -1,10 +1,10 @@
 /**
  * Online Learning Panel - Real-time Model Updates & Drift Detection
  * Incremental learning with concept drift detection for live trading
- * Fincept Professional Design - Full backend integration with qlib_online_learning.py
+ * REFACTORED: Terminal-style UI matching DeepAgent and RL Trading UX
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Zap,
   Activity,
@@ -17,7 +17,11 @@ import {
   BarChart3,
   Bell,
   Settings,
-  Clock
+  Clock,
+  Cpu,
+  Network,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 const FINCEPT = {
@@ -127,271 +131,508 @@ export function OnlineLearningPanel() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
-            <Zap size={24} style={{ color: FINCEPT.CYAN }} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold" style={{ color: FINCEPT.WHITE }}>
-              Online Learning
-            </h2>
-            <p className="text-sm" style={{ color: FINCEPT.MUTED }}>
-              Real-time model updates with concept drift detection
-            </p>
-          </div>
-        </div>
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: FINCEPT.DARK_BG
+    }}>
+      {/* Terminal-style Header */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: FINCEPT.PANEL_BG,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <Zap size={16} color={FINCEPT.YELLOW} />
+        <span style={{
+          color: FINCEPT.YELLOW,
+          fontSize: '12px',
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          fontFamily: 'monospace'
+        }}>
+          ONLINE LEARNING SYSTEM
+        </span>
+        <div style={{ flex: 1 }} />
 
+        {/* Status Indicators */}
         {modelId && (
-          <div className="flex items-center space-x-2">
+          <>
+            <div style={{
+              fontSize: '10px',
+              fontFamily: 'monospace',
+              padding: '3px 8px',
+              backgroundColor: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.CYAN}`,
+              color: FINCEPT.CYAN
+            }}>
+              MODEL: {modelId.substring(0, 12)}...
+            </div>
             {isLive && (
-              <div className="flex items-center space-x-2 px-3 py-1 rounded-lg" style={{ backgroundColor: FINCEPT.GREEN + '20', border: `1px solid ${FINCEPT.GREEN}` }}>
-                <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: FINCEPT.GREEN }} />
-                <span className="text-sm" style={{ color: FINCEPT.GREEN }}>LIVE</span>
+              <div style={{
+                fontSize: '10px',
+                fontFamily: 'monospace',
+                padding: '3px 8px',
+                backgroundColor: FINCEPT.GREEN + '20',
+                border: `1px solid ${FINCEPT.GREEN}`,
+                color: FINCEPT.GREEN,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: FINCEPT.GREEN, animation: 'pulse 2s infinite' }} />
+                LIVE
               </div>
             )}
-          </div>
+          </>
         )}
+
+        <div style={{
+          fontSize: '10px',
+          fontFamily: 'monospace',
+          padding: '3px 8px',
+          backgroundColor: modelId ? (isLive ? FINCEPT.GREEN + '20' : FINCEPT.DARK_BG) : FINCEPT.DARK_BG,
+          border: `1px solid ${modelId ? (isLive ? FINCEPT.GREEN : FINCEPT.BORDER) : FINCEPT.BORDER}`,
+          color: modelId ? (isLive ? FINCEPT.GREEN : FINCEPT.MUTED) : FINCEPT.MUTED
+        }}>
+          {isLive ? 'ACTIVE' : modelId ? 'READY' : 'IDLE'}
+        </div>
       </div>
 
-      {error && (
-        <div className="flex items-center space-x-2 p-4 rounded-lg" style={{ backgroundColor: FINCEPT.RED + '20', border: `1px solid ${FINCEPT.RED}` }}>
-          <AlertTriangle size={20} style={{ color: FINCEPT.RED }} />
-          <span style={{ color: FINCEPT.RED }}>{error}</span>
-        </div>
-      )}
-
-      {/* Status Cards */}
-      {metrics && (
-        <div className="grid grid-cols-4 gap-4">
-          <div className="p-4 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
-            <div className="text-xs mb-1" style={{ color: FINCEPT.GRAY }}>Current MAE</div>
-            <div className="text-2xl font-bold font-mono" style={{ color: FINCEPT.CYAN }}>
-              {metrics.current_mae.toFixed(4)}
-            </div>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* Left Sidebar - Model Type Selection */}
+        <div style={{
+          width: '220px',
+          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <div style={{
+            padding: '10px 12px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            fontSize: '10px',
+            fontWeight: 700,
+            color: FINCEPT.MUTED,
+            fontFamily: 'monospace',
+            letterSpacing: '0.5px'
+          }}>
+            MODEL TYPE
           </div>
-
-          <div className="p-4 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
-            <div className="text-xs mb-1" style={{ color: FINCEPT.GRAY }}>Samples Trained</div>
-            <div className="text-2xl font-bold font-mono" style={{ color: FINCEPT.GREEN }}>
-              {metrics.samples_trained.toLocaleString()}
-            </div>
-          </div>
-
-          <div className="p-4 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${metrics.drift_detected ? FINCEPT.RED : FINCEPT.BORDER}` }}>
-            <div className="flex items-center space-x-1 mb-1">
-              <div className="text-xs" style={{ color: FINCEPT.GRAY }}>Drift Status</div>
-              {metrics.drift_detected && <Bell size={12} style={{ color: FINCEPT.RED }} />}
-            </div>
-            <div className="text-lg font-bold" style={{ color: metrics.drift_detected ? FINCEPT.RED : FINCEPT.GREEN }}>
-              {metrics.drift_detected ? 'DETECTED' : 'STABLE'}
-            </div>
-          </div>
-
-          <div className="p-4 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
-            <div className="text-xs mb-1" style={{ color: FINCEPT.GRAY }}>Last Update</div>
-            <div className="text-sm font-mono" style={{ color: FINCEPT.WHITE }}>
-              {new Date(metrics.last_updated).toLocaleTimeString()}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
-          {/* Model Configuration */}
-          <div className="p-6 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
-            <h3 className="font-bold mb-4" style={{ color: FINCEPT.ORANGE }}>
-              Model Configuration
-            </h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm mb-2" style={{ color: FINCEPT.GRAY }}>
-                  Model Type
-                </label>
-                <select
-                  value={modelType}
-                  onChange={(e) => setModelType(e.target.value)}
-                  disabled={!!modelId}
-                  className="w-full px-4 py-2 rounded-lg"
+          <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
+            {modelTypes.map(type => {
+              const isSelected = modelType === type.id;
+              return (
+                <div
+                  key={type.id}
+                  onClick={() => !modelId && setModelType(type.id)}
                   style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE
+                    padding: '10px',
+                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
+                    border: `1px solid ${isSelected ? FINCEPT.YELLOW : FINCEPT.BORDER}`,
+                    cursor: modelId ? 'not-allowed' : 'pointer',
+                    opacity: modelId ? 0.5 : 1,
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected && !modelId) {
+                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                      e.currentTarget.style.borderColor = FINCEPT.YELLOW;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected && !modelId) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    }
                   }}
                 >
-                  {modelTypes.map(type => (
-                    <option key={type.id} value={type.id}>{type.name}</option>
-                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Activity size={14} style={{ color: FINCEPT.YELLOW }} />
+                    <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
+                      {type.name}
+                    </span>
+                  </div>
+                  <p style={{ color: FINCEPT.MUTED, fontSize: '9px', margin: 0, lineHeight: '1.3' }}>
+                    {type.desc}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Drift Strategy Section */}
+          <div style={{
+            padding: '12px',
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
+            marginTop: 'auto'
+          }}>
+            <div style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color: FINCEPT.MUTED,
+              marginBottom: '8px',
+              fontFamily: 'monospace',
+              letterSpacing: '0.5px'
+            }}>
+              DRIFT STRATEGY
+            </div>
+            <select
+              value={driftStrategy}
+              onChange={(e) => setDriftStrategy(e.target.value)}
+              disabled={isLive}
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                backgroundColor: FINCEPT.DARK_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                color: FINCEPT.WHITE,
+                fontSize: '10px',
+                fontFamily: 'monospace',
+                opacity: isLive ? 0.5 : 1
+              }}
+            >
+              <option value="retrain">Retrain</option>
+              <option value="adaptive">Adaptive LR</option>
+              <option value="ensemble">Ensemble</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          {/* Configuration & Control Section */}
+          <div style={{
+            padding: '16px',
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Zap size={14} style={{ color: FINCEPT.YELLOW }} />
+              <span style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
+                MODEL CONTROL
+              </span>
+              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>•</span>
+              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>
+                {modelId ? 'MODEL INITIALIZED' : 'NO MODEL'}
+              </span>
+            </div>
+
+            {/* Control Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'end' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                  UPDATE FREQUENCY
+                </label>
+                <select
+                  value={updateFrequency}
+                  onChange={(e) => setUpdateFrequency(e.target.value)}
+                  disabled={isLive}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    color: FINCEPT.WHITE,
+                    fontSize: '11px',
+                    fontFamily: 'monospace',
+                    opacity: isLive ? 0.5 : 1
+                  }}
+                >
+                  <option value="hourly">Hourly</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
                 </select>
-                <p className="text-xs mt-1" style={{ color: FINCEPT.MUTED }}>
-                  {modelTypes.find(t => t.id === modelType)?.desc}
-                </p>
               </div>
 
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                  SELECTED MODEL
+                </label>
+                <div style={{
+                  padding: '8px 10px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.YELLOW}`,
+                  color: FINCEPT.YELLOW,
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  fontWeight: 600
+                }}>
+                  {modelTypes.find(t => t.id === modelType)?.name || modelType}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
               {!modelId ? (
                 <button
                   onClick={handleCreateModel}
-                  className="w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold"
                   style={{
+                    flex: 1,
+                    padding: '10px 16px',
                     backgroundColor: FINCEPT.ORANGE,
-                    color: FINCEPT.WHITE
+                    border: 'none',
+                    color: FINCEPT.DARK_BG,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.5px',
+                    transition: 'all 0.15s'
                   }}
                 >
-                  <Play size={20} />
-                  <span>Create Online Model</span>
+                  <Play size={14} />
+                  CREATE ONLINE MODEL
+                </button>
+              ) : !isLive ? (
+                <button
+                  onClick={handleStartLive}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    backgroundColor: FINCEPT.GREEN,
+                    border: 'none',
+                    color: FINCEPT.DARK_BG,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.5px',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <Play size={14} />
+                  START LIVE UPDATES
                 </button>
               ) : (
-                <div className="p-3 rounded-lg" style={{ backgroundColor: FINCEPT.GREEN + '20', border: `1px solid ${FINCEPT.GREEN}` }}>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle2 size={16} style={{ color: FINCEPT.GREEN }} />
-                    <span className="text-sm" style={{ color: FINCEPT.GREEN }}>
-                      Model created: {modelId}
-                    </span>
-                  </div>
-                </div>
+                <button
+                  onClick={handleStopLive}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    backgroundColor: FINCEPT.RED,
+                    border: 'none',
+                    color: FINCEPT.WHITE,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.5px',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <Pause size={14} />
+                  STOP LIVE UPDATES
+                </button>
               )}
             </div>
           </div>
 
-          {/* Live Updates Control */}
-          {modelId && (
-            <div className="p-6 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
-              <h3 className="font-bold mb-4" style={{ color: FINCEPT.ORANGE }}>
-                Live Updates
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm mb-2" style={{ color: FINCEPT.GRAY }}>
-                    Update Frequency
-                  </label>
-                  <select
-                    value={updateFrequency}
-                    onChange={(e) => setUpdateFrequency(e.target.value)}
-                    disabled={isLive}
-                    className="w-full px-4 py-2 rounded-lg"
-                    style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      color: FINCEPT.WHITE
-                    }}
-                  >
-                    <option value="hourly">Hourly</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                  </select>
+          {/* Metrics Dashboard */}
+          {metrics && (
+            <div style={{
+              padding: '16px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              backgroundColor: FINCEPT.PANEL_BG
+            }}>
+              <div style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: FINCEPT.CYAN,
+                marginBottom: '12px',
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <Cpu size={13} color={FINCEPT.CYAN} />
+                REAL-TIME METRICS
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.CYAN}`,
+                  borderLeft: `3px solid ${FINCEPT.CYAN}`
+                }}>
+                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                    CURRENT MAE
+                  </div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.CYAN, fontFamily: 'monospace' }}>
+                    {metrics.current_mae.toFixed(4)}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm mb-2" style={{ color: FINCEPT.GRAY }}>
-                    Drift Handling Strategy
-                  </label>
-                  <select
-                    value={driftStrategy}
-                    onChange={(e) => setDriftStrategy(e.target.value)}
-                    disabled={isLive}
-                    className="w-full px-4 py-2 rounded-lg"
-                    style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      color: FINCEPT.WHITE
-                    }}
-                  >
-                    <option value="retrain">Retrain Model</option>
-                    <option value="adaptive">Adaptive Learning Rate</option>
-                    <option value="ensemble">Ensemble Approach</option>
-                  </select>
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.GREEN}`,
+                  borderLeft: `3px solid ${FINCEPT.GREEN}`
+                }}>
+                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                    SAMPLES TRAINED
+                  </div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.GREEN, fontFamily: 'monospace' }}>
+                    {metrics.samples_trained.toLocaleString()}
+                  </div>
                 </div>
 
-                {!isLive ? (
-                  <button
-                    onClick={handleStartLive}
-                    className="w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold"
-                    style={{
-                      backgroundColor: FINCEPT.CYAN,
-                      color: FINCEPT.DARK_BG
-                    }}
-                  >
-                    <Play size={20} />
-                    <span>Start Live Updates</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleStopLive}
-                    className="w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold"
-                    style={{
-                      backgroundColor: FINCEPT.RED,
-                      color: FINCEPT.WHITE
-                    }}
-                  >
-                    <Pause size={20} />
-                    <span>Stop Live Updates</span>
-                  </button>
-                )}
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${metrics.drift_detected ? FINCEPT.RED : FINCEPT.GREEN}`,
+                  borderLeft: `3px solid ${metrics.drift_detected ? FINCEPT.RED : FINCEPT.GREEN}`
+                }}>
+                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    DRIFT STATUS
+                    {metrics.drift_detected && <Bell size={10} color={FINCEPT.RED} />}
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: metrics.drift_detected ? FINCEPT.RED : FINCEPT.GREEN, fontFamily: 'monospace' }}>
+                    {metrics.drift_detected ? 'DETECTED' : 'STABLE'}
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`
+                }}>
+                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                    LAST UPDATE
+                  </div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
+                    {new Date(metrics.last_updated).toLocaleTimeString()}
+                  </div>
+                </div>
               </div>
             </div>
           )}
-        </div>
 
-        {/* Right Column - Update History */}
-        <div className="space-y-6">
-          <div className="p-6 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}` }}>
-            <h3 className="font-bold mb-4" style={{ color: FINCEPT.ORANGE }}>
-              Update History
-            </h3>
+          {/* Update History */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            {error && (
+              <div style={{
+                padding: '12px 14px',
+                backgroundColor: FINCEPT.RED + '15',
+                border: `1px solid ${FINCEPT.RED}`,
+                borderLeft: `3px solid ${FINCEPT.RED}`,
+                color: FINCEPT.RED,
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontFamily: 'monospace',
+                marginBottom: '16px',
+                lineHeight: '1.5'
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                {error}
+              </div>
+            )}
 
-            <div
-              className="space-y-2 overflow-y-auto"
-              style={{ height: '500px' }}
-            >
-              {updateHistory.length === 0 ? (
-                <div className="text-center py-20" style={{ color: FINCEPT.MUTED }}>
-                  No updates yet. Start live updates to see history.
+            {updateHistory.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: FINCEPT.CYAN,
+                  marginBottom: '8px',
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <Clock size={13} color={FINCEPT.CYAN} />
+                  UPDATE HISTORY
                 </div>
-              ) : (
-                updateHistory.map((update, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-lg"
-                    style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${update.drift ? FINCEPT.RED : FINCEPT.BORDER}`
-                    }}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
-                        {new Date(update.timestamp).toLocaleTimeString()}
-                      </span>
-                      {update.drift && (
-                        <div className="flex items-center space-x-1 px-2 py-1 rounded text-xs" style={{ backgroundColor: FINCEPT.RED + '20', color: FINCEPT.RED }}>
-                          <AlertTriangle size={12} />
-                          <span>DRIFT</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {updateHistory.map((update, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '10px 12px',
+                        backgroundColor: FINCEPT.PANEL_BG,
+                        border: `1px solid ${update.drift ? FINCEPT.RED : FINCEPT.BORDER}`,
+                        borderLeft: `3px solid ${update.drift ? FINCEPT.RED : FINCEPT.CYAN}`
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '10px', fontFamily: 'monospace', color: FINCEPT.GRAY }}>
+                          {new Date(update.timestamp).toLocaleTimeString()}
+                        </span>
+                        {update.drift && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 6px',
+                            backgroundColor: FINCEPT.RED + '20',
+                            fontSize: '9px',
+                            color: FINCEPT.RED,
+                            fontFamily: 'monospace',
+                            fontWeight: 700
+                          }}>
+                            <AlertTriangle size={10} />
+                            DRIFT
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '10px' }}>
+                        <div>
+                          <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>MAE: </span>
+                          <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                            {update.mae.toFixed(4)}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span style={{ color: FINCEPT.GRAY }}>MAE: </span>
-                        <span className="font-mono" style={{ color: FINCEPT.WHITE }}>
-                          {update.mae.toFixed(4)}
-                        </span>
-                      </div>
-                      <div>
-                        <span style={{ color: FINCEPT.GRAY }}>Samples: </span>
-                        <span className="font-mono" style={{ color: FINCEPT.WHITE }}>
-                          {update.samples}
-                        </span>
+                        <div>
+                          <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>Samples: </span>
+                          <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                            {update.samples}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!modelId && updateHistory.length === 0 && (
+              <div style={{
+                padding: '40px 20px',
+                textAlign: 'center'
+              }}>
+                <Activity size={48} color={FINCEPT.MUTED} style={{ margin: '0 auto 16px' }} />
+                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, marginBottom: '8px', fontFamily: 'monospace' }}>
+                  Ready for Online Learning
+                </div>
+                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, lineHeight: '1.5' }}>
+                  Create a model and start live updates to see real-time metrics and drift detection.
+                  <br />Results and update history will appear here.
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

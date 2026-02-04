@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // WebSocket Manager - Connection pool and lifecycle management
 //
 // Responsibilities:
@@ -12,6 +13,7 @@ use super::router::MessageRouter;
 use super::types::*;
 use dashmap::DashMap;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
@@ -36,6 +38,9 @@ pub struct WebSocketManager {
 
     // Connection locks to prevent race conditions (one mutex per provider)
     connection_locks: Arc<DashMap<String, Arc<Mutex<()>>>>,
+
+    // Atomic connection state tracking (lock-free, avoids try_read false negatives)
+    connected_state: Arc<DashMap<String, Arc<AtomicBool>>>,
 }
 
 impl WebSocketManager {
@@ -47,6 +52,7 @@ impl WebSocketManager {
             metrics: Arc::new(DashMap::new()),
             subscriptions: Arc::new(DashMap::new()),
             connection_locks: Arc::new(DashMap::new()),
+            connected_state: Arc::new(DashMap::new()),
         }
     }
 
@@ -124,6 +130,12 @@ impl WebSocketManager {
             Arc::new(RwLock::new(adapter))
         );
 
+        // Set atomic connected state
+        self.connected_state
+            .entry(provider.to_string())
+            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
+            .store(true, Ordering::SeqCst);
+
         // Initialize metrics
         let metrics = ConnectionMetrics {
             provider: provider.to_string(),
@@ -141,14 +153,23 @@ impl WebSocketManager {
 
     /// Disconnect from a provider
     pub async fn disconnect(&self, provider: &str) -> Result<()> {
+        // Clear atomic connected state immediately
+        if let Some(state) = self.connected_state.get(provider) {
+            state.store(false, Ordering::SeqCst);
+        }
+
         if let Some((_, adapter)) = self.connections.remove(provider) {
             adapter.write().await.disconnect().await
                 .map_err(|e| WebSocketError::ConnectionError(e.to_string()))?;
+
+            // Clear subscription tracking so re-subscribe works after reconnect
+            self.subscriptions.remove(provider);
 
             // Update metrics
             if let Some(mut metrics) = self.metrics.get_mut(provider) {
                 metrics.status = ConnectionStatus::Disconnected;
                 metrics.connected_at = None;
+                metrics.active_subscriptions = 0;
             }
 
             // Update status
@@ -223,15 +244,12 @@ impl WebSocketManager {
         )))
     }
 
-    /// Check if actually connected (verifies adapter's connection state, not just map existence)
+    /// Check if connected using atomic state (lock-free, no false negatives)
     pub fn is_connected(&self, provider: &str) -> bool {
-        if let Some(adapter) = self.connections.get(provider) {
-            // Use try_read to avoid blocking - if we can't get lock, assume disconnected
-            if let Ok(guard) = adapter.try_read() {
-                return guard.is_connected();
-            }
-        }
-        false
+        self.connected_state
+            .get(provider)
+            .map(|state| state.load(Ordering::SeqCst))
+            .unwrap_or(false)
     }
 
     // ========================================================================

@@ -11,7 +11,7 @@ import {
 } from '@/services/aiQuantLab/ffnService';
 import { portfolioService, type Portfolio } from '@/services/portfolio/portfolioService';
 import { yfinanceService } from '@/services/markets/yfinanceService';
-import { SAMPLE_PRICES, DEFAULT_CONFIG, DEFAULT_HISTORICAL_DAYS, DEFAULT_BENCHMARK_SYMBOL } from '../constants';
+import { DEFAULT_CONFIG, DEFAULT_HISTORICAL_DAYS, DEFAULT_BENCHMARK_SYMBOL } from '../constants';
 import type {
   DataSourceType,
   AnalysisMode,
@@ -27,10 +27,10 @@ export function useFFNState(): FFNState {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [priceInput, setPriceInput] = useState(JSON.stringify(SAMPLE_PRICES, null, 2));
+  const [priceInput, setPriceInput] = useState('{}');
 
   // Data source configuration
-  const [dataSourceType, setDataSourceType] = useState<DataSourceType>('manual');
+  const [dataSourceType, setDataSourceType] = useState<DataSourceType>('symbol');
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('');
   const [symbolInput, setSymbolInput] = useState('AAPL');
@@ -66,7 +66,21 @@ export function useFFNState(): FFNState {
   useEffect(() => {
     checkFFNStatus();
     loadPortfolios();
+    // Auto-fetch data on mount if using symbol mode
+    if (dataSourceType === 'symbol') {
+      fetchData();
+    }
   }, []);
+
+  // Auto-fetch data when switching to symbol mode or when symbol changes
+  useEffect(() => {
+    if (dataSourceType === 'symbol' && (symbolInput || symbolsInput)) {
+      const timer = setTimeout(() => {
+        fetchData();
+      }, 500); // Debounce to avoid excessive fetching
+      return () => clearTimeout(timer);
+    }
+  }, [dataSourceType]);
 
   const checkFFNStatus = async () => {
     try {

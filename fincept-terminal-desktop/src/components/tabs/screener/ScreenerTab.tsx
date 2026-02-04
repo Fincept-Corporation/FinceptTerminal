@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { Search, Download, BarChart3, Loader2, AlertCircle, FolderTree } from 'lucide-react';
@@ -73,6 +74,21 @@ function ScreenerTab() {
     loadCategorySeries,
     checkApiKey,
   } = useScreenerData();
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    seriesIds, startDate, endDate, chartType, normalizeData,
+  }), [seriesIds, startDate, endDate, chartType, normalizeData]);
+
+  const setWorkspaceState = useCallback((state: any) => {
+    if (typeof state.seriesIds === "string") setSeriesIds(state.seriesIds);
+    if (typeof state.startDate === "string") setStartDate(state.startDate);
+    if (typeof state.endDate === "string") setEndDate(state.endDate);
+    if (state.chartType === "line" || state.chartType === "area") setChartType(state.chartType);
+    if (typeof state.normalizeData === "boolean") setNormalizeData(state.normalizeData);
+  }, []);
+
+  useWorkspaceTabState("screener", getWorkspaceState, setWorkspaceState);
 
   // Check API key on mount
   useEffect(() => {

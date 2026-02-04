@@ -11,6 +11,18 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { withTimeout, deduplicatedFetch } from '@/services/core/apiUtils';
+import { validateString, validateSymbol } from '@/services/core/validators';
+
+// =============================================================================
+// Error Extraction Helper
+// =============================================================================
+
+function extractError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  return 'Unknown error';
+}
 
 // =============================================================================
 // Types
@@ -193,14 +205,13 @@ export async function getHITLStatus(): Promise<{
   error?: string;
 }> {
   try {
-    const result = await invoke<{ success: boolean; status: HITLStatus }>('get_alpha_hitl_status');
+    const result = await deduplicatedFetch('alpha-enh:hitlStatus', () =>
+      withTimeout(invoke<{ success: boolean; status: HITLStatus }>('get_alpha_hitl_status'), 15000, 'Get HITL status timeout')
+    );
     return result;
   } catch (error) {
     console.error('Error getting HITL status:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -211,18 +222,16 @@ export async function getPendingApprovals(): Promise<{
   error?: string;
 }> {
   try {
-    const result = await invoke<{
-      success: boolean;
-      pending_approvals: ApprovalRequest[];
-      count: number;
-    }>('get_alpha_pending_approvals');
+    const result = await deduplicatedFetch('alpha-enh:pendingApprovals', () =>
+      withTimeout(
+        invoke<{ success: boolean; pending_approvals: ApprovalRequest[]; count: number }>('get_alpha_pending_approvals'),
+        15000, 'Get pending approvals timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('Error getting pending approvals:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -230,19 +239,20 @@ export async function approveDecision(
   requestId: string,
   notes?: string
 ): Promise<{ success: boolean; error?: string }> {
+  const v = validateString(requestId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid requestId: ${v.error}` };
+
   try {
-    const result = await invoke<{ success: boolean; action: string }>('approve_alpha_decision', {
-      requestId,
-      approvedBy: 'user',
-      notes: notes || '',
-    });
+    const result = await withTimeout(
+      invoke<{ success: boolean; action: string }>('approve_alpha_decision', {
+        requestId, approvedBy: 'user', notes: notes || '',
+      }),
+      30000, 'Approve decision timeout'
+    );
     return { success: result.success };
   } catch (error) {
     console.error('Error approving decision:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -250,19 +260,20 @@ export async function rejectDecision(
   requestId: string,
   notes?: string
 ): Promise<{ success: boolean; error?: string }> {
+  const v = validateString(requestId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid requestId: ${v.error}` };
+
   try {
-    const result = await invoke<{ success: boolean; action: string }>('reject_alpha_decision', {
-      requestId,
-      rejectedBy: 'user',
-      notes: notes || '',
-    });
+    const result = await withTimeout(
+      invoke<{ success: boolean; action: string }>('reject_alpha_decision', {
+        requestId, rejectedBy: 'user', notes: notes || '',
+      }),
+      30000, 'Reject decision timeout'
+    );
     return { success: result.success };
   } catch (error) {
     console.error('Error rejecting decision:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -270,18 +281,18 @@ export async function updateHITLRule(
   ruleName: string,
   enabled: boolean
 ): Promise<{ success: boolean; error?: string }> {
+  const v = validateString(ruleName, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid ruleName: ${v.error}` };
+
   try {
-    const result = await invoke<{ success: boolean }>('update_alpha_hitl_rule', {
-      ruleName,
-      enabled,
-    });
+    const result = await withTimeout(
+      invoke<{ success: boolean }>('update_alpha_hitl_rule', { ruleName, enabled }),
+      15000, 'Update HITL rule timeout'
+    );
     return { success: result.success };
   } catch (error) {
     console.error('Error updating HITL rule:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -298,22 +309,20 @@ export async function getSentiment(
   prompt_context?: string;
   error?: string;
 }> {
+  const v = validateSymbol(symbol);
+  if (!v.valid) return { success: false, error: `Invalid symbol: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      sentiment: SentimentResult;
-      prompt_context: string;
-    }>('get_alpha_sentiment', {
-      symbol,
-      maxArticles: maxArticles || 15,
-    });
+    const result = await withTimeout(
+      invoke<{ success: boolean; sentiment: SentimentResult; prompt_context: string }>(
+        'get_alpha_sentiment', { symbol, maxArticles: maxArticles || 15 }
+      ),
+      30000, 'Get sentiment timeout'
+    );
     return result;
   } catch (error) {
     console.error('Error getting sentiment:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -325,17 +334,14 @@ export async function getMarketMood(
   error?: string;
 }> {
   try {
-    const result = await invoke<{ success: boolean; market_mood: MarketMood }>(
-      'get_alpha_market_mood',
-      { symbols }
+    const result = await withTimeout(
+      invoke<{ success: boolean; market_mood: MarketMood }>('get_alpha_market_mood', { symbols }),
+      30000, 'Get market mood timeout'
     );
     return result;
   } catch (error) {
     console.error('Error getting market mood:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -351,21 +357,23 @@ export async function getPortfolioMetrics(
   metrics?: PortfolioMetrics | Record<string, PortfolioMetrics>;
   error?: string;
 }> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      metrics: PortfolioMetrics | Record<string, PortfolioMetrics>;
-    }>('get_alpha_portfolio_metrics', {
-      competitionId,
-      modelName: modelName || null,
-    });
+    const key = `alpha-enh:metrics:${competitionId}:${modelName || 'all'}`;
+    const result = await deduplicatedFetch(key, () =>
+      withTimeout(
+        invoke<{ success: boolean; metrics: PortfolioMetrics | Record<string, PortfolioMetrics> }>(
+          'get_alpha_portfolio_metrics', { competitionId, modelName: modelName || null }
+        ),
+        15000, 'Get portfolio metrics timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('Error getting portfolio metrics:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -374,34 +382,27 @@ export async function getEquityCurve(
   modelName?: string
 ): Promise<{
   success: boolean;
-  equity_curve?: Array<{
-    timestamp: string;
-    cycle: number;
-    value: number;
-    model: string;
-  }>;
+  equity_curve?: Array<{ timestamp: string; cycle: number; value: number; model: string }>;
   error?: string;
 }> {
+  const v = validateString(competitionId, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid competitionId: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      equity_curve: Array<{
-        timestamp: string;
-        cycle: number;
-        value: number;
-        model: string;
-      }>;
-    }>('get_alpha_equity_curve', {
-      competitionId,
-      modelName: modelName || null,
-    });
+    const key = `alpha-enh:equityCurve:${competitionId}:${modelName || 'all'}`;
+    const result = await deduplicatedFetch(key, () =>
+      withTimeout(
+        invoke<{
+          success: boolean;
+          equity_curve: Array<{ timestamp: string; cycle: number; value: number; model: string }>;
+        }>('get_alpha_equity_curve', { competitionId, modelName: modelName || null }),
+        15000, 'Get equity curve timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('Error getting equity curve:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -419,27 +420,30 @@ export async function createGridAgent(
   grid_levels?: number[];
   error?: string;
 }> {
+  const v = validateString(name, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid grid name: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      agent_name: string;
-      grid_config: GridConfig & { grid_spacing: number };
-      grid_levels: number[];
-    }>('create_alpha_grid_agent', {
-      name,
-      upperPrice: gridConfig.upper_price,
-      lowerPrice: gridConfig.lower_price,
-      gridLevels: gridConfig.num_grids,
-      gridType: 'arithmetic',
-      totalInvestment: gridConfig.quantity_per_grid * gridConfig.num_grids * gridConfig.lower_price,
-    });
+    const result = await withTimeout(
+      invoke<{
+        success: boolean;
+        agent_name: string;
+        grid_config: GridConfig & { grid_spacing: number };
+        grid_levels: number[];
+      }>('create_alpha_grid_agent', {
+        name,
+        upperPrice: gridConfig.upper_price,
+        lowerPrice: gridConfig.lower_price,
+        gridLevels: gridConfig.num_grids,
+        gridType: 'arithmetic',
+        totalInvestment: gridConfig.quantity_per_grid * gridConfig.num_grids * gridConfig.lower_price,
+      }),
+      30000, 'Create grid agent timeout'
+    );
     return result;
   } catch (error) {
     console.error('Error creating grid agent:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -450,18 +454,20 @@ export async function getGridStatus(
   grid_status?: GridStatus['grid_status'];
   error?: string;
 }> {
+  const v = validateString(agentName, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid agentName: ${v.error}` };
+
   try {
-    const result = await invoke<GridStatus>('get_alpha_grid_status', { agentName });
-    return {
-      success: true,
-      grid_status: result.grid_status,
-    };
+    const result = await deduplicatedFetch(`alpha-enh:gridStatus:${agentName}`, () =>
+      withTimeout(invoke<GridStatus>('get_alpha_grid_status', { agentName }), 15000, 'Get grid status timeout')
+    );
+    if (!result.grid_status) {
+      return { success: false, error: 'Grid status data not available' };
+    }
+    return { success: true, grid_status: result.grid_status };
   } catch (error) {
     console.error('Error getting grid status:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -479,21 +485,19 @@ export async function listBrokers(
   error?: string;
 }> {
   try {
-    const result = await invoke<{
-      success: boolean;
-      brokers: BrokerInfo[];
-      count: number;
-    }>('list_alpha_brokers', {
-      brokerType: brokerType || null,
-      region: region || null,
-    });
+    const key = `alpha-enh:brokers:${brokerType || 'all'}:${region || 'all'}`;
+    const result = await deduplicatedFetch(key, () =>
+      withTimeout(
+        invoke<{ success: boolean; brokers: BrokerInfo[]; count: number }>(
+          'list_alpha_brokers', { brokerType: brokerType || null, region: region || null }
+        ),
+        15000, 'List brokers timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('Error listing brokers:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -506,22 +510,20 @@ export async function getBrokerTicker(
   broker_id?: string;
   error?: string;
 }> {
+  const v = validateString(symbol, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid symbol: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      ticker: TickerData;
-      broker_id: string;
-    }>('get_alpha_broker_ticker', {
-      symbol,
-      brokerId: brokerId || null,
-    });
+    const result = await withTimeout(
+      invoke<{ success: boolean; ticker: TickerData; broker_id: string }>(
+        'get_alpha_broker_ticker', { symbol, brokerId: brokerId || null }
+      ),
+      15000, 'Get broker ticker timeout'
+    );
     return result;
   } catch (error) {
     console.error('Error getting broker ticker:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -537,19 +539,20 @@ export async function getResearch(
   prompt_context?: string;
   error?: string;
 }> {
+  const v = validateSymbol(ticker);
+  if (!v.valid) return { success: false, error: `Invalid ticker: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      report: ResearchReport;
-      prompt_context: string;
-    }>('get_alpha_research', { ticker });
+    const result = await withTimeout(
+      invoke<{ success: boolean; report: ResearchReport; prompt_context: string }>(
+        'get_alpha_research', { ticker }
+      ),
+      30000, 'Get research timeout'
+    );
     return result;
   } catch (error) {
     console.error('Error getting research:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -563,24 +566,22 @@ export async function getSecFilings(
   count?: number;
   error?: string;
 }> {
+  const v = validateSymbol(ticker);
+  if (!v.valid) return { success: false, error: `Invalid ticker: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      ticker: string;
-      filings: ResearchReport['recent_filings'];
-      count: number;
-    }>('get_alpha_sec_filings', {
-      ticker,
-      formTypes: formTypes || null,
-      limit: limit || 10,
-    });
+    const result = await deduplicatedFetch(`alpha-enh:secFilings:${ticker}`, () =>
+      withTimeout(
+        invoke<{ success: boolean; ticker: string; filings: ResearchReport['recent_filings']; count: number }>(
+          'get_alpha_sec_filings', { ticker, formTypes: formTypes || null, limit: limit || 10 }
+        ),
+        15000, 'Get SEC filings timeout'
+      )
+    );
     return result;
   } catch (error) {
     console.error('Error getting SEC filings:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 
@@ -600,22 +601,22 @@ export async function getTechnicalFeatures(
   prompt_context?: string;
   error?: string;
 }> {
+  const v = validateString(symbol, { minLength: 1 });
+  if (!v.valid) return { success: false, error: `Invalid symbol: ${v.error}` };
+
   try {
-    const result = await invoke<{
-      success: boolean;
-      features: {
-        technical: TechnicalFeatures | null;
-        sentiment: SentimentResult | null;
-      };
-      prompt_context: string;
-    }>('get_alpha_features', { symbol, price });
+    const result = await withTimeout(
+      invoke<{
+        success: boolean;
+        features: { technical: TechnicalFeatures | null; sentiment: SentimentResult | null };
+        prompt_context: string;
+      }>('get_alpha_features', { symbol, price }),
+      30000, 'Get technical features timeout'
+    );
     return result;
   } catch (error) {
     console.error('Error getting technical features:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    return { success: false, error: extractError(error) };
   }
 }
 

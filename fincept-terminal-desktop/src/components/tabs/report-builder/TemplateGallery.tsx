@@ -18,7 +18,7 @@ import { ReportTemplate } from '@/services/core/reportService';
 import { reportService } from '@/services/core/reportService';
 import { save, open as openDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 
 // Export template type for external use
 export type ReportTemplateType = Partial<ReportTemplate>;

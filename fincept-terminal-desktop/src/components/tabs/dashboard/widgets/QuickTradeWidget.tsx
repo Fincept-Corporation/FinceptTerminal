@@ -173,10 +173,11 @@ export const QuickTradeWidget: React.FC<QuickTradeWidgetProps> = ({
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 placeholder="Qty"
                 value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setQuantity(v); }}
                 style={{
                   flex: 1,
                   backgroundColor: 'var(--ft-color-background)',

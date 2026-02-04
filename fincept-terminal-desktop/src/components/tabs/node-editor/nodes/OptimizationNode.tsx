@@ -235,9 +235,15 @@ const OptimizationNode: React.FC<OptimizationNodeProps> = ({ data, selected }) =
               Max Iterations
             </label>
             <input
-              type="number"
-              value={localConfig.maxIterations}
-              onChange={(e) => setLocalConfig({ ...localConfig, maxIterations: Number(e.target.value) })}
+              type="text"
+              inputMode="numeric"
+              value={localConfig.maxIterations.toString()}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d*$/.test(v)) {
+                  setLocalConfig({ ...localConfig, maxIterations: Number(v) || 0 });
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '6px',
@@ -280,12 +286,18 @@ const OptimizationNode: React.FC<OptimizationNodeProps> = ({ data, selected }) =
                   <div>
                     <label style={{ fontSize: '8px', color: '#6b7280' }}>Min</label>
                     <input
-                      type="number"
-                      value={range.min}
-                      onChange={(e) => setParamRanges({
-                        ...paramRanges,
-                        [param]: { ...range, min: Number(e.target.value) }
-                      })}
+                      type="text"
+                      inputMode="decimal"
+                      value={range.min.toString()}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                          setParamRanges({
+                            ...paramRanges,
+                            [param]: { ...range, min: parseFloat(v) || 0 }
+                          });
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '4px',
@@ -300,12 +312,18 @@ const OptimizationNode: React.FC<OptimizationNodeProps> = ({ data, selected }) =
                   <div>
                     <label style={{ fontSize: '8px', color: '#6b7280' }}>Max</label>
                     <input
-                      type="number"
-                      value={range.max}
-                      onChange={(e) => setParamRanges({
-                        ...paramRanges,
-                        [param]: { ...range, max: Number(e.target.value) }
-                      })}
+                      type="text"
+                      inputMode="decimal"
+                      value={range.max.toString()}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                          setParamRanges({
+                            ...paramRanges,
+                            [param]: { ...range, max: parseFloat(v) || 0 }
+                          });
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '4px',
@@ -320,12 +338,18 @@ const OptimizationNode: React.FC<OptimizationNodeProps> = ({ data, selected }) =
                   <div>
                     <label style={{ fontSize: '8px', color: '#6b7280' }}>Step</label>
                     <input
-                      type="number"
-                      value={range.step}
-                      onChange={(e) => setParamRanges({
-                        ...paramRanges,
-                        [param]: { ...range, step: Number(e.target.value) }
-                      })}
+                      type="text"
+                      inputMode="decimal"
+                      value={range.step.toString()}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                          setParamRanges({
+                            ...paramRanges,
+                            [param]: { ...range, step: parseFloat(v) || 0 }
+                          });
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '4px',

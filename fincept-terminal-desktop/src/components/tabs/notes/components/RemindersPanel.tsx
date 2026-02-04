@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Bell, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 import { FINCEPT, getPriorityColor, getSentimentColor } from '../constants';
 import type { UpcomingReminder, Note } from '../types';
 

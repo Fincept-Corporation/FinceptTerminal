@@ -5,7 +5,8 @@
  * This is the main orchestrator component that composes all sub-components.
  */
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import ReactFlow, {
   Node,
   Edge,
@@ -128,6 +129,21 @@ export default function NodeEditorTab() {
   const [showTemplateGallery, setShowTemplateGallery] = useState(false);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeView,
+    isPaletteCollapsed,
+    workflowName,
+  }), [activeView, isPaletteCollapsed, workflowName]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (state.activeView === 'editor' || state.activeView === 'workflows') setActiveView(state.activeView);
+    if (typeof state.isPaletteCollapsed === 'boolean') setIsPaletteCollapsed(state.isPaletteCollapsed);
+    if (typeof state.workflowName === 'string') setWorkflowName(state.workflowName);
+  }, [setWorkflowName]);
+
+  useWorkspaceTabState('node-editor', getWorkspaceState, setWorkspaceState);
 
   // Load MCP node configurations, Python agents, and NodeSystem on mount
   useEffect(() => {

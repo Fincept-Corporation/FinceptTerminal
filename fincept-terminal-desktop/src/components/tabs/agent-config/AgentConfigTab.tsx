@@ -1057,9 +1057,15 @@ const AgentConfigTab: React.FC = () => {
               MAX TOKENS
             </label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={editedConfig.max_tokens}
-              onChange={e => setEditedConfig(prev => ({ ...prev, max_tokens: parseInt(e.target.value) || 4096 }))}
+              onChange={e => {
+                const v = e.target.value;
+                if (v === '' || /^\d+$/.test(v)) {
+                  setEditedConfig(prev => ({ ...prev, max_tokens: v ? parseInt(v) : 4096 }));
+                }
+              }}
               disabled={!editMode}
               style={{
                 width: '100%',

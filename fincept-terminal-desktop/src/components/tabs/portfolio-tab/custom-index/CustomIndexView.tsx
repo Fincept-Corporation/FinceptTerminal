@@ -911,9 +911,10 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
                     PRICE {fetchingPrice && <RefreshCw size={10} className="animate-spin" style={{ marginLeft: 4 }} />}
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={editForm.customPrice}
-                    onChange={e => setEditForm({ ...editForm, customPrice: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setEditForm({ ...editForm, customPrice: v }); }}
                     style={{ ...COMMON_STYLES.inputField, width: '100%' }}
                     placeholder="Auto-fetch or manual"
                   />
@@ -923,9 +924,10 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
                 <div>
                   <label style={COMMON_STYLES.dataLabel}>SHARES</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={editForm.shares}
-                    onChange={e => setEditForm({ ...editForm, shares: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setEditForm({ ...editForm, shares: v }); }}
                     style={{ ...COMMON_STYLES.inputField, width: '100%' }}
                     placeholder="Shares"
                   />
@@ -933,9 +935,10 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
                 <div>
                   <label style={COMMON_STYLES.dataLabel}>WEIGHT (%)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={editForm.weight}
-                    onChange={e => setEditForm({ ...editForm, weight: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setEditForm({ ...editForm, weight: v }); }}
                     style={{ ...COMMON_STYLES.inputField, width: '100%' }}
                     placeholder="0-100"
                   />
@@ -945,9 +948,10 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
                 <div>
                   <label style={COMMON_STYLES.dataLabel}>MARKET CAP</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={editForm.marketCap}
-                    onChange={e => setEditForm({ ...editForm, marketCap: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setEditForm({ ...editForm, marketCap: v }); }}
                     style={{ ...COMMON_STYLES.inputField, width: '100%' }}
                     placeholder="Market cap"
                   />
@@ -955,9 +959,10 @@ const CustomIndexView: React.FC<CustomIndexViewProps> = ({
                 <div>
                   <label style={COMMON_STYLES.dataLabel}>FUND. SCORE</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={editForm.fundamentalScore}
-                    onChange={e => setEditForm({ ...editForm, fundamentalScore: e.target.value })}
+                    onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setEditForm({ ...editForm, fundamentalScore: v }); }}
                     style={{ ...COMMON_STYLES.inputField, width: '100%' }}
                     placeholder="1-100"
                   />

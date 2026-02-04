@@ -4,12 +4,13 @@
  * Displays open positions with P&L and action buttons with proper scrolling
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, RefreshCw, X, ChevronDown, ChevronUp,
   AlertCircle, Loader2, Target
 } from 'lucide-react';
 import { useStockTradingData, useStockBrokerContext } from '@/contexts/StockBrokerContext';
+import { withTimeout } from '@/services/core/apiUtils';
 import type { Position, ProductType } from '@/brokers/stocks/types';
 
 // Fincept color palette
@@ -47,6 +48,12 @@ export function PositionsPanel({ onSquareOff }: PositionsPanelProps) {
   const [expandedPosition, setExpandedPosition] = useState<string | null>(null);
   const [isClosingAll, setIsClosingAll] = useState(false);
   const [closingPositionId, setClosingPositionId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Calculate totals
   const totals = React.useMemo(() => {
@@ -68,17 +75,18 @@ export function PositionsPanel({ onSquareOff }: PositionsPanelProps) {
 
     try {
       const side = position.quantity > 0 ? 'SELL' : 'BUY';
-      const response = await adapter.placeOrder({
+      const response = await withTimeout(adapter.placeOrder({
         symbol: position.symbol,
         exchange: position.exchange,
         side,
         quantity: Math.abs(position.quantity),
         orderType: 'MARKET',
         productType: position.productType,
-      });
+      }), 30000);
 
+      if (!mountedRef.current) return;
       if (response.success) {
-        await refreshPositions();
+        await withTimeout(refreshPositions(), 15000).catch(() => {});
         if (onSquareOff) {
           onSquareOff(position);
         }
@@ -86,7 +94,7 @@ export function PositionsPanel({ onSquareOff }: PositionsPanelProps) {
     } catch (err) {
       console.error('Failed to square off position:', err);
     } finally {
-      setClosingPositionId(null);
+      if (mountedRef.current) setClosingPositionId(null);
     }
   };
 
@@ -97,14 +105,15 @@ export function PositionsPanel({ onSquareOff }: PositionsPanelProps) {
     setIsClosingAll(true);
 
     try {
-      const result = await adapter.closeAllPositions();
+      const result = await withTimeout(adapter.closeAllPositions(), 30000);
+      if (!mountedRef.current) return;
       if (result.success) {
-        await refreshPositions();
+        await withTimeout(refreshPositions(), 15000).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to close all positions:', err);
     } finally {
-      setIsClosingAll(false);
+      if (mountedRef.current) setIsClosingAll(false);
     }
   };
 

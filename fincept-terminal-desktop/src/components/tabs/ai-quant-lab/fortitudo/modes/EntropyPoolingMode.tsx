@@ -32,11 +32,15 @@ export const EntropyPoolingMode: React.FC<EntropyPoolingModeProps> = ({
               NUMBER OF SCENARIOS
             </label>
             <input
-              type="number"
-              value={nScenarios}
-              onChange={(e) => setNScenarios(parseInt(e.target.value))}
-              min="10"
-              max="10000"
+              type="text"
+              inputMode="numeric"
+              value={String(nScenarios)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d*$/.test(v)) {
+                  setNScenarios(parseInt(v) || 0);
+                }
+              }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -53,12 +57,15 @@ export const EntropyPoolingMode: React.FC<EntropyPoolingModeProps> = ({
               MAX PROBABILITY (%)
             </label>
             <input
-              type="number"
-              value={maxProbability * 100}
-              onChange={(e) => setMaxProbability(parseFloat(e.target.value) / 100)}
-              step="0.5"
-              min="0.5"
-              max="100"
+              type="text"
+              inputMode="decimal"
+              value={String(maxProbability * 100)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                  setMaxProbability((parseFloat(v) || 0) / 100);
+                }
+              }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,

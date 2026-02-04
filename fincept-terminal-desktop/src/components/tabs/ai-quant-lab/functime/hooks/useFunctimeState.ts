@@ -16,7 +16,6 @@ import {
   type PortfolioSeasonalityResult
 } from '@/services/aiQuantLab/portfolioFunctimeService';
 import type { Portfolio } from '@/services/portfolio/portfolioService';
-import { SAMPLE_DATA } from '../constants';
 import { parseHistoricalData } from '../utils';
 import type {
   DataSourceType,
@@ -33,10 +32,10 @@ export function useFunctimeState() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<ForecastAnalysisResult | null>(null);
-  const [dataInput, setDataInput] = useState(JSON.stringify(SAMPLE_DATA, null, 2));
+  const [dataInput, setDataInput] = useState('[]');
 
   // Data source configuration
-  const [dataSourceType, setDataSourceType] = useState<DataSourceType>('manual');
+  const [dataSourceType, setDataSourceType] = useState<DataSourceType>('symbol');
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('');
   const [symbolInput, setSymbolInput] = useState('AAPL');
@@ -80,7 +79,21 @@ export function useFunctimeState() {
   useEffect(() => {
     checkFunctimeStatus();
     loadPortfolios();
+    // Auto-fetch data on mount if using symbol mode
+    if (dataSourceType === 'symbol') {
+      loadDataFromSource();
+    }
   }, []);
+
+  // Auto-fetch data when switching to symbol mode
+  useEffect(() => {
+    if (dataSourceType === 'symbol' && symbolInput) {
+      const timer = setTimeout(() => {
+        loadDataFromSource();
+      }, 500); // Debounce to avoid excessive fetching
+      return () => clearTimeout(timer);
+    }
+  }, [dataSourceType]);
 
   const loadPortfolios = async () => {
     try {

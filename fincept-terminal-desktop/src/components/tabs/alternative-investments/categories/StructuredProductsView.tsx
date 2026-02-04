@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import { AlternativeInvestmentApi } from '@/services/alternativeInvestments/api/analyticsApi';
+import { withTimeout } from '@/services/core/apiUtils';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -22,11 +24,31 @@ const TYPES = [
   { id: 'leveraged-fund' as const, name: 'Leveraged Fund' },
 ];
 
+type AnalysisState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; message: string };
+type AnalysisAction =
+  | { type: 'START' }
+  | { type: 'SUCCESS'; payload: any }
+  | { type: 'ERROR'; payload: string }
+  | { type: 'RESET' };
+function analysisReducer(state: AnalysisState, action: AnalysisAction): AnalysisState {
+  switch (action.type) {
+    case 'START': return { status: 'loading' };
+    case 'SUCCESS': return { status: 'success', data: action.payload };
+    case 'ERROR': return { status: 'error', message: action.payload };
+    case 'RESET': return { status: 'idle' };
+    default: return state;
+  }
+}
+
 export const StructuredProductsView: React.FC = () => {
   const [selected, setSelected] = useState<StructuredType>('structured-product');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(analysisReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const [structuredData, setStructuredData] = useState({
     name: 'Sample Structured Note',
@@ -48,9 +70,8 @@ export const StructuredProductsView: React.FC = () => {
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
+    if (state.status === 'loading') return;
+    dispatch({ type: 'START' });
 
     try {
       let result;
@@ -58,34 +79,34 @@ export const StructuredProductsView: React.FC = () => {
 
       switch (selected) {
         case 'structured-product':
-          result = await AlternativeInvestmentApi.analyzeStructuredProduct({
+          result = await withTimeout(AlternativeInvestmentApi.analyzeStructuredProduct({
             ...structuredData,
-            asset_class: 'structured_product',
+            asset_class: 'structured_product' as const,
             ...baseData,
-          });
+          }), 30000);
           break;
         case 'leveraged-fund':
-          result = await AlternativeInvestmentApi.analyzeLeveragedFund({
+          result = await withTimeout(AlternativeInvestmentApi.analyzeLeveragedFund({
             ...leveragedData,
-            asset_class: 'leveraged_fund',
+            asset_class: 'leveraged_fund' as const,
             ...baseData,
-          });
+          }), 30000);
           break;
       }
-      setAnalysis(result);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SUCCESS', payload: result });
     } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsAnalyzing(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'ERROR', payload: err.message || 'Analysis failed' });
     }
   };
 
   const renderVerdict = () => {
-    if (!analysis?.success || !analysis.metrics) return null;
+    if (state.status !== 'success' || !state.data?.success || !state.data?.metrics) return null;
 
-    const category = analysis.metrics.analysis_category || 'UNKNOWN';
-    const recommendation = analysis.metrics.analysis_recommendation || 'No recommendation';
-    const keyProblems = analysis.metrics.key_problems || [];
+    const category = state.data.metrics.analysis_category || 'UNKNOWN';
+    const recommendation = state.data.metrics.analysis_recommendation || 'No recommendation';
+    const keyProblems = state.data.metrics.key_problems || [];
 
     let badgeColor = FINCEPT.GRAY;
     if (category === 'BUY' || category === 'STRONG BUY') badgeColor = FINCEPT.GREEN;
@@ -138,48 +159,50 @@ export const StructuredProductsView: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Principal ($)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={structuredData.principal}
-              onChange={(e) => setStructuredData({...structuredData, principal: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setStructuredData({...structuredData, principal: Number(v) || 0}); } }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Term (Years)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={structuredData.term_years}
-              onChange={(e) => setStructuredData({...structuredData, term_years: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) { setStructuredData({...structuredData, term_years: Number(v) || 0}); } }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Coupon Rate (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={structuredData.coupon_rate * 100}
-              onChange={(e) => setStructuredData({...structuredData, coupon_rate: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setStructuredData({...structuredData, coupon_rate: (Number(v) || 0) / 100}); } }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Barrier Level (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={structuredData.barrier_level * 100}
-              onChange={(e) => setStructuredData({...structuredData, barrier_level: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setStructuredData({...structuredData, barrier_level: (Number(v) || 0) / 100}); } }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Participation Rate (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={structuredData.participation_rate * 100}
-              onChange={(e) => setStructuredData({...structuredData, participation_rate: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setStructuredData({...structuredData, participation_rate: (Number(v) || 0) / 100}); } }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
@@ -211,20 +234,20 @@ export const StructuredProductsView: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Leverage Ratio (e.g., 3.0 for 3x)</label>
           <input
-            type="number"
-            step="0.1"
+            type="text"
+            inputMode="decimal"
             value={leveragedData.leverage_ratio}
-            onChange={(e) => setLeveragedData({...leveragedData, leverage_ratio: Number(e.target.value)})}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setLeveragedData({...leveragedData, leverage_ratio: Number(v) || 0}); } }}
             style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
           />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Expense Ratio (%)</label>
           <input
-            type="number"
-            step="0.0001"
+            type="text"
+            inputMode="decimal"
             value={leveragedData.expense_ratio * 100}
-            onChange={(e) => setLeveragedData({...leveragedData, expense_ratio: Number(e.target.value) / 100})}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setLeveragedData({...leveragedData, expense_ratio: (Number(v) || 0) / 100}); } }}
             style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
           />
         </div>
@@ -302,21 +325,21 @@ export const StructuredProductsView: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isAnalyzing}
+            disabled={state.status === 'loading'}
             style={{
               marginTop: 'auto',
               padding: '10px',
-              backgroundColor: isAnalyzing ? FINCEPT.MUTED : FINCEPT.ORANGE,
+              backgroundColor: state.status === 'loading' ? FINCEPT.MUTED : FINCEPT.ORANGE,
               color: FINCEPT.DARK_BG,
               border: 'none',
               borderRadius: '4px',
               fontSize: '11px',
               fontWeight: 700,
-              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+              cursor: state.status === 'loading' ? 'not-allowed' : 'pointer',
               letterSpacing: '0.5px',
             }}
           >
-            {isAnalyzing ? 'ANALYZING...' : 'ANALYZE PRODUCT'}
+            {state.status === 'loading' ? 'ANALYZING...' : 'ANALYZE PRODUCT'}
           </button>
         </form>
       </div>
@@ -327,18 +350,18 @@ export const StructuredProductsView: React.FC = () => {
           <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.MUTED, letterSpacing: '0.5px' }}>ANALYSIS RESULTS</div>
         </div>
         <div style={{ flex: 1, overflow: 'auto' }}>
-          {isAnalyzing && (
+          {state.status === 'loading' && (
             <div style={{ padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
               <div style={{ width: '24px', height: '24px', border: `2px solid ${FINCEPT.BORDER}`, borderTopColor: FINCEPT.ORANGE, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
               <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Running structured product analytics...</div>
             </div>
           )}
-          {error && (
+          {state.status === 'error' && (
             <div style={{ margin: '16px', padding: '12px', backgroundColor: `${FINCEPT.RED}20`, border: `1px solid ${FINCEPT.RED}`, borderRadius: '4px' }}>
-              <div style={{ fontSize: '10px', color: FINCEPT.RED }}>{error}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED }}>{state.status === 'error' && state.message}</div>
             </div>
           )}
-          {!isAnalyzing && !error && !analysis && (
+          {state.status === 'idle' && (
             <div style={{ padding: '24px', textAlign: 'center' }}>
               <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>Select product type and enter details to see results</div>
             </div>
@@ -356,4 +379,10 @@ export const StructuredProductsView: React.FC = () => {
   );
 };
 
-export default StructuredProductsView;
+const StructuredProductsViewWithBoundary: React.FC = () => (
+  <ErrorBoundary name="StructuredProductsView">
+    <StructuredProductsView />
+  </ErrorBoundary>
+);
+
+export default StructuredProductsViewWithBoundary;

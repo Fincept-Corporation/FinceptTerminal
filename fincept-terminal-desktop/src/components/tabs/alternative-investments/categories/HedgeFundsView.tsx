@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import { AlternativeInvestmentApi } from '@/services/alternativeInvestments/api/analyticsApi';
 import { HedgeFundParams, ManagedFuturesParams, HedgeFundStrategy } from '@/services/alternativeInvestments/api/types';
+import { withTimeout } from '@/services/core/apiUtils';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -24,35 +26,54 @@ const TYPES = [
   { id: 'market-neutral', name: 'Market Neutral' },
 ];
 
+type AnalysisState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; message: string };
+type AnalysisAction =
+  | { type: 'START' }
+  | { type: 'SUCCESS'; payload: any }
+  | { type: 'ERROR'; payload: string }
+  | { type: 'RESET' };
+function analysisReducer(state: AnalysisState, action: AnalysisAction): AnalysisState {
+  switch (action.type) {
+    case 'START': return { status: 'loading' };
+    case 'SUCCESS': return { status: 'success', data: action.payload };
+    case 'ERROR': return { status: 'error', message: action.payload };
+    case 'RESET': return { status: 'idle' };
+    default: return state;
+  }
+}
+
 export const HedgeFundsView: React.FC = () => {
   const [selected, setSelected] = useState<HedgeFundType>('hedge-fund');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(analysisReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const handleAnalyze = async (data: any) => {
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
+    if (state.status === 'loading') return;
+    dispatch({ type: 'START' });
 
     try {
       let result;
       switch (selected) {
         case 'hedge-fund':
-          result = await AlternativeInvestmentApi.analyzeHedgeFund(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeHedgeFund(data), 30000);
           break;
         case 'managed-futures':
-          result = await AlternativeInvestmentApi.analyzeManagedFutures(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeManagedFutures(data), 30000);
           break;
         case 'market-neutral':
-          result = await AlternativeInvestmentApi.analyzeMarketNeutral(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeMarketNeutral(data), 30000);
           break;
       }
-      setAnalysis(result);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SUCCESS', payload: result });
     } catch (err: any) {
-      setError(err.message || 'Analysis failed');
-    } finally {
-      setIsAnalyzing(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'ERROR', payload: err.message || 'Analysis failed' });
     }
   };
 
@@ -71,8 +92,7 @@ export const HedgeFundsView: React.FC = () => {
                 key={type.id}
                 onClick={() => {
                   setSelected(type.id as HedgeFundType);
-                  setAnalysis(null);
-                  setError(null);
+                  dispatch({ type: 'RESET' });
                 }}
                 style={{
                   padding: '8px 10px',
@@ -108,9 +128,9 @@ export const HedgeFundsView: React.FC = () => {
               </span>
             </div>
             <div style={{ padding: '20px' }}>
-              {selected === 'hedge-fund' && <HedgeFundForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
-              {selected === 'managed-futures' && <ManagedFuturesForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
-              {selected === 'market-neutral' && <MarketNeutralForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
+              {selected === 'hedge-fund' && <HedgeFundForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
+              {selected === 'managed-futures' && <ManagedFuturesForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
+              {selected === 'market-neutral' && <MarketNeutralForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
             </div>
           </div>
         </div>
@@ -125,32 +145,32 @@ export const HedgeFundsView: React.FC = () => {
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-          {error && (
+          {state.status === 'error' && (
             <div style={{ backgroundColor: '#FF444410', border: '1px solid #FF4444', borderRadius: '2px', padding: '16px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.RED, marginBottom: '6px', letterSpacing: '0.5px' }}>ERROR</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{error}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{state.status === 'error' && state.message}</div>
             </div>
           )}
 
-          {analysis && analysis.success && analysis.metrics && (
+          {state.status === 'success' && state.data?.success && state.data?.metrics && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{
                 padding: '12px 20px',
-                backgroundColor: analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
-                                 analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
+                backgroundColor: state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
+                                 state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
                                  FINCEPT.RED + '20',
-                border: `2px solid ${analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                                     analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                border: `2px solid ${state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                                     state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                                      FINCEPT.RED}`,
                 borderRadius: '2px',
                 textAlign: 'center',
               }}>
                 <div style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '1.5px', color:
-                  analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                  analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                  state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                  state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                   FINCEPT.RED
                 }}>
-                  {analysis.metrics.analysis_category}
+                  {state.data.metrics.analysis_category}
                 </div>
               </div>
 
@@ -159,17 +179,17 @@ export const HedgeFundsView: React.FC = () => {
                   RECOMMENDATION
                 </div>
                 <div style={{ fontSize: '12px', color: FINCEPT.WHITE, lineHeight: '1.6' }}>
-                  {analysis.metrics.analysis_recommendation}
+                  {state.data.metrics.analysis_recommendation}
                 </div>
               </div>
 
-              {analysis.metrics.key_problems && analysis.metrics.key_problems.length > 0 && (
+              {state.data.metrics.key_problems && state.data.metrics.key_problems.length > 0 && (
                 <div style={{ padding: '16px', backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px' }}>
                   <div style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, marginBottom: '12px', letterSpacing: '0.5px' }}>
                     KEY CONCERNS
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {analysis.metrics.key_problems.map((problem: string, i: number) => (
+                    {state.data.metrics.key_problems.map((problem: string, i: number) => (
                       <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                         <div style={{
                           fontSize: '11px',
@@ -192,7 +212,7 @@ export const HedgeFundsView: React.FC = () => {
             </div>
           )}
 
-          {!analysis && !isAnalyzing && !error && (
+          {state.status === 'idle' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -206,7 +226,7 @@ export const HedgeFundsView: React.FC = () => {
             </div>
           )}
 
-          {isAnalyzing && (
+          {state.status === 'loading' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -274,23 +294,23 @@ const HedgeFundForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onSubmit
         </div>
         <div>
           <label style={labelStyle}>AUM ($)</label>
-          <input type="number" value={formData.aum} onChange={(e) => setFormData({...formData, aum: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.aum} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, aum: Number(v)}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>ANNUAL RETURN (%)</label>
-          <input type="number" step="0.01" value={formData.annual_return * 100} onChange={(e) => setFormData({...formData, annual_return: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.annual_return * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, annual_return: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>VOLATILITY (%)</label>
-          <input type="number" step="0.01" value={formData.volatility * 100} onChange={(e) => setFormData({...formData, volatility: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.volatility * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, volatility: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>MANAGEMENT FEE (%)</label>
-          <input type="number" step="0.01" value={formData.management_fee * 100} onChange={(e) => setFormData({...formData, management_fee: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.management_fee * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, management_fee: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>PERFORMANCE FEE (%)</label>
-          <input type="number" step="0.01" value={formData.performance_fee * 100} onChange={(e) => setFormData({...formData, performance_fee: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.performance_fee * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, performance_fee: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -349,19 +369,19 @@ const ManagedFuturesForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onS
         </div>
         <div>
           <label style={labelStyle}>ANNUAL RETURN (%)</label>
-          <input type="number" step="0.01" value={formData.annual_return * 100} onChange={(e) => setFormData({...formData, annual_return: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.annual_return * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, annual_return: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>VOLATILITY (%)</label>
-          <input type="number" step="0.01" value={formData.volatility * 100} onChange={(e) => setFormData({...formData, volatility: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.volatility * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, volatility: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>MANAGEMENT FEE (%)</label>
-          <input type="number" step="0.01" value={formData.management_fee * 100} onChange={(e) => setFormData({...formData, management_fee: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.management_fee * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, management_fee: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>PERFORMANCE FEE (%)</label>
-          <input type="number" step="0.01" value={formData.performance_fee * 100} onChange={(e) => setFormData({...formData, performance_fee: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.performance_fee * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, performance_fee: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -420,19 +440,19 @@ const MarketNeutralForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onSu
         </div>
         <div>
           <label style={labelStyle}>ANNUAL RETURN (%)</label>
-          <input type="number" step="0.01" value={formData.annual_return * 100} onChange={(e) => setFormData({...formData, annual_return: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.annual_return * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, annual_return: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>VOLATILITY (%)</label>
-          <input type="number" step="0.01" value={formData.volatility * 100} onChange={(e) => setFormData({...formData, volatility: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.volatility * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, volatility: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>MARKET BETA</label>
-          <input type="number" step="0.01" value={formData.market_beta} onChange={(e) => setFormData({...formData, market_beta: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.market_beta} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, market_beta: Number(v)}); }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>MANAGEMENT FEE (%)</label>
-          <input type="number" step="0.01" value={formData.management_fee * 100} onChange={(e) => setFormData({...formData, management_fee: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.management_fee * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFormData({...formData, management_fee: (Number(v) || 0) / 100}); }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -453,4 +473,10 @@ const MarketNeutralForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onSu
   );
 };
 
-export default HedgeFundsView;
+const HedgeFundsViewWithBoundary: React.FC = () => (
+  <ErrorBoundary name="HedgeFundsView">
+    <HedgeFundsView />
+  </ErrorBoundary>
+);
+
+export default HedgeFundsViewWithBoundary;

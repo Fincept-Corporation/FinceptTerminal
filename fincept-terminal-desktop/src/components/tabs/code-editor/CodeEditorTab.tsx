@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   Play, Save, FileText, Plus, X, Terminal as TerminalIcon,
   Upload, Trash2, ChevronRight, Code, Braces, Hash,
@@ -1226,6 +1227,19 @@ export default function CodeEditorTab() {
   const [outputHeight, setOutputHeight] = useState(280);
   const [isOutputMaximized, setIsOutputMaximized] = useState(false);
   const [showOutput, setShowOutput] = useState(true);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeFileId, showExplorer, showOutput,
+  }), [activeFileId, showExplorer, showOutput]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.activeFileId === 'string') setActiveFileId(state.activeFileId);
+    if (typeof state.showExplorer === 'boolean') setShowExplorer(state.showExplorer);
+    if (typeof state.showOutput === 'boolean') setShowOutput(state.showOutput);
+  }, []);
+
+  useWorkspaceTabState('code-editor', getWorkspaceState, setWorkspaceState);
   const [search, setSearch] = useState<SearchState>({
     isOpen: false, query: '', replaceQuery: '', showReplace: false, matchCount: 0, currentMatch: 0
   });

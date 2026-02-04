@@ -5,7 +5,8 @@
  * Supports multiple brokers across different regions with real-time market data.
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { APP_VERSION } from '@/constants/version';
 import {
   TrendingUp, TrendingDown, Activity, DollarSign, BarChart3,
@@ -33,6 +34,8 @@ import type { SymbolSearchResult, SupportedBroker } from '@/services/trading/mas
 
 import type { StockExchange, Quote, MarketDepth, TimeFrame } from '@/brokers/stocks/types';
 import { GridTradingPanel } from '../trading/grid-trading';
+import { MonitoringPanel } from '../trading/monitoring/MonitoringPanel';
+import { AlgoTradingPanel } from '../trading/algo-trading';
 
 // Market hours and caching utilities
 import { getMarketStatus, getPollingInterval, getCacheTTL, isMarketOpen, getMarketStatusMessage } from '@/services/markets/marketHoursService';
@@ -159,9 +162,9 @@ const MARKET_INDICES = [
   { symbol: 'NIFTYIT', exchange: 'NSE' as StockExchange },
 ];
 
-type BottomPanelTab = 'positions' | 'holdings' | 'orders' | 'history' | 'stats' | 'market' | 'grid-trading' | 'brokers';
+type BottomPanelTab = 'positions' | 'holdings' | 'orders' | 'history' | 'stats' | 'market' | 'grid-trading' | 'monitoring' | 'brokers';
 type LeftSidebarView = 'watchlist' | 'indices' | 'sectors';
-type CenterView = 'chart' | 'depth' | 'trades';
+type CenterView = 'chart' | 'depth' | 'trades' | 'algo';
 type RightPanelView = 'orderbook' | 'marketdepth' | 'info';
 
 // Main Tab Content (wrapped in provider)
@@ -210,6 +213,29 @@ function EquityTradingContent() {
 
   // Chart timeframe - default to 5m for real brokers, 1d for yfinance
   const [chartInterval, setChartInterval] = useState<TimeFrame>('5m');
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    selectedSymbol,
+    selectedExchange,
+    leftSidebarView,
+    centerView,
+    rightPanelView,
+    activeBottomTab,
+    chartInterval,
+  }), [selectedSymbol, selectedExchange, leftSidebarView, centerView, rightPanelView, activeBottomTab, chartInterval]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.selectedSymbol === 'string') setSelectedSymbol(state.selectedSymbol);
+    if (typeof state.selectedExchange === 'string') setSelectedExchange(state.selectedExchange as StockExchange);
+    if (typeof state.leftSidebarView === 'string') setLeftSidebarView(state.leftSidebarView as LeftSidebarView);
+    if (typeof state.centerView === 'string') setCenterView(state.centerView as CenterView);
+    if (typeof state.rightPanelView === 'string') setRightPanelView(state.rightPanelView as RightPanelView);
+    if (typeof state.activeBottomTab === 'string') setActiveBottomTab(state.activeBottomTab as BottomPanelTab);
+    if (typeof state.chartInterval === 'string') setChartInterval(state.chartInterval as TimeFrame);
+  }, []);
+
+  useWorkspaceTabState('equity-trading', getWorkspaceState, setWorkspaceState);
 
   // Set correct chart interval when broker changes or on initial load
   // yfinance only supports daily data, real brokers default to 5m intraday
@@ -1412,7 +1438,7 @@ function EquityTradingContent() {
               gap: '8px',
               flexShrink: 0
             }}>
-              {(['CHART', 'DEPTH', 'TRADES'] as const).map((view) => (
+              {(['CHART', 'DEPTH', 'TRADES', 'ALGO'] as const).map((view) => (
                 <button
                   key={view}
                   onClick={() => setCenterView(view.toLowerCase() as CenterView)}
@@ -1564,6 +1590,17 @@ function EquityTradingContent() {
                   )}
                 </div>
               )}
+              {centerView === 'algo' && (
+                <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+                  <AlgoTradingPanel
+                    assetType="equity"
+                    symbol={selectedSymbol}
+                    currentPrice={currentPrice}
+                    activeBroker={activeBroker}
+                    isPaper={isPaper}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -1594,6 +1631,7 @@ function EquityTradingContent() {
                   { id: 'history', label: 'HISTORY', count: null },
                   { id: 'stats', label: 'STATS', count: null },
                   { id: 'grid-trading', label: 'GRID BOT', count: null },
+                  { id: 'monitoring', label: 'MONITOR', count: null },
                   { id: 'brokers', label: 'BROKERS', count: null },
                 ] as const).map((tab) => (
                   <button
@@ -1728,6 +1766,17 @@ function EquityTradingContent() {
                       brokerId={activeBroker || ''}
                       stockAdapter={adapter || undefined}
                       variant="full"
+                    />
+                  </div>
+                )}
+
+                {/* Monitoring Tab */}
+                {activeBottomTab === 'monitoring' && (
+                  <div style={{ height: '100%', overflow: 'hidden' }}>
+                    <MonitoringPanel
+                      provider={activeBroker || 'fyers'}
+                      symbol={selectedSymbol}
+                      assetType="equity"
                     />
                   </div>
                 )}

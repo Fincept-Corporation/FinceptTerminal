@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // GICS (Global Industry Classification Standard) Service
 // Implements CFA Institute-compliant sector classification and peer identification
 

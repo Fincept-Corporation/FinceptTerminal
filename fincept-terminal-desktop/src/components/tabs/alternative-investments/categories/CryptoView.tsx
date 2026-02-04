@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import { AlternativeInvestmentApi } from '@/services/alternativeInvestments/api/analyticsApi';
+import { withTimeout } from '@/services/core/apiUtils';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -16,10 +18,30 @@ const FINCEPT = {
   CYAN: '#00E5FF',
 };
 
+type AnalysisState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; message: string };
+type AnalysisAction =
+  | { type: 'START' }
+  | { type: 'SUCCESS'; payload: any }
+  | { type: 'ERROR'; payload: string }
+  | { type: 'RESET' };
+function analysisReducer(state: AnalysisState, action: AnalysisAction): AnalysisState {
+  switch (action.type) {
+    case 'START': return { status: 'loading' };
+    case 'SUCCESS': return { status: 'success', data: action.payload };
+    case 'ERROR': return { status: 'error', message: action.payload };
+    case 'RESET': return { status: 'idle' };
+    default: return state;
+  }
+}
+
 export const CryptoView: React.FC = () => {
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(analysisReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const [formData, setFormData] = useState({
     name: 'Bitcoin',
@@ -33,30 +55,29 @@ export const CryptoView: React.FC = () => {
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
+    if (state.status === 'loading') return;
+    dispatch({ type: 'START' });
 
     try {
-      const result = await AlternativeInvestmentApi.analyzeDigitalAsset({
+      const result = await withTimeout(AlternativeInvestmentApi.analyzeDigitalAsset({
         ...formData,
         asset_class: 'digital_assets',
         currency: 'USD',
-      });
-      setAnalysis(result);
+      }), 30000);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SUCCESS', payload: result });
     } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsAnalyzing(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'ERROR', payload: err.message || 'Analysis failed' });
     }
   };
 
   const renderVerdict = () => {
-    if (!analysis?.success || !analysis.metrics) return null;
+    if (state.status !== 'success' || !state.data?.success || !state.data?.metrics) return null;
 
-    const category = analysis.metrics.analysis_category || 'UNKNOWN';
-    const recommendation = analysis.metrics.analysis_recommendation || 'No recommendation';
-    const keyProblems = analysis.metrics.key_problems || [];
+    const category = state.data.metrics.analysis_category || 'UNKNOWN';
+    const recommendation = state.data.metrics.analysis_recommendation || 'No recommendation';
+    const keyProblems = state.data.metrics.key_problems || [];
 
     let badgeColor = FINCEPT.GRAY;
     if (category === 'BUY' || category === 'STRONG BUY') badgeColor = FINCEPT.GREEN;
@@ -130,50 +151,50 @@ export const CryptoView: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Purchase Price ($)</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.purchase_price}
-                  onChange={(e) => setFormData({...formData, purchase_price: Number(e.target.value)})}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, purchase_price: Number(v) || 0}); } }}
                   style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Current Price ($)</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.current_price}
-                  onChange={(e) => setFormData({...formData, current_price: Number(e.target.value)})}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, current_price: Number(v) || 0}); } }}
                   style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Amount Held</label>
                 <input
-                  type="number"
-                  step="0.00001"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.amount_held}
-                  onChange={(e) => setFormData({...formData, amount_held: Number(e.target.value)})}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, amount_held: Number(v) || 0}); } }}
                   style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Volatility (%)</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.volatility * 100}
-                  onChange={(e) => setFormData({...formData, volatility: Number(e.target.value) / 100})}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, volatility: (Number(v) || 0) / 100}); } }}
                   style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
                 <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Market Cap (Billions $)</label>
                 <input
-                  type="number"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.market_cap_billions}
-                  onChange={(e) => setFormData({...formData, market_cap_billions: Number(e.target.value)})}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, market_cap_billions: Number(v) || 0}); } }}
                   style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
                 />
               </div>
@@ -182,21 +203,21 @@ export const CryptoView: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isAnalyzing}
+            disabled={state.status === 'loading'}
             style={{
               marginTop: 'auto',
               padding: '10px',
-              backgroundColor: isAnalyzing ? FINCEPT.MUTED : FINCEPT.CYAN,
+              backgroundColor: state.status === 'loading' ? FINCEPT.MUTED : FINCEPT.CYAN,
               color: FINCEPT.DARK_BG,
               border: 'none',
               borderRadius: '4px',
               fontSize: '11px',
               fontWeight: 700,
-              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+              cursor: state.status === 'loading' ? 'not-allowed' : 'pointer',
               letterSpacing: '0.5px',
             }}
           >
-            {isAnalyzing ? 'ANALYZING...' : 'ANALYZE DIGITAL ASSET'}
+            {state.status === 'loading' ? 'ANALYZING...' : 'ANALYZE DIGITAL ASSET'}
           </button>
         </form>
       </div>
@@ -207,18 +228,18 @@ export const CryptoView: React.FC = () => {
           <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.MUTED, letterSpacing: '0.5px' }}>ANALYSIS RESULTS</div>
         </div>
         <div style={{ flex: 1, overflow: 'auto' }}>
-          {isAnalyzing && (
+          {state.status === 'loading' && (
             <div style={{ padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
               <div style={{ width: '24px', height: '24px', border: `2px solid ${FINCEPT.BORDER}`, borderTopColor: FINCEPT.CYAN, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
               <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Running digital asset analytics...</div>
             </div>
           )}
-          {error && (
+          {state.status === 'error' && (
             <div style={{ margin: '16px', padding: '12px', backgroundColor: `${FINCEPT.RED}20`, border: `1px solid ${FINCEPT.RED}`, borderRadius: '4px' }}>
-              <div style={{ fontSize: '10px', color: FINCEPT.RED }}>{error}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED }}>{state.status === 'error' && state.message}</div>
             </div>
           )}
-          {!isAnalyzing && !error && !analysis && (
+          {state.status === 'idle' && (
             <div style={{ padding: '24px', textAlign: 'center' }}>
               <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>Enter digital asset details to see results</div>
             </div>
@@ -236,4 +257,10 @@ export const CryptoView: React.FC = () => {
   );
 };
 
-export default CryptoView;
+const CryptoViewWithBoundary: React.FC = () => (
+  <ErrorBoundary name="CryptoView">
+    <CryptoView />
+  </ErrorBoundary>
+);
+
+export default CryptoViewWithBoundary;

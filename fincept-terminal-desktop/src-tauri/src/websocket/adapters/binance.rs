@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Binance WebSocket Adapter
 //
 // Implements Binance WebSocket API

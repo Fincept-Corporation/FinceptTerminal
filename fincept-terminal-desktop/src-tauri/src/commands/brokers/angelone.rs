@@ -9,9 +9,22 @@ use super::common::ApiResponse;
 use totp_rs::{Algorithm, TOTP, Secret};
 use crate::database::master_contract;
 use std::time::Duration;
+use std::sync::OnceLock;
 
-/// Default timeout for API requests (30 seconds)
-const API_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default timeout for API requests (15 seconds)
+const API_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Shared HTTP client — reuses connections and TLS sessions across calls
+fn shared_client() -> &'static Client {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .timeout(API_TIMEOUT)
+            .pool_max_idle_per_host(4)
+            .build()
+            .expect("Failed to create HTTP client")
+    })
+}
 
 /// Base URL for AngelOne API
 const ANGELONE_BASE_URL: &str = "https://apiconnect.angelone.in";
@@ -60,14 +73,11 @@ async fn angel_api_call(
     method: &str,
     payload: Option<Value>,
 ) -> Result<Value, String> {
-    let client = Client::builder()
-        .timeout(API_TIMEOUT)
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = shared_client();
 
     let url = format!("{}{}", ANGELONE_BASE_URL, endpoint);
 
-    let mut builder = build_angel_request(&client, &url, method, api_key, Some(access_token));
+    let mut builder = build_angel_request(client, &url, method, api_key, Some(access_token));
 
     if let Some(body) = payload {
         builder = builder.json(&body);
@@ -261,12 +271,12 @@ pub async fn angelone_validate_token(
     auth_token: String,
     api_key: String,
 ) -> ApiResponse<bool> {
-    let client = Client::new();
+    let client = shared_client();
     let timestamp = chrono::Utc::now().timestamp_millis();
 
     let url = format!("{}/rest/secure/angelbroking/user/v1/getProfile", ANGELONE_BASE_URL);
 
-    match build_angel_request(&client, &url, "GET", &api_key, Some(&auth_token))
+    match build_angel_request(client, &url, "GET", &api_key, Some(&auth_token))
         .send()
         .await
     {

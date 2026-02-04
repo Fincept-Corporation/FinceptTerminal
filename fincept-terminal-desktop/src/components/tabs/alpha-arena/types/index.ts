@@ -8,7 +8,7 @@
 export type CompetitionMode = 'baseline' | 'monk' | 'situational' | 'max_leverage';
 export type CompetitionStatus = 'created' | 'running' | 'paused' | 'completed' | 'failed';
 export type TradeAction = 'buy' | 'sell' | 'hold' | 'short';
-export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'ollama';
+export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'ollama' | 'fincept';
 
 // Response Events
 export type StreamResponseEvent =
@@ -215,11 +215,12 @@ export interface CreateCompetitionRequest {
   competition_name?: string;
   models: Array<{
     name: string;
-    provider?: string;
-    model_id?: string;
-    initial_capital?: number;
-    trading_style?: string;  // Trading style ID (e.g., 'aggressive', 'conservative')
-    metadata?: Record<string, unknown>;  // Additional metadata including style config
+    provider: string;
+    model_id: string;
+    api_key?: string;
+    initial_capital: number;
+    trading_style?: string;
+    metadata?: Record<string, unknown>;
   }>;
   symbols?: string[];
   initial_capital?: number;
@@ -244,6 +245,7 @@ export interface RunCycleResponse {
   events?: CycleEvent[];
   leaderboard?: LeaderboardEntry[];
   error?: string;
+  warnings?: string[];
 }
 
 export interface LeaderboardResponse {

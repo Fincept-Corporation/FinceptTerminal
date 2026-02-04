@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import { AlternativeInvestmentApi } from '@/services/alternativeInvestments/api/analyticsApi';
 import { PreciousMetalsParams, NaturalResourceParams, MetalType } from '@/services/alternativeInvestments/api/types';
+import { withTimeout } from '@/services/core/apiUtils';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -23,32 +25,51 @@ const COMMODITY_TYPES = [
   { id: 'natural-resources', name: 'Natural Resources' },
 ];
 
+type AnalysisState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; message: string };
+type AnalysisAction =
+  | { type: 'START' }
+  | { type: 'SUCCESS'; payload: any }
+  | { type: 'ERROR'; payload: string }
+  | { type: 'RESET' };
+function analysisReducer(state: AnalysisState, action: AnalysisAction): AnalysisState {
+  switch (action.type) {
+    case 'START': return { status: 'loading' };
+    case 'SUCCESS': return { status: 'success', data: action.payload };
+    case 'ERROR': return { status: 'error', message: action.payload };
+    case 'RESET': return { status: 'idle' };
+    default: return state;
+  }
+}
+
 export const CommoditiesView: React.FC = () => {
   const [selected, setSelected] = useState<CommodityType>('precious-metals');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(analysisReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const handleAnalyze = async (data: any) => {
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
+    if (state.status === 'loading') return;
+    dispatch({ type: 'START' });
 
     try {
       let result;
       switch (selected) {
         case 'precious-metals':
-          result = await AlternativeInvestmentApi.analyzePreciousMetals(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzePreciousMetals(data), 30000);
           break;
         case 'natural-resources':
-          result = await AlternativeInvestmentApi.analyzeNaturalResources(data);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeNaturalResources(data), 30000);
           break;
       }
-      setAnalysis(result);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SUCCESS', payload: result });
     } catch (err: any) {
-      setError(err.message || 'Analysis failed');
-    } finally {
-      setIsAnalyzing(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'ERROR', payload: err.message || 'Analysis failed' });
     }
   };
 
@@ -67,8 +88,7 @@ export const CommoditiesView: React.FC = () => {
                 key={type.id}
                 onClick={() => {
                   setSelected(type.id as CommodityType);
-                  setAnalysis(null);
-                  setError(null);
+                  dispatch({ type: 'RESET' });
                 }}
                 style={{
                   padding: '8px 10px',
@@ -104,8 +124,8 @@ export const CommoditiesView: React.FC = () => {
               </span>
             </div>
             <div style={{ padding: '20px' }}>
-              {selected === 'precious-metals' && <PreciousMetalForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
-              {selected === 'natural-resources' && <NaturalResourceForm onSubmit={handleAnalyze} isLoading={isAnalyzing} />}
+              {selected === 'precious-metals' && <PreciousMetalForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
+              {selected === 'natural-resources' && <NaturalResourceForm onSubmit={handleAnalyze} isLoading={state.status === 'loading'} />}
             </div>
           </div>
         </div>
@@ -120,32 +140,32 @@ export const CommoditiesView: React.FC = () => {
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-          {error && (
+          {state.status === 'error' && (
             <div style={{ backgroundColor: '#FF444410', border: '1px solid #FF4444', borderRadius: '2px', padding: '16px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.RED, marginBottom: '6px', letterSpacing: '0.5px' }}>ERROR</div>
-              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{error}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED, lineHeight: '1.5' }}>{state.status === 'error' && state.message}</div>
             </div>
           )}
 
-          {analysis && analysis.success && analysis.metrics && (
+          {state.status === 'success' && state.data?.success && state.data?.metrics && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{
                 padding: '12px 20px',
-                backgroundColor: analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
-                                 analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
+                backgroundColor: state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN + '20' :
+                                 state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE + '20' :
                                  FINCEPT.RED + '20',
-                border: `2px solid ${analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                                     analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                border: `2px solid ${state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                                     state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                                      FINCEPT.RED}`,
                 borderRadius: '2px',
                 textAlign: 'center',
               }}>
                 <div style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '1.5px', color:
-                  analysis.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
-                  analysis.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
+                  state.data.metrics.analysis_category === 'GOOD' ? FINCEPT.GREEN :
+                  state.data.metrics.analysis_category === 'FLAWED' ? FINCEPT.ORANGE :
                   FINCEPT.RED
                 }}>
-                  {analysis.metrics.analysis_category}
+                  {state.data.metrics.analysis_category}
                 </div>
               </div>
 
@@ -154,17 +174,17 @@ export const CommoditiesView: React.FC = () => {
                   RECOMMENDATION
                 </div>
                 <div style={{ fontSize: '12px', color: FINCEPT.WHITE, lineHeight: '1.6' }}>
-                  {analysis.metrics.analysis_recommendation}
+                  {state.data.metrics.analysis_recommendation}
                 </div>
               </div>
 
-              {analysis.metrics.key_problems && analysis.metrics.key_problems.length > 0 && (
+              {state.data.metrics.key_problems && state.data.metrics.key_problems.length > 0 && (
                 <div style={{ padding: '16px', backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px' }}>
                   <div style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, marginBottom: '12px', letterSpacing: '0.5px' }}>
                     KEY CONCERNS
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {analysis.metrics.key_problems.map((problem: string, i: number) => (
+                    {state.data.metrics.key_problems.map((problem: string, i: number) => (
                       <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                         <div style={{
                           fontSize: '11px',
@@ -187,7 +207,7 @@ export const CommoditiesView: React.FC = () => {
             </div>
           )}
 
-          {!analysis && !isAnalyzing && !error && (
+          {state.status === 'idle' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -201,7 +221,7 @@ export const CommoditiesView: React.FC = () => {
             </div>
           )}
 
-          {isAnalyzing && (
+          {state.status === 'loading' && (
             <div style={{
               padding: '24px',
               backgroundColor: FINCEPT.DARK_BG,
@@ -268,19 +288,19 @@ const PreciousMetalForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ onSu
         </div>
         <div>
           <label style={labelStyle}>WEIGHT (OZ)</label>
-          <input type="number" step="0.1" value={formData.weight_oz} onChange={(e) => setFormData({...formData, weight_oz: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.weight_oz} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, weight_oz: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>PURCHASE PRICE ($/OZ)</label>
-          <input type="number" value={formData.purchase_price} onChange={(e) => setFormData({...formData, purchase_price: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.purchase_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, purchase_price: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>CURRENT PRICE ($/OZ)</label>
-          <input type="number" value={formData.current_price} onChange={(e) => setFormData({...formData, current_price: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.current_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, current_price: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>ANNUAL STORAGE COST ($)</label>
-          <input type="number" value={formData.storage_cost_annual} onChange={(e) => setFormData({...formData, storage_cost_annual: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.storage_cost_annual} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, storage_cost_annual: Number(v) || 0}); } }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -348,15 +368,15 @@ const NaturalResourceForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ on
         </div>
         <div>
           <label style={labelStyle}>PURCHASE PRICE ($)</label>
-          <input type="number" value={formData.purchase_price} onChange={(e) => setFormData({...formData, purchase_price: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.purchase_price} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, purchase_price: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div>
           <label style={labelStyle}>CURRENT VALUE ($)</label>
-          <input type="number" value={formData.current_value} onChange={(e) => setFormData({...formData, current_value: Number(e.target.value)})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.current_value} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, current_value: Number(v) || 0}); } }} style={inputStyle} />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>ANNUAL YIELD (%)</label>
-          <input type="number" step="0.01" value={formData.annual_yield * 100} onChange={(e) => setFormData({...formData, annual_yield: Number(e.target.value) / 100})} style={inputStyle} />
+          <input type="text" inputMode="decimal" value={formData.annual_yield * 100} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setFormData({...formData, annual_yield: (Number(v) || 0) / 100}); } }} style={inputStyle} />
         </div>
       </div>
       <button type="submit" disabled={isLoading} style={{
@@ -377,4 +397,10 @@ const NaturalResourceForm: React.FC<{onSubmit: any; isLoading: boolean}> = ({ on
   );
 };
 
-export default CommoditiesView;
+const CommoditiesViewWithBoundary: React.FC = () => (
+  <ErrorBoundary name="CommoditiesView">
+    <CommoditiesView />
+  </ErrorBoundary>
+);
+
+export default CommoditiesViewWithBoundary;

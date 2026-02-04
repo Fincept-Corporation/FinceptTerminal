@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Agent Streaming Module - High-performance streaming agent execution
 // Uses Tauri events for real-time token streaming and parallel execution
 

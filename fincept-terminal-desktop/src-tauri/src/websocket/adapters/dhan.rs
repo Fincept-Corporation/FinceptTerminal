@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Dhan WebSocket Adapter (Binary Protocol)
 //
 // Dhan uses binary-encoded market data over WebSocket:

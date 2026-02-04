@@ -18,10 +18,15 @@ export function ConfigSection({
           RISK-FREE RATE
         </label>
         <input
-          type="number"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={config.risk_free_rate}
-          onChange={(e) => setConfig({ ...config, risk_free_rate: parseFloat(e.target.value) || 0 })}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '' || /^\d*\.?\d*$/.test(v)) {
+              setConfig({ ...config, risk_free_rate: parseFloat(v) || 0 });
+            }
+          }}
           className="w-full p-2 rounded text-xs font-mono"
           style={{
             backgroundColor: FINCEPT.DARK_BG,
@@ -36,10 +41,15 @@ export function ConfigSection({
           DRAWDOWN THRESHOLD
         </label>
         <input
-          type="number"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={config.drawdown_threshold}
-          onChange={(e) => setConfig({ ...config, drawdown_threshold: parseFloat(e.target.value) || 0.05 })}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '' || /^\d*\.?\d*$/.test(v)) {
+              setConfig({ ...config, drawdown_threshold: parseFloat(v) || 0.05 });
+            }
+          }}
           className="w-full p-2 rounded text-xs font-mono"
           style={{
             backgroundColor: FINCEPT.DARK_BG,

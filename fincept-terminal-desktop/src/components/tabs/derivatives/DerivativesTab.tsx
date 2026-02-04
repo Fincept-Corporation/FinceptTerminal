@@ -1,7 +1,8 @@
 // File: src/components/tabs/DerivativesTab.tsx
 // Professional Derivatives Pricing & Valuation - Powered by FinancePy
 
-import React, { useState } from 'react';
+import React, { useState , useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   Calculator, TrendingUp, DollarSign, Activity, BarChart3,
   Percent, Calendar, Settings, Info, ChevronDown, ChevronUp,
@@ -54,6 +55,17 @@ interface OptionResult {
 export function DerivativesTab() {
   const { t } = useTranslation();
   const [activeInstrument, setActiveInstrument] = useState<InstrumentType>('bonds');
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeInstrument,
+  }), [activeInstrument]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.activeInstrument === "string") setActiveInstrument(state.activeInstrument as any);
+  }, []);
+
+  useWorkspaceTabState("derivatives", getWorkspaceState, setWorkspaceState);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -406,20 +418,20 @@ export function DerivativesTab() {
             <div>
               <label style={labelStyle}>COUPON RATE (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={bondParams.couponRate}
-                onChange={(e) => setBondParams({ ...bondParams, couponRate: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setBondParams({ ...bondParams, couponRate: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
             <div>
               <label style={labelStyle}>YTM (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={bondParams.ytm}
-                onChange={(e) => setBondParams({ ...bondParams, ytm: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setBondParams({ ...bondParams, ytm: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
@@ -494,20 +506,20 @@ export function DerivativesTab() {
             <div>
               <label style={labelStyle}>COUPON RATE (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={bondParams.couponRate}
-                onChange={(e) => setBondParams({ ...bondParams, couponRate: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setBondParams({ ...bondParams, couponRate: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
             <div>
               <label style={labelStyle}>CLEAN PRICE</label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={bondParams.cleanPrice}
-                onChange={(e) => setBondParams({ ...bondParams, cleanPrice: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setBondParams({ ...bondParams, cleanPrice: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
@@ -576,20 +588,20 @@ export function DerivativesTab() {
             <div>
               <label style={labelStyle}>STRIKE PRICE</label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.strike}
-                onChange={(e) => setOptionParams({ ...optionParams, strike: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, strike: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
             <div>
               <label style={labelStyle}>SPOT PRICE</label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.spot}
-                onChange={(e) => setOptionParams({ ...optionParams, spot: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, spot: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
@@ -599,20 +611,20 @@ export function DerivativesTab() {
             <div>
               <label style={labelStyle}>VOLATILITY (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.volatility}
-                onChange={(e) => setOptionParams({ ...optionParams, volatility: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, volatility: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
             <div>
               <label style={labelStyle}>RISK-FREE RATE (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.riskFreeRate}
-                onChange={(e) => setOptionParams({ ...optionParams, riskFreeRate: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, riskFreeRate: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
@@ -622,10 +634,10 @@ export function DerivativesTab() {
             <div>
               <label style={labelStyle}>DIVIDEND YIELD (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.dividendYield}
-                onChange={(e) => setOptionParams({ ...optionParams, dividendYield: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, dividendYield: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
@@ -688,20 +700,20 @@ export function DerivativesTab() {
             <div>
               <label style={labelStyle}>STRIKE PRICE</label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.strike}
-                onChange={(e) => setOptionParams({ ...optionParams, strike: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, strike: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
             <div>
               <label style={labelStyle}>SPOT PRICE</label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.spot}
-                onChange={(e) => setOptionParams({ ...optionParams, spot: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, spot: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
@@ -710,10 +722,10 @@ export function DerivativesTab() {
           <div>
             <label style={labelStyle}>MARKET OPTION PRICE</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={optionParams.optionPrice}
-              onChange={(e) => setOptionParams({ ...optionParams, optionPrice: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, optionPrice: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
@@ -722,20 +734,20 @@ export function DerivativesTab() {
             <div>
               <label style={labelStyle}>RISK-FREE RATE (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.riskFreeRate}
-                onChange={(e) => setOptionParams({ ...optionParams, riskFreeRate: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, riskFreeRate: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
             <div>
               <label style={labelStyle}>DIVIDEND YIELD (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={optionParams.dividendYield}
-                onChange={(e) => setOptionParams({ ...optionParams, dividendYield: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptionParams({ ...optionParams, dividendYield: parseFloat(v) || 0 }); }}
                 style={inputStyle}
               />
             </div>
@@ -801,20 +813,20 @@ export function DerivativesTab() {
           <div>
             <label style={labelStyle}>STRIKE FX RATE</label>
             <input
-              type="number"
-              step="0.0001"
+              type="text"
+              inputMode="decimal"
               value={fxParams.strike}
-              onChange={(e) => setFxParams({ ...fxParams, strike: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFxParams({ ...fxParams, strike: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
           <div>
             <label style={labelStyle}>SPOT FX RATE</label>
             <input
-              type="number"
-              step="0.0001"
+              type="text"
+              inputMode="decimal"
               value={fxParams.spot}
-              onChange={(e) => setFxParams({ ...fxParams, spot: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFxParams({ ...fxParams, spot: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
@@ -824,30 +836,30 @@ export function DerivativesTab() {
           <div>
             <label style={labelStyle}>VOLATILITY (%)</label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={fxParams.volatility}
-              onChange={(e) => setFxParams({ ...fxParams, volatility: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFxParams({ ...fxParams, volatility: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
           <div>
             <label style={labelStyle}>DOMESTIC RATE (%)</label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={fxParams.domesticRate}
-              onChange={(e) => setFxParams({ ...fxParams, domesticRate: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFxParams({ ...fxParams, domesticRate: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
           <div>
             <label style={labelStyle}>FOREIGN RATE (%)</label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={fxParams.foreignRate}
-              onChange={(e) => setFxParams({ ...fxParams, foreignRate: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFxParams({ ...fxParams, foreignRate: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
@@ -857,10 +869,10 @@ export function DerivativesTab() {
           <div>
             <label style={labelStyle}>NOTIONAL</label>
             <input
-              type="number"
-              step="10000"
+              type="text"
+              inputMode="decimal"
               value={fxParams.notional}
-              onChange={(e) => setFxParams({ ...fxParams, notional: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setFxParams({ ...fxParams, notional: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
@@ -924,10 +936,10 @@ export function DerivativesTab() {
           <div>
             <label style={labelStyle}>FIXED RATE (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={swapParams.fixedRate}
-              onChange={(e) => setSwapParams({ ...swapParams, fixedRate: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSwapParams({ ...swapParams, fixedRate: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
@@ -946,10 +958,10 @@ export function DerivativesTab() {
           <div>
             <label style={labelStyle}>DISCOUNT RATE (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={swapParams.discountRate}
-              onChange={(e) => setSwapParams({ ...swapParams, discountRate: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSwapParams({ ...swapParams, discountRate: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
@@ -958,10 +970,10 @@ export function DerivativesTab() {
         <div>
           <label style={labelStyle}>NOTIONAL AMOUNT</label>
           <input
-            type="number"
-            step="100000"
+            type="text"
+            inputMode="decimal"
             value={swapParams.notional}
-            onChange={(e) => setSwapParams({ ...swapParams, notional: parseFloat(e.target.value) })}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSwapParams({ ...swapParams, notional: parseFloat(v) || 0 }); }}
             style={inputStyle}
           />
         </div>
@@ -1013,30 +1025,30 @@ export function DerivativesTab() {
           <div>
             <label style={labelStyle}>RECOVERY RATE (%)</label>
             <input
-              type="number"
-              step="1"
+              type="text"
+              inputMode="decimal"
               value={cdsParams.recoveryRate}
-              onChange={(e) => setCdsParams({ ...cdsParams, recoveryRate: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCdsParams({ ...cdsParams, recoveryRate: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
           <div>
             <label style={labelStyle}>SPREAD (BPS)</label>
             <input
-              type="number"
-              step="1"
+              type="text"
+              inputMode="decimal"
               value={cdsParams.spreadBps}
-              onChange={(e) => setCdsParams({ ...cdsParams, spreadBps: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCdsParams({ ...cdsParams, spreadBps: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>
           <div>
             <label style={labelStyle}>NOTIONAL</label>
             <input
-              type="number"
-              step="1000000"
+              type="text"
+              inputMode="decimal"
               value={cdsParams.notional}
-              onChange={(e) => setCdsParams({ ...cdsParams, notional: parseFloat(e.target.value) })}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCdsParams({ ...cdsParams, notional: parseFloat(v) || 0 }); }}
               style={inputStyle}
             />
           </div>

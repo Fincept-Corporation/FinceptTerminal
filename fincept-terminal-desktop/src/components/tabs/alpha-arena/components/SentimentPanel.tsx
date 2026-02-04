@@ -5,11 +5,14 @@
  * Shows sentiment scores, headlines, and market mood indicators.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   Newspaper, TrendingUp, TrendingDown, Minus, RefreshCw,
   Globe, AlertCircle, ChevronRight, ExternalLink, Loader2,
 } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useCache, cacheKey } from '@/hooks/useCache';
+import { validateSymbol } from '@/services/core/validators';
 import {
   alphaArenaEnhancedService,
   type SentimentResult,
@@ -56,51 +59,54 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
   symbol = 'BTC',
   showMarketMood = true,
 }) => {
-  const [sentiment, setSentiment] = useState<SentimentResult | null>(null);
-  const [marketMood, setMarketMood] = useState<MarketMood | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'symbol' | 'market'>('symbol');
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchSentiment = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
+  // Cache: symbol sentiment (enabled when activeTab === 'symbol')
+  const sentimentCache = useCache<SentimentResult>({
+    key: cacheKey('alpha-arena', 'sentiment', symbol),
+    category: 'alpha-arena',
+    fetcher: async () => {
+      const validSym = validateSymbol(symbol);
+      if (!validSym.valid) throw new Error(validSym.error);
       const result = await alphaArenaEnhancedService.getSentiment(symbol);
       if (result.success && result.sentiment) {
-        setSentiment(result.sentiment);
-      } else {
-        setError(result.error || 'Failed to fetch sentiment');
+        return result.sentiment;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch sentiment');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [symbol]);
+      throw new Error(result.error || 'Failed to fetch sentiment');
+    },
+    ttl: 300,
+    enabled: activeTab === 'symbol',
+    staleWhileRevalidate: true,
+  });
 
-  const fetchMarketMood = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
+  // Cache: market mood (enabled when activeTab === 'market')
+  const marketMoodCache = useCache<MarketMood>({
+    key: cacheKey('alpha-arena', 'market-mood'),
+    category: 'alpha-arena',
+    fetcher: async () => {
       const result = await alphaArenaEnhancedService.getMarketMood();
       if (result.success && result.market_mood) {
-        setMarketMood(result.market_mood);
+        return result.market_mood;
       }
-    } catch (err) {
-      console.error('Error fetching market mood:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      throw new Error(result.error || 'Failed to fetch market mood');
+    },
+    ttl: 300,
+    enabled: activeTab === 'market',
+    staleWhileRevalidate: true,
+  });
 
-  useEffect(() => {
+  const sentiment = sentimentCache.data;
+  const marketMood = marketMoodCache.data;
+  const isLoading = activeTab === 'symbol' ? sentimentCache.isLoading : marketMoodCache.isLoading;
+  const error = activeTab === 'symbol' ? sentimentCache.error : marketMoodCache.error;
+
+  const handleRefresh = () => {
     if (activeTab === 'symbol') {
-      fetchSentiment();
+      sentimentCache.refresh();
     } else {
-      fetchMarketMood();
+      marketMoodCache.refresh();
     }
-  }, [activeTab, fetchSentiment, fetchMarketMood]);
+  };
 
   const getSentimentIcon = (sentimentLevel: string) => {
     if (sentimentLevel.includes('bullish')) {
@@ -150,7 +156,7 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
           </span>
         </div>
         <button
-          onClick={activeTab === 'symbol' ? fetchSentiment : fetchMarketMood}
+          onClick={handleRefresh}
           disabled={isLoading}
           className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
         >
@@ -196,7 +202,7 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
         {error && (
           <div className="flex items-center gap-2 p-2 rounded mb-3" style={{ backgroundColor: COLORS.RED + '10' }}>
             <AlertCircle size={14} style={{ color: COLORS.RED }} />
-            <span className="text-xs" style={{ color: COLORS.RED }}>{error}</span>
+            <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
           </div>
         )}
 
@@ -373,4 +379,4 @@ const SentimentPanel: React.FC<SentimentPanelProps> = ({
   );
 };
 
-export default SentimentPanel;
+export default withErrorBoundary(SentimentPanel, { name: 'AlphaArena.SentimentPanel' });

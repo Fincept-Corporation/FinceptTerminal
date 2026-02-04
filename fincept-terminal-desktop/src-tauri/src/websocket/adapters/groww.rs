@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Groww WebSocket Adapter (NATS Protocol)
 //
 // Groww uses NATS protocol over WebSocket:

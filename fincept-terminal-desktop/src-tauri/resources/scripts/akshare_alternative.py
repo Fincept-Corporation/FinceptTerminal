@@ -9,10 +9,18 @@ Many placeholder functions were removed as they don't exist in akshare 1.18.20.
 
 import sys
 import json
+import time
 import pandas as pd
 import akshare as ak
 from typing import Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 class AKShareError:
@@ -84,6 +92,47 @@ class AlternativeDataWrapper:
                     "timestamp": int(datetime.now().timestamp())
                 }
 
+            except ValueError as e:
+                error_msg = str(e)
+                if "Length mismatch" in error_msg or "Expected axis" in error_msg:
+                    return {
+                        "success": False,
+                        "error": "AKShare API structure changed (column mismatch). Endpoint temporarily unavailable.",
+                        "data": [],
+                        "error_type": "api_mismatch",
+                        "timestamp": int(datetime.now().timestamp())
+                    }
+                last_error = error_msg
+                if attempt < max_retries - 1:
+                    time.sleep(self.retry_delay)
+                continue
+            except AttributeError as e:
+                error_msg = str(e)
+                if "NoneType" in error_msg and "find_all" in error_msg:
+                    return {
+                        "success": False,
+                        "error": "Data source returned empty response. Website may be unavailable.",
+                        "data": [],
+                        "error_type": "empty_response",
+                        "timestamp": int(datetime.now().timestamp())
+                    }
+                last_error = error_msg
+                if attempt < max_retries - 1:
+                    time.sleep(self.retry_delay)
+                continue
+            except KeyError as e:
+                return {
+                    "success": False,
+                    "error": f"Missing data field: {str(e)}. API format may have changed.",
+                    "data": [],
+                    "error_type": "missing_field",
+                    "timestamp": int(datetime.now().timestamp())
+                }
+            except (ConnectionError, TimeoutError) as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    time.sleep(self.retry_delay * 2)
+                continue
             except Exception as e:
                 last_error = str(e)
                 if attempt < max_retries - 1:
@@ -102,12 +151,6 @@ class AlternativeDataWrapper:
             "count": 0,
             "timestamp": int(datetime.now().timestamp())
         }
-
-    # ==================== AIR QUALITY ====================
-
-    def get_air_quality_hebei(self) -> Dict[str, Any]:
-        """Get Hebei province air quality data"""
-        return self._safe_call_with_retry(ak.air_quality_hebei)
 
     # ==================== ENERGY ====================
 
@@ -159,26 +202,15 @@ class AlternativeDataWrapper:
         """Get car sales ranking from Gasgoo"""
         return self._safe_call_with_retry(ak.car_sale_rank_gasgoo)
 
-    # ==================== BILLIONAIRES ====================
-
-    def get_billionaires_index(self) -> Dict[str, Any]:
-        """Get Bloomberg Billionaires Index"""
-        return self._safe_call_with_retry(ak.index_bloomberg_billionaires)
-
-    def get_billionaires_hist(self) -> Dict[str, Any]:
-        """Get Bloomberg Billionaires historical data"""
-        return self._safe_call_with_retry(ak.index_bloomberg_billionaires_hist)
-
     # ==================== UTILITY FUNCTIONS ====================
 
     def get_all_available_endpoints(self) -> Dict[str, Any]:
         """Get list of all available endpoints"""
         endpoints = [
-            "air_quality_hebei", "energy_carbon", "energy_oil_hist", "energy_oil_detail",
+            "energy_carbon", "energy_oil_hist", "energy_oil_detail",
             "movie_boxoffice_daily", "movie_boxoffice_weekly", "movie_boxoffice_monthly",
             "movie_boxoffice_yearly", "movie_boxoffice_realtime",
-            "car_market_total", "car_market_segment", "car_sale_rank",
-            "billionaires_index", "billionaires_hist"
+            "car_market_total", "car_market_segment", "car_sale_rank"
         ]
 
         return {
@@ -192,18 +224,42 @@ class AlternativeDataWrapper:
 # Export wrapper instance
 alternative_wrapper = AlternativeDataWrapper()
 
-
+# ==================== CLI ====================
 if __name__ == "__main__":
-    """Test the wrapper"""
-    import time
+    import sys
+    import json
 
-    print("Testing akshare_alternative.py wrapper...")
+    # Get wrapper instance
+    wrapper = AlternativeDataWrapper()
 
-    # Test energy carbon
-    result = alternative_wrapper.get_energy_carbon()
-    print(f"\nEnergy Carbon: {result['success']}, count: {result.get('count', 0)}")
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "Usage: python akshare_alternative.py <endpoint> [args...]"}))
+        sys.exit(1)
 
-    # Test available endpoints
-    endpoints = alternative_wrapper.get_all_available_endpoints()
-    print(f"\nTotal endpoints: {endpoints['count']}")
-    print("Available endpoints:", endpoints['endpoints'])
+    endpoint = sys.argv[1]
+    args = sys.argv[2:] if len(sys.argv) > 2 else []
+
+    # Handle get_all_endpoints
+    if endpoint == "get_all_endpoints":
+        if hasattr(wrapper, 'get_all_available_endpoints'):
+            result = wrapper.get_all_available_endpoints()
+        elif hasattr(wrapper, 'get_all_endpoints'):
+            result = wrapper.get_all_endpoints()
+        else:
+            result = {"success": False, "error": "Endpoint list not available"}
+        print(json.dumps(result, ensure_ascii=True))
+        sys.exit(0)
+
+    # Dynamic method resolution
+    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
+
+    if hasattr(wrapper, method_name):
+        method = getattr(wrapper, method_name)
+        try:
+            result = method(*args) if args else method()
+            print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+        except Exception as e:
+            print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
+    else:
+        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
+

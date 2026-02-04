@@ -10,7 +10,8 @@
     "tabLayout": "Tab Layout",
     "appearance": "Appearance",
     "language": "Language",
-    "storage": "Storage & Cache"
+    "storage": "Storage & Cache",
+    "notifications": "Notifications"
   },
   "credentials": {
     "title": "API CREDENTIALS MANAGEMENT",
@@ -112,6 +113,19 @@
     "save": "SAVE",
     "cancel": "CANCEL",
     "add": "ADD"
+  },
+  "notifications": {
+    "title": "NOTIFICATION PROVIDERS",
+    "description": "Configure external notification channels. App notifications will be forwarded to enabled providers.",
+    "eventFilters": "Event Filters",
+    "eventFilterDescription": "Choose which notification types to forward to external providers.",
+    "providers": "Providers",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "testButton": "TEST",
+    "testSuccess": "Test notification sent successfully!",
+    "testFailed": "Failed to send test notification. Check your configuration.",
+    "saved": "Configuration saved"
   },
   "footer": {
     "database": "Database: SQLite",

@@ -22,7 +22,8 @@ export const FINCEPT = {
   MUTED: '#4A4A4A'
 };
 
-// Sample panel data for demonstration
+// Sample panel data for demonstration (kept for backward compatibility)
+// Note: Default behavior now uses live yfinance data
 export const SAMPLE_DATA = [
   { entity_id: 'AAPL', time: '2024-01-02', value: 185.64 },
   { entity_id: 'AAPL', time: '2024-01-03', value: 184.25 },

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   Plus,
   Search,
@@ -60,6 +61,18 @@ function DataSourcesTabContent() {
   const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
   const [editingConnection, setEditingConnection] = useState<DataSourceConnection | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    view, selectedCategory,
+  }), [view, selectedCategory]);
+
+  const setWorkspaceState = useCallback((state: any) => {
+    if (state.view === "gallery" || state.view === "connections") setView(state.view);
+    if (typeof state.selectedCategory === "string") setSelectedCategory(state.selectedCategory);
+  }, []);
+
+  useWorkspaceTabState("datasources", getWorkspaceState, setWorkspaceState);
 
   const getCategoryIcon = (category: DataSourceCategory) => {
     const iconProps = { size: 12, color: FINCEPT.GRAY };

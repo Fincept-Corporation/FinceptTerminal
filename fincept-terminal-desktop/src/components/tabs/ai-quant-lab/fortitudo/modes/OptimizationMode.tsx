@@ -116,12 +116,10 @@ export const OptimizationMode: React.FC<OptimizationModeProps> = ({
               MAX WEIGHT
             </label>
             <input
-              type="number"
-              value={optMaxWeight}
-              onChange={(e) => setOptMaxWeight(parseFloat(e.target.value))}
-              step="0.05"
-              min="0.1"
-              max="1.0"
+              type="text"
+              inputMode="decimal"
+              value={String(optMaxWeight)}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptMaxWeight(parseFloat(v) || 0); }}
               className="w-full px-3 py-2 rounded text-sm font-mono border"
               style={{
                 backgroundColor: FINCEPT.DARK_BG,
@@ -139,10 +137,10 @@ export const OptimizationMode: React.FC<OptimizationModeProps> = ({
                 TARGET RETURN
               </label>
               <input
-                type="number"
-                value={optTargetReturn}
-                onChange={(e) => setOptTargetReturn(parseFloat(e.target.value))}
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                value={String(optTargetReturn)}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptTargetReturn(parseFloat(v) || 0); }}
                 className="w-full px-3 py-2 rounded text-sm font-mono border"
                 style={{
                   backgroundColor: FINCEPT.DARK_BG,
@@ -161,12 +159,10 @@ export const OptimizationMode: React.FC<OptimizationModeProps> = ({
                 CVaR ALPHA
               </label>
               <input
-                type="number"
-                value={optAlpha}
-                onChange={(e) => setOptAlpha(parseFloat(e.target.value))}
-                step="0.01"
-                min="0.01"
-                max="0.50"
+                type="text"
+                inputMode="decimal"
+                value={String(optAlpha)}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setOptAlpha(parseFloat(v) || 0); }}
                 className="w-full px-3 py-2 rounded text-sm font-mono border"
                 style={{
                   backgroundColor: FINCEPT.DARK_BG,

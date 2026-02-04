@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Type definitions for all database entities
 
 use serde::{Deserialize, Serialize};

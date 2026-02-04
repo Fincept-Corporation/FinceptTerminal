@@ -1,6 +1,7 @@
 // Terminal-styled toast notifications matching Fincept design system
 import { toast as sonnerToast, ExternalToast } from 'sonner';
 import React from 'react';
+import { notificationService } from '@/services/notifications';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -197,6 +198,17 @@ export const terminalToast = (options: TerminalToastOptions) => {
       )}
     </div>
   );
+
+  // Route to external notification providers (fire-and-forget)
+  try {
+    const eventType = type === 'default' ? 'info' : type;
+    notificationService.notify({
+      type: eventType as 'success' | 'error' | 'warning' | 'info',
+      title: header?.label || type.charAt(0).toUpperCase() + type.slice(1),
+      body: message,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (_) { /* never block UI */ }
 
   return sonnerToast(content, {
     duration: 8000,

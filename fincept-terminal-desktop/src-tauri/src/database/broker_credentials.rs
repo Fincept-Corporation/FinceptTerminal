@@ -1,5 +1,5 @@
 // Broker Credentials Module - Secure encrypted storage for broker API credentials
-// Uses AES-256-GCM encryption for sensitive data
+// Uses AES-256-GCM encryption with HMAC-SHA256 key derivation
 
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
@@ -7,13 +7,19 @@ use aes_gcm::{
 };
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
+use hmac::Hmac;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Encryption key storage (in production, use OS keychain)
+/// Number of HMAC iterations for key derivation
+const KDF_ITERATIONS: u32 = 100_000;
+
+/// Encryption key storage
 static ENCRYPTION_KEY: Lazy<Mutex<Option<Vec<u8>>>> = Lazy::new(|| Mutex::new(None));
 
 /// Broker credentials structure
@@ -31,73 +37,117 @@ pub struct BrokerCredentials {
     pub updated_at: i64,
 }
 
+/// Get the app data directory for storing persistent files
+fn get_app_data_dir() -> Result<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            return Ok(PathBuf::from(local_app_data).join("fincept-dev"));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            return Ok(PathBuf::from(home).join("Library/Application Support/fincept-dev"));
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            return Ok(PathBuf::from(home).join(".local/share/fincept-dev"));
+        }
+    }
+
+    Err(anyhow::anyhow!("Could not determine app data directory"))
+}
+
+/// Get or create a stable, persisted key identifier.
+/// On first run, generates a random 32-byte ID and saves it.
+/// On subsequent runs, reads the persisted ID.
+fn get_stable_key_id() -> Result<Vec<u8>> {
+    let data_dir = get_app_data_dir()?;
+    let key_id_path = data_dir.join(".credential_key_id");
+
+    if key_id_path.exists() {
+        let contents = std::fs::read(&key_id_path)
+            .context("Failed to read persisted key ID")?;
+        if contents.len() == 32 {
+            return Ok(contents);
+        }
+        // Invalid length, regenerate
+        eprintln!("[BrokerCredentials] Warning: Key ID file has invalid length, regenerating");
+    }
+
+    // Generate new random key ID
+    use rand::RngCore;
+    let mut key_id = vec![0u8; 32];
+    OsRng.fill_bytes(&mut key_id);
+
+    // Ensure directory exists
+    std::fs::create_dir_all(&data_dir)
+        .context("Failed to create app data directory")?;
+
+    std::fs::write(&key_id_path, &key_id)
+        .context("Failed to persist key ID")?;
+
+    eprintln!("[BrokerCredentials] Generated and persisted new key ID");
+    Ok(key_id)
+}
+
+/// Get or create a persisted salt for key derivation
+fn get_or_create_salt() -> Result<Vec<u8>> {
+    let data_dir = get_app_data_dir()?;
+    let salt_path = data_dir.join(".credential_salt");
+
+    if salt_path.exists() {
+        let contents = std::fs::read(&salt_path)
+            .context("Failed to read persisted salt")?;
+        if contents.len() == 32 {
+            return Ok(contents);
+        }
+        eprintln!("[BrokerCredentials] Warning: Salt file has invalid length, regenerating");
+    }
+
+    // Generate new random salt
+    use rand::RngCore;
+    let mut salt = vec![0u8; 32];
+    OsRng.fill_bytes(&mut salt);
+
+    std::fs::create_dir_all(&data_dir)
+        .context("Failed to create app data directory")?;
+
+    std::fs::write(&salt_path, &salt)
+        .context("Failed to persist salt")?;
+
+    eprintln!("[BrokerCredentials] Generated and persisted new salt");
+    Ok(salt)
+}
+
 /// Initialize encryption key (should be called on app startup)
-/// Uses machine-specific data to derive a consistent key across restarts
+/// Uses a persisted stable key ID + PBKDF2 key derivation
 pub fn init_encryption_key() -> Result<()> {
     let mut key_guard = ENCRYPTION_KEY.lock();
 
     if key_guard.is_none() {
-        // Derive encryption key from machine-specific identifiers
-        // This ensures the same key is used across app restarts
-        let machine_id = get_machine_id()?;
-        let key = derive_encryption_key(&machine_id);
+        let key_id = get_stable_key_id()?;
+        let salt = get_or_create_salt()?;
+        let key = derive_encryption_key(&key_id, &salt)?;
         *key_guard = Some(key);
 
-        eprintln!("[BrokerCredentials] Encryption key initialized from machine ID");
+        eprintln!("[BrokerCredentials] Encryption key initialized from persisted key ID");
     }
 
     Ok(())
 }
 
-/// Get machine-specific identifier
-fn get_machine_id() -> Result<String> {
-    use std::env;
-
-    // Combine multiple machine-specific values for uniqueness
-    let mut identifiers = Vec::new();
-
-    // Computer name
-    if let Ok(name) = env::var("COMPUTERNAME") {
-        identifiers.push(name);
-    } else if let Ok(name) = env::var("HOSTNAME") {
-        identifiers.push(name);
-    }
-
-    // Username
-    if let Ok(user) = env::var("USERNAME") {
-        identifiers.push(user);
-    } else if let Ok(user) = env::var("USER") {
-        identifiers.push(user);
-    }
-
-    // OS-specific identifiers
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(sid) = env::var("USERDOMAIN") {
-            identifiers.push(sid);
-        }
-    }
-
-    // Fallback if no identifiers found
-    if identifiers.is_empty() {
-        identifiers.push("fincept-terminal-default".to_string());
-    }
-
-    Ok(identifiers.join("-"))
-}
-
-/// Derive a consistent encryption key from machine ID
-fn derive_encryption_key(machine_id: &str) -> Vec<u8> {
-    use sha2::{Sha256, Digest};
-
-    // Use PBKDF2-like approach with SHA-256
-    let mut hasher = Sha256::new();
-    hasher.update(b"fincept-terminal-encryption-v1");
-    hasher.update(machine_id.as_bytes());
-    hasher.update(b"broker-credentials");
-
-    let result = hasher.finalize();
-    result.to_vec() // 32 bytes for AES-256
+/// Derive encryption key using PBKDF2-HMAC-SHA256
+fn derive_encryption_key(key_id: &[u8], salt: &[u8]) -> Result<Vec<u8>> {
+    let mut derived_key = vec![0u8; 32]; // 32 bytes for AES-256
+    pbkdf2::pbkdf2::<Hmac<Sha256>>(key_id, salt, KDF_ITERATIONS, &mut derived_key)
+        .map_err(|e| anyhow::anyhow!("PBKDF2 key derivation failed: {}", e))?;
+    Ok(derived_key)
 }
 
 /// Encrypt data using AES-256-GCM
@@ -159,11 +209,26 @@ fn decrypt_data(encrypted: &str) -> Result<String> {
     String::from_utf8(plaintext).context("Invalid UTF-8 in decrypted data")
 }
 
+/// Helper to decrypt a single field, returning an error rather than silently dropping
+fn decrypt_field(field_name: &str, broker_id: &str, encrypted_value: &Option<String>) -> Result<Option<String>> {
+    match encrypted_value {
+        Some(val) => {
+            let decrypted = decrypt_data(val)
+                .with_context(|| format!(
+                    "Failed to decrypt {} for broker '{}'. The encryption key may have changed.",
+                    field_name, broker_id
+                ))?;
+            Ok(Some(decrypted))
+        }
+        None => Ok(None),
+    }
+}
+
 /// Get current timestamp in seconds since UNIX epoch
 fn current_timestamp() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs() as i64
 }
 
@@ -171,13 +236,12 @@ fn current_timestamp() -> i64 {
 pub fn save_credentials(conn: &Connection, creds: &BrokerCredentials) -> Result<()> {
     eprintln!("[BrokerCredentials] save_credentials called for broker: {}", creds.broker_id);
 
-    // Debug: Print what we received
     eprintln!("[BrokerCredentials] Input data:");
     eprintln!("  - api_key: {:?} (len: {})",
-        creds.api_key.as_ref().map(|s| if s.len() > 0 { "***PRESENT***" } else { "EMPTY" }),
+        creds.api_key.as_ref().map(|s| if !s.is_empty() { "***PRESENT***" } else { "EMPTY" }),
         creds.api_key.as_ref().map(|s| s.len()).unwrap_or(0));
     eprintln!("  - api_secret: {:?} (len: {})",
-        creds.api_secret.as_ref().map(|s| if s.len() > 0 { "***PRESENT***" } else { "EMPTY" }),
+        creds.api_secret.as_ref().map(|s| if !s.is_empty() { "***PRESENT***" } else { "EMPTY" }),
         creds.api_secret.as_ref().map(|s| s.len()).unwrap_or(0));
 
     // Ensure encryption key is initialized
@@ -185,11 +249,12 @@ pub fn save_credentials(conn: &Connection, creds: &BrokerCredentials) -> Result<
 
     let now = current_timestamp();
 
-    // Encrypt sensitive fields
+    // Encrypt sensitive fields (including additional_data)
     let encrypted_api_key = creds.api_key.as_ref().map(|v| encrypt_data(v)).transpose()?;
     let encrypted_api_secret = creds.api_secret.as_ref().map(|v| encrypt_data(v)).transpose()?;
     let encrypted_access_token = creds.access_token.as_ref().map(|v| encrypt_data(v)).transpose()?;
     let encrypted_refresh_token = creds.refresh_token.as_ref().map(|v| encrypt_data(v)).transpose()?;
+    let encrypted_additional_data = creds.additional_data.as_ref().map(|v| encrypt_data(v)).transpose()?;
 
     conn.execute(
         "INSERT INTO broker_credentials
@@ -208,7 +273,7 @@ pub fn save_credentials(conn: &Connection, creds: &BrokerCredentials) -> Result<
             encrypted_api_secret,
             encrypted_access_token,
             encrypted_refresh_token,
-            &creds.additional_data,
+            encrypted_additional_data,
             now,
         ],
     )?;
@@ -220,7 +285,6 @@ pub fn save_credentials(conn: &Connection, creds: &BrokerCredentials) -> Result<
 /// Get broker credentials by broker_id
 pub fn get_credentials(conn: &Connection, broker_id: &str) -> Result<Option<BrokerCredentials>> {
     eprintln!("[BrokerCredentials] get_credentials called for broker: {}", broker_id);
-    // Ensure encryption key is initialized
     init_encryption_key()?;
 
     eprintln!("[BrokerCredentials] Decrypting credentials for: {}", broker_id);
@@ -234,19 +298,13 @@ pub fn get_credentials(conn: &Connection, broker_id: &str) -> Result<Option<Brok
     let result = stmt.query_row(params![broker_id], |row| {
         let encrypted: bool = row.get::<_, i32>(7)? == 1;
 
-        // Get encrypted fields
-        let api_key_enc: Option<String> = row.get(2)?;
-        let api_secret_enc: Option<String> = row.get(3)?;
-        let access_token_enc: Option<String> = row.get(4)?;
-        let refresh_token_enc: Option<String> = row.get(5)?;
-
         Ok(BrokerCredentials {
             id: Some(row.get(0)?),
             broker_id: row.get(1)?,
-            api_key: api_key_enc,
-            api_secret: api_secret_enc,
-            access_token: access_token_enc,
-            refresh_token: refresh_token_enc,
+            api_key: row.get(2)?,
+            api_secret: row.get(3)?,
+            access_token: row.get(4)?,
+            refresh_token: row.get(5)?,
             additional_data: row.get(6)?,
             encrypted,
             created_at: row.get(8)?,
@@ -256,49 +314,36 @@ pub fn get_credentials(conn: &Connection, broker_id: &str) -> Result<Option<Brok
 
     match result {
         Ok(mut creds) => {
-            // Debug: Print what was retrieved from database BEFORE decryption
             eprintln!("[BrokerCredentials] Raw data from DB:");
             eprintln!("  - api_key encrypted: {:?}", creds.api_key.as_ref().map(|s| format!("{}...", &s[..20.min(s.len())])));
             eprintln!("  - api_secret encrypted: {:?}", creds.api_secret.as_ref().map(|s| format!("{}...", &s[..20.min(s.len())])));
             eprintln!("  - encrypted flag: {}", creds.encrypted);
 
-            // Decrypt sensitive fields if encrypted
             if creds.encrypted {
-                eprintln!("[BrokerCredentials] Decrypting api_key for: {}", broker_id);
-                creds.api_key = match creds.api_key.as_ref().map(|v| decrypt_data(v)).transpose() {
-                    Ok(val) => val,
-                    Err(e) => {
-                        eprintln!("[BrokerCredentials] ❌ Failed to decrypt api_key: {}", e);
-                        None
-                    }
-                };
+                // Try to decrypt — if the encryption key has changed, auto-delete stale credentials
+                let decrypt_result = (|| -> Result<()> {
+                    creds.api_key = decrypt_field("api_key", broker_id, &creds.api_key)?;
+                    creds.api_secret = decrypt_field("api_secret", broker_id, &creds.api_secret)?;
+                    creds.access_token = decrypt_field("access_token", broker_id, &creds.access_token)?;
+                    creds.refresh_token = decrypt_field("refresh_token", broker_id, &creds.refresh_token)?;
+                    creds.additional_data = decrypt_field("additional_data", broker_id, &creds.additional_data)?;
+                    Ok(())
+                })();
 
-                eprintln!("[BrokerCredentials] Decrypting api_secret for: {}", broker_id);
-                creds.api_secret = match creds.api_secret.as_ref().map(|v| decrypt_data(v)).transpose() {
-                    Ok(val) => val,
-                    Err(e) => {
-                        eprintln!("[BrokerCredentials] ❌ Failed to decrypt api_secret: {}", e);
-                        None
-                    }
-                };
-
-                eprintln!("[BrokerCredentials] Decrypting access_token for: {}", broker_id);
-                creds.access_token = match creds.access_token.as_ref().map(|v| decrypt_data(v)).transpose() {
-                    Ok(val) => val,
-                    Err(e) => {
-                        eprintln!("[BrokerCredentials] ❌ Failed to decrypt access_token: {}", e);
-                        None
-                    }
-                };
-
-                eprintln!("[BrokerCredentials] Decrypting refresh_token for: {}", broker_id);
-                creds.refresh_token = match creds.refresh_token.as_ref().map(|v| decrypt_data(v)).transpose() {
-                    Ok(val) => val,
-                    Err(e) => {
-                        eprintln!("[BrokerCredentials] ❌ Failed to decrypt refresh_token: {}", e);
-                        None
-                    }
-                };
+                if let Err(e) = decrypt_result {
+                    eprintln!(
+                        "[BrokerCredentials] WARNING: Decryption failed for '{}': {}. \
+                         Deleting stale credentials -- please re-enter them.",
+                        broker_id, e
+                    );
+                    // Remove the undecryptable row so the user can start fresh
+                    let _ = delete_credentials(conn, broker_id);
+                    return Err(anyhow::anyhow!(
+                        "Credentials for '{}' could not be decrypted (encryption key changed). \
+                         They have been removed — please re-enter your API credentials.",
+                        broker_id
+                    ));
+                }
 
                 eprintln!("[BrokerCredentials] ✓ Decryption complete for: {}", broker_id);
             }

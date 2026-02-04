@@ -34,7 +34,6 @@ import RecordedContextsManager from '@/components/common/RecordedContextsManager
 import { HeaderSupportButtons } from '@/components/common/HeaderSupportButtons';
 import AgentConfigTab from '@/components/tabs/agent-config';
 import RelationshipMapTab from '@/components/tabs/relationship-map/RelationshipMapTab';
-import MonitoringTab from '@/components/tabs/monitoring';
 import { useTranslation } from 'react-i18next';
 import { WorkspaceProvider } from '@/contexts/WorkspaceContext';
 import WorkspaceDialog from './WorkspaceDialog';
@@ -66,6 +65,8 @@ const MAAnalyticsTab = React.lazy(() => import('@/components/tabs/MAAnalyticsTab
 const AlphaArenaTab = React.lazy(() => import('@/components/tabs/alpha-arena'));
 const NotesTab = React.lazy(() => import('@/components/tabs/notes').then(m => ({ default: m.NotesTab })));
 const AlternativeInvestmentsTab = React.lazy(() => import('@/components/tabs/alternative-investments').then(m => ({ default: m.AlternativeInvestmentsTab })));
+const MarketSimTab = React.lazy(() => import('@/components/tabs/market-sim').then(m => ({ default: m.MarketSimTab })));
+const StrategiesTab = React.lazy(() => import('@/components/tabs/strategies'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -548,17 +549,20 @@ function FinxeptTerminalContent() {
     { label: 'Alpha Arena', action: () => setActiveTab('alpha-arena') },
     { label: 'Polymarket', action: () => setActiveTab('polymarket') },
     { label: 'Derivatives Pricing', action: () => setActiveTab('derivatives') },
-    { label: 'Alternative Investments', action: () => setActiveTab('alternative-investments') },
     { label: 'Watchlist', action: () => setActiveTab('watchlist') },
     // Research & Intelligence
     { label: 'Research & Intelligence', header: true },
     { label: 'Equity Research', action: () => setActiveTab('research') },
     { label: 'AI Quant Lab', action: () => setActiveTab('ai-quant-lab') },
+    { label: 'M&A Analytics', action: () => setActiveTab('ma-analytics') },
+    { label: 'Alternative Investments', action: () => setActiveTab('alternative-investments') },
     { label: 'Geopolitics', action: () => setActiveTab('geopolitics') },
     { label: 'Maritime Intelligence', action: () => setActiveTab('maritime') },
     { label: '3D Visualization', action: () => setActiveTab('3d-viz') },
+    { label: 'Market Simulation', action: () => setActiveTab('market-sim') },
     // Tools
     { label: 'Tools', header: true },
+    { label: 'Strategy Engine', action: () => setActiveTab('strategies') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp') },
     { label: 'Data Sources', action: () => setActiveTab('datasources') },
@@ -566,7 +570,6 @@ function FinxeptTerminalContent() {
     { label: 'Report Builder', action: () => setActiveTab('reportbuilder') },
     { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
-    { label: 'Monitoring', action: () => setActiveTab('monitoring') },
     { label: 'Notes', action: () => setActiveTab('notes') },
     { label: 'Settings', action: () => setActiveTab('settings') },
     // Community & Support
@@ -879,18 +882,18 @@ function FinxeptTerminalContent() {
                   Code Editor
                 </TabsTrigger>
                 <TabsTrigger
-                  value="ma-analytics"
-                  style={activeTab === 'ma-analytics' ? tabStyles.active : tabStyles.default}
-                  title="M&A Analytics"
+                  value="ai-quant-lab"
+                  style={activeTab === 'ai-quant-lab' ? tabStyles.active : tabStyles.default}
+                  title="AI Quant Lab"
                 >
-                  M&A Analytics
+                  AI Quant Lab
                 </TabsTrigger>
                 <TabsTrigger
-                  value="alternative-investments"
-                  style={activeTab === 'alternative-investments' ? tabStyles.active : tabStyles.default}
-                  title="Alternative Investments"
+                  value="settings"
+                  style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
+                  title="Settings"
                 >
-                  Alternative Investments
+                  Settings
                 </TabsTrigger>
                 <TabsTrigger
                   value="profile"
@@ -927,9 +930,6 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="news" className="h-full m-0 p-0">
               <NewsTab />
-            </TabsContent>
-            <TabsContent value="monitoring" className="h-full m-0 p-0">
-              <MonitoringTab />
             </TabsContent>
             <TabsContent value="forum" className="h-full m-0 p-0">
               <ForumTab />
@@ -972,6 +972,11 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="portfolio" className="h-full m-0 p-0">
               <PortfolioTab />
+            </TabsContent>
+            <TabsContent value="strategies" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <StrategiesTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="backtesting" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
@@ -1099,6 +1104,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="alternative-investments" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <AlternativeInvestmentsTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="market-sim" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <MarketSimTab />
               </React.Suspense>
             </TabsContent>
           </Tabs>

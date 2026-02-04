@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { flushSync } from 'react-dom';
 import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
@@ -66,6 +67,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const [systemStatus, setSystemStatus] = useState('STATUS: INITIALIZING...');
   const [streamingContent, setStreamingContent] = useState('');
   const [statistics, setStatistics] = useState({ totalSessions: 0, totalMessages: 0, totalTokens: 0 });
+
+  // Workspace tab state - persist active session across workspace switches
+  const getWorkspaceState = useCallback(() => ({
+    currentSessionUuid: currentSessionUuid || null,
+  }), [currentSessionUuid]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.currentSessionUuid === 'string') setCurrentSessionUuid(state.currentSessionUuid);
+  }, []);
+
+  useWorkspaceTabState('chat', getWorkspaceState, setWorkspaceState);
   const [mcpToolsCount, setMcpToolsCount] = useState(0);
   const [linkedContexts, setLinkedContexts] = useState<RecordedContext[]>([]);
   const [activeToolCalls, setActiveToolCalls] = useState<Array<{ name: string; args: any; status: 'calling' | 'success' | 'error' }>>([]);

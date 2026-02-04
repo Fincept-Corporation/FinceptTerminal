@@ -10,6 +10,7 @@ import { ProviderProvider } from './contexts/ProviderContext';
 import { workflowService } from './services/core/workflowService';
 import { initializeNodeSystem } from './services/nodeSystem';
 import { initializeStockBrokers } from './brokers/stocks';
+import { notificationService } from './services/notifications';
 
 // Import screens
 import LoginScreen from './components/auth/LoginScreen';
@@ -75,6 +76,11 @@ const App: React.FC = () => {
       console.error('Failed to initialize node system:', err);
     });
 
+    // Initialize notification service
+    notificationService.initialize().catch((err) => {
+      console.error('Failed to initialize notification service:', err);
+    });
+
     // Initialize stock broker adapters
     try {
       initializeStockBrokers();
@@ -85,8 +91,29 @@ const App: React.FC = () => {
     checkSetup();
   }, []);
 
-  // Payment window manager no longer needed - using external browser
-  // Removed in-app payment window code
+  // Global monitor_alert listener — fires notifications even when MonitoringPanel is not mounted
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    (async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      const fn = await listen<{ symbol: string; provider: string; field: string; triggered_value: number; triggered_at: number }>('monitor_alert', (event) => {
+        const alert = event.payload;
+        const triggerTime = new Date(alert.triggered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        console.log('[App] monitor_alert received:', alert.symbol, alert.triggered_value, 'at', triggerTime);
+        notificationService.notify({
+          type: 'warning',
+          title: `Price Alert: ${alert.symbol}`,
+          body: `${alert.field.toUpperCase()} = ${alert.triggered_value.toFixed(2)} on ${alert.provider} at ${triggerTime}`,
+          timestamp: new Date(alert.triggered_at).toISOString(),
+          metadata: { symbol: alert.symbol, provider: alert.provider, field: alert.field, time: triggerTime },
+        }).catch(err => console.warn('[App] Notification send error:', err));
+      });
+      unlisten = fn;
+    })();
+
+    return () => { if (unlisten) unlisten(); };
+  }, []);
 
   // Cleanup running workflows on app unmount
   useEffect(() => {

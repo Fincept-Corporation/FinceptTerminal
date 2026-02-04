@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Master Contract Commands
 // Tauri commands for broker symbol data management and search
 

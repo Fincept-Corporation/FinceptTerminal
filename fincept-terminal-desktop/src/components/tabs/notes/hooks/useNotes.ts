@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { notesService, Note, NoteTemplate } from '@/services/core/notesService';
 import { noteReminderService } from '@/services/core/noteReminderService.tsx';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/terminal-toast';
 import { showConfirm, showError } from '@/utils/notifications';
 import type { NoteStatistics, UpcomingReminder, FilterState } from '../types';
 

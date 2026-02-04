@@ -5,12 +5,14 @@
  * before execution. Shows pending approvals with risk levels.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import {
   Shield, AlertTriangle, Check, X, Clock, RefreshCw,
   Settings, ChevronDown, ChevronUp, Loader2,
   AlertCircle, CheckCircle, Info,
 } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useCache, cacheKey } from '@/hooks/useCache';
 import {
   alphaArenaEnhancedService,
   type ApprovalRequest,
@@ -44,88 +46,123 @@ interface HITLApprovalPanelProps {
   onApprovalChange?: () => void;
 }
 
+// State machine for approve/reject actions
+type ActionState =
+  | { status: 'idle' }
+  | { status: 'processing'; requestId: string }
+  | { status: 'error'; error: string };
+
+type ActionDispatch =
+  | { type: 'PROCESS_START'; requestId: string }
+  | { type: 'PROCESS_SUCCESS' }
+  | { type: 'PROCESS_ERROR'; error: string }
+  | { type: 'CLEAR_ERROR' };
+
+function actionReducer(_state: ActionState, action: ActionDispatch): ActionState {
+  switch (action.type) {
+    case 'PROCESS_START': return { status: 'processing', requestId: action.requestId };
+    case 'PROCESS_SUCCESS': return { status: 'idle' };
+    case 'PROCESS_ERROR': return { status: 'error', error: action.error };
+    case 'CLEAR_ERROR': return { status: 'idle' };
+    default: return _state;
+  }
+}
+
+interface HITLData {
+  status: HITLStatus | null;
+  pending_approvals: ApprovalRequest[];
+}
+
 const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
   competitionId,
   onApprovalChange,
 }) => {
-  const [hitlStatus, setHitlStatus] = useState<HITLStatus | null>(null);
-  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [expandedApproval, setExpandedApproval] = useState<string | null>(null);
+  const [actionState, dispatchAction] = useReducer(actionReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
 
-  const fetchStatus = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Cache: HITL status + pending approvals with auto-refresh every 5s
+  const hitlCache = useCache<HITLData>({
+    key: cacheKey('alpha-arena', 'hitl', competitionId || 'none'),
+    category: 'alpha-arena',
+    fetcher: async () => {
       const [statusResult, pendingResult] = await Promise.all([
         alphaArenaEnhancedService.getHITLStatus(),
         alphaArenaEnhancedService.getPendingApprovals(),
       ]);
 
-      if (statusResult.success && statusResult.status) {
-        setHitlStatus(statusResult.status);
-      }
-      if (pendingResult.success && pendingResult.pending_approvals) {
-        setPendingApprovals(pendingResult.pending_approvals);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch HITL status');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      return {
+        status: statusResult.success && statusResult.status ? statusResult.status : null,
+        pending_approvals: pendingResult.success && pendingResult.pending_approvals
+          ? pendingResult.pending_approvals
+          : [],
+      };
+    },
+    ttl: 30,
+    enabled: !!competitionId,
+    staleWhileRevalidate: true,
+    refetchInterval: 5000,
+  });
 
-  useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
-  }, [fetchStatus]);
+  const hitlStatus = hitlCache.data?.status || null;
+  const pendingApprovals = hitlCache.data?.pending_approvals || [];
+  const isLoading = hitlCache.isLoading;
+  const fetchError = hitlCache.error;
 
   const handleApprove = async (requestId: string) => {
-    setIsProcessing(requestId);
+    if (actionState.status === 'processing') return;
+    dispatchAction({ type: 'PROCESS_START', requestId });
     try {
       const result = await alphaArenaEnhancedService.approveDecision(requestId);
+      if (!mountedRef.current) return;
       if (result.success) {
-        setPendingApprovals(prev => prev.filter(a => a.id !== requestId));
+        dispatchAction({ type: 'PROCESS_SUCCESS' });
+        hitlCache.invalidate();
         onApprovalChange?.();
       } else {
-        setError(result.error || 'Failed to approve');
+        dispatchAction({ type: 'PROCESS_ERROR', error: result.error || 'Failed to approve' });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve');
-    } finally {
-      setIsProcessing(null);
+      if (!mountedRef.current) return;
+      dispatchAction({ type: 'PROCESS_ERROR', error: err instanceof Error ? err.message : 'Failed to approve' });
     }
   };
 
   const handleReject = async (requestId: string) => {
-    setIsProcessing(requestId);
+    if (actionState.status === 'processing') return;
+    dispatchAction({ type: 'PROCESS_START', requestId });
     try {
       const result = await alphaArenaEnhancedService.rejectDecision(requestId);
+      if (!mountedRef.current) return;
       if (result.success) {
-        setPendingApprovals(prev => prev.filter(a => a.id !== requestId));
+        dispatchAction({ type: 'PROCESS_SUCCESS' });
+        hitlCache.invalidate();
         onApprovalChange?.();
       } else {
-        setError(result.error || 'Failed to reject');
+        dispatchAction({ type: 'PROCESS_ERROR', error: result.error || 'Failed to reject' });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reject');
-    } finally {
-      setIsProcessing(null);
+      if (!mountedRef.current) return;
+      dispatchAction({ type: 'PROCESS_ERROR', error: err instanceof Error ? err.message : 'Failed to reject' });
     }
   };
 
   const handleToggleRule = async (ruleName: string, currentEnabled: boolean) => {
     try {
       const result = await alphaArenaEnhancedService.updateHITLRule(ruleName, !currentEnabled);
+      if (!mountedRef.current) return;
       if (result.success) {
-        fetchStatus();
+        hitlCache.refresh();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update rule');
+      if (!mountedRef.current) return;
+      dispatchAction({ type: 'PROCESS_ERROR', error: err instanceof Error ? err.message : 'Failed to update rule' });
     }
   };
 
@@ -138,6 +175,9 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
     const minutes = Math.floor(seconds / 60);
     return `${minutes}m ${seconds % 60}s`;
   };
+
+  const isProcessing = actionState.status === 'processing' ? actionState.requestId : null;
+  const error = actionState.status === 'error' ? actionState.error : fetchError?.message || null;
 
   return (
     <div
@@ -169,7 +209,7 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
             <Settings size={14} style={{ color: COLORS.GRAY }} />
           </button>
           <button
-            onClick={fetchStatus}
+            onClick={() => hitlCache.refresh()}
             disabled={isLoading}
             className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
             title="Refresh"
@@ -188,7 +228,7 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
         <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
           <AlertCircle size={14} style={{ color: COLORS.RED }} />
           <span className="text-xs" style={{ color: COLORS.RED }}>{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto">
+          <button onClick={() => dispatchAction({ type: 'CLEAR_ERROR' })} className="ml-auto">
             <X size={12} style={{ color: COLORS.RED }} />
           </button>
         </div>
@@ -371,4 +411,4 @@ const HITLApprovalPanel: React.FC<HITLApprovalPanelProps> = ({
   );
 };
 
-export default HITLApprovalPanel;
+export default withErrorBoundary(HITLApprovalPanel, { name: 'AlphaArena.HITLApprovalPanel' });

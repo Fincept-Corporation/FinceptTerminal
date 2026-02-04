@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Fyers WebSocket Adapter
 //
 // Implements Fyers HSM (High-Speed Market) binary protocol for real-time market data

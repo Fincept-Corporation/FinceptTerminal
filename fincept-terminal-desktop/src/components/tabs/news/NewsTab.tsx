@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { Info, Settings, RefreshCw, Clock, Zap, Newspaper, ExternalLink, Copy, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Search } from 'lucide-react';
 import { fetchAllNews, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData, setNewsCacheTTL } from '@/services/news/newsService';
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
@@ -203,6 +204,20 @@ const NewsTab: React.FC = () => {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showFeedSettings, setShowFeedSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Workspace tab state
+  const getWorkspaceState = useCallback(() => ({
+    activeFilter, feedCount, refreshInterval, searchQuery,
+  }), [activeFilter, feedCount, refreshInterval, searchQuery]);
+
+  const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
+    if (typeof state.activeFilter === 'string') setActiveFilter(state.activeFilter);
+    if (typeof state.feedCount === 'number') setFeedCount(state.feedCount);
+    if (typeof state.refreshInterval === 'number') setRefreshInterval(state.refreshInterval);
+    if (typeof state.searchQuery === 'string') setSearchQuery(state.searchQuery);
+  }, []);
+
+  useWorkspaceTabState('news', getWorkspaceState, setWorkspaceState);
   const [currentAnalyzingId, setCurrentAnalyzingId] = useState<string | null>(null);
   const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
   const [currentAnalyzedArticle, setCurrentAnalyzedArticle] = useState<NewsArticle | null>(null);

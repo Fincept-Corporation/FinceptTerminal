@@ -325,7 +325,7 @@ class MultiExchangeDataProvider:
     Extends Alpha Arena's market data capabilities.
     """
 
-    def __init__(self, default_exchange: str = "kraken"):
+    def __init__(self, default_exchange: str = "binance"):
         self.default_exchange = default_exchange
         self._client: Optional[Any] = None
         self._cache: Dict[str, MarketData] = {}
@@ -435,6 +435,9 @@ class MultiExchangeDataProvider:
     async def _fetch_binance(self, symbol: str) -> MarketData:
         """Fetch from Binance API."""
         pair = symbol.replace("/", "")
+        # Binance uses USDT pairs, not USD
+        if pair.endswith("USD") and not pair.endswith("USDT"):
+            pair = pair + "T"
         url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={pair}"
 
         if not self._client:
@@ -812,7 +815,7 @@ async def create_broker_adapter(
 _multi_provider: Optional[MultiExchangeDataProvider] = None
 
 
-async def get_multi_exchange_provider(default_exchange: str = "kraken") -> MultiExchangeDataProvider:
+async def get_multi_exchange_provider(default_exchange: str = "binance") -> MultiExchangeDataProvider:
     """Get or create the multi-exchange data provider."""
     global _multi_provider
 

@@ -1,6 +1,7 @@
 /**
  * DataSourceSection Component
  * Data source selection and configuration
+ * GREEN THEME
  */
 
 import React from 'react';
@@ -36,83 +37,151 @@ export function DataSourceSection({
   const isMultiSymbolMode = analysisMode === 'comparison' || analysisMode === 'optimize';
 
   return (
-    <div
-      className="rounded overflow-hidden m-2"
-      style={{ border: `1px solid ${FINCEPT.BORDER}` }}
-    >
+    <div style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
       <button
         onClick={toggleSection}
-        className="w-full px-3 py-2 flex items-center justify-between"
-        style={{ backgroundColor: FINCEPT.HEADER_BG }}
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          transition: 'background-color 0.15s'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+        }}
       >
-        <div className="flex items-center gap-2">
-          <Database size={14} color={FINCEPT.CYAN} />
-          <span className="text-xs font-bold uppercase" style={{ color: FINCEPT.WHITE }}>
-            Data Source
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Database size={14} color={FINCEPT.GREEN} />
+          <span style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            fontFamily: 'monospace',
+            color: FINCEPT.GREEN,
+            letterSpacing: '0.5px'
+          }}>
+            DATA SOURCE
           </span>
         </div>
         {expanded ? (
-          <ChevronUp size={14} color={FINCEPT.GRAY} />
+          <ChevronUp size={14} color={FINCEPT.WHITE} style={{ opacity: 0.5 }} />
         ) : (
-          <ChevronDown size={14} color={FINCEPT.GRAY} />
+          <ChevronDown size={14} color={FINCEPT.WHITE} style={{ opacity: 0.5 }} />
         )}
       </button>
 
       {expanded && (
-        <div className="p-3 space-y-3">
-          {/* Data source type buttons */}
-          <div className="flex gap-1">
+        <div style={{ padding: '12px' }}>
+          {/* Data source type buttons - Joined Design */}
+          <div style={{ display: 'flex', gap: '0', marginBottom: '12px' }}>
             <button
               onClick={() => setDataSourceType('manual')}
-              className="flex-1 px-2 py-1.5 rounded text-xs font-mono"
               style={{
-                backgroundColor: dataSourceType === 'manual' ? FINCEPT.ORANGE : 'transparent',
-                color: dataSourceType === 'manual' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`
+                flex: 1,
+                padding: '8px 12px',
+                backgroundColor: dataSourceType === 'manual' ? FINCEPT.GREEN : FINCEPT.DARK_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                color: dataSourceType === 'manual' ? '#000000' : FINCEPT.WHITE,
+                opacity: dataSourceType === 'manual' ? 1 : 0.7,
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                transition: 'all 0.15s'
               }}
             >
-              Manual
+              MANUAL
             </button>
             <button
               onClick={() => setDataSourceType('portfolio')}
-              className="flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: dataSourceType === 'portfolio' ? FINCEPT.ORANGE : 'transparent',
-                color: dataSourceType === 'portfolio' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`
+                flex: 1,
+                padding: '8px 12px',
+                backgroundColor: dataSourceType === 'portfolio' ? FINCEPT.GREEN : FINCEPT.DARK_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderLeft: '0',
+                marginLeft: '-1px',
+                color: dataSourceType === 'portfolio' ? '#000000' : FINCEPT.WHITE,
+                opacity: dataSourceType === 'portfolio' ? 1 : 0.7,
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.15s'
               }}
             >
               <Briefcase size={12} />
-              Portfolio
+              PORTFOLIO
             </button>
             <button
               onClick={() => setDataSourceType('symbol')}
-              className="flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1"
               style={{
-                backgroundColor: dataSourceType === 'symbol' ? FINCEPT.ORANGE : 'transparent',
-                color: dataSourceType === 'symbol' ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`
+                flex: 1,
+                padding: '8px 12px',
+                backgroundColor: dataSourceType === 'symbol' ? FINCEPT.GREEN : FINCEPT.DARK_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderLeft: '0',
+                marginLeft: '-1px',
+                color: dataSourceType === 'symbol' ? '#000000' : FINCEPT.WHITE,
+                opacity: dataSourceType === 'symbol' ? 1 : 0.7,
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.15s'
               }}
             >
               <Search size={12} />
-              Symbol
+              SYMBOL
             </button>
           </div>
 
           {/* Portfolio selector */}
           {dataSourceType === 'portfolio' && (
             <div>
-              <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
+              <label style={{
+                display: 'block',
+                fontSize: '9px',
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                marginBottom: '8px',
+                letterSpacing: '0.5px'
+              }}>
                 SELECT PORTFOLIO
               </label>
               <select
                 value={selectedPortfolioId}
                 onChange={(e) => setSelectedPortfolioId(e.target.value)}
-                className="w-full p-2 rounded text-xs font-mono"
                 style={{
+                  width: '100%',
+                  padding: '10px 12px',
                   backgroundColor: FINCEPT.DARK_BG,
                   color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                  cursor: 'pointer'
                 }}
               >
                 {portfolios.map(p => (
@@ -125,8 +194,16 @@ export function DataSourceSection({
           {/* Symbol input */}
           {dataSourceType === 'symbol' && (
             <div>
-              <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
-                {isMultiSymbolMode ? 'SYMBOLS (comma-separated)' : 'SYMBOL'}
+              <label style={{
+                display: 'block',
+                fontSize: '9px',
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                marginBottom: '8px',
+                letterSpacing: '0.5px'
+              }}>
+                {isMultiSymbolMode ? 'SYMBOLS (COMMA SEPARATED)' : 'SYMBOL'}
               </label>
               <input
                 type="text"
@@ -136,11 +213,16 @@ export function DataSourceSection({
                   : setSymbolInput(e.target.value.toUpperCase())
                 }
                 placeholder={isMultiSymbolMode ? 'AAPL,MSFT,GOOGL' : 'AAPL'}
-                className="w-full p-2 rounded text-xs font-mono"
                 style={{
+                  width: '100%',
+                  padding: '10px 12px',
                   backgroundColor: FINCEPT.DARK_BG,
                   color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  outline: 'none'
                 }}
               />
             </div>
@@ -149,18 +231,37 @@ export function DataSourceSection({
           {/* Historical days */}
           {dataSourceType !== 'manual' && (
             <div>
-              <label className="block text-xs font-mono mb-1" style={{ color: FINCEPT.GRAY }}>
+              <label style={{
+                display: 'block',
+                fontSize: '9px',
+                fontFamily: 'monospace',
+                color: FINCEPT.WHITE,
+                opacity: 0.5,
+                marginBottom: '8px',
+                letterSpacing: '0.5px'
+              }}>
                 HISTORICAL DAYS
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={historicalDays}
-                onChange={(e) => setHistoricalDays(parseInt(e.target.value) || 365)}
-                className="w-full p-2 rounded text-xs font-mono"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || /^\d+$/.test(v)) {
+                    setHistoricalDays(v === '' ? 0 : parseInt(v));
+                  }
+                }}
                 style={{
+                  width: '100%',
+                  padding: '10px 12px',
                   backgroundColor: FINCEPT.DARK_BG,
                   color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  outline: 'none'
                 }}
               />
             </div>
@@ -171,22 +272,44 @@ export function DataSourceSection({
             <button
               onClick={fetchData}
               disabled={priceDataLoading}
-              className="w-full py-2 rounded text-xs font-bold uppercase flex items-center justify-center gap-2"
               style={{
-                backgroundColor: FINCEPT.CYAN,
-                color: FINCEPT.DARK_BG,
-                opacity: priceDataLoading ? 0.5 : 1
+                width: '100%',
+                padding: '10px 12px',
+                backgroundColor: priceDataLoading ? FINCEPT.DARK_BG : FINCEPT.GREEN,
+                border: 'none',
+                color: priceDataLoading ? FINCEPT.WHITE : '#000000',
+                opacity: priceDataLoading ? 0.5 : 1,
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                letterSpacing: '0.5px',
+                cursor: priceDataLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={(e) => {
+                if (!priceDataLoading) {
+                  e.currentTarget.style.opacity = '0.9';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!priceDataLoading) {
+                  e.currentTarget.style.opacity = '1';
+                }
               }}
             >
               {priceDataLoading ? (
                 <>
-                  <RefreshCw size={12} className="animate-spin" />
-                  Loading...
+                  <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                  LOADING...
                 </>
               ) : (
                 <>
                   <Database size={12} />
-                  Fetch Data
+                  FETCH DATA
                 </>
               )}
             </button>
@@ -195,4 +318,17 @@ export function DataSourceSection({
       )}
     </div>
   );
+}
+
+// Add keyframe animation for spinner
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
+if (!document.querySelector('[data-ffn-spin-animation]')) {
+  style.setAttribute('data-ffn-spin-animation', 'true');
+  document.head.appendChild(style);
 }

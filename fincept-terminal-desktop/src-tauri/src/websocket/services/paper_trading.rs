@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Paper Trading WebSocket Service - uses unified paper_trading module
 
 use crate::paper_trading;

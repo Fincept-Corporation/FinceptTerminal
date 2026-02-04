@@ -247,8 +247,8 @@ export function StakingPanel() {
             <div style={{ borderTop: `1px solid ${FINCEPT.BORDER}`, paddingTop: '16px' }}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontSize: '10px', color: FINCEPT.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>AMOUNT TO STAKE</label>
-                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
-                  style={{ width: '100%', padding: '10px 12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', color: FINCEPT.WHITE, fontSize: '12px', fontFamily: 'monospace' }} step="0.00000001" min="0" />
+                <input type="text" inputMode="decimal" value={amount} onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAmount(v); }} placeholder="0.00"
+                  style={{ width: '100%', padding: '10px 12px', backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', color: FINCEPT.WHITE, fontSize: '12px', fontFamily: 'monospace' }} />
                 <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                   {[25, 50, 75, 100].map((pct) => (
                     <button key={pct} onClick={() => setPercentage(pct)}

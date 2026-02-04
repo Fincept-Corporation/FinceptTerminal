@@ -80,6 +80,36 @@ class BondsWrapper:
                     "timestamp": int(datetime.now().timestamp())
                 }
 
+            except ValueError as e:
+                error_msg = str(e)
+                # Handle AKShare API bugs gracefully
+                if "Length mismatch" in error_msg or "Expected axis" in error_msg:
+                    return {
+                        "success": False,
+                        "error": "AKShare API structure changed (column mismatch). Endpoint temporarily unavailable.",
+                        "data": [],
+                        "error_type": "api_mismatch",
+                        "timestamp": int(datetime.now().timestamp())
+                    }
+                last_error = error_msg
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(self.retry_delay)
+                continue
+            except KeyError as e:
+                return {
+                    "success": False,
+                    "error": f"Missing data field: {str(e)}. API format may have changed.",
+                    "data": [],
+                    "error_type": "missing_field",
+                    "timestamp": int(datetime.now().timestamp())
+                }
+            except (ConnectionError, TimeoutError) as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(self.retry_delay * 2)
+                continue
             except Exception as e:
                 last_error = str(e)
                 if attempt < max_retries - 1:
@@ -158,23 +188,7 @@ class BondsWrapper:
         """Get convertible bond value analysis"""
         return self._safe_call_with_retry(ak.bond_zh_cov_value_analysis)
 
-    def get_bond_cov_comparison(self) -> Dict[str, Any]:
-        """Get convertible bond comparison data"""
-        return self._safe_call_with_retry(ak.bond_cov_comparison)
-
     # ==================== GOVERNMENT BONDS ====================
-
-    def get_bond_china_yield(self) -> Dict[str, Any]:
-        """Get China treasury bond yields"""
-        return self._safe_call_with_retry(ak.bond_china_yield)
-
-    def get_bond_china_close_return(self) -> Dict[str, Any]:
-        """Get China bond close return"""
-        return self._safe_call_with_retry(ak.bond_china_close_return)
-
-    def get_bond_china_close_return_map(self) -> Dict[str, Any]:
-        """Get China bond close return map"""
-        return self._safe_call_with_retry(ak.bond_china_close_return_map)
 
     def get_bond_treasure_issue_cninfo(self) -> Dict[str, Any]:
         """Get treasury bond issuance data from CNInfo"""
@@ -183,10 +197,6 @@ class BondsWrapper:
     def get_bond_local_government_issue_cninfo(self) -> Dict[str, Any]:
         """Get local government bond issuance from CNInfo"""
         return self._safe_call_with_retry(ak.bond_local_government_issue_cninfo)
-
-    def get_bond_zh_us_rate(self) -> Dict[str, Any]:
-        """Get China-US treasury yield spread"""
-        return self._safe_call_with_retry(ak.bond_zh_us_rate)
 
     # ==================== CORPORATE BONDS ====================
 
@@ -208,10 +218,6 @@ class BondsWrapper:
         """Get bond daily data (Shanghai/Shenzhen)"""
         return self._safe_call_with_retry(ak.bond_zh_hs_daily)
 
-    def get_bond_zh_hs_spot(self) -> Dict[str, Any]:
-        """Get bond spot prices (Shanghai/Shenzhen)"""
-        return self._safe_call_with_retry(ak.bond_zh_hs_spot)
-
     def get_bond_spot_deal(self) -> Dict[str, Any]:
         """Get bond spot deal data"""
         return self._safe_call_with_retry(ak.bond_spot_deal)
@@ -219,16 +225,6 @@ class BondsWrapper:
     def get_bond_spot_quote(self) -> Dict[str, Any]:
         """Get bond spot quotes"""
         return self._safe_call_with_retry(ak.bond_spot_quote)
-
-    # ==================== BOND INDICES ====================
-
-    def get_bond_composite_index_cbond(self) -> Dict[str, Any]:
-        """Get composite bond index from CBond"""
-        return self._safe_call_with_retry(ak.bond_composite_index_cbond)
-
-    def get_bond_new_composite_index_cbond(self) -> Dict[str, Any]:
-        """Get new composite bond index from CBond"""
-        return self._safe_call_with_retry(ak.bond_new_composite_index_cbond)
 
     # ==================== BOND BUYBACK ====================
 
@@ -256,18 +252,6 @@ class BondsWrapper:
 
     # ==================== BOND INFO ====================
 
-    def get_bond_info_cm(self) -> Dict[str, Any]:
-        """Get bond information from China Money"""
-        return self._safe_call_with_retry(ak.bond_info_cm)
-
-    def get_bond_info_detail_cm(self) -> Dict[str, Any]:
-        """Get bond detailed information from China Money"""
-        return self._safe_call_with_retry(ak.bond_info_detail_cm)
-
-    def get_bond_info_cm_query(self) -> Dict[str, Any]:
-        """Query bond information from China Money"""
-        return self._safe_call_with_retry(ak.bond_info_cm_query)
-
     def get_bond_debt_nafmii(self) -> Dict[str, Any]:
         """Get bond debt data from NAFMII"""
         return self._safe_call_with_retry(ak.bond_debt_nafmii)
@@ -291,14 +275,12 @@ class BondsWrapper:
         endpoints = [
             "bond_cb_jsl", "bond_cb_index_jsl", "bond_cb_redeem_jsl",
             "bond_cb_profile_sina", "bond_cb_summary_sina", "bond_zh_cov_spot",
-            "bond_cov_comparison", "bond_china_yield", "bond_china_close_return",
             "bond_treasure_issue_cninfo", "bond_local_government_issue_cninfo",
-            "bond_zh_us_rate", "bond_corporate_issue_cninfo", "bond_cov_issue_cninfo",
-            "bond_zh_hs_daily", "bond_zh_hs_spot", "bond_spot_deal", "bond_spot_quote",
-            "bond_composite_index_cbond", "bond_new_composite_index_cbond",
+            "bond_corporate_issue_cninfo", "bond_cov_issue_cninfo",
+            "bond_zh_hs_daily", "bond_spot_deal", "bond_spot_quote",
             "bond_buy_back_hist_em", "bond_sh_buy_back_em", "bond_sz_buy_back_em",
             "bond_cash_summary_sse", "bond_deal_summary_sse",
-            "bond_info_cm", "bond_info_detail_cm", "bond_debt_nafmii"
+            "bond_debt_nafmii"
         ]
 
         return {
@@ -307,11 +289,10 @@ class BondsWrapper:
                 "available_endpoints": endpoints,
                 "total_count": len(endpoints),
                 "categories": {
-                    "Chinese Bond Market": ["bond_cb_jsl", "bond_cb_index_jsl", "bond_zh_cov_spot", "bond_zh_hs_daily", "bond_zh_hs_spot"],
-                    "Yield Curves": ["bond_china_yield", "bond_china_close_return", "bond_zh_us_rate"],
+                    "Chinese Bond Market": ["bond_cb_jsl", "bond_cb_index_jsl", "bond_zh_cov_spot", "bond_zh_hs_daily"],
                     "Government Bonds": ["bond_treasure_issue_cninfo", "bond_local_government_issue_cninfo"],
                     "Corporate Bonds": ["bond_corporate_issue_cninfo", "bond_cov_issue_cninfo"],
-                    "Convertible Bonds": ["bond_cb_profile_sina", "bond_cb_summary_sina", "bond_cov_comparison"],
+                    "Convertible Bonds": ["bond_cb_profile_sina", "bond_cb_summary_sina"],
                 },
                 "timestamp": int(datetime.now().timestamp())
             },
@@ -331,19 +312,21 @@ def main():
 
     endpoint = sys.argv[1]
 
-    endpoint_map = {
-        "get_all_endpoints": wrapper.get_all_available_endpoints,
-        "bond_yield": wrapper.get_bond_china_yield,
-        "bond_cb_jsl": wrapper.get_bond_cb_jsl,
-        "bond_spot": wrapper.get_bond_zh_hs_spot,
-    }
+    # Dynamic endpoint resolution - check if method exists
+    if endpoint == "get_all_endpoints":
+        result = wrapper.get_all_available_endpoints()
+        print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
+        return
 
-    method = endpoint_map.get(endpoint)
-    if method:
+    # Try to find the method on the wrapper
+    method_name = f"get_{endpoint}" if not endpoint.startswith("get_") else endpoint
+
+    if hasattr(wrapper, method_name):
+        method = getattr(wrapper, method_name)
         result = method()
         print(json.dumps(result, ensure_ascii=True, cls=DateTimeEncoder))
     else:
-        print(json.dumps({"error": f"Unknown endpoint: {endpoint}"}))
+        print(json.dumps({"error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
 
 if __name__ == "__main__":
     main()

@@ -916,10 +916,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 RISK-FREE RATE (%)
               </label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={config.risk_free_rate * 100}
-                onChange={(e) => setConfig({ ...config, risk_free_rate: parseFloat(e.target.value) / 100 })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, risk_free_rate: (parseFloat(v) || 0) / 100 }); }}
                 style={{
                   ...COMMON_STYLES.inputField,
                   transition: EFFECTS.TRANSITION_STANDARD,
@@ -934,10 +934,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   MIN WEIGHT (%)
                 </label>
                 <input
-                  type="number"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={config.weight_bounds_min * 100}
-                  onChange={(e) => setConfig({ ...config, weight_bounds_min: parseFloat(e.target.value) / 100 })}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, weight_bounds_min: (parseFloat(v) || 0) / 100 }); }}
                   style={{
                     ...COMMON_STYLES.inputField,
                     transition: EFFECTS.TRANSITION_STANDARD,
@@ -949,10 +949,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   MAX WEIGHT (%)
                 </label>
                 <input
-                  type="number"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={config.weight_bounds_max * 100}
-                  onChange={(e) => setConfig({ ...config, weight_bounds_max: parseFloat(e.target.value) / 100 })}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, weight_bounds_max: (parseFloat(v) || 0) / 100 }); }}
                   style={{
                     ...COMMON_STYLES.inputField,
                     transition: EFFECTS.TRANSITION_STANDARD,
@@ -967,10 +967,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 L2 REGULARIZATION (Gamma)
               </label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={config.gamma}
-                onChange={(e) => setConfig({ ...config, gamma: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setConfig({ ...config, gamma: parseFloat(v) || 0 }); }}
                 style={{
                   ...COMMON_STYLES.inputField,
                   transition: EFFECTS.TRANSITION_STANDARD,
@@ -984,10 +984,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                 TOTAL PORTFOLIO VALUE ($)
               </label>
               <input
-                type="number"
-                step="1000"
+                type="text"
+                inputMode="numeric"
                 value={config.total_portfolio_value}
-                onChange={(e) => setConfig({ ...config, total_portfolio_value: parseFloat(e.target.value) })}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setConfig({ ...config, total_portfolio_value: parseInt(v) || 0 }); }}
                 style={{
                   ...COMMON_STYLES.inputField,
                   transition: EFFECTS.TRANSITION_STANDARD,
@@ -1245,11 +1245,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
                   NUMBER OF POINTS
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={config.total_portfolio_value}
-                  onChange={(e) => setConfig({ ...config, total_portfolio_value: parseInt(e.target.value) || 100 })}
-                  min="10"
-                  max="500"
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) setConfig({ ...config, total_portfolio_value: parseInt(v) || 100 }); }}
                   style={{
                     ...COMMON_STYLES.inputField,
                     transition: EFFECTS.TRANSITION_STANDARD,

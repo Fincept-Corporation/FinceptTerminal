@@ -5,12 +5,15 @@
  * risk factors, and AI-generated summaries.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   FileText, Search, RefreshCw, AlertTriangle, ExternalLink,
   Building2, DollarSign, TrendingUp, Loader2, ChevronDown,
   ChevronUp, Calendar, FileSearch, Shield, BarChart3,
 } from 'lucide-react';
+import { withErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useCache, cacheKey } from '@/hooks/useCache';
+import { validateSymbol } from '@/services/core/validators';
 import {
   alphaArenaEnhancedService,
   type ResearchReport,
@@ -48,43 +51,39 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
   initialTicker = '',
   onResearchLoaded,
 }) => {
-  const [ticker, setTicker] = useState(initialTicker);
   const [searchTicker, setSearchTicker] = useState(initialTicker);
-  const [report, setReport] = useState<ResearchReport | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [confirmedTicker, setConfirmedTicker] = useState(initialTicker || '');
   const [expandedSection, setExpandedSection] = useState<string | null>('filings');
   const [selectedFormTypes, setSelectedFormTypes] = useState<string[]>([]);
 
-  const fetchResearch = useCallback(async (tickerToFetch: string) => {
-    if (!tickerToFetch.trim()) {
-      setError('Please enter a ticker symbol');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setTicker(tickerToFetch.toUpperCase());
-
-    try {
-      const result = await alphaArenaEnhancedService.getResearch(tickerToFetch);
-
+  // Cache: research report keyed on confirmedTicker
+  const researchCache = useCache<ResearchReport>({
+    key: cacheKey('alpha-arena', 'research', confirmedTicker),
+    category: 'alpha-arena',
+    fetcher: async () => {
+      const validSym = validateSymbol(confirmedTicker);
+      if (!validSym.valid) throw new Error(validSym.error);
+      const result = await alphaArenaEnhancedService.getResearch(confirmedTicker);
       if (result.success && result.report) {
-        setReport(result.report);
-        onResearchLoaded?.(tickerToFetch);
-      } else {
-        setError(result.error || 'Failed to fetch research');
+        onResearchLoaded?.(confirmedTicker);
+        return result.report;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch research');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [onResearchLoaded]);
+      throw new Error(result.error || 'Failed to fetch research');
+    },
+    ttl: 600,
+    enabled: !!confirmedTicker,
+    staleWhileRevalidate: true,
+  });
+
+  const report = researchCache.data;
+  const isLoading = researchCache.isLoading;
+  const error = researchCache.error;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchResearch(searchTicker);
+    const trimmed = searchTicker.trim().toUpperCase();
+    if (!trimmed) return;
+    setConfirmedTicker(trimmed);
   };
 
   const toggleSection = (section: string) => {
@@ -126,7 +125,7 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
         </div>
         {report && (
           <button
-            onClick={() => fetchResearch(ticker)}
+            onClick={() => researchCache.refresh()}
             disabled={isLoading}
             className="p-1.5 rounded transition-colors hover:bg-[#1A1A1A]"
           >
@@ -178,7 +177,7 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
       {error && (
         <div className="px-4 py-2 flex items-center gap-2" style={{ backgroundColor: COLORS.RED + '10' }}>
           <AlertTriangle size={14} style={{ color: COLORS.RED }} />
-          <span className="text-xs" style={{ color: COLORS.RED }}>{error}</span>
+          <span className="text-xs" style={{ color: COLORS.RED }}>{error.message}</span>
         </div>
       )}
 
@@ -450,4 +449,4 @@ const ResearchPanel: React.FC<ResearchPanelProps> = ({
   );
 };
 
-export default ResearchPanel;
+export default withErrorBoundary(ResearchPanel, { name: 'AlphaArena.ResearchPanel' });

@@ -8,6 +8,10 @@ pandas>=2.0.0,<2.3.0
 # Backtesting and trading (NumPy 1.x dependent)
 vectorbt==0.28.2
 backtesting==0.6.5
+zipline-reloaded>=3.0
+exchange-calendars>=4.0
+bt>=1.1.2
+ffn>=1.1.2
 
 # Time series and forecasting (NumPy 1.x dependent)
 gluonts[torch]==0.16.2

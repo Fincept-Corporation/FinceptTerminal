@@ -3,6 +3,7 @@ import React from 'react';
 import { FINCEPT } from '../constants';
 import type { CenterViewType, TradeData } from '../types';
 import { TradingChart, DepthChart } from '../../trading/charts';
+import { AlgoTradingPanel } from '../../trading/algo-trading';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 interface CryptoChartAreaProps {
@@ -10,6 +11,9 @@ interface CryptoChartAreaProps {
   selectedView: CenterViewType;
   tradesData: TradeData[];
   isBottomPanelMinimized: boolean;
+  currentPrice: number;
+  activeBroker: string | null;
+  isPaper: boolean;
   onViewChange: (view: CenterViewType) => void;
 }
 
@@ -18,6 +22,9 @@ export function CryptoChartArea({
   selectedView,
   tradesData,
   isBottomPanelMinimized,
+  currentPrice,
+  activeBroker,
+  isPaper,
   onViewChange,
 }: CryptoChartAreaProps) {
   return (
@@ -38,7 +45,7 @@ export function CryptoChartArea({
         alignItems: 'center',
         gap: '8px'
       }}>
-        {(['CHART', 'DEPTH', 'TRADES'] as const).map((view) => (
+        {(['CHART', 'DEPTH', 'TRADES', 'ALGO'] as const).map((view) => (
           <button
             key={view}
             onClick={() => onViewChange(view.toLowerCase() as CenterViewType)}
@@ -116,6 +123,19 @@ export function CryptoChartArea({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {selectedView === 'algo' && (
+          <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+            <ErrorBoundary name="AlgoTradingPanel" variant="minimal">
+              <AlgoTradingPanel
+                assetType="crypto"
+                symbol={selectedSymbol}
+                currentPrice={currentPrice}
+                activeBroker={activeBroker}
+                isPaper={isPaper}
+              />
+            </ErrorBoundary>
           </div>
         )}
       </div>

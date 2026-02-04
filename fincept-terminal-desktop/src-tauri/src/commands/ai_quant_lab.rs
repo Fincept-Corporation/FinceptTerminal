@@ -234,6 +234,64 @@ pub async fn deepagent_execute_task(
     python::execute_sync(&app, "agents/deepagents/cli.py", args)
 }
 
+/// Create execution plan (returns todos without executing)
+#[tauri::command]
+pub async fn deepagent_create_plan(
+    app: tauri::AppHandle,
+    agent_type: String,
+    task: String,
+    config: Option<String>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "agent_type": agent_type,
+        "task": task,
+        "config": config
+    });
+
+    let args = vec!["create_plan".to_string(), params.to_string()];
+    python::execute_sync(&app, "agents/deepagents/cli.py", args)
+}
+
+/// Execute a single step from the plan
+#[tauri::command]
+pub async fn deepagent_execute_step(
+    app: tauri::AppHandle,
+    task: String,
+    step_prompt: String,
+    specialist: String,
+    config: Option<String>,
+    previous_results: Option<String>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "task": task,
+        "step_prompt": step_prompt,
+        "specialist": specialist,
+        "config": config,
+        "previous_results": previous_results
+    });
+
+    let args = vec!["execute_step".to_string(), params.to_string()];
+    python::execute_sync(&app, "agents/deepagents/cli.py", args)
+}
+
+/// Synthesize all step results into final report
+#[tauri::command]
+pub async fn deepagent_synthesize_results(
+    app: tauri::AppHandle,
+    task: String,
+    step_results: String,
+    config: Option<String>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "task": task,
+        "step_results": step_results,
+        "config": config
+    });
+
+    let args = vec!["synthesize_results".to_string(), params.to_string()];
+    python::execute_sync(&app, "agents/deepagents/cli.py", args)
+}
+
 /// Resume task from checkpoint
 #[tauri::command]
 pub async fn deepagent_resume_task(

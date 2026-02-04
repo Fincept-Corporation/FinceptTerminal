@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Shoonya (Finvasia) WebSocket Adapter
 //
 // Shoonya uses NorenOMS WebSocket for market data:

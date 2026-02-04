@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Motilal Oswal WebSocket Adapter
 //
 // Motilal Oswal uses WebSocket for market data streaming:

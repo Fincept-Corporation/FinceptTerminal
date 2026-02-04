@@ -4,7 +4,9 @@
 // Each broker has: {broker}_ws_connect, {broker}_ws_disconnect, {broker}_ws_subscribe, {broker}_ws_unsubscribe
 
 use crate::websocket::adapters::*;
+use crate::websocket::router::MessageRouter;
 use crate::websocket::types::{MarketMessage, ProviderConfig};
+use crate::WebSocketState;
 use once_cell::sync::Lazy;
 use serde_json::json;
 use std::collections::HashMap;
@@ -52,9 +54,16 @@ static SHOONYA_WS: Lazy<Arc<RwLock<Option<ShoonyaAdapter>>>> =
 // HELPER MACROS
 // ============================================================================
 
-/// Creates WebSocket event callback for a broker
-fn create_ws_callback(app: tauri::AppHandle, broker: &'static str) -> Box<dyn Fn(MarketMessage) + Send + Sync> {
+/// Creates WebSocket event callback for a broker.
+/// Emits broker-specific events to frontend AND routes through the shared MessageRouter
+/// so backend services (monitoring, paper trading, etc.) also receive the ticks.
+fn create_ws_callback(
+    app: tauri::AppHandle,
+    broker: &'static str,
+    router: Option<Arc<tokio::sync::RwLock<MessageRouter>>>,
+) -> Box<dyn Fn(MarketMessage) + Send + Sync> {
     Box::new(move |msg: MarketMessage| {
+        // 1. Emit broker-specific events to frontend
         match &msg {
             MarketMessage::Ticker(data) => {
                 let _ = app.emit(&format!("{}_ticker", broker), data);
@@ -71,6 +80,15 @@ fn create_ws_callback(app: tauri::AppHandle, broker: &'static str) -> Box<dyn Fn
             MarketMessage::Candle(data) => {
                 let _ = app.emit(&format!("{}_candle", broker), data);
             }
+        }
+
+        // 2. Route through MessageRouter for backend services (monitoring, paper trading, etc.)
+        if let Some(ref router) = router {
+            let router = router.clone();
+            let msg = msg.clone();
+            tokio::spawn(async move {
+                router.read().await.route(msg).await;
+            });
         }
     })
 }
@@ -94,7 +112,7 @@ pub async fn upstox_ws_connect(
     };
 
     let mut adapter = UpstoxAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "upstox"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "upstox", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -192,7 +210,7 @@ pub async fn dhan_ws_connect(
     };
 
     let mut adapter = DhanAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "dhan"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "dhan", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -265,6 +283,7 @@ pub async fn dhan_ws_unsubscribe(symbol: String) -> Result<ApiResponse<bool>, St
 #[tauri::command]
 pub async fn angelone_ws_connect(
     app: tauri::AppHandle,
+    state: tauri::State<'_, WebSocketState>,
     auth_token: String,
     api_key: String,
     client_code: String,
@@ -288,8 +307,9 @@ pub async fn angelone_ws_connect(
         ..Default::default()
     };
 
+    let router = state.router.clone();
     let mut adapter = AngelOneAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "angelone"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "angelone", Some(router)));
 
     eprintln!("[angelone_ws_connect] Attempting WebSocket connection...");
 
@@ -326,9 +346,9 @@ pub async fn angelone_ws_disconnect() -> Result<ApiResponse<bool>, String> {
 }
 
 #[tauri::command]
-pub async fn angelone_ws_subscribe(symbol: String, mode: String) -> Result<ApiResponse<bool>, String> {
+pub async fn angelone_ws_subscribe(symbol: String, mode: String, symbol_name: Option<String>) -> Result<ApiResponse<bool>, String> {
     let timestamp = chrono::Utc::now().timestamp_millis();
-    eprintln!("[angelone_ws_subscribe] symbol={}, mode={}", symbol, mode);
+    eprintln!("[angelone_ws_subscribe] symbol={}, mode={}, name={:?}", symbol, mode, symbol_name);
     let mut ws_guard = ANGELONE_WS.write().await;
 
     if let Some(ref mut adapter) = *ws_guard {
@@ -338,7 +358,9 @@ pub async fn angelone_ws_subscribe(symbol: String, mode: String) -> Result<ApiRe
             "snap" | "snap_quote" => "snap",
             _ => "ltp",
         };
-        match adapter.subscribe(&symbol, channel, None).await {
+        // Pass the human-readable name so the adapter can use it in tick messages
+        let params = symbol_name.map(|n| serde_json::json!({ "name": n }));
+        match adapter.subscribe(&symbol, channel, params).await {
             Ok(_) => {
                 eprintln!("[angelone_ws_subscribe] ✓ Subscribed to {} ({})", symbol, channel);
                 Ok(ApiResponse { success: true, data: Some(true), error: None, timestamp })
@@ -388,7 +410,7 @@ pub async fn kotak_ws_connect(
     };
 
     let mut adapter = KotakAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "kotak"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "kotak", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -467,7 +489,7 @@ pub async fn groww_ws_connect(
     };
 
     let mut adapter = GrowwAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "groww"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "groww", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -552,7 +574,7 @@ pub async fn aliceblue_ws_connect(
     };
 
     let mut adapter = AliceBlueAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "aliceblue"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "aliceblue", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -638,7 +660,7 @@ pub async fn fivepaisa_ws_connect(
     };
 
     let mut adapter = FivePaisaAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "fivepaisa"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "fivepaisa", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -725,7 +747,7 @@ pub async fn iifl_ws_connect(
     };
 
     let mut adapter = IiflAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "iifl"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "iifl", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -809,7 +831,7 @@ pub async fn motilal_ws_connect(
     };
 
     let mut adapter = MotilalAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "motilal"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "motilal", None));
 
     match adapter.connect().await {
         Ok(_) => {
@@ -895,7 +917,7 @@ pub async fn shoonya_ws_connect(
     };
 
     let mut adapter = ShoonyaAdapter::new(config);
-    adapter.set_message_callback(create_ws_callback(app.clone(), "shoonya"));
+    adapter.set_message_callback(create_ws_callback(app.clone(), "shoonya", None));
 
     match adapter.connect().await {
         Ok(_) => {

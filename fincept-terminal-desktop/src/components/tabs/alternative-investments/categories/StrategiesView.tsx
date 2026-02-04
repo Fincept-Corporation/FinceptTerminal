@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useRef, useEffect } from 'react';
 import { AlternativeInvestmentApi } from '@/services/alternativeInvestments/api/analyticsApi';
+import { withTimeout } from '@/services/core/apiUtils';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -25,11 +27,31 @@ const TYPES = [
   { id: 'risk' as const, name: 'Risk' },
 ];
 
+type AnalysisState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; message: string };
+type AnalysisAction =
+  | { type: 'START' }
+  | { type: 'SUCCESS'; payload: any }
+  | { type: 'ERROR'; payload: string }
+  | { type: 'RESET' };
+function analysisReducer(state: AnalysisState, action: AnalysisAction): AnalysisState {
+  switch (action.type) {
+    case 'START': return { status: 'loading' };
+    case 'SUCCESS': return { status: 'success', data: action.payload };
+    case 'ERROR': return { status: 'error', message: action.payload };
+    case 'RESET': return { status: 'idle' };
+    default: return state;
+  }
+}
+
 export const StrategiesView: React.FC = () => {
   const [selected, setSelected] = useState<StrategyType>('covered-calls');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(analysisReducer, { status: 'idle' });
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const [coveredCallData, setCoveredCallData] = useState({
     name: 'Covered Call Strategy',
@@ -70,45 +92,44 @@ export const StrategiesView: React.FC = () => {
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysis(null);
+    if (state.status === 'loading') return;
+    dispatch({ type: 'START' });
 
     try {
       let result;
-      const baseData = { asset_class: 'equity', currency: 'USD' };
+      const baseData = { asset_class: 'equity' as const, currency: 'USD' };
 
       switch (selected) {
         case 'covered-calls':
-          result = await AlternativeInvestmentApi.analyzeCoveredCall({ ...coveredCallData, ...baseData });
+          result = await withTimeout(AlternativeInvestmentApi.analyzeCoveredCall({ ...coveredCallData, ...baseData }), 30000);
           break;
         case 'sri-funds':
-          result = await AlternativeInvestmentApi.analyzeSRIFund({ ...sriData, ...baseData });
+          result = await withTimeout(AlternativeInvestmentApi.analyzeSRIFund({ ...sriData, ...baseData }), 30000);
           break;
         case 'asset-location':
-          result = await AlternativeInvestmentApi.analyzeAssetLocation(assetLocationData);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeAssetLocation(assetLocationData), 30000);
           break;
         case 'performance':
-          result = await AlternativeInvestmentApi.analyzePerformance(performanceData);
+          result = await withTimeout(AlternativeInvestmentApi.analyzePerformance(performanceData), 30000);
           break;
         case 'risk':
-          result = await AlternativeInvestmentApi.analyzeRisk(riskData);
+          result = await withTimeout(AlternativeInvestmentApi.analyzeRisk(riskData), 30000);
           break;
       }
-      setAnalysis(result);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'SUCCESS', payload: result });
     } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsAnalyzing(false);
+      if (!mountedRef.current) return;
+      dispatch({ type: 'ERROR', payload: err.message || 'Analysis failed' });
     }
   };
 
   const renderVerdict = () => {
-    if (!analysis?.success || !analysis.metrics) return null;
+    if (state.status !== 'success' || !state.data?.success || !state.data?.metrics) return null;
 
-    const category = analysis.metrics.analysis_category || 'UNKNOWN';
-    const recommendation = analysis.metrics.analysis_recommendation || 'No recommendation';
-    const keyProblems = analysis.metrics.key_problems || [];
+    const category = state.data.metrics.analysis_category || 'UNKNOWN';
+    const recommendation = state.data.metrics.analysis_recommendation || 'No recommendation';
+    const keyProblems = state.data.metrics.key_problems || [];
 
     let badgeColor = FINCEPT.GRAY;
     if (category === 'BUY' || category === 'STRONG BUY') badgeColor = FINCEPT.GREEN;
@@ -161,48 +182,50 @@ export const StrategiesView: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Stock Price ($)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={coveredCallData.stock_price}
-              onChange={(e) => setCoveredCallData({...coveredCallData, stock_price: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCoveredCallData({...coveredCallData, stock_price: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Shares Owned</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={coveredCallData.shares_owned}
-              onChange={(e) => setCoveredCallData({...coveredCallData, shares_owned: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCoveredCallData({...coveredCallData, shares_owned: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Strike Price ($)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={coveredCallData.strike_price}
-              onChange={(e) => setCoveredCallData({...coveredCallData, strike_price: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCoveredCallData({...coveredCallData, strike_price: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Premium Received ($)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={coveredCallData.premium_received}
-              onChange={(e) => setCoveredCallData({...coveredCallData, premium_received: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCoveredCallData({...coveredCallData, premium_received: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Days to Expiration</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={coveredCallData.days_to_expiration}
-              onChange={(e) => setCoveredCallData({...coveredCallData, days_to_expiration: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setCoveredCallData({...coveredCallData, days_to_expiration: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
@@ -225,40 +248,40 @@ export const StrategiesView: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Expense Ratio (%)</label>
             <input
-              type="number"
-              step="0.0001"
+              type="text"
+              inputMode="decimal"
               value={sriData.expense_ratio * 100}
-              onChange={(e) => setSriData({...sriData, expense_ratio: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSriData({...sriData, expense_ratio: (Number(v) || 0) / 100}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>ESG Rating (1-10)</label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={sriData.esg_rating}
-              onChange={(e) => setSriData({...sriData, esg_rating: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSriData({...sriData, esg_rating: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Annual Return (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={sriData.annual_return * 100}
-              onChange={(e) => setSriData({...sriData, annual_return: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSriData({...sriData, annual_return: (Number(v) || 0) / 100}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Tracking Error (%)</label>
             <input
-              type="number"
-              step="0.001"
+              type="text"
+              inputMode="decimal"
               value={sriData.tracking_error * 100}
-              onChange={(e) => setSriData({...sriData, tracking_error: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setSriData({...sriData, tracking_error: (Number(v) || 0) / 100}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
@@ -272,46 +295,50 @@ export const StrategiesView: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Tax Bracket (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={assetLocationData.tax_bracket * 100}
-              onChange={(e) => setAssetLocationData({...assetLocationData, tax_bracket: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAssetLocationData({...assetLocationData, tax_bracket: (Number(v) || 0) / 100}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Total Portfolio Value ($)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={assetLocationData.portfolio_value}
-              onChange={(e) => setAssetLocationData({...assetLocationData, portfolio_value: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAssetLocationData({...assetLocationData, portfolio_value: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Taxable Account ($)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={assetLocationData.taxable_account_value}
-              onChange={(e) => setAssetLocationData({...assetLocationData, taxable_account_value: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAssetLocationData({...assetLocationData, taxable_account_value: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Tax-Deferred Account ($)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={assetLocationData.tax_deferred_value}
-              onChange={(e) => setAssetLocationData({...assetLocationData, tax_deferred_value: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAssetLocationData({...assetLocationData, tax_deferred_value: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Tax-Free Account ($)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={assetLocationData.tax_free_value}
-              onChange={(e) => setAssetLocationData({...assetLocationData, tax_free_value: Number(e.target.value)})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setAssetLocationData({...assetLocationData, tax_free_value: Number(v)}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
@@ -345,10 +372,10 @@ export const StrategiesView: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Risk-Free Rate (%)</label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={performanceData.risk_free_rate * 100}
-              onChange={(e) => setPerformanceData({...performanceData, risk_free_rate: Number(e.target.value) / 100})}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setPerformanceData({...performanceData, risk_free_rate: (Number(v) || 0) / 100}); }}
               style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
             />
           </div>
@@ -372,19 +399,20 @@ export const StrategiesView: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Confidence Level (%)</label>
           <input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={riskData.confidence_level * 100}
-            onChange={(e) => setRiskData({...riskData, confidence_level: Number(e.target.value) / 100})}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setRiskData({...riskData, confidence_level: (Number(v) || 0) / 100}); }}
             style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
           />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Time Horizon (Days)</label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={riskData.time_horizon}
-            onChange={(e) => setRiskData({...riskData, time_horizon: Number(e.target.value)})}
+            onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setRiskData({...riskData, time_horizon: Number(v)}); }}
             style={{ backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '4px', padding: '8px', fontSize: '11px', color: FINCEPT.WHITE }}
           />
         </div>
@@ -444,21 +472,21 @@ export const StrategiesView: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isAnalyzing}
+            disabled={state.status === 'loading'}
             style={{
               marginTop: 'auto',
               padding: '10px',
-              backgroundColor: isAnalyzing ? FINCEPT.MUTED : FINCEPT.ORANGE,
+              backgroundColor: state.status === 'loading' ? FINCEPT.MUTED : FINCEPT.ORANGE,
               color: FINCEPT.DARK_BG,
               border: 'none',
               borderRadius: '4px',
               fontSize: '11px',
               fontWeight: 700,
-              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+              cursor: state.status === 'loading' ? 'not-allowed' : 'pointer',
               letterSpacing: '0.5px',
             }}
           >
-            {isAnalyzing ? 'ANALYZING...' : 'ANALYZE STRATEGY'}
+            {state.status === 'loading' ? 'ANALYZING...' : 'ANALYZE STRATEGY'}
           </button>
         </form>
       </div>
@@ -469,18 +497,18 @@ export const StrategiesView: React.FC = () => {
           <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.MUTED, letterSpacing: '0.5px' }}>ANALYSIS RESULTS</div>
         </div>
         <div style={{ flex: 1, overflow: 'auto' }}>
-          {isAnalyzing && (
+          {state.status === 'loading' && (
             <div style={{ padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
               <div style={{ width: '24px', height: '24px', border: `2px solid ${FINCEPT.BORDER}`, borderTopColor: FINCEPT.ORANGE, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
               <div style={{ fontSize: '10px', color: FINCEPT.GRAY }}>Running strategy analytics...</div>
             </div>
           )}
-          {error && (
+          {state.status === 'error' && (
             <div style={{ margin: '16px', padding: '12px', backgroundColor: `${FINCEPT.RED}20`, border: `1px solid ${FINCEPT.RED}`, borderRadius: '4px' }}>
-              <div style={{ fontSize: '10px', color: FINCEPT.RED }}>{error}</div>
+              <div style={{ fontSize: '10px', color: FINCEPT.RED }}>{state.status === 'error' && state.message}</div>
             </div>
           )}
-          {!isAnalyzing && !error && !analysis && (
+          {state.status === 'idle' && (
             <div style={{ padding: '24px', textAlign: 'center' }}>
               <div style={{ fontSize: '10px', color: FINCEPT.MUTED }}>Select strategy type and enter details to see results</div>
             </div>
@@ -498,4 +526,10 @@ export const StrategiesView: React.FC = () => {
   );
 };
 
-export default StrategiesView;
+const StrategiesViewWithBoundary: React.FC = () => (
+  <ErrorBoundary name="StrategiesView">
+    <StrategiesView />
+  </ErrorBoundary>
+);
+
+export default StrategiesViewWithBoundary;

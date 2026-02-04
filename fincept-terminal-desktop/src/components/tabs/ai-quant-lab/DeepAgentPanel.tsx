@@ -20,7 +20,9 @@ import {
   Cpu,
   Network
 } from 'lucide-react';
-import { deepAgentService, ExecuteTaskRequest, Todo } from '@/services/aiQuantLab/deepAgentService';
+import { deepAgentService, ExecuteTaskRequest, Todo, PlanTodo, AgentConfig } from '@/services/aiQuantLab/deepAgentService';
+import { useAuth } from '@/contexts/AuthContext';
+import { getActiveLLMConfig } from '@/services/core/sqliteService';
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -116,7 +118,93 @@ const EXAMPLE_TASKS = {
   ]
 };
 
-export function DeepAgentPanel() {
+/** Parse simple markdown: **bold**, *italic*, ## headings, --- hr, - bullets */
+export function formatResultText(text: string): React.ReactNode[] {
+  const lines = text.split('\n');
+  const nodes: React.ReactNode[] = [];
+
+  lines.forEach((line, i) => {
+    const trimmed = line.trim();
+
+    // Horizontal rule
+    if (/^-{3,}$/.test(trimmed) || /^\*{3,}$/.test(trimmed)) {
+      nodes.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid #2A2A2A', margin: '12px 0' }} />);
+      return;
+    }
+
+    // Headings
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const sizes = { 1: '16px', 2: '14px', 3: '13px' } as Record<number, string>;
+      nodes.push(
+        <div key={i} style={{ fontSize: sizes[level] || '13px', fontWeight: 700, color: '#FF8800', margin: '14px 0 6px 0' }}>
+          {renderInlineFormatting(headingMatch[2])}
+        </div>
+      );
+      return;
+    }
+
+    // Bullet points
+    if (/^[-*]\s+/.test(trimmed)) {
+      nodes.push(
+        <div key={i} style={{ paddingLeft: '16px', position: 'relative', marginBottom: '2px' }}>
+          <span style={{ position: 'absolute', left: '4px', color: '#FF8800' }}>•</span>
+          {renderInlineFormatting(trimmed.replace(/^[-*]\s+/, ''))}
+        </div>
+      );
+      return;
+    }
+
+    // Regular line with inline formatting
+    nodes.push(
+      <div key={i} style={{ minHeight: trimmed === '' ? '8px' : undefined }}>
+        {renderInlineFormatting(line)}
+      </div>
+    );
+  });
+
+  return nodes;
+}
+
+/** Handle **bold** and *italic* inline */
+function renderInlineFormatting(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    // Bold: **text**
+    const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+    if (boldMatch && boldMatch.index !== undefined) {
+      if (boldMatch.index > 0) {
+        parts.push(remaining.slice(0, boldMatch.index));
+      }
+      parts.push(<span key={key++} style={{ fontWeight: 700, color: '#FFFFFF' }}>{boldMatch[1]}</span>);
+      remaining = remaining.slice(boldMatch.index + boldMatch[0].length);
+      continue;
+    }
+    // No more matches
+    parts.push(remaining);
+    break;
+  }
+
+  return parts.length === 1 ? parts[0] : <>{parts}</>;
+}
+
+export interface DeepAgentOutput {
+  result: string;
+  error: string;
+  executionLog: string[];
+  isExecuting: boolean;
+}
+
+interface DeepAgentPanelProps {
+  onOutputChange?: (output: DeepAgentOutput) => void;
+}
+
+export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
+  const { session } = useAuth();
   const [selectedAgent, setSelectedAgent] = useState<string>('research');
   const [task, setTask] = useState<string>('');
   const [isExecuting, setIsExecuting] = useState(false);
@@ -129,6 +217,11 @@ export function DeepAgentPanel() {
   const [executionLog, setExecutionLog] = useState<string[]>([]);
 
   const resultRef = useRef<HTMLDivElement>(null);
+
+  // Notify parent of output changes
+  useEffect(() => {
+    onOutputChange?.({ result, error, executionLog, isExecuting });
+  }, [result, error, executionLog, isExecuting, onOutputChange]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -147,37 +240,122 @@ export function DeepAgentPanel() {
     const newThreadId = `thread-${Date.now()}`;
     setThreadId(newThreadId);
 
+    // Fetch active LLM config from SQLite settings
+    let llmProvider = 'fincept';
+    let llmApiKey = session?.api_key || undefined;
+    let llmBaseUrl: string | undefined;
+    let llmModel: string | undefined;
+    try {
+      const activeLLM = await getActiveLLMConfig();
+      if (activeLLM) {
+        llmProvider = activeLLM.provider;
+        llmApiKey = activeLLM.api_key || llmApiKey;
+        llmBaseUrl = activeLLM.base_url;
+        llmModel = activeLLM.model;
+      }
+    } catch (e) {
+      console.warn('[DeepAgent] Could not fetch LLM config, defaulting to fincept:', e);
+    }
+
+    const agentConfig: AgentConfig = {
+      api_key: session?.api_key || undefined,
+      llm_provider: llmProvider,
+      llm_api_key: llmApiKey,
+      llm_base_url: llmBaseUrl,
+      llm_model: llmModel,
+    };
+
     addLog(`Starting ${selectedAgentInfo?.name} execution...`);
     addLog(`Task: ${task.substring(0, 60)}${task.length > 60 ? '...' : ''}`);
 
     try {
-      addLog('Creating agent configuration...');
-      const request: ExecuteTaskRequest = {
+      // Phase 1: Create plan
+      addLog('Creating execution plan...');
+      const planResponse = await deepAgentService.createPlan({
         agent_type: selectedAgent,
         task: task,
-        thread_id: newThreadId,
-        config: {
-          enable_checkpointing: true,
-          enable_summarization: true,
-          recursion_limit: 100
-        }
-      };
+        config: agentConfig
+      });
 
-      addLog('Invoking DeepAgent backend...');
-      const response = await deepAgentService.executeTask(request);
-
-      if (response.success) {
-        addLog('✓ Task completed successfully');
-        setResult(response.result || 'Task completed successfully');
-        setTodos(response.todos || []);
-        setThreadId(response.thread_id || newThreadId);
-        if (response.todos && response.todos.length > 0) {
-          addLog(`Generated ${response.todos.length} task(s)`);
-        }
-      } else {
-        addLog(`✗ Error: ${response.error}`);
-        setError(response.error || 'Unknown error occurred');
+      if (!planResponse.success || !planResponse.todos) {
+        addLog(`✗ Planning failed: ${planResponse.error}`);
+        setError(planResponse.error || 'Failed to create plan');
+        setIsExecuting(false);
+        addLog('Execution finished');
+        return;
       }
+
+      const planTodos = planResponse.todos;
+      addLog(`✓ Plan created with ${planTodos.length} step(s)`);
+
+      // Initialize todos in UI
+      const uiTodos: Todo[] = planTodos.map(t => ({
+        id: t.id,
+        task: t.task,
+        status: 'pending' as const,
+        subtasks: []
+      }));
+      setTodos([...uiTodos]);
+
+      // Phase 2: Execute each step incrementally
+      const stepResults: { step: string; specialist: string; result: string }[] = [];
+
+      for (let i = 0; i < planTodos.length; i++) {
+        const todo = planTodos[i];
+
+        // Mark current step as in_progress
+        uiTodos[i].status = 'in_progress';
+        setTodos([...uiTodos]);
+        addLog(`▶ Step ${i + 1}/${planTodos.length}: ${todo.task}`);
+
+        const stepResponse = await deepAgentService.executeStep({
+          task: task,
+          step_prompt: todo.prompt,
+          specialist: todo.specialist,
+          config: agentConfig,
+          previous_results: stepResults.length > 0 ? stepResults : undefined
+        });
+
+        if (stepResponse.success && stepResponse.result) {
+          uiTodos[i].status = 'completed';
+          setTodos([...uiTodos]);
+          stepResults.push({
+            step: todo.task,
+            specialist: todo.specialist,
+            result: stepResponse.result
+          });
+          addLog(`✓ Completed: ${todo.task}`);
+
+          // Show intermediate result immediately
+          const intermediateOutput = stepResults.map(sr =>
+            `## ${sr.step}\n\n${sr.result}`
+          ).join('\n\n---\n\n');
+          setResult(intermediateOutput);
+        } else {
+          addLog(`✗ Step failed: ${stepResponse.error}`);
+          uiTodos[i].status = 'completed'; // mark done even if failed
+          setTodos([...uiTodos]);
+        }
+      }
+
+      // Phase 3: Synthesize final report
+      if (stepResults.length > 1) {
+        addLog('Synthesizing final report...');
+        const synthesisResponse = await deepAgentService.synthesizeResults({
+          task: task,
+          step_results: stepResults,
+          config: agentConfig
+        });
+
+        if (synthesisResponse.success && synthesisResponse.result) {
+          setResult(synthesisResponse.result);
+          addLog('✓ Final report generated');
+        } else {
+          addLog('⚠ Synthesis failed, showing individual step results');
+        }
+      }
+
+      addLog('✓ All steps completed');
     } catch (err) {
       addLog(`✗ Exception: ${String(err)}`);
       setError(String(err));
@@ -223,15 +401,16 @@ export function DeepAgentPanel() {
       <div key={todo.id} style={{ marginLeft: depth > 0 ? '16px' : '0' }}>
         <div
           style={{
-            padding: '6px 10px',
+            padding: '8px 12px',
             backgroundColor: FINCEPT.DARK_BG,
             border: `1px solid ${statusColors[todo.status]}`,
-            marginBottom: '4px',
+            borderLeft: `3px solid ${statusColors[todo.status]}`,
+            marginBottom: '5px',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             cursor: hasSubtasks ? 'pointer' : 'default',
-            fontSize: '11px',
+            fontSize: '13px',
             fontFamily: 'monospace'
           }}
           onClick={() => hasSubtasks && toggleTodo(todo.id)}
@@ -500,27 +679,33 @@ export function DeepAgentPanel() {
             {executionLog.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
                 <div style={{
-                  fontSize: '10px',
+                  fontSize: '11px',
                   fontWeight: 700,
-                  color: FINCEPT.MUTED,
+                  color: FINCEPT.CYAN,
                   marginBottom: '8px',
                   fontFamily: 'monospace',
-                  letterSpacing: '0.5px'
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
+                  <Cpu size={13} color={FINCEPT.CYAN} />
                   EXECUTION LOG
                 </div>
                 <div style={{
-                  padding: '8px',
+                  padding: '12px 14px',
                   backgroundColor: FINCEPT.PANEL_BG,
                   border: `1px solid ${FINCEPT.BORDER}`,
-                  maxHeight: '150px',
+                  borderLeft: `3px solid ${FINCEPT.CYAN}`,
+                  maxHeight: '180px',
                   overflowY: 'auto',
-                  fontSize: '10px',
+                  fontSize: '13px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.CYAN
+                  color: FINCEPT.CYAN,
+                  lineHeight: '1.7'
                 }}>
                   {executionLog.map((log, idx) => (
-                    <div key={idx} style={{ marginBottom: '2px' }}>
+                    <div key={idx} style={{ marginBottom: '3px' }}>
                       {log}
                     </div>
                   ))}
@@ -530,18 +715,20 @@ export function DeepAgentPanel() {
 
             {error && (
               <div style={{
-                padding: '10px',
+                padding: '12px 14px',
                 backgroundColor: FINCEPT.RED + '15',
                 border: `1px solid ${FINCEPT.RED}`,
+                borderLeft: `3px solid ${FINCEPT.RED}`,
                 color: FINCEPT.RED,
-                fontSize: '11px',
+                fontSize: '13px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
+                gap: '10px',
                 fontFamily: 'monospace',
-                marginBottom: '12px'
+                marginBottom: '16px',
+                lineHeight: '1.5'
               }}>
-                <AlertCircle size={14} />
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
                 {error}
               </div>
             )}
@@ -549,48 +736,23 @@ export function DeepAgentPanel() {
             {todos.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
                 <div style={{
-                  fontSize: '10px',
+                  fontSize: '11px',
                   fontWeight: 700,
-                  color: FINCEPT.MUTED,
+                  color: FINCEPT.YELLOW,
                   marginBottom: '8px',
                   fontFamily: 'monospace',
-                  letterSpacing: '0.5px'
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
+                  <GitBranch size={13} color={FINCEPT.YELLOW} />
                   TASK BREAKDOWN
                 </div>
                 {todos.map(todo => renderTodo(todo))}
               </div>
             )}
 
-            {result && (
-              <div>
-                <div style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: FINCEPT.MUTED,
-                  marginBottom: '8px',
-                  fontFamily: 'monospace',
-                  letterSpacing: '0.5px'
-                }}>
-                  RESULT
-                </div>
-                <div
-                  ref={resultRef}
-                  style={{
-                    padding: '12px',
-                    backgroundColor: FINCEPT.PANEL_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
-                    fontSize: '11px',
-                    lineHeight: '1.6',
-                    whiteSpace: 'pre-wrap',
-                    fontFamily: 'monospace'
-                  }}
-                >
-                  {result}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
