@@ -18,6 +18,9 @@ DataFrame Operations:
 Error Classes:
 - TransformerError: Raised when a transformer/indicator fails to apply
 
+Yahoo Finance:
+- load_yfinance_data(): Load data from Yahoo Finance (yfinance)
+
 Archive (Data Downloading):
 - Binance API: get_binance_klines, get_available_symbols, get_exchange_info,
                binance_kline_to_df, get_oldest_date_available
@@ -683,6 +686,57 @@ def update_kline(
     """
     from fast_trade.archive.update_kline import update_kline as ft_update
     ft_update(symbol, exchange, start_date, end_date)
+
+
+# ============================================================================
+# Yahoo Finance Data Loading
+# ============================================================================
+
+def load_yfinance_data(
+    symbol: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    interval: str = '1d'
+) -> pd.DataFrame:
+    """
+    Load data from Yahoo Finance using yfinance.
+
+    Args:
+        symbol: Ticker symbol (e.g. 'AAPL', 'SPY')
+        start_date: Start date string (YYYY-MM-DD) or None for default
+        end_date: End date string (YYYY-MM-DD) or None for today
+        interval: Data interval ('1m', '5m', '15m', '1h', '1d', '1wk', '1mo')
+
+    Returns:
+        DataFrame with date index and open, high, low, close, volume columns
+        (lowercase, fast-trade format)
+    """
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(
+            start=start_date or '2020-01-01',
+            end=end_date,
+            interval=interval,
+            auto_adjust=True
+        )
+
+        if df is not None and len(df) > 0:
+            # Standardize to fast-trade format (lowercase columns)
+            df.columns = [c.lower() for c in df.columns]
+            df.index.name = 'date'
+
+            # Ensure required columns exist
+            required = ['open', 'high', 'low', 'close', 'volume']
+            available = [col for col in required if col in df.columns]
+
+            return df[available]
+
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"yfinance error for {symbol}: {e}")
+        return pd.DataFrame()
 
 
 # ============================================================================

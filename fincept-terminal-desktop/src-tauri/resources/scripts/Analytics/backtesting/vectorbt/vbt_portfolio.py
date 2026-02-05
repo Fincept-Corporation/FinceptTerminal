@@ -1028,9 +1028,13 @@ def _simulate_signals(
                 if size_series is not None:
                     shares = float(size_series.iloc[i])
                     if shares <= 0:
-                        shares = cash / buy_price if buy_price > 0 else 0
+                        # Reserve commission & slippage when calculating max shares
+                        # buy_price already includes slippage (price * (1 + slippage))
+                        shares = (cash / (buy_price * (1 + commission))) if buy_price > 0 else 0
                 else:
-                    shares = cash / buy_price if buy_price > 0 else 0
+                    # Reserve commission & slippage when calculating max shares
+                    # buy_price already includes slippage (price * (1 + slippage))
+                    shares = (cash / (buy_price * (1 + commission))) if buy_price > 0 else 0
 
                 if shares > 0:
                     fee = shares * buy_price * commission

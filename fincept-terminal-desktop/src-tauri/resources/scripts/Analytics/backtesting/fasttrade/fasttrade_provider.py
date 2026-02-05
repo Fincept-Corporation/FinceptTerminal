@@ -41,6 +41,7 @@ Indicators (via FINTA):
 - And many more...
 
 Data Handling:
+- Yahoo Finance data loading via yfinance
 - OHLCV data support (pandas DataFrame)
 - Built-in Archive for Binance/Coinbase data
 - Synthetic data generation (fallback for testing)
@@ -95,6 +96,7 @@ from .ft_data import (
     generate_synthetic_ohlcv,
     load_basic_df_from_csv,
     standardize_df,
+    load_yfinance_data,
 )
 from .ft_summary import (
     build_summary,
@@ -281,7 +283,7 @@ class FastTradeProvider(BacktestingProviderBase):
         """
         Prepare OHLCV data for backtesting
 
-        For now, generates synthetic data. In production, would fetch from APIs.
+        Tries to load from yfinance first, falls back to synthetic data if unavailable.
         """
         self._log('Preparing market data...')
 
@@ -290,23 +292,33 @@ class FastTradeProvider(BacktestingProviderBase):
         if assets and len(assets) > 0:
             symbol = assets[0].get('symbol', 'SPY')
 
-        # Generate synthetic OHLCV data using ft_data module
-        # In production, this would fetch from APIs or database
-        data = generate_synthetic_ohlcv(
-            periods=len(pd.date_range(
-                start=start_date or '2023-01-01',
-                end=end_date or '2024-01-01',
-                freq='1H'
-            )),
-            start_date=start_date or '2023-01-01',
-            freq='1H',
-            initial_price=100.0,
-            volatility=0.02,
-            drift=0.0002,
-            seed=42,
+        # Try to load from yfinance
+        self._log(f'Attempting to load {symbol} from Yahoo Finance...')
+        data = load_yfinance_data(
+            symbol=symbol,
+            start_date=start_date or '2020-01-01',
+            end_date=end_date,
+            interval='1d'  # Daily data by default
         )
 
-        self._log(f'Generated {len(data)} periods of data for {symbol}')
+        # Fallback to synthetic data if yfinance fails
+        if data.empty:
+            self._log(f'Yahoo Finance failed, generating synthetic data for {symbol}')
+            data = generate_synthetic_ohlcv(
+                periods=len(pd.date_range(
+                    start=start_date or '2023-01-01',
+                    end=end_date or '2024-01-01',
+                    freq='1D'
+                )),
+                start_date=start_date or '2023-01-01',
+                freq='1D',
+                initial_price=100.0,
+                volatility=0.02,
+                drift=0.0002,
+                seed=42,
+            )
+        else:
+            self._log(f'Loaded {len(data)} periods of data from Yahoo Finance for {symbol}')
 
         return data
 

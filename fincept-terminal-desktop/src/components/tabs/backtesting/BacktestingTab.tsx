@@ -543,7 +543,14 @@ const BacktestingTab: React.FC = () => {
           console.log('[BACKTEST] Python logs:', parsed.data.logs);
         }
       }
-      setResult(parsed);
+
+      // Check if Python returned an error
+      if (!parsed.success || parsed.error) {
+        setError(parsed.error || 'Backtest failed with unknown error');
+        setResult(null);
+      } else {
+        setResult(parsed);
+      }
     } catch (err: any) {
       setError(err.toString());
     } finally {
@@ -1867,6 +1874,28 @@ const BacktestingTab: React.FC = () => {
             {resultView === 'metrics' && renderResultMetrics()}
             {resultView === 'trades' && renderResultTrades()}
             {resultView === 'raw' && renderResultRaw()}
+
+            {/* Show message if result exists but no data */}
+            {!result?.data?.performance && (
+              <div style={{
+                padding: '12px',
+                backgroundColor: `${FINCEPT.YELLOW}20`,
+                border: `1px solid ${FINCEPT.YELLOW}`,
+                borderRadius: '2px',
+              }}>
+                <div style={{
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  color: FINCEPT.YELLOW,
+                  marginBottom: '4px',
+                }}>
+                  EMPTY RESULT
+                </div>
+                <div style={{ fontSize: '9px', color: FINCEPT.WHITE, lineHeight: 1.4 }}>
+                  Backtest completed but returned no performance data. Check console logs for details.
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1894,43 +1923,386 @@ const BacktestingTab: React.FC = () => {
   const renderResultSummary = () => {
     if (!result?.data?.performance) return null;
     const perf = result.data.performance;
+    const stats = result.data.statistics;
+
+    const totalReturn = (perf.totalReturn ?? 0) * 100;
+    const isProfit = totalReturn > 0;
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Status Badge */}
         <div style={{
-          padding: '2px 6px',
+          padding: '4px 8px',
           backgroundColor: `${FINCEPT.GREEN}20`,
           color: FINCEPT.GREEN,
           fontSize: '8px',
           fontWeight: 700,
           borderRadius: '2px',
           display: 'inline-block',
+          alignSelf: 'flex-start',
         }}>
-          COMPLETED
+          ✓ COMPLETED
         </div>
-        {renderMetric('Total Return', `${((perf.totalReturn ?? 0) * 100).toFixed(2)}%`, (perf.totalReturn ?? 0) > 0 ? FINCEPT.GREEN : FINCEPT.RED)}
-        {renderMetric('Sharpe Ratio', (perf.sharpeRatio ?? 0).toFixed(3), FINCEPT.CYAN)}
-        {renderMetric('Max Drawdown', `${((perf.maxDrawdown ?? 0) * 100).toFixed(2)}%`, FINCEPT.RED)}
-        {renderMetric('Win Rate', `${((perf.winRate ?? 0) * 100).toFixed(1)}%`, FINCEPT.CYAN)}
-        {renderMetric('Total Trades', (perf.totalTrades ?? 0).toString(), FINCEPT.GRAY)}
+
+        {/* Main Performance Card */}
+        <div style={{
+          padding: '12px',
+          backgroundColor: `${isProfit ? FINCEPT.GREEN : FINCEPT.RED}10`,
+          border: `2px solid ${isProfit ? FINCEPT.GREEN : FINCEPT.RED}`,
+          borderRadius: '4px',
+        }}>
+          <div style={{
+            fontSize: '9px',
+            color: FINCEPT.GRAY,
+            marginBottom: '4px',
+            fontWeight: 600,
+          }}>
+            TOTAL RETURN
+          </div>
+          <div style={{
+            fontSize: '20px',
+            color: isProfit ? FINCEPT.GREEN : FINCEPT.RED,
+            fontWeight: 700,
+            fontFamily: '"IBM Plex Mono", monospace',
+          }}>
+            {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(2)}%
+          </div>
+          <div style={{
+            fontSize: '8px',
+            color: FINCEPT.MUTED,
+            marginTop: '4px',
+          }}>
+            {stats?.initialCapital ? `$${stats.initialCapital.toLocaleString()}` : ''} → {stats?.finalCapital ? `$${stats.finalCapital.toLocaleString()}` : ''}
+          </div>
+        </div>
+
+        {/* Key Metrics Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {/* Sharpe Ratio */}
+          <div style={{
+            padding: '8px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>SHARPE</div>
+            <div style={{
+              fontSize: '14px',
+              color: (perf.sharpeRatio ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.CYAN,
+              fontWeight: 700,
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}>
+              {(perf.sharpeRatio ?? 0).toFixed(2)}
+            </div>
+          </div>
+
+          {/* Max Drawdown */}
+          <div style={{
+            padding: '8px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>MAX DD</div>
+            <div style={{
+              fontSize: '14px',
+              color: FINCEPT.RED,
+              fontWeight: 700,
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}>
+              {((perf.maxDrawdown ?? 0) * 100).toFixed(2)}%
+            </div>
+          </div>
+
+          {/* Win Rate */}
+          <div style={{
+            padding: '8px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>WIN RATE</div>
+            <div style={{
+              fontSize: '14px',
+              color: (perf.winRate ?? 0) > 0.5 ? FINCEPT.GREEN : FINCEPT.YELLOW,
+              fontWeight: 700,
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}>
+              {((perf.winRate ?? 0) * 100).toFixed(1)}%
+            </div>
+          </div>
+
+          {/* Total Trades */}
+          <div style={{
+            padding: '8px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>TRADES</div>
+            <div style={{
+              fontSize: '14px',
+              color: FINCEPT.CYAN,
+              fontWeight: 700,
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}>
+              {perf.totalTrades ?? 0}
+            </div>
+          </div>
+        </div>
+
+        {/* Trade Breakdown */}
+        {(perf.totalTrades ?? 0) > 0 && (
+          <div style={{
+            padding: '8px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+            fontSize: '8px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Winning Trades</span>
+              <span style={{ color: FINCEPT.GREEN, fontWeight: 600 }}>{perf.winningTrades ?? 0}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Losing Trades</span>
+              <span style={{ color: FINCEPT.RED, fontWeight: 600 }}>{perf.losingTrades ?? 0}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: FINCEPT.GRAY }}>Profit Factor</span>
+              <span style={{
+                color: (perf.profitFactor ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.RED,
+                fontWeight: 600,
+              }}>
+                {(perf.profitFactor ?? 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Warning for zero trades */}
+        {(perf.totalTrades ?? 0) === 0 && (
+          <div style={{
+            padding: '8px',
+            backgroundColor: `${FINCEPT.YELLOW}10`,
+            border: `1px solid ${FINCEPT.YELLOW}`,
+            borderRadius: '3px',
+            fontSize: '8px',
+            color: FINCEPT.YELLOW,
+          }}>
+            ⚠ No trades executed. Strategy generated no signals or all entries were skipped.
+          </div>
+        )}
       </div>
     );
+  };
+
+  const formatMetricValue = (key: string, value: any): string => {
+    if (value === null || value === undefined) return 'N/A';
+
+    // Percentage metrics (convert from decimal to %)
+    const percentageKeys = ['totalReturn', 'annualizedReturn', 'maxDrawdown', 'winRate', 'lossRate', 'volatility'];
+    if (percentageKeys.includes(key)) {
+      return `${(value * 100).toFixed(2)}%`;
+    }
+
+    // Ratio metrics (2 decimals)
+    const ratioKeys = ['sharpeRatio', 'sortinoRatio', 'calmarRatio', 'profitFactor', 'informationRatio', 'treynorRatio'];
+    if (ratioKeys.includes(key)) {
+      return value.toFixed(2);
+    }
+
+    // Count metrics (no decimals)
+    const countKeys = ['totalTrades', 'winningTrades', 'losingTrades', 'maxDrawdownDuration'];
+    if (countKeys.includes(key)) {
+      return Math.round(value).toString();
+    }
+
+    // Currency metrics (2 decimals with $)
+    const currencyKeys = ['averageWin', 'averageLoss', 'largestWin', 'largestLoss', 'averageTradeReturn', 'expectancy'];
+    if (currencyKeys.includes(key)) {
+      return `$${value.toFixed(2)}`;
+    }
+
+    // Beta/Alpha (2 decimals)
+    if (key === 'alpha' || key === 'beta') {
+      return value.toFixed(2);
+    }
+
+    // Default
+    return typeof value === 'number' ? value.toFixed(2) : String(value);
+  };
+
+  const getMetricColor = (key: string, value: any): string => {
+    if (value === null || value === undefined) return FINCEPT.MUTED;
+
+    // Green for positive, red for negative
+    const directionalKeys = ['totalReturn', 'annualizedReturn', 'sharpeRatio', 'sortinoRatio', 'calmarRatio', 'profitFactor', 'alpha'];
+    if (directionalKeys.includes(key)) {
+      return value > 0 ? FINCEPT.GREEN : value < 0 ? FINCEPT.RED : FINCEPT.GRAY;
+    }
+
+    // Red for drawdown (worse when bigger)
+    if (key === 'maxDrawdown') {
+      return value > 0 ? FINCEPT.RED : FINCEPT.GRAY;
+    }
+
+    // Green for high win rate
+    if (key === 'winRate') {
+      return value > 0.5 ? FINCEPT.GREEN : value > 0 ? FINCEPT.YELLOW : FINCEPT.RED;
+    }
+
+    return FINCEPT.CYAN;
+  };
+
+  const getMetricDescription = (key: string): string => {
+    const descriptions: Record<string, string> = {
+      totalReturn: 'Total percentage gain/loss',
+      annualizedReturn: 'Return normalized to yearly basis',
+      sharpeRatio: 'Risk-adjusted return (>1 is good)',
+      sortinoRatio: 'Downside risk-adjusted return',
+      maxDrawdown: 'Largest peak-to-trough decline',
+      winRate: 'Percentage of winning trades',
+      lossRate: 'Percentage of losing trades',
+      profitFactor: 'Gross profit / gross loss',
+      volatility: 'Standard deviation of returns',
+      calmarRatio: 'Return / max drawdown',
+      totalTrades: 'Number of completed trades',
+      winningTrades: 'Number of profitable trades',
+      losingTrades: 'Number of losing trades',
+      averageWin: 'Average profit per winning trade',
+      averageLoss: 'Average loss per losing trade',
+      largestWin: 'Biggest single winning trade',
+      largestLoss: 'Biggest single losing trade',
+      averageTradeReturn: 'Mean return across all trades',
+      expectancy: 'Expected profit per trade',
+      alpha: 'Excess return vs benchmark (requires benchmark)',
+      beta: 'Volatility vs benchmark (requires benchmark)',
+      maxDrawdownDuration: 'Longest drawdown period in bars',
+      informationRatio: 'Risk-adjusted excess return (requires benchmark)',
+      treynorRatio: 'Return per unit of systematic risk (requires benchmark)',
+    };
+    return descriptions[key] || '';
   };
 
   const renderResultMetrics = () => {
     if (!result?.data?.performance) return null;
     const perf = result.data.performance;
 
+    // Group metrics by category
+    const categories = {
+      'Returns': ['totalReturn', 'annualizedReturn', 'expectancy'],
+      'Risk Metrics': ['sharpeRatio', 'sortinoRatio', 'calmarRatio', 'volatility', 'maxDrawdown'],
+      'Trade Statistics': ['totalTrades', 'winningTrades', 'losingTrades', 'winRate', 'lossRate', 'profitFactor'],
+      'Trade Performance': ['averageWin', 'averageLoss', 'largestWin', 'largestLoss', 'averageTradeReturn'],
+      'Advanced Metrics': ['alpha', 'beta', 'informationRatio', 'treynorRatio', 'maxDrawdownDuration'],
+    };
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '8px' }}>
-        {Object.entries(perf).map(([key, value]) => (
-          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${FINCEPT.BORDER}`, paddingBottom: '4px' }}>
-            <span style={{ color: FINCEPT.GRAY }}>{key.replace(/([A-Z])/g, ' $1').toUpperCase()}</span>
-            <span style={{ color: FINCEPT.CYAN, fontFamily: '"IBM Plex Mono", monospace' }}>
-              {typeof value === 'number' ? value.toFixed(4) : String(value ?? 'N/A')}
-            </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {Object.entries(categories).map(([category, metrics]) => {
+          // Filter out metrics that don't exist or are null
+          const availableMetrics = metrics.filter(key => key in perf);
+
+          // Skip "Advanced Metrics" if all values are null/undefined
+          if (category === 'Advanced Metrics') {
+            const hasData = availableMetrics.some(key =>
+              perf[key as keyof typeof perf] !== null &&
+              perf[key as keyof typeof perf] !== undefined
+            );
+            if (!hasData) return null;
+          }
+
+          return (
+            <div key={category}>
+              {/* Category Header */}
+              <div style={{
+                fontSize: '8px',
+                fontWeight: 700,
+                color: FINCEPT.ORANGE,
+                marginBottom: '8px',
+                paddingBottom: '4px',
+                borderBottom: `2px solid ${FINCEPT.ORANGE}40`,
+                letterSpacing: '0.5px',
+              }}>
+                {category.toUpperCase()}
+              </div>
+
+              {/* Metrics Grid */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {availableMetrics.map(key => {
+                  const value = perf[key as keyof typeof perf];
+
+                  // Skip if value is null/undefined and it's an advanced metric
+                  if ((value === null || value === undefined) && category === 'Advanced Metrics') {
+                    return null;
+                  }
+
+                  return (
+                    <div key={key} style={{
+                      padding: '6px 8px',
+                      backgroundColor: FINCEPT.PANEL_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                    }}>
+                      {/* Metric Name and Value */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{
+                          color: FINCEPT.WHITE,
+                          fontSize: '8px',
+                          fontWeight: 600,
+                        }}>
+                          {key.replace(/([A-Z])/g, ' $1').trim().split(' ').map(w =>
+                            w.charAt(0).toUpperCase() + w.slice(1)
+                          ).join(' ')}
+                        </span>
+                        <span style={{
+                          color: getMetricColor(key, value),
+                          fontFamily: '"IBM Plex Mono", monospace',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                        }}>
+                          {formatMetricValue(key, value)}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      <div style={{
+                        fontSize: '7px',
+                        color: FINCEPT.MUTED,
+                        lineHeight: 1.3,
+                      }}>
+                        {getMetricDescription(key)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Note about missing advanced metrics */}
+        {(!perf.alpha && !perf.beta && !perf.informationRatio && !perf.treynorRatio) && (
+          <div style={{
+            padding: '8px',
+            backgroundColor: `${FINCEPT.GRAY}10`,
+            border: `1px solid ${FINCEPT.GRAY}40`,
+            borderRadius: '3px',
+            fontSize: '7px',
+            color: FINCEPT.MUTED,
+            lineHeight: 1.4,
+          }}>
+            <div style={{ color: FINCEPT.GRAY, fontWeight: 600, marginBottom: '4px' }}>
+              💡 BENCHMARK METRICS
+            </div>
+            Advanced metrics (Alpha, Beta, Information Ratio, Treynor Ratio) require a benchmark symbol.
+            Enable benchmark in settings and run again to see these metrics.
           </div>
-        ))}
+        )}
       </div>
     );
   };
@@ -1939,27 +2311,127 @@ const BacktestingTab: React.FC = () => {
     if (!result?.data?.trades) return null;
     const trades = result.data.trades;
 
-    return (
-      <div style={{ fontSize: '7px' }}>
-        {trades.slice(0, 20).map((trade: any, i: number) => (
-          <div key={i} style={{
-            padding: '6px',
-            backgroundColor: FINCEPT.PANEL_BG,
-            border: `1px solid ${FINCEPT.BORDER}`,
-            borderRadius: '2px',
-            marginBottom: '4px',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: FINCEPT.GRAY }}>#{trade.id}</span>
-              <span style={{ color: trade.pnl > 0 ? FINCEPT.GREEN : FINCEPT.RED }}>
-                {trade.pnl?.toFixed(2) || 'N/A'}
-              </span>
-            </div>
-            <div style={{ color: FINCEPT.MUTED }}>
-              {trade.symbol} • {trade.side} • {trade.entryDate}
-            </div>
+    if (trades.length === 0) {
+      return (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '40px 20px',
+          color: FINCEPT.MUTED,
+          fontSize: '9px',
+          textAlign: 'center',
+        }}>
+          <TrendingUp size={24} style={{ opacity: 0.3, marginBottom: '8px' }} />
+          <div>No trades executed</div>
+          <div style={{ fontSize: '8px', marginTop: '4px' }}>
+            Strategy generated no entry/exit signals
           </div>
-        ))}
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{
+          fontSize: '8px',
+          color: FINCEPT.GRAY,
+          padding: '4px 0',
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        }}>
+          SHOWING {Math.min(20, trades.length)} OF {trades.length} TRADES
+        </div>
+        {trades.slice(0, 20).map((trade: any, i: number) => {
+          const isWin = (trade.pnl ?? 0) > 0;
+          const pnlPercent = trade.pnlPercent ?? ((trade.exitPrice && trade.entryPrice)
+            ? ((trade.exitPrice - trade.entryPrice) / trade.entryPrice * 100)
+            : 0);
+
+          return (
+            <div key={i} style={{
+              padding: '8px',
+              backgroundColor: FINCEPT.PANEL_BG,
+              border: `1px solid ${isWin ? FINCEPT.GREEN : FINCEPT.RED}40`,
+              borderLeft: `3px solid ${isWin ? FINCEPT.GREEN : FINCEPT.RED}`,
+              borderRadius: '2px',
+            }}>
+              {/* Header: Trade ID and P&L */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
+                <span style={{
+                  color: FINCEPT.GRAY,
+                  fontSize: '7px',
+                  fontWeight: 600,
+                }}>
+                  TRADE #{i + 1}
+                </span>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{
+                    color: isWin ? FINCEPT.GREEN : FINCEPT.RED,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    fontFamily: '"IBM Plex Mono", monospace',
+                  }}>
+                    {isWin ? '+' : ''}{trade.pnl ? `$${trade.pnl.toFixed(2)}` : 'N/A'}
+                  </div>
+                  <div style={{
+                    color: isWin ? FINCEPT.GREEN : FINCEPT.RED,
+                    fontSize: '7px',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                  }}>
+                    {isWin ? '+' : ''}{pnlPercent.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Trade Details */}
+              <div style={{ fontSize: '7px', color: FINCEPT.MUTED, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Symbol</span>
+                  <span style={{ color: FINCEPT.CYAN, fontWeight: 600 }}>{trade.symbol}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Side</span>
+                  <span style={{
+                    color: trade.side === 'long' ? FINCEPT.GREEN : FINCEPT.RED,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                  }}>
+                    {trade.side}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Entry</span>
+                  <span style={{ color: FINCEPT.WHITE, fontFamily: '"IBM Plex Mono", monospace' }}>
+                    ${trade.entryPrice?.toFixed(2) ?? 'N/A'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Exit</span>
+                  <span style={{ color: FINCEPT.WHITE, fontFamily: '"IBM Plex Mono", monospace' }}>
+                    ${trade.exitPrice?.toFixed(2) ?? 'N/A'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Quantity</span>
+                  <span style={{ color: FINCEPT.CYAN }}>{trade.quantity?.toFixed(4) ?? 'N/A'}</span>
+                </div>
+                {trade.holdingPeriod && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Duration</span>
+                    <span style={{ color: FINCEPT.YELLOW }}>{trade.holdingPeriod} bars</span>
+                  </div>
+                )}
+                {trade.exitReason && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Exit Reason</span>
+                    <span style={{ color: FINCEPT.ORANGE, textTransform: 'uppercase' }}>{trade.exitReason}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   };
