@@ -40,17 +40,33 @@ export const SystemNode: React.FC<NodeProps<SystemNodeData>> = ({
   data,
   selected,
 }) => {
-  const node = data.node;
+  const node = data?.node;
 
-  // Get node type definition
+  // Get node type definition - handle missing node gracefully
   const nodeType = useMemo<INodeType | null>(() => {
+    if (!node?.type) {
+      return null;
+    }
     try {
       return NodeRegistry.getNodeType(node.type, node.typeVersion);
     } catch (error) {
       console.error('Failed to get node type:', error);
       return null;
     }
-  }, [node.type, node.typeVersion]);
+  }, [node?.type, node?.typeVersion]);
+
+  // Handle missing node data
+  if (!node) {
+    return (
+      <div className="px-4 py-3 bg-yellow-900/20 border-2 border-yellow-500 rounded-lg min-w-[200px]">
+        <div className="flex items-center gap-2 text-yellow-400">
+          <AlertCircle size={16} />
+          <span className="text-sm font-medium">Invalid Node Data</span>
+        </div>
+        <div className="text-xs text-yellow-400/70 mt-1">Node data is missing or corrupted</div>
+      </div>
+    );
+  }
 
   // Node color
   const nodeColor = nodeType?.description?.defaults?.color || '#888888';

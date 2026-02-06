@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useReducer, useRef } from 'rea
 import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 import { useBrokerContext } from '@/contexts/BrokerContext';
 import { useRustTicker, useRustOrderBook, useRustTrades } from '@/hooks/useRustWebSocket';
@@ -43,7 +44,7 @@ import type { OrderRequest } from '@/types/trading';
 // Constants
 const API_TIMEOUT_MS = 30000;
 const WATCHLIST_REFRESH_MS = 30000;
-const PAPER_TRADING_REFRESH_MS = 5000; // Reduced from 1s to 5s for production
+const PAPER_TRADING_REFRESH_MS = 30000; // 30 second fallback sync (WebSocket handles real-time)
 
 // State machine types
 type CryptoStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -75,7 +76,9 @@ type CryptoAction =
   | { type: 'SET_PAPER_DATA'; positions: Position[]; orders: Order[]; trades: any[]; balance: number; equity: number; stats: any }
   | { type: 'SET_SYMBOLS'; symbols: string[]; isLoading: boolean }
   | { type: 'RESET_DATA' }
-  | { type: 'CLEAR_TICKER_TRADES' };
+  | { type: 'CLEAR_TICKER_TRADES' }
+  | { type: 'UPDATE_POSITION_PRICES'; prices: Map<string, number> }
+  | { type: 'UPDATE_FROM_TRADE'; trade: { symbol: string; side: 'buy' | 'sell'; price: number; quantity: number; timestamp: number } };
 
 const initialState: CryptoState = {
   status: 'idle',
@@ -130,6 +133,99 @@ function cryptoReducer(state: CryptoState, action: CryptoAction): CryptoState {
       };
     case 'CLEAR_TICKER_TRADES':
       return { ...state, tickerData: null, tradesData: [] };
+    case 'UPDATE_POSITION_PRICES':
+      return {
+        ...state,
+        positions: state.positions.map(pos => {
+          const newPrice = action.prices.get(pos.symbol);
+          if (!newPrice) return pos;
+
+          const entryPrice = pos.entryPrice || 0;
+          const quantity = pos.quantity || 0;
+
+          // Recalculate P&L with new price
+          let unrealizedPnl = 0;
+          let pnlPercent = 0;
+
+          if (newPrice > 0 && entryPrice > 0 && quantity > 0) {
+            if (pos.side === 'long') {
+              unrealizedPnl = (newPrice - entryPrice) * quantity;
+            } else {
+              unrealizedPnl = (entryPrice - newPrice) * quantity;
+            }
+            pnlPercent = ((newPrice - entryPrice) / entryPrice) * 100;
+            if (pos.side === 'short') pnlPercent = -pnlPercent;
+          }
+
+          return {
+            ...pos,
+            currentPrice: newPrice,
+            unrealizedPnl,
+            pnlPercent,
+            positionValue: newPrice * quantity,
+          };
+        }),
+      };
+    case 'UPDATE_FROM_TRADE':
+      // Handle position updates from trade execution
+      const { trade } = action;
+      const existingPos = state.positions.find(p => p.symbol === trade.symbol);
+
+      let updatedPositions = [...state.positions];
+
+      if (!existingPos) {
+        // New position opened
+        updatedPositions.push({
+          symbol: trade.symbol,
+          side: trade.side === 'buy' ? 'long' : 'short',
+          quantity: trade.quantity,
+          entryPrice: trade.price,
+          currentPrice: trade.price,
+          positionValue: trade.price * trade.quantity,
+          unrealizedPnl: 0,
+          pnlPercent: 0,
+        });
+      } else {
+        // Update existing position or close it
+        updatedPositions = updatedPositions.map(pos => {
+          if (pos.symbol !== trade.symbol) return pos;
+
+          const isSameSide = (pos.side === 'long' && trade.side === 'buy') || (pos.side === 'short' && trade.side === 'sell');
+
+          if (isSameSide) {
+            // Adding to position - recalculate average entry
+            const totalQty = pos.quantity + trade.quantity;
+            const newEntry = ((pos.entryPrice * pos.quantity) + (trade.price * trade.quantity)) / totalQty;
+
+            return {
+              ...pos,
+              quantity: totalQty,
+              entryPrice: newEntry,
+              positionValue: trade.price * totalQty,
+            };
+          } else {
+            // Reducing position
+            const newQty = pos.quantity - trade.quantity;
+
+            if (newQty <= 0) {
+              // Position closed - will be filtered out
+              return null;
+            }
+
+            return {
+              ...pos,
+              quantity: newQty,
+              positionValue: trade.price * newQty,
+            };
+          }
+        }).filter(Boolean) as Position[];
+      }
+
+      return {
+        ...state,
+        positions: updatedPositions,
+        trades: [trade, ...state.trades].slice(0, 50), // Keep last 50 trades
+      };
     default:
       return state;
   }
@@ -592,6 +688,53 @@ export function CryptoTradingTab() {
       console.error('[CryptoTrading] Failed to load paper trading data:', error);
     }
   }, [tradingMode, paperAdapter, activeBroker]);
+
+  // Real-time WebSocket listeners for positions
+  useEffect(() => {
+    let mounted = true;
+    const unlisteners: (() => void)[] = [];
+
+    const setupWebSocketListeners = async () => {
+      // 1. Price updates (ws_ticker)
+      const tickerUnlisten = await listen<{ provider: string; symbol: string; price: number }>('ws_ticker', (event) => {
+        if (!mounted) return;
+
+        const { symbol, price } = event.payload;
+
+        // Check if we have a position for this symbol
+        const hasPosition = state.positions.some(p => p.symbol === symbol);
+        if (!hasPosition) return;
+
+        // Update position prices
+        const priceMap = new Map<string, number>();
+        priceMap.set(symbol, price);
+
+        dispatch({ type: 'UPDATE_POSITION_PRICES', prices: priceMap });
+      });
+      unlisteners.push(tickerUnlisten);
+
+      // 2. Trade executions (ws_trade) - for paper trading fills
+      const tradeUnlisten = await listen<{ provider: string; symbol: string; price: number; quantity: number; side: 'buy' | 'sell'; timestamp: number }>('ws_trade', (event) => {
+        if (!mounted) return;
+
+        const { symbol, price, quantity, side, timestamp } = event.payload;
+
+        // Update positions based on trade execution
+        dispatch({
+          type: 'UPDATE_FROM_TRADE',
+          trade: { symbol, price, quantity, side, timestamp }
+        });
+      });
+      unlisteners.push(tradeUnlisten);
+    };
+
+    setupWebSocketListeners();
+
+    return () => {
+      mounted = false;
+      unlisteners.forEach(unlisten => unlisten());
+    };
+  }, [state.positions]);
 
   useEffect(() => {
     loadPaperTradingData();

@@ -15,7 +15,12 @@ export const FINCEPT = {
   CYAN: '#00E5FF',
   BLUE: '#0088FF',
   BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F'
+  HOVER: '#1F1F1F',
+  GRAY: '#888888',
+  MUTED: '#666666',
+  PURPLE: '#BB86FC',
+  YELLOW: '#FFD700',
+  HEADER_BG: '#1A1A1A'
 };
 
 // Sample price data for demonstration (kept for backward compatibility)

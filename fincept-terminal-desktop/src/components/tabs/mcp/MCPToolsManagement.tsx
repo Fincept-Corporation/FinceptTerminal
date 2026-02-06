@@ -1,10 +1,18 @@
 // MCP Tools Management - Manage both internal and external MCP tools
 // Fincept UI Design System
-import React, { useState, useEffect } from 'react';
+// Production-ready: useReducer, AbortController, ErrorBoundary, timeout, deduplication
+
+import React, { useReducer, useEffect, useCallback, useRef } from 'react';
 import { Settings, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { mcpToolService } from '@/services/mcp/mcpToolService';
 import { INTERNAL_SERVER_ID } from '@/services/mcp/internal';
 import { showWarning } from '@/utils/notifications';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { withTimeout, deduplicatedFetch } from '@/services/core/apiUtils';
+
+// ============================================================================
+// Types & State Machine
+// ============================================================================
 
 interface MCPToolWithStatus {
   serverId: string;
@@ -19,6 +27,75 @@ interface MCPToolWithStatus {
 interface MCPToolsManagementProps {
   onClose?: () => void;
 }
+
+type ToolsStatus = 'idle' | 'loading' | 'success' | 'error';
+
+interface ToolsState {
+  status: ToolsStatus;
+  tools: MCPToolWithStatus[];
+  statusMessage: string;
+  error: string | null;
+  searchTerm: string;
+  selectedCategory: string | null;
+}
+
+type ToolsAction =
+  | { type: 'LOAD_START' }
+  | { type: 'LOAD_SUCCESS'; payload: MCPToolWithStatus[] }
+  | { type: 'LOAD_ERROR'; payload: string }
+  | { type: 'SET_STATUS_MESSAGE'; payload: string }
+  | { type: 'SET_SEARCH_TERM'; payload: string }
+  | { type: 'SET_SELECTED_CATEGORY'; payload: string | null }
+  | { type: 'UPDATE_TOOL'; payload: { name: string; serverId: string; isEnabled: boolean } };
+
+const initialState: ToolsState = {
+  status: 'idle',
+  tools: [],
+  statusMessage: 'Loading tools...',
+  error: null,
+  searchTerm: '',
+  selectedCategory: null,
+};
+
+function toolsReducer(state: ToolsState, action: ToolsAction): ToolsState {
+  switch (action.type) {
+    case 'LOAD_START':
+      return { ...state, status: 'loading', error: null };
+    case 'LOAD_SUCCESS':
+      return {
+        ...state,
+        status: 'success',
+        tools: action.payload,
+        statusMessage: `${action.payload.length} tools loaded`,
+        error: null,
+      };
+    case 'LOAD_ERROR':
+      return { ...state, status: 'error', error: action.payload, statusMessage: action.payload };
+    case 'SET_STATUS_MESSAGE':
+      return { ...state, statusMessage: action.payload };
+    case 'SET_SEARCH_TERM':
+      return { ...state, searchTerm: action.payload };
+    case 'SET_SELECTED_CATEGORY':
+      return { ...state, selectedCategory: action.payload };
+    case 'UPDATE_TOOL':
+      return {
+        ...state,
+        tools: state.tools.map(t =>
+          t.name === action.payload.name && t.serverId === action.payload.serverId
+            ? { ...t, isEnabled: action.payload.isEnabled }
+            : t
+        ),
+      };
+    default:
+      return state;
+  }
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const TIMEOUT_MS = 15000; // 15 second timeout
 
 const FINCEPT = {
   ORANGE: '#FF8800',
@@ -56,24 +133,98 @@ const TOOL_CATEGORIES = [
   { id: 'external', label: 'EXTERNAL TOOLS', color: FINCEPT.ORANGE },
 ];
 
-const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
-  const [tools, setTools] = useState<MCPToolWithStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState('Loading tools...');
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
-  useEffect(() => {
-    loadTools();
+const getToolCategory = (toolName: string): string => {
+  const categoryMap: Record<string, string> = {
+    navigate_tab: 'navigation', navigate_screen: 'navigation', get_active_tab: 'navigation', open_settings_section: 'navigation',
+    place_order: 'trading', cancel_order: 'trading', modify_order: 'trading', get_positions: 'trading', get_balance: 'trading', get_orders: 'trading', get_holdings: 'trading', close_position: 'trading',
+    crypto_place_market_order: 'crypto-trading', crypto_place_limit_order: 'crypto-trading', crypto_place_stop_loss: 'crypto-trading', crypto_cancel_order: 'crypto-trading', crypto_cancel_all_orders: 'crypto-trading', crypto_get_positions: 'crypto-trading', crypto_close_position: 'crypto-trading', crypto_get_balance: 'crypto-trading', crypto_get_holdings: 'crypto-trading', crypto_get_orders: 'crypto-trading', crypto_get_ticker: 'crypto-trading', crypto_get_orderbook: 'crypto-trading', crypto_add_to_watchlist: 'crypto-trading', crypto_remove_from_watchlist: 'crypto-trading', crypto_search_symbol: 'crypto-trading', crypto_switch_trading_mode: 'crypto-trading', crypto_switch_broker: 'crypto-trading', crypto_get_portfolio_value: 'crypto-trading', crypto_get_pnl: 'crypto-trading', crypto_set_stop_loss_for_position: 'crypto-trading', crypto_set_take_profit: 'crypto-trading',
+    create_portfolio: 'portfolio', list_portfolios: 'portfolio', add_asset: 'portfolio', remove_asset: 'portfolio', add_transaction: 'portfolio', get_portfolio_summary: 'portfolio',
+    add_widget: 'dashboard', remove_widget: 'dashboard', list_widgets: 'dashboard', configure_widget: 'dashboard',
+    set_theme: 'settings', get_theme: 'settings', set_language: 'settings', get_settings: 'settings', set_setting: 'settings',
+    save_workspace: 'workspace', load_workspace: 'workspace', list_workspaces: 'workspace', delete_workspace: 'workspace',
+    run_backtest: 'backtesting', optimize_strategy: 'backtesting', get_historical_data: 'backtesting',
+    get_quote: 'market-data', add_to_watchlist: 'market-data', remove_from_watchlist: 'market-data', search_symbol: 'market-data',
+    create_workflow: 'workflow', run_workflow: 'workflow', stop_workflow: 'workflow', list_workflows: 'workflow',
+    create_note: 'notes', list_notes: 'notes', delete_note: 'notes', generate_report: 'notes',
+  };
+  return categoryMap[toolName] || 'other';
+};
+
+const getCategoryColor = (categoryId: string) => {
+  const category = TOOL_CATEGORIES.find(c => c.id === categoryId);
+  return category?.color || FINCEPT.GRAY;
+};
+
+const getCategoryLabel = (categoryId: string) => {
+  const category = TOOL_CATEGORIES.find(c => c.id === categoryId);
+  return category?.label || 'OTHER';
+};
+
+// ============================================================================
+// Inner Component
+// ============================================================================
+
+const MCPToolsManagementInner: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
+  const [state, dispatch] = useReducer(toolsReducer, initialState);
+
+  // Refs for cleanup and deduplication
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const pendingOperationsRef = useRef<Set<string>>(new Set());
+
+  // Safe dispatch
+  const safeDispatch = useCallback((action: ToolsAction) => {
+    if (mountedRef.current) {
+      dispatch(action);
+    }
   }, []);
 
-  const loadTools = async () => {
-    try {
-      setLoading(true);
-      setStatusMessage('Loading tools...');
+  // Deduplication helpers
+  const isOperationPending = useCallback((opKey: string): boolean => {
+    return pendingOperationsRef.current.has(opKey);
+  }, []);
 
-      const internalTools = await mcpToolService.getAllInternalTools();
-      const allTools = await mcpToolService.getAllTools();
+  const markOperationStart = useCallback((opKey: string) => {
+    pendingOperationsRef.current.add(opKey);
+  }, []);
+
+  const markOperationEnd = useCallback((opKey: string) => {
+    pendingOperationsRef.current.delete(opKey);
+  }, []);
+
+  // Load tools with deduplication and timeout
+  const loadTools = useCallback(async () => {
+    const opKey = 'loadTools';
+
+    if (isOperationPending(opKey)) {
+      return;
+    }
+
+    if (abortControllerRef.current?.signal.aborted) {
+      return;
+    }
+
+    markOperationStart(opKey);
+    safeDispatch({ type: 'LOAD_START' });
+
+    try {
+      const [internalTools, allTools] = await Promise.all([
+        deduplicatedFetch('tools:internal', () =>
+          withTimeout(mcpToolService.getAllInternalTools(), TIMEOUT_MS, 'Internal tools timeout')
+        ),
+        deduplicatedFetch('tools:all', () =>
+          withTimeout(mcpToolService.getAllTools(), TIMEOUT_MS, 'All tools timeout')
+        ),
+      ]);
+
+      if (abortControllerRef.current?.signal.aborted || !mountedRef.current) {
+        return;
+      }
+
       const enabledTools = new Set(allTools.map(t => `${t.serverId}__${t.name}`));
 
       const categorizedInternalTools: MCPToolWithStatus[] = internalTools.map(tool => {
@@ -102,60 +253,74 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
           isInternal: false,
         }));
 
-      setTools([...categorizedInternalTools, ...externalTools]);
-      setStatusMessage(`${categorizedInternalTools.length + externalTools.length} tools loaded`);
-      setLoading(false);
+      safeDispatch({ type: 'LOAD_SUCCESS', payload: [...categorizedInternalTools, ...externalTools] });
     } catch (error) {
+      if (abortControllerRef.current?.signal.aborted || !mountedRef.current) {
+        return;
+      }
+
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load tools';
       console.error('Failed to load tools:', error);
-      setStatusMessage('Error loading tools');
-      setLoading(false);
+      safeDispatch({ type: 'LOAD_ERROR', payload: errorMessage });
+    } finally {
+      markOperationEnd(opKey);
     }
-  };
+  }, [isOperationPending, markOperationStart, markOperationEnd, safeDispatch]);
 
-  const getToolCategory = (toolName: string): string => {
-    const categoryMap: Record<string, string> = {
-      navigate_tab: 'navigation', navigate_screen: 'navigation', get_active_tab: 'navigation', open_settings_section: 'navigation',
-      place_order: 'trading', cancel_order: 'trading', modify_order: 'trading', get_positions: 'trading', get_balance: 'trading', get_orders: 'trading', get_holdings: 'trading', close_position: 'trading',
-      crypto_place_market_order: 'crypto-trading', crypto_place_limit_order: 'crypto-trading', crypto_place_stop_loss: 'crypto-trading', crypto_cancel_order: 'crypto-trading', crypto_cancel_all_orders: 'crypto-trading', crypto_get_positions: 'crypto-trading', crypto_close_position: 'crypto-trading', crypto_get_balance: 'crypto-trading', crypto_get_holdings: 'crypto-trading', crypto_get_orders: 'crypto-trading', crypto_get_ticker: 'crypto-trading', crypto_get_orderbook: 'crypto-trading', crypto_add_to_watchlist: 'crypto-trading', crypto_remove_from_watchlist: 'crypto-trading', crypto_search_symbol: 'crypto-trading', crypto_switch_trading_mode: 'crypto-trading', crypto_switch_broker: 'crypto-trading', crypto_get_portfolio_value: 'crypto-trading', crypto_get_pnl: 'crypto-trading', crypto_set_stop_loss_for_position: 'crypto-trading', crypto_set_take_profit: 'crypto-trading',
-      create_portfolio: 'portfolio', list_portfolios: 'portfolio', add_asset: 'portfolio', remove_asset: 'portfolio', add_transaction: 'portfolio', get_portfolio_summary: 'portfolio',
-      add_widget: 'dashboard', remove_widget: 'dashboard', list_widgets: 'dashboard', configure_widget: 'dashboard',
-      set_theme: 'settings', get_theme: 'settings', set_language: 'settings', get_settings: 'settings', set_setting: 'settings',
-      save_workspace: 'workspace', load_workspace: 'workspace', list_workspaces: 'workspace', delete_workspace: 'workspace',
-      run_backtest: 'backtesting', optimize_strategy: 'backtesting', get_historical_data: 'backtesting',
-      get_quote: 'market-data', add_to_watchlist: 'market-data', remove_from_watchlist: 'market-data', search_symbol: 'market-data',
-      create_workflow: 'workflow', run_workflow: 'workflow', stop_workflow: 'workflow', list_workflows: 'workflow',
-      create_note: 'notes', list_notes: 'notes', delete_note: 'notes', generate_report: 'notes',
+  // Initialize and cleanup
+  useEffect(() => {
+    mountedRef.current = true;
+    abortControllerRef.current = new AbortController();
+
+    loadTools();
+
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort();
+      pendingOperationsRef.current.clear();
     };
-    return categoryMap[toolName] || 'other';
-  };
+  }, [loadTools]);
 
-  const handleToggleTool = async (tool: MCPToolWithStatus) => {
+  // Toggle tool handler with deduplication
+  const handleToggleTool = useCallback(async (tool: MCPToolWithStatus) => {
     if (!tool.isInternal) {
       showWarning('External tools are managed through their MCP servers. Stop the server to disable all its tools.');
       return;
     }
 
-    try {
-      const newState = !tool.isEnabled;
-      setStatusMessage(`${newState ? 'Enabling' : 'Disabling'} ${tool.name}...`);
-      await mcpToolService.setInternalToolEnabled(tool.name, tool.category || 'other', newState);
-      setTools(prev => prev.map(t =>
-        t.name === tool.name && t.serverId === tool.serverId
-          ? { ...t, isEnabled: newState }
-          : t
-      ));
-      setStatusMessage(`${tool.name} ${newState ? 'enabled' : 'disabled'}`);
-    } catch (error) {
-      console.error('Failed to toggle tool:', error);
-      setStatusMessage(`Error toggling ${tool.name}`);
+    const opKey = `toggle:${tool.serverId}:${tool.name}`;
+    if (isOperationPending(opKey)) {
+      return;
     }
-  };
 
-  const filteredTools = tools.filter(tool => {
-    const matchesSearch = !searchTerm ||
-      tool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tool.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = !selectedCategory || tool.category === selectedCategory;
+    markOperationStart(opKey);
+    const newState = !tool.isEnabled;
+    safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `${newState ? 'Enabling' : 'Disabling'} ${tool.name}...` });
+
+    try {
+      await withTimeout(
+        mcpToolService.setInternalToolEnabled(tool.name, tool.category || 'other', newState),
+        TIMEOUT_MS,
+        'Toggle tool timeout'
+      );
+
+      safeDispatch({ type: 'UPDATE_TOOL', payload: { name: tool.name, serverId: tool.serverId, isEnabled: newState } });
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `${tool.name} ${newState ? 'enabled' : 'disabled'}` });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Failed to toggle tool:', error);
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `Error toggling ${tool.name}: ${errorMessage}` });
+    } finally {
+      markOperationEnd(opKey);
+    }
+  }, [isOperationPending, markOperationStart, markOperationEnd, safeDispatch]);
+
+  // Computed values
+  const filteredTools = state.tools.filter(tool => {
+    const matchesSearch = !state.searchTerm ||
+      tool.name.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+      tool.description?.toLowerCase().includes(state.searchTerm.toLowerCase());
+    const matchesCategory = !state.selectedCategory || tool.category === state.selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -166,16 +331,7 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
     return acc;
   }, {} as Record<string, MCPToolWithStatus[]>);
 
-  const getCategoryColor = (categoryId: string) => {
-    const category = TOOL_CATEGORIES.find(c => c.id === categoryId);
-    return category?.color || FINCEPT.GRAY;
-  };
-
-  const getCategoryLabel = (categoryId: string) => {
-    const category = TOOL_CATEGORIES.find(c => c.id === categoryId);
-    return category?.label || 'OTHER';
-  };
-
+  // Render
   return (
     <div style={{
       width: '100%',
@@ -214,7 +370,7 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
             </span>
             <div style={{ width: '1px', height: '16px', backgroundColor: FINCEPT.BORDER }} />
             <span style={{ color: FINCEPT.GRAY, fontSize: '9px', letterSpacing: '0.5px' }}>
-              {tools.filter(t => t.isEnabled).length} ENABLED | {tools.length} TOTAL
+              {state.tools.filter(t => t.isEnabled).length} ENABLED | {state.tools.length} TOTAL
             </span>
           </div>
 
@@ -263,8 +419,8 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
             <input
               type="text"
               placeholder="Search tools..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={state.searchTerm}
+              onChange={(e) => dispatch({ type: 'SET_SEARCH_TERM', payload: e.target.value })}
               style={{
                 width: '100%',
                 padding: '8px 10px 8px 28px',
@@ -282,8 +438,8 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
           </div>
 
           <select
-            value={selectedCategory || ''}
-            onChange={(e) => setSelectedCategory(e.target.value || null)}
+            value={state.selectedCategory || ''}
+            onChange={(e) => dispatch({ type: 'SET_SELECTED_CATEGORY', payload: e.target.value || null })}
             style={{
               backgroundColor: FINCEPT.DARK_BG,
               border: `1px solid ${FINCEPT.BORDER}`,
@@ -306,7 +462,7 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
 
       {/* Tools List */}
       <div className="tools-scroll" style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-        {loading ? (
+        {state.status === 'loading' ? (
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -319,6 +475,20 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
           }}>
             <Settings size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
             <span>Loading tools...</span>
+          </div>
+        ) : state.status === 'error' ? (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: FINCEPT.RED,
+            fontSize: '10px',
+            textAlign: 'center',
+          }}>
+            <AlertCircle size={24} style={{ marginBottom: '8px' }} />
+            <span>{state.error}</span>
           </div>
         ) : Object.keys(toolsByCategory).length === 0 ? (
           <div style={{
@@ -463,11 +633,21 @@ const MCPToolsManagement: React.FC<MCPToolsManagementProps> = ({ onClose }) => {
         alignItems: 'center',
         gap: '8px',
       }}>
-        <span style={{ color: FINCEPT.ORANGE }}>●</span>
-        <span>{statusMessage}</span>
+        <span style={{ color: state.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE }}>●</span>
+        <span>{state.statusMessage}</span>
       </div>
     </div>
   );
 };
+
+// ============================================================================
+// Export with ErrorBoundary wrapper
+// ============================================================================
+
+const MCPToolsManagement: React.FC<MCPToolsManagementProps> = (props) => (
+  <ErrorBoundary name="MCP Tools Management" variant="default">
+    <MCPToolsManagementInner {...props} />
+  </ErrorBoundary>
+);
 
 export default MCPToolsManagement;

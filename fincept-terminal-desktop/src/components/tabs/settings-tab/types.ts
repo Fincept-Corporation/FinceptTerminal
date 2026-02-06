@@ -11,7 +11,8 @@ export type SettingsSection =
   | 'stockSymbols'
   | 'language'
   | 'storage'
-  | 'notifications';
+  | 'notifications'
+  | 'chatBubble';
 
 export interface SettingsMessage {
   type: 'success' | 'error';

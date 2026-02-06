@@ -1,0 +1,118 @@
+"""
+Renaissance Technologies Organization Module
+
+Defines the organizational structure, personas, hierarchy, and communication protocols.
+"""
+
+from .personas import (
+    Department,
+    Seniority,
+    AgentPersona,
+    ALL_PERSONAS,
+    get_persona,
+    get_personas_by_department,
+    get_persona_instructions,
+    # Individual personas
+    INVESTMENT_COMMITTEE_CHAIR,
+    RESEARCH_LEAD,
+    SIGNAL_SCIENTIST,
+    DATA_SCIENTIST,
+    QUANT_RESEARCHER,
+    EXECUTION_TRADER,
+    MARKET_MAKER,
+    RISK_QUANT,
+    COMPLIANCE_OFFICER,
+    PORTFOLIO_MANAGER,
+)
+
+from .hierarchy import (
+    TeamType,
+    TeamDefinition,
+    OrganizationConfig,
+    RESEARCH_TEAM,
+    TRADING_TEAM,
+    RISK_TEAM,
+    INVESTMENT_COMMITTEE,
+    RENTECH_ORGANIZATION,
+    get_team_for_persona,
+    get_collaboration_partners,
+    get_escalation_path,
+    should_involve_team,
+    get_decision_authority,
+    WorkflowStep,
+    SIGNAL_APPROVAL_WORKFLOW,
+    TRADE_EXECUTION_WORKFLOW,
+    get_workflow,
+)
+
+from .communication import (
+    MessageType,
+    Priority,
+    MessageStatus,
+    AgentMessage,
+    ConversationThread,
+    CommunicationManager,
+    get_communication_manager,
+    reset_communication_manager,
+    # Message creators
+    create_signal_request,
+    create_approval_request,
+    create_escalation,
+    create_alert,
+    create_decision,
+    create_collaboration_request,
+)
+
+__all__ = [
+    # Personas
+    "Department",
+    "Seniority",
+    "AgentPersona",
+    "ALL_PERSONAS",
+    "get_persona",
+    "get_personas_by_department",
+    "get_persona_instructions",
+    "INVESTMENT_COMMITTEE_CHAIR",
+    "RESEARCH_LEAD",
+    "SIGNAL_SCIENTIST",
+    "DATA_SCIENTIST",
+    "QUANT_RESEARCHER",
+    "EXECUTION_TRADER",
+    "MARKET_MAKER",
+    "RISK_QUANT",
+    "COMPLIANCE_OFFICER",
+    "PORTFOLIO_MANAGER",
+    # Hierarchy
+    "TeamType",
+    "TeamDefinition",
+    "OrganizationConfig",
+    "RESEARCH_TEAM",
+    "TRADING_TEAM",
+    "RISK_TEAM",
+    "INVESTMENT_COMMITTEE",
+    "RENTECH_ORGANIZATION",
+    "get_team_for_persona",
+    "get_collaboration_partners",
+    "get_escalation_path",
+    "should_involve_team",
+    "get_decision_authority",
+    "WorkflowStep",
+    "SIGNAL_APPROVAL_WORKFLOW",
+    "TRADE_EXECUTION_WORKFLOW",
+    "get_workflow",
+    # Communication
+    "MessageType",
+    "Priority",
+    "MessageStatus",
+    "AgentMessage",
+    "ConversationThread",
+    "CommunicationManager",
+    "get_communication_manager",
+    "reset_communication_manager",
+    "create_signal_request",
+    "create_approval_request",
+    "create_escalation",
+    "create_alert",
+    "create_decision",
+    "create_collaboration_request",
+]

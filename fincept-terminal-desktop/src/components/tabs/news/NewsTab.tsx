@@ -893,6 +893,7 @@ const NewsTab: React.FC = () => {
                   </div>
 
                   {/* Summary */}
+                  {analysisData.analysis.summary && typeof analysisData.analysis.summary === 'string' && (
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{
                       fontSize: '9px',
@@ -915,9 +916,10 @@ const NewsTab: React.FC = () => {
                       {analysisData.analysis.summary}
                     </div>
                   </div>
+                  )}
 
                   {/* Key Points */}
-                  {analysisData.analysis.key_points.length > 0 && (
+                  {analysisData.analysis.key_points && Array.isArray(analysisData.analysis.key_points) && analysisData.analysis.key_points.length > 0 && (
                     <div style={{ marginBottom: '14px' }}>
                       <div style={{
                         fontSize: '9px',
@@ -934,7 +936,7 @@ const NewsTab: React.FC = () => {
                         border: `1px solid ${F.BORDER}`,
                         borderRadius: '2px',
                       }}>
-                        {analysisData.analysis.key_points.map((pt, i) => (
+                        {analysisData.analysis.key_points.filter(pt => typeof pt === 'string').map((pt, i) => (
                           <div
                             key={i}
                             style={{
@@ -1052,6 +1054,7 @@ const NewsTab: React.FC = () => {
                   </div>
 
                   {/* Risk Signals */}
+                  {analysisData.analysis.risk_signals && typeof analysisData.analysis.risk_signals === 'object' && !('error' in analysisData.analysis.risk_signals) && (
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{
                       fontSize: '9px',
@@ -1063,7 +1066,13 @@ const NewsTab: React.FC = () => {
                       RISK SIGNALS
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                      {Object.entries(analysisData.analysis.risk_signals).map(([type, signal]) => (
+                      {Object.entries(analysisData.analysis.risk_signals).map(([type, signal]) => {
+                        // Skip if signal is not a valid object with level/details
+                        if (!signal || typeof signal !== 'object' || 'error' in signal || !('level' in signal)) {
+                          return null;
+                        }
+                        const riskSignal = signal as { level: string; details?: string };
+                        return (
                         <div
                           key={type}
                           style={{
@@ -1074,29 +1083,31 @@ const NewsTab: React.FC = () => {
                           }}
                         >
                           <div style={{
-                            color: getRiskColor(signal.level),
+                            color: getRiskColor(riskSignal.level || 'none'),
                             fontWeight: 700,
                             fontSize: '9px',
                             marginBottom: '2px',
                           }}>
-                            {type.toUpperCase()}: {signal.level.toUpperCase()}
+                            {type.toUpperCase()}: {(riskSignal.level || 'NONE').toUpperCase()}
                           </div>
-                          {signal.details && (
+                          {riskSignal.details && typeof riskSignal.details === 'string' && (
                             <div style={{
                               color: F.MUTED,
                               fontSize: '8px',
                               lineHeight: '1.3',
                             }}>
-                              {signal.details}
+                              {riskSignal.details}
                             </div>
                           )}
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   </div>
+                  )}
 
                   {/* Topics */}
-                  {analysisData.analysis.topics.length > 0 && (
+                  {analysisData.analysis.topics && Array.isArray(analysisData.analysis.topics) && analysisData.analysis.topics.length > 0 && (
                     <div style={{ marginBottom: '14px' }}>
                       <div style={{
                         fontSize: '9px',
@@ -1107,7 +1118,7 @@ const NewsTab: React.FC = () => {
                         TOPICS
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {analysisData.analysis.topics.map((topic, idx) => (
+                        {analysisData.analysis.topics.filter(topic => typeof topic === 'string').map((topic, idx) => (
                           <span
                             key={idx}
                             style={{
@@ -1128,7 +1139,7 @@ const NewsTab: React.FC = () => {
                   )}
 
                   {/* Keywords */}
-                  {analysisData.analysis.keywords.length > 0 && (
+                  {analysisData.analysis.keywords && Array.isArray(analysisData.analysis.keywords) && analysisData.analysis.keywords.length > 0 && (
                     <div style={{ marginBottom: '14px' }}>
                       <div style={{
                         fontSize: '9px',
@@ -1139,7 +1150,7 @@ const NewsTab: React.FC = () => {
                         KEYWORDS
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {analysisData.analysis.keywords.slice(0, 10).map((kw, idx) => (
+                        {analysisData.analysis.keywords.filter(kw => typeof kw === 'string').slice(0, 10).map((kw, idx) => (
                           <span
                             key={idx}
                             style={{
@@ -1159,7 +1170,7 @@ const NewsTab: React.FC = () => {
                   )}
 
                   {/* Organizations */}
-                  {analysisData.analysis.entities.organizations.length > 0 && (
+                  {analysisData.analysis.entities && analysisData.analysis.entities.organizations && Array.isArray(analysisData.analysis.entities.organizations) && analysisData.analysis.entities.organizations.length > 0 && (
                     <div>
                       <div style={{
                         fontSize: '9px',
@@ -1169,7 +1180,7 @@ const NewsTab: React.FC = () => {
                       }}>
                         ORGANIZATIONS
                       </div>
-                      {analysisData.analysis.entities.organizations.map((org, idx) => (
+                      {analysisData.analysis.entities.organizations.filter(org => org && typeof org === 'object' && 'name' in org).map((org, idx) => (
                         <div
                           key={idx}
                           style={{
@@ -1185,14 +1196,14 @@ const NewsTab: React.FC = () => {
                             fontWeight: 700,
                             fontSize: '9px',
                           }}>
-                            {org.name}
+                            {typeof org.name === 'string' ? org.name : ''}
                           </span>
                           <span style={{
                             color: F.GRAY,
                             fontSize: '9px',
                             marginLeft: '6px',
                           }}>
-                            {org.sector} {org.ticker ? `| ${org.ticker}` : ''}
+                            {typeof org.sector === 'string' ? org.sector : ''} {org.ticker && typeof org.ticker === 'string' ? `| ${org.ticker}` : ''}
                           </span>
                         </div>
                       ))}

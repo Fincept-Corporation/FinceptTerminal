@@ -1,17 +1,23 @@
 // MCP Marketplace Component
 // Browse and install curated MCP servers - Fincept UI Design System
+// Production-ready: ErrorBoundary, memoization, installation tracking
 
-import React, { useState } from 'react';
-import { Search, Download, Zap, CheckCircle } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Search, Download, Zap, CheckCircle, Loader2 } from 'lucide-react';
 import { MARKETPLACE_SERVERS, MCPServerDefinition } from './serverDefinitions';
 import { MCPServerWithStats } from '../../../../services/mcp/mcpManager';
 import PostgresForm from './forms/PostgresForm';
 import QuestDBForm from './forms/QuestDBForm';
 import GenericForm from './forms/GenericForm';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 interface MCPMarketplaceProps {
-  onInstall: (serverConfig: any) => void;
+  onInstall: (serverConfig: any, callbacks?: {
+    onProgress?: (status: string) => void;
+    onComplete?: (success: boolean, error?: string) => void;
+  }) => Promise<void>;
   installedServers: MCPServerWithStats[];
+  installingServerIds?: Set<string>;
 }
 
 const FINCEPT = {
@@ -34,21 +40,44 @@ const FINCEPT = {
 
 const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
 
-const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedServers }) => {
+const MCPMarketplaceInner: React.FC<MCPMarketplaceProps> = ({
+  onInstall,
+  installedServers,
+  installingServerIds = new Set()
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [configureServer, setConfigureServer] = useState<MCPServerDefinition | null>(null);
+  const [localInstallingIds, setLocalInstallingIds] = useState<Set<string>>(new Set());
+  const [installProgress, setInstallProgress] = useState<Map<string, string>>(new Map());
 
-  const isServerInstalled = (serverId: string) => {
-    return installedServers.some(s => s.id === serverId);
-  };
+  // Combine parent and local installing states
+  const allInstallingIds = useMemo(() => {
+    return new Set([...installingServerIds, ...localInstallingIds]);
+  }, [installingServerIds, localInstallingIds]);
 
-  const filteredServers = MARKETPLACE_SERVERS.filter(server => {
-    const matchesSearch = server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         server.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || server.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Memoize installed server IDs for efficient lookup
+  const installedServerIds = useMemo(() => {
+    return new Set(installedServers.map(s => s.id));
+  }, [installedServers]);
+
+  const isServerInstalled = useCallback((serverId: string) => {
+    return installedServerIds.has(serverId);
+  }, [installedServerIds]);
+
+  const isServerInstalling = useCallback((serverId: string) => {
+    return allInstallingIds.has(serverId);
+  }, [allInstallingIds]);
+
+  // Memoize filtered servers
+  const filteredServers = useMemo(() => {
+    return MARKETPLACE_SERVERS.filter(server => {
+      const matchesSearch = server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           server.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || server.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchQuery, selectedCategory]);
 
   const categories = ['all', 'data', 'web', 'productivity', 'dev'];
   const categoryLabels: Record<string, string> = {
@@ -59,28 +88,91 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
     dev: 'DEV',
   };
 
-  const handleInstallClick = (server: MCPServerDefinition) => {
+  const handleInstallClick = useCallback(async (server: MCPServerDefinition) => {
     if (server.requiresConfig) {
       setConfigureServer(server);
     } else {
-      onInstall(server);
-    }
-  };
+      // Immediately show installing state - this happens BEFORE any async work
+      setLocalInstallingIds(prev => new Set([...prev, server.id]));
+      setInstallProgress(prev => new Map(prev).set(server.id, 'Preparing installation...'));
 
-  const handleConfiguredInstall = (config: { args: string[]; env: Record<string, string> }) => {
+      // Call onInstall with callbacks for progress updates
+      // This is non-blocking - the function returns immediately after saving to DB
+      await onInstall(server, {
+        onProgress: (status) => {
+          setInstallProgress(prev => new Map(prev).set(server.id, status));
+        },
+        onComplete: (success, error) => {
+          // Remove from installing state when done
+          setLocalInstallingIds(prev => {
+            const next = new Set(prev);
+            next.delete(server.id);
+            return next;
+          });
+          setInstallProgress(prev => {
+            const next = new Map(prev);
+            next.delete(server.id);
+            return next;
+          });
+        }
+      });
+    }
+  }, [onInstall]);
+
+  const handleConfiguredInstall = useCallback(async (config: { args: string[]; env: Record<string, string> }) => {
     if (configureServer) {
       const serverWithConfig = {
         ...configureServer,
         args: [...configureServer.args, ...config.args],
         env: config.env,
       };
-      onInstall(serverWithConfig);
+
+      // Close modal first for better UX
+      const serverId = configureServer.id;
       setConfigureServer(null);
+
+      // Show installing state immediately
+      setLocalInstallingIds(prev => new Set([...prev, serverId]));
+      setInstallProgress(prev => new Map(prev).set(serverId, 'Preparing installation...'));
+
+      // Call onInstall with callbacks - non-blocking
+      await onInstall(serverWithConfig, {
+        onProgress: (status) => {
+          setInstallProgress(prev => new Map(prev).set(serverId, status));
+        },
+        onComplete: (success, error) => {
+          setLocalInstallingIds(prev => {
+            const next = new Set(prev);
+            next.delete(serverId);
+            return next;
+          });
+          setInstallProgress(prev => {
+            const next = new Map(prev);
+            next.delete(serverId);
+            return next;
+          });
+        }
+      });
     }
-  };
+  }, [configureServer, onInstall]);
+
+  const handleCloseConfig = useCallback(() => {
+    setConfigureServer(null);
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: FONT_FAMILY }}>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
+
       {/* Search and Filters */}
       <div style={{ marginBottom: '16px' }}>
         <div style={{ position: 'relative', marginBottom: '12px' }}>
@@ -166,28 +258,35 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
           }}>
             {filteredServers.map(server => {
               const installed = isServerInstalled(server.id);
+              const installing = isServerInstalling(server.id);
+
               return (
                 <div
                   key={server.id}
                   style={{
                     backgroundColor: FINCEPT.PANEL_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
+                    border: `1px solid ${installing ? FINCEPT.CYAN : FINCEPT.BORDER}`,
                     borderRadius: '2px',
                     padding: '16px',
-                    cursor: installed ? 'default' : 'pointer',
+                    cursor: installed || installing ? 'default' : 'pointer',
                     transition: 'all 0.2s',
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '240px',
+                    opacity: installing ? 0.8 : 1,
                   }}
                   onMouseEnter={(e) => {
-                    if (!installed) {
+                    if (!installed && !installing) {
                       e.currentTarget.style.borderColor = FINCEPT.ORANGE;
                       e.currentTarget.style.boxShadow = `0 0 12px ${FINCEPT.ORANGE}40`;
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    if (!installing) {
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    } else {
+                      e.currentTarget.style.borderColor = FINCEPT.CYAN;
+                    }
                     e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
@@ -204,6 +303,13 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                           {server.name}
                         </span>
                         {installed && <CheckCircle size={10} color={FINCEPT.GREEN} />}
+                        {installing && (
+                          <Loader2
+                            size={10}
+                            color={FINCEPT.CYAN}
+                            style={{ animation: 'spin 1s linear infinite' }}
+                          />
+                        )}
                       </div>
                       <span style={{
                         padding: '2px 6px',
@@ -301,6 +407,50 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                       <CheckCircle size={10} />
                       INSTALLED
                     </button>
+                  ) : installing ? (
+                    <div style={{ width: '100%' }}>
+                      <button
+                        disabled
+                        style={{
+                          width: '100%',
+                          padding: '8px 16px',
+                          backgroundColor: FINCEPT.CYAN,
+                          color: FINCEPT.DARK_BG,
+                          border: 'none',
+                          borderRadius: '2px',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          cursor: 'not-allowed',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          fontFamily: FONT_FAMILY,
+                          animation: 'pulse 1.5s ease-in-out infinite',
+                        }}
+                      >
+                        <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} />
+                        INSTALLING...
+                      </button>
+                      {/* Progress status message */}
+                      {installProgress.get(server.id) && (
+                        <div style={{
+                          marginTop: '6px',
+                          padding: '4px 8px',
+                          backgroundColor: `${FINCEPT.CYAN}10`,
+                          border: `1px solid ${FINCEPT.CYAN}30`,
+                          borderRadius: '2px',
+                          fontSize: '8px',
+                          color: FINCEPT.CYAN,
+                          textAlign: 'center',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {installProgress.get(server.id)}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <button
                       onClick={() => handleInstallClick(server)}
@@ -319,6 +469,15 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                         justifyContent: 'center',
                         gap: '4px',
                         fontFamily: FONT_FAMILY,
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#FF9922';
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = FINCEPT.ORANGE;
+                        e.currentTarget.style.transform = 'scale(1)';
                       }}
                     >
                       <Download size={10} />
@@ -407,18 +566,18 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
               {configureServer.id === 'postgres' ? (
                 <PostgresForm
                   onSubmit={handleConfiguredInstall}
-                  onCancel={() => setConfigureServer(null)}
+                  onCancel={handleCloseConfig}
                 />
               ) : configureServer.id === 'questdb' ? (
                 <QuestDBForm
                   onSubmit={handleConfiguredInstall}
-                  onCancel={() => setConfigureServer(null)}
+                  onCancel={handleCloseConfig}
                 />
               ) : (
                 <GenericForm
                   server={configureServer}
                   onSubmit={handleConfiguredInstall}
-                  onCancel={() => setConfigureServer(null)}
+                  onCancel={handleCloseConfig}
                 />
               )}
             </div>
@@ -428,5 +587,15 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
     </div>
   );
 };
+
+// ============================================================================
+// Export with ErrorBoundary wrapper
+// ============================================================================
+
+const MCPMarketplace: React.FC<MCPMarketplaceProps> = (props) => (
+  <ErrorBoundary name="MCP Marketplace" variant="default">
+    <MCPMarketplaceInner {...props} />
+  </ErrorBoundary>
+);
 
 export default MCPMarketplace;

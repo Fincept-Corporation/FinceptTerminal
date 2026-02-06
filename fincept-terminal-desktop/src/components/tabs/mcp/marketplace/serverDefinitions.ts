@@ -59,6 +59,25 @@ export const MARKETPLACE_SERVERS: MCPServerDefinition[] = [
     requiresConfig: false,
     tools: ['search_wikipedia', 'get_article', 'get_summary', 'get_sections', 'get_links', 'get_coordinates', 'get_related_topics', 'summarize_article_for_query', 'summarize_article_section', 'extract_key_facts'],
     documentation: 'https://github.com/Rudra-ravi/wikipedia-mcp'
+  },
+  {
+    id: 'defeatbeta-api',
+    name: 'DefeatBeta API',
+    description: 'Open-source Yahoo Finance alternative with 70+ financial tools: stock data, earnings transcripts, financial statements, valuation ratios. Prerequisites: Install uv first (pip install uv)',
+    category: 'data',
+    icon: '📈',
+    command: 'uvx',
+    args: ['--refresh', 'git+https://github.com/defeat-beta/defeatbeta-api.git#subdirectory=mcp'],
+    env: {},
+    requiresConfig: false,
+    tools: [
+      'get_stock_profile', 'get_stock_price', 'get_stock_news', 'get_stock_sec_filings',
+      'get_stock_earning_call_transcript', 'get_quarterly_income_statement', 'get_annual_income_statement',
+      'get_quarterly_balance_sheet', 'get_annual_balance_sheet', 'get_quarterly_cash_flow_statement',
+      'get_quarterly_revenue_by_segment', 'get_quarterly_revenue_by_geography',
+      'get_sp500_historical_annual_returns', 'get_sp500_cagr_returns', 'get_daily_treasury_yield'
+    ],
+    documentation: 'https://github.com/defeat-beta/defeatbeta-api/blob/main/mcp/README.md'
   }
   // Kite MCP server removed - moved to equity-trading tab with new implementation
 ];

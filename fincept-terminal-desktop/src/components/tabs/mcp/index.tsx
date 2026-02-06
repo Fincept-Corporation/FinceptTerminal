@@ -1,8 +1,9 @@
 // MCP Integrations Tab - Main Component
 // Three-panel terminal layout per Fincept UI Design System
+// Production-ready: State machine, AbortController, deduplication, error boundary, timeouts, validation
 
-import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare, Server, Wrench, ShoppingBag, ChevronRight } from 'lucide-react';
+import React, { useReducer, useEffect, useCallback, useRef } from 'react';
+import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare, Server, Wrench } from 'lucide-react';
 import { mcpManager, MCPServerWithStats } from '../../../services/mcp/mcpManager';
 import { sqliteService } from '../../../services/core/sqliteService';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
@@ -13,10 +14,106 @@ import MCPMarketplace from './marketplace/MCPMarketplace';
 import MCPAddServerModal from './MCPAddServerModal';
 import MCPToolsManagement from './MCPToolsManagement';
 import { showConfirm } from '@/utils/notifications';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { withTimeout, deduplicatedFetch } from '@/services/core/apiUtils';
+
+// ============================================================================
+// Types & State Machine
+// ============================================================================
 
 interface MCPTabProps {
   onNavigateToTab?: (tabName: string) => void;
 }
+
+// Explicit state machine states
+type MCPStatus = 'idle' | 'loading' | 'success' | 'error';
+
+interface MCPState {
+  status: MCPStatus;
+  servers: MCPServerWithStats[];
+  tools: any[];
+  statusMessage: string;
+  error: string | null;
+  view: 'marketplace' | 'installed' | 'tools';
+  isAddModalOpen: boolean;
+  isRefreshing: boolean;
+  searchTerm: string;
+  selectedServerId: string | null;
+}
+
+type MCPAction =
+  | { type: 'SET_VIEW'; payload: 'marketplace' | 'installed' | 'tools' }
+  | { type: 'LOAD_START' }
+  | { type: 'LOAD_SUCCESS'; payload: { servers: MCPServerWithStats[]; tools: any[] } }
+  | { type: 'LOAD_ERROR'; payload: string }
+  | { type: 'SET_STATUS_MESSAGE'; payload: string }
+  | { type: 'SET_REFRESHING'; payload: boolean }
+  | { type: 'SET_SEARCH_TERM'; payload: string }
+  | { type: 'SET_SELECTED_SERVER'; payload: string | null }
+  | { type: 'OPEN_ADD_MODAL' }
+  | { type: 'CLOSE_ADD_MODAL' }
+  | { type: 'RESET_ERROR' };
+
+const initialState: MCPState = {
+  status: 'idle',
+  servers: [],
+  tools: [],
+  statusMessage: 'Initializing...',
+  error: null,
+  view: 'marketplace',
+  isAddModalOpen: false,
+  isRefreshing: false,
+  searchTerm: '',
+  selectedServerId: null,
+};
+
+function mcpReducer(state: MCPState, action: MCPAction): MCPState {
+  switch (action.type) {
+    case 'SET_VIEW':
+      return { ...state, view: action.payload };
+    case 'LOAD_START':
+      return { ...state, status: 'loading', error: null };
+    case 'LOAD_SUCCESS': {
+      const { servers, tools } = action.payload;
+      const runningCount = servers.filter(s => s.status === 'running').length;
+      const internalToolsCount = tools.filter((t: any) => t.serverId === 'fincept-terminal').length;
+      const externalToolsCount = tools.length - internalToolsCount;
+      return {
+        ...state,
+        status: 'success',
+        servers,
+        tools,
+        statusMessage: `${runningCount} servers running | ${internalToolsCount} internal + ${externalToolsCount} external tools`,
+        error: null,
+      };
+    }
+    case 'LOAD_ERROR':
+      return { ...state, status: 'error', error: action.payload, statusMessage: action.payload };
+    case 'SET_STATUS_MESSAGE':
+      return { ...state, statusMessage: action.payload };
+    case 'SET_REFRESHING':
+      return { ...state, isRefreshing: action.payload };
+    case 'SET_SEARCH_TERM':
+      return { ...state, searchTerm: action.payload };
+    case 'SET_SELECTED_SERVER':
+      return { ...state, selectedServerId: action.payload };
+    case 'OPEN_ADD_MODAL':
+      return { ...state, isAddModalOpen: true };
+    case 'CLOSE_ADD_MODAL':
+      return { ...state, isAddModalOpen: false };
+    case 'RESET_ERROR':
+      return { ...state, status: 'idle', error: null };
+    default:
+      return state;
+  }
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const TIMEOUT_MS = 30000; // 30 second timeout for operations
+const POLL_INTERVAL_MS = 5000; // 5 second polling interval
 
 // Fincept Design System Colors
 const FINCEPT = {
@@ -39,27 +136,110 @@ const FINCEPT = {
 
 const FONT_FAMILY = '"IBM Plex Mono", "Consolas", monospace';
 
-const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
-  const [view, setView] = useState<'marketplace' | 'installed' | 'tools'>('marketplace');
-  const [servers, setServers] = useState<MCPServerWithStats[]>([]);
-  const [tools, setTools] = useState<any[]>([]);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('Initializing...');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
+// ============================================================================
+// Main Component
+// ============================================================================
+
+const MCPTabInner: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
+  const [state, dispatch] = useReducer(mcpReducer, initialState);
+
+  // Refs for cleanup and deduplication
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const pendingOperationsRef = useRef<Set<string>>(new Set());
 
   // Crypto broker context for MCP bridge
   const { activeAdapter, tradingMode, activeBroker } = useBrokerContext();
 
-  // Stock broker context for MCP bridge (optional - may not be available)
+  // Stock broker context for MCP bridge (optional)
   const stockBrokerCtx = useStockBrokerContextOptional();
   const stockAdapter = stockBrokerCtx?.adapter;
   const stockTradingMode = stockBrokerCtx?.tradingMode;
   const stockActiveBroker = stockBrokerCtx?.activeBroker;
   const stockIsAuthenticated = stockBrokerCtx?.isAuthenticated;
 
-  // Connect crypto broker to MCP bridge
+  // ============================================================================
+  // Helper: Check if mounted before state update
+  // ============================================================================
+  const safeDispatch = useCallback((action: MCPAction) => {
+    if (mountedRef.current) {
+      dispatch(action);
+    }
+  }, []);
+
+  // ============================================================================
+  // Helper: Check if operation is already pending (deduplication)
+  // ============================================================================
+  const isOperationPending = useCallback((opKey: string): boolean => {
+    return pendingOperationsRef.current.has(opKey);
+  }, []);
+
+  const markOperationStart = useCallback((opKey: string) => {
+    pendingOperationsRef.current.add(opKey);
+  }, []);
+
+  const markOperationEnd = useCallback((opKey: string) => {
+    pendingOperationsRef.current.delete(opKey);
+  }, []);
+
+  // ============================================================================
+  // Load Data with deduplication, timeout, and abort support
+  // ============================================================================
+  const loadData = useCallback(async (silent = false) => {
+    const opKey = 'loadData';
+
+    // Deduplication: Skip if already loading
+    if (isOperationPending(opKey)) {
+      return;
+    }
+
+    // Check if aborted
+    if (abortControllerRef.current?.signal.aborted) {
+      return;
+    }
+
+    markOperationStart(opKey);
+
+    if (!silent) {
+      safeDispatch({ type: 'LOAD_START' });
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: 'Loading servers...' });
+    }
+
+    try {
+      // Use deduplicatedFetch and withTimeout for external calls
+      const [serversData, toolsData] = await Promise.all([
+        deduplicatedFetch('mcp:servers', () =>
+          withTimeout(mcpManager.getServersWithStats(), TIMEOUT_MS, 'Server list timeout')
+        ),
+        deduplicatedFetch('mcp:tools', async () => {
+          const { mcpToolService } = await import('../../../services/mcp/mcpToolService');
+          return withTimeout(mcpToolService.getAllTools(), TIMEOUT_MS, 'Tools list timeout');
+        }),
+      ]);
+
+      // Check abort after async operations
+      if (abortControllerRef.current?.signal.aborted || !mountedRef.current) {
+        return;
+      }
+
+      safeDispatch({ type: 'LOAD_SUCCESS', payload: { servers: serversData, tools: toolsData } });
+    } catch (error) {
+      // Don't report errors if aborted
+      if (abortControllerRef.current?.signal.aborted || !mountedRef.current) {
+        return;
+      }
+
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load MCP data';
+      console.error('Failed to load MCP data:', error);
+      safeDispatch({ type: 'LOAD_ERROR', payload: errorMessage });
+    } finally {
+      markOperationEnd(opKey);
+    }
+  }, [isOperationPending, markOperationStart, markOperationEnd, safeDispatch]);
+
+  // ============================================================================
+  // Broker Bridge Effects
+  // ============================================================================
   useEffect(() => {
     if (activeAdapter) {
       brokerMCPBridge.connect({
@@ -75,7 +255,6 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
     };
   }, [activeAdapter, tradingMode, activeBroker]);
 
-  // Connect stock broker to MCP bridge
   useEffect(() => {
     if (stockAdapter && stockIsAuthenticated && stockActiveBroker) {
       stockBrokerMCPBridge.connect({
@@ -92,91 +271,151 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
     };
   }, [stockAdapter, stockIsAuthenticated, stockActiveBroker, stockTradingMode]);
 
+  // ============================================================================
+  // Initialization & Cleanup Effect
+  // ============================================================================
   useEffect(() => {
+    mountedRef.current = true;
+    abortControllerRef.current = new AbortController();
+
     const initializeServers = async () => {
       try {
-        await sqliteService.initialize();
+        await withTimeout(sqliteService.initialize(), TIMEOUT_MS, 'Database init timeout');
         const { mcpToolService } = await import('../../../services/mcp/mcpToolService');
-        await mcpToolService.initialize();
+        await withTimeout(mcpToolService.initialize(), TIMEOUT_MS, 'MCP Tool Service init timeout');
         await loadData();
       } catch (error) {
-        console.error('Failed to initialize MCP tab:', error);
-        setStatusMessage('Initialization failed');
+        if (!abortControllerRef.current?.signal.aborted && mountedRef.current) {
+          console.error('Failed to initialize MCP tab:', error);
+          safeDispatch({ type: 'LOAD_ERROR', payload: 'Initialization failed' });
+        }
       }
     };
 
     initializeServers();
 
+    // Polling interval with abort check
     const interval = setInterval(() => {
-      loadData(true);
-    }, 5000);
+      if (!abortControllerRef.current?.signal.aborted && mountedRef.current) {
+        loadData(true);
+      }
+    }, POLL_INTERVAL_MS);
 
-    return () => clearInterval(interval);
-  }, []);
+    // Cleanup function
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort();
+      clearInterval(interval);
+      pendingOperationsRef.current.clear();
+    };
+  }, [loadData, safeDispatch]);
 
-  const loadData = async (silent = false) => {
-    try {
-      if (!silent) setStatusMessage('Loading servers...');
-
-      const serversData = await mcpManager.getServersWithStats();
-      setServers(serversData);
-
-      const { mcpToolService } = await import('../../../services/mcp/mcpToolService');
-      const toolsData = await mcpToolService.getAllTools();
-      setTools(toolsData);
-
-      const runningCount = serversData.filter(s => s.status === 'running').length;
-      const internalToolsCount = toolsData.filter((t: any) => t.serverId === 'fincept-terminal').length;
-      const externalToolsCount = toolsData.length - internalToolsCount;
-      setStatusMessage(`${runningCount} servers running | ${internalToolsCount} internal + ${externalToolsCount} external tools`);
-    } catch (error) {
-      console.error('Failed to load MCP data:', error);
-      setStatusMessage('Error loading data');
-    }
-  };
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
+  // ============================================================================
+  // Handlers with timeout and deduplication
+  // ============================================================================
+  const handleRefresh = useCallback(async () => {
+    safeDispatch({ type: 'SET_REFRESHING', payload: true });
     await loadData();
-    setTimeout(() => setIsRefreshing(false), 500);
-  };
+    setTimeout(() => safeDispatch({ type: 'SET_REFRESHING', payload: false }), 500);
+  }, [loadData, safeDispatch]);
 
-  const handleInstallServer = async (config: any) => {
+  const handleInstallServer = useCallback(async (
+    config: any,
+    callbacks?: {
+      onProgress?: (status: string) => void;
+      onComplete?: (success: boolean, error?: string) => void;
+    }
+  ) => {
+    const opKey = `install:${config.id}`;
+    if (isOperationPending(opKey)) {
+      return;
+    }
+
+    markOperationStart(opKey);
+    safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: 'Installing server...' });
+
     try {
-      setStatusMessage('Installing server...');
-      await mcpManager.installServer(config);
+      // Pass callbacks to mcpManager for non-blocking installation
+      // The installServer call returns quickly after saving to DB
+      // Background server startup continues and calls the callbacks
+      await mcpManager.installServer(config, {
+        onProgress: (status) => {
+          safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: status });
+          callbacks?.onProgress?.(status);
+        },
+        onComplete: async (success, error) => {
+          markOperationEnd(opKey);
+
+          if (success) {
+            safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: 'Server installed and started successfully' });
+            safeDispatch({ type: 'SET_VIEW', payload: 'installed' });
+          } else {
+            // Server saved but failed to start - still show in installed list
+            safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: error ? `Server installed but start failed: ${error}` : 'Server installed (not running)' });
+            safeDispatch({ type: 'SET_VIEW', payload: 'installed' });
+          }
+
+          // Refresh data to show updated server list
+          await loadData();
+          callbacks?.onComplete?.(success, error);
+        }
+      });
+
+      // Refresh immediately to show server in list (even before it's fully started)
       await loadData();
-      setStatusMessage('Server installed successfully');
-      setView('installed');
+
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to install server:', error);
-      setStatusMessage(`Installation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `Installation failed: ${errorMessage}` });
+      markOperationEnd(opKey);
+      callbacks?.onComplete?.(false, errorMessage);
     }
-  };
+  }, [isOperationPending, markOperationStart, markOperationEnd, loadData, safeDispatch]);
 
-  const handleStartServer = async (serverId: string) => {
+  const handleStartServer = useCallback(async (serverId: string) => {
+    const opKey = `start:${serverId}`;
+    if (isOperationPending(opKey)) {
+      return;
+    }
+
+    markOperationStart(opKey);
+    safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: 'Starting server...' });
+
     try {
-      setStatusMessage('Starting server...');
-      await mcpManager.startServer(serverId);
+      await withTimeout(mcpManager.startServer(serverId), TIMEOUT_MS, 'Start server timeout');
       await loadData();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to start server:', error);
-      setStatusMessage(`Start failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `Start failed: ${errorMessage}` });
+    } finally {
+      markOperationEnd(opKey);
     }
-  };
+  }, [isOperationPending, markOperationStart, markOperationEnd, loadData, safeDispatch]);
 
-  const handleStopServer = async (serverId: string) => {
+  const handleStopServer = useCallback(async (serverId: string) => {
+    const opKey = `stop:${serverId}`;
+    if (isOperationPending(opKey)) {
+      return;
+    }
+
+    markOperationStart(opKey);
+    safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: 'Stopping server...' });
+
     try {
-      setStatusMessage('Stopping server...');
-      await mcpManager.stopServer(serverId);
+      await withTimeout(mcpManager.stopServer(serverId), TIMEOUT_MS, 'Stop server timeout');
       await loadData();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to stop server:', error);
-      setStatusMessage(`Stop failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `Stop failed: ${errorMessage}` });
+    } finally {
+      markOperationEnd(opKey);
     }
-  };
+  }, [isOperationPending, markOperationStart, markOperationEnd, loadData, safeDispatch]);
 
-  const handleRemoveServer = async (serverId: string) => {
+  const handleRemoveServer = useCallback(async (serverId: string) => {
     const confirmed = await showConfirm('This will delete all associated data.', {
       title: 'Remove this MCP server?',
       type: 'danger'
@@ -185,29 +424,58 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
       return;
     }
 
+    const opKey = `remove:${serverId}`;
+    if (isOperationPending(opKey)) {
+      return;
+    }
+
+    markOperationStart(opKey);
+    safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: 'Removing server...' });
+
     try {
-      setStatusMessage('Removing server...');
-      await mcpManager.removeServer(serverId);
-      if (selectedServerId === serverId) setSelectedServerId(null);
+      await withTimeout(mcpManager.removeServer(serverId), TIMEOUT_MS, 'Remove server timeout');
+      if (state.selectedServerId === serverId) {
+        safeDispatch({ type: 'SET_SELECTED_SERVER', payload: null });
+      }
       await loadData();
-      setStatusMessage('Server removed');
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: 'Server removed' });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to remove server:', error);
-      setStatusMessage(`Remove failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `Remove failed: ${errorMessage}` });
+    } finally {
+      markOperationEnd(opKey);
     }
-  };
+  }, [isOperationPending, markOperationStart, markOperationEnd, state.selectedServerId, loadData, safeDispatch]);
 
-  const handleToggleAutoStart = async (serverId: string, enabled: boolean) => {
+  const handleToggleAutoStart = useCallback(async (serverId: string, enabled: boolean) => {
+    const opKey = `autostart:${serverId}`;
+    if (isOperationPending(opKey)) {
+      return;
+    }
+
+    markOperationStart(opKey);
+
     try {
-      await mcpManager.updateServerConfig(serverId, { auto_start: enabled });
+      await withTimeout(
+        mcpManager.updateServerConfig(serverId, { auto_start: enabled }),
+        TIMEOUT_MS,
+        'Update config timeout'
+      );
       await loadData();
-      setStatusMessage(enabled ? 'Auto-start enabled' : 'Auto-start disabled');
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: enabled ? 'Auto-start enabled' : 'Auto-start disabled' });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to toggle auto-start:', error);
-      setStatusMessage(`Auto-start toggle failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      safeDispatch({ type: 'SET_STATUS_MESSAGE', payload: `Auto-start toggle failed: ${errorMessage}` });
+    } finally {
+      markOperationEnd(opKey);
     }
-  };
+  }, [isOperationPending, markOperationStart, markOperationEnd, loadData, safeDispatch]);
 
+  // ============================================================================
+  // Computed Values
+  // ============================================================================
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'running':
@@ -227,26 +495,28 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
     }
   };
 
-  const runningServers = servers.filter(s => s.status === 'running').length;
-  const filteredServers = servers.filter(s =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const runningServers = state.servers.filter(s => s.status === 'running').length;
+  const filteredServers = state.servers.filter(s =>
+    s.name.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+    s.description.toLowerCase().includes(state.searchTerm.toLowerCase())
   );
 
-  const selectedServer = selectedServerId
-    ? servers.find(s => s.id === selectedServerId) || null
+  const selectedServer = state.selectedServerId
+    ? state.servers.find(s => s.id === state.selectedServerId) || null
     : null;
 
-  const internalToolCount = tools.filter((t: any) => t.serverId === 'fincept-terminal').length;
-  const externalToolCount = tools.length - internalToolCount;
+  const internalToolCount = state.tools.filter((t: any) => t.serverId === 'fincept-terminal').length;
+  const externalToolCount = state.tools.length - internalToolCount;
 
-  // Get tools for the selected server
-  const selectedServerTools = selectedServerId === 'internal'
-    ? tools.filter((t: any) => t.serverId === 'fincept-terminal')
+  const selectedServerTools = state.selectedServerId === 'internal'
+    ? state.tools.filter((t: any) => t.serverId === 'fincept-terminal')
     : selectedServer
-      ? tools.filter((t: any) => t.serverId === selectedServer.id)
+      ? state.tools.filter((t: any) => t.serverId === selectedServer.id)
       : [];
 
+  // ============================================================================
+  // Render
+  // ============================================================================
   return (
     <div style={{
       width: '100%',
@@ -293,7 +563,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
           </span>
           <div style={{ width: '1px', height: '16px', backgroundColor: FINCEPT.BORDER }} />
           <span style={{ color: FINCEPT.GRAY, fontSize: '9px', letterSpacing: '0.5px' }}>
-            {servers.length} SERVERS | {runningServers} RUNNING | {tools.length} TOOLS
+            {state.servers.length} SERVERS | {runningServers} RUNNING | {state.tools.length} TOOLS
           </span>
         </div>
 
@@ -308,11 +578,11 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
             return (
               <button
                 key={tab}
-                onClick={() => setView(tab)}
+                onClick={() => dispatch({ type: 'SET_VIEW', payload: tab })}
                 style={{
                   padding: '6px 12px',
-                  backgroundColor: view === tab ? FINCEPT.ORANGE : 'transparent',
-                  color: view === tab ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  backgroundColor: state.view === tab ? FINCEPT.ORANGE : 'transparent',
+                  color: state.view === tab ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                   border: 'none',
                   fontSize: '9px',
                   fontWeight: 700,
@@ -355,7 +625,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
 
           <button
             onClick={handleRefresh}
-            disabled={isRefreshing}
+            disabled={state.isRefreshing || state.status === 'loading'}
             style={{
               padding: '6px 10px',
               backgroundColor: 'transparent',
@@ -364,21 +634,21 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
               fontSize: '9px',
               fontWeight: 700,
               borderRadius: '2px',
-              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              cursor: state.isRefreshing || state.status === 'loading' ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              opacity: isRefreshing ? 0.5 : 1,
+              opacity: state.isRefreshing || state.status === 'loading' ? 0.5 : 1,
               transition: 'all 0.2s',
               fontFamily: FONT_FAMILY,
             }}
           >
-            <RefreshCw size={10} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshCw size={10} style={{ animation: state.isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
             REFRESH
           </button>
 
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => dispatch({ type: 'OPEN_ADD_MODAL' })}
             style={{
               padding: '8px 16px',
               backgroundColor: FINCEPT.ORANGE,
@@ -401,7 +671,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
       </div>
 
       {/* Main Content - Three Panel Layout for installed view, full-width for marketplace/tools */}
-      {view === 'installed' ? (
+      {state.view === 'installed' ? (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Left Panel - Server List (280px) */}
           <div style={{
@@ -436,8 +706,8 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
                 <input
                   type="text"
                   placeholder="Search servers..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={state.searchTerm}
+                  onChange={(e) => dispatch({ type: 'SET_SEARCH_TERM', payload: e.target.value })}
                   style={{
                     width: '100%',
                     padding: '8px 10px 8px 28px',
@@ -459,20 +729,20 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
             <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto' }}>
               {/* Internal Tools Entry */}
               <div
-                onClick={() => setSelectedServerId('internal')}
+                onClick={() => dispatch({ type: 'SET_SELECTED_SERVER', payload: 'internal' })}
                 style={{
                   padding: '10px 12px',
-                  backgroundColor: selectedServerId === 'internal' ? `${FINCEPT.ORANGE}15` : 'transparent',
-                  borderLeft: selectedServerId === 'internal' ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                  backgroundColor: state.selectedServerId === 'internal' ? `${FINCEPT.ORANGE}15` : 'transparent',
+                  borderLeft: state.selectedServerId === 'internal' ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                   borderBottom: `1px solid ${FINCEPT.BORDER}`,
                 }}
                 onMouseEnter={(e) => {
-                  if (selectedServerId !== 'internal') e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                  if (state.selectedServerId !== 'internal') e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                 }}
                 onMouseLeave={(e) => {
-                  if (selectedServerId !== 'internal') e.currentTarget.style.backgroundColor = 'transparent';
+                  if (state.selectedServerId !== 'internal') e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -498,7 +768,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
               </div>
 
               {/* External Servers */}
-              {filteredServers.length === 0 && !searchTerm ? (
+              {filteredServers.length === 0 && !state.searchTerm ? (
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -517,20 +787,20 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
                 filteredServers.map(server => (
                   <div
                     key={server.id}
-                    onClick={() => setSelectedServerId(server.id)}
+                    onClick={() => dispatch({ type: 'SET_SELECTED_SERVER', payload: server.id })}
                     style={{
                       padding: '10px 12px',
-                      backgroundColor: selectedServerId === server.id ? `${FINCEPT.ORANGE}15` : 'transparent',
-                      borderLeft: selectedServerId === server.id ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                      backgroundColor: state.selectedServerId === server.id ? `${FINCEPT.ORANGE}15` : 'transparent',
+                      borderLeft: state.selectedServerId === server.id ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                       borderBottom: `1px solid ${FINCEPT.BORDER}`,
                     }}
                     onMouseEnter={(e) => {
-                      if (selectedServerId !== server.id) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                      if (state.selectedServerId !== server.id) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
                     }}
                     onMouseLeave={(e) => {
-                      if (selectedServerId !== server.id) e.currentTarget.style.backgroundColor = 'transparent';
+                      if (state.selectedServerId !== server.id) e.currentTarget.style.backgroundColor = 'transparent';
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -575,13 +845,13 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
               justifyContent: 'space-between',
             }}>
               <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
-                {selectedServerId === 'internal'
+                {state.selectedServerId === 'internal'
                   ? 'FINCEPT TERMINAL (INTERNAL)'
                   : selectedServer
                     ? selectedServer.name.toUpperCase()
                     : 'SERVER DETAILS'}
               </span>
-              {(selectedServer || selectedServerId === 'internal') && (
+              {(selectedServer || state.selectedServerId === 'internal') && (
                 <span style={{ fontSize: '9px', color: FINCEPT.CYAN }}>
                   {selectedServerTools.length} TOOLS AVAILABLE
                 </span>
@@ -590,7 +860,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
 
             {/* Center Content */}
             <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-              {selectedServerId === 'internal' ? (
+              {state.selectedServerId === 'internal' ? (
                 // Internal server detail
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
@@ -631,7 +901,7 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
 
                   {/* Action */}
                   <button
-                    onClick={() => setView('tools')}
+                    onClick={() => dispatch({ type: 'SET_VIEW', payload: 'tools' })}
                     style={{
                       padding: '8px 16px',
                       backgroundColor: FINCEPT.ORANGE,
@@ -948,8 +1218,15 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
       ) : (
         /* Marketplace / Tools views - full width */
         <div className="mcp-scroll" style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-          {view === 'marketplace' ? (
-            <MCPMarketplace onInstall={handleInstallServer} installedServers={servers} />
+          {state.view === 'marketplace' ? (
+            <MCPMarketplace
+              onInstall={handleInstallServer}
+              installedServers={state.servers}
+              installingServerIds={new Set([
+                ...mcpManager.getInstallingServerIds(),
+                ...Array.from(pendingOperationsRef.current).filter(op => op.startsWith('install:')).map(op => op.replace('install:', ''))
+              ])}
+            />
           ) : (
             <MCPToolsManagement />
           )}
@@ -968,24 +1245,34 @@ const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
         alignItems: 'center',
         gap: '8px',
       }}>
-        <span style={{ color: FINCEPT.ORANGE }}>●</span>
-        <span>{statusMessage}</span>
+        <span style={{ color: state.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE }}>●</span>
+        <span>{state.statusMessage}</span>
         <div style={{ flex: 1 }} />
         <span style={{ color: FINCEPT.CYAN }}>MCP v1.0</span>
       </div>
 
       {/* Add Server Modal */}
-      {isAddModalOpen && (
+      {state.isAddModalOpen && (
         <MCPAddServerModal
-          onClose={() => setIsAddModalOpen(false)}
+          onClose={() => dispatch({ type: 'CLOSE_ADD_MODAL' })}
           onAdd={(config) => {
             handleInstallServer(config);
-            setIsAddModalOpen(false);
+            dispatch({ type: 'CLOSE_ADD_MODAL' });
           }}
         />
       )}
     </div>
   );
 };
+
+// ============================================================================
+// Export with ErrorBoundary wrapper
+// ============================================================================
+
+const MCPTab: React.FC<MCPTabProps> = (props) => (
+  <ErrorBoundary name="MCP Tab" variant="default">
+    <MCPTabInner {...props} />
+  </ErrorBoundary>
+);
 
 export default MCPTab;

@@ -252,11 +252,15 @@ pub async fn run_renaissance_agent(
     market_data: String,
     quant_params: Option<String>,
 ) -> Result<String, String> {
-    let mut args = vec!["analyze".to_string(), market_data];
-    if let Some(qp) = quant_params {
-        args.push(qp);
-    }
-    python::execute(&app, "agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/renaissance_technologies_agent.py", args).await
+    // Prepare signal data JSON
+    let signal_data = if let Some(qp) = quant_params {
+        format!(r#"{{"market_data": {}, "params": {}}}"#, market_data, qp)
+    } else {
+        format!(r#"{{"market_data": {}}}"#, market_data)
+    };
+
+    let args = vec!["analyze".to_string(), signal_data];
+    python::execute(&app, "agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/rentech_cli.py", args).await
 }
 
 #[tauri::command]

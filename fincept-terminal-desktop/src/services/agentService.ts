@@ -1198,4 +1198,111 @@ export const agentService = {
   buildTeamConfig,
 };
 
+// =============================================================================
+// Renaissance Technologies Integration
+// =============================================================================
+
+export interface RenTechSignal {
+  ticker: string;
+  signal_type: string;
+  direction: 'long' | 'short';
+  strength: number;
+  confidence: number;
+  p_value: number;
+  information_coefficient: number;
+}
+
+export interface RenTechConfig {
+  max_position_size_pct?: number;
+  max_leverage?: number;
+  max_drawdown_pct?: number;
+  max_daily_var_pct?: number;
+  min_signal_confidence?: number;
+}
+
+export interface RenTechResult {
+  success: boolean;
+  signal_id?: string;
+  statistical_quality?: string;
+  risk_assessment?: string;
+  ic_decision?: any;
+  execution_plan?: any;
+  error?: string;
+}
+
+/**
+ * Run Renaissance Technologies signal analysis
+ */
+export async function runRenaissanceTechnologies(
+  signal: RenTechSignal,
+  config?: RenTechConfig
+): Promise<RenTechResult> {
+  try {
+    const result = await invoke<string>('execute_python_agent', {
+      agentType: 'renaissance',
+      parameters: config || {},
+      inputs: { signal, config },
+    });
+
+    const parsed = JSON.parse(result);
+    return parsed.data || parsed;
+  } catch (error: any) {
+    console.error('[RenTech] Analysis failed:', error);
+    return {
+      success: false,
+      error: error.message || 'Renaissance Technologies analysis failed',
+    };
+  }
+}
+
+/**
+ * Run IC Deliberation on a signal
+ */
+export async function runICDeliberation(deliberationData: {
+  signal: any;
+  signal_evaluation: any;
+  risk_assessment: any;
+  sizing_recommendation: any;
+}): Promise<RenTechResult> {
+  try {
+    const jsonData = JSON.stringify(deliberationData);
+    const result = await invoke<string>('execute_python_agent', {
+      agentType: 'renaissance',
+      parameters: {},
+      inputs: { command: 'run_ic_deliberation', data: deliberationData },
+    });
+
+    const parsed = JSON.parse(result);
+    return { success: true, ic_decision: parsed.data };
+  } catch (error: any) {
+    console.error('[RenTech] IC deliberation failed:', error);
+    return {
+      success: false,
+      error: error.message || 'IC deliberation failed',
+    };
+  }
+}
+
+/**
+ * Get Renaissance Technologies agent presets
+ */
+export async function getRenTechPresets(): Promise<{
+  agents: any[];
+  teams: any[];
+}> {
+  try {
+    const result = await invoke<string>('execute_python_agent', {
+      agentType: 'renaissance',
+      parameters: {},
+      inputs: { command: 'list_agent_presets' },
+    });
+
+    const parsed = JSON.parse(result);
+    return parsed.data || { agents: [], teams: [] };
+  } catch (error) {
+    console.error('[RenTech] Failed to get presets:', error);
+    return { agents: [], teams: [] };
+  }
+}
+
 export default agentService;

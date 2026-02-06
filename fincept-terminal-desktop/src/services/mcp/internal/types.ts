@@ -7,6 +7,7 @@ export interface InternalToolSchema {
     description: string;
     enum?: string[];
     default?: any;
+    items?: { type: string };
   }>;
   required?: string[];
 }
@@ -63,14 +64,38 @@ export interface TerminalContexts {
   searchStockInstruments?: (query: string, exchange?: string) => Promise<any[]>;
   getStockHistoricalData?: (params: any) => Promise<any>;
 
-  // Portfolio
+  // Portfolio - Core CRUD
   getPortfolios?: () => Promise<any>;
   createPortfolio?: (params: any) => Promise<any>;
   deletePortfolio?: (id: string) => Promise<any>;
+  getPortfolio?: (portfolioId: string) => Promise<any>;
+
+  // Portfolio - Asset Management
   addAsset?: (portfolioId: string, asset: any) => Promise<any>;
-  removeAsset?: (portfolioId: string, assetId: string) => Promise<any>;
+  removeAsset?: (portfolioId: string, symbol: string, sellPrice?: number) => Promise<any>;
+  sellAsset?: (portfolioId: string, symbol: string, quantity: number, price: number) => Promise<any>;
+  getPortfolioAssets?: (portfolioId: string) => Promise<any[]>;
+
+  // Portfolio - Transactions
   addTransaction?: (portfolioId: string, tx: any) => Promise<any>;
+  getPortfolioTransactions?: (portfolioId: string, limit?: number) => Promise<any[]>;
+  getSymbolTransactions?: (portfolioId: string, symbol: string) => Promise<any[]>;
+
+  // Portfolio - Summary & Analytics
   getPortfolioSummary?: (portfolioId: string) => Promise<any>;
+  calculateAdvancedMetrics?: (portfolioId: string) => Promise<any>;
+  calculateRiskMetrics?: (portfolioId: string) => Promise<any>;
+
+  // Portfolio - Optimization
+  optimizePortfolioWeights?: (portfolioId: string, method?: string) => Promise<any>;
+  getRebalancingRecommendations?: (portfolioId: string, targetAllocations: Record<string, number>) => Promise<any[]>;
+
+  // Portfolio - Analysis
+  analyzeDiversification?: (portfolioId: string) => Promise<any>;
+  getPortfolioPerformanceHistory?: (portfolioId: string, limit?: number) => Promise<any[]>;
+
+  // Portfolio - Export
+  exportPortfolioCSV?: (portfolioId: string) => Promise<string>;
 
   // Dashboard
   addWidget?: (widgetType: string, config?: any) => void;
@@ -154,6 +179,55 @@ export interface TerminalContexts {
   openWorkflowInEditor?: (workflowId: string) => Promise<void>;
   exportNodeWorkflow?: (workflowId: string) => Promise<any>;
   importNodeWorkflow?: (workflowData: any) => Promise<WorkflowInfo>;
+
+  // Node Editor - Quick Edit Operations
+  removeNodeFromWorkflow?: (workflowId: string, nodeId: string) => Promise<WorkflowInfo>;
+  disconnectNodes?: (params: DisconnectNodesParams) => Promise<WorkflowInfo>;
+  renameNode?: (workflowId: string, nodeId: string, newLabel: string) => Promise<WorkflowInfo>;
+  clearWorkflow?: (workflowId: string) => Promise<WorkflowInfo>;
+  cloneNode?: (workflowId: string, nodeId: string, newLabel?: string) => Promise<{ workflow: WorkflowInfo; newNodeId: string }>;
+  moveNode?: (params: MoveNodeParams) => Promise<{ workflow: WorkflowInfo; newPosition: { x: number; y: number } }>;
+  getWorkflowStats?: (workflowId: string) => Promise<WorkflowStats>;
+  autoLayoutWorkflow?: (params: AutoLayoutParams) => Promise<{ workflow: WorkflowInfo; nodesRepositioned: number }>;
+
+  // ============================================================================
+  // News - Fetching & Filtering
+  // ============================================================================
+  fetchAllNews?: (forceRefresh?: boolean) => Promise<NewsArticleInfo[]>;
+  getNewsByCategory?: (category: string) => Promise<NewsArticleInfo[]>;
+  getNewsBySource?: (source: string) => Promise<NewsArticleInfo[]>;
+  searchNews?: (query: string) => Promise<NewsArticleInfo[]>;
+  getBreakingNews?: () => Promise<NewsArticleInfo[]>;
+  getNewsBySentiment?: (sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL') => Promise<NewsArticleInfo[]>;
+  getNewsByPriority?: (priority: 'FLASH' | 'URGENT' | 'BREAKING' | 'ROUTINE') => Promise<NewsArticleInfo[]>;
+  getNewsByTicker?: (ticker: string) => Promise<NewsArticleInfo[]>;
+
+  // News - Providers / Sources
+  getActiveSources?: () => Promise<string[]>;
+  getRSSFeedCount?: () => Promise<number>;
+  getUserRSSFeeds?: () => Promise<UserRSSFeedInfo[]>;
+  getDefaultFeeds?: () => Promise<RSSFeedInfo[]>;
+  getAllRSSFeeds?: () => Promise<RSSFeedInfo[]>;
+
+  // News - Feed Management
+  addUserRSSFeed?: (params: AddRSSFeedParams) => Promise<UserRSSFeedInfo>;
+  updateUserRSSFeed?: (id: string, params: UpdateRSSFeedParams) => Promise<void>;
+  deleteUserRSSFeed?: (id: string) => Promise<void>;
+  toggleUserRSSFeed?: (id: string, enabled: boolean) => Promise<void>;
+  toggleDefaultRSSFeed?: (feedId: string, enabled: boolean) => Promise<void>;
+  deleteDefaultRSSFeed?: (feedId: string) => Promise<void>;
+  restoreDefaultRSSFeed?: (feedId: string) => Promise<void>;
+  restoreAllDefaultFeeds?: () => Promise<void>;
+  testRSSFeedUrl?: (url: string) => Promise<boolean>;
+
+  // News - Analysis
+  analyzeNewsArticle?: (url: string) => Promise<NewsAnalysisResult>;
+
+  // News - Statistics
+  getNewsSentimentStats?: () => Promise<NewsSentimentStats>;
+  getNewsCacheStats?: () => Promise<NewsCacheStats>;
+  getAvailableCategories?: () => string[];
+  getAvailableRegions?: () => string[];
 }
 
 // ============================================================================
@@ -242,6 +316,40 @@ export interface ConfigureNodeParams {
   parameters: Record<string, any>;
 }
 
+export interface DisconnectNodesParams {
+  workflowId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceHandle?: string;
+}
+
+export interface MoveNodeParams {
+  workflowId: string;
+  nodeId: string;
+  x?: number;
+  y?: number;
+  relative?: boolean;
+  direction?: 'up' | 'down' | 'left' | 'right' | '';
+}
+
+export interface AutoLayoutParams {
+  workflowId: string;
+  direction?: 'horizontal' | 'vertical';
+  spacingX?: number;
+  spacingY?: number;
+}
+
+export interface WorkflowStats {
+  workflowId: string;
+  totalRuns: number;
+  successfulRuns: number;
+  failedRuns: number;
+  successRate: number;
+  lastRunAt?: string;
+  lastStatus?: string;
+  averageDuration?: number;
+}
+
 export interface UpdateWorkflowParams {
   workflowId: string;
   name?: string;
@@ -284,3 +392,142 @@ export interface WorkflowValidation {
 
 export const INTERNAL_SERVER_ID = 'fincept-terminal';
 export const INTERNAL_SERVER_NAME = 'Fincept Terminal';
+
+// ============================================================================
+// News Types
+// ============================================================================
+
+export interface NewsArticleInfo {
+  id: string;
+  time: string;
+  priority: 'FLASH' | 'URGENT' | 'BREAKING' | 'ROUTINE';
+  category: string;
+  headline: string;
+  summary: string;
+  source: string;
+  region: string;
+  sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  impact: 'HIGH' | 'MEDIUM' | 'LOW';
+  tickers: string[];
+  classification: string;
+  link?: string;
+  pubDate?: string;
+}
+
+export interface RSSFeedInfo {
+  id: string | null;
+  name: string;
+  url: string;
+  category: string;
+  region: string;
+  source: string;
+  enabled: boolean;
+  is_default: boolean;
+}
+
+export interface UserRSSFeedInfo {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  region: string;
+  source_name: string;
+  enabled: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AddRSSFeedParams {
+  name: string;
+  url: string;
+  category: string;
+  region: string;
+  source_name: string;
+}
+
+export interface UpdateRSSFeedParams {
+  name: string;
+  url: string;
+  category: string;
+  region: string;
+  source_name: string;
+  enabled: boolean;
+}
+
+export interface NewsAnalysisResult {
+  success: boolean;
+  data?: NewsAnalysisData;
+  error?: string;
+}
+
+export interface NewsAnalysisData {
+  article_id: string;
+  source: string;
+  url: string;
+  published_at: string;
+  ingested_at: string;
+  processing_version: string;
+  content: {
+    headline: string;
+    word_count: number;
+  };
+  analysis: {
+    sentiment: {
+      score: number;
+      intensity: number;
+      confidence: number;
+    };
+    market_impact: {
+      urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+      prediction: string;
+    };
+    entities: {
+      organizations: Array<{
+        name: string;
+        ticker: string | null;
+        sector: string;
+        sentiment: number;
+      }>;
+      people: Array<{
+        name: string;
+        ticker: string | null;
+        sector: string;
+        sentiment: number;
+      }>;
+      locations: Array<{
+        name: string;
+        ticker: string | null;
+        sector: string;
+        sentiment: number;
+      }>;
+    };
+    keywords: string[];
+    topics: string[];
+    risk_signals: {
+      regulatory: { level: string; details: string };
+      geopolitical: { level: string; details: string };
+      operational: { level: string; details: string };
+      market: { level: string; details: string };
+    };
+    summary: string;
+    key_points: string[];
+  };
+  credits_used: number;
+  credits_remaining: number;
+}
+
+export interface NewsSentimentStats {
+  bullish: number;
+  bearish: number;
+  neutral: number;
+  total: number;
+  netScore: number;
+  alertCount: number;
+}
+
+export interface NewsCacheStats {
+  hasCachedData: boolean;
+  articleCount: number;
+  cacheAge: number | null;
+}

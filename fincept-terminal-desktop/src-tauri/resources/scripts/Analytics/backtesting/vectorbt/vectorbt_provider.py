@@ -832,6 +832,55 @@ class VectorBTProvider(BacktestingProviderBase):
         except Exception as e:
             return {'success': False, 'error': str(e), 'traceback': __import__('traceback').format_exc()}
 
+    def _calculate_signal_metrics(self, entries, exits, close_series):
+        """Calculate performance metrics for generated signals."""
+        import numpy as np
+
+        metrics = {
+            'totalSignals': int(entries.sum()),
+            'signalDensity': float(entries.sum() / len(close_series) * 100),  # % of bars with signals
+        }
+
+        # Simple forward-looking performance (next bar return after entry)
+        if entries.sum() > 0:
+            entry_indices = np.where(entries)[0]
+            forward_returns = []
+            holding_periods = []
+
+            for entry_idx in entry_indices:
+                if entry_idx < len(close_series) - 1:
+                    entry_price = close_series.iloc[entry_idx]
+
+                    # Find next exit or end of data
+                    exit_idx = None
+                    for idx in range(entry_idx + 1, len(exits)):
+                        if exits.iloc[idx]:
+                            exit_idx = idx
+                            break
+
+                    if exit_idx is None:
+                        exit_idx = len(close_series) - 1
+
+                    exit_price = close_series.iloc[exit_idx]
+                    ret = (exit_price - entry_price) / entry_price * 100
+                    forward_returns.append(ret)
+                    holding_periods.append(exit_idx - entry_idx)
+
+            if forward_returns:
+                returns_array = np.array(forward_returns)
+                metrics['avgReturn'] = float(np.mean(returns_array))
+                metrics['medianReturn'] = float(np.median(returns_array))
+                metrics['winRate'] = float(np.sum(returns_array > 0) / len(returns_array) * 100)
+                metrics['bestTrade'] = float(np.max(returns_array))
+                metrics['worstTrade'] = float(np.min(returns_array))
+                metrics['avgHoldingPeriod'] = float(np.mean(holding_periods))
+                metrics['profitFactor'] = float(
+                    np.sum(returns_array[returns_array > 0]) /
+                    abs(np.sum(returns_array[returns_array < 0]))
+                ) if np.sum(returns_array < 0) != 0 else float('inf')
+
+        return metrics
+
     def indicator_signals(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Generate indicator-based signals (crossover, threshold, breakout, mean_reversion, filter)."""
         try:
@@ -850,7 +899,16 @@ class VectorBTProvider(BacktestingProviderBase):
                 self._normalize_symbols(symbols), start_date, end_date
             )
 
-            result_data = {'mode': mode, 'totalBars': len(close_series), 'usingSyntheticData': using_synthetic}
+            result_data = {
+                'mode': mode,
+                'totalBars': len(close_series),
+                'usingSyntheticData': using_synthetic,
+                'symbol': symbols[0] if symbols else 'Unknown',
+                'dateRange': {
+                    'start': str(close_series.index[0]),
+                    'end': str(close_series.index[-1])
+                }
+            }
 
             if mode == 'crossover_signals':
                 fast_ind = params.get('fast_indicator', 'ma')
@@ -858,46 +916,117 @@ class VectorBTProvider(BacktestingProviderBase):
                 slow_ind = params.get('slow_indicator', 'ma')
                 slow_period = params.get('slow_period', 20)
 
-                calc_map = {'ma': ind.calculate_ma, 'ema': lambda s, p: ind.calculate_ma(s, p, ma_type='ema')}
-                fast_line = calc_map.get(fast_ind, ind.calculate_ma)(close_series, fast_period)
-                slow_line = calc_map.get(slow_ind, ind.calculate_ma)(close_series, slow_period)
+                calc_map = {
+                    'ma': lambda s, p: ind.calculate_ma(None, s, p, ewm=False),
+                    'ema': lambda s, p: ind.calculate_ma(None, s, p, ewm=True)
+                }
+                fast_line = calc_map.get(fast_ind, calc_map['ma'])(close_series, fast_period)
+                slow_line = calc_map.get(slow_ind, calc_map['ma'])(close_series, slow_period)
 
                 entries, exits = ind.generate_crossover_signals(fast_line, slow_line, close_series.index)
+
+                # Add performance metrics
+                metrics = self._calculate_signal_metrics(entries, exits, close_series)
+                result_data.update(metrics)
+
+                # Add signal details with context
                 result_data['entryCount'] = int(entries.sum())
                 result_data['exitCount'] = int(exits.sum())
-                result_data['entries'] = [str(d) for d in entries[entries].index[:50]]
-                result_data['exits'] = [str(d) for d in exits[exits].index[:50]]
+                result_data['entrySignals'] = [
+                    {
+                        'date': str(d),
+                        'price': float(close_series.loc[d]),
+                        'fastMA': float(fast_line[close_series.index.get_loc(d)]),
+                        'slowMA': float(slow_line[close_series.index.get_loc(d)]),
+                    }
+                    for d in entries[entries].index[:50]
+                ]
+                result_data['exitSignals'] = [
+                    {
+                        'date': str(d),
+                        'price': float(close_series.loc[d]),
+                        'fastMA': float(fast_line[close_series.index.get_loc(d)]),
+                        'slowMA': float(slow_line[close_series.index.get_loc(d)]),
+                    }
+                    for d in exits[exits].index[:50]
+                ]
 
             elif mode == 'threshold_signals':
                 period = params.get('period', 14)
                 lower = params.get('lower', 30)
                 upper = params.get('upper', 70)
 
-                ind_calc = {'rsi': ind.calculate_rsi, 'cci': ind.calculate_cci, 'williams_r': ind.calculate_williams_r,
-                            'stoch': lambda s, p: ind.calculate_stoch(s, s, s, p)[0]}
-                calc_fn = ind_calc.get(indicator, ind.calculate_rsi)
+                # Need to get full OHLCV for some indicators
+                import yfinance as yf
+                normalized_symbols = self._normalize_symbols(symbols)
+                raw_data = yf.download(
+                    normalized_symbols if len(normalized_symbols) > 1 else normalized_symbols[0],
+                    start=start_date, end=end_date, progress=False
+                )
+                high_series = raw_data['High'].values.flatten() if 'High' in raw_data.columns else close_series
+                low_series = raw_data['Low'].values.flatten() if 'Low' in raw_data.columns else close_series
+
+                ind_calc = {
+                    'rsi': lambda s, p: ind.calculate_rsi(None, s, p),
+                    'cci': lambda s, p: ind.calculate_cci(high_series, low_series, s, p),
+                    'williams_r': lambda s, p: ind.calculate_williams_r(high_series, low_series, s, p),
+                    'stoch': lambda s, p: ind.calculate_stoch(None, high_series, low_series, s, p)['k']
+                }
+                calc_fn = ind_calc.get(indicator, ind_calc['rsi'])
                 values = calc_fn(close_series, period)
 
                 entries, exits = ind.generate_threshold_signals(values, lower, upper, close_series.index)
+
+                # Add performance metrics
+                metrics = self._calculate_signal_metrics(entries, exits, close_series)
+                result_data.update(metrics)
+
+                # Add signal details with context
                 result_data['entryCount'] = int(entries.sum())
                 result_data['exitCount'] = int(exits.sum())
-                result_data['entries'] = [str(d) for d in entries[entries].index[:50]]
-                result_data['exits'] = [str(d) for d in exits[exits].index[:50]]
+                result_data['entrySignals'] = [
+                    {
+                        'date': str(d),
+                        'price': float(close_series.loc[d]),
+                        'indicatorValue': float(values[close_series.index.get_loc(d)]),
+                        'threshold': lower,
+                    }
+                    for d in entries[entries].index[:50]
+                ]
+                result_data['exitSignals'] = [
+                    {
+                        'date': str(d),
+                        'price': float(close_series.loc[d]),
+                        'indicatorValue': float(values[close_series.index.get_loc(d)]),
+                        'threshold': upper,
+                    }
+                    for d in exits[exits].index[:50]
+                ]
 
             elif mode == 'breakout_signals':
                 channel = params.get('channel', 'donchian')
                 period = params.get('period', 20)
+
+                # Get full OHLCV for Keltner
+                import yfinance as yf
+                normalized_symbols = self._normalize_symbols(symbols)
+                raw_data = yf.download(
+                    normalized_symbols if len(normalized_symbols) > 1 else normalized_symbols[0],
+                    start=start_date, end=end_date, progress=False
+                )
+                high_series = raw_data['High'].values.flatten() if 'High' in raw_data.columns else close_series
+                low_series = raw_data['Low'].values.flatten() if 'Low' in raw_data.columns else close_series
 
                 if channel == 'donchian':
                     ch = ind.calculate_donchian(close_series, period)
                     upper_ch = ch['upper'] if isinstance(ch, dict) else ch[0]
                     lower_ch = ch['lower'] if isinstance(ch, dict) else ch[1]
                 elif channel == 'bbands':
-                    bb = ind.calculate_bbands(close_series, period)
+                    bb = ind.calculate_bbands(None, close_series, period)
                     upper_ch = bb['upper'] if isinstance(bb, dict) else bb[0]
                     lower_ch = bb['lower'] if isinstance(bb, dict) else bb[2]
                 else:
-                    ch = ind.calculate_keltner(close_series, close_series, close_series, period)
+                    ch = ind.calculate_keltner(high_series, low_series, close_series, ema_period=period, atr_period=10, multiplier=2.0)
                     upper_ch = ch['upper'] if isinstance(ch, dict) else ch[0]
                     lower_ch = ch['lower'] if isinstance(ch, dict) else ch[2]
 
@@ -927,18 +1056,38 @@ class VectorBTProvider(BacktestingProviderBase):
                 filter_threshold = params.get('filter_threshold', 25)
                 filter_type = params.get('filter_type', 'above')
 
+                # Get full OHLCV for indicators that need it
+                import yfinance as yf
+                normalized_symbols = self._normalize_symbols(symbols)
+                raw_data = yf.download(
+                    normalized_symbols if len(normalized_symbols) > 1 else normalized_symbols[0],
+                    start=start_date, end=end_date, progress=False
+                )
+                high_series = raw_data['High'].values.flatten() if 'High' in raw_data.columns else close_series
+                low_series = raw_data['Low'].values.flatten() if 'Low' in raw_data.columns else close_series
+
                 # Compute base indicator and generate threshold signals
-                base_calc = {'rsi': ind.calculate_rsi, 'cci': ind.calculate_cci, 'williams_r': ind.calculate_williams_r,
-                             'momentum': ind.calculate_momentum, 'stoch': lambda s, p: ind.calculate_stoch(s, s, s, p)[0],
-                             'macd': lambda s, p: ind.calculate_macd(s, p, p * 2, 9)[0]}
-                base_fn = base_calc.get(base_indicator, ind.calculate_rsi)
+                base_calc = {
+                    'rsi': lambda s, p: ind.calculate_rsi(None, s, p),
+                    'cci': lambda s, p: ind.calculate_cci(high_series, low_series, s, p),
+                    'williams_r': lambda s, p: ind.calculate_williams_r(high_series, low_series, s, p),
+                    'momentum': lambda s, p: ind.calculate_momentum(s, p),
+                    'stoch': lambda s, p: ind.calculate_stoch(None, high_series, low_series, s, p)['k'],
+                    'macd': lambda s, p: ind.calculate_macd(None, s, p, p * 2, 9)['macd']
+                }
+                base_fn = base_calc.get(base_indicator, base_calc['rsi'])
                 base_values = base_fn(close_series, base_period)
                 entries, exits = ind.generate_threshold_signals(base_values, 30, 70, close_series.index)
 
                 # Compute filter indicator
-                filter_calc = {'adx': ind.calculate_adx, 'atr': ind.calculate_atr, 'mstd': ind.calculate_mstd,
-                               'zscore': ind.calculate_zscore, 'rsi': ind.calculate_rsi}
-                filter_fn = filter_calc.get(filter_indicator, ind.calculate_adx)
+                filter_calc = {
+                    'adx': lambda s, p: ind.calculate_adx(s, high=high_series, low=low_series, period=p),
+                    'atr': lambda s, p: ind.calculate_atr(None, high_series, low_series, s, p),
+                    'mstd': lambda s, p: ind.calculate_mstd(None, s, p),
+                    'zscore': lambda s, p: ind.calculate_zscore(s, p),
+                    'rsi': lambda s, p: ind.calculate_rsi(None, s, p)
+                }
+                filter_fn = filter_calc.get(filter_indicator, filter_calc['adx'])
                 filter_values = filter_fn(close_series, filter_period)
 
                 filtered_entries, filtered_exits = ind.apply_signal_filter(
@@ -959,6 +1108,13 @@ class VectorBTProvider(BacktestingProviderBase):
 
     def indicator_param_sweep(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Run indicator parameter sweep using IndicatorFactory.run_combs()."""
+        import sys
+        print("[INDICATOR_SWEEP] === STARTING ===", flush=True)
+        sys.stdout.flush()
+
+        # TEST: Return immediately to see if function is being called
+        # return {'success': True, 'data': {'indicator': 'TEST', 'totalCombinations': 999, 'usingSyntheticData': False, 'results': []}}
+
         try:
             import numpy as np
             import pandas as pd
@@ -970,9 +1126,46 @@ class VectorBTProvider(BacktestingProviderBase):
             end_date = request.get('endDate')
             param_ranges = request.get('paramRanges', {})
 
-            close_series, using_synthetic = self._load_market_data(
-                self._normalize_symbols(symbols), start_date, end_date
-            )
+            print(f"[INDICATOR_SWEEP] Got request: indicator={indicator}, symbols={symbols}", flush=True)
+            print(f"[INDICATOR_SWEEP] param_ranges={param_ranges}", flush=True)
+            sys.stdout.flush()
+
+            # Load full OHLCV data instead of just close
+            normalized_symbols = self._normalize_symbols(symbols)
+            using_synthetic = False
+
+            try:
+                import yfinance as yf
+                raw_data = yf.download(
+                    normalized_symbols if len(normalized_symbols) > 1 else normalized_symbols[0],
+                    start=start_date, end=end_date, progress=False
+                )
+
+                if raw_data is None or raw_data.empty:
+                    raise ValueError(f'No data returned for {normalized_symbols}')
+
+                # Extract OHLCV columns
+                if len(normalized_symbols) == 1:
+                    # Single symbol - yfinance returns multi-index columns, need to flatten
+                    close_series = (raw_data['Close'].values if 'Close' in raw_data else raw_data['close'].values).flatten()
+                    high_series = (raw_data['High'].values if 'High' in raw_data else raw_data['high'].values).flatten()
+                    low_series = (raw_data['Low'].values if 'Low' in raw_data else raw_data['low'].values).flatten()
+                    volume_series = (raw_data['Volume'].values if 'Volume' in raw_data else raw_data['volume'].values).flatten()
+                else:
+                    # Multi-symbol: take first symbol
+                    close_series = raw_data['Close'].iloc[:, 0].values
+                    high_series = raw_data['High'].iloc[:, 0].values
+                    low_series = raw_data['Low'].iloc[:, 0].values
+                    volume_series = raw_data['Volume'].iloc[:, 0].values
+
+            except Exception as e:
+                print(f"[INDICATOR_SWEEP] Data load failed: {e}, using synthetic")
+                using_synthetic = True
+                # Generate synthetic OHLCV
+                close_series = self._generate_synthetic_data(symbols, start_date, end_date).values
+                high_series = close_series * 1.02  # High = close * 1.02
+                low_series = close_series * 0.98   # Low = close * 0.98
+                volume_series = np.random.randint(1000000, 10000000, len(close_series))
 
             # Build parameter lists from ranges
             param_lists = {}
@@ -980,31 +1173,82 @@ class VectorBTProvider(BacktestingProviderBase):
                 mn, mx, st = rng.get('min', 5), rng.get('max', 50), rng.get('step', 5)
                 param_lists[name] = list(range(int(mn), int(mx) + 1, int(st))) if st >= 1 else list(np.arange(mn, mx + st, st))
 
+            print(f"[INDICATOR_SWEEP] indicator={indicator}")
+            print(f"[INDICATOR_SWEEP] param_ranges={param_ranges}")
+            print(f"[INDICATOR_SWEEP] param_lists={param_lists}")
+            print(f"[INDICATOR_SWEEP] close_series length={len(close_series)}")
+
             # Map indicator to factory-compatible function
+            # Signatures from python -c inspection:
+            # Single-price indicators (work with close only):
+            #   calculate_ma(vbt, close, period, ewm=False)
+            #   calculate_rsi(vbt, close, period=14)
+            #   calculate_mstd(vbt, close, period, ewm=False)
+            #   calculate_zscore(close, period=20)
+            #   calculate_momentum(close, lookback=20)
+            #   calculate_donchian(close, period=20) -> dict
+            #   calculate_bbands(vbt, close, period=20, alpha=2.0) -> dict
+            #   calculate_obv(vbt, close, volume) - needs volume
+            # Multi-price indicators (need high/low/close):
+            #   calculate_atr(vbt, high, low, close, period=14)
+            #   calculate_cci(high, low, close, period=20)
+            #   calculate_williams_r(high, low, close, period=14)
+            #   calculate_keltner(high, low, close, ema_period=20, atr_period=10, multiplier=2.0) -> dict
+            #   calculate_stoch(vbt, high, low, close, k_period=14, d_period=3) -> dict
+            #   calculate_macd(vbt, close, fast_period=12, slow_period=26, signal_period=9) -> dict
+            #   calculate_adx(close, high=None, low=None, period=14) -> dict
+
+            # Now we have full OHLCV data, support ALL indicators
             calc_map = {
-                'rsi': lambda s, period=14: ind.calculate_rsi(s, period),
-                'ma': lambda s, period=20: ind.calculate_ma(s, period),
-                'ema': lambda s, period=20: ind.calculate_ma(s, period, ma_type='ema'),
-                'atr': lambda s, period=14: ind.calculate_atr(s, period),
-                'mstd': lambda s, period=20: ind.calculate_mstd(s, period),
-                'zscore': lambda s, period=20: ind.calculate_zscore(s, period),
-                'adx': lambda s, period=14: ind.calculate_adx(s, period),
-                'momentum': lambda s, lookback=20: ind.calculate_momentum(s, lookback),
-                'cci': lambda s, period=20: ind.calculate_cci(s, period),
-                'williams_r': lambda s, period=14: ind.calculate_williams_r(s, period),
+                # Moving averages (close only)
+                'ma': lambda period: ind.calculate_ma(None, close_series, period, ewm=False),
+                'ema': lambda period: ind.calculate_ma(None, close_series, period, ewm=True),
+                'mstd': lambda period: ind.calculate_mstd(None, close_series, period, ewm=False),
+
+                # Oscillators (close only)
+                'rsi': lambda period: ind.calculate_rsi(None, close_series, period),
+                'momentum': lambda lookback: ind.calculate_momentum(close_series, lookback),
+
+                # Statistical (close only)
+                'zscore': lambda period: ind.calculate_zscore(close_series, period),
+
+                # Channels/Bands (close only)
+                'donchian': lambda period: ind.calculate_donchian(close_series, period),
+                'bbands': lambda period: ind.calculate_bbands(None, close_series, period, alpha=2.0),
+                'macd': lambda fast, slow, signal: ind.calculate_macd(None, close_series, fast, slow, signal),
+                'adx': lambda period: ind.calculate_adx(close_series, high=high_series, low=low_series, period=period),
+
+                # Multi-price indicators (need high/low/close)
+                'atr': lambda period: ind.calculate_atr(None, high_series, low_series, close_series, period),
+                'cci': lambda period: ind.calculate_cci(high_series, low_series, close_series, period),
+                'williams_r': lambda period: ind.calculate_williams_r(high_series, low_series, close_series, period),
+                'keltner': lambda period: ind.calculate_keltner(high_series, low_series, close_series, ema_period=period, atr_period=10, multiplier=2.0),
+                'stoch': lambda k_period, d_period: ind.calculate_stoch(None, high_series, low_series, close_series, k_period, d_period),
+
+                # Volume indicators
+                'obv': lambda: ind.calculate_obv(None, close_series, volume_series),
+                'vwap': lambda: ind.calculate_vwap(high_series, low_series, close_series, volume_series),
             }
 
             if indicator not in calc_map:
                 return {'success': False, 'error': f'Indicator {indicator} not supported for param sweep'}
 
-            factory = ind.IndicatorFactory(
-                input_names=['close'],
+            print(f"[INDICATOR_SWEEP] Creating factory with param_names={list(param_lists.keys())}")
+
+            # Create factory - the lambdas now capture OHLCV data internally
+            # So we don't pass inputs to run_combs, only params
+            factory_fn = ind.IndicatorFactory.from_custom_func(
+                calc_map[indicator],
+                input_names=[],  # No inputs needed, captured in lambda
                 param_names=list(param_lists.keys()),
                 output_names=['output'],
                 short_name=indicator,
             )
-            factory_fn = factory.from_custom_func(lambda close, **kw: calc_map[indicator](close, **kw))
-            results = factory_fn.run_combs(close_series, param_ranges=param_lists)
+            print(f"[INDICATOR_SWEEP] Calling run_combs with param_ranges={param_lists}")
+
+            # Call run_combs without inputs since lambdas capture OHLCV
+            results = factory_fn.run_combs(param_ranges=param_lists)
+            print(f"[INDICATOR_SWEEP] run_combs returned {len(results)} results")
 
             # Summarize results
             summaries = []
@@ -1012,24 +1256,54 @@ class VectorBTProvider(BacktestingProviderBase):
                 params_dict = r.get('params', {})
                 output = r.get('output')
                 summary = {'params': params_dict}
-                if output is not None and hasattr(output, '__len__') and len(output) > 0:
-                    vals = np.array(output, dtype=float)
-                    vals = vals[~np.isnan(vals)]
-                    if len(vals) > 0:
-                        summary['mean'] = float(np.mean(vals))
-                        summary['std'] = float(np.std(vals))
-                        summary['min'] = float(np.min(vals))
-                        summary['max'] = float(np.max(vals))
-                        summary['last'] = float(vals[-1])
+
+                # Output can be a dict (from IndicatorFactory) or array
+                if output is not None:
+                    # IndicatorFactory wraps output in dict with 'output' key
+                    if isinstance(output, dict) and 'output' in output:
+                        output = output['output']
+
+                    # Now output is the actual indicator result (array or dict)
+                    if isinstance(output, dict):
+                        # Multi-output indicator (MACD, BBands, Stoch)
+                        # Calculate stats for each component
+                        summary['outputs'] = {}
+                        for component_name, component_array in output.items():
+                            if component_array is not None and hasattr(component_array, '__len__') and len(component_array) > 0:
+                                vals = np.array(component_array, dtype=float)
+                                vals = vals[~np.isnan(vals)]
+                                if len(vals) > 0:
+                                    summary['outputs'][component_name] = {
+                                        'mean': float(np.mean(vals)),
+                                        'std': float(np.std(vals)),
+                                        'min': float(np.min(vals)),
+                                        'max': float(np.max(vals)),
+                                        'last': float(vals[-1])
+                                    }
+                    elif hasattr(output, '__len__') and len(output) > 0:
+                        # Single-output indicator (MA, RSI, ATR, etc.)
+                        vals = np.array(output, dtype=float)
+                        vals = vals[~np.isnan(vals)]
+                        if len(vals) > 0:
+                            summary['mean'] = float(np.mean(vals))
+                            summary['std'] = float(np.std(vals))
+                            summary['min'] = float(np.min(vals))
+                            summary['max'] = float(np.max(vals))
+                            summary['last'] = float(vals[-1])
                 summaries.append(summary)
 
-            return {'success': True, 'data': {
+            result_data = {
                 'indicator': indicator,
                 'totalCombinations': len(results),
                 'usingSyntheticData': using_synthetic,
                 'results': summaries,
-            }}
+            }
+            print(f"[INDICATOR_SWEEP] Returning: {result_data}")
+            return {'success': True, 'data': result_data}
         except Exception as e:
+            print(f"[INDICATOR_SWEEP] ERROR: {e}")
+            import traceback
+            traceback.print_exc()
             return {'success': False, 'error': str(e), 'traceback': __import__('traceback').format_exc()}
 
     def labels_to_signals(self, request: Dict[str, Any]) -> Dict[str, Any]:
@@ -1564,7 +1838,11 @@ def main():
             result = provider.indicator_signals(args)
             result_str = json_response(result)
         elif command == 'indicator_param_sweep':
+            print("[MAIN] About to call indicator_param_sweep")
+            sys.stdout.flush()
             result = provider.indicator_param_sweep(args)
+            print(f"[MAIN] indicator_param_sweep returned: {result}")
+            sys.stdout.flush()
             result_str = json_response(result)
         elif command == 'labels_to_signals':
             result = provider.labels_to_signals(args)

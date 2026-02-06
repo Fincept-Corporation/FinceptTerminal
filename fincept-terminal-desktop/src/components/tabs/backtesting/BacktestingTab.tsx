@@ -48,86 +48,53 @@ const PROVIDER_COLORS: Record<BacktestingProviderSlug, string> = {
 };
 
 // ============================================================================
-// DATA SOURCE OPTIONS
+// DATA SOURCE OPTIONS - Removed (data command removed)
 // ============================================================================
-
-const DATA_SOURCES = [
-  { id: 'yfinance', label: 'Yahoo Finance', supported: true },
-  { id: 'binance', label: 'Binance', supported: true },
-  { id: 'ccxt', label: 'CCXT', supported: true },
-  { id: 'alpaca', label: 'Alpaca', supported: true },
-  { id: 'synthetic', label: 'Synthetic (GBM)', supported: true },
-];
-
-const TIMEFRAMES = [
-  { id: '1m', label: '1 Minute' },
-  { id: '5m', label: '5 Minutes' },
-  { id: '15m', label: '15 Minutes' },
-  { id: '1h', label: '1 Hour' },
-  { id: '4h', label: '4 Hours' },
-  { id: '1d', label: '1 Day' },
-  { id: '1w', label: '1 Week' },
-];
 
 // ============================================================================
 // INDICATOR OPTIONS
 // ============================================================================
 
 const INDICATORS = [
-  { id: 'ma', label: 'Moving Average', params: ['period', 'ewm'] },
+  // Moving Averages
+  { id: 'ma', label: 'Moving Average (SMA)', params: ['period'] },
+  { id: 'ema', label: 'Moving Average (EMA)', params: ['period'] },
   { id: 'mstd', label: 'Moving Std Dev', params: ['period'] },
-  { id: 'bbands', label: 'Bollinger Bands', params: ['period', 'alpha'] },
+
+  // Oscillators
   { id: 'rsi', label: 'RSI', params: ['period'] },
-  { id: 'stoch', label: 'Stochastic', params: ['kPeriod', 'dPeriod'] },
-  { id: 'macd', label: 'MACD', params: ['fast', 'slow', 'signal'] },
-  { id: 'atr', label: 'ATR', params: ['period'] },
-  { id: 'obv', label: 'OBV', params: [] },
-  { id: 'adx', label: 'ADX', params: ['period'] },
-  { id: 'donchian', label: 'Donchian', params: ['period'] },
-  { id: 'zscore', label: 'Z-Score', params: ['window'] },
-  { id: 'momentum', label: 'Momentum', params: ['period'] },
-  { id: 'williams_r', label: 'Williams %R', params: ['period'] },
+  { id: 'stoch', label: 'Stochastic', params: ['k_period', 'd_period'] },
   { id: 'cci', label: 'CCI', params: ['period'] },
-  { id: 'keltner', label: 'Keltner', params: ['period', 'atrMult'] },
+  { id: 'williams_r', label: 'Williams %R', params: ['period'] },
+
+  // Trend Indicators
+  { id: 'macd', label: 'MACD', params: ['fast', 'slow', 'signal'] },
+  { id: 'adx', label: 'ADX', params: ['period'] },
+  { id: 'momentum', label: 'Momentum', params: ['lookback'] },
+
+  // Volatility
+  { id: 'atr', label: 'ATR', params: ['period'] },
+  { id: 'bbands', label: 'Bollinger Bands', params: ['period'] },
+  { id: 'keltner', label: 'Keltner Channel', params: ['period'] },
+
+  // Channels
+  { id: 'donchian', label: 'Donchian Channel', params: ['period'] },
+
+  // Statistical
+  { id: 'zscore', label: 'Z-Score', params: ['period'] },
+
+  // Volume
+  { id: 'obv', label: 'OBV', params: [] },
+  { id: 'vwap', label: 'VWAP', params: [] },
 ];
 
 // ============================================================================
-// SIGNAL GENERATORS
+// LABEL GENERATORS - Removed (labels command removed)
 // ============================================================================
 
-const SIGNAL_GENERATORS = [
-  { id: 'RAND', label: 'Random', params: ['n', 'seed'] },
-  { id: 'RANDX', label: 'Random Entry/Exit', params: ['n', 'seed'] },
-  { id: 'RANDNX', label: 'Random N Entries', params: ['n', 'seed'] },
-  { id: 'RPROB', label: 'Random Probability', params: ['prob', 'seed'] },
-  { id: 'RPROBX', label: 'Random Prob Entry/Exit', params: ['entryProb', 'exitProb', 'seed'] },
-  { id: 'STX', label: 'Stop/Take-Profit', params: ['stopLoss', 'takeProfit'] },
-  { id: 'STCX', label: 'Trailing Stop', params: ['stopLoss', 'trailing'] },
-  { id: 'OHLCSTX', label: 'OHLC Stop/TP', params: ['stopLoss', 'takeProfit'] },
-];
-
 // ============================================================================
-// LABEL GENERATORS
+// SPLITTERS - Removed (splits command removed)
 // ============================================================================
-
-const LABEL_GENERATORS = [
-  { id: 'FIXLB', label: 'Fixed Horizon', params: ['horizon', 'threshold'] },
-  { id: 'MEANLB', label: 'Mean Reversion', params: ['window', 'threshold'] },
-  { id: 'LEXLB', label: 'Local Extrema', params: ['window'] },
-  { id: 'TRENDLB', label: 'Trend', params: ['window', 'threshold'] },
-  { id: 'BOLB', label: 'Bollinger', params: ['window', 'alpha'] },
-];
-
-// ============================================================================
-// SPLITTERS
-// ============================================================================
-
-const SPLITTERS = [
-  { id: 'range', label: 'Range Splitter', params: [] },
-  { id: 'rolling', label: 'Rolling Window', params: ['windowLen', 'testLen', 'step'] },
-  { id: 'expanding', label: 'Expanding Window', params: ['minLen', 'testLen', 'step'] },
-  { id: 'purged_kfold', label: 'Purged K-Fold', params: ['nSplits', 'purgeLen', 'embargoLen'] },
-];
 
 // ============================================================================
 // POSITION SIZING OPTIONS
@@ -265,25 +232,13 @@ const BacktestingTab: React.FC = () => {
   const [wfSplits, setWfSplits] = useState(5);
   const [wfTrainRatio, setWfTrainRatio] = useState(0.7);
 
-  // --- Data Config ---
-  const [dataSource, setDataSource] = useState('yfinance');
-  const [timeframe, setTimeframe] = useState('1d');
-
   // --- Indicator Config ---
   const [selectedIndicator, setSelectedIndicator] = useState('ma');
   const [indicatorParams, setIndicatorParams] = useState<Record<string, any>>({});
 
-  // --- Signal Config ---
-  const [selectedSignalGen, setSelectedSignalGen] = useState('RAND');
-  const [signalParams, setSignalParams] = useState<Record<string, any>>({});
-
-  // --- Label Config ---
-  const [selectedLabelGen, setSelectedLabelGen] = useState('FIXLB');
-  const [labelParams, setLabelParams] = useState<Record<string, any>>({});
-
-  // --- Split Config ---
-  const [selectedSplitter, setSelectedSplitter] = useState('rolling');
-  const [splitParams, setSplitParams] = useState<Record<string, any>>({});
+  // --- Indicator Signals Config ---
+  const [indSignalMode, setIndSignalMode] = useState('crossover_signals');
+  const [indSignalParams, setIndSignalParams] = useState<Record<string, any>>({});
 
   // --- Execution State ---
   const [isRunning, setIsRunning] = useState(false);
@@ -413,23 +368,57 @@ const BacktestingTab: React.FC = () => {
           };
           break;
 
-        case 'data':
-          commandArgs = {
-            symbols: symbolList,
-            dataSource,
-            timeframe,
-            startDate,
-            endDate,
-          };
-          break;
-
         case 'indicator':
+          // Indicator command uses parameter sweeping (ranges)
+          const indicatorParamRanges: Record<string, { min: number; max: number; step: number }> = {};
+          const selectedInd = INDICATORS.find(i => i.id === selectedIndicator);
+
+          if (selectedInd) {
+            // Default values per parameter type
+            const paramDefaults: Record<string, number> = {
+              'period': 20,
+              'k_period': 14,
+              'd_period': 3,
+              'fast': 12,
+              'slow': 26,
+              'signal': 9,
+              'alpha': 2,
+              'window': 20,
+              'atrMult': 2,
+              'lookback': 20,
+            };
+
+            // Filter to only numeric parameters (skip boolean flags like 'ewm')
+            const numericParams = selectedInd.params.filter(p =>
+              !['ewm'].includes(p) // Skip non-numeric flags
+            );
+
+            console.log('[INDICATOR] selectedInd:', selectedInd.id, 'params:', selectedInd.params);
+            console.log('[INDICATOR] numericParams:', numericParams);
+            console.log('[INDICATOR] indicatorParams:', indicatorParams);
+
+            numericParams.forEach(paramName => {
+              const defaultValue = paramDefaults[paramName] ?? 14;
+              const value = indicatorParams[paramName] ?? defaultValue;
+
+              // Create a range of ±20% around the value for sweep
+              const minVal = Math.max(2, Math.floor(value * 0.8));
+              const maxVal = Math.ceil(value * 1.2);
+              const stepVal = Math.max(1, Math.floor((maxVal - minVal) / 5));
+
+              indicatorParamRanges[paramName] = { min: minVal, max: maxVal, step: stepVal };
+              console.log(`[INDICATOR] ${paramName}: value=${value}, range=[${minVal}, ${maxVal}], step=${stepVal}`);
+            });
+          }
+
+          console.log('[INDICATOR] Final paramRanges:', indicatorParamRanges);
+
           commandArgs = {
             symbols: symbolList,
             startDate,
             endDate,
             indicator: selectedIndicator,
-            parameters: indicatorParams,
+            paramRanges: indicatorParamRanges,
           };
           break;
 
@@ -438,65 +427,9 @@ const BacktestingTab: React.FC = () => {
             symbols: symbolList,
             startDate,
             endDate,
+            mode: indSignalMode,
             indicator: selectedIndicator,
-            parameters: indicatorParams,
-          };
-          break;
-
-        case 'signals':
-          commandArgs = {
-            symbols: symbolList,
-            startDate,
-            endDate,
-            generator: selectedSignalGen,
-            parameters: signalParams,
-          };
-          break;
-
-        case 'labels':
-          commandArgs = {
-            symbols: symbolList,
-            startDate,
-            endDate,
-            generator: selectedLabelGen,
-            parameters: labelParams,
-          };
-          break;
-
-        case 'splits':
-          commandArgs = {
-            startDate,
-            endDate,
-            splitter: selectedSplitter,
-            parameters: splitParams,
-          };
-          break;
-
-        case 'returns':
-          commandArgs = {
-            symbols: symbolList,
-            startDate,
-            endDate,
-          };
-          break;
-
-        case 'browse_strategies':
-          commandArgs = {};
-          break;
-
-        case 'browse_indicators':
-          commandArgs = {};
-          break;
-
-        case 'labels_to_signals':
-          commandArgs = {
-            symbols: symbolList,
-            startDate,
-            endDate,
-            labelType: selectedLabelGen,
-            params: labelParams,
-            entryLabel: 1,
-            exitLabel: -1,
+            params: indSignalParams,
           };
           break;
       }
@@ -561,9 +494,8 @@ const BacktestingTab: React.FC = () => {
     selectedStrategy, strategyParams, customCode, commission, slippage, leverage, margin,
     stopLoss, takeProfit, trailingStop, positionSizing, positionSizeValue, allowShort,
     benchmarkSymbol, enableBenchmark, randomBenchmark, optimizeObjective, optimizeMethod,
-    maxIterations, paramRanges, wfSplits, wfTrainRatio, dataSource, timeframe,
-    selectedIndicator, indicatorParams, selectedSignalGen, signalParams,
-    selectedLabelGen, labelParams, selectedSplitter, splitParams
+    maxIterations, paramRanges, wfSplits, wfTrainRatio,
+    selectedIndicator, indicatorParams, indSignalMode, indSignalParams
   ]);
 
   const toggleSection = (section: string) => {
@@ -874,16 +806,8 @@ const BacktestingTab: React.FC = () => {
         {activeCommand === 'backtest' && renderBacktestConfig()}
         {activeCommand === 'optimize' && renderOptimizeConfig()}
         {activeCommand === 'walk_forward' && renderWalkForwardConfig()}
-        {activeCommand === 'data' && renderDataConfig()}
         {activeCommand === 'indicator' && renderIndicatorConfig()}
         {activeCommand === 'indicator_signals' && renderIndicatorSignalsConfig()}
-        {activeCommand === 'signals' && renderSignalsConfig()}
-        {activeCommand === 'labels' && renderLabelsConfig()}
-        {activeCommand === 'splits' && renderSplitsConfig()}
-        {activeCommand === 'returns' && renderReturnsConfig()}
-        {activeCommand === 'browse_strategies' && renderBrowseStrategiesConfig()}
-        {activeCommand === 'browse_indicators' && renderBrowseIndicatorsConfig()}
-        {activeCommand === 'labels_to_signals' && renderLabelsToSignalsConfig()}
       </div>
     </div>
   );
@@ -1352,86 +1276,16 @@ const BacktestingTab: React.FC = () => {
     </div>
   );
 
-  const renderDataConfig = () => (
+  const renderIndicatorConfig = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('datasource', 'DATA SOURCE', Database, (
+      {renderSection('market', 'MARKET DATA', Database, (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '9px',
-              fontWeight: 700,
-              color: FINCEPT.GRAY,
-              marginBottom: '4px',
-              letterSpacing: '0.5px',
-              fontFamily: '"IBM Plex Mono", monospace',
-            }}>
-              SOURCE
-            </label>
-            <select
-              value={dataSource}
-              onChange={e => setDataSource(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                backgroundColor: FINCEPT.DARK_BG,
-                color: FINCEPT.WHITE,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                fontSize: '10px',
-                fontFamily: '"IBM Plex Mono", monospace',
-                outline: 'none',
-              }}
-            >
-              {DATA_SOURCES.map(ds => (
-                <option key={ds.id} value={ds.id} disabled={!ds.supported}>
-                  {ds.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '9px',
-              fontWeight: 700,
-              color: FINCEPT.GRAY,
-              marginBottom: '4px',
-              letterSpacing: '0.5px',
-              fontFamily: '"IBM Plex Mono", monospace',
-            }}>
-              TIMEFRAME
-            </label>
-            <select
-              value={timeframe}
-              onChange={e => setTimeframe(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                backgroundColor: FINCEPT.DARK_BG,
-                color: FINCEPT.WHITE,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                fontSize: '10px',
-                fontFamily: '"IBM Plex Mono", monospace',
-                outline: 'none',
-              }}
-            >
-              {TIMEFRAMES.map(tf => (
-                <option key={tf.id} value={tf.id}>{tf.label}</option>
-              ))}
-            </select>
-          </div>
           {renderInput('Symbols', symbols, setSymbols, 'text')}
           {renderInput('Start Date', startDate, setStartDate, 'date')}
           {renderInput('End Date', endDate, setEndDate, 'date')}
         </div>
       ))}
-    </div>
-  );
 
-  const renderIndicatorConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {renderSection('indicator', 'INDICATOR SELECTION', Activity, (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
@@ -1466,165 +1320,246 @@ const BacktestingTab: React.FC = () => {
     </div>
   );
 
-  const renderIndicatorSignalsConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderIndicatorConfig()}
-    </div>
-  );
+  const renderIndicatorSignalsConfig = () => {
+    const SIGNAL_MODES = [
+      { id: 'crossover_signals', label: 'Crossover', description: 'MA/EMA crossover signals' },
+      { id: 'threshold_signals', label: 'Threshold', description: 'RSI/CCI threshold signals' },
+      { id: 'breakout_signals', label: 'Breakout', description: 'Channel breakout signals' },
+      { id: 'mean_reversion_signals', label: 'Mean Reversion', description: 'Z-score mean reversion' },
+      { id: 'signal_filter', label: 'Signal Filter', description: 'Filter signals with indicators' },
+    ];
 
-  const renderSignalsConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('signals', 'SIGNAL GENERATOR', Zap, (
-        <>
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Market Data */}
+        {renderSection('market', 'MARKET DATA', Database, (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {renderInput('Symbols', symbols, setSymbols, 'text')}
+            {renderInput('Start Date', startDate, setStartDate, 'date')}
+            {renderInput('End Date', endDate, setEndDate, 'date')}
+          </div>
+        ))}
+
+        {/* Signal Mode Selection */}
+        {renderSection('signal_mode', 'SIGNAL MODE', Zap, (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-            {SIGNAL_GENERATORS.map(gen => (
+            {SIGNAL_MODES.map(mode => (
               <button
-                key={gen.id}
-                onClick={() => setSelectedSignalGen(gen.id)}
+                key={mode.id}
+                onClick={() => {
+                  setIndSignalMode(mode.id);
+                  setIndSignalParams({}); // Reset params when mode changes
+                }}
                 style={{
                   padding: '8px',
-                  backgroundColor: selectedSignalGen === gen.id ? FINCEPT.YELLOW : 'transparent',
-                  color: selectedSignalGen === gen.id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  backgroundColor: indSignalMode === mode.id ? FINCEPT.YELLOW : 'transparent',
+                  color: indSignalMode === mode.id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                   border: `1px solid ${FINCEPT.BORDER}`,
                   borderRadius: '2px',
                   fontSize: '9px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   fontFamily: '"IBM Plex Mono", monospace',
+                  textAlign: 'left',
                 }}
               >
-                {gen.label}
+                <div>{mode.label}</div>
+                <div style={{ fontSize: '7px', fontWeight: 400, marginTop: '2px', opacity: 0.7 }}>
+                  {mode.description}
+                </div>
               </button>
             ))}
           </div>
-        </>
-      ))}
-    </div>
-  );
+        ))}
 
-  const renderLabelsConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('labels', 'LABEL GENERATOR', Tag, (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-          {LABEL_GENERATORS.map(gen => (
-            <button
-              key={gen.id}
-              onClick={() => setSelectedLabelGen(gen.id)}
-              style={{
-                padding: '8px',
-                backgroundColor: selectedLabelGen === gen.id ? FINCEPT.BLUE : 'transparent',
-                color: selectedLabelGen === gen.id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: '"IBM Plex Mono", monospace',
-              }}
-            >
-              {gen.label}
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderSplitsConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('splits', 'CROSS-VALIDATION SPLITTER', Split, (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-          {SPLITTERS.map(splitter => (
-            <button
-              key={splitter.id}
-              onClick={() => setSelectedSplitter(splitter.id)}
-              style={{
-                padding: '8px',
-                backgroundColor: selectedSplitter === splitter.id ? FINCEPT.PURPLE : 'transparent',
-                color: selectedSplitter === splitter.id ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: '"IBM Plex Mono", monospace',
-              }}
-            >
-              {splitter.label}
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderReturnsConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('returns', 'RETURNS ANALYSIS', DollarSign, (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          {renderInput('Symbols', symbols, setSymbols, 'text')}
-          {renderInput('Start Date', startDate, setStartDate, 'date')}
-          {renderInput('End Date', endDate, setEndDate, 'date')}
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderBrowseStrategiesConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('browse_strategies', 'BROWSE STRATEGIES', Search, (
-        <div style={{ fontSize: '9px', color: FINCEPT.GRAY, lineHeight: 1.6 }}>
-          <p style={{ marginBottom: '8px' }}>
-            Click <span style={{ color: FINCEPT.ORANGE, fontWeight: 700 }}>RUN</span> to fetch the complete strategy catalog from vbt_strategies module.
-          </p>
-          <p style={{ color: FINCEPT.MUTED }}>
-            Returns all available trading strategies with their parameters, descriptions, and usage examples.
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderBrowseIndicatorsConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('browse_indicators', 'BROWSE INDICATORS', Filter, (
-        <div style={{ fontSize: '9px', color: FINCEPT.GRAY, lineHeight: 1.6 }}>
-          <p style={{ marginBottom: '8px' }}>
-            Click <span style={{ color: FINCEPT.ORANGE, fontWeight: 700 }}>RUN</span> to fetch the complete indicator catalog from vbt_indicators module.
-          </p>
-          <p style={{ color: FINCEPT.MUTED }}>
-            Returns all available technical indicators with their parameters, calculation methods, and signal generation capabilities.
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-
-  const renderLabelsToSignalsConfig = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {renderSection('labels_to_signals', 'LABELS TO SIGNALS CONVERSION', ChevronRight, (
-        <div style={{ fontSize: '9px', color: FINCEPT.GRAY, lineHeight: 1.6 }}>
-          <p style={{ marginBottom: '8px', color: FINCEPT.CYAN }}>
-            Converts ML labels into trading signals (entry/exit).
-          </p>
+        {/* Mode-Specific Parameters */}
+        {indSignalMode === 'crossover_signals' && renderSection('crossover_params', 'CROSSOVER PARAMETERS', Activity, (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            {renderInput('Symbols', symbols, setSymbols, 'text')}
-            {renderInput('Start Date', startDate, setStartDate, 'date')}
-            {renderInput('End Date', endDate, setEndDate, 'date')}
-            {renderSelect('Label Type', selectedLabelGen, setSelectedLabelGen, LABEL_GENERATORS.map(g => ({ value: g.id, label: g.label })))}
+            <div>
+              <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>FAST INDICATOR</div>
+              <select
+                value={indSignalParams.fast_indicator ?? 'ma'}
+                onChange={(e) => setIndSignalParams(prev => ({ ...prev, fast_indicator: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                }}
+              >
+                <option value="ma">SMA</option>
+                <option value="ema">EMA</option>
+              </select>
+            </div>
+            {renderInput('Fast Period', indSignalParams.fast_period ?? 10, (v) => setIndSignalParams(prev => ({ ...prev, fast_period: v })), 'number')}
+            <div>
+              <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>SLOW INDICATOR</div>
+              <select
+                value={indSignalParams.slow_indicator ?? 'ma'}
+                onChange={(e) => setIndSignalParams(prev => ({ ...prev, slow_indicator: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                }}
+              >
+                <option value="ma">SMA</option>
+                <option value="ema">EMA</option>
+              </select>
+            </div>
+            {renderInput('Slow Period', indSignalParams.slow_period ?? 20, (v) => setIndSignalParams(prev => ({ ...prev, slow_period: v })), 'number')}
           </div>
-          <div style={{ marginTop: '12px', padding: '8px', backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px' }}>
-            <p style={{ fontSize: '8px', color: FINCEPT.MUTED, marginBottom: '4px' }}>
-              Entry Label: <span style={{ color: FINCEPT.GREEN }}>1</span> (buy signal)
-            </p>
-            <p style={{ fontSize: '8px', color: FINCEPT.MUTED }}>
-              Exit Label: <span style={{ color: FINCEPT.RED }}>-1</span> (sell signal)
-            </p>
+        ))}
+
+        {indSignalMode === 'threshold_signals' && renderSection('threshold_params', 'THRESHOLD PARAMETERS', Activity, (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>INDICATOR</div>
+              <select
+                value={selectedIndicator}
+                onChange={(e) => setSelectedIndicator(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                }}
+              >
+                <option value="rsi">RSI</option>
+                <option value="cci">CCI</option>
+                <option value="williams_r">Williams %R</option>
+                <option value="stoch">Stochastic</option>
+              </select>
+            </div>
+            {renderInput('Period', indSignalParams.period ?? 14, (v) => setIndSignalParams(prev => ({ ...prev, period: v })), 'number')}
+            {renderInput('Lower Threshold', indSignalParams.lower ?? 30, (v) => setIndSignalParams(prev => ({ ...prev, lower: v })), 'number')}
+            {renderInput('Upper Threshold', indSignalParams.upper ?? 70, (v) => setIndSignalParams(prev => ({ ...prev, upper: v })), 'number')}
           </div>
-        </div>
-      ))}
-    </div>
-  );
+        ))}
+
+        {indSignalMode === 'breakout_signals' && renderSection('breakout_params', 'BREAKOUT PARAMETERS', Activity, (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>CHANNEL TYPE</div>
+              <select
+                value={indSignalParams.channel ?? 'donchian'}
+                onChange={(e) => setIndSignalParams(prev => ({ ...prev, channel: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                }}
+              >
+                <option value="donchian">Donchian Channel</option>
+                <option value="bbands">Bollinger Bands</option>
+                <option value="keltner">Keltner Channel</option>
+              </select>
+            </div>
+            {renderInput('Period', indSignalParams.period ?? 20, (v) => setIndSignalParams(prev => ({ ...prev, period: v })), 'number')}
+          </div>
+        ))}
+
+        {indSignalMode === 'mean_reversion_signals' && renderSection('mean_reversion_params', 'MEAN REVERSION PARAMETERS', Activity, (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            {renderInput('Period', indSignalParams.period ?? 20, (v) => setIndSignalParams(prev => ({ ...prev, period: v })), 'number')}
+            {renderInput('Z-Score Entry', indSignalParams.z_entry ?? 2.0, (v) => setIndSignalParams(prev => ({ ...prev, z_entry: v })), 'number')}
+            {renderInput('Z-Score Exit', indSignalParams.z_exit ?? 0.0, (v) => setIndSignalParams(prev => ({ ...prev, z_exit: v })), 'number')}
+          </div>
+        ))}
+
+        {indSignalMode === 'signal_filter' && renderSection('filter_params', 'SIGNAL FILTER PARAMETERS', Activity, (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>BASE INDICATOR</div>
+              <select
+                value={indSignalParams.base_indicator ?? 'rsi'}
+                onChange={(e) => setIndSignalParams(prev => ({ ...prev, base_indicator: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                }}
+              >
+                <option value="rsi">RSI</option>
+                <option value="cci">CCI</option>
+                <option value="williams_r">Williams %R</option>
+                <option value="momentum">Momentum</option>
+                <option value="stoch">Stochastic</option>
+                <option value="macd">MACD</option>
+              </select>
+            </div>
+            {renderInput('Base Period', indSignalParams.base_period ?? 14, (v) => setIndSignalParams(prev => ({ ...prev, base_period: v })), 'number')}
+            <div>
+              <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>FILTER INDICATOR</div>
+              <select
+                value={indSignalParams.filter_indicator ?? 'adx'}
+                onChange={(e) => setIndSignalParams(prev => ({ ...prev, filter_indicator: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                }}
+              >
+                <option value="adx">ADX</option>
+                <option value="atr">ATR</option>
+                <option value="mstd">Moving Std Dev</option>
+                <option value="zscore">Z-Score</option>
+                <option value="rsi">RSI</option>
+              </select>
+            </div>
+            {renderInput('Filter Period', indSignalParams.filter_period ?? 14, (v) => setIndSignalParams(prev => ({ ...prev, filter_period: v })), 'number')}
+            {renderInput('Filter Threshold', indSignalParams.filter_threshold ?? 25, (v) => setIndSignalParams(prev => ({ ...prev, filter_threshold: v })), 'number')}
+            <div>
+              <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>FILTER TYPE</div>
+              <select
+                value={indSignalParams.filter_type ?? 'above'}
+                onChange={(e) => setIndSignalParams(prev => ({ ...prev, filter_type: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  color: FINCEPT.WHITE,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                }}
+              >
+                <option value="above">Above Threshold</option>
+                <option value="below">Below Threshold</option>
+              </select>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+
+
+
+
 
   // ============================================================================
   // RENDER: Helper Functions
@@ -1870,32 +1805,46 @@ const BacktestingTab: React.FC = () => {
 
         {result && !isRunning && (
           <div>
-            {resultView === 'summary' && renderResultSummary()}
-            {resultView === 'metrics' && renderResultMetrics()}
-            {resultView === 'trades' && renderResultTrades()}
-            {resultView === 'raw' && renderResultRaw()}
+            {/* Render based on command type */}
+            {activeCommand === 'backtest' && (
+              <>
+                {resultView === 'summary' && renderResultSummary()}
+                {resultView === 'metrics' && renderResultMetrics()}
+                {resultView === 'trades' && renderResultTrades()}
+                {resultView === 'raw' && renderResultRaw()}
 
-            {/* Show message if result exists but no data */}
-            {!result?.data?.performance && (
-              <div style={{
-                padding: '12px',
-                backgroundColor: `${FINCEPT.YELLOW}20`,
-                border: `1px solid ${FINCEPT.YELLOW}`,
-                borderRadius: '2px',
-              }}>
-                <div style={{
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  color: FINCEPT.YELLOW,
-                  marginBottom: '4px',
-                }}>
-                  EMPTY RESULT
-                </div>
-                <div style={{ fontSize: '9px', color: FINCEPT.WHITE, lineHeight: 1.4 }}>
-                  Backtest completed but returned no performance data. Check console logs for details.
-                </div>
-              </div>
+                {/* Show message if backtest has no performance data */}
+                {!result?.data?.performance && (
+                  <div style={{
+                    padding: '12px',
+                    backgroundColor: `${FINCEPT.YELLOW}20`,
+                    border: `${FINCEPT.YELLOW}`,
+                    borderRadius: '2px',
+                  }}>
+                    <div style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: FINCEPT.YELLOW,
+                      marginBottom: '4px',
+                    }}>
+                      EMPTY RESULT
+                    </div>
+                    <div style={{ fontSize: '9px', color: FINCEPT.WHITE, lineHeight: 1.4 }}>
+                      Backtest completed but returned no performance data. Check console logs for details.
+                    </div>
+                  </div>
+                )}
+              </>
             )}
+
+            {/* Indicator Signals - show signal counts */}
+            {activeCommand === 'indicator_signals' && renderSignalsResult()}
+
+            {/* Indicator - show indicator values */}
+            {activeCommand === 'indicator' && renderIndicatorResult()}
+
+            {/* Other commands - show raw data */}
+            {!['backtest', 'indicator_signals', 'indicator'].includes(activeCommand) && renderResultRaw()}
           </div>
         )}
 
@@ -2467,6 +2416,409 @@ const BacktestingTab: React.FC = () => {
       </span>
     </div>
   );
+
+  // ============================================================================
+  // RENDER: Command-Specific Results
+  // ============================================================================
+
+
+  const renderSignalsResult = () => {
+    if (!result?.data) return renderResultRaw();
+
+    const data = result.data;
+    const entrySignals = data.entrySignals ?? data.entries ?? [];
+    const exitSignals = data.exitSignals ?? data.exits ?? [];
+    const hasMetrics = data.avgReturn !== undefined;
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{
+          padding: '4px 8px',
+          backgroundColor: `${FINCEPT.GREEN}20`,
+          color: FINCEPT.GREEN,
+          fontSize: '8px',
+          fontWeight: 700,
+          borderRadius: '2px',
+          display: 'inline-block',
+          alignSelf: 'flex-start',
+        }}>
+          ✓ SIGNALS GENERATED{data.symbol ? ` - ${data.symbol}` : ''}
+        </div>
+
+        {/* Performance Metrics */}
+        {hasMetrics && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.ORANGE, marginBottom: '12px' }}>
+              SIGNAL PERFORMANCE METRICS
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>WIN RATE</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: data.winRate >= 50 ? FINCEPT.GREEN : FINCEPT.RED }}>
+                  {data.winRate?.toFixed(1) ?? 'N/A'}%
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>AVG RETURN</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: data.avgReturn >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>
+                  {data.avgReturn?.toFixed(2) ?? 'N/A'}%
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>PROFIT FACTOR</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.CYAN }}>
+                  {data.profitFactor !== null && data.profitFactor !== undefined
+                    ? (data.profitFactor === Infinity ? '∞' : data.profitFactor.toFixed(2))
+                    : 'N/A'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>SIGNALS</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.WHITE }}>
+                  {data.totalSignals ?? 'N/A'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>BEST TRADE</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: FINCEPT.GREEN }}>
+                  +{data.bestTrade?.toFixed(2) ?? 'N/A'}%
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>WORST TRADE</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: FINCEPT.RED }}>
+                  {data.worstTrade?.toFixed(2) ?? 'N/A'}%
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>AVG HOLD (DAYS)</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: FINCEPT.WHITE }}>
+                  {data.avgHoldingPeriod?.toFixed(0) ?? 'N/A'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '4px' }}>SIGNAL DENSITY</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: FINCEPT.YELLOW }}>
+                  {data.signalDensity?.toFixed(1) ?? 'N/A'}%
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Signal Counts */}
+        <div style={{
+          padding: '12px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderRadius: '3px',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: '12px',
+        }}>
+          <div>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>ENTRY SIGNALS</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: FINCEPT.GREEN }}>
+              {data.entryCount ?? 0}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>EXIT SIGNALS</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: FINCEPT.RED }}>
+              {data.exitCount ?? 0}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>TOTAL BARS</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: FINCEPT.WHITE }}>
+              {data.totalBars ?? 0}
+            </div>
+          </div>
+        </div>
+
+        {/* Detailed Entry Signals */}
+        {entrySignals.length > 0 && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '8px', fontWeight: 600 }}>
+              ENTRY SIGNALS (showing first 10)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {entrySignals.slice(0, 10).map((signal: any, idx: number) => (
+                <div key={idx} style={{
+                  padding: '6px 8px',
+                  backgroundColor: `${FINCEPT.GREEN}15`,
+                  borderLeft: `2px solid ${FINCEPT.GREEN}`,
+                  borderRadius: '2px',
+                  fontSize: '8px',
+                  display: 'grid',
+                  gridTemplateColumns: typeof signal === 'object' ? '2fr 1fr 1fr 1fr' : '1fr',
+                  gap: '8px',
+                }}>
+                  {typeof signal === 'object' ? (
+                    <>
+                      <div>
+                        <span style={{ color: FINCEPT.GRAY }}>Date: </span>
+                        <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>{signal.date}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: FINCEPT.GRAY }}>Price: </span>
+                        <span style={{ color: FINCEPT.CYAN }}>${signal.price?.toFixed(2)}</span>
+                      </div>
+                      {signal.fastMA !== undefined && (
+                        <div>
+                          <span style={{ color: FINCEPT.GRAY }}>Fast: </span>
+                          <span style={{ color: FINCEPT.YELLOW }}>{signal.fastMA?.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {signal.indicatorValue !== undefined && (
+                        <div>
+                          <span style={{ color: FINCEPT.GRAY }}>Indicator: </span>
+                          <span style={{ color: FINCEPT.PURPLE }}>{signal.indicatorValue?.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span style={{ color: FINCEPT.WHITE }}>{signal}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Detailed Exit Signals */}
+        {exitSignals.length > 0 && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '8px', fontWeight: 600 }}>
+              EXIT SIGNALS (showing first 10)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {exitSignals.slice(0, 10).map((signal: any, idx: number) => (
+                <div key={idx} style={{
+                  padding: '6px 8px',
+                  backgroundColor: `${FINCEPT.RED}15`,
+                  borderLeft: `2px solid ${FINCEPT.RED}`,
+                  borderRadius: '2px',
+                  fontSize: '8px',
+                  display: 'grid',
+                  gridTemplateColumns: typeof signal === 'object' ? '2fr 1fr 1fr 1fr' : '1fr',
+                  gap: '8px',
+                }}>
+                  {typeof signal === 'object' ? (
+                    <>
+                      <div>
+                        <span style={{ color: FINCEPT.GRAY }}>Date: </span>
+                        <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>{signal.date}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: FINCEPT.GRAY }}>Price: </span>
+                        <span style={{ color: FINCEPT.CYAN }}>${signal.price?.toFixed(2)}</span>
+                      </div>
+                      {signal.slowMA !== undefined && (
+                        <div>
+                          <span style={{ color: FINCEPT.GRAY }}>Slow: </span>
+                          <span style={{ color: FINCEPT.ORANGE }}>{signal.slowMA?.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {signal.indicatorValue !== undefined && (
+                        <div>
+                          <span style={{ color: FINCEPT.GRAY }}>Indicator: </span>
+                          <span style={{ color: FINCEPT.PURPLE }}>{signal.indicatorValue?.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span style={{ color: FINCEPT.WHITE }}>{signal}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+
+  const renderIndicatorResult = () => {
+    if (!result?.data) return renderResultRaw();
+
+    const data = result.data;
+    const indicator = data.indicator ?? 'Unknown';
+    const totalCombinations = data.totalCombinations ?? 0;
+    const results = data.results ?? [];
+
+    // Helper to render single stat value
+    const renderStat = (label: string, value: number | undefined, color: string) => (
+      <div>
+        <span style={{ color: FINCEPT.GRAY }}>{label}: </span>
+        <span style={{ color }}>{value?.toFixed(2) ?? 'N/A'}</span>
+      </div>
+    );
+
+    // Render single-output indicator result
+    const renderSingleOutput = (r: any, idx: number) => (
+      <div key={idx} style={{
+        padding: '6px 8px',
+        backgroundColor: `${FINCEPT.ORANGE}10`,
+        borderLeft: `2px solid ${FINCEPT.PURPLE}`,
+        borderRadius: '2px',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr 1fr',
+        gap: '8px',
+        fontSize: '8px',
+      }}>
+        <div>
+          <span style={{ color: FINCEPT.GRAY }}>Params: </span>
+          <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
+            {JSON.stringify(r.params)}
+          </span>
+        </div>
+        {renderStat('Mean', r.mean, FINCEPT.CYAN)}
+        {renderStat('Last', r.last, FINCEPT.ORANGE)}
+        <div>
+          <span style={{ color: FINCEPT.GRAY }}>Range: </span>
+          <span style={{ color: FINCEPT.WHITE }}>
+            {r.min?.toFixed(2) ?? 'N/A'} - {r.max?.toFixed(2) ?? 'N/A'}
+          </span>
+        </div>
+      </div>
+    );
+
+    // Render multi-output indicator result (MACD, BBands, Stoch)
+    const renderMultiOutput = (r: any, idx: number) => {
+      const outputs = r.outputs ?? {};
+      const componentNames = Object.keys(outputs);
+
+      return (
+        <div key={idx} style={{
+          padding: '8px',
+          backgroundColor: `${FINCEPT.ORANGE}10`,
+          borderLeft: `2px solid ${FINCEPT.PURPLE}`,
+          borderRadius: '2px',
+          fontSize: '8px',
+        }}>
+          {/* Parameters */}
+          <div style={{ marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <span style={{ color: FINCEPT.GRAY }}>Params: </span>
+            <span style={{ color: FINCEPT.WHITE, fontWeight: 600 }}>
+              {JSON.stringify(r.params)}
+            </span>
+          </div>
+
+          {/* Components */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {componentNames.map(componentName => {
+              const component = outputs[componentName];
+              return (
+                <div key={componentName} style={{
+                  padding: '4px 6px',
+                  backgroundColor: `${FINCEPT.CYAN}15`,
+                  borderRadius: '2px',
+                }}>
+                  <div style={{ color: FINCEPT.CYAN, fontWeight: 700, marginBottom: '4px', fontSize: '7px' }}>
+                    {componentName.toUpperCase()}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px' }}>
+                    {renderStat('Mean', component.mean, FINCEPT.WHITE)}
+                    {renderStat('Std', component.std, FINCEPT.GRAY)}
+                    {renderStat('Last', component.last, FINCEPT.ORANGE)}
+                    <div>
+                      <span style={{ color: FINCEPT.GRAY }}>Range: </span>
+                      <span style={{ color: FINCEPT.WHITE }}>
+                        {component.min?.toFixed(2) ?? 'N/A'} - {component.max?.toFixed(2) ?? 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{
+          padding: '4px 8px',
+          backgroundColor: `${FINCEPT.GREEN}20`,
+          color: FINCEPT.GREEN,
+          fontSize: '8px',
+          fontWeight: 700,
+          borderRadius: '2px',
+          display: 'inline-block',
+          alignSelf: 'flex-start',
+        }}>
+          ✓ INDICATOR SWEEP COMPLETED
+        </div>
+
+        {/* Summary Card */}
+        <div style={{
+          padding: '12px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${FINCEPT.BORDER}`,
+          borderRadius: '3px',
+        }}>
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.WHITE }}>
+              {indicator.toUpperCase()} PARAMETER SWEEP
+            </div>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY }}>
+              Total Combinations: {totalCombinations}
+            </div>
+          </div>
+        </div>
+
+        {/* Results Table */}
+        {results.length > 0 ? (
+          <div style={{
+            padding: '12px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '3px',
+          }}>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '8px', fontWeight: 600 }}>
+              PARAMETER COMBINATIONS (showing first 20)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {results.slice(0, 20).map((r: any, idx: number) => {
+                // Check if this is multi-output (has 'outputs' field) or single-output
+                const isMultiOutput = r.outputs && Object.keys(r.outputs).length > 0;
+                return isMultiOutput ? renderMultiOutput(r, idx) : renderSingleOutput(r, idx);
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            padding: '12px',
+            backgroundColor: `${FINCEPT.YELLOW}20`,
+            border: `1px solid ${FINCEPT.YELLOW}`,
+            borderRadius: '2px',
+          }}>
+            <div style={{ fontSize: '9px', color: FINCEPT.YELLOW }}>
+              No parameter combinations generated. Check parameter ranges.
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ============================================================================
   // RENDER: Status Bar

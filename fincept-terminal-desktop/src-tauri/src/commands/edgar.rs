@@ -13,5 +13,5 @@ pub async fn execute_edgar_command(
     cmd_args.extend(args);
 
     
-    python::execute(&app, "edgar_tools.py", cmd_args).await
+    python::execute(&app, "edgar_mcp.py", cmd_args).await
 }

@@ -1,0 +1,23 @@
+{
+  "id": "macro_cycle_agent",
+  "name": "Macro Cycle Analyst",
+  "description": "Analyzes macroeconomic data to determine business cycle positioning - expansion, peak, contraction, or trough. Provides insights on cyclical sector rotation.",
+  "category": "hedgeFundAgents",
+  "version": "1.0.0",
+  "provider": "local",
+  "capabilities": ["economic_analysis", "cycle_identification", "sector_rotation"],
+  "config": {
+    "role": "Business cycle and economic phase identification expert",
+    "goal": "Identify current economic cycle phase and predict transitions",
+    "instructions": "You are a macro cycle analyst for a hedge fund. Analyze economic indicators (GDP growth, unemployment, inflation, yield curve, PMI, consumer confidence) to determine: 1) Current cycle phase, 2) Expected duration before transition, 3) Sector rotation recommendations, 4) Leading vs lagging indicators divergence. Provide actionable insights for portfolio positioning based on cycle dynamics.",
+    "llm_config": {
+      "provider": "openai",
+      "model_id": "gpt-4-turbo",
+      "temperature": 0.7,
+      "max_tokens": 3000
+    },
+    "tools": ["economic_data", "web_search", "market_data"],
+    "enable_memory": true,
+    "enable_agentic_memory": true
+  }
+}

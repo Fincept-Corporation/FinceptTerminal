@@ -16,11 +16,14 @@ import { stockTradingTools } from './tools/stock-trading';
 import { reportBuilderTools } from './tools/report-builder';
 import { edgarTools } from './tools/edgar';
 import { nodeEditorTools } from './tools/node-editor';
+import { newsTools } from './tools/news';
 import { reportBuilderMCPBridge } from './ReportBuilderMCPBridge';
 import { brokerMCPBridge } from './BrokerMCPBridge';
 import { stockBrokerMCPBridge } from './StockBrokerMCPBridge';
 import { notesMCPBridge } from './NotesMCPBridge';
 import { nodeEditorMCPBridge } from './NodeEditorMCPBridge';
+import { portfolioMCPBridge } from './PortfolioMCPBridge';
+import { newsMCPBridge } from './NewsMCPBridge';
 
 // Flag to ensure initialization only runs once
 let isInitialized = false;
@@ -52,6 +55,7 @@ export function initializeInternalMCP(): void {
     terminalMCPProvider.registerTools(reportBuilderTools);
     terminalMCPProvider.registerTools(edgarTools);
     terminalMCPProvider.registerTools(nodeEditorTools);
+    terminalMCPProvider.registerTools(newsTools);
 
 
     // Initialize global bridge contexts
@@ -59,6 +63,12 @@ export function initializeInternalMCP(): void {
 
     // Initialize Node Editor bridge contexts
     nodeEditorMCPBridge.initialize();
+
+    // Initialize Portfolio bridge contexts
+    portfolioMCPBridge.connect();
+
+    // Initialize News bridge contexts
+    newsMCPBridge.connect();
 
     // Mark as initialized
     isInitialized = true;
@@ -81,6 +91,8 @@ export { stockBrokerMCPBridge } from './StockBrokerMCPBridge';
 export { notesMCPBridge } from './NotesMCPBridge';
 export { reportBuilderMCPBridge } from './ReportBuilderMCPBridge';
 export { nodeEditorMCPBridge } from './NodeEditorMCPBridge';
+export { portfolioMCPBridge } from './PortfolioMCPBridge';
+export { newsMCPBridge } from './NewsMCPBridge';
 export { INTERNAL_SERVER_ID, INTERNAL_SERVER_NAME } from './types';
 export type { TerminalContexts, InternalTool, InternalToolResult } from './types';
 export type {
@@ -93,4 +105,14 @@ export type {
   WorkflowInfo,
   WorkflowExecutionResult,
   WorkflowValidation,
+  // News types
+  NewsArticleInfo,
+  RSSFeedInfo,
+  UserRSSFeedInfo,
+  AddRSSFeedParams,
+  UpdateRSSFeedParams,
+  NewsAnalysisResult,
+  NewsAnalysisData,
+  NewsSentimentStats,
+  NewsCacheStats,
 } from './types';

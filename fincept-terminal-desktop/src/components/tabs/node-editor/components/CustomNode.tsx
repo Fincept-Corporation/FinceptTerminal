@@ -26,12 +26,29 @@ interface CustomNodeProps {
 
 const CustomNode: React.FC<CustomNodeProps> = ({ data, id, selected }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [label, setLabel] = useState(data.label);
+  const [label, setLabel] = useState(data?.label || 'Node');
 
   const handleLabelSave = () => {
-    data.onLabelChange(id, label);
+    if (data?.onLabelChange) {
+      data.onLabelChange(id, label);
+    }
     setIsEditing(false);
   };
+
+  // Handle missing data gracefully
+  if (!data) {
+    return (
+      <div style={{
+        background: '#1a1a1a',
+        border: '2px solid #f59e0b',
+        borderRadius: '6px',
+        padding: '12px',
+        minWidth: '180px',
+      }}>
+        <div style={{ color: '#f59e0b', fontSize: '12px' }}>Invalid Node Data</div>
+      </div>
+    );
+  }
 
   const getIcon = () => {
     switch (data.nodeType) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Lock, Bot, Database, Terminal, Activity, Globe, TrendingUp, Briefcase, HardDrive, Bell } from 'lucide-react';
+import { Settings as SettingsIcon, Lock, Bot, Database, Terminal, Activity, Globe, TrendingUp, Briefcase, HardDrive, Bell, MessageCircle } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,7 @@ import {
   TerminalAppearanceSection,
   StorageCacheSection,
   NotificationsSection,
+  ChatBubbleSection,
 } from './sections';
 
 // Hooks and types
@@ -98,6 +99,7 @@ export default function SettingsTab() {
     { id: 'language' as SettingsSection, icon: Globe, label: t('sidebar.language') },
     { id: 'storage' as SettingsSection, icon: HardDrive, label: t('sidebar.storage') },
     { id: 'notifications' as SettingsSection, icon: Bell, label: t('sidebar.notifications') },
+    { id: 'chatBubble' as SettingsSection, icon: MessageCircle, label: 'AI Chat Bubble' },
   ];
 
   return (
@@ -381,6 +383,14 @@ export default function SettingsTab() {
                 colors={settingsColors}
                 loading={loading}
                 setLoading={setLoading}
+                showMessage={showMessage}
+              />
+            )}
+
+            {/* Chat Bubble Section */}
+            {activeSection === 'chatBubble' && (
+              <ChatBubbleSection
+                colors={settingsColors}
                 showMessage={showMessage}
               />
             )}

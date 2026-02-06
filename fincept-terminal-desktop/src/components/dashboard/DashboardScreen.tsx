@@ -34,10 +34,12 @@ import RecordedContextsManager from '@/components/common/RecordedContextsManager
 import { HeaderSupportButtons } from '@/components/common/HeaderSupportButtons';
 import AgentConfigTab from '@/components/tabs/agent-config';
 import RelationshipMapTab from '@/components/tabs/relationship-map/RelationshipMapTab';
+import TauriEventsMonitorTab from '@/components/tabs/tauri-events-monitor';
 import { useTranslation } from 'react-i18next';
 import { WorkspaceProvider } from '@/contexts/WorkspaceContext';
 import WorkspaceDialog from './WorkspaceDialog';
 import { terminalMCPProvider } from '@/services/mcp/internal';
+import ChatBubble from '@/components/common/ChatBubble';
 
 // Lazy loaded tabs (heavy/Python-dependent)
 const EquityResearchTab = React.lazy(() => import('@/components/tabs/equity-research'));
@@ -241,7 +243,23 @@ function FinxeptTerminalContent() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [workspaceDialogMode, setWorkspaceDialogMode] = useState<'save' | 'open' | 'new' | 'export' | 'import' | null>(null);
+  const [chatBubbleEnabled, setChatBubbleEnabled] = useState(true);
   const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
+
+  // Load chat bubble setting
+  React.useEffect(() => {
+    const loadChatBubbleSetting = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const value = await invoke<string | null>('db_get_setting', { key: 'chat_bubble_enabled' });
+        setChatBubbleEnabled(value !== 'false');
+      } catch (error) {
+        // Default to enabled if setting doesn't exist
+        setChatBubbleEnabled(true);
+      }
+    };
+    loadChatBubbleSetting();
+  }, []);
 
   // Wire internal MCP provider with terminal contexts
   React.useEffect(() => {
@@ -570,6 +588,7 @@ function FinxeptTerminalContent() {
     { label: 'Report Builder', action: () => setActiveTab('reportbuilder') },
     { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
+    { label: 'Tauri Events Monitor', action: () => setActiveTab('tauri-events') },
     { label: 'Notes', action: () => setActiveTab('notes') },
     { label: 'Settings', action: () => setActiveTab('settings') },
     // Community & Support
@@ -889,6 +908,13 @@ function FinxeptTerminalContent() {
                   AI Quant Lab
                 </TabsTrigger>
                 <TabsTrigger
+                  value="tauri-events"
+                  style={activeTab === 'tauri-events' ? tabStyles.active : tabStyles.default}
+                  title="Tauri Events Monitor"
+                >
+                  Events Monitor
+                </TabsTrigger>
+                <TabsTrigger
                   value="settings"
                   style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
                   title="Settings"
@@ -946,6 +972,9 @@ function FinxeptTerminalContent() {
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <TradeVisualizationTab />
               </React.Suspense>
+            </TabsContent>
+            <TabsContent value="tauri-events" className="h-full m-0 p-0">
+              <TauriEventsMonitorTab />
             </TabsContent>
             <TabsContent value="chat" className="h-full m-0 p-0">
               <ChatTab
@@ -1221,6 +1250,11 @@ function FinxeptTerminalContent() {
           onClose={() => setWorkspaceDialogMode(null)}
           onLoadWorkspace={(tab) => setActiveTab(tab)}
         />
+      )}
+
+      {/* Floating Chat Bubble */}
+      {chatBubbleEnabled && mode !== 'chat' && (
+        <ChatBubble onNavigateToTab={setActiveTab} />
       )}
     </div>
   );

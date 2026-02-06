@@ -1,0 +1,114 @@
+{
+  "id": "renaissance_technologies",
+  "name": "Renaissance Technologies Medallion Fund",
+  "description": "Multi-agent quantitative hedge fund system inspired by RenTech's systematic approach. Features 10 specialized agents, 4 teams, signal discovery, risk assessment, IC deliberation, and execution workflows.",
+  "category": "hedgeFundAgents",
+  "version": "1.0.0",
+  "provider": "local",
+  "capabilities": [
+    "signal_discovery",
+    "statistical_analysis",
+    "risk_assessment",
+    "portfolio_optimization",
+    "ic_deliberation",
+    "trade_execution",
+    "post_trade_analysis",
+    "multi_agent_collaboration",
+    "systematic_trading",
+    "quantitative_research"
+  ],
+  "config": {
+    "model": {
+      "provider": "openai",
+      "model_id": "gpt-4o",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "instructions": "Renaissance Technologies Multi-Agent System with 10 specialized agents:\n\n**Research Team:**\n- Signal Scientist: Discovers statistical signals (p<0.01)\n- Data Scientist: Data quality and feature engineering\n- Quant Researcher: Strategy development and backtesting\n- Research Lead: Validates research and coordinates team\n\n**Trading Team:**\n- Execution Trader: Optimal order execution (TWAP/VWAP)\n- Market Maker: Liquidity provision and spread capture\n\n**Risk Team:**\n- Risk Quant: VaR, drawdown, stress testing\n- Compliance Officer: Regulatory compliance\n\n**Investment Committee:**\n- Portfolio Manager: Position sizing and portfolio construction\n- Investment Committee Chair: Final approval with 0.5075 win rate threshold\n\n**Key Features:**\n- Statistical rigor (p-values, IC, t-stats)\n- Multi-step reasoning engine\n- Agent memory system\n- Knowledge base with LanceDB\n- Guardrails (position limits, VaR limits)\n- Evaluation and learning\n- Full observability/tracing\n\n**Workflows:**\n1. Signal Discovery → Validation → Risk Assessment → IC Deliberation → Execution → Post-Trade Analysis\n\n**Commands:**\n- analyze_signal: Full signal analysis pipeline\n- run_ic_deliberation: Investment Committee decision\n- run_agent: Execute specific agent\n- run_team: Execute team workflow",
+    "tools": [
+      "signal_discovery",
+      "statistical_testing",
+      "backtesting",
+      "risk_modeling",
+      "portfolio_optimization",
+      "market_data_fetch",
+      "execution_algorithms"
+    ],
+    "output_format": "json",
+    "script_path": "agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/rentech_cli.py",
+    "agents": [
+      {
+        "id": "signal_scientist",
+        "name": "Signal Scientist",
+        "role": "Statistical signal discovery"
+      },
+      {
+        "id": "data_scientist",
+        "name": "Data Scientist",
+        "role": "Data quality and feature engineering"
+      },
+      {
+        "id": "quant_researcher",
+        "name": "Quant Researcher",
+        "role": "Strategy development and backtesting"
+      },
+      {
+        "id": "research_lead",
+        "name": "Research Lead",
+        "role": "Research validation and coordination"
+      },
+      {
+        "id": "execution_trader",
+        "name": "Execution Trader",
+        "role": "Optimal trade execution"
+      },
+      {
+        "id": "market_maker",
+        "name": "Market Maker",
+        "role": "Liquidity and spread capture"
+      },
+      {
+        "id": "risk_quant",
+        "name": "Risk Quant",
+        "role": "Risk modeling and assessment"
+      },
+      {
+        "id": "compliance_officer",
+        "name": "Compliance Officer",
+        "role": "Regulatory compliance"
+      },
+      {
+        "id": "portfolio_manager",
+        "name": "Portfolio Manager",
+        "role": "Position sizing and portfolio construction"
+      },
+      {
+        "id": "investment_committee_chair",
+        "name": "Investment Committee Chair",
+        "role": "Final approval and oversight"
+      }
+    ],
+    "teams": [
+      {
+        "id": "research_team",
+        "name": "Research Team",
+        "members": ["signal_scientist", "data_scientist", "quant_researcher", "research_lead"]
+      },
+      {
+        "id": "trading_team",
+        "name": "Trading Team",
+        "members": ["execution_trader", "market_maker"]
+      },
+      {
+        "id": "risk_team",
+        "name": "Risk Team",
+        "members": ["risk_quant", "compliance_officer"]
+      },
+      {
+        "id": "medallion_fund",
+        "name": "Medallion Fund (Full IC)",
+        "members": ["investment_committee_chair", "portfolio_manager", "research_lead", "risk_quant"]
+      }
+    ]
+  }
+}

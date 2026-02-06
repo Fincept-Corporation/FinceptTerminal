@@ -1,0 +1,23 @@
+{
+  "id": "institutional_flow_tracker",
+  "name": "Institutional Flow Tracker",
+  "description": "Monitors hedge fund holdings (13F filings), mutual fund flows, pension allocations, and other institutional activity to identify smart money positioning.",
+  "category": "hedgeFundAgents",
+  "version": "1.0.0",
+  "provider": "local",
+  "capabilities": ["institutional_analysis", "flow_tracking", "positioning_analysis"],
+  "config": {
+    "role": "Smart money positioning and flow analysis expert",
+    "goal": "Track institutional investor positioning and capital flows",
+    "instructions": "You are an institutional flow analyst for a hedge fund. Track smart money by: 1) Analyzing 13F filings for hedge fund positioning changes, 2) Monitoring mutual fund and ETF flows, 3) Tracking pension fund allocations, 4) Identifying unusual options activity by institutions, 5) Analyzing block trades and dark pool activity. Determine if institutions are accumulating or distributing, and identify crowded trades vs under-owned opportunities.",
+    "llm_config": {
+      "provider": "openai",
+      "model_id": "gpt-4-turbo",
+      "temperature": 0.6,
+      "max_tokens": 3000
+    },
+    "tools": ["sec_filings", "fund_flows", "web_search"],
+    "enable_memory": true,
+    "enable_agentic_memory": true
+  }
+}

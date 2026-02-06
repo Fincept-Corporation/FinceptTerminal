@@ -670,6 +670,7 @@ class IndicatorFactory:
             raise ValueError("No function defined. Use from_custom_func or from_apply_func.")
 
         param_vals = [params.get(p, None) for p in self._param_names]
+        print(f"[IndicatorFactory.run] param_names={self._param_names}, params={params}, param_vals={param_vals}")
         result = func(*inputs, *param_vals)
 
         if isinstance(result, tuple):
@@ -708,7 +709,10 @@ class IndicatorFactory:
             try:
                 output = self.run(*inputs, **params)
                 results.append({'params': params, 'output': output})
-            except Exception:
+            except Exception as e:
+                print(f"[IndicatorFactory.run_combs] Exception for params {params}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
 
         return results

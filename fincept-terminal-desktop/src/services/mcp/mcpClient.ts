@@ -50,6 +50,7 @@ class MCPClient {
   private isInitialized = false;
   private capabilities: MCPServerCapabilities = {};
   private requestTimeoutMs = 30000; // 30 second timeout for requests
+  private initTimeoutMs = 120000; // 2 minute timeout for initialization (uvx downloads)
 
   constructor(serverId: string) {
     this.serverId = serverId;
@@ -88,6 +89,7 @@ class MCPClient {
   }
 
   // Initialize MCP protocol handshake
+  // Uses longer timeout for first-time uvx package downloads
   private async initialize(): Promise<void> {
     const response = await this.sendRequest('initialize', {
       protocolVersion: '2024-11-05',
@@ -101,7 +103,7 @@ class MCPClient {
         name: 'fincept-terminal',
         version: '1.0.0'
       }
-    });
+    }, this.initTimeoutMs); // Use longer timeout for init
 
     this.capabilities = response.capabilities || {};
     this.isInitialized = true;
@@ -213,8 +215,9 @@ class MCPClient {
   }
 
   // Send JSON-RPC request with timeout
-  private async sendRequest(method: string, params: any): Promise<any> {
+  private async sendRequest(method: string, params: any, customTimeoutMs?: number): Promise<any> {
     const id = this.messageId++;
+    const timeoutMs = customTimeoutMs || this.requestTimeoutMs;
 
     const request = {
       jsonrpc: '2.0',
@@ -225,14 +228,15 @@ class MCPClient {
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        reject(new Error(`MCP request '${method}' timed out after ${this.requestTimeoutMs}ms`));
-      }, this.requestTimeoutMs);
+        reject(new Error(`MCP request '${method}' timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
     });
 
     const requestPromise = (async () => {
       const response = await invoke<string>('send_mcp_request', {
         serverId: this.serverId,
-        request: JSON.stringify(request)
+        request: JSON.stringify(request),
+        timeoutSecs: Math.ceil(timeoutMs / 1000) // Pass timeout to Rust
       });
 
       const parsed = JSON.parse(response);

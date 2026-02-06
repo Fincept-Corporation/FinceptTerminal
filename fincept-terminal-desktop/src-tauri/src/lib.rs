@@ -99,6 +99,13 @@ fn spawn_mcp_server(
                 (cmd, args.clone())
             }
         }
+    } else if command == "uvx" {
+        // uvx is from the uv Python package manager
+        #[cfg(target_os = "windows")]
+        let cmd = "uvx.exe".to_string();
+        #[cfg(not(target_os = "windows"))]
+        let cmd = "uvx".to_string();
+        (cmd, args.clone())
     } else {
         // Fix command for Windows - node/python need .exe extension
         #[cfg(target_os = "windows")]
@@ -213,8 +220,10 @@ fn send_mcp_request(
     state: tauri::State<MCPState>,
     server_id: String,
     request: String,
+    timeout_secs: Option<u64>,
 ) -> Result<String, String> {
-    println!("[Tauri] Sending request to server {}: {}", server_id, request);
+    let timeout = timeout_secs.unwrap_or(30);
+    println!("[Tauri] Sending request to server {} (timeout: {}s): {}", server_id, timeout, request);
 
     let mut processes = state.processes.lock().unwrap();
 
@@ -228,8 +237,8 @@ fn send_mcp_request(
                 .map_err(|e| format!("Failed to flush stdin: {}", e))?;
         }
 
-        // Wait for response with timeout (30 seconds for initial package download)
-        match mcp_process.response_rx.recv_timeout(Duration::from_secs(30)) {
+        // Wait for response with configurable timeout
+        match mcp_process.response_rx.recv_timeout(Duration::from_secs(timeout)) {
             Ok(response) => {
                 Ok(response)
             }

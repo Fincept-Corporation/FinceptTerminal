@@ -17,9 +17,8 @@ import {
 export type BacktestingProviderSlug = 'vectorbt' | 'backtestingpy' | 'fasttrade' | 'zipline' | 'bt' | 'fincept';
 
 export type CommandType =
-  | 'backtest' | 'optimize' | 'walk_forward' | 'data' | 'indicator'
-  | 'indicator_signals' | 'signals' | 'labels' | 'splits' | 'returns'
-  | 'browse_strategies' | 'browse_indicators' | 'labels_to_signals';
+  | 'backtest' | 'optimize' | 'walk_forward' | 'indicator'
+  | 'indicator_signals';
 
 interface StrategyParam {
   name: string;
@@ -78,16 +77,8 @@ export const ALL_COMMANDS: Command[] = [
   { id: 'backtest', label: 'Backtest', icon: Play, description: 'Run strategy backtest', color: C.ORANGE },
   { id: 'optimize', label: 'Optimize', icon: Target, description: 'Parameter optimization', color: C.GREEN },
   { id: 'walk_forward', label: 'Walk Forward', icon: ChevronRight, description: 'Walk-forward validation', color: C.BLUE },
-  { id: 'data', label: 'Data', icon: Database, description: 'Download market data', color: C.CYAN },
   { id: 'indicator', label: 'Indicators', icon: Activity, description: 'Calculate indicators', color: C.PURPLE },
   { id: 'indicator_signals', label: 'Ind. Signals', icon: Zap, description: 'Indicator signals', color: C.YELLOW },
-  { id: 'signals', label: 'Signals', icon: TrendingUp, description: 'Generate signals', color: C.GREEN },
-  { id: 'labels', label: 'Labels', icon: Tag, description: 'ML label generation', color: C.BLUE },
-  { id: 'splits', label: 'Splits', icon: Split, description: 'Cross-validation', color: C.PURPLE },
-  { id: 'returns', label: 'Returns', icon: DollarSign, description: 'Returns analysis', color: C.CYAN },
-  { id: 'browse_strategies', label: 'Browse Strategies', icon: Search, description: 'View strategy catalog', color: C.GREEN },
-  { id: 'browse_indicators', label: 'Browse Indicators', icon: Filter, description: 'View indicator catalog', color: C.PURPLE },
-  { id: 'labels_to_signals', label: 'Labels\u2192Signals', icon: ChevronRight, description: 'Convert labels to signals', color: C.YELLOW },
 ];
 
 // ============================================================================
@@ -199,6 +190,28 @@ const VBT_EXTRA_TREND: Strategy[] = [
       { name: 'slowPeriod', label: 'Slow Period', default: 50, min: 10, max: 200 },
     ],
   },
+  {
+    id: 'williams_r', name: 'Williams %R', description: 'Williams %R trend indicator',
+    params: [
+      { name: 'period', label: 'Period', default: 14, min: 5, max: 50 },
+      { name: 'oversold', label: 'Oversold', default: -80, min: -90, max: -70 },
+      { name: 'overbought', label: 'Overbought', default: -20, min: -30, max: -10 },
+    ],
+  },
+  {
+    id: 'cci', name: 'CCI', description: 'Commodity Channel Index trend',
+    params: [
+      { name: 'period', label: 'Period', default: 20, min: 5, max: 50 },
+      { name: 'oversold', label: 'Oversold', default: -100, min: -200, max: -50 },
+      { name: 'overbought', label: 'Overbought', default: 100, min: 50, max: 200 },
+    ],
+  },
+  {
+    id: 'obv_trend', name: 'OBV Trend', description: 'On-Balance Volume trend',
+    params: [
+      { name: 'maPeriod', label: 'MA Period', default: 20, min: 5, max: 100 },
+    ],
+  },
 ];
 
 const VBT_EXTRA_MOMENTUM: Strategy[] = [
@@ -217,6 +230,12 @@ const VBT_EXTRA_BREAKOUT: Strategy[] = [
     params: [
       { name: 'atrPeriod', label: 'ATR Period', default: 14, min: 5, max: 50 },
       { name: 'atrMultiplier', label: 'ATR Multiplier', default: 2.0, min: 0.5, max: 5.0, step: 0.1 },
+    ],
+  },
+  {
+    id: 'donchian_breakout', name: 'Donchian Breakout', description: 'Donchian channel breakout',
+    params: [
+      { name: 'period', label: 'Period', default: 20, min: 5, max: 100 },
     ],
   },
 ];
@@ -247,29 +266,7 @@ const VBT_MULTI_INDICATOR: Strategy[] = [
   },
 ];
 
-const VBT_OTHER: Strategy[] = [
-  {
-    id: 'williams_r', name: 'Williams %R', description: 'Williams %R oscillator',
-    params: [
-      { name: 'period', label: 'Period', default: 14, min: 5, max: 50 },
-      { name: 'oversold', label: 'Oversold', default: -80, min: -90, max: -70 },
-      { name: 'overbought', label: 'Overbought', default: -20, min: -30, max: -10 },
-    ],
-  },
-  {
-    id: 'cci', name: 'CCI', description: 'Commodity Channel Index',
-    params: [
-      { name: 'period', label: 'Period', default: 20, min: 5, max: 50 },
-      { name: 'threshold', label: 'Threshold', default: 100, min: 50, max: 200 },
-    ],
-  },
-  {
-    id: 'obv_trend', name: 'OBV Trend', description: 'On-Balance Volume trend',
-    params: [
-      { name: 'maPeriod', label: 'MA Period', default: 20, min: 5, max: 100 },
-    ],
-  },
-];
+const VBT_OTHER: Strategy[] = [];
 
 const VBT_CUSTOM: Strategy[] = [
   { id: 'code', name: 'Custom Code', description: 'Python custom strategy', params: [] },
@@ -363,24 +360,14 @@ const VECTORBT_CONFIG: BacktestingProviderConfig = {
   slug: 'vectorbt',
   displayName: 'VECTORBT',
   commands: [
-    'backtest', 'optimize', 'walk_forward', 'data', 'indicator',
-    'indicator_signals', 'signals', 'labels', 'splits', 'returns',
-    'browse_strategies', 'browse_indicators', 'labels_to_signals',
+    'backtest', 'optimize', 'walk_forward', 'indicator', 'indicator_signals',
   ],
   commandMap: {
     backtest: 'run_backtest',
     optimize: 'optimize',
     walk_forward: 'walk_forward',
-    data: 'get_historical_data',
     indicator: 'indicator_param_sweep',
     indicator_signals: 'indicator_signals',
-    signals: 'generate_signals',
-    labels: 'generate_labels',
-    splits: 'generate_splits',
-    returns: 'analyze_returns',
-    browse_strategies: 'get_strategies',
-    browse_indicators: 'get_indicators',
-    labels_to_signals: 'labels_to_signals',
   },
   strategies: {
     trend: [...SHARED_TREND, ...VBT_EXTRA_TREND],
@@ -547,18 +534,13 @@ const BACKTESTINGPY_CONFIG: BacktestingProviderConfig = {
   slug: 'backtestingpy',
   displayName: 'BACKTESTING.PY',
   commands: [
-    'backtest', 'optimize', 'walk_forward', 'data', 'indicator',
-    'signals', 'browse_strategies', 'browse_indicators',
+    'backtest', 'optimize', 'walk_forward', 'indicator',
   ],
   commandMap: {
     backtest: 'run_backtest',
     optimize: 'optimize',
     walk_forward: 'walk_forward',
-    data: 'get_historical_data',
     indicator: 'calculate_indicator',
-    signals: 'generate_signals',
-    browse_strategies: 'get_strategies',
-    browse_indicators: 'get_indicators',
   },
   strategies: {
     trend: [...SHARED_TREND, ...BTP_EXTRA_TREND],
@@ -724,24 +706,14 @@ const ZIPLINE_CONFIG: BacktestingProviderConfig = {
   slug: 'zipline',
   displayName: 'ZIPLINE',
   commands: [
-    'backtest', 'optimize', 'walk_forward', 'data', 'indicator',
-    'indicator_signals', 'signals', 'labels', 'splits', 'returns',
-    'browse_strategies', 'browse_indicators', 'labels_to_signals',
+    'backtest', 'optimize', 'walk_forward', 'indicator', 'indicator_signals',
   ],
   commandMap: {
     backtest: 'run_backtest',
     optimize: 'optimize',
     walk_forward: 'walk_forward',
-    data: 'get_historical_data',
     indicator: 'calculate_indicator',
     indicator_signals: 'indicator_signals',
-    signals: 'generate_signals',
-    labels: 'generate_labels',
-    splits: 'generate_splits',
-    returns: 'analyze_returns',
-    browse_strategies: 'get_strategies',
-    browse_indicators: 'get_indicators',
-    labels_to_signals: 'labels_to_signals',
   },
   strategies: {
     trend: [...SHARED_TREND, ...ZIPLINE_EXTRA_TREND],
@@ -828,24 +800,14 @@ const BT_CONFIG: BacktestingProviderConfig = {
   slug: 'bt',
   displayName: 'BT',
   commands: [
-    'backtest', 'optimize', 'walk_forward', 'data', 'indicator',
-    'indicator_signals', 'signals', 'labels', 'splits', 'returns',
-    'browse_strategies', 'browse_indicators', 'labels_to_signals',
+    'backtest', 'optimize', 'walk_forward', 'indicator', 'indicator_signals',
   ],
   commandMap: {
     backtest: 'run_backtest',
     optimize: 'optimize',
     walk_forward: 'walk_forward',
-    data: 'get_historical_data',
     indicator: 'calculate_indicator',
     indicator_signals: 'indicator_signals',
-    signals: 'generate_signals',
-    labels: 'generate_labels',
-    splits: 'generate_splits',
-    returns: 'analyze_returns',
-    browse_strategies: 'get_strategies',
-    browse_indicators: 'get_indicators',
-    labels_to_signals: 'labels_to_signals',
   },
   strategies: {
     portfolio: [...BT_PORTFOLIO],
@@ -871,10 +833,9 @@ const BT_CONFIG: BacktestingProviderConfig = {
 const FINCEPT_CONFIG: BacktestingProviderConfig = {
   slug: 'fincept',
   displayName: 'FINCEPT ENGINE',
-  commands: ['backtest', 'browse_strategies'],
+  commands: ['backtest'],
   commandMap: {
     backtest: 'execute_fincept_strategy',
-    browse_strategies: 'list_strategies',
   },
   strategies: {
     // Dynamically loaded from _registry.py

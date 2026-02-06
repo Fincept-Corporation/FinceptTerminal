@@ -20,6 +20,10 @@ import {
   WorkflowExecutionResult,
   WorkflowValidation,
   NodePropertyInfo,
+  DisconnectNodesParams,
+  MoveNodeParams,
+  AutoLayoutParams,
+  WorkflowStats,
 } from './types';
 import { NodeRegistry } from '@/services/nodeSystem/NodeRegistry';
 import { NodeLoader, initializeNodeSystem } from '@/services/nodeSystem/NodeLoader';
@@ -208,6 +212,16 @@ class NodeEditorMCPBridgeClass {
       openWorkflowInEditor: this.openWorkflowInEditor.bind(this),
       exportNodeWorkflow: this.exportNodeWorkflow.bind(this),
       importNodeWorkflow: this.importNodeWorkflow.bind(this),
+
+      // Quick Edit Operations
+      removeNodeFromWorkflow: this.removeNodeFromWorkflow.bind(this),
+      disconnectNodes: this.disconnectNodes.bind(this),
+      renameNode: this.renameNode.bind(this),
+      clearWorkflow: this.clearWorkflow.bind(this),
+      cloneNode: this.cloneNode.bind(this),
+      moveNode: this.moveNode.bind(this),
+      getWorkflowStats: this.getWorkflowStats.bind(this),
+      autoLayoutWorkflow: this.autoLayoutWorkflow.bind(this),
     };
 
     terminalMCPProvider.setContexts(contexts);
@@ -457,68 +471,81 @@ class NodeEditorMCPBridgeClass {
   /**
    * Map backend node types to UI component types
    * This is critical for proper rendering in ReactFlow
+   *
+   * NOTE: We use 'custom' for most MCP-created nodes because:
+   * - 'system' type expects INode data structure from n8n node system
+   * - 'data-source' type expects callback functions (onConnectionChange, etc.)
+   * - 'custom' type works with simple data (label, color, nodeType, hasInput, hasOutput)
    */
   private mapToUINodeType(backendType: string): string {
-    // Trigger nodes
+    // Trigger nodes - use 'custom' instead of 'system' because SystemNode
+    // expects data.node with INode structure from n8n node system
     if (backendType.includes('Trigger') || backendType === 'manual') {
-      return 'system';
+      return 'custom';
     }
 
-    // Data source nodes
+    // Data source nodes - use 'custom' instead of 'data-source' because
+    // DataSourceNode expects callback functions (onConnectionChange, onQueryChange, etc.)
     const dataSourceNodes = [
       'yfinance', 'getQuote', 'getHistoricalData', 'getMarketDepth',
       'streamQuotes', 'getFundamentals', 'getTickerStats', 'stockData'
     ];
     if (dataSourceNodes.includes(backendType)) {
-      return 'data-source';
+      return 'custom';
     }
 
-    // Technical indicator nodes
+    // Technical indicator nodes - use 'custom' for same reason
     if (backendType === 'technicalIndicators' || backendType.includes('indicator')) {
-      return 'technical-indicator';
+      return 'custom';
     }
 
-    // Agent nodes
+    // Agent nodes - these can stay as agent-mediator if they work
     const agentNodes = [
       'agentMediator', 'agent', 'multiAgent', 'geopoliticsAgent',
       'hedgeFundAgent', 'investorAgent'
     ];
     if (agentNodes.includes(backendType)) {
-      return 'agent-mediator';
+      return 'custom'; // Use custom for simplicity in MCP-created workflows
     }
 
-    // Results display
+    // Results display - this one works with simple data
     if (backendType === 'resultsDisplay' || backendType === 'results-display') {
       return 'results-display';
     }
 
-    // Backtest nodes
+    // Backtest nodes - use custom
     if (backendType === 'backtestEngine' || backendType === 'backtest') {
-      return 'backtest';
+      return 'custom';
     }
 
-    // Optimization nodes
+    // Optimization nodes - use custom
     if (backendType === 'portfolioOptimization' || backendType === 'optimization') {
-      return 'optimization';
+      return 'custom';
     }
 
-    // If it's already a UI type, return as-is
-    const uiTypes = [
-      'data-source', 'technical-indicator', 'agent-mediator',
-      'results-display', 'backtest', 'optimization', 'system',
-      'custom', 'mcp-tool', 'python-agent'
-    ];
-    if (uiTypes.includes(backendType)) {
+    // If it's already a UI type that's safe to use, return as-is
+    // Only results-display is safe without callbacks
+    const safeUiTypes = ['results-display', 'custom'];
+    if (safeUiTypes.includes(backendType)) {
       return backendType;
     }
 
-    // Default to custom for everything else
+    // Default to custom for everything else - it's the most flexible
     return 'custom';
   }
 
   /**
    * Create proper ReactFlow node data structure for any node type
-   * Returns BaseNodeData compatible structure
+   * Returns data compatible with CustomNode (the most flexible node type)
+   *
+   * CustomNode expects:
+   * - label: string
+   * - color: string
+   * - nodeType: string
+   * - hasInput: boolean
+   * - hasOutput: boolean
+   * - status?: string
+   * - onLabelChange?: function (optional)
    */
   private createNodeData(
     nodeType: string,
@@ -529,48 +556,41 @@ class NodeEditorMCPBridgeClass {
     const uiType = this.mapToUINodeType(nodeType);
     const color = parameters.color || this.getNodeColor(backendType || nodeType);
 
-    // Determine input/output based on node type
-    const hasInput = !['system', 'trigger'].includes(uiType) &&
-                     !nodeType.includes('Trigger') &&
-                     !backendType?.includes('Trigger');
-    const hasOutput = uiType !== 'results-display';
+    // Determine input/output based on backend type (triggers have no input)
+    const isTrigger = (backendType || nodeType || '').toLowerCase().includes('trigger') ||
+                      backendType === 'manual' ||
+                      backendType === 'manualTrigger';
+    const isResultsDisplay = uiType === 'results-display' ||
+                             backendType === 'resultsDisplay';
 
-    // Build base node data that satisfies BaseNodeData interface
-    const baseData: BaseNodeData = {
+    const hasInput = !isTrigger;
+    const hasOutput = !isResultsDisplay;
+
+    // Build node data compatible with CustomNode
+    // CustomNode is the most flexible and doesn't require callbacks
+    const nodeData = {
+      // Required by CustomNode
       label: label || backendType || nodeType || 'Node',
-      status: 'idle',
-      onLabelChange: () => {},
-    };
-
-    // Add extra properties based on node type
-    // These properties are used by the ReactFlow UI components
-    const extendedData = {
-      ...baseData,
       color: color,
-      nodeType: backendType || nodeType,
+      nodeType: backendType || nodeType || 'custom',
       hasInput: hasInput,
       hasOutput: hasOutput,
+      status: parameters.status || 'idle',
+
+      // Optional - these will be ignored if not used
+      onLabelChange: undefined as ((nodeId: string, newLabel: string) => void) | undefined,
+
+      // Spread any additional parameters (symbol, operation, etc.)
       ...parameters,
     };
 
-    // Return as proper type based on UI node type
-    switch (uiType) {
-      case 'data-source':
-        return extendedData as DataSourceNodeData;
-      case 'technical-indicator':
-        return extendedData as TechnicalIndicatorNodeData;
-      case 'python-agent':
-        return extendedData as PythonAgentNodeData;
-      case 'mcp-tool':
-        return extendedData as MCPToolNodeData;
-      case 'results-display':
-        return extendedData as ResultsDisplayNodeData;
-      case 'agent-mediator':
-        return extendedData as AgentMediatorNodeData;
-      default:
-        // For custom/system/other types, return as BaseNodeData with extras
-        return extendedData as DataSourceNodeData; // DataSourceNodeData is a good default
+    // Remove undefined onLabelChange to keep data clean
+    if (nodeData.onLabelChange === undefined) {
+      delete (nodeData as any).onLabelChange;
     }
+
+    // Return as BaseNodeData which CustomNode accepts
+    return nodeData as BaseNodeData;
   }
 
   async addNodeToWorkflow(params: AddNodeParams): Promise<WorkflowInfo> {
@@ -919,6 +939,304 @@ class NodeEditorMCPBridgeClass {
         targetHandle: e.targetHandle,
       })),
     });
+  }
+
+  // ============================================================================
+  // QUICK EDIT OPERATIONS
+  // ============================================================================
+
+  async removeNodeFromWorkflow(workflowId: string, nodeId: string): Promise<WorkflowInfo> {
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${workflowId}' not found`);
+    }
+
+    // Remove the node
+    workflow.nodes = (workflow.nodes || []).filter(n => n.id !== nodeId);
+
+    // Remove all edges connected to this node
+    workflow.edges = (workflow.edges || []).filter(
+      e => e.source !== nodeId && e.target !== nodeId
+    );
+
+    workflow.updatedAt = new Date().toISOString();
+    await workflowService.saveWorkflow(workflow);
+
+    return this.workflowToInfo(workflow);
+  }
+
+  async disconnectNodes(params: DisconnectNodesParams): Promise<WorkflowInfo> {
+    const workflow = await workflowService.loadWorkflow(params.workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${params.workflowId}' not found`);
+    }
+
+    // Remove matching edge(s)
+    workflow.edges = (workflow.edges || []).filter(e => {
+      const isMatch = e.source === params.sourceNodeId && e.target === params.targetNodeId;
+      // If sourceHandle is specified, also check that
+      if (isMatch && params.sourceHandle) {
+        return e.sourceHandle !== params.sourceHandle;
+      }
+      return !isMatch;
+    });
+
+    workflow.updatedAt = new Date().toISOString();
+    await workflowService.saveWorkflow(workflow);
+
+    return this.workflowToInfo(workflow);
+  }
+
+  async renameNode(workflowId: string, nodeId: string, newLabel: string): Promise<WorkflowInfo> {
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${workflowId}' not found`);
+    }
+
+    const node = (workflow.nodes || []).find(n => n.id === nodeId);
+    if (!node) {
+      throw new Error(`Node '${nodeId}' not found in workflow`);
+    }
+
+    // Update the label in node data
+    if (node.data) {
+      node.data.label = newLabel;
+    }
+
+    workflow.updatedAt = new Date().toISOString();
+    await workflowService.saveWorkflow(workflow);
+
+    return this.workflowToInfo(workflow);
+  }
+
+  async clearWorkflow(workflowId: string): Promise<WorkflowInfo> {
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${workflowId}' not found`);
+    }
+
+    // Clear all nodes and edges
+    workflow.nodes = [];
+    workflow.edges = [];
+    workflow.status = 'draft';
+    workflow.updatedAt = new Date().toISOString();
+
+    await workflowService.saveWorkflow(workflow);
+
+    return this.workflowToInfo(workflow);
+  }
+
+  async cloneNode(
+    workflowId: string,
+    nodeId: string,
+    newLabel?: string
+  ): Promise<{ workflow: WorkflowInfo; newNodeId: string }> {
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${workflowId}' not found`);
+    }
+
+    const originalNode = (workflow.nodes || []).find(n => n.id === nodeId);
+    if (!originalNode) {
+      throw new Error(`Node '${nodeId}' not found in workflow`);
+    }
+
+    // Generate new node ID
+    const newNodeId = `${nodeId}_clone_${Date.now()}`;
+
+    // Clone the node with new position (offset to the right)
+    const clonedNode: WorkflowNode = {
+      ...originalNode,
+      id: newNodeId,
+      position: {
+        x: originalNode.position.x + 50,
+        y: originalNode.position.y + 50,
+      },
+      data: {
+        ...originalNode.data,
+        label: newLabel || `Copy of ${originalNode.data?.label || nodeId}`,
+      },
+    };
+
+    workflow.nodes.push(clonedNode);
+    workflow.updatedAt = new Date().toISOString();
+
+    await workflowService.saveWorkflow(workflow);
+
+    return {
+      workflow: this.workflowToInfo(workflow),
+      newNodeId,
+    };
+  }
+
+  async moveNode(params: MoveNodeParams): Promise<{ workflow: WorkflowInfo; newPosition: { x: number; y: number } }> {
+    const workflow = await workflowService.loadWorkflow(params.workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${params.workflowId}' not found`);
+    }
+
+    const node = (workflow.nodes || []).find(n => n.id === params.nodeId);
+    if (!node) {
+      throw new Error(`Node '${params.nodeId}' not found in workflow`);
+    }
+
+    let newX = node.position.x;
+    let newY = node.position.y;
+    const moveOffset = 50;
+
+    // Handle direction-based movement
+    if (params.direction) {
+      switch (params.direction) {
+        case 'up': newY -= moveOffset; break;
+        case 'down': newY += moveOffset; break;
+        case 'left': newX -= moveOffset; break;
+        case 'right': newX += moveOffset; break;
+      }
+    } else if (params.x !== undefined || params.y !== undefined) {
+      // Handle coordinate-based movement
+      if (params.relative) {
+        newX += params.x || 0;
+        newY += params.y || 0;
+      } else {
+        newX = params.x ?? newX;
+        newY = params.y ?? newY;
+      }
+    }
+
+    node.position = { x: newX, y: newY };
+    workflow.updatedAt = new Date().toISOString();
+    await workflowService.saveWorkflow(workflow);
+
+    return {
+      workflow: this.workflowToInfo(workflow),
+      newPosition: { x: newX, y: newY },
+    };
+  }
+
+  async getWorkflowStats(workflowId: string): Promise<WorkflowStats> {
+    const workflow = await workflowService.loadWorkflow(workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${workflowId}' not found`);
+    }
+
+    // Derive stats from current workflow state
+    // In a full implementation, this would query execution history from database
+    const isCompleted = workflow.status === 'completed';
+    const isError = workflow.status === 'error';
+    const isRunning = workflow.status === 'running';
+    const hasRun = isCompleted || isError;
+
+    // Count nodes and edges as a proxy for complexity
+    const nodeCount = (workflow.nodes || []).length;
+    const edgeCount = (workflow.edges || []).length;
+
+    return {
+      workflowId,
+      totalRuns: hasRun ? 1 : 0,
+      successfulRuns: isCompleted ? 1 : 0,
+      failedRuns: isError ? 1 : 0,
+      successRate: isCompleted ? 100 : (isError ? 0 : 0),
+      lastRunAt: hasRun || isRunning ? workflow.updatedAt : undefined,
+      lastStatus: workflow.status,
+      averageDuration: undefined,
+    };
+  }
+
+  async autoLayoutWorkflow(params: AutoLayoutParams): Promise<{ workflow: WorkflowInfo; nodesRepositioned: number }> {
+    const workflow = await workflowService.loadWorkflow(params.workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow '${params.workflowId}' not found`);
+    }
+
+    const nodes = workflow.nodes || [];
+    const edges = workflow.edges || [];
+    if (nodes.length === 0) {
+      return { workflow: this.workflowToInfo(workflow), nodesRepositioned: 0 };
+    }
+
+    const spacingX = params.spacingX || 250;
+    const spacingY = params.spacingY || 100;
+    const isHorizontal = params.direction !== 'vertical';
+
+    // Build adjacency map
+    const outgoing = new Map<string, string[]>();
+    const incoming = new Map<string, string[]>();
+    for (const edge of edges) {
+      if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+      outgoing.get(edge.source)!.push(edge.target);
+      if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+      incoming.get(edge.target)!.push(edge.source);
+    }
+
+    // Find root nodes (no incoming edges)
+    const rootNodes = nodes.filter(n => !incoming.has(n.id) || incoming.get(n.id)!.length === 0);
+
+    // BFS to assign levels
+    const levels = new Map<string, number>();
+    const queue: string[] = rootNodes.map(n => n.id);
+    rootNodes.forEach(n => levels.set(n.id, 0));
+
+    while (queue.length > 0) {
+      const nodeId = queue.shift()!;
+      const level = levels.get(nodeId)!;
+      const children = outgoing.get(nodeId) || [];
+      for (const childId of children) {
+        if (!levels.has(childId) || levels.get(childId)! < level + 1) {
+          levels.set(childId, level + 1);
+          queue.push(childId);
+        }
+      }
+    }
+
+    // Assign levels to disconnected nodes
+    let maxLevel = Math.max(0, ...levels.values());
+    for (const node of nodes) {
+      if (!levels.has(node.id)) {
+        maxLevel++;
+        levels.set(node.id, maxLevel);
+      }
+    }
+
+    // Group nodes by level
+    const levelGroups = new Map<number, typeof nodes>();
+    for (const node of nodes) {
+      const level = levels.get(node.id) || 0;
+      if (!levelGroups.has(level)) levelGroups.set(level, []);
+      levelGroups.get(level)!.push(node);
+    }
+
+    // Position nodes
+    let nodesRepositioned = 0;
+    const startX = 100;
+    const startY = 100;
+
+    for (const [level, group] of levelGroups) {
+      group.forEach((node, idx) => {
+        const oldPos = { ...node.position };
+        if (isHorizontal) {
+          node.position = {
+            x: startX + level * spacingX,
+            y: startY + idx * spacingY,
+          };
+        } else {
+          node.position = {
+            x: startX + idx * spacingX,
+            y: startY + level * spacingY,
+          };
+        }
+        if (oldPos.x !== node.position.x || oldPos.y !== node.position.y) {
+          nodesRepositioned++;
+        }
+      });
+    }
+
+    workflow.updatedAt = new Date().toISOString();
+    await workflowService.saveWorkflow(workflow);
+
+    return {
+      workflow: this.workflowToInfo(workflow),
+      nodesRepositioned,
+    };
   }
 
   // ============================================================================

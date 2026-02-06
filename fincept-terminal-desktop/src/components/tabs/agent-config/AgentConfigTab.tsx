@@ -42,6 +42,7 @@ import agentService, {
   type PlanStep,
   type RoutingResult,
 } from '@/services/agentService';
+import RenaissanceTechnologiesPanel from './RenaissanceTechnologiesPanel';
 
 // =============================================================================
 // Constants & Types - Fincept Professional Terminal Palette
@@ -1503,94 +1504,100 @@ const AgentConfigTab: React.FC = () => {
               display: 'flex',
               overflow: 'hidden',
             }}>
-              {/* Config Area */}
-              <div style={{
-                flex: 1,
-                overflow: 'auto',
-                padding: '16px',
-              }}>
-                {showJsonEditor ? (
-                  <textarea
-                    value={jsonText}
-                    onChange={e => setJsonText(e.target.value)}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      padding: '12px',
-                      backgroundColor: FINCEPT.DARK_BG,
-                      color: FINCEPT.WHITE,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      borderRadius: '2px',
-                      fontSize: '11px',
-                      fontFamily: '"IBM Plex Mono", monospace',
-                      resize: 'none',
-                    }}
-                  />
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {/* Config Editor */}
-                    {renderAgentConfigEditor()}
-
-                    {/* Routing Toggle */}
-                    <div style={{
-                      padding: '12px',
-                      backgroundColor: FINCEPT.PANEL_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      borderRadius: '2px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <Route size={16} style={{ color: FINCEPT.PURPLE }} />
-                        <div>
-                          <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE }}>
-                            SuperAgent Auto-Routing
-                          </div>
-                          <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
-                            Automatically route queries to the best agent
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setUseAutoRouting(!useAutoRouting)}
+              {selectedAgent.id === 'renaissance_technologies' ? (
+                <RenaissanceTechnologiesPanel />
+              ) : (
+                <>
+                  {/* Config Area */}
+                  <div style={{
+                    flex: 1,
+                    overflow: 'auto',
+                    padding: '16px',
+                  }}>
+                    {showJsonEditor ? (
+                      <textarea
+                        value={jsonText}
+                        onChange={e => setJsonText(e.target.value)}
                         style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: useAutoRouting ? FINCEPT.GREEN : FINCEPT.GRAY,
+                          width: '100%',
+                          height: '100%',
+                          padding: '12px',
+                          backgroundColor: FINCEPT.DARK_BG,
+                          color: FINCEPT.WHITE,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                          borderRadius: '2px',
+                          fontSize: '11px',
+                          fontFamily: '"IBM Plex Mono", monospace',
+                          resize: 'none',
                         }}
-                      >
-                        {useAutoRouting ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
-                      </button>
-                    </div>
+                      />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {/* Config Editor */}
+                        {renderAgentConfigEditor()}
 
-                    {/* Last Routing Result */}
-                    {lastRoutingResult && (
-                      <div style={{
-                        padding: '12px',
-                        backgroundColor: `${FINCEPT.PURPLE}10`,
-                        border: `1px solid ${FINCEPT.PURPLE}40`,
-                        borderRadius: '2px',
-                      }}>
-                        <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.PURPLE, marginBottom: '6px' }}>
-                          LAST ROUTING RESULT
+                        {/* Routing Toggle */}
+                        <div style={{
+                          padding: '12px',
+                          backgroundColor: FINCEPT.PANEL_BG,
+                          border: `1px solid ${FINCEPT.BORDER}`,
+                          borderRadius: '2px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Route size={16} style={{ color: FINCEPT.PURPLE }} />
+                            <div>
+                              <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE }}>
+                                SuperAgent Auto-Routing
+                              </div>
+                              <div style={{ fontSize: '9px', color: FINCEPT.GRAY }}>
+                                Automatically route queries to the best agent
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setUseAutoRouting(!useAutoRouting)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: useAutoRouting ? FINCEPT.GREEN : FINCEPT.GRAY,
+                            }}
+                          >
+                            {useAutoRouting ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+                          </button>
                         </div>
-                        <div style={{ fontSize: '11px', color: FINCEPT.WHITE }}>
-                          <span style={{ color: FINCEPT.GRAY }}>Intent:</span>{' '}
-                          <span style={{ color: FINCEPT.ORANGE }}>{lastRoutingResult.intent}</span>
-                          {' • '}
-                          <span style={{ color: FINCEPT.GRAY }}>Agent:</span>{' '}
-                          <span style={{ color: FINCEPT.ORANGE }}>{lastRoutingResult.agent_id}</span>
-                          {' • '}
-                          <span style={{ color: FINCEPT.GRAY }}>Confidence:</span>{' '}
-                          <span style={{ color: FINCEPT.GREEN }}>{(lastRoutingResult.confidence * 100).toFixed(0)}%</span>
-                        </div>
+
+                        {/* Last Routing Result */}
+                        {lastRoutingResult && (
+                          <div style={{
+                            padding: '12px',
+                            backgroundColor: `${FINCEPT.PURPLE}10`,
+                            border: `1px solid ${FINCEPT.PURPLE}40`,
+                            borderRadius: '2px',
+                          }}>
+                            <div style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.PURPLE, marginBottom: '6px' }}>
+                              LAST ROUTING RESULT
+                            </div>
+                            <div style={{ fontSize: '11px', color: FINCEPT.WHITE }}>
+                              <span style={{ color: FINCEPT.GRAY }}>Intent:</span>{' '}
+                              <span style={{ color: FINCEPT.ORANGE }}>{lastRoutingResult.intent}</span>
+                              {' • '}
+                              <span style={{ color: FINCEPT.GRAY }}>Agent:</span>{' '}
+                              <span style={{ color: FINCEPT.ORANGE }}>{lastRoutingResult.agent_id}</span>
+                              {' • '}
+                              <span style={{ color: FINCEPT.GRAY }}>Confidence:</span>{' '}
+                              <span style={{ color: FINCEPT.GREEN }}>{(lastRoutingResult.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </>
         ) : (

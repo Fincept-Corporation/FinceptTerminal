@@ -97,4 +97,64 @@ export const navigationTools: InternalTool[] = [
       return { success: true, message: `Opened settings > ${args.section}`, data: { section: args.section } };
     },
   },
+  {
+    name: 'open_news_tab',
+    description: 'Navigate to the News tab to view financial news, RSS feeds, and market sentiment. Use this when user wants to see news, check headlines, or read financial articles',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    handler: async (_args, contexts) => {
+      if (!contexts.setActiveTab) {
+        return { success: false, error: 'Navigation context not available' };
+      }
+      contexts.setActiveTab('news');
+      return { success: true, message: 'Navigated to News tab' };
+    },
+  },
+  {
+    name: 'open_portfolio_tab',
+    description: 'Navigate to the Portfolio tab to view holdings, performance, and manage investments',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    handler: async (_args, contexts) => {
+      if (!contexts.setActiveTab) {
+        return { success: false, error: 'Navigation context not available' };
+      }
+      contexts.setActiveTab('portfolio');
+      return { success: true, message: 'Navigated to Portfolio tab' };
+    },
+  },
+  {
+    name: 'open_trading_tab',
+    description: 'Navigate to the Trading tab for crypto trading with connected exchanges',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    handler: async (_args, contexts) => {
+      if (!contexts.setActiveTab) {
+        return { success: false, error: 'Navigation context not available' };
+      }
+      contexts.setActiveTab('trading');
+      return { success: true, message: 'Navigated to Trading tab' };
+    },
+  },
+  {
+    name: 'open_markets_tab',
+    description: 'Navigate to the Markets tab to view market data, indices, and real-time quotes',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    handler: async (_args, contexts) => {
+      if (!contexts.setActiveTab) {
+        return { success: false, error: 'Navigation context not available' };
+      }
+      contexts.setActiveTab('markets');
+      return { success: true, message: 'Navigated to Markets tab' };
+    },
+  },
 ];

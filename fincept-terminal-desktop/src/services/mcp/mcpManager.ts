@@ -37,7 +37,25 @@ class MCPManager {
     // Health check is deferred until the first server starts
   }
 
-  // Install a new MCP server
+  // Installation state tracking
+  private installingServers = new Set<string>();
+  private installationCallbacks = new Map<string, {
+    onProgress?: (status: string) => void;
+    onComplete?: (success: boolean, error?: string) => void;
+  }>();
+
+  // Check if a server is currently being installed
+  isInstalling(serverId: string): boolean {
+    return this.installingServers.has(serverId);
+  }
+
+  // Get all currently installing server IDs
+  getInstallingServerIds(): string[] {
+    return Array.from(this.installingServers);
+  }
+
+  // Install a new MCP server (non-blocking)
+  // Returns immediately after saving to DB, starts server in background
   async installServer(config: {
     id: string;
     name: string;
@@ -47,15 +65,31 @@ class MCPManager {
     env?: Record<string, string>;
     category: string;
     icon: string;
+  }, callbacks?: {
+    onProgress?: (status: string) => void;
+    onComplete?: (success: boolean, error?: string) => void;
   }): Promise<void> {
+    // Prevent duplicate installations
+    if (this.installingServers.has(config.id)) {
+      mcpLogger.warn(`Server ${config.id} is already being installed`);
+      return;
+    }
+
+    this.installingServers.add(config.id);
+    if (callbacks) {
+      this.installationCallbacks.set(config.id, callbacks);
+    }
+
     try {
       mcpLogger.info(`Installing server: ${config.name}`);
+      callbacks?.onProgress?.('Checking existing installation...');
 
       // Check if server already exists
       const existing = await sqliteService.getMCPServer(config.id);
 
       if (existing) {
         mcpLogger.info(`Server ${config.id} already installed, updating config...`);
+        callbacks?.onProgress?.('Updating existing configuration...');
 
         // Update existing server config
         await sqliteService.updateMCPServerConfig(config.id, {
@@ -67,19 +101,14 @@ class MCPManager {
           await this.stopServer(config.id);
         }
 
-        // Try to start with new config
-        try {
-          await this.startServer(config.id);
-        } catch (startError) {
-          mcpLogger.warn(`Failed to start existing server: ${startError}`);
-          // Don't throw - server is already installed
-        }
-
-        mcpLogger.info(`Server ${config.name} updated successfully`);
+        // Start in background - don't await
+        this.startServerInBackground(config.id, callbacks);
         return;
       }
 
-      // Add new server to database
+      callbacks?.onProgress?.('Saving server configuration...');
+
+      // Add new server to database (fast operation)
       await sqliteService.addMCPServer({
         id: config.id,
         name: config.name,
@@ -94,19 +123,46 @@ class MCPManager {
         status: 'stopped'
       });
 
-      // Try to start the server (don't fail install if start fails)
-      try {
-        await this.startServer(config.id);
-      } catch (startError) {
-        mcpLogger.warn(`Server installed but failed to start: ${startError}`);
-        // Server is installed, just not running - this is OK
-      }
+      mcpLogger.info(`Server ${config.name} saved to database`);
+      callbacks?.onProgress?.('Starting server (this may take a while for first-time downloads)...');
 
-      mcpLogger.info(`Server ${config.name} installed successfully`);
+      // Start server in background - don't await, let it run
+      this.startServerInBackground(config.id, callbacks);
+
     } catch (error) {
+      this.installingServers.delete(config.id);
+      this.installationCallbacks.delete(config.id);
       mcpLogger.error('Installation error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      callbacks?.onComplete?.(false, errorMsg);
       throw error;
     }
+  }
+
+  // Start server in background without blocking
+  private startServerInBackground(serverId: string, callbacks?: {
+    onProgress?: (status: string) => void;
+    onComplete?: (success: boolean, error?: string) => void;
+  }): void {
+    // Use setTimeout to ensure this runs in the next tick, not blocking current execution
+    setTimeout(async () => {
+      try {
+        callbacks?.onProgress?.('Connecting to server...');
+        await this.startServer(serverId);
+
+        this.installingServers.delete(serverId);
+        this.installationCallbacks.delete(serverId);
+        callbacks?.onComplete?.(true);
+        mcpLogger.info(`Server ${serverId} started successfully in background`);
+      } catch (startError) {
+        this.installingServers.delete(serverId);
+        this.installationCallbacks.delete(serverId);
+        const errorMsg = startError instanceof Error ? startError.message : 'Unknown error';
+        mcpLogger.warn(`Server installed but failed to start: ${errorMsg}`);
+        callbacks?.onComplete?.(false, errorMsg);
+        // Don't throw - server is installed, just not running
+      }
+    }, 0);
   }
 
   // Start an MCP server

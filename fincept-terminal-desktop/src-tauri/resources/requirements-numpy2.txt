@@ -62,6 +62,13 @@ langchain-community>=0.0.1
 tiktoken>=0.5.0
 # Note: litellm removed - model data extracted to llm_models_data.json (240KB static file)
 
+# Agno AI Framework
+agno>=1.0.0
+
+# Agno Tool Dependencies (free tools - no API keys required)
+ddgs>=6.0.0
+wikipedia>=1.4.0
+
 # ML/DL (NumPy 2.x compatible)
 # PyTorch 2.3.1+ doesn't support macOS Intel, use 2.2.2 for compatibility
 torch==2.2.2; platform_machine == "x86_64" and sys_platform == "darwin"

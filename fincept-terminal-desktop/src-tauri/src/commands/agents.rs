@@ -248,8 +248,9 @@ fn get_agent_script_path(agent_type: &str) -> Option<&'static str> {
         "macro_cycle" | "central_bank" | "behavioral" | "institutional_flow" |
         "innovation" | "geopolitical" | "currency" | "supply_chain" |
         "sentiment" | "regulatory" | "bridgewater" | "citadel" |
-        "renaissance" | "two_sigma" | "de_shaw" | "elliott" |
+        "two_sigma" | "de_shaw" | "elliott" |
         "pershing_square" | "arq_capital" => Some("agents/hedgeFundAgents/hedge_fund_agent_cli.py"),
+        "renaissance" | "renaissance_technologies" | "rentech" => Some("agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/rentech_cli.py"),
         "capitalism" => Some("agents/EconomicAgents/capitalism_agent_cli.py"),
         "keynesian" => Some("agents/EconomicAgents/keynesian_agent_cli.py"),
         "neoliberal" => Some("agents/EconomicAgents/neoliberal_agent_cli.py"),

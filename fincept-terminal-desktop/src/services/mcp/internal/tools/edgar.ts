@@ -294,7 +294,7 @@ async function executeEdgarCommand(command: string, args: any[]): Promise<any> {
 
     const result = await invoke('execute_python_script', {
       app: null, // Will be injected by Tauri
-      scriptName: 'edgar_tools.py',
+      scriptName: 'edgar_mcp.py',
       args: scriptArgs,
       env: {}
     });
@@ -964,6 +964,260 @@ export const edgarTools: InternalTool[] = [
           success: false,
           error: error?.message || String(error),
         };
+      }
+    },
+  },
+
+  // ============================================================================
+  // NEW: 10-K SECTION EXTRACTION
+  // ============================================================================
+
+  {
+    name: 'edgar_10k_sections',
+    description: 'Extract specific sections from 10-K annual report. Get Item 1 (Business), Item 1A (Risk Factors), Item 7 (MD&A), Item 10 (Governance), and more.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Company name to search' },
+        ticker: { type: 'string', description: 'Or exact ticker symbol' },
+        sections: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Sections to extract: business, risk_factors, legal_proceedings, md&a, controls, compensation, governance, all_items'
+        },
+      },
+      required: [],
+    },
+    handler: async (args) => {
+      let ticker = args.ticker;
+      if (args.query && !ticker) {
+        ticker = await resolveTickerFromQuery(args.query);
+        if (!ticker) {
+          return { success: false, error: `Could not find company: ${args.query}` };
+        }
+      }
+
+      if (!ticker) {
+        return { success: false, error: 'Must provide either query or ticker' };
+      }
+
+      const sections = args.sections || [];
+
+      try {
+        const result = await executeEdgarCommand('10k_sections', [ticker, ...sections]);
+        return {
+          success: true,
+          data: result.data,
+          ticker,
+          message: `Extracted 10-K sections for ${ticker}`,
+        };
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error?.message || String(error),
+        };
+      }
+    },
+  },
+
+  {
+    name: 'edgar_10k_full_text',
+    description: 'Get full text content of 10-K annual report',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Company name' },
+        ticker: { type: 'string', description: 'Or ticker symbol' },
+        max_length: { type: 'number', description: 'Maximum text length' },
+      },
+      required: [],
+    },
+    handler: async (args) => {
+      let ticker = args.ticker;
+      if (args.query && !ticker) {
+        ticker = await resolveTickerFromQuery(args.query);
+        if (!ticker) return { success: false, error: `Could not find company: ${args.query}` };
+      }
+      if (!ticker) return { success: false, error: 'Must provide either query or ticker' };
+
+      const maxLength = args.max_length || null;
+      const commandArgs = maxLength ? [ticker, maxLength] : [ticker];
+
+      try {
+        const result = await executeEdgarCommand('10k_full_text', commandArgs);
+        return {
+          success: true,
+          data: result.data,
+          ticker,
+          message: `Retrieved 10-K full text for ${ticker}`,
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message || String(error) };
+      }
+    },
+  },
+
+  {
+    name: 'edgar_10k_search',
+    description: 'Search for text within 10-K annual report',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Company name' },
+        ticker: { type: 'string', description: 'Or ticker symbol' },
+        search_query: { type: 'string', description: 'Text to search for' },
+        max_results: { type: 'number', description: 'Maximum results (default: 10)' },
+      },
+      required: ['search_query'],
+    },
+    handler: async (args) => {
+      let ticker = args.ticker;
+      if (args.query && !ticker) {
+        ticker = await resolveTickerFromQuery(args.query);
+        if (!ticker) return { success: false, error: `Could not find company: ${args.query}` };
+      }
+      if (!ticker) return { success: false, error: 'Must provide either query or ticker' };
+
+      const searchQuery = args.search_query;
+      const maxResults = args.max_results || 10;
+
+      try {
+        const result = await executeEdgarCommand('10k_search', [ticker, searchQuery, maxResults]);
+        return {
+          success: true,
+          data: result.data,
+          ticker,
+          message: `Searched 10-K for "${searchQuery}"`,
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message || String(error) };
+      }
+    },
+  },
+
+  // ============================================================================
+  // NEW: 10-Q SECTION EXTRACTION
+  // ============================================================================
+
+  {
+    name: 'edgar_10q_sections',
+    description: 'Extract specific sections from 10-Q quarterly report. Get Part I Item 1 (Financials), Item 2 (MD&A), Part II Item 1A (Risk Factors), and more.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Company name to search' },
+        ticker: { type: 'string', description: 'Or exact ticker symbol' },
+        sections: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Sections to extract: part_i_item_1, part_i_item_2, part_i_item_3, part_i_item_4, part_i_item_8, part_ii_item_1, part_ii_item_1a, part_ii_item_2, part_ii_item_5, part_ii_item_6'
+        },
+      },
+      required: [],
+    },
+    handler: async (args) => {
+      let ticker = args.ticker;
+      if (args.query && !ticker) {
+        ticker = await resolveTickerFromQuery(args.query);
+        if (!ticker) {
+          return { success: false, error: `Could not find company: ${args.query}` };
+        }
+      }
+
+      if (!ticker) {
+        return { success: false, error: 'Must provide either query or ticker' };
+      }
+
+      const sections = args.sections || [];
+
+      try {
+        const result = await executeEdgarCommand('10q_sections', [ticker, ...sections]);
+        return {
+          success: true,
+          data: result.data,
+          ticker,
+          message: `Extracted 10-Q sections for ${ticker}`,
+        };
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error?.message || String(error),
+        };
+      }
+    },
+  },
+
+  {
+    name: 'edgar_10q_full_text',
+    description: 'Get full text content of 10-Q quarterly report',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Company name' },
+        ticker: { type: 'string', description: 'Or ticker symbol' },
+        max_length: { type: 'number', description: 'Maximum text length' },
+      },
+      required: [],
+    },
+    handler: async (args) => {
+      let ticker = args.ticker;
+      if (args.query && !ticker) {
+        ticker = await resolveTickerFromQuery(args.query);
+        if (!ticker) return { success: false, error: `Could not find company: ${args.query}` };
+      }
+      if (!ticker) return { success: false, error: 'Must provide either query or ticker' };
+
+      const maxLength = args.max_length || null;
+      const commandArgs = maxLength ? [ticker, maxLength] : [ticker];
+
+      try {
+        const result = await executeEdgarCommand('10q_full_text', commandArgs);
+        return {
+          success: true,
+          data: result.data,
+          ticker,
+          message: `Retrieved 10-Q full text for ${ticker}`,
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message || String(error) };
+      }
+    },
+  },
+
+  {
+    name: 'edgar_10q_search',
+    description: 'Search for text within 10-Q quarterly report',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Company name' },
+        ticker: { type: 'string', description: 'Or ticker symbol' },
+        search_query: { type: 'string', description: 'Text to search for' },
+        max_results: { type: 'number', description: 'Maximum results (default: 10)' },
+      },
+      required: ['search_query'],
+    },
+    handler: async (args) => {
+      let ticker = args.ticker;
+      if (args.query && !ticker) {
+        ticker = await resolveTickerFromQuery(args.query);
+        if (!ticker) return { success: false, error: `Could not find company: ${args.query}` };
+      }
+      if (!ticker) return { success: false, error: 'Must provide either query or ticker' };
+
+      const searchQuery = args.search_query;
+      const maxResults = args.max_results || 10;
+
+      try {
+        const result = await executeEdgarCommand('10q_search', [ticker, searchQuery, maxResults]);
+        return {
+          success: true,
+          data: result.data,
+          ticker,
+          message: `Searched 10-Q for "${searchQuery}"`,
+        };
+      } catch (error: any) {
+        return { success: false, error: error?.message || String(error) };
       }
     },
   },
