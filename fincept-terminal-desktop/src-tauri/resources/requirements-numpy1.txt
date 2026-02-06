@@ -28,3 +28,4 @@ plotly>=5.18.0,<6.0.0
 
 # Visualization (for PyPortfolioOpt compatibility)
 matplotlib>=3.8.0,<3.10.0
+

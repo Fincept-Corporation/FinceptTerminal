@@ -1,0 +1,40 @@
+# Ignore Python cache files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+
+# Ignore node modules
+**/node_modules/
+
+# Ignore temp files
+**/*.tmp
+**/*.log
+
+# Ignore RenTech agent subdirectories to prevent rebuilds during Python execution
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/strategies/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/models/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/agents/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/organization/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/utils/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/evaluation/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/guardrails/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/knowledge/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/memory/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/reasoning/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/schemas/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/teams/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/tests/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/tracing/
+resources/scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/workflows/
+
+# Ignore all Python agent directories to prevent rebuilds
+resources/scripts/agents/**/
+
+# Ignore Python output and data files
+**/*.pkl
+**/*.joblib
+**/*.h5
+**/*.db
+**/*.sqlite
+**/*.sqlite3

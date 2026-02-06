@@ -477,10 +477,21 @@ pub async fn execute_renaissance_cli(
     let python_path = python::get_python_path(&app, None)?;
     println!("[RenTech Rust] Python path: {:?}", python_path);
 
+    // Get the parent directory to add to PYTHONPATH
+    let agents_dir = script_path.parent()
+        .and_then(|p| p.parent())
+        .ok_or("Failed to get agents directory".to_string())?;
+
+    println!("[RenTech Rust] Adding to PYTHONPATH: {:?}", agents_dir);
+
+    // Run as module: python -m renaissance_technologies_hedge_fund_agent.rentech_cli
     let child = Command::new(&python_path)
-        .arg(script_path.to_str().unwrap())
+        .env("PYTHONPATH", agents_dir)
+        .arg("-m")
+        .arg("renaissance_technologies_hedge_fund_agent.rentech_cli")
         .arg(&command)
         .arg(&data)
+        .current_dir(agents_dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
