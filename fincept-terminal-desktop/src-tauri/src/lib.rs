@@ -1395,6 +1395,7 @@ pub fn run() {
             commands::agents::get_agent_metadata,
             commands::agents::execute_core_agent,
             commands::agents::read_agent_config,
+            commands::agents::execute_renaissance_cli,
             // SuperAgent & Planner Commands
             commands::agents::route_query,
             commands::agents::execute_routed_query,

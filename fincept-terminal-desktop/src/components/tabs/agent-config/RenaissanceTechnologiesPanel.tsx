@@ -175,14 +175,33 @@ export default function RenaissanceTechnologiesPanel() {
         information_coefficient: 0.05,
       };
 
-      const result = await invoke<string>('execute_python_agent', {
-        agentType: 'renaissance',
-        parameters: {},
-        inputs: { signal: signalData, config: riskLimits },
+      const cliInput = {
+        signal: signalData,
+        config: riskLimits,
+      };
+
+      console.log('[RenTech] Calling execute_renaissance_cli with:', {
+        command: 'analyze_signal',
+        data: cliInput,
       });
 
+      const result = await invoke<string>('execute_renaissance_cli', {
+        command: 'analyze_signal',
+        data: JSON.stringify(cliInput),
+      });
+
+      console.log('[RenTech] Raw result:', result);
       const parsed = JSON.parse(result);
-      setAnalysisResult(parsed.data || parsed);
+      console.log('[RenTech] Parsed result:', parsed);
+
+      if (parsed.success) {
+        setAnalysisResult(parsed.data || parsed);
+      } else {
+        setAnalysisResult({
+          success: false,
+          error: parsed.error || 'Analysis failed',
+        });
+      }
     } catch (error: any) {
       console.error('Analysis error:', error);
       setAnalysisResult({
@@ -221,13 +240,28 @@ export default function RenaissanceTechnologiesPanel() {
         },
       };
 
-      const jsonData = JSON.stringify(deliberationData);
-      const result = await invoke<string>('core_agent_cli', {
-        args: ['run_ic_deliberation', jsonData]
+      console.log('[RenTech IC] Calling execute_renaissance_cli with:', {
+        command: 'run_ic_deliberation',
+        data: deliberationData,
       });
 
+      const result = await invoke<string>('execute_renaissance_cli', {
+        command: 'run_ic_deliberation',
+        data: JSON.stringify(deliberationData),
+      });
+
+      console.log('[RenTech IC] Raw result:', result);
       const parsed = JSON.parse(result);
-      setAnalysisResult({ success: true, ic_decision: parsed.data });
+      console.log('[RenTech IC] Parsed result:', parsed);
+
+      if (parsed.success) {
+        setAnalysisResult({ success: true, ic_decision: parsed.data });
+      } else {
+        setAnalysisResult({
+          success: false,
+          error: parsed.error || 'IC deliberation failed',
+        });
+      }
     } catch (error: any) {
       console.error('IC deliberation error:', error);
       setAnalysisResult({

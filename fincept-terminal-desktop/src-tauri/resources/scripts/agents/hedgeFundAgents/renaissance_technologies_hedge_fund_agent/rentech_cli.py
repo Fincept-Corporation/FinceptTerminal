@@ -93,7 +93,7 @@ def create_model_from_settings(model_settings: Dict[str, Any]):
     Returns:
         Agno model instance
     """
-    from .utils.model_factory import create_model_from_config
+    from utils.model_factory import create_model_from_config
 
     # Convert model_settings to config dict format
     config_dict = {
@@ -125,7 +125,7 @@ def create_agent(json_str: str) -> str:
     """
     try:
         from agno.agent import Agent
-        from .schemas import AgentConfig
+        from schemas import AgentConfig
 
         data = json.loads(json_str)
         config_data = data.get("config", data)
@@ -180,7 +180,7 @@ def run_agent(json_str: str) -> str:
     """
     try:
         from agno.agent import Agent
-        from .schemas import AgentConfig
+        from schemas import AgentConfig
 
         data = json.loads(json_str)
 
@@ -228,7 +228,7 @@ def run_agent(json_str: str) -> str:
 def list_agent_presets() -> str:
     """List available agent preset configurations"""
     try:
-        from .schemas import (
+        from schemas import (
             get_research_agent_config,
             get_trading_agent_config,
             get_risk_agent_config,
@@ -267,7 +267,7 @@ def create_team(json_str: str) -> str:
     try:
         from agno.agent import Agent
         from agno.team import Team
-        from .schemas import TeamConfig, AgentConfig
+        from schemas import TeamConfig, AgentConfig
 
         data = json.loads(json_str)
         config_data = data.get("config", data)
@@ -334,7 +334,7 @@ def run_team(json_str: str) -> str:
     try:
         from agno.agent import Agent
         from agno.team import Team
-        from .schemas import TeamConfig
+        from schemas import TeamConfig
 
         data = json.loads(json_str)
 
@@ -392,7 +392,7 @@ def run_team(json_str: str) -> str:
 def list_team_presets() -> str:
     """List available team preset configurations"""
     try:
-        from .schemas import (
+        from schemas import (
             get_research_team_config,
             get_trading_team_config,
             get_risk_team_config,
@@ -448,7 +448,7 @@ def run_ic_deliberation(json_str: str) -> str:
     }
     """
     try:
-        from .reasoning.ic_deliberation import get_ic_deliberator
+        from reasoning.ic_deliberation import get_ic_deliberator
 
         data = json.loads(json_str)
 
@@ -527,7 +527,7 @@ def analyze_signal(json_str: str) -> str:
     }
     """
     try:
-        from .main import RenaissanceTechnologiesSystem, AnalysisConfig
+        from main import RenaissanceTechnologiesSystem, AnalysisConfig
 
         data = json.loads(json_str)
 
@@ -597,7 +597,7 @@ def analyze_signal(json_str: str) -> str:
 def get_config_schema() -> str:
     """Get JSON schemas for all configurations"""
     try:
-        from .schemas import get_agent_config_schema, get_team_config_schema
+        from schemas import get_agent_config_schema, get_team_config_schema
 
         return success_response({
             "agent_schema": get_agent_config_schema(),
@@ -627,7 +627,7 @@ def health_check() -> str:
 
         # Check model
         try:
-            from .config import get_config
+            from config import get_config
             config = get_config()
             status["components"]["config"] = "ok"
             status["model"] = {
@@ -639,14 +639,14 @@ def health_check() -> str:
 
         # Check reasoning
         try:
-            from .reasoning import get_reasoning_engine
+            from reasoning import get_reasoning_engine
             status["components"]["reasoning"] = "ok"
         except Exception as e:
             status["components"]["reasoning"] = f"error: {e}"
 
         # Check guardrails
         try:
-            from .guardrails import get_guardrail_registry
+            from guardrails import get_guardrail_registry
             status["components"]["guardrails"] = "ok"
         except Exception as e:
             status["components"]["guardrails"] = f"error: {e}"

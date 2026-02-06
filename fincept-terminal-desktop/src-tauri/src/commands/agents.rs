@@ -390,12 +390,126 @@ pub async fn list_available_agents(app: tauri::AppHandle) -> Result<Vec<AgentMet
         }
     }
 
+    // Load Renaissance Technologies agent (single agent config format)
+    let rentech_path = if cfg!(debug_assertions) {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+        let base_dir = if current_dir.ends_with("src-tauri") {
+            current_dir
+        } else {
+            current_dir.join("src-tauri")
+        };
+        base_dir.join("resources/scripts/agents/finagent_core/configs/renaissance_technologies_agent.json")
+    } else {
+        let resource_dir = app.path().resource_dir()
+            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+        resource_dir.join("scripts/agents/finagent_core/configs/renaissance_technologies_agent.json")
+    };
+
+    if let Ok(content) = std::fs::read_to_string(&rentech_path) {
+        if let Ok(agent_def) = serde_json::from_str::<AgentDefinition>(&content) {
+            all_agents.push(AgentMetadata {
+                id: agent_def.id.clone(),
+                name: agent_def.name,
+                agent_type: "python-agent".to_string(),
+                category: "hedge-fund".to_string(),
+                description: agent_def.description,
+                script_path: "agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/".to_string(),
+                parameters: vec![
+                    AgentParameter {
+                        name: "query".to_string(),
+                        label: "Query".to_string(),
+                        param_type: "string".to_string(),
+                        required: true,
+                        default_value: None,
+                        description: Some("The analysis query or question".to_string()),
+                    },
+                ],
+                required_inputs: vec![],
+                outputs: vec!["analysis".to_string()],
+                icon: "🏆".to_string(),
+                color: "#f59e0b".to_string(),
+            });
+        }
+    }
+
     Ok(all_agents)
 }
 
 #[tauri::command]
 pub async fn get_agent_metadata(agent_type: String) -> Result<AgentMetadata, String> {
     Err(format!("Legacy command - use execute_core_agent with action='system_info' instead for: {}", agent_type))
+}
+
+/// Execute Renaissance Technologies CLI directly
+#[tauri::command]
+pub async fn execute_renaissance_cli(
+    app: tauri::AppHandle,
+    command: String,
+    data: String,
+) -> Result<String, String> {
+    use std::process::Command;
+    use std::time::Duration;
+    use tokio::time::timeout;
+    use crate::python;
+
+    println!("[RenTech Rust] Starting execution - command: {}, data length: {}", command, data.len());
+
+    let relative_path = "scripts/agents/hedgeFundAgents/renaissance_technologies_hedge_fund_agent/rentech_cli.py";
+
+    let script_path = if cfg!(debug_assertions) {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+        let base_dir = if current_dir.ends_with("src-tauri") {
+            current_dir
+        } else {
+            current_dir.join("src-tauri")
+        };
+        base_dir.join("resources").join(relative_path)
+    } else {
+        let resource_dir = app.path().resource_dir()
+            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+        resource_dir.join(relative_path)
+    };
+
+    println!("[RenTech Rust] Script path: {:?}", script_path);
+
+    let python_path = python::get_python_path(&app, None)?;
+    println!("[RenTech Rust] Python path: {:?}", python_path);
+
+    let child = Command::new(&python_path)
+        .arg(script_path.to_str().unwrap())
+        .arg(&command)
+        .arg(&data)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn Renaissance CLI process: {}", e))?;
+
+    println!("[RenTech Rust] Process spawned, waiting for output...");
+
+    let output_result = timeout(Duration::from_secs(120), async move {
+        tokio::task::spawn_blocking(move || child.wait_with_output()).await
+    })
+    .await
+    .map_err(|_| "Renaissance CLI execution timed out after 120 seconds".to_string())?;
+
+    let output = output_result
+        .map_err(|e| format!("Failed to wait for process: {}", e))?
+        .map_err(|e| format!("Process execution error: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    println!("[RenTech Rust] Exit status: {:?}", output.status);
+    println!("[RenTech Rust] Stdout: {}", stdout);
+    println!("[RenTech Rust] Stderr: {}", stderr);
+
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Err(format!("Renaissance CLI failed with exit code {:?}\nStderr: {}", output.status.code(), stderr))
+    }
 }
 
 /// Read agent configuration file from resources
