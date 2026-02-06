@@ -20,7 +20,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 [📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) • [📚 Docs](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs) • [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) • [💬 Discord](https://discord.gg/ae87a8ygbN)
 
-![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
+![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
 </div>
 
