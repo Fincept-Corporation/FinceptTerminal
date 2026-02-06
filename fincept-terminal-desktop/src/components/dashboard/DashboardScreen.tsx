@@ -34,7 +34,6 @@ import RecordedContextsManager from '@/components/common/RecordedContextsManager
 import { HeaderSupportButtons } from '@/components/common/HeaderSupportButtons';
 import AgentConfigTab from '@/components/tabs/agent-config';
 import RelationshipMapTab from '@/components/tabs/relationship-map/RelationshipMapTab';
-import TauriEventsMonitorTab from '@/components/tabs/tauri-events-monitor';
 import { useTranslation } from 'react-i18next';
 import { WorkspaceProvider } from '@/contexts/WorkspaceContext';
 import WorkspaceDialog from './WorkspaceDialog';
@@ -588,7 +587,6 @@ function FinxeptTerminalContent() {
     { label: 'Report Builder', action: () => setActiveTab('reportbuilder') },
     { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
-    { label: 'Tauri Events Monitor', action: () => setActiveTab('tauri-events') },
     { label: 'Notes', action: () => setActiveTab('notes') },
     { label: 'Settings', action: () => setActiveTab('settings') },
     // Community & Support
@@ -908,13 +906,6 @@ function FinxeptTerminalContent() {
                   AI Quant Lab
                 </TabsTrigger>
                 <TabsTrigger
-                  value="tauri-events"
-                  style={activeTab === 'tauri-events' ? tabStyles.active : tabStyles.default}
-                  title="Tauri Events Monitor"
-                >
-                  Events Monitor
-                </TabsTrigger>
-                <TabsTrigger
                   value="settings"
                   style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
                   title="Settings"
@@ -972,9 +963,6 @@ function FinxeptTerminalContent() {
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <TradeVisualizationTab />
               </React.Suspense>
-            </TabsContent>
-            <TabsContent value="tauri-events" className="h-full m-0 p-0">
-              <TauriEventsMonitorTab />
             </TabsContent>
             <TabsContent value="chat" className="h-full m-0 p-0">
               <ChatTab
