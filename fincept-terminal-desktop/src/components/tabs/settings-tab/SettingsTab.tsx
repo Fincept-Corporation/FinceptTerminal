@@ -47,7 +47,7 @@ export default function SettingsTab() {
   const { t } = useTranslation('settings');
   const { session } = useAuth();
   const { theme, updateTheme, resetTheme, colors } = useTerminalTheme();
-  const { defaultTimezone, setDefaultTimezone, options: timezoneOptions } = useTimezone();
+  const { timezone, setTimezone, options: timezoneOptions } = useTimezone();
   const [activeSection, setActiveSection] = useState<SettingsSection>('credentials');
 
   const {
@@ -290,8 +290,8 @@ export default function SettingsTab() {
                 showMessage={showMessage}
                 keyMappings={keyMappings}
                 setKeyMappings={setKeyMappings}
-                defaultTimezone={defaultTimezone}
-                setDefaultTimezone={setDefaultTimezone}
+                defaultTimezone={timezone}
+                setDefaultTimezone={setTimezone}
                 timezoneOptions={timezoneOptions}
               />
             )}

@@ -173,6 +173,9 @@ interface StockBrokerContextType {
   isConnecting: boolean;
   isRefreshing: boolean;
 
+  // Master contract state
+  masterContractReady: boolean;
+
   // Error state
   error: string | null;
   clearError: () => void;
@@ -202,6 +205,9 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
 
   // Error state
   const [error, setError] = useState<string | null>(null);
+
+  // Master contract state
+  const [masterContractReady, setMasterContractReady] = useState(false);
 
   // Cached trading data
   const [positions, setPositions] = useState<Position[]>([]);
@@ -620,15 +626,20 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           // Fetch initial data
           await refreshAllData(adapterToUse);
 
-          // Auto-download master contract if needed (background task)
+          // Auto-download master contract if needed
+          setMasterContractReady(false);
           symbolMaster.ensureMasterContract(activeBroker).then((result) => {
             if (result.success) {
               console.log(`[StockBrokerContext] ✓ Master contract ready: ${result.total_symbols} symbols`);
+              setMasterContractReady(true);
             } else {
               console.warn(`[StockBrokerContext] Master contract download issue: ${result.message}`);
+              // Still set to true if we have cached data
+              setMasterContractReady(result.total_symbols > 0);
             }
           }).catch((err) => {
             console.warn(`[StockBrokerContext] Master contract download failed:`, err);
+            setMasterContractReady(false);
           });
 
           // Connect WebSocket for real-time data streaming
@@ -731,15 +742,19 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           // Fetch initial data
           await refreshAllData(adapter);
 
-          // Auto-download master contract if needed (background task)
+          // Auto-download master contract if needed
+          setMasterContractReady(false);
           symbolMaster.ensureMasterContract(activeBroker).then((result) => {
             if (result.success) {
               console.log(`[StockBrokerContext] ✓ Master contract ready: ${result.total_symbols} symbols`);
+              setMasterContractReady(true);
             } else {
               console.warn(`[StockBrokerContext] Master contract download issue: ${result.message}`);
+              setMasterContractReady(result.total_symbols > 0);
             }
           }).catch((err) => {
             console.warn(`[StockBrokerContext] Master contract download failed:`, err);
+            setMasterContractReady(false);
           });
 
           // Connect WebSocket for real-time data streaming
@@ -1383,6 +1398,9 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       isConnecting,
       isRefreshing,
 
+      // Master contract
+      masterContractReady,
+
       // Error
       error,
       clearError,
@@ -1418,6 +1436,7 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
       isLoading,
       isConnecting,
       isRefreshing,
+      masterContractReady,
       error,
       clearError,
     ]

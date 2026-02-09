@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Loader } from 'lucide-react';
+import { Search, Loader, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import type { ConditionItem, ScanResult } from '../types';
 import { TIMEFRAMES } from '../constants/indicators';
 import { runAlgoScan } from '../services/algoTradingService';
@@ -11,6 +11,7 @@ const F = {
   ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
   GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F',
   HEADER_BG: '#1A1A1A', BORDER: '#2A2A2A', MUTED: '#4A4A4A', CYAN: '#00E5FF',
+  YELLOW: '#FFD600',
 };
 
 const inputStyle: React.CSSProperties = {
@@ -24,11 +25,20 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '4px', display: 'block',
 };
 
+interface SymbolError {
+  symbol: string;
+  error: string;
+}
+
+const STOCK_BROKERS = ['fyers', 'zerodha', 'upstox', 'dhan', 'angelone', 'kotak', 'groww', 'aliceblue', 'fivepaisa', 'iifl', 'motilal', 'shoonya'];
+
 const ScannerPanel: React.FC = () => {
   const stockBroker = useStockBrokerContextOptional();
   const { activeBroker } = useBrokerContext();
-  // Prefer stock broker (fyers, zerodha) over crypto broker
-  const provider = stockBroker?.activeBroker || activeBroker || 'fyers';
+  // For scanner, always prefer stock broker. Fallback to 'fyers' if the active broker is crypto-only.
+  const provider = stockBroker?.activeBroker
+    || (STOCK_BROKERS.includes(activeBroker) ? activeBroker : null)
+    || 'fyers';
 
   const [conditions, setConditions] = useState<ConditionItem[]>([
     { indicator: 'RSI', params: { period: 14 }, field: 'value', operator: '<', value: 30 },
@@ -40,6 +50,10 @@ const ScannerPanel: React.FC = () => {
   const [results, setResults] = useState<ScanResult[] | null>(null);
   const [scanned, setScanned] = useState(0);
   const [error, setError] = useState('');
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const [prefetchWarning, setPrefetchWarning] = useState('');
+  const [symbolErrors, setSymbolErrors] = useState<SymbolError[]>([]);
 
   const buildConditionsJson = (): string => {
     if (conditions.length === 0) return '[]';
@@ -52,11 +66,37 @@ const ScannerPanel: React.FC = () => {
     const symbols = symbolsInput.split(/[,\n]/).map(s => s.trim().toUpperCase()).filter(Boolean);
     if (symbols.length === 0) { setError('Enter at least one symbol'); return; }
     if (conditions.length === 0) { setError('Add at least one condition'); return; }
-    setScanning(true); setError(''); setResults(null);
-    const result = await runAlgoScan(buildConditionsJson(), JSON.stringify(symbols), timeframe, provider);
-    setScanning(false);
-    if (result.success && result.data) { setResults(result.data.matches); setScanned(result.data.scanned); }
-    else setError(result.error || 'Scan failed');
+
+    setScanning(true);
+    setError('');
+    setResults(null);
+    setDebugLog([]);
+    setPrefetchWarning('');
+    setSymbolErrors([]);
+
+    try {
+      const result = await runAlgoScan(buildConditionsJson(), JSON.stringify(symbols), timeframe, provider);
+      setScanning(false);
+
+      // Capture debug info regardless of success/failure
+      if (result.debug) setDebugLog(result.debug);
+      if (result.prefetch_warning) setPrefetchWarning(result.prefetch_warning);
+
+      if (result.success && result.data) {
+        setResults(result.data.matches);
+        setScanned(result.data.scanned);
+        if (result.data.errors && result.data.errors.length > 0) {
+          setSymbolErrors(result.data.errors);
+        }
+        if (result.data.debug) setDebugLog(result.data.debug);
+        if (result.data.prefetch_warning) setPrefetchWarning(result.data.prefetch_warning);
+      } else {
+        setError(result.error || 'Scan failed — check debug log for details');
+      }
+    } catch (e) {
+      setScanning(false);
+      setError(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   return (
@@ -95,8 +135,77 @@ const ScannerPanel: React.FC = () => {
         </div>
       </div>
 
+      {/* Error Display */}
       {error && (
-        <div style={{ padding: '6px 10px', backgroundColor: `${F.RED}20`, color: F.RED, fontSize: '9px', fontWeight: 700, borderRadius: '2px' }}>{error}</div>
+        <div style={{ padding: '8px 10px', backgroundColor: `${F.RED}15`, border: `1px solid ${F.RED}40`, borderRadius: '2px' }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, color: F.RED, marginBottom: '2px' }}>
+            SCAN ERROR
+          </div>
+          <div style={{ fontSize: '9px', color: F.RED, lineHeight: '1.4', whiteSpace: 'pre-wrap' }}>
+            {error}
+          </div>
+        </div>
+      )}
+
+      {/* Prefetch Warning */}
+      {prefetchWarning && !error && (
+        <div style={{
+          padding: '6px 10px', backgroundColor: `${F.YELLOW}12`, border: `1px solid ${F.YELLOW}30`,
+          borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '6px',
+        }}>
+          <AlertTriangle size={10} color={F.YELLOW} />
+          <span style={{ fontSize: '9px', color: F.YELLOW }}>{prefetchWarning}</span>
+        </div>
+      )}
+
+      {/* Symbol-level errors */}
+      {symbolErrors.length > 0 && (
+        <div style={{ padding: '6px 10px', backgroundColor: `${F.YELLOW}10`, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
+          <div style={{ fontSize: '8px', fontWeight: 700, color: F.YELLOW, letterSpacing: '0.5px', marginBottom: '4px' }}>
+            SYMBOL WARNINGS ({symbolErrors.length})
+          </div>
+          {symbolErrors.map((se, i) => (
+            <div key={i} style={{ fontSize: '9px', color: F.GRAY, lineHeight: '1.4' }}>
+              <span style={{ color: F.WHITE, fontWeight: 700 }}>{se.symbol}</span>: {se.error}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Debug Log (collapsible) */}
+      {debugLog.length > 0 && (
+        <div style={{ backgroundColor: F.PANEL_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            style={{
+              width: '100%', padding: '6px 10px', backgroundColor: F.HEADER_BG,
+              border: 'none', borderBottom: showDebug ? `1px solid ${F.BORDER}` : 'none',
+              color: F.MUTED, fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+              textAlign: 'left',
+            }}
+          >
+            {showDebug ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            DEBUG LOG ({debugLog.length} entries)
+          </button>
+          {showDebug && (
+            <div style={{
+              padding: '8px 10px', maxHeight: '200px', overflow: 'auto',
+              fontFamily: '"IBM Plex Mono", monospace', fontSize: '8px', lineHeight: '1.5',
+            }}>
+              {debugLog.map((line, i) => (
+                <div key={i} style={{
+                  color: line.includes('ERROR') ? F.RED
+                    : line.includes('WARNING') ? F.YELLOW
+                    : line.includes('summary') ? F.CYAN
+                    : F.MUTED,
+                }}>
+                  {line}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Results */}

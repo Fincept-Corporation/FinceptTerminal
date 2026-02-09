@@ -41,6 +41,26 @@ def main():
     matches = []
     errors = []
     scanned = 0
+    debug_log = []
+
+    debug_log.append(f'[scanner.py] db={args.db}')
+    debug_log.append(f'[scanner.py] timeframe={args.timeframe}, symbols={len(symbols)}, conditions={len(conditions)}')
+
+    # Check DB connectivity and candle_cache state
+    try:
+        conn_check = sqlite3.connect(args.db)
+        cur = conn_check.cursor()
+        cur.execute('SELECT COUNT(*) FROM candle_cache WHERE timeframe = ?', (args.timeframe,))
+        total_rows = cur.fetchone()[0]
+        debug_log.append(f'[scanner.py] candle_cache total rows for tf={args.timeframe}: {total_rows}')
+
+        for sym in symbols:
+            cur.execute('SELECT COUNT(*) FROM candle_cache WHERE symbol = ? AND timeframe = ?', (sym, args.timeframe))
+            sym_count = cur.fetchone()[0]
+            debug_log.append(f'[scanner.py] {sym}: {sym_count} candles in cache')
+        conn_check.close()
+    except Exception as e:
+        debug_log.append(f'[scanner.py] DB check error: {e}')
 
     for symbol in symbols:
         scanned += 1
@@ -63,6 +83,9 @@ def main():
 
         except Exception as e:
             errors.append({'symbol': symbol, 'error': str(e)})
+            debug_log.append(f'[scanner.py] {symbol} exception: {e}')
+
+    debug_log.append(f'[scanner.py] summary: scanned={scanned}, matches={len(matches)}, errors={len(errors)}')
 
     print(json.dumps({
         'success': True,
@@ -71,6 +94,7 @@ def main():
         'scanned': scanned,
         'errors': errors,
         'timeframe': args.timeframe,
+        'scanner_debug': debug_log,
     }))
 
 

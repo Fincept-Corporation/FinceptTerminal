@@ -362,19 +362,40 @@ class ModelsRegistry:
             if final_api_key:
                 model_kwargs["api_key"] = final_api_key
 
-            # Add base_url - check api_keys for custom endpoint, then config default
-            base_url_key = f"{provider.upper()}_BASE_URL"
-            custom_base_url = (api_keys or {}).get(base_url_key)
-            if custom_base_url:
-                model_kwargs["base_url"] = custom_base_url
-            elif config.get("base_url"):
-                model_kwargs["base_url"] = kwargs.pop("base_url", config["base_url"])
+            # Providers whose SDK constructors do NOT accept base_url
+            NO_BASE_URL_PROVIDERS = {
+                "google", "vertexai", "anthropic", "aws", "ibm",
+                "cohere", "meta", "cerebras", "sambanova", "nebius",
+                "internlm", "dashscope", "siliconflow",
+            }
 
-            # Add optional parameters (Agno uses these names)
+            # Always pop base_url from kwargs so it never leaks via catch-all
+            kwarg_base_url = kwargs.pop("base_url", None)
+
+            if provider_lower not in NO_BASE_URL_PROVIDERS:
+                # Add base_url - check api_keys for custom endpoint, then config default
+                base_url_key = f"{provider.upper()}_BASE_URL"
+                custom_base_url = (api_keys or {}).get(base_url_key)
+                if custom_base_url:
+                    model_kwargs["base_url"] = custom_base_url
+                elif kwarg_base_url:
+                    model_kwargs["base_url"] = kwarg_base_url
+                elif config.get("base_url"):
+                    model_kwargs["base_url"] = config["base_url"]
+
+            # Add optional parameters with provider-specific name mapping
+            # Google Gemini uses max_output_tokens instead of max_tokens
+            USES_MAX_OUTPUT_TOKENS = {"google", "vertexai"}
+
             if "temperature" in kwargs:
                 model_kwargs["temperature"] = kwargs.pop("temperature")
             if "max_tokens" in kwargs:
-                model_kwargs["max_tokens"] = kwargs.pop("max_tokens")
+                max_tok = kwargs.pop("max_tokens")
+                if max_tok is not None:
+                    if provider_lower in USES_MAX_OUTPUT_TOKENS:
+                        model_kwargs["max_output_tokens"] = max_tok
+                    else:
+                        model_kwargs["max_tokens"] = max_tok
             if "max_completion_tokens" in kwargs:
                 model_kwargs["max_completion_tokens"] = kwargs.pop("max_completion_tokens")
 
@@ -382,6 +403,11 @@ class ModelsRegistry:
             for k, v in kwargs.items():
                 if v is not None:
                     model_kwargs[k] = v
+
+            # DEBUG: log exactly what we're passing to the constructor
+            import sys
+            print(f"[DEBUG models_registry] provider={provider_lower}, class={class_name}, model_kwargs keys={list(model_kwargs.keys())}", file=sys.stderr, flush=True)
+            print(f"[DEBUG models_registry] model_kwargs={model_kwargs}", file=sys.stderr, flush=True)
 
             model_instance = model_class(**model_kwargs)
             logger.debug(f"Created model: {provider}/{final_model_id}")

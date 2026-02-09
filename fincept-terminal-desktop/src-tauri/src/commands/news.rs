@@ -264,8 +264,9 @@ fn parse_rss_feed(xml_text: &str, feed: &RSSFeed) -> Vec<NewsArticle> {
                         .unwrap()
                         .as_millis();
                     item_index += 1;
+                    let feed_id = feed.id.as_deref().unwrap_or(&feed.source);
                     current_item = Some(NewsArticle {
-                        id: format!("{}-{}-{}", feed.source, timestamp, item_index),
+                        id: format!("{}-{}-{}", feed_id, timestamp, item_index),
                         time: String::new(),
                         priority: "ROUTINE".to_string(),
                         category: feed.category.clone(),

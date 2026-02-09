@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { Globe, Wifi, WifiOff, ChevronDown, Settings as SettingsIcon, AlertTriangle, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { TimezoneSelector } from '@/components/common/TimezoneSelector';
+import { useCurrentTime } from '@/contexts/TimezoneContext';
 import { FINCEPT } from '../constants';
 
 interface BrokerInfo {
@@ -155,6 +155,7 @@ export function CryptoTopNav({
 }: CryptoTopNavProps) {
   const { t } = useTranslation('trading');
   const [showLiveModeModal, setShowLiveModeModal] = useState(false);
+  const { formattedTime, timezone } = useCurrentTime();
 
   const handleLiveModeClick = useCallback(() => {
     if (tradingMode !== 'live') {
@@ -382,7 +383,9 @@ export function CryptoTopNav({
 
           <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT.BORDER }} />
 
-          <TimezoneSelector compact />
+          <span style={{ fontSize: '10px', fontWeight: 600, color: FINCEPT.CYAN }}>
+            {formattedTime} <span style={{ color: FINCEPT.ORANGE, fontWeight: 700 }}>{timezone.shortLabel}</span>
+          </span>
 
           <button
             onClick={onSettingsToggle}

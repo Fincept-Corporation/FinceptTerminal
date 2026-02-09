@@ -2,9 +2,7 @@
  * TimezoneContext.tsx
  *
  * Global timezone state management for Fincept Terminal.
- * Provides dual-timezone support:
- * - Default Timezone: Persisted in SQLite, used by navigation bar
- * - Session Timezone: Per-session, used by dashboard widgets
+ * Single timezone persisted in SQLite, used across the application.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
@@ -71,8 +69,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   { id: 'tel-aviv', label: 'Tel Aviv (IST)', shortLabel: 'TLV', zone: 'Asia/Jerusalem' },
 ];
 
-const DEFAULT_STORAGE_KEY = 'fincept_default_timezone';
-const SESSION_STORAGE_KEY = 'fincept_timezone';
+const STORAGE_KEY = 'fincept_default_timezone';
 const DEFAULT_TIMEZONE_ID = 'local';
 
 // ============================================================================
@@ -80,24 +77,24 @@ const DEFAULT_TIMEZONE_ID = 'local';
 // ============================================================================
 
 interface TimezoneContextValue {
-  /** Default timezone (persisted, used by nav bar) */
-  defaultTimezone: TimezoneOption;
-  /** Session timezone (per-session, used by dashboard widgets) */
+  /** Current timezone setting (persisted) */
   timezone: TimezoneOption;
   /** All available timezone options */
   options: TimezoneOption[];
-  /** Update the default timezone (persisted in settings) */
-  setDefaultTimezone: (timezoneId: string) => void;
-  /** Update the session timezone (for dashboard widgets) */
+  /** Update the timezone (persisted in settings) */
   setTimezone: (timezoneId: string) => void;
-  /** Format a Date object according to a specific timezone */
+  /** Format a Date object according to the timezone */
   formatTime: (date: Date, options?: Intl.DateTimeFormatOptions) => string;
-  /** Format a Date object according to the default timezone */
-  formatTimeWithDefault: (date: Date, options?: Intl.DateTimeFormatOptions) => string;
   /** Format a Date object to a short time string (HH:MM:SS) */
   formatTimeShort: (date: Date) => string;
   /** Get the current time formatted in the selected timezone */
   getCurrentTimeFormatted: () => string;
+
+  // Aliases for backwards compatibility with Settings Tab
+  /** @deprecated Use timezone instead */
+  defaultTimezone: TimezoneOption;
+  /** @deprecated Use setTimezone instead */
+  setDefaultTimezone: (timezoneId: string) => void;
 }
 
 const TimezoneContext = createContext<TimezoneContextValue | undefined>(undefined);
@@ -111,81 +108,48 @@ interface TimezoneProviderProps {
 }
 
 export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) => {
-  // Initialize default timezone
-  const [defaultTimezoneId, setDefaultTimezoneId] = useState<string>(DEFAULT_TIMEZONE_ID);
+  const [timezoneId, setTimezoneId] = useState<string>(DEFAULT_TIMEZONE_ID);
 
-  // Initialize session timezone
-  const [sessionTimezoneId, setSessionTimezoneId] = useState<string>(DEFAULT_TIMEZONE_ID);
+  // Get the full timezone option object
+  const timezone = TIMEZONE_OPTIONS.find(tz => tz.id === timezoneId) || TIMEZONE_OPTIONS[0];
 
-  // Get the full timezone option objects
-  const defaultTimezone = TIMEZONE_OPTIONS.find(tz => tz.id === defaultTimezoneId) || TIMEZONE_OPTIONS[0];
-  const timezone = TIMEZONE_OPTIONS.find(tz => tz.id === sessionTimezoneId) || TIMEZONE_OPTIONS[0];
-
-  // Load timezones from storage on mount
+  // Load timezone from storage on mount
   useEffect(() => {
-    const loadTimezones = async () => {
+    const loadTimezone = async () => {
       try {
-        const storedDefault = await getSetting(DEFAULT_STORAGE_KEY);
-        if (storedDefault && TIMEZONE_OPTIONS.find(tz => tz.id === storedDefault)) {
-          setDefaultTimezoneId(storedDefault);
-        }
-
-        const storedSession = await getSetting(SESSION_STORAGE_KEY);
-        if (storedSession && TIMEZONE_OPTIONS.find(tz => tz.id === storedSession)) {
-          setSessionTimezoneId(storedSession);
-        } else if (storedDefault && TIMEZONE_OPTIONS.find(tz => tz.id === storedDefault)) {
-          setSessionTimezoneId(storedDefault);
+        const stored = await getSetting(STORAGE_KEY);
+        if (stored && TIMEZONE_OPTIONS.find(tz => tz.id === stored)) {
+          setTimezoneId(stored);
         }
       } catch (e) {
-        console.warn('[TimezoneContext] Failed to load timezones from storage:', e);
+        console.warn('[TimezoneContext] Failed to load timezone from storage:', e);
       }
     };
-    loadTimezones();
+    loadTimezone();
   }, []);
 
-  // Persist default timezone to storage when it changes
+  // Persist timezone to storage when it changes
   useEffect(() => {
-    const saveDefaultTimezone = async () => {
+    const saveTimezone = async () => {
       try {
-        await saveSetting(DEFAULT_STORAGE_KEY, defaultTimezoneId, 'timezone');
+        await saveSetting(STORAGE_KEY, timezoneId, 'timezone');
       } catch (e) {
-        console.warn('[TimezoneContext] Failed to save default timezone:', e);
+        console.warn('[TimezoneContext] Failed to save timezone:', e);
       }
     };
-    saveDefaultTimezone();
-  }, [defaultTimezoneId]);
+    saveTimezone();
+  }, [timezoneId]);
 
-  // Persist session timezone to storage when it changes
-  useEffect(() => {
-    const saveSessionTimezone = async () => {
-      try {
-        await saveSetting(SESSION_STORAGE_KEY, sessionTimezoneId, 'timezone');
-      } catch (e) {
-        console.warn('[TimezoneContext] Failed to save session timezone:', e);
-      }
-    };
-    saveSessionTimezone();
-  }, [sessionTimezoneId]);
-
-  // Set default timezone by ID (used in Settings)
-  const setDefaultTimezone = useCallback((id: string) => {
-    if (TIMEZONE_OPTIONS.find(tz => tz.id === id)) {
-      setDefaultTimezoneId(id);
-    } else {
-      console.warn(`[TimezoneContext] Unknown timezone ID: ${id}`);
-    }
-  }, []);
-
-  // Set session timezone by ID (used in dashboard widgets)
+  // Set timezone by ID
   const setTimezone = useCallback((id: string) => {
     if (TIMEZONE_OPTIONS.find(tz => tz.id === id)) {
-      setSessionTimezoneId(id);
+      setTimezoneId(id);
     } else {
       console.warn(`[TimezoneContext] Unknown timezone ID: ${id}`);
     }
   }, []);
 
-  // Format a date according to the session timezone
+  // Format a date according to the timezone
   const formatTime = useCallback((date: Date, options?: Intl.DateTimeFormatOptions): string => {
     const defaultOptions: Intl.DateTimeFormatOptions = {
       hour: '2-digit',
@@ -208,29 +172,6 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
     }
   }, [timezone]);
 
-  // Format a date according to the DEFAULT timezone (for nav bar)
-  const formatTimeWithDefault = useCallback((date: Date, options?: Intl.DateTimeFormatOptions): string => {
-    const defaultOptions: Intl.DateTimeFormatOptions = {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-      ...options,
-    };
-
-    // Add timezone if not using local
-    if (defaultTimezone.zone) {
-      defaultOptions.timeZone = defaultTimezone.zone;
-    }
-
-    try {
-      return new Intl.DateTimeFormat('en-US', defaultOptions).format(date);
-    } catch (e) {
-      console.error('[TimezoneContext] Format error:', e);
-      return date.toLocaleTimeString('en-US', { hour12: false });
-    }
-  }, [defaultTimezone]);
-
   // Short format: HH:MM:SS
   const formatTimeShort = useCallback((date: Date): string => {
     return formatTime(date, {
@@ -247,15 +188,15 @@ export const TimezoneProvider: React.FC<TimezoneProviderProps> = ({ children }) 
   }, [formatTimeShort]);
 
   const value: TimezoneContextValue = {
-    defaultTimezone,
     timezone,
     options: TIMEZONE_OPTIONS,
-    setDefaultTimezone,
     setTimezone,
     formatTime,
-    formatTimeWithDefault,
     formatTimeShort,
     getCurrentTimeFormatted,
+    // Backwards compatibility aliases
+    defaultTimezone: timezone,
+    setDefaultTimezone: setTimezone,
   };
 
   return (
@@ -282,15 +223,15 @@ export const useTimezone = (): TimezoneContextValue => {
 };
 
 // ============================================================================
-// Utility Hook: useCurrentTime (for dashboard widgets)
+// Utility Hook: useCurrentTime
 // ============================================================================
 
 /**
  * Hook that provides a ticking current time, automatically formatted
- * according to the SESSION timezone (for dashboard widgets).
- * 
+ * according to the configured timezone.
+ *
  * @param refreshInterval - Update interval in milliseconds (default: 1000)
- * @returns Object with currentTime (Date) and formattedTime (string)
+ * @returns Object with currentTime (Date), formattedTime (string), and timezone
  */
 export const useCurrentTime = (refreshInterval: number = 1000) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -311,35 +252,7 @@ export const useCurrentTime = (refreshInterval: number = 1000) => {
   };
 };
 
-// ============================================================================
-// Utility Hook: useDefaultTime (for navigation bar)
-// ============================================================================
-
-/**
- * Hook that provides a ticking current time, automatically formatted
- * according to the DEFAULT timezone (for navigation bar).
- * 
- * @param refreshInterval - Update interval in milliseconds (default: 1000)
- * @returns Object with currentTime (Date), formattedTime (string), and timezone
- */
-export const useDefaultTime = (refreshInterval: number = 1000) => {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const { formatTimeWithDefault, defaultTimezone } = useTimezone();
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, refreshInterval);
-
-    return () => clearInterval(timer);
-  }, [refreshInterval]);
-
-  return {
-    currentTime,
-    formattedTime: formatTimeWithDefault(currentTime),
-    timezone: defaultTimezone,
-  };
-};
+// Keep useDefaultTime as alias for backwards compatibility
+export const useDefaultTime = useCurrentTime;
 
 export default TimezoneContext;
-

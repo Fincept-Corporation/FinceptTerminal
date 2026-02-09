@@ -1,11 +1,11 @@
 /**
  * Deal Database - Track and Save M&A Deals
  *
- * Simple deal tracking and management
+ * Simple deal tracking and management with SEC filing scanner
  */
 
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Search, FileText, TrendingUp, DollarSign, Calendar } from 'lucide-react';
+import { Database, Search, FileText, TrendingUp, RefreshCw, Scan, AlertCircle } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 import { MAAnalyticsService, type MADeal } from '@/services/maAnalyticsService';
 
@@ -14,20 +14,50 @@ export const DealDatabase: React.FC = () => {
   const [selectedDeal, setSelectedDeal] = useState<MADeal | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanDays, setScanDays] = useState(30);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   useEffect(() => {
     loadDeals();
   }, []);
+
+  // Clear status message after 5 seconds
+  useEffect(() => {
+    if (statusMessage) {
+      const timer = setTimeout(() => setStatusMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [statusMessage]);
 
   const loadDeals = async () => {
     setLoading(true);
     try {
       const result = await MAAnalyticsService.DealDatabase.getAllDeals();
       setDeals(result);
+      setStatusMessage({ type: 'info', text: `Loaded ${result.length} deals from database` });
     } catch (error) {
       console.error('Failed to load deals:', error);
+      setStatusMessage({ type: 'error', text: 'Failed to load deals from database' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const scanFilings = async () => {
+    setScanning(true);
+    setStatusMessage({ type: 'info', text: `Scanning SEC filings from the last ${scanDays} days...` });
+    try {
+      const result = await MAAnalyticsService.DealDatabase.scanFilings(scanDays);
+      const count = Array.isArray(result) ? result.length : 0;
+      setStatusMessage({ type: 'success', text: `Found ${count} M&A filings. Refreshing deals...` });
+      // Reload deals after scanning
+      await loadDeals();
+    } catch (error) {
+      console.error('Failed to scan filings:', error);
+      setStatusMessage({ type: 'error', text: `Scan failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -62,7 +92,31 @@ export const DealDatabase: React.FC = () => {
           <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>
             DEAL TRACKER
           </div>
-          <div style={{ display: 'flex', gap: SPACING.SMALL, marginBottom: SPACING.DEFAULT }}>
+
+          {/* Status Message */}
+          {statusMessage && (
+            <div style={{
+              padding: SPACING.SMALL,
+              marginBottom: SPACING.SMALL,
+              borderRadius: '4px',
+              fontSize: TYPOGRAPHY.TINY,
+              backgroundColor: statusMessage.type === 'error' ? `${FINCEPT.RED}20` :
+                             statusMessage.type === 'success' ? `${FINCEPT.GREEN}20` :
+                             `${FINCEPT.CYAN}20`,
+              color: statusMessage.type === 'error' ? FINCEPT.RED :
+                     statusMessage.type === 'success' ? FINCEPT.GREEN :
+                     FINCEPT.CYAN,
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.SMALL,
+            }}>
+              <AlertCircle size={12} />
+              {statusMessage.text}
+            </div>
+          )}
+
+          {/* Search Input */}
+          <div style={{ display: 'flex', gap: SPACING.SMALL, marginBottom: SPACING.SMALL }}>
             <div style={{ position: 'relative', flex: 1 }}>
               <Search
                 size={12}
@@ -86,11 +140,75 @@ export const DealDatabase: React.FC = () => {
                 }}
               />
             </div>
+            <button
+              onClick={loadDeals}
+              disabled={loading}
+              title="Refresh deals"
+              style={{
+                padding: SPACING.SMALL,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: '4px',
+                color: FINCEPT.GRAY,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
+
+          {/* Scan SEC Filings */}
+          <div style={{
+            display: 'flex',
+            gap: SPACING.SMALL,
+            alignItems: 'center',
+            marginBottom: SPACING.SMALL,
+          }}>
+            <select
+              value={scanDays}
+              onChange={(e) => setScanDays(Number(e.target.value))}
+              style={{
+                ...COMMON_STYLES.inputField,
+                width: '80px',
+                fontSize: TYPOGRAPHY.TINY,
+              }}
+            >
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+              <option value={60}>60 days</option>
+              <option value={90}>90 days</option>
+            </select>
+            <button
+              onClick={scanFilings}
+              disabled={scanning}
+              style={{
+                flex: 1,
+                padding: SPACING.SMALL,
+                backgroundColor: scanning ? FINCEPT.PANEL_BG : FINCEPT.ORANGE,
+                border: 'none',
+                borderRadius: '4px',
+                color: scanning ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+                cursor: scanning ? 'not-allowed' : 'pointer',
+                fontSize: TYPOGRAPHY.TINY,
+                fontWeight: TYPOGRAPHY.BOLD,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: SPACING.TINY,
+              }}
+            >
+              <Scan size={12} className={scanning ? 'animate-spin' : ''} />
+              {scanning ? 'SCANNING...' : 'SCAN SEC FILINGS'}
+            </button>
+          </div>
+
           <div style={{
             fontSize: TYPOGRAPHY.TINY,
             color: FINCEPT.MUTED,
-            marginTop: SPACING.SMALL,
           }}>
             {filteredDeals.length} deal{filteredDeals.length !== 1 ? 's' : ''} tracked
           </div>
@@ -124,9 +242,15 @@ export const DealDatabase: React.FC = () => {
                 color: FINCEPT.MUTED,
                 marginTop: SPACING.SMALL,
                 textAlign: 'center',
-                maxWidth: '200px',
+                maxWidth: '220px',
               }}>
-                Use Valuation Toolkit or Merger Analysis to create and save deals
+                {searchQuery ? (
+                  'Try a different search term'
+                ) : (
+                  <>
+                    Click <strong style={{ color: FINCEPT.ORANGE }}>SCAN SEC FILINGS</strong> above to automatically discover M&A deals from SEC EDGAR
+                  </>
+                )}
               </div>
             </div>
           ) : (

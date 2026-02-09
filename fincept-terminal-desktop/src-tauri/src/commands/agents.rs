@@ -93,6 +93,14 @@ async fn execute_core_agent_with_timeout(
     let payload_str = serde_json::to_string(&payload)
         .map_err(|e| format!("Failed to serialize payload: {}", e))?;
 
+    // DEBUG: Log the action and model config being sent to Python
+    let action = payload.get("action").and_then(|v| v.as_str()).unwrap_or("unknown");
+    let model_info = payload.get("config")
+        .and_then(|c| c.get("model"))
+        .map(|m| m.to_string())
+        .unwrap_or_else(|| "no model config".to_string());
+    eprintln!("[AgentCmd] action={}, model_config={}, payload_len={}", action, model_info, payload_str.len());
+
     let app_clone = app.clone();
     let args: Vec<String> = vec![payload_str];
 
@@ -103,6 +111,23 @@ async fn execute_core_agent_with_timeout(
             python::execute_sync(&app_clone, "agents/finagent_core/main.py", args)
         })
     ).await;
+
+    match &result {
+        Ok(Ok(Ok(ref output))) => {
+            // Log first 500 chars of successful output
+            let preview: String = output.chars().take(500).collect();
+            eprintln!("[AgentCmd] SUCCESS: {}", preview);
+        }
+        Ok(Ok(Err(ref e))) => {
+            eprintln!("[AgentCmd] PYTHON ERROR: {}", e);
+        }
+        Ok(Err(ref e)) => {
+            eprintln!("[AgentCmd] TASK ERROR: {}", e);
+        }
+        Err(_) => {
+            eprintln!("[AgentCmd] TIMEOUT after {}s", timeout_secs);
+        }
+    }
 
     match result {
         Ok(Ok(inner_result)) => inner_result,

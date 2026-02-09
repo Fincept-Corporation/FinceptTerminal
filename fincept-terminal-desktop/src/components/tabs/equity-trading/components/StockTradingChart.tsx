@@ -114,7 +114,7 @@ export function StockTradingChart({
     volume: number;
   }>>([]);
 
-  const { adapter, isAuthenticated, isLoading: contextLoading, isConnecting } = useStockBrokerContext();
+  const { adapter, isAuthenticated, isLoading: contextLoading, isConnecting, masterContractReady } = useStockBrokerContext();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -162,6 +162,19 @@ export function StockTradingChart({
       return;
     }
 
+    // Wait for master contract to be ready before checking instrument
+    if (!masterContractReady) {
+      if (retryCount < INIT_MAX_RETRIES) {
+        console.log(`[StockTradingChart] Master contract not ready, retry ${retryCount + 1}/${INIT_MAX_RETRIES} in ${INIT_RETRY_DELAY}ms...`);
+        setTimeout(() => fetchHistoricalData(retryCount + 1), INIT_RETRY_DELAY);
+        return;
+      }
+      console.warn('[StockTradingChart] Master contract still not ready after retries');
+      setError('Symbol data loading. Please wait...');
+      setIsLoading(false);
+      return;
+    }
+
     // Check if master contract/instrument lookup is ready (for brokers that need it)
     if (typeof adapter.getInstrument === 'function') {
       try {
@@ -173,7 +186,7 @@ export function StockTradingChart({
             return;
           }
           console.warn('[StockTradingChart] Instrument token still not available after retries');
-          setError('Symbol data not ready. Please ensure master contract is downloaded.');
+          setError('Symbol not found. Try searching for a different symbol.');
           setIsLoading(false);
           return;
         }
@@ -308,7 +321,7 @@ export function StockTradingChart({
 
       setIsLoading(false);
     }
-  }, [adapter, isAuthenticated, symbol, exchange, selectedInterval]);
+  }, [adapter, isAuthenticated, symbol, exchange, selectedInterval, masterContractReady]);
 
   // Auto-fetch on mount and when dependencies change
   useEffect(() => {

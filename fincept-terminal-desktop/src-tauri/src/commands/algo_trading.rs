@@ -589,25 +589,64 @@ pub async fn run_algo_scan(
     let scanner_path = scripts_dir.join("scanner_engine.py");
     let db_path = get_main_db_path_str()?;
     let tf = timeframe.unwrap_or_else(|| "5m".to_string());
+    let broker = provider.as_deref().unwrap_or("fyers").to_string();
+
+    // Collect debug info throughout the scan process
+    let mut debug_log: Vec<String> = Vec::new();
+    debug_log.push(format!("[scan] broker={}, timeframe={}, db={}", broker, tf, db_path));
 
     if !scanner_path.exists() {
+        debug_log.push(format!("[scan] ERROR: scanner_engine.py not found at {:?}", scanner_path));
         return Ok(json!({
             "success": false,
-            "error": "scanner_engine.py not found"
+            "error": "scanner_engine.py not found",
+            "debug": debug_log
         }).to_string());
     }
+    debug_log.push(format!("[scan] scanner_path={:?}", scanner_path));
+
+    // Parse symbol list
+    let symbol_list: Vec<String> = serde_json::from_str(&symbols).unwrap_or_default();
+    debug_log.push(format!("[scan] symbols parsed: {} symbols", symbol_list.len()));
 
     // Pre-fetch historical data from broker into candle_cache for each symbol
-    // This ensures the scanner has data even if WebSocket candle aggregation hasn't run
-    let symbol_list: Vec<String> = serde_json::from_str(&symbols).unwrap_or_default();
+    let mut prefetch_warning: Option<String> = None;
     if !symbol_list.is_empty() {
-        let broker = provider.as_deref().unwrap_or("fyers");
-        if let Err(e) = prefetch_historical_candles(&db_path, &symbol_list, &tf, broker).await {
-            eprintln!("[run_algo_scan] Warning: prefetch failed: {}", e);
-            // Continue anyway — scanner will report insufficient data per symbol
+        debug_log.push(format!("[prefetch] starting for broker={}", broker));
+        match prefetch_historical_candles(&db_path, &symbol_list, &tf, &broker).await {
+            Ok(prefetch_debug) => {
+                debug_log.extend(prefetch_debug);
+                debug_log.push("[prefetch] completed successfully".to_string());
+            }
+            Err(e) => {
+                let err_msg = format!("Data prefetch failed: {}", e);
+                eprintln!("[run_algo_scan] {}", err_msg);
+                debug_log.push(format!("[prefetch] ERROR: {}", e));
+                prefetch_warning = Some(err_msg);
+            }
         }
     }
 
+    // Check candle_cache has data before running scanner
+    let candle_count = check_candle_cache_count(&db_path, &symbol_list, &tf);
+    debug_log.push(format!("[scan] candle_cache total rows for these symbols: {}", candle_count));
+
+    if candle_count == 0 {
+        // No data at all — return a clear error instead of running Python for nothing
+        let error_msg = if let Some(ref pw) = prefetch_warning {
+            format!("No candle data available. {}", pw)
+        } else {
+            format!("No candle data in cache for the given symbols and timeframe '{}'. Ensure broker is authenticated and symbols are valid.", tf)
+        };
+        return Ok(json!({
+            "success": false,
+            "error": error_msg,
+            "debug": debug_log
+        }).to_string());
+    }
+
+    // Run the Python scanner
+    debug_log.push("[scan] launching scanner_engine.py".to_string());
     let output = Command::new("python")
         .arg(&scanner_path)
         .arg("--conditions")
@@ -621,63 +660,126 @@ pub async fn run_algo_scan(
         .output()
         .map_err(|e| format!("Failed to run scanner: {}", e))?;
 
+    let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
+    if !stderr_str.trim().is_empty() {
+        debug_log.push(format!("[scanner.py stderr] {}", stderr_str.trim()));
+    }
+
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Try to parse as JSON, otherwise wrap
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stdout) {
+        debug_log.push(format!("[scan] scanner returned {} bytes", stdout.len()));
+
+        if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(&stdout) {
+            // Merge scanner_debug from Python into our debug log
+            if let Some(scanner_debug) = parsed.get("scanner_debug").and_then(|v| v.as_array()) {
+                for entry in scanner_debug {
+                    if let Some(s) = entry.as_str() {
+                        debug_log.push(s.to_string());
+                    }
+                }
+            }
+            // Inject debug log and prefetch warning into the response
+            if let Some(obj) = parsed.as_object_mut() {
+                obj.remove("scanner_debug"); // remove raw Python debug, we merged it
+                obj.insert("debug".to_string(), json!(debug_log));
+                if let Some(pw) = prefetch_warning {
+                    obj.insert("prefetch_warning".to_string(), json!(pw));
+                }
+            }
             Ok(parsed.to_string())
         } else {
-            Ok(json!({ "success": true, "raw": stdout.to_string() }).to_string())
+            debug_log.push(format!("[scan] WARNING: could not parse scanner output as JSON"));
+            Ok(json!({
+                "success": true,
+                "raw": stdout.to_string(),
+                "debug": debug_log
+            }).to_string())
         }
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        debug_log.push(format!("[scan] scanner process exited with error"));
         Ok(json!({
             "success": false,
-            "error": format!("Scanner failed: {}", stderr)
+            "error": format!("Scanner failed: {}", stderr_str.trim()),
+            "debug": debug_log
         }).to_string())
     }
+}
+
+/// Quick helper to count candle_cache rows for the given symbols+timeframe
+fn check_candle_cache_count(db_path: &str, symbols: &[String], timeframe: &str) -> i64 {
+    let conn = match rusqlite::Connection::open(db_path) {
+        Ok(c) => c,
+        Err(_) => return 0,
+    };
+    let mut total: i64 = 0;
+    for symbol in symbols {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM candle_cache WHERE symbol = ?1 AND timeframe = ?2",
+                rusqlite::params![symbol, timeframe],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        total += count;
+    }
+    total
 }
 
 /// Pre-fetch historical candles from broker API and insert into candle_cache table.
 /// Maps timeframe strings to Fyers resolution values and fetches ~1 year of daily data
 /// or appropriate ranges for other timeframes.
+/// Returns a Vec of debug log lines for the caller to include in the response.
 async fn prefetch_historical_candles(
     db_path: &str,
     symbols: &[String],
     timeframe: &str,
     broker: &str,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     use crate::commands::brokers;
+
+    let mut debug_log: Vec<String> = Vec::new();
 
     // Only support Fyers for now
     if broker != "fyers" {
-        return Ok(());
+        debug_log.push(format!("[prefetch] broker '{}' not supported for prefetch, only 'fyers' is supported", broker));
+        return Ok(debug_log);
     }
 
     // Get Fyers credentials
+    debug_log.push("[prefetch] fetching Fyers credentials...".to_string());
     let creds = brokers::get_indian_broker_credentials("fyers".to_string())
         .await
-        .map_err(|e| format!("Failed to get credentials: {}", e))?;
+        .map_err(|e| format!("Failed to get Fyers credentials: {}", e))?;
 
     if !creds.success || creds.data.is_none() {
-        return Err("Fyers credentials not found. Authenticate first.".to_string());
+        return Err("Fyers credentials not found. Please authenticate with Fyers first (Settings > Brokers > Fyers).".to_string());
     }
 
     let cred_data = creds.data.unwrap();
     let api_key = cred_data.get("apiKey")
         .and_then(|v| v.as_str())
-        .ok_or("Fyers API key not found")?
+        .ok_or("Fyers API key not found in stored credentials")?
         .to_string();
     let access_token = cred_data.get("accessToken")
         .and_then(|v| v.as_str())
-        .ok_or("Fyers access token not found")?
+        .ok_or("Fyers access token not found. Please re-authenticate with Fyers — tokens expire daily.")?
         .to_string();
+
+    if api_key.is_empty() {
+        return Err("Fyers API key is empty. Please re-enter credentials in Settings > Brokers.".to_string());
+    }
+    if access_token.is_empty() {
+        return Err("Fyers access token is empty. Please re-authenticate — Fyers tokens expire daily.".to_string());
+    }
+
+    debug_log.push(format!("[prefetch] credentials OK (api_key len={}, token len={})", api_key.len(), access_token.len()));
 
     // Map timeframe to Fyers resolution and lookback days
     let (resolution, lookback_days) = match timeframe {
         "1m" => ("1", 5),
         "3m" => ("3", 10),
         "5m" => ("5", 15),
+        "10m" => ("10", 20),
         "15m" => ("15", 30),
         "30m" => ("30", 60),
         "1h" => ("60", 90),
@@ -690,12 +792,11 @@ async fn prefetch_historical_candles(
     let from_date = (now - chrono::Duration::days(lookback_days)).format("%Y-%m-%d").to_string();
     let to_date = now.format("%Y-%m-%d").to_string();
 
-    eprintln!("[prefetch] Fetching {} candles for {} symbols, range {} to {}",
-        resolution, symbols.len(), from_date, to_date);
+    debug_log.push(format!("[prefetch] resolution={}, lookback={}d, range={} to {}", resolution, lookback_days, from_date, to_date));
 
     // Open DB connection for inserting candles
     let conn = rusqlite::Connection::open(db_path)
-        .map_err(|e| format!("Failed to open DB: {}", e))?;
+        .map_err(|e| format!("Failed to open DB at {}: {}", db_path, e))?;
 
     // Ensure candle_cache table exists
     conn.execute_batch(
@@ -714,6 +815,10 @@ async fn prefetch_historical_candles(
         );"
     ).map_err(|e| format!("Failed to create candle_cache table: {}", e))?;
 
+    let mut total_fetched = 0;
+    let mut total_inserted = 0;
+    let mut fetch_errors: Vec<String> = Vec::new();
+
     for symbol in symbols {
         // Build Fyers symbol format: "NSE:SYMBOL-EQ" if not already formatted
         let fyers_symbol = if symbol.contains(':') {
@@ -730,9 +835,11 @@ async fn prefetch_historical_candles(
         ).unwrap_or(0);
 
         if existing_count >= 50 {
-            eprintln!("[prefetch] {} already has {} candles, skipping", symbol, existing_count);
+            debug_log.push(format!("[prefetch] {} already cached ({} candles), skipping", symbol, existing_count));
             continue;
         }
+
+        debug_log.push(format!("[prefetch] {} -> fetching as '{}' (existing={})", symbol, fyers_symbol, existing_count));
 
         // Fetch from Fyers API
         match brokers::fyers_get_history(
@@ -746,7 +853,8 @@ async fn prefetch_historical_candles(
             Ok(response) => {
                 if response.success {
                     if let Some(candles) = response.data.and_then(|d| d.as_array().cloned()) {
-                        eprintln!("[prefetch] {} -> {} candles fetched", symbol, candles.len());
+                        total_fetched += candles.len();
+                        debug_log.push(format!("[prefetch] {} -> {} candles from API", symbol, candles.len()));
 
                         // Insert candles into candle_cache
                         // Fyers format: [timestamp, O, H, L, C, V]
@@ -771,19 +879,37 @@ async fn prefetch_historical_candles(
                                 }
                             }
                         }
-                        eprintln!("[prefetch] {} -> {} candles inserted into cache", symbol, inserted);
+                        total_inserted += inserted;
+                        debug_log.push(format!("[prefetch] {} -> {} candles inserted", symbol, inserted));
+                    } else {
+                        let msg = format!("{}: API returned success but no candle data", symbol);
+                        debug_log.push(format!("[prefetch] {} -> WARNING: {}", symbol, msg));
+                        fetch_errors.push(msg);
                     }
                 } else {
-                    eprintln!("[prefetch] {} fetch failed: {:?}", symbol, response.error);
+                    let api_err = response.error.unwrap_or_else(|| "Unknown API error".to_string());
+                    let msg = format!("{}: Fyers API error — {}", symbol, api_err);
+                    debug_log.push(format!("[prefetch] {} -> ERROR: {}", symbol, api_err));
+                    fetch_errors.push(msg);
                 }
             }
             Err(e) => {
-                eprintln!("[prefetch] {} fetch error: {}", symbol, e);
+                let msg = format!("{}: request failed — {}", symbol, e);
+                debug_log.push(format!("[prefetch] {} -> FETCH ERROR: {}", symbol, e));
+                fetch_errors.push(msg);
             }
         }
     }
 
-    Ok(())
+    debug_log.push(format!("[prefetch] summary: fetched={}, inserted={}, errors={}", total_fetched, total_inserted, fetch_errors.len()));
+
+    // If ALL symbols failed, return an error so the caller knows
+    if total_inserted == 0 && !fetch_errors.is_empty() {
+        let combined = fetch_errors.join("; ");
+        return Err(format!("All symbol fetches failed: {}", combined));
+    }
+
+    Ok(debug_log)
 }
 
 // ============================================================================

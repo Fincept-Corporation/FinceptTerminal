@@ -1,7 +1,9 @@
 // Master Contract Service - Symbol Search & Management
 // Provides access to broker symbol data for fast search and offline access
+// Updated to use unified symbol_master commands
 
 import { invoke } from '@tauri-apps/api/core';
+import * as symbolMaster from '@/services/symbolMasterService';
 
 // ============================================================================
 // Types
@@ -37,16 +39,16 @@ export interface DownloadResult {
  */
 export interface MasterContractCache {
   broker_id: string;
-  symbols_data: string;
+  status: string;
   symbol_count: number;
   last_updated: number;
-  created_at: number;
+  is_ready: boolean;
 }
 
 /**
  * Supported broker IDs for master contract
  */
-export type SupportedBroker = 'angelone' | 'fyers' | 'zerodha';
+export type SupportedBroker = 'angelone' | 'fyers' | 'zerodha' | 'upstox' | 'dhan' | 'shoonya';
 
 // ============================================================================
 // Master Contract Download
@@ -57,23 +59,26 @@ export type SupportedBroker = 'angelone' | 'fyers' | 'zerodha';
  * Downloads symbol data from broker API and stores in local database
  */
 export const downloadMasterContract = async (brokerId: SupportedBroker): Promise<DownloadResult> => {
-  return await invoke<DownloadResult>('download_master_contract', { brokerId });
+  const result = await symbolMaster.downloadMasterContract(brokerId);
+  return {
+    success: result.success,
+    message: result.message,
+    symbol_count: Number(result.total_symbols)
+  };
 };
 
 /**
  * Download Angel One master contract
- * Downloads from https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json
  */
 export const downloadAngelOneMasterContract = async (): Promise<DownloadResult> => {
-  return await invoke<DownloadResult>('download_angelone_master_contract');
+  return await downloadMasterContract('angelone');
 };
 
 /**
  * Download Fyers master contract
- * Downloads from https://public.fyers.in/sym_details/*.csv
  */
 export const downloadFyersMasterContract = async (): Promise<DownloadResult> => {
-  return await invoke<DownloadResult>('download_fyers_master_contract');
+  return await downloadMasterContract('fyers');
 };
 
 // ============================================================================
@@ -82,12 +87,6 @@ export const downloadFyersMasterContract = async (): Promise<DownloadResult> => 
 
 /**
  * Search symbols in master contract database
- * @param brokerId - Broker to search symbols for
- * @param query - Search query (symbol, name, or token)
- * @param exchange - Optional exchange filter (e.g., "NSE", "BSE", "NFO")
- * @param instrumentType - Optional instrument type filter (e.g., "EQ", "OPTIDX", "FUTSTK")
- * @param limit - Maximum number of results (default: 50)
- * @returns Array of matching symbols ordered by relevance
  */
 export const searchSymbols = async (
   brokerId: SupportedBroker,
@@ -96,46 +95,49 @@ export const searchSymbols = async (
   instrumentType?: string,
   limit: number = 50
 ): Promise<SymbolSearchResult[]> => {
-  return await invoke<SymbolSearchResult[]>('search_symbols', {
-    brokerId,
-    query,
-    exchange: exchange || null,
-    instrumentType: instrumentType || null,
+  const response = await symbolMaster.searchSymbols(brokerId, query, {
+    exchange,
+    instrumentType,
     limit
   });
+
+  if (!response.success) {
+    return [];
+  }
+
+  return response.symbols.map(s => ({
+    symbol: s.symbol,
+    br_symbol: s.br_symbol,
+    name: s.name,
+    exchange: s.exchange,
+    token: s.token,
+    expiry: s.expiry,
+    strike: s.strike,
+    lot_size: s.lot_size,
+    instrument_type: s.instrument_type,
+    tick_size: s.tick_size
+  }));
 };
 
 /**
  * Get symbol by exact match
- * @param brokerId - Broker ID
- * @param symbol - Exact symbol name
- * @param exchange - Exchange name
  */
 export const getSymbol = async (
   brokerId: SupportedBroker,
   symbol: string,
   exchange: string
 ): Promise<SymbolSearchResult | null> => {
-  return await invoke<SymbolSearchResult | null>('get_symbol', {
-    brokerId,
-    symbol,
-    exchange
-  });
+  return await symbolMaster.getSymbol(brokerId, symbol, exchange);
 };
 
 /**
  * Get symbol by broker token
- * @param brokerId - Broker ID
- * @param token - Broker-specific token
  */
 export const getSymbolByToken = async (
   brokerId: SupportedBroker,
   token: string
 ): Promise<SymbolSearchResult | null> => {
-  return await invoke<SymbolSearchResult | null>('get_symbol_by_token', {
-    brokerId,
-    token
-  });
+  return await symbolMaster.getSymbolByToken(brokerId, token);
 };
 
 // ============================================================================
@@ -146,32 +148,25 @@ export const getSymbolByToken = async (
  * Get total symbol count for a broker
  */
 export const getSymbolCount = async (brokerId: SupportedBroker): Promise<number> => {
-  return await invoke<number>('get_symbol_count', { brokerId });
+  return await symbolMaster.getSymbolCount(brokerId);
 };
 
 /**
  * Get list of exchanges for a broker
  */
 export const getExchanges = async (brokerId: SupportedBroker): Promise<string[]> => {
-  return await invoke<string[]>('get_exchanges', { brokerId });
+  return await symbolMaster.getExchanges(brokerId);
 };
 
 /**
  * Get list of expiries for derivatives
- * @param brokerId - Broker ID
- * @param exchange - Optional exchange filter
- * @param underlying - Optional underlying symbol filter
  */
 export const getExpiries = async (
   brokerId: SupportedBroker,
   exchange?: string,
   underlying?: string
 ): Promise<string[]> => {
-  return await invoke<string[]>('get_expiries', {
-    brokerId,
-    exchange: exchange || null,
-    underlying: underlying || null
-  });
+  return await symbolMaster.getExpiries(brokerId, { exchange, underlying });
 };
 
 // ============================================================================
@@ -194,26 +189,35 @@ export const hasSymbolData = async (brokerId: SupportedBroker): Promise<boolean>
  * Get master contract cache metadata
  */
 export const getMasterContractCache = async (brokerId: SupportedBroker): Promise<MasterContractCache | null> => {
-  return await invoke<MasterContractCache | null>('get_master_contract', { brokerId });
+  const status = await symbolMaster.getStatus(brokerId);
+  if (!status) return null;
+
+  return {
+    broker_id: status.broker_id,
+    status: status.status,
+    symbol_count: Number(status.total_symbols),
+    last_updated: status.last_updated,
+    is_ready: status.is_ready
+  };
 };
 
 /**
  * Check if cache is valid (not expired)
- * @param brokerId - Broker ID
- * @param ttlSeconds - Time to live in seconds (default: 24 hours)
  */
 export const isCacheValid = async (
   brokerId: SupportedBroker,
-  ttlSeconds: number = 86400
+  _ttlSeconds: number = 86400
 ): Promise<boolean> => {
-  return await invoke<boolean>('is_cache_valid', { brokerId, ttlSeconds });
+  const response = await symbolMaster.isReady(brokerId);
+  return response.is_valid;
 };
 
 /**
  * Get cache age in seconds
  */
 export const getCacheAge = async (brokerId: SupportedBroker): Promise<number | null> => {
-  return await invoke<number | null>('get_cache_age', { brokerId });
+  const response = await symbolMaster.isReady(brokerId);
+  return response.age_seconds;
 };
 
 // ============================================================================
@@ -244,7 +248,10 @@ export const getBrokerDisplayName = (brokerId: SupportedBroker): string => {
   const names: Record<SupportedBroker, string> = {
     angelone: 'Angel One',
     fyers: 'Fyers',
-    zerodha: 'Zerodha'
+    zerodha: 'Zerodha',
+    upstox: 'Upstox',
+    dhan: 'Dhan',
+    shoonya: 'Shoonya'
   };
   return names[brokerId] || brokerId;
 };
@@ -264,7 +271,9 @@ export const getExchangeDisplayName = (exchange: string): string => {
     NSE_FO: 'NSE F&O',
     BSE_CM: 'BSE Cash',
     BSE_FO: 'BSE F&O',
-    MCX_FO: 'MCX F&O'
+    MCX_FO: 'MCX F&O',
+    NSE_INDEX: 'NSE Index',
+    BSE_INDEX: 'BSE Index'
   };
   return names[exchange] || exchange;
 };
@@ -288,7 +297,8 @@ export const getInstrumentTypeDisplayName = (instrumentType: string | null): str
     OPTCUR: 'Currency Options',
     CE: 'Call Option',
     PE: 'Put Option',
-    FUT: 'Futures'
+    FUT: 'Futures',
+    INDEX: 'Index'
   };
   return names[instrumentType.toUpperCase()] || instrumentType;
 };
@@ -330,19 +340,11 @@ class MasterContractService {
    * Downloads if not available or cache is expired
    */
   async initializeBroker(brokerId: SupportedBroker): Promise<DownloadResult> {
-    const hasData = await this.hasSymbolData(brokerId);
-    const cacheValid = await this.isCacheValid(brokerId);
-
-    if (!hasData || !cacheValid) {
-      console.log(`[MasterContractService] Downloading master contract for ${brokerId}...`);
-      return await this.downloadMasterContract(brokerId);
-    }
-
-    const count = await this.getSymbolCount(brokerId);
+    const result = await symbolMaster.ensureMasterContract(brokerId);
     return {
-      success: true,
-      message: 'Cache is valid',
-      symbol_count: count
+      success: result.success,
+      message: result.message,
+      symbol_count: Number(result.total_symbols)
     };
   }
 

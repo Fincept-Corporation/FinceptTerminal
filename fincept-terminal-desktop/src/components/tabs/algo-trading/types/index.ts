@@ -5,6 +5,16 @@ export interface ConditionItem {
   operator: string;
   value: number;
   value2?: number;
+  // Indicator-vs-indicator comparison (Phase 3)
+  compareMode?: 'value' | 'indicator';  // default 'value'
+  compareIndicator?: string;
+  compareParams?: Record<string, number>;
+  compareField?: string;
+  // Chart offsets (Phase 4)
+  offset?: number;         // 0=current (default), 1=1 candle ago, etc.
+  compareOffset?: number;  // offset for comparison side
+  // Advanced operators
+  lookback?: number;       // for crossed_within, rising, falling operators
 }
 
 export interface ConditionGroup {
@@ -87,13 +97,15 @@ export interface ConditionDetail {
   computed_value: number | null;
   operator: string;
   target: number;
+  target_indicator?: string;
+  target_computed_value?: number;
   error?: string;
 }
 
 export interface IndicatorDefinition {
   name: string;
   label: string;
-  category: 'trend' | 'momentum' | 'volatility' | 'volume' | 'price';
+  category: 'stock_attributes' | 'moving_averages' | 'momentum' | 'trend' | 'volatility' | 'volume';
   fields: string[];
   defaultField: string;
   params: IndicatorParam[];

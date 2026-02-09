@@ -4,7 +4,7 @@ import { Info, Settings, RefreshCw, Clock, Zap, Newspaper, ExternalLink, Copy, X
 import { fetchAllNews, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData, setNewsCacheTTL } from '@/services/news/newsService';
 import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
 import RecordingControlPanel from '@/components/common/RecordingControlPanel';
-import { TimezoneSelector } from '@/components/common/TimezoneSelector';
+import { useCurrentTime } from '@/contexts/TimezoneContext';
 import { useTranslation } from 'react-i18next';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '@/services/news/newsAnalysisService';
@@ -183,6 +183,7 @@ const NewsGridCard: React.FC<{
 const NewsTab: React.FC = () => {
   const { t } = useTranslation('news');
   const { colors, fontSize, fontFamily } = useTerminalTheme();
+  const { formattedTime, timezone } = useCurrentTime();
 
   // Helper functions for priority/sentiment colors
   const priColor = (p: string) => ({
@@ -451,7 +452,9 @@ const NewsTab: React.FC = () => {
           <span style={{ color: colors.panel }}>|</span>
           <span style={{ color: colors.success, fontSize: '9px', fontWeight: 700 }}>{feedCount} SRC</span>
           <span style={{ color: colors.panel }}>|</span>
-          <TimezoneSelector compact />
+          <span style={{ fontSize: '9px', fontWeight: 600, color: 'var(--ft-color-accent, #00E5FF)' }}>
+            {formattedTime} <span style={{ color: colors.primary, fontWeight: 700 }}>{timezone.shortLabel}</span>
+          </span>
         </div>
 
         {/* Right: actions */}

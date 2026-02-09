@@ -159,11 +159,21 @@ fn run_subprocess(
     python: &PathBuf,
     script: &PathBuf,
     args: &[String],
+    data_dir: Option<&PathBuf>,
 ) -> Result<String, String> {
     let mut cmd = Command::new(python);
-    cmd.arg(script).args(args)
+    // -B flag: don't write .pyc files AND ignore existing __pycache__
+    cmd.arg("-B").arg(script).args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Also set env var as belt-and-suspenders
+    cmd.env("PYTHONDONTWRITEBYTECODE", "1");
+
+    // Set FINCEPT_DATA_DIR environment variable for Python scripts
+    if let Some(dir) = data_dir {
+        cmd.env("FINCEPT_DATA_DIR", dir.to_string_lossy().to_string());
+    }
 
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -199,12 +209,18 @@ fn run_subprocess_with_stdin(
     script: &PathBuf,
     args: &[String],
     stdin_data: &str,
+    data_dir: Option<&PathBuf>,
 ) -> Result<String, String> {
     let mut cmd = Command::new(python);
     cmd.arg(script).args(args).arg("--stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Set FINCEPT_DATA_DIR environment variable for Python scripts
+    if let Some(dir) = data_dir {
+        cmd.env("FINCEPT_DATA_DIR", dir.to_string_lossy().to_string());
+    }
 
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -277,7 +293,8 @@ pub async fn execute(
 ) -> Result<String, String> {
     let script_path = resolve_script_path(app, script)?;
     let python = resolve_python_path(app, script)?;
-    run_subprocess(&python, &script_path, &args)
+    let data_dir = get_install_dir(app).ok();
+    run_subprocess(&python, &script_path, &args, data_dir.as_ref())
 }
 
 /// Execute Python script (sync wrapper)
@@ -288,7 +305,8 @@ pub fn execute_sync(
 ) -> Result<String, String> {
     let script_path = resolve_script_path(app, script)?;
     let python = resolve_python_path(app, script)?;
-    run_subprocess(&python, &script_path, &args)
+    let data_dir = get_install_dir(app).ok();
+    run_subprocess(&python, &script_path, &args, data_dir.as_ref())
 }
 
 /// Execute with stdin data (for large payloads, sync only)
@@ -300,7 +318,8 @@ pub fn execute_with_stdin(
 ) -> Result<String, String> {
     let python = resolve_python_path(app, script)?;
     let script_path = resolve_script_path(app, script)?;
-    run_subprocess_with_stdin(&python, &script_path, &args, stdin_data)
+    let data_dir = get_install_dir(app).ok();
+    run_subprocess_with_stdin(&python, &script_path, &args, stdin_data, data_dir.as_ref())
 }
 
 /// Get Bun executable path
@@ -363,6 +382,7 @@ pub async fn execute_streaming(
 ) -> Result<String, String> {
     let script_path = resolve_script_path(&app, script)?;
     let python = resolve_python_path(&app, script)?;
+    let data_dir = get_install_dir(&app).ok();
 
     let mut cmd = Command::new(&python);
     cmd.arg(&script_path)
@@ -370,6 +390,11 @@ pub async fn execute_streaming(
         .arg("--stream")  // Tell Python to output in streaming mode
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Set FINCEPT_DATA_DIR environment variable for Python scripts
+    if let Some(ref dir) = data_dir {
+        cmd.env("FINCEPT_DATA_DIR", dir.to_string_lossy().to_string());
+    }
 
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -485,6 +510,7 @@ pub fn spawn_streaming(
 ) -> Result<Child, String> {
     let script_path = resolve_script_path(app, script)?;
     let python = resolve_python_path(app, script)?;
+    let data_dir = get_install_dir(app).ok();
 
     let mut cmd = Command::new(&python);
     cmd.arg(&script_path)
@@ -492,6 +518,11 @@ pub fn spawn_streaming(
         .arg("--stream")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Set FINCEPT_DATA_DIR environment variable for Python scripts
+    if let Some(ref dir) = data_dir {
+        cmd.env("FINCEPT_DATA_DIR", dir.to_string_lossy().to_string());
+    }
 
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);

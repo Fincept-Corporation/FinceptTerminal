@@ -4,7 +4,7 @@ import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye,
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
-import { useCurrentTime, useDefaultTime } from '@/contexts/TimezoneContext';
+import { useCurrentTime } from '@/contexts/TimezoneContext';
 import { ChatModeInterface } from '@/components/chat-mode';
 import { APP_VERSION } from '@/constants/version';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
@@ -208,7 +208,7 @@ const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any
 
 // Header Time Display Component - uses DEFAULT timezone from settings for nav bar
 const HeaderTimeDisplay = () => {
-  const { formattedTime, timezone } = useDefaultTime();
+  const { formattedTime, timezone } = useCurrentTime();
 
   // Get current date in YYYY-MM-DD format
   const [currentDate, setCurrentDate] = React.useState(() => {
@@ -228,8 +228,8 @@ const HeaderTimeDisplay = () => {
   }, []);
 
   return (
-    <span style={{ color: '#a3a3a3', fontSize: '9px' }}>
-      {currentDate} {formattedTime}
+    <span style={{ color: '#a3a3a3', fontSize: '11px', fontWeight: 500 }}>
+      {currentDate} {formattedTime} <span style={{ color: '#ea580c', fontWeight: 600 }}>{timezone.shortLabel}</span>
     </span>
   );
 };
@@ -682,7 +682,7 @@ function FinxeptTerminalContent() {
           <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
           <HeaderTimeDisplay />
           <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
-          <span style={{ color: '#10b981', fontSize: '10px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>v{APP_VERSION}</span>
+          <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>v{APP_VERSION}</span>
           <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
           <span style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>FINCEPT PROFESSIONAL</span>
         </div>
@@ -1062,7 +1062,7 @@ function FinxeptTerminalContent() {
                 <CryptoTradingTab />
               </React.Suspense>
             </TabsContent>
-            <TabsContent value="equity-trading" className="h-full m-0 p-0" forceMount>
+            <TabsContent value="equity-trading" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <EquityTradingTab />
               </React.Suspense>

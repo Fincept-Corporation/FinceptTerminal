@@ -6,6 +6,8 @@ interface ApiResult<T = unknown> {
   data?: T;
   error?: string;
   count?: number;
+  debug?: string[];
+  prefetch_warning?: string;
 }
 
 function parseResult<T>(raw: string): ApiResult<T> {
@@ -104,14 +106,49 @@ export async function getAlgoTrades(
 }
 
 // Scanner
+export interface ScanResponse {
+  matches: ScanResult[];
+  scanned: number;
+  errors?: Array<{ symbol: string; error: string }>;
+  debug?: string[];
+  prefetch_warning?: string;
+}
+
 export async function runAlgoScan(
   conditions: string,
   symbols: string,
   timeframe?: string,
   provider?: string
-): Promise<ApiResult<{ matches: ScanResult[]; scanned: number }>> {
+): Promise<ApiResult<ScanResponse>> {
   const raw = await invoke<string>('run_algo_scan', { conditions, symbols, timeframe, provider });
-  return parseResult(raw);
+  const result = parseResult<ScanResponse>(raw);
+  // The Rust backend puts debug/prefetch_warning at root level (same as success/error),
+  // and the Python scanner puts matches/scanned/errors in the same JSON object.
+  // Normalize: merge top-level fields into data when success=true.
+  if (result.success && !result.data) {
+    // Scanner output is flat JSON — parse again to extract fields
+    try {
+      const parsed = JSON.parse(raw);
+      result.data = {
+        matches: parsed.matches || [],
+        scanned: parsed.scanned || 0,
+        errors: parsed.errors,
+        debug: parsed.debug,
+        prefetch_warning: parsed.prefetch_warning,
+      };
+      result.debug = parsed.debug;
+      result.prefetch_warning = parsed.prefetch_warning;
+    } catch { /* already handled */ }
+  }
+  // Also carry debug from root level
+  if (!result.debug) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.debug) result.debug = parsed.debug;
+      if (parsed.prefetch_warning) result.prefetch_warning = parsed.prefetch_warning;
+    } catch { /* ignore */ }
+  }
+  return result;
 }
 
 // Candle cache
