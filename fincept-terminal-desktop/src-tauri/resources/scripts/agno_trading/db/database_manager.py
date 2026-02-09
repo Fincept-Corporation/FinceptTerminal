@@ -14,10 +14,19 @@ class DatabaseManager:
     def __init__(self, db_path: Optional[str] = None):
         """Initialize database manager"""
         if db_path is None:
-            # Use temp directory to avoid Tauri file watcher triggering rebuilds
-            import tempfile
-            temp_dir = tempfile.gettempdir()
-            db_dir = os.path.join(temp_dir, 'fincept_alpha_arena')
+            # Use FINCEPT_DATA_DIR env var if set by Rust, otherwise use platform-specific app data
+            data_dir = os.environ.get("FINCEPT_DATA_DIR")
+            if data_dir:
+                db_dir = os.path.join(data_dir, 'alpha_arena')
+            else:
+                # Fallback to platform-specific user data directory
+                if os.name == "nt":  # Windows
+                    base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~/AppData/Local"))
+                elif hasattr(os, 'uname') and os.uname().sysname == "Darwin":  # macOS
+                    base = os.path.expanduser("~/Library/Application Support")
+                else:  # Linux
+                    base = os.path.expanduser("~/.local/share")
+                db_dir = os.path.join(base, 'fincept-dev', 'alpha_arena')
             os.makedirs(db_dir, exist_ok=True)
             db_path = os.path.join(db_dir, 'agno_trading.db')
             print(f"[DatabaseManager] Using database at: {db_path}", file=sys.stderr)

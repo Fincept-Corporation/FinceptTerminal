@@ -172,17 +172,34 @@ def evaluate_single_condition(condition: dict, df: pd.DataFrame) -> dict:
                     'error': 'Insufficient data',
                 }
 
-            # Check if any consecutive pair shows a crossing within the window
+            # For indicator-vs-indicator, get N target values to compare bar-by-bar
             met = False
-            for i in range(len(values) - 1):
-                if operator == 'crossed_above_within':
-                    if values[i] <= target_current and values[i + 1] > target_current:
-                        met = True
-                        break
-                else:
-                    if values[i] >= target_current and values[i + 1] < target_current:
-                        met = True
-                        break
+            if compare_mode == 'indicator':
+                compare_indicator = condition.get('compareIndicator', '')
+                compare_params_dict = condition.get('compareParams', {})
+                compare_field_name = condition.get('compareField', 'value')
+                target_values_list = get_last_n_values(compare_indicator, df, compare_params_dict, compare_field_name, n=n)
+                if len(target_values_list) >= len(values):
+                    for i in range(len(values) - 1):
+                        if operator == 'crossed_above_within':
+                            if values[i] <= target_values_list[i] and values[i + 1] > target_values_list[i + 1]:
+                                met = True
+                                break
+                        else:
+                            if values[i] >= target_values_list[i] and values[i + 1] < target_values_list[i + 1]:
+                                met = True
+                                break
+            else:
+                # Compare against fixed numeric target
+                for i in range(len(values) - 1):
+                    if operator == 'crossed_above_within':
+                        if values[i] <= target_current and values[i + 1] > target_current:
+                            met = True
+                            break
+                    else:
+                        if values[i] >= target_current and values[i + 1] < target_current:
+                            met = True
+                            break
 
             return {
                 'met': met,

@@ -93,7 +93,7 @@ class CoreAgent:
             self._current_config = config
 
         # Build run kwargs
-        run_kwargs = {"message": query}  # Agno uses 'message' not 'input'
+        run_kwargs = {"input": query}  # Agno uses 'input' parameter
 
         if session_id:
             run_kwargs["session_id"] = session_id
