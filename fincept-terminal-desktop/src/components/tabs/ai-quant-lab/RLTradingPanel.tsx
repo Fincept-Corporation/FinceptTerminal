@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import {
   Brain,
   Play,
@@ -30,24 +31,6 @@ import {
   Clock
 } from 'lucide-react';
 
-// Fincept Professional Color Palette
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
-};
 
 interface TrainingMetrics {
   mean_reward: number;
@@ -68,6 +51,8 @@ interface EnvironmentConfig {
 }
 
 export function RLTradingPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
+
   // Environment Configuration
   const [tickers, setTickers] = useState('AAPL,MSFT,GOOGL,NVDA,TSLA');
   const [startDate, setStartDate] = useState('2023-01-01');
@@ -233,20 +218,20 @@ export function RLTradingPanel() {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Target size={16} color={FINCEPT.PURPLE} />
+        <Target size={16} color={colors.purple} />
         <span style={{
-          color: FINCEPT.PURPLE,
+          color: colors.purple,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -259,9 +244,9 @@ export function RLTradingPanel() {
           onClick={handleReset}
           style={{
             padding: '4px 12px',
-            backgroundColor: FINCEPT.DARK_BG,
-            border: `1px solid ${FINCEPT.BORDER}`,
-            color: FINCEPT.WHITE,
+            backgroundColor: colors.background,
+            border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+            color: colors.text,
             fontSize: '10px',
             fontFamily: 'monospace',
             cursor: 'pointer',
@@ -271,12 +256,12 @@ export function RLTradingPanel() {
             transition: 'all 0.15s'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-            e.currentTarget.style.borderColor = FINCEPT.PURPLE;
+            e.currentTarget.style.backgroundColor = '#1F1F1F';
+            e.currentTarget.style.borderColor = colors.purple;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-            e.currentTarget.style.borderColor = FINCEPT.BORDER;
+            e.currentTarget.style.backgroundColor = colors.background;
+            e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
           }}
         >
           <RefreshCw size={12} />
@@ -286,9 +271,9 @@ export function RLTradingPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: envCreated && modelTrained ? FINCEPT.GREEN + '20' : FINCEPT.DARK_BG,
-          border: `1px solid ${envCreated && modelTrained ? FINCEPT.GREEN : FINCEPT.BORDER}`,
-          color: envCreated && modelTrained ? FINCEPT.GREEN : FINCEPT.MUTED
+          backgroundColor: envCreated && modelTrained ? colors.success + '20' : colors.background,
+          border: `1px solid ${envCreated && modelTrained ? colors.success : 'var(--ft-border-color, #2A2A2A)'}`,
+          color: envCreated && modelTrained ? colors.success : colors.textMuted
         }}>
           {envCreated && modelTrained ? 'READY' : 'IDLE'}
         </div>
@@ -298,17 +283,17 @@ export function RLTradingPanel() {
         {/* Left Sidebar - Algorithm Selection */}
         <div style={{
           width: '200px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.MUTED,
+            color: colors.textMuted,
             fontFamily: 'monospace',
             letterSpacing: '0.5px'
           }}>
@@ -323,32 +308,32 @@ export function RLTradingPanel() {
                   onClick={() => !envCreated && setAlgorithm(algo.id)}
                   style={{
                     padding: '10px',
-                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
-                    border: `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
+                    backgroundColor: isSelected ? '#1F1F1F' : 'transparent',
+                    border: `1px solid ${isSelected ? colors.purple : 'var(--ft-border-color, #2A2A2A)'}`,
                     cursor: envCreated ? 'not-allowed' : 'pointer',
                     opacity: envCreated ? 0.5 : 1,
                     transition: 'all 0.15s'
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected && !envCreated) {
-                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                      e.currentTarget.style.borderColor = FINCEPT.PURPLE;
+                      e.currentTarget.style.backgroundColor = colors.background;
+                      e.currentTarget.style.borderColor = colors.purple;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected && !envCreated) {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                     }
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                    <Zap size={14} style={{ color: FINCEPT.PURPLE }} />
-                    <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
+                    <Zap size={14} style={{ color: colors.purple }} />
+                    <span style={{ color: colors.text, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
                       {algo.name}
                     </span>
                   </div>
-                  <p style={{ color: FINCEPT.MUTED, fontSize: '9px', margin: 0, lineHeight: '1.3' }}>
+                  <p style={{ color: colors.textMuted, fontSize: '9px', margin: 0, lineHeight: '1.3' }}>
                     {algo.desc}
                   </p>
                 </div>
@@ -362,18 +347,18 @@ export function RLTradingPanel() {
           {/* Configuration Section */}
           <div style={{
             padding: '16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             display: 'flex',
             flexDirection: 'column',
             gap: '12px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Target size={14} style={{ color: FINCEPT.PURPLE }} />
-              <span style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
+              <Target size={14} style={{ color: colors.purple }} />
+              <span style={{ fontSize: '11px', fontWeight: 600, color: colors.text, fontFamily: 'monospace' }}>
                 ENVIRONMENT CONFIGURATION
               </span>
-              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>•</span>
-              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>
+              <span style={{ fontSize: '10px', color: colors.textMuted }}>•</span>
+              <span style={{ fontSize: '10px', color: colors.textMuted }}>
                 {envCreated ? 'LOCKED' : 'READY TO CONFIGURE'}
               </span>
             </div>
@@ -381,7 +366,7 @@ export function RLTradingPanel() {
             {/* Configuration Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   TICKERS
                 </label>
                 <input
@@ -393,9 +378,9 @@ export function RLTradingPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: envCreated ? 0.5 : 1
@@ -404,14 +389,14 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   ALGORITHM
                 </label>
                 <div style={{
                   padding: '8px 10px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.PURPLE}`,
-                  color: FINCEPT.PURPLE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.purple}`,
+                  color: colors.purple,
                   fontSize: '11px',
                   fontFamily: 'monospace',
                   fontWeight: 600
@@ -421,7 +406,7 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   START DATE
                 </label>
                 <input
@@ -432,9 +417,9 @@ export function RLTradingPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: envCreated ? 0.5 : 1
@@ -443,7 +428,7 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   END DATE
                 </label>
                 <input
@@ -454,9 +439,9 @@ export function RLTradingPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: envCreated ? 0.5 : 1
@@ -465,7 +450,7 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   INITIAL CASH ($)
                 </label>
                 <input
@@ -477,9 +462,9 @@ export function RLTradingPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: envCreated ? 0.5 : 1
@@ -488,7 +473,7 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   COMMISSION (%)
                 </label>
                 <input
@@ -500,9 +485,9 @@ export function RLTradingPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: envCreated ? 0.5 : 1
@@ -511,7 +496,7 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   ACTION SPACE
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -523,9 +508,9 @@ export function RLTradingPanel() {
                       style={{
                         flex: 1,
                         padding: '8px 10px',
-                        backgroundColor: actionSpaceType === type ? FINCEPT.PURPLE : FINCEPT.DARK_BG,
-                        border: `1px solid ${actionSpaceType === type ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
-                        color: FINCEPT.WHITE,
+                        backgroundColor: actionSpaceType === type ? colors.purple : colors.background,
+                        border: `1px solid ${actionSpaceType === type ? colors.purple : 'var(--ft-border-color, #2A2A2A)'}`,
+                        color: colors.text,
                         fontSize: '10px',
                         fontFamily: 'monospace',
                         cursor: envCreated ? 'not-allowed' : 'pointer',
@@ -541,7 +526,7 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   TIMESTEPS
                 </label>
                 <input
@@ -553,9 +538,9 @@ export function RLTradingPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: (isTraining || modelTrained) ? 0.5 : 1
@@ -564,7 +549,7 @@ export function RLTradingPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   LEARNING RATE
                 </label>
                 <input
@@ -576,9 +561,9 @@ export function RLTradingPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: (isTraining || modelTrained) ? 0.5 : 1
@@ -595,9 +580,9 @@ export function RLTradingPanel() {
                 style={{
                   flex: 1,
                   padding: '10px 16px',
-                  backgroundColor: envCreated ? FINCEPT.GREEN : FINCEPT.ORANGE,
+                  backgroundColor: envCreated ? colors.success : colors.primary,
                   border: 'none',
-                  color: FINCEPT.DARK_BG,
+                  color: colors.background,
                   fontSize: '11px',
                   fontWeight: 700,
                   cursor: envCreated ? 'not-allowed' : 'pointer',
@@ -621,9 +606,9 @@ export function RLTradingPanel() {
                 style={{
                   flex: 1,
                   padding: '10px 16px',
-                  backgroundColor: modelTrained ? FINCEPT.GREEN : FINCEPT.PURPLE,
+                  backgroundColor: modelTrained ? colors.success : colors.purple,
                   border: 'none',
-                  color: FINCEPT.DARK_BG,
+                  color: colors.background,
                   fontSize: '11px',
                   fontWeight: 700,
                   cursor: (!envCreated || isTraining || modelTrained) ? 'not-allowed' : 'pointer',
@@ -661,9 +646,9 @@ export function RLTradingPanel() {
                 style={{
                   flex: 1,
                   padding: '10px 16px',
-                  backgroundColor: FINCEPT.CYAN,
+                  backgroundColor: colors.accent,
                   border: 'none',
-                  color: FINCEPT.DARK_BG,
+                  color: colors.background,
                   fontSize: '11px',
                   fontWeight: 700,
                   cursor: (!modelTrained || isEvaluating) ? 'not-allowed' : 'pointer',
@@ -695,15 +680,15 @@ export function RLTradingPanel() {
             {isTraining && (
               <div style={{ marginTop: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '10px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>TRAINING PROGRESS</span>
-                  <span style={{ fontSize: '10px', color: FINCEPT.PURPLE, fontFamily: 'monospace' }}>{progress}%</span>
+                  <span style={{ fontSize: '10px', color: colors.textMuted, fontFamily: 'monospace' }}>TRAINING PROGRESS</span>
+                  <span style={{ fontSize: '10px', color: colors.purple, fontFamily: 'monospace' }}>{progress}%</span>
                 </div>
-                <div style={{ width: '100%', height: '6px', backgroundColor: FINCEPT.DARK_BG, overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: '6px', backgroundColor: colors.background, overflow: 'hidden' }}>
                   <div
                     style={{
                       width: `${progress}%`,
                       height: '100%',
-                      backgroundColor: FINCEPT.PURPLE,
+                      backgroundColor: colors.purple,
                       transition: 'width 0.3s ease'
                     }}
                   />
@@ -718,10 +703,10 @@ export function RLTradingPanel() {
             {error && (
               <div style={{
                 padding: '12px 14px',
-                backgroundColor: FINCEPT.RED + '15',
-                border: `1px solid ${FINCEPT.RED}`,
-                borderLeft: `3px solid ${FINCEPT.RED}`,
-                color: FINCEPT.RED,
+                backgroundColor: colors.alert + '15',
+                border: `1px solid ${colors.alert}`,
+                borderLeft: `3px solid ${colors.alert}`,
+                color: colors.alert,
                 fontSize: '13px',
                 display: 'flex',
                 alignItems: 'center',
@@ -741,7 +726,7 @@ export function RLTradingPanel() {
                 <div style={{
                   fontSize: '11px',
                   fontWeight: 700,
-                  color: FINCEPT.CYAN,
+                  color: colors.accent,
                   marginBottom: '8px',
                   fontFamily: 'monospace',
                   letterSpacing: '0.5px',
@@ -749,23 +734,23 @@ export function RLTradingPanel() {
                   alignItems: 'center',
                   gap: '6px'
                 }}>
-                  <Cpu size={13} color={FINCEPT.CYAN} />
+                  <Cpu size={13} color={colors.accent} />
                   EXECUTION LOG
                 </div>
                 <div style={{
                   padding: '12px 14px',
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  borderLeft: `3px solid ${FINCEPT.CYAN}`,
+                  backgroundColor: colors.panel,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  borderLeft: `3px solid ${colors.accent}`,
                   maxHeight: '180px',
                   overflowY: 'auto',
                   fontSize: '11px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.CYAN,
+                  color: colors.accent,
                   lineHeight: '1.7'
                 }}>
                   {logs.map((log, idx) => (
-                    <div key={idx} style={{ marginBottom: '3px', color: log.includes('ERROR') ? FINCEPT.RED : log.includes('✓') ? FINCEPT.GREEN : FINCEPT.CYAN }}>
+                    <div key={idx} style={{ marginBottom: '3px', color: log.includes('ERROR') ? colors.alert : log.includes('✓') ? colors.success : colors.accent }}>
                       {log}
                     </div>
                   ))}
@@ -779,7 +764,7 @@ export function RLTradingPanel() {
                 <div style={{
                   fontSize: '11px',
                   fontWeight: 700,
-                  color: FINCEPT.GREEN,
+                  color: colors.success,
                   marginBottom: '8px',
                   fontFamily: 'monospace',
                   letterSpacing: '0.5px',
@@ -787,7 +772,7 @@ export function RLTradingPanel() {
                   alignItems: 'center',
                   gap: '6px'
                 }}>
-                  <CheckCircle2 size={13} color={FINCEPT.GREEN} />
+                  <CheckCircle2 size={13} color={colors.success} />
                   EVALUATION RESULTS
                 </div>
 
@@ -795,17 +780,17 @@ export function RLTradingPanel() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                   <div style={{
                     padding: '12px',
-                    backgroundColor: FINCEPT.PANEL_BG,
-                    border: `1px solid ${trainingMetrics.portfolio_return > 0 ? FINCEPT.GREEN : FINCEPT.RED}`,
-                    borderLeft: `3px solid ${trainingMetrics.portfolio_return > 0 ? FINCEPT.GREEN : FINCEPT.RED}`
+                    backgroundColor: colors.panel,
+                    border: `1px solid ${trainingMetrics.portfolio_return > 0 ? colors.success : colors.alert}`,
+                    borderLeft: `3px solid ${trainingMetrics.portfolio_return > 0 ? colors.success : colors.alert}`
                   }}>
-                    <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '4px', fontFamily: 'monospace' }}>
                       PORTFOLIO RETURN
                     </div>
                     <div style={{
                       fontSize: '20px',
                       fontWeight: 700,
-                      color: trainingMetrics.portfolio_return > 0 ? FINCEPT.GREEN : FINCEPT.RED,
+                      color: trainingMetrics.portfolio_return > 0 ? colors.success : colors.alert,
                       fontFamily: 'monospace'
                     }}>
                       {trainingMetrics.portfolio_return > 0 ? '+' : ''}{trainingMetrics.portfolio_return.toFixed(2)}%
@@ -814,14 +799,14 @@ export function RLTradingPanel() {
 
                   <div style={{
                     padding: '12px',
-                    backgroundColor: FINCEPT.PANEL_BG,
-                    border: `1px solid ${FINCEPT.CYAN}`,
-                    borderLeft: `3px solid ${FINCEPT.CYAN}`
+                    backgroundColor: colors.panel,
+                    border: `1px solid ${colors.accent}`,
+                    borderLeft: `3px solid ${colors.accent}`
                   }}>
-                    <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '4px', fontFamily: 'monospace' }}>
                       PORTFOLIO VALUE
                     </div>
-                    <div style={{ fontSize: '20px', fontWeight: 700, color: FINCEPT.CYAN, fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '20px', fontWeight: 700, color: colors.accent, fontFamily: 'monospace' }}>
                       ${(trainingMetrics.mean_portfolio_value / 1000).toFixed(0)}K
                     </div>
                   </div>
@@ -830,31 +815,31 @@ export function RLTradingPanel() {
                 {/* Detailed Metrics */}
                 <div style={{
                   padding: '12px',
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`
+                  backgroundColor: colors.panel,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-                      <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>Mean Reward:</span>
-                      <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                      <span style={{ color: colors.textMuted, fontFamily: 'monospace' }}>Mean Reward:</span>
+                      <span style={{ color: colors.text, fontFamily: 'monospace', fontWeight: 600 }}>
                         {trainingMetrics.mean_reward.toFixed(4)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-                      <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>Std Reward:</span>
-                      <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                      <span style={{ color: colors.textMuted, fontFamily: 'monospace' }}>Std Reward:</span>
+                      <span style={{ color: colors.text, fontFamily: 'monospace', fontWeight: 600 }}>
                         {trainingMetrics.std_reward.toFixed(4)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-                      <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>Episode Length:</span>
-                      <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                      <span style={{ color: colors.textMuted, fontFamily: 'monospace' }}>Episode Length:</span>
+                      <span style={{ color: colors.text, fontFamily: 'monospace', fontWeight: 600 }}>
                         {trainingMetrics.mean_length}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
-                      <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>Episodes:</span>
-                      <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                      <span style={{ color: colors.textMuted, fontFamily: 'monospace' }}>Episodes:</span>
+                      <span style={{ color: colors.text, fontFamily: 'monospace', fontWeight: 600 }}>
                         {trainingMetrics.episode_count}
                       </span>
                     </div>
@@ -869,11 +854,11 @@ export function RLTradingPanel() {
                 padding: '40px 20px',
                 textAlign: 'center'
               }}>
-                <Brain size={48} color={FINCEPT.MUTED} style={{ margin: '0 auto 16px' }} />
-                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, marginBottom: '8px', fontFamily: 'monospace' }}>
+                <Brain size={48} color={colors.textMuted} style={{ margin: '0 auto 16px' }} />
+                <div style={{ fontSize: '11px', color: colors.text, marginBottom: '8px', fontFamily: 'monospace' }}>
                   Ready to Train RL Agent
                 </div>
-                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, lineHeight: '1.5' }}>
+                <div style={{ fontSize: '10px', color: colors.textMuted, lineHeight: '1.5' }}>
                   Configure your environment, select an algorithm, and start training.
                   <br />Results and logs will appear here.
                 </div>

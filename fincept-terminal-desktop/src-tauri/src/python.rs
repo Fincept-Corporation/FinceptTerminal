@@ -1,13 +1,15 @@
 #![allow(dead_code)]
 // Unified Python Runtime Module
 // Provides Python script execution via subprocess
-// Public API: execute(), execute_sync(), execute_with_stdin(), initialize(), get_bun_path()
+// Public API: execute(), execute_sync(), execute_with_stdin(), execute_streaming(), initialize(), get_bun_path()
 
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Command, Stdio, Child};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -335,4 +337,165 @@ pub fn get_python_path(app: &tauri::AppHandle, library_hint: Option<&str>) -> Re
 /// Get script path (for direct Command usage in data_sources)
 pub fn get_script_path(app: &tauri::AppHandle, script: &str) -> Result<PathBuf, String> {
     resolve_script_path(app, script)
+}
+
+// ============================================================================
+// STREAMING EXECUTION
+// ============================================================================
+
+/// Streaming chunk types emitted to frontend
+#[derive(Clone, serde::Serialize)]
+pub struct StreamChunk {
+    pub stream_id: String,
+    pub chunk_type: String,  // "token", "thinking", "tool_call", "done", "error"
+    pub content: String,
+    pub sequence: u32,
+}
+
+/// Execute Python script with real-time streaming via Tauri events
+/// Each line from Python stdout is immediately emitted to frontend
+pub async fn execute_streaming(
+    app: tauri::AppHandle,
+    script: &str,
+    args: Vec<String>,
+    stream_id: String,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<String, String> {
+    let script_path = resolve_script_path(&app, script)?;
+    let python = resolve_python_path(&app, script)?;
+
+    let mut cmd = Command::new(&python);
+    cmd.arg(&script_path)
+        .args(&args)
+        .arg("--stream")  // Tell Python to output in streaming mode
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = cmd.spawn()
+        .map_err(|e| format!("Failed to spawn Python process: {}", e))?;
+
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to capture stdout".to_string())?;
+
+    let reader = BufReader::new(stdout);
+    let mut sequence: u32 = 0;
+    let mut full_output = String::new();
+    let event_name = format!("agent-stream-{}", stream_id);
+
+    // Read stdout line by line and emit events in real-time
+    for line in reader.lines() {
+        // Check if cancelled
+        if cancel_flag.load(Ordering::Relaxed) {
+            let _ = child.kill();
+            let chunk = StreamChunk {
+                stream_id: stream_id.clone(),
+                chunk_type: "cancelled".to_string(),
+                content: "Stream cancelled by user".to_string(),
+                sequence,
+            };
+            let _ = app.emit(&event_name, &chunk);
+            return Err("Stream cancelled".to_string());
+        }
+
+        match line {
+            Ok(line_content) => {
+                let trimmed = line_content.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                // Determine chunk type based on content prefix
+                let (chunk_type, content) = if trimmed.starts_with("THINKING:") {
+                    ("thinking".to_string(), trimmed.strip_prefix("THINKING:").unwrap_or(trimmed).trim().to_string())
+                } else if trimmed.starts_with("TOOL:") {
+                    ("tool_call".to_string(), trimmed.strip_prefix("TOOL:").unwrap_or(trimmed).trim().to_string())
+                } else if trimmed.starts_with("ERROR:") {
+                    ("error".to_string(), trimmed.strip_prefix("ERROR:").unwrap_or(trimmed).trim().to_string())
+                } else if trimmed.starts_with("DONE:") {
+                    ("done".to_string(), trimmed.strip_prefix("DONE:").unwrap_or(trimmed).trim().to_string())
+                } else if trimmed.starts_with('{') || trimmed.starts_with('[') {
+                    // JSON output - likely final result
+                    ("json".to_string(), trimmed.to_string())
+                } else {
+                    // Regular token/content
+                    ("token".to_string(), trimmed.to_string())
+                };
+
+                full_output.push_str(&content);
+                full_output.push('\n');
+
+                let chunk = StreamChunk {
+                    stream_id: stream_id.clone(),
+                    chunk_type,
+                    content,
+                    sequence,
+                };
+
+                // Emit to frontend immediately
+                if let Err(e) = app.emit(&event_name, &chunk) {
+                    eprintln!("[Streaming] Failed to emit event: {}", e);
+                }
+
+                sequence += 1;
+            }
+            Err(e) => {
+                eprintln!("[Streaming] Error reading line: {}", e);
+                break;
+            }
+        }
+    }
+
+    // Wait for process to complete
+    let status = child.wait()
+        .map_err(|e| format!("Failed to wait for process: {}", e))?;
+
+    // Emit done event
+    let done_chunk = StreamChunk {
+        stream_id: stream_id.clone(),
+        chunk_type: "done".to_string(),
+        content: if status.success() { "completed".to_string() } else { "failed".to_string() },
+        sequence,
+    };
+    let _ = app.emit(&event_name, &done_chunk);
+
+    // Capture any stderr
+    if let Some(stderr) = child.stderr.take() {
+        let stderr_reader = BufReader::new(stderr);
+        for line in stderr_reader.lines().flatten() {
+            eprintln!("[Python stderr] {}", line);
+        }
+    }
+
+    if status.success() {
+        // Try to extract final JSON if present
+        extract_json(&full_output).or_else(|_| Ok(full_output))
+    } else {
+        Err(format!("Script failed with exit code: {:?}", status.code()))
+    }
+}
+
+/// Spawn streaming execution and return the child process handle for cancellation
+pub fn spawn_streaming(
+    app: &tauri::AppHandle,
+    script: &str,
+    args: Vec<String>,
+) -> Result<Child, String> {
+    let script_path = resolve_script_path(app, script)?;
+    let python = resolve_python_path(app, script)?;
+
+    let mut cmd = Command::new(&python);
+    cmd.arg(&script_path)
+        .args(&args)
+        .arg("--stream")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    cmd.spawn()
+        .map_err(|e| format!("Failed to spawn: {}", e))
 }

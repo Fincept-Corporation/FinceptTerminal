@@ -12,7 +12,8 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface OrderBookLevel {
   bid_px: number;
@@ -44,6 +45,8 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
   accentColor,
   textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSchema, setSelectedSchema] = useState<SchemaType>('mbp-10');
@@ -115,13 +118,13 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
       <div
         className="p-4 text-center"
         style={{
-          backgroundColor: FINCEPT_COLORS.DARK_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
-        <BookOpen size={24} style={{ color: FINCEPT_COLORS.MUTED, margin: '0 auto 8px' }} />
-        <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+        <BookOpen size={24} style={{ color: colors.textMuted, margin: '0 auto 8px' }} />
+        <div className="text-xs" style={{ color: colors.textMuted }}>
           Configure Databento API key to view order book
         </div>
       </div>
@@ -135,9 +138,9 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         overflow: 'hidden',
       }}
     >
@@ -145,8 +148,8 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
       <div
         className="flex items-center justify-between p-2"
         style={{
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
         }}
       >
         <div className="flex items-center gap-2">
@@ -158,14 +161,14 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
         <button
           onClick={fetchOrderBook}
           disabled={loading}
-          style={{ color: loading ? FINCEPT_COLORS.MUTED : accentColor }}
+          style={{ color: loading ? colors.textMuted : accentColor }}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-between p-2" style={{ borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}` }}>
+      <div className="flex items-center justify-between p-2" style={{ borderBottom: `1px solid ${colors.textMuted}` }}>
         {/* Symbol selector */}
         <div className="flex items-center gap-1">
           {symbols.slice(0, 4).map(sym => (
@@ -174,9 +177,9 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
               onClick={() => setSelectedSymbol(sym)}
               className="px-2 py-0.5 text-[9px] font-bold"
               style={{
-                backgroundColor: selectedSymbol === sym ? accentColor : FINCEPT_COLORS.BORDER,
-                color: selectedSymbol === sym ? FINCEPT_COLORS.BLACK : textColor,
-                borderRadius: '2px',
+                backgroundColor: selectedSymbol === sym ? accentColor : colors.textMuted,
+                color: selectedSymbol === sym ? colors.background : textColor,
+                borderRadius: 'var(--ft-border-radius)',
               }}
             >
               {sym}
@@ -192,10 +195,10 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
               onClick={() => setSelectedSchema(schema)}
               className="px-2 py-0.5 text-[9px]"
               style={{
-                backgroundColor: selectedSchema === schema ? FINCEPT_COLORS.BORDER : 'transparent',
-                color: selectedSchema === schema ? textColor : FINCEPT_COLORS.MUTED,
-                border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-                borderRadius: '2px',
+                backgroundColor: selectedSchema === schema ? colors.textMuted : 'transparent',
+                color: selectedSchema === schema ? textColor : colors.textMuted,
+                border: `1px solid ${colors.textMuted}`,
+                borderRadius: 'var(--ft-border-radius)',
               }}
             >
               {schema === 'mbp-1' ? 'TOP' : '10-LVL'}
@@ -209,10 +212,10 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
         <div
           className="flex items-center gap-2 m-2 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.RED}15`,
-            border: `1px solid ${FINCEPT_COLORS.RED}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.RED,
+            backgroundColor: `${colors.alert}15`,
+            border: `1px solid ${colors.alert}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.alert,
           }}
         >
           <AlertCircle size={12} />
@@ -224,10 +227,10 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
       {currentSnapshot && (
         <div
           className="flex items-center justify-between p-2 text-xs"
-          style={{ backgroundColor: FINCEPT_COLORS.BLACK, borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}` }}
+          style={{ backgroundColor: colors.background, borderBottom: `1px solid ${colors.textMuted}` }}
         >
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Spread:</span>
-          <span style={{ color: FINCEPT_COLORS.YELLOW }}>
+          <span style={{ color: colors.textMuted }}>Spread:</span>
+          <span style={{ color: colors.warning }}>
             ${spread.toFixed(2)} ({spreadPct.toFixed(3)}%)
           </span>
         </div>
@@ -240,13 +243,13 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
             <RefreshCw size={16} className="animate-spin" style={{ color: accentColor }} />
           </div>
         ) : !currentSnapshot || currentSnapshot.levels.length === 0 ? (
-          <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+          <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
             Click refresh to load order book data
           </div>
         ) : (
           <div>
             {/* Header Row */}
-            <div className="grid grid-cols-4 gap-1 mb-1 text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+            <div className="grid grid-cols-4 gap-1 mb-1 text-[9px]" style={{ color: colors.textMuted }}>
               <div className="text-right">BID SIZE</div>
               <div className="text-right">BID</div>
               <div className="text-left">ASK</div>
@@ -263,33 +266,33 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
                   key={idx}
                   className="grid grid-cols-4 gap-1 py-0.5 text-[10px] relative"
                   style={{
-                    backgroundColor: idx === 0 ? `${FINCEPT_COLORS.BORDER}50` : 'transparent',
+                    backgroundColor: idx === 0 ? `${colors.textMuted}50` : 'transparent',
                   }}
                 >
                   {/* Bid side visualization */}
-                  <div className="relative text-right pr-1" style={{ color: FINCEPT_COLORS.GREEN }}>
+                  <div className="relative text-right pr-1" style={{ color: colors.success }}>
                     <div
                       className="absolute right-0 top-0 bottom-0"
                       style={{
                         width: `${bidWidth}%`,
-                        backgroundColor: `${FINCEPT_COLORS.GREEN}20`,
+                        backgroundColor: `${colors.success}20`,
                       }}
                     />
                     <span className="relative z-10">{formatSize(level.bid_sz)}</span>
                   </div>
-                  <div className="text-right font-mono" style={{ color: FINCEPT_COLORS.GREEN }}>
+                  <div className="text-right font-mono" style={{ color: colors.success }}>
                     {formatPrice(level.bid_px)}
                   </div>
-                  <div className="text-left font-mono" style={{ color: FINCEPT_COLORS.RED }}>
+                  <div className="text-left font-mono" style={{ color: colors.alert }}>
                     {formatPrice(level.ask_px)}
                   </div>
                   {/* Ask side visualization */}
-                  <div className="relative text-left pl-1" style={{ color: FINCEPT_COLORS.RED }}>
+                  <div className="relative text-left pl-1" style={{ color: colors.alert }}>
                     <div
                       className="absolute left-0 top-0 bottom-0"
                       style={{
                         width: `${askWidth}%`,
-                        backgroundColor: `${FINCEPT_COLORS.RED}20`,
+                        backgroundColor: `${colors.alert}20`,
                       }}
                     />
                     <span className="relative z-10">{formatSize(level.ask_sz)}</span>
@@ -301,19 +304,19 @@ export const OrderBookPanel: React.FC<OrderBookPanelProps> = ({
             {/* Summary Stats */}
             <div
               className="grid grid-cols-2 gap-2 mt-2 pt-2 text-[9px]"
-              style={{ borderTop: `1px solid ${FINCEPT_COLORS.BORDER}` }}
+              style={{ borderTop: `1px solid ${colors.textMuted}` }}
             >
               <div className="flex items-center gap-1">
-                <TrendingUp size={10} style={{ color: FINCEPT_COLORS.GREEN }} />
-                <span style={{ color: FINCEPT_COLORS.MUTED }}>Total Bid:</span>
-                <span style={{ color: FINCEPT_COLORS.GREEN }}>
+                <TrendingUp size={10} style={{ color: colors.success }} />
+                <span style={{ color: colors.textMuted }}>Total Bid:</span>
+                <span style={{ color: colors.success }}>
                   {formatSize(currentSnapshot.levels.reduce((sum, l) => sum + l.bid_sz, 0))}
                 </span>
               </div>
               <div className="flex items-center gap-1">
-                <TrendingDown size={10} style={{ color: FINCEPT_COLORS.RED }} />
-                <span style={{ color: FINCEPT_COLORS.MUTED }}>Total Ask:</span>
-                <span style={{ color: FINCEPT_COLORS.RED }}>
+                <TrendingDown size={10} style={{ color: colors.alert }} />
+                <span style={{ color: colors.textMuted }}>Total Ask:</span>
+                <span style={{ color: colors.alert }}>
                   {formatSize(currentSnapshot.levels.reduce((sum, l) => sum + l.ask_sz, 0))}
                 </span>
               </div>

@@ -11,15 +11,8 @@
 import { NodeRegistry } from './NodeRegistry';
 import { INodeType } from './types';
 
-// Import finance nodes
-import { StockDataNode } from '../../nodes/finance/StockData.node';
-
 // Import core nodes
-import { FilterNode as CoreFilterNode } from '../../nodes/core/Filter.node';
-import { MergeNode as CoreMergeNode } from '../../nodes/core/Merge.node';
-import { SetNode } from '../../nodes/core/Set.node';
-import { SwitchNode as CoreSwitchNode } from '../../nodes/core/Switch.node';
-import { CodeNode as CoreCodeNode } from '../../nodes/core/Code.node';
+import { SetNode, CodeNode } from './nodes/core';
 
 // Import analytics nodes
 import {
@@ -34,9 +27,7 @@ import {
 
 // Import market data nodes
 import {
-  YFinanceNode,
   GetQuoteNode,
-  GetHistoricalDataNode,
   GetMarketDepthNode,
   StreamQuotesNode,
   GetFundamentalsNode,
@@ -177,34 +168,19 @@ class NodeLoaderClass {
 
   /**
    * Load core nodes (basic workflow nodes)
+   * Note: Filter, Merge, Switch are now in transform/controlFlow - removed duplicates
    */
   private async loadCoreNodes(): Promise<void> {
-
     try {
-      // Filter Node - Remove items based on conditions
-      const filterNode = new CoreFilterNode();
-      NodeRegistry.registerNodeType(filterNode, 'CoreFilterNode');
-      this.loadedNodes.set('filter', filterNode);
+      const nodes = [
+        { instance: new SetNode(), name: 'SetNode' },
+        { instance: new CodeNode(), name: 'CodeNode' },
+      ];
 
-      // Merge Node - Combine data from multiple inputs
-      const mergeNode = new CoreMergeNode();
-      NodeRegistry.registerNodeType(mergeNode, 'CoreMergeNode');
-      this.loadedNodes.set('coreMerge', mergeNode);
-
-      // Set Node - Add/edit/remove fields
-      const setNode = new SetNode();
-      NodeRegistry.registerNodeType(setNode, 'SetNode');
-      this.loadedNodes.set('set', setNode);
-
-      // Switch Node - Route items based on conditions
-      const switchNode = new CoreSwitchNode();
-      NodeRegistry.registerNodeType(switchNode, 'CoreSwitchNode');
-      this.loadedNodes.set('coreSwitch', switchNode);
-
-      // Code Node - Execute custom JavaScript
-      const codeNode = new CoreCodeNode();
-      NodeRegistry.registerNodeType(codeNode, 'CoreCodeNode');
-      this.loadedNodes.set('coreCode', codeNode);
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
     } catch (error) {
       console.error('[NodeLoader] Error loading core nodes:', error);
     }
@@ -212,27 +188,10 @@ class NodeLoaderClass {
 
   /**
    * Load finance-specific nodes
+   * Note: StockData removed - use GetQuote, GetFundamentals instead
    */
   private async loadFinanceNodes(): Promise<void> {
-
-    try {
-      // Stock Data Node
-      const stockDataNode = new StockDataNode();
-      NodeRegistry.registerNodeType(stockDataNode, 'StockDataNode');
-      this.loadedNodes.set('stockData', stockDataNode);
-
-      // More finance nodes will be added:
-      // - TechnicalIndicators Node
-      // - PortfolioOptimizer Node
-      // - RiskCalculator Node
-      // - BacktestStrategy Node
-      // - OptionsAnalysis Node
-      // - FundamentalAnalysis Node
-      // - SentimentAnalysis Node
-      // - EconomicData Node
-    } catch (error) {
-      console.error('[NodeLoader] Error loading finance nodes:', error);
-    }
+    // Finance nodes are now loaded via analytics and marketData categories
   }
 
   /**
@@ -297,9 +256,7 @@ class NodeLoaderClass {
 
     try {
       const nodes = [
-        { instance: new YFinanceNode(), name: 'YFinanceNode' },
         { instance: new GetQuoteNode(), name: 'GetQuoteNode' },
-        { instance: new GetHistoricalDataNode(), name: 'GetHistoricalDataNode' },
         { instance: new GetMarketDepthNode(), name: 'GetMarketDepthNode' },
         { instance: new StreamQuotesNode(), name: 'StreamQuotesNode' },
         { instance: new GetFundamentalsNode(), name: 'GetFundamentalsNode' },

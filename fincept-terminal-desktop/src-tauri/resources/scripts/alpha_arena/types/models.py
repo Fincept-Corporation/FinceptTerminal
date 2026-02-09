@@ -230,6 +230,8 @@ class CompetitionConfig(BaseModel):
     exchange_id: str = Field("kraken", description="Exchange for market data")
     max_cycles: Optional[int] = Field(None, description="Max cycles (None = unlimited)")
     custom_prompt: Optional[str] = Field(None, description="Custom system prompt")
+    temperature: float = Field(0.7, ge=0.0, le=2.0, description="LLM temperature from Settings")
+    max_tokens: int = Field(2000, ge=100, description="LLM max tokens from Settings")
 
     class Config:
         use_enum_values = True

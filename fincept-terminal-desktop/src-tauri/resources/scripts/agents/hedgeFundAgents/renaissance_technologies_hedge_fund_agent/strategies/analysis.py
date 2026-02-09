@@ -103,6 +103,11 @@ def run_signal_analysis(
         if roe:
             factor_exposures["quality"] = max(-1, min(1, (roe - 0.1) / 0.2))
 
+    # Calculate p-value from statistical significance
+    # Convert stat_sig (0-1) to p-value (lower is better)
+    # stat_sig 0.9 -> p-value 0.01, stat_sig 0.5 -> p-value 0.5
+    p_value = max(0.001, 1 - stat_sig)
+
     return {
         "ticker": ticker,
         "mean_reversion": {
@@ -132,6 +137,7 @@ def run_signal_analysis(
         },
         "aggregate_signal": max(-1, min(1, aggregate_signal)),
         "statistical_significance": max(0, min(1, stat_sig)),
+        "p_value": p_value,  # Add calculated p-value
         "reasoning": _generate_signal_reasoning(
             mean_reversion, momentum, regime, aggregate_signal, stat_sig
         )

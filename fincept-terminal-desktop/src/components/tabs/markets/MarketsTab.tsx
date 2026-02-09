@@ -191,7 +191,7 @@ const MarketPanel: React.FC<MarketPanelProps> = ({
             backgroundColor: 'rgba(239, 68, 68, 0.1)',
             color: colors.alert,
             padding: '4px 8px',
-            fontSize: '10px',
+            fontSize: fontSize.small,
             display: 'flex',
             justifyContent: 'space-between',
           }}
@@ -331,9 +331,9 @@ const MarketPanel: React.FC<MarketPanelProps> = ({
         <div
           style={{
             backgroundColor: 'rgba(245, 158, 11, 0.1)',
-            color: '#f59e0b',
+            color: colors.warning,
             padding: '2px 8px',
-            fontSize: '9px',
+            fontSize: fontSize.tiny,
             textAlign: 'center',
           }}
         >
@@ -487,7 +487,7 @@ const MarketsTab: React.FC = () => {
               onClick={() => window.location.reload()}
               style={{
                 backgroundColor: colors.primary,
-                color: '#000',
+                color: colors.background,
                 border: 'none',
                 padding: '8px 24px',
                 cursor: 'pointer',
@@ -502,8 +502,8 @@ const MarketsTab: React.FC = () => {
               style={{
                 width: '50px',
                 height: '50px',
-                border: '3px solid #404040',
-                borderTop: '3px solid #ea580c',
+                border: `3px solid ${colors.textMuted}`,
+                borderTop: `3px solid ${colors.primary}`,
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite',
               }}
@@ -546,14 +546,14 @@ const MarketsTab: React.FC = () => {
           padding: '8px 12px',
           backgroundColor: colors.panel,
           borderBottom: `1px solid ${colors.textMuted}`,
-          fontSize: '13px',
+          fontSize: fontSize.subheading,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT</span>
           <span>{t('marketTerminalLive')}</span>
           <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ fontSize: '11px' }}>
+          <span style={{ fontSize: fontSize.body }}>
             {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
           </span>
         </div>
@@ -564,7 +564,7 @@ const MarketsTab: React.FC = () => {
             color: colors.background,
             border: 'none',
             padding: '4px 8px',
-            fontSize: '11px',
+            fontSize: fontSize.body,
             fontWeight: 'bold',
             cursor: 'pointer',
             display: 'flex',
@@ -593,10 +593,10 @@ const MarketsTab: React.FC = () => {
             onClick={handleRefreshAll}
             style={{
               backgroundColor: colors.primary,
-              color: '#000',
+              color: colors.background,
               border: 'none',
               padding: '4px 12px',
-              fontSize: '11px',
+              fontSize: fontSize.body,
               fontWeight: 'bold',
               cursor: 'pointer',
               display: 'flex',
@@ -610,10 +610,10 @@ const MarketsTab: React.FC = () => {
             onClick={() => dispatch({ type: 'SET_AUTO_UPDATE', payload: !state.autoUpdate })}
             style={{
               backgroundColor: state.autoUpdate ? colors.secondary : colors.textMuted,
-              color: '#000',
+              color: colors.background,
               border: 'none',
               padding: '4px 12px',
-              fontSize: '11px',
+              fontSize: fontSize.body,
               fontWeight: 'bold',
               cursor: 'pointer',
             }}
@@ -628,7 +628,7 @@ const MarketsTab: React.FC = () => {
               border: `1px solid ${colors.textMuted}`,
               color: colors.text,
               padding: '4px 8px',
-              fontSize: '11px',
+              fontSize: fontSize.body,
             }}
           >
             <option value={600000}>10 min</option>
@@ -647,7 +647,7 @@ const MarketsTab: React.FC = () => {
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
         {/* Global Markets */}
-        <div style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+        <div style={{ color: colors.primary, fontSize: fontSize.subheading, fontWeight: 'bold', marginBottom: '8px' }}>
           {t('globalMarkets')}
         </div>
         <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }} />
@@ -667,7 +667,7 @@ const MarketsTab: React.FC = () => {
         </div>
 
         {/* Regional Markets */}
-        <div style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+        <div style={{ color: colors.primary, fontSize: fontSize.subheading, fontWeight: 'bold', marginBottom: '8px' }}>
           {t('regionalMarketsLive')}
         </div>
         <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }} />

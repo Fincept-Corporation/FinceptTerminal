@@ -18,7 +18,8 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface TradeRecord {
   ts_event: string;
@@ -81,6 +82,8 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
   accentColor,
   textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSchema, setActiveSchema] = useState<SchemaType>('trades');
@@ -265,13 +268,13 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
       <div
         className="p-4 text-center"
         style={{
-          backgroundColor: FINCEPT_COLORS.DARK_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
-        <Activity size={24} style={{ color: FINCEPT_COLORS.MUTED, margin: '0 auto 8px' }} />
-        <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+        <Activity size={24} style={{ color: colors.textMuted, margin: '0 auto 8px' }} />
+        <div className="text-xs" style={{ color: colors.textMuted }}>
           Configure Databento API key for additional schemas
         </div>
       </div>
@@ -281,9 +284,9 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         overflow: 'hidden',
       }}
     >
@@ -291,8 +294,8 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
       <div
         className="flex items-center justify-between p-2"
         style={{
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
         }}
       >
         <div className="flex items-center gap-2">
@@ -304,7 +307,7 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
         <button
           onClick={handleRefresh}
           disabled={loading}
-          style={{ color: loading ? FINCEPT_COLORS.MUTED : accentColor }}
+          style={{ color: loading ? colors.textMuted : accentColor }}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
@@ -313,7 +316,7 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
       {/* Schema Tabs */}
       <div
         className="flex items-center gap-1 p-2"
-        style={{ borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}` }}
+        style={{ borderBottom: `1px solid ${colors.textMuted}` }}
       >
         {SCHEMA_TABS.map((tab) => (
           <button
@@ -321,9 +324,9 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
             onClick={() => handleSchemaChange(tab.id)}
             className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold"
             style={{
-              backgroundColor: activeSchema === tab.id ? accentColor : FINCEPT_COLORS.BORDER,
-              color: activeSchema === tab.id ? FINCEPT_COLORS.BLACK : textColor,
-              borderRadius: '2px',
+              backgroundColor: activeSchema === tab.id ? accentColor : colors.textMuted,
+              color: activeSchema === tab.id ? colors.background : textColor,
+              borderRadius: 'var(--ft-border-radius)',
             }}
           >
             {tab.icon}
@@ -337,10 +340,10 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
         <div
           className="flex items-center gap-2 m-2 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.RED}15`,
-            border: `1px solid ${FINCEPT_COLORS.RED}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.RED,
+            backgroundColor: `${colors.alert}15`,
+            border: `1px solid ${colors.alert}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.alert,
           }}
         >
           <AlertCircle size={12} />
@@ -359,12 +362,12 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
             {/* Trades View */}
             {activeSchema === 'trades' && (
               trades.length === 0 ? (
-                <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
                   Click refresh to load trades data
                 </div>
               ) : (
                 <div>
-                  <div className="grid grid-cols-5 gap-2 mb-1 text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+                  <div className="grid grid-cols-5 gap-2 mb-1 text-[9px]" style={{ color: colors.textMuted }}>
                     <div>TIME</div>
                     <div>SYMBOL</div>
                     <div className="text-right">PRICE</div>
@@ -373,17 +376,17 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
                   </div>
                   {trades.slice(0, 20).map((trade, idx) => (
                     <div key={idx} className="grid grid-cols-5 gap-2 py-0.5 text-[10px]">
-                      <div style={{ color: FINCEPT_COLORS.MUTED }}>{formatTime(trade.ts_event)}</div>
+                      <div style={{ color: colors.textMuted }}>{formatTime(trade.ts_event)}</div>
                       <div style={{ color: accentColor, fontWeight: 'bold' }}>{trade.symbol}</div>
-                      <div className="text-right font-mono" style={{ color: FINCEPT_COLORS.WHITE }}>{formatPrice(trade.price)}</div>
-                      <div className="text-right" style={{ color: FINCEPT_COLORS.MUTED }}>{formatQty(trade.size)}</div>
+                      <div className="text-right font-mono" style={{ color: textColor }}>{formatPrice(trade.price)}</div>
+                      <div className="text-right" style={{ color: colors.textMuted }}>{formatQty(trade.size)}</div>
                       <div className="text-right flex items-center justify-end">
                         {trade.side === 'B' || trade.side === 'BUY' ? (
-                          <TrendingUp size={10} style={{ color: FINCEPT_COLORS.GREEN }} />
+                          <TrendingUp size={10} style={{ color: colors.success }} />
                         ) : trade.side === 'S' || trade.side === 'SELL' ? (
-                          <TrendingDown size={10} style={{ color: FINCEPT_COLORS.RED }} />
+                          <TrendingDown size={10} style={{ color: colors.alert }} />
                         ) : (
-                          <ArrowRight size={10} style={{ color: FINCEPT_COLORS.MUTED }} />
+                          <ArrowRight size={10} style={{ color: colors.textMuted }} />
                         )}
                       </div>
                     </div>
@@ -395,12 +398,12 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
             {/* Imbalance View */}
             {activeSchema === 'imbalance' && (
               imbalances.length === 0 ? (
-                <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
                   Click refresh to load imbalance data (available at market open/close)
                 </div>
               ) : (
                 <div>
-                  <div className="grid grid-cols-5 gap-2 mb-1 text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+                  <div className="grid grid-cols-5 gap-2 mb-1 text-[9px]" style={{ color: colors.textMuted }}>
                     <div>TIME</div>
                     <div>SYMBOL</div>
                     <div className="text-right">REF PRICE</div>
@@ -409,13 +412,13 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
                   </div>
                   {imbalances.slice(0, 20).map((imb, idx) => (
                     <div key={idx} className="grid grid-cols-5 gap-2 py-0.5 text-[10px]">
-                      <div style={{ color: FINCEPT_COLORS.MUTED }}>{formatTime(imb.ts_event)}</div>
+                      <div style={{ color: colors.textMuted }}>{formatTime(imb.ts_event)}</div>
                       <div style={{ color: accentColor, fontWeight: 'bold' }}>{imb.symbol}</div>
-                      <div className="text-right font-mono" style={{ color: FINCEPT_COLORS.WHITE }}>{formatPrice(imb.ref_price)}</div>
-                      <div className="text-right" style={{ color: imb.imbalance_side === 'B' ? FINCEPT_COLORS.GREEN : FINCEPT_COLORS.RED }}>
+                      <div className="text-right font-mono" style={{ color: textColor }}>{formatPrice(imb.ref_price)}</div>
+                      <div className="text-right" style={{ color: imb.imbalance_side === 'B' ? colors.success : colors.alert }}>
                         {formatQty(imb.imbalance_qty)} {imb.imbalance_side}
                       </div>
-                      <div className="text-right" style={{ color: FINCEPT_COLORS.MUTED }}>{imb.auction_type || '--'}</div>
+                      <div className="text-right" style={{ color: colors.textMuted }}>{imb.auction_type || '--'}</div>
                     </div>
                   ))}
                 </div>
@@ -425,12 +428,12 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
             {/* Statistics View */}
             {activeSchema === 'statistics' && (
               statistics.length === 0 ? (
-                <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
                   Click refresh to load statistics (trading halts, circuit breakers)
                 </div>
               ) : (
                 <div>
-                  <div className="grid grid-cols-4 gap-2 mb-1 text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+                  <div className="grid grid-cols-4 gap-2 mb-1 text-[9px]" style={{ color: colors.textMuted }}>
                     <div>TIME</div>
                     <div>SYMBOL</div>
                     <div>TYPE</div>
@@ -438,10 +441,10 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
                   </div>
                   {statistics.slice(0, 20).map((stat, idx) => (
                     <div key={idx} className="grid grid-cols-4 gap-2 py-0.5 text-[10px]">
-                      <div style={{ color: FINCEPT_COLORS.MUTED }}>{formatTime(stat.ts_event)}</div>
+                      <div style={{ color: colors.textMuted }}>{formatTime(stat.ts_event)}</div>
                       <div style={{ color: accentColor, fontWeight: 'bold' }}>{stat.symbol}</div>
-                      <div style={{ color: FINCEPT_COLORS.YELLOW }}>{stat.stat_type || '--'}</div>
-                      <div className="text-right font-mono" style={{ color: FINCEPT_COLORS.WHITE }}>
+                      <div style={{ color: colors.warning }}>{stat.stat_type || '--'}</div>
+                      <div className="text-right font-mono" style={{ color: textColor }}>
                         {stat.price > 0 ? formatPrice(stat.price) : formatQty(stat.quantity)}
                       </div>
                     </div>
@@ -453,12 +456,12 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
             {/* Status View */}
             {activeSchema === 'status' && (
               statuses.length === 0 ? (
-                <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
                   Click refresh to load trading status (halts, Reg SHO)
                 </div>
               ) : (
                 <div>
-                  <div className="grid grid-cols-4 gap-2 mb-1 text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+                  <div className="grid grid-cols-4 gap-2 mb-1 text-[9px]" style={{ color: colors.textMuted }}>
                     <div>TIME</div>
                     <div>SYMBOL</div>
                     <div>ACTION</div>
@@ -466,16 +469,16 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
                   </div>
                   {statuses.slice(0, 20).map((status, idx) => (
                     <div key={idx} className="grid grid-cols-4 gap-2 py-0.5 text-[10px]">
-                      <div style={{ color: FINCEPT_COLORS.MUTED }}>{formatTime(status.ts_event)}</div>
+                      <div style={{ color: colors.textMuted }}>{formatTime(status.ts_event)}</div>
                       <div style={{ color: accentColor, fontWeight: 'bold' }}>{status.symbol}</div>
-                      <div style={{ color: status.action === 'HALT' ? FINCEPT_COLORS.RED : FINCEPT_COLORS.GREEN }}>
+                      <div style={{ color: status.action === 'HALT' ? colors.alert : colors.success }}>
                         {status.action || '--'}
                       </div>
-                      <div style={{ color: FINCEPT_COLORS.MUTED }}>{status.reason || status.trading_event || '--'}</div>
+                      <div style={{ color: colors.textMuted }}>{status.reason || status.trading_event || '--'}</div>
                     </div>
                   ))}
                   {statuses.some(s => s.is_short_sell_restricted) && (
-                    <div className="mt-2 p-1 text-[9px]" style={{ backgroundColor: FINCEPT_COLORS.RED + '20', borderRadius: '2px', color: FINCEPT_COLORS.RED }}>
+                    <div className="mt-2 p-1 text-[9px]" style={{ backgroundColor: colors.alert + '20', borderRadius: 'var(--ft-border-radius)', color: colors.alert }}>
                       Some symbols have Reg SHO restrictions
                     </div>
                   )}
@@ -490,8 +493,8 @@ export const AdditionalSchemasPanel: React.FC<AdditionalSchemasPanelProps> = ({
       <div
         className="flex items-center justify-between p-2 text-[9px]"
         style={{
-          borderTop: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          color: FINCEPT_COLORS.MUTED,
+          borderTop: `1px solid ${colors.textMuted}`,
+          color: colors.textMuted,
         }}
       >
         <span>Symbols: {symbols.join(', ')}</span>

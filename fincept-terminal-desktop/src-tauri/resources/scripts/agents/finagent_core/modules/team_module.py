@@ -37,6 +37,9 @@ class TeamModule:
         description: Optional[str] = None,
         mode: str = "coordinate",
         leader_agent: Optional[Any] = None,
+        model: Optional[Any] = None,
+        show_members_responses: bool = False,
+        leader_index: Optional[int] = None,
         **kwargs
     ):
         """
@@ -47,12 +50,18 @@ class TeamModule:
             description: Team description
             mode: Coordination mode ('coordinate', 'route', 'collaborate')
             leader_agent: Optional leader/coordinator agent
+            model: Coordinator model for team decisions
+            show_members_responses: Show individual member responses in output
+            leader_index: Index of the leader agent in the members list
             **kwargs: Additional configuration
         """
         self.name = name
         self.description = description
         self.mode = mode
         self.leader_agent = leader_agent
+        self.model = model
+        self.show_members_responses = show_members_responses
+        self.leader_index = leader_index
         self.config = kwargs
 
         self._agents: List[Any] = []
@@ -118,6 +127,11 @@ class TeamModule:
             # Agno Team uses 'members' not 'agents'
             members = [info["agent"] for info in self._agents]
 
+            # If leader_index is set, pick that agent as leader
+            leader = self.leader_agent
+            if leader is None and self.leader_index is not None and 0 <= self.leader_index < len(members):
+                leader = members[self.leader_index]
+
             team_kwargs = {
                 "members": members,  # Required parameter
             }
@@ -125,18 +139,38 @@ class TeamModule:
             if self.name:
                 team_kwargs["name"] = self.name
 
+            # Add coordinator model (required for team to make decisions)
+            if self.model:
+                team_kwargs["model"] = self.model
+
+            # Show individual member responses
+            if self.show_members_responses:
+                team_kwargs["show_members_responses"] = True
+
             # Add mode-specific configuration
-            if self.mode == "route":
+            if self.mode == "coordinate":
+                # Default: leader delegates to chosen members
+                pass
+            elif self.mode == "route":
                 team_kwargs["respond_directly"] = False
             elif self.mode == "collaborate":
                 team_kwargs["delegate_to_all_members"] = True
+                team_kwargs["share_member_interactions"] = True
+
+            # If a leader agent is specified, use its instructions/role for the team
+            # In Agno, the Team itself acts as the leader — members are workers
+            if leader:
+                if hasattr(leader, 'instructions') and leader.instructions:
+                    team_kwargs["instructions"] = leader.instructions
+                if hasattr(leader, 'description') and leader.description:
+                    team_kwargs["description"] = leader.description
 
             self._team = Team(**team_kwargs)
 
             # Register event handlers
             self._register_event_handlers()
 
-            logger.debug(f"Built team '{self.name}' with {len(members)} agents")
+            logger.debug(f"Built team '{self.name}' with {len(members)} agents, mode={self.mode}")
             return self._team
 
         except ImportError as e:
@@ -277,7 +311,8 @@ class TeamModule:
     def from_config(
         cls,
         config: Dict[str, Any],
-        agents: List[Any]
+        agents: List[Any],
+        model: Optional[Any] = None
     ) -> "TeamModule":
         """
         Create TeamModule from configuration.
@@ -285,6 +320,7 @@ class TeamModule:
         Args:
             config: Team configuration
             agents: List of Agno Agent instances
+            model: Optional coordinator model
 
         Returns:
             TeamModule instance
@@ -293,6 +329,9 @@ class TeamModule:
             name=config.get("name", "Agent Team"),
             description=config.get("description"),
             mode=config.get("mode", "coordinate"),
+            model=model,
+            show_members_responses=config.get("show_members_responses", False),
+            leader_index=config.get("leader_index"),
         )
 
         for i, agent in enumerate(agents):

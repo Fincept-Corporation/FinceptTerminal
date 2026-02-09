@@ -12,8 +12,6 @@ export type {
   TradeData,
   WatchlistPrice,
   CenterViewType,
-  RightPanelViewType,
-  LeftSidebarViewType,
   BottomPanelTabType,
 } from './types';
 

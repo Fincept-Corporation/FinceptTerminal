@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import {
   Gauge,
   Activity,
@@ -23,19 +24,6 @@ import {
   Loader2
 } from 'lucide-react';
 
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',          // Primary theme color for HFT
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  BORDER: '#2A2A2A',
-  CYAN: '#00E5FF',
-  MUTED: '#4A4A4A',
-  HOVER: '#1F1F1F'
-};
 
 interface OrderBookLevel {
   price: number;
@@ -50,6 +38,7 @@ interface MarketMakingQuotes {
 }
 
 export function HFTPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [symbol, setSymbol] = useState('AAPL');
   const [orderBookCreated, setOrderBookCreated] = useState(false);
   const [isLive, setIsLive] = useState(false);
@@ -149,20 +138,20 @@ export function HFTPanel() {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Activity size={16} color={FINCEPT.RED} />
+        <Activity size={16} color={colors.alert} />
         <span style={{
-          color: FINCEPT.RED,
+          color: colors.alert,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -178,9 +167,9 @@ export function HFTPanel() {
             fontSize: '11px',
             fontFamily: 'monospace',
             padding: '3px 10px',
-            backgroundColor: FINCEPT.DARK_BG,
-            border: `1px solid ${FINCEPT.ORANGE}`,
-            color: FINCEPT.ORANGE,
+            backgroundColor: colors.background,
+            border: `1px solid ${colors.primary}`,
+            color: colors.primary,
             fontWeight: 700
           }}>
             {symbol}
@@ -192,9 +181,9 @@ export function HFTPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: FINCEPT.DARK_BG,
-          border: `1px solid ${FINCEPT.CYAN}`,
-          color: FINCEPT.CYAN
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.accent}`,
+          color: colors.accent
         }}>
           {latencyStats.mean}μs
         </div>
@@ -205,14 +194,14 @@ export function HFTPanel() {
             fontSize: '10px',
             fontFamily: 'monospace',
             padding: '3px 8px',
-            backgroundColor: FINCEPT.GREEN + '20',
-            border: `1px solid ${FINCEPT.GREEN}`,
-            color: FINCEPT.GREEN,
+            backgroundColor: colors.success + '20',
+            border: `1px solid ${colors.success}`,
+            color: colors.success,
             display: 'flex',
             alignItems: 'center',
             gap: '4px'
           }}>
-            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: FINCEPT.GREEN, animation: 'pulse 2s infinite' }} />
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: colors.success, animation: 'pulse 2s infinite' }} />
             LIVE
           </div>
         )}
@@ -221,9 +210,9 @@ export function HFTPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: orderBookCreated ? (isLive ? FINCEPT.GREEN + '20' : FINCEPT.DARK_BG) : FINCEPT.DARK_BG,
-          border: `1px solid ${orderBookCreated ? (isLive ? FINCEPT.GREEN : FINCEPT.BORDER) : FINCEPT.BORDER}`,
-          color: orderBookCreated ? (isLive ? FINCEPT.GREEN : FINCEPT.MUTED) : FINCEPT.MUTED
+          backgroundColor: orderBookCreated ? (isLive ? colors.success + '20' : colors.background) : colors.background,
+          border: `1px solid ${orderBookCreated ? (isLive ? colors.success : 'var(--ft-border-color, #2A2A2A)') : 'var(--ft-border-color, #2A2A2A)'}`,
+          color: orderBookCreated ? (isLive ? colors.success : colors.textMuted) : colors.textMuted
         }}>
           {isLive ? 'STREAMING' : orderBookCreated ? 'READY' : 'IDLE'}
         </div>
@@ -245,9 +234,9 @@ export function HFTPanel() {
                 maxWidth: '500px',
                 width: '100%',
                 padding: '24px',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                borderLeft: `3px solid ${FINCEPT.RED}`
+                backgroundColor: colors.panel,
+                border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                borderLeft: `3px solid ${colors.alert}`
               }}>
                 <div style={{
                   display: 'flex',
@@ -255,11 +244,11 @@ export function HFTPanel() {
                   gap: '10px',
                   marginBottom: '20px'
                 }}>
-                  <Gauge size={18} color={FINCEPT.RED} />
+                  <Gauge size={18} color={colors.alert} />
                   <span style={{
                     fontSize: '12px',
                     fontWeight: 700,
-                    color: FINCEPT.RED,
+                    color: colors.alert,
                     fontFamily: 'monospace',
                     letterSpacing: '0.5px'
                   }}>
@@ -272,7 +261,7 @@ export function HFTPanel() {
                     display: 'block',
                     fontSize: '9px',
                     marginBottom: '6px',
-                    color: FINCEPT.WHITE,
+                    color: colors.text,
                     fontFamily: 'monospace',
                     letterSpacing: '0.5px',
                     opacity: 0.7
@@ -287,9 +276,9 @@ export function HFTPanel() {
                     style={{
                       width: '100%',
                       padding: '12px 14px',
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      color: FINCEPT.RED,
+                      backgroundColor: colors.background,
+                      border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                      color: colors.alert,
                       fontSize: '16px',
                       fontFamily: 'monospace',
                       fontWeight: 700,
@@ -297,10 +286,10 @@ export function HFTPanel() {
                       transition: 'border-color 0.15s'
                     }}
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = FINCEPT.RED;
+                      e.currentTarget.style.borderColor = colors.alert;
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                     }}
                   />
                 </div>
@@ -310,7 +299,7 @@ export function HFTPanel() {
                   style={{
                     width: '100%',
                     padding: '14px 20px',
-                    backgroundColor: FINCEPT.RED,
+                    backgroundColor: colors.alert,
                     border: 'none',
                     color: '#000000',
                     fontSize: '11px',
@@ -338,15 +327,15 @@ export function HFTPanel() {
                 <div style={{
                   marginTop: '16px',
                   padding: '12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                   fontSize: '10px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   opacity: 0.7,
                   lineHeight: '1.6'
                 }}>
-                  <strong style={{ color: FINCEPT.RED }}>Note:</strong> This creates a simulated HFT order book with real-time price updates, microstructure analytics, and market making capabilities.
+                  <strong style={{ color: colors.alert }}>Note:</strong> This creates a simulated HFT order book with real-time price updates, microstructure analytics, and market making capabilities.
                 </div>
               </div>
             </div>
@@ -355,74 +344,74 @@ export function HFTPanel() {
               {/* Metrics Bar */}
               <div style={{
                 padding: '12px 16px',
-                borderBottom: `1px solid ${FINCEPT.BORDER}`,
-                backgroundColor: FINCEPT.PANEL_BG
+                borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                backgroundColor: colors.panel
               }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    borderLeft: `3px solid ${FINCEPT.RED}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    borderLeft: `3px solid ${colors.alert}`
                   }}>
-                    <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
                       MID PRICE
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.RED, fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: colors.alert, fontFamily: 'monospace' }}>
                       ${midPrice.toFixed(2)}
                     </div>
                   </div>
 
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    borderLeft: `3px solid ${FINCEPT.RED}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    borderLeft: `3px solid ${colors.alert}`
                   }}>
-                    <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
                       SPREAD
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.RED, fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: colors.alert, fontFamily: 'monospace' }}>
                       ${spread.toFixed(3)}
                     </div>
                   </div>
 
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                   }}>
-                    <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
                       MEAN LATENCY
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.CYAN, fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: colors.accent, fontFamily: 'monospace' }}>
                       {latencyStats.mean}μs
                     </div>
                   </div>
 
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                   }}>
-                    <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
                       P99 LATENCY
                     </div>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: FINCEPT.WHITE, opacity: 0.7, fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: colors.text, opacity: 0.7, fontFamily: 'monospace' }}>
                       {latencyStats.p99}μs
                     </div>
                   </div>
 
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${microstructure.toxicity_score > 0.5 ? FINCEPT.RED : FINCEPT.GREEN}`,
-                    borderLeft: `3px solid ${microstructure.toxicity_score > 0.5 ? FINCEPT.RED : FINCEPT.GREEN}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${microstructure.toxicity_score > 0.5 ? colors.alert : colors.success}`,
+                    borderLeft: `3px solid ${microstructure.toxicity_score > 0.5 ? colors.alert : colors.success}`
                   }}>
-                    <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, marginBottom: '3px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>
                       TOXICITY
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: microstructure.toxicity_score > 0.5 ? FINCEPT.RED : FINCEPT.GREEN, fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: microstructure.toxicity_score > 0.5 ? colors.alert : colors.success, fontFamily: 'monospace' }}>
                       {microstructure.toxicity_score > 0.5 ? 'HIGH' : 'LOW'}
                     </div>
                   </div>
@@ -432,18 +421,18 @@ export function HFTPanel() {
               {/* Control Bar */}
               <div style={{
                 padding: '12px 16px',
-                borderBottom: `1px solid ${FINCEPT.BORDER}`,
-                backgroundColor: FINCEPT.PANEL_BG,
+                borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                backgroundColor: colors.panel,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Network size={14} color={FINCEPT.RED} />
+                  <Network size={14} color={colors.alert} />
                   <span style={{
                     fontSize: '10px',
                     fontWeight: 700,
-                    color: FINCEPT.RED,
+                    color: colors.alert,
                     fontFamily: 'monospace',
                     letterSpacing: '0.5px'
                   }}>
@@ -456,7 +445,7 @@ export function HFTPanel() {
                     onClick={handleStartLive}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: FINCEPT.GREEN,
+                      backgroundColor: colors.success,
                       border: 'none',
                       color: '#000000',
                       fontSize: '10px',
@@ -484,7 +473,7 @@ export function HFTPanel() {
                     onClick={handleStopLive}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: FINCEPT.RED,
+                      backgroundColor: colors.alert,
                       border: 'none',
                       color: '#000000',
                       fontSize: '10px',
@@ -513,8 +502,8 @@ export function HFTPanel() {
                   style={{
                     padding: '8px 16px',
                     backgroundColor: 'transparent',
-                    border: `1px solid ${FINCEPT.RED}`,
-                    color: FINCEPT.RED,
+                    border: `1px solid ${colors.alert}`,
+                    color: colors.alert,
                     fontSize: '10px',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -526,7 +515,7 @@ export function HFTPanel() {
                     transition: 'background-color 0.15s'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = FINCEPT.RED + '20';
+                    e.currentTarget.style.backgroundColor = colors.alert + '20';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent';
@@ -540,16 +529,16 @@ export function HFTPanel() {
               {/* Order Book Display */}
               <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
                 {/* Order Book */}
-                <div style={{ flex: 1, padding: '16px', backgroundColor: FINCEPT.DARK_BG, borderRight: `1px solid ${FINCEPT.BORDER}` }}>
+                <div style={{ flex: 1, padding: '16px', backgroundColor: colors.background, borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}` }}>
                   {/* Header Row */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px', padding: '0 8px' }}>
-                    <div style={{ textAlign: 'right', fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, fontFamily: 'monospace' }}>
+                    <div style={{ textAlign: 'right', fontSize: '10px', fontWeight: 700, color: colors.textMuted, fontFamily: 'monospace' }}>
                       BID SIZE
                     </div>
-                    <div style={{ textAlign: 'center', fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, fontFamily: 'monospace' }}>
+                    <div style={{ textAlign: 'center', fontSize: '10px', fontWeight: 700, color: colors.textMuted, fontFamily: 'monospace' }}>
                       PRICE
                     </div>
-                    <div style={{ textAlign: 'left', fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, fontFamily: 'monospace' }}>
+                    <div style={{ textAlign: 'left', fontSize: '10px', fontWeight: 700, color: colors.textMuted, fontFamily: 'monospace' }}>
                       ASK SIZE
                     </div>
                   </div>
@@ -564,29 +553,29 @@ export function HFTPanel() {
                         <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
                           {/* Bid Side */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: FINCEPT.GREEN, minWidth: '50px', textAlign: 'right' }}>
+                            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.success, minWidth: '50px', textAlign: 'right' }}>
                               {bid?.size || ''}
                             </span>
                             <div style={{
                               height: '20px',
                               width: `${bid ? (bid.size / maxBidSize) * 100 : 0}%`,
                               maxWidth: '150px',
-                              backgroundColor: FINCEPT.GREEN + '30',
-                              borderRight: `2px solid ${FINCEPT.GREEN}`
+                              backgroundColor: colors.success + '30',
+                              borderRight: `2px solid ${colors.success}`
                             }} />
                           </div>
 
                           {/* Price */}
                           <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: FINCEPT.WHITE }}>
+                            <div style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: colors.text }}>
                               {bid ? bid.price.toFixed(2) : ''}
                             </div>
                             {i === 0 && (
-                              <div style={{ fontSize: '9px', fontFamily: 'monospace', color: FINCEPT.ORANGE, marginTop: '2px' }}>
+                              <div style={{ fontSize: '9px', fontFamily: 'monospace', color: colors.primary, marginTop: '2px' }}>
                                 ↕ ${spread.toFixed(3)}
                               </div>
                             )}
-                            <div style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: FINCEPT.WHITE, marginTop: i === 0 ? '2px' : '0' }}>
+                            <div style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: colors.text, marginTop: i === 0 ? '2px' : '0' }}>
                               {ask ? ask.price.toFixed(2) : ''}
                             </div>
                           </div>
@@ -597,10 +586,10 @@ export function HFTPanel() {
                               height: '20px',
                               width: `${ask ? (ask.size / maxAskSize) * 100 : 0}%`,
                               maxWidth: '150px',
-                              backgroundColor: FINCEPT.RED + '30',
-                              borderLeft: `2px solid ${FINCEPT.RED}`
+                              backgroundColor: colors.alert + '30',
+                              borderLeft: `2px solid ${colors.alert}`
                             }} />
-                            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: FINCEPT.RED, minWidth: '50px' }}>
+                            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: colors.alert, minWidth: '50px' }}>
                               {ask?.size || ''}
                             </span>
                           </div>
@@ -611,13 +600,13 @@ export function HFTPanel() {
                 </div>
 
                 {/* Right Panel - Microstructure & Market Making */}
-                <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '0', borderLeft: `1px solid ${FINCEPT.BORDER}` }}>
+                <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '0', borderLeft: `1px solid ${'var(--ft-border-color, #2A2A2A)'}` }}>
                   {/* Microstructure Section */}
-                  <div style={{ padding: '16px', borderBottom: `1px solid ${FINCEPT.BORDER}`, backgroundColor: FINCEPT.PANEL_BG }}>
+                  <div style={{ padding: '16px', borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`, backgroundColor: colors.panel }}>
                     <div style={{
                       fontSize: '11px',
                       fontWeight: 700,
-                      color: FINCEPT.CYAN,
+                      color: colors.accent,
                       marginBottom: '12px',
                       fontFamily: 'monospace',
                       letterSpacing: '0.5px',
@@ -625,7 +614,7 @@ export function HFTPanel() {
                       alignItems: 'center',
                       gap: '6px'
                     }}>
-                      <Cpu size={13} color={FINCEPT.CYAN} />
+                      <Cpu size={13} color={colors.accent} />
                       MICROSTRUCTURE
                     </div>
 
@@ -634,7 +623,7 @@ export function HFTPanel() {
                       <div>
                         <div style={{
                           fontSize: '9px',
-                          color: FINCEPT.WHITE,
+                          color: colors.text,
                           opacity: 0.5,
                           marginBottom: '6px',
                           fontFamily: 'monospace',
@@ -646,8 +635,8 @@ export function HFTPanel() {
                           <div style={{
                             flex: 1,
                             height: '8px',
-                            backgroundColor: FINCEPT.DARK_BG,
-                            border: `1px solid ${FINCEPT.BORDER}`,
+                            backgroundColor: colors.background,
+                            border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                             position: 'relative',
                             overflow: 'hidden'
                           }}>
@@ -655,7 +644,7 @@ export function HFTPanel() {
                               position: 'absolute',
                               height: '100%',
                               width: `${Math.abs(microstructure.depth_imbalance) * 100}%`,
-                              backgroundColor: microstructure.depth_imbalance > 0 ? FINCEPT.GREEN : FINCEPT.RED,
+                              backgroundColor: microstructure.depth_imbalance > 0 ? colors.success : colors.alert,
                               left: microstructure.depth_imbalance < 0 ? 'auto' : '0',
                               right: microstructure.depth_imbalance < 0 ? '0' : 'auto'
                             }} />
@@ -663,7 +652,7 @@ export function HFTPanel() {
                           <span style={{
                             fontSize: '11px',
                             fontFamily: 'monospace',
-                            color: FINCEPT.WHITE,
+                            color: colors.text,
                             fontWeight: 600,
                             minWidth: '45px'
                           }}>
@@ -676,13 +665,13 @@ export function HFTPanel() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                         <div style={{
                           padding: '8px',
-                          backgroundColor: FINCEPT.DARK_BG,
-                          border: `1px solid ${FINCEPT.GREEN}`,
-                          borderLeft: `2px solid ${FINCEPT.GREEN}`
+                          backgroundColor: colors.background,
+                          border: `1px solid ${colors.success}`,
+                          borderLeft: `2px solid ${colors.success}`
                         }}>
                           <div style={{
                             fontSize: '9px',
-                            color: FINCEPT.WHITE,
+                            color: colors.text,
                             opacity: 0.5,
                             marginBottom: '3px',
                             fontFamily: 'monospace',
@@ -693,7 +682,7 @@ export function HFTPanel() {
                           <div style={{
                             fontSize: '11px',
                             fontFamily: 'monospace',
-                            color: FINCEPT.GREEN,
+                            color: colors.success,
                             fontWeight: 700
                           }}>
                             ${microstructure.vwap_bid.toFixed(2)}
@@ -701,13 +690,13 @@ export function HFTPanel() {
                         </div>
                         <div style={{
                           padding: '8px',
-                          backgroundColor: FINCEPT.DARK_BG,
-                          border: `1px solid ${FINCEPT.RED}`,
-                          borderLeft: `2px solid ${FINCEPT.RED}`
+                          backgroundColor: colors.background,
+                          border: `1px solid ${colors.alert}`,
+                          borderLeft: `2px solid ${colors.alert}`
                         }}>
                           <div style={{
                             fontSize: '9px',
-                            color: FINCEPT.WHITE,
+                            color: colors.text,
                             opacity: 0.5,
                             marginBottom: '3px',
                             fontFamily: 'monospace',
@@ -718,7 +707,7 @@ export function HFTPanel() {
                           <div style={{
                             fontSize: '11px',
                             fontFamily: 'monospace',
-                            color: FINCEPT.RED,
+                            color: colors.alert,
                             fontWeight: 700
                           }}>
                             ${microstructure.vwap_ask.toFixed(2)}
@@ -729,11 +718,11 @@ export function HFTPanel() {
                   </div>
 
                   {/* Market Making Section */}
-                  <div style={{ padding: '16px', backgroundColor: FINCEPT.DARK_BG, flex: 1 }}>
+                  <div style={{ padding: '16px', backgroundColor: colors.background, flex: 1 }}>
                     <div style={{
                       fontSize: '10px',
                       fontWeight: 700,
-                      color: FINCEPT.RED,
+                      color: colors.alert,
                       marginBottom: '12px',
                       fontFamily: 'monospace',
                       letterSpacing: '0.5px',
@@ -741,7 +730,7 @@ export function HFTPanel() {
                       alignItems: 'center',
                       gap: '6px'
                     }}>
-                      <DollarSign size={13} color={FINCEPT.RED} />
+                      <DollarSign size={13} color={colors.alert} />
                       MARKET MAKING
                     </div>
 
@@ -750,13 +739,13 @@ export function HFTPanel() {
                         {/* Bid Quote */}
                         <div style={{
                           padding: '12px',
-                          backgroundColor: FINCEPT.GREEN + '15',
-                          border: `1px solid ${FINCEPT.GREEN}`,
-                          borderLeft: `3px solid ${FINCEPT.GREEN}`
+                          backgroundColor: colors.success + '15',
+                          border: `1px solid ${colors.success}`,
+                          borderLeft: `3px solid ${colors.success}`
                         }}>
                           <div style={{
                             fontSize: '9px',
-                            color: FINCEPT.GREEN,
+                            color: colors.success,
                             marginBottom: '6px',
                             fontFamily: 'monospace',
                             fontWeight: 700,
@@ -768,7 +757,7 @@ export function HFTPanel() {
                             <span style={{
                               fontSize: '16px',
                               fontFamily: 'monospace',
-                              color: FINCEPT.GREEN,
+                              color: colors.success,
                               fontWeight: 700
                             }}>
                               ${marketMakingQuotes.bid.price.toFixed(2)}
@@ -776,7 +765,7 @@ export function HFTPanel() {
                             <span style={{
                               fontSize: '10px',
                               fontFamily: 'monospace',
-                              color: FINCEPT.GREEN,
+                              color: colors.success,
                               opacity: 0.8
                             }}>
                               {marketMakingQuotes.bid.size}
@@ -787,13 +776,13 @@ export function HFTPanel() {
                         {/* Ask Quote */}
                         <div style={{
                           padding: '12px',
-                          backgroundColor: FINCEPT.RED + '15',
-                          border: `1px solid ${FINCEPT.RED}`,
-                          borderLeft: `3px solid ${FINCEPT.RED}`
+                          backgroundColor: colors.alert + '15',
+                          border: `1px solid ${colors.alert}`,
+                          borderLeft: `3px solid ${colors.alert}`
                         }}>
                           <div style={{
                             fontSize: '9px',
-                            color: FINCEPT.RED,
+                            color: colors.alert,
                             marginBottom: '6px',
                             fontFamily: 'monospace',
                             fontWeight: 700,
@@ -805,7 +794,7 @@ export function HFTPanel() {
                             <span style={{
                               fontSize: '16px',
                               fontFamily: 'monospace',
-                              color: FINCEPT.RED,
+                              color: colors.alert,
                               fontWeight: 700
                             }}>
                               ${marketMakingQuotes.ask.price.toFixed(2)}
@@ -813,7 +802,7 @@ export function HFTPanel() {
                             <span style={{
                               fontSize: '10px',
                               fontFamily: 'monospace',
-                              color: FINCEPT.RED,
+                              color: colors.alert,
                               opacity: 0.8
                             }}>
                               {marketMakingQuotes.ask.size}
@@ -825,12 +814,12 @@ export function HFTPanel() {
                         <div style={{
                           textAlign: 'center',
                           padding: '8px',
-                          backgroundColor: FINCEPT.PANEL_BG,
-                          border: `1px solid ${FINCEPT.BORDER}`
+                          backgroundColor: colors.panel,
+                          border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                         }}>
                           <span style={{
                             fontSize: '9px',
-                            color: FINCEPT.WHITE,
+                            color: colors.text,
                             opacity: 0.6,
                             fontFamily: 'monospace',
                             letterSpacing: '0.5px'
@@ -843,13 +832,13 @@ export function HFTPanel() {
                       <div style={{
                         textAlign: 'center',
                         padding: '30px 20px',
-                        backgroundColor: FINCEPT.PANEL_BG,
-                        border: `1px solid ${FINCEPT.BORDER}`
+                        backgroundColor: colors.panel,
+                        border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                       }}>
-                        <DollarSign size={32} color={FINCEPT.MUTED} style={{ margin: '0 auto 12px' }} />
+                        <DollarSign size={32} color={colors.textMuted} style={{ margin: '0 auto 12px' }} />
                         <div style={{
                           fontSize: '10px',
-                          color: FINCEPT.WHITE,
+                          color: colors.text,
                           opacity: 0.6,
                           fontFamily: 'monospace',
                           lineHeight: '1.6'

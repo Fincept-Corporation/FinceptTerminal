@@ -23,25 +23,10 @@ import {
 } from 'lucide-react';
 import { statsmodelsService, type StatsmodelsResult } from '@/services/aiQuantLab/statsmodelsService';
 import { yfinanceService } from '@/services/markets/yfinanceService';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-  TEAL: '#00C9A7', // Unique theme color for Statsmodels
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
-};
+// Unique theme color for Statsmodels
+const TEAL = '#00C9A7';
 
 type AnalysisCategory = 'time_series' | 'stationarity' | 'regression' | 'glm' | 'tests' | 'power' | 'multivariate' | 'nonparametric';
 type DataSourceType = 'manual' | 'symbol';
@@ -147,6 +132,7 @@ const getParamFields = (analysisId: string): ParamField[] => {
 };
 
 export function StatsmodelsPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<StatsmodelsResult<Record<string, unknown>> | null>(null);
@@ -329,35 +315,35 @@ export function StatsmodelsPanel() {
     return (
       <div
         className="border rounded p-4 mt-4"
-        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
+        style={{ backgroundColor: colors.panel, borderColor: 'var(--ft-border-color, #2A2A2A)' }}
       >
         <div className="flex items-center gap-2 mb-3">
           {analysisResult.success ? (
-            <CheckCircle2 size={16} color={FINCEPT.GREEN} />
+            <CheckCircle2 size={16} color={colors.success} />
           ) : (
-            <AlertCircle size={16} color={FINCEPT.RED} />
+            <AlertCircle size={16} color={colors.alert} />
           )}
           <span
             className="text-xs font-semibold"
-            style={{ color: analysisResult.success ? FINCEPT.GREEN : FINCEPT.RED }}
+            style={{ color: analysisResult.success ? colors.success : colors.alert }}
           >
             {analysisResult.success ? 'ANALYSIS COMPLETE' : 'ANALYSIS FAILED'}
           </span>
           {analysisResult.analysis_type && (
-            <span className="text-xs" style={{ color: FINCEPT.GRAY }}>
+            <span className="text-xs" style={{ color: colors.textMuted }}>
               - {analysisResult.analysis_type.toUpperCase()}
             </span>
           )}
         </div>
 
         {analysisResult.error && (
-          <div className="text-xs p-2 rounded mb-3" style={{ backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.RED }}>
+          <div className="text-xs p-2 rounded mb-3" style={{ backgroundColor: colors.background, color: colors.alert }}>
             {analysisResult.error}
             {analysisResult.message && (
-              <div className="mt-1" style={{ color: FINCEPT.GRAY }}>{analysisResult.message}</div>
+              <div className="mt-1" style={{ color: colors.textMuted }}>{analysisResult.message}</div>
             )}
             {analysisResult.suggestions && Array.isArray(analysisResult.suggestions) && (
-              <div className="mt-2" style={{ color: FINCEPT.ORANGE }}>
+              <div className="mt-2" style={{ color: colors.primary }}>
                 <div className="font-semibold mb-1">Suggestions:</div>
                 <ul className="list-disc list-inside">
                   {analysisResult.suggestions.map((s: string, i: number) => (
@@ -377,9 +363,9 @@ export function StatsmodelsPanel() {
               const isExpanded = expandedArrays.has(key);
 
               return (
-                <div key={key} className="py-2 border-b" style={{ borderColor: FINCEPT.BORDER }}>
+                <div key={key} className="py-2 border-b" style={{ borderColor: 'var(--ft-border-color, #2A2A2A)' }}>
                   <div className="flex justify-between items-start gap-4">
-                    <span className="text-xs font-mono" style={{ color: FINCEPT.ORANGE }}>{key}</span>
+                    <span className="text-xs font-mono" style={{ color: colors.primary }}>{key}</span>
                     <div className="flex items-center gap-1">
                       {isLargeArray && (
                         <>
@@ -389,9 +375,9 @@ export function StatsmodelsPanel() {
                             title={isExpanded ? "Collapse" : "View All"}
                           >
                             {isExpanded ? (
-                              <ChevronUp size={12} color={FINCEPT.GRAY} />
+                              <ChevronUp size={12} color={colors.textMuted} />
                             ) : (
-                              <Eye size={12} color={FINCEPT.GRAY} />
+                              <Eye size={12} color={colors.textMuted} />
                             )}
                           </button>
                           <button
@@ -399,14 +385,14 @@ export function StatsmodelsPanel() {
                             className="p-1 rounded hover:bg-opacity-20 hover:bg-white"
                             title="Copy to Clipboard"
                           >
-                            <Copy size={12} color={FINCEPT.GRAY} />
+                            <Copy size={12} color={colors.textMuted} />
                           </button>
                           <button
                             onClick={() => exportData(key, value)}
                             className="p-1 rounded hover:bg-opacity-20 hover:bg-white"
                             title="Export as CSV"
                           >
-                            <Download size={12} color={FINCEPT.GRAY} />
+                            <Download size={12} color={colors.textMuted} />
                           </button>
                         </>
                       )}
@@ -415,7 +401,7 @@ export function StatsmodelsPanel() {
                   <div
                     className="text-xs font-mono mt-1"
                     style={{
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       maxHeight: isExpanded ? '300px' : 'none',
                       overflowY: isExpanded ? 'auto' : 'visible',
                       wordBreak: 'break-all'
@@ -434,7 +420,7 @@ export function StatsmodelsPanel() {
             <button
               onClick={exportAllResults}
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded"
-              style={{ backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.ORANGE, border: `1px solid ${FINCEPT.BORDER}` }}
+              style={{ backgroundColor: colors.panel, color: colors.primary, border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}` }}
             >
               <Download size={12} />
               Export All Results
@@ -443,7 +429,7 @@ export function StatsmodelsPanel() {
         )}
 
         {analysisResult.timestamp && (
-          <div className="mt-3 text-xs" style={{ color: FINCEPT.MUTED }}>
+          <div className="mt-3 text-xs" style={{ color: colors.textMuted }}>
             Timestamp: {analysisResult.timestamp}
           </div>
         )}
@@ -456,20 +442,20 @@ export function StatsmodelsPanel() {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Activity size={16} color={FINCEPT.TEAL} />
+        <Activity size={16} color={TEAL} />
         <span style={{
-          color: FINCEPT.TEAL,
+          color: TEAL,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -482,9 +468,9 @@ export function StatsmodelsPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: analysisResult ? FINCEPT.GREEN + '20' : FINCEPT.TEAL + '20',
-          border: `1px solid ${analysisResult ? FINCEPT.GREEN : FINCEPT.TEAL}`,
-          color: analysisResult ? FINCEPT.GREEN : FINCEPT.TEAL
+          backgroundColor: analysisResult ? colors.success + '20' : TEAL + '20',
+          border: `1px solid ${analysisResult ? colors.success : TEAL}`,
+          color: analysisResult ? colors.success : TEAL
         }}>
           {analysisResult ? 'RESULTS READY' : 'READY'}
         </div>
@@ -494,8 +480,8 @@ export function StatsmodelsPanel() {
         {/* Left Sidebar - Configuration */}
         <div style={{
           width: '320px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column'
         }}>
@@ -503,10 +489,10 @@ export function StatsmodelsPanel() {
             {/* Data Source Section */}
             <div style={{
               padding: '10px 12px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
               fontSize: '10px',
               fontWeight: 700,
-              color: FINCEPT.TEAL,
+              color: TEAL,
               fontFamily: 'monospace',
               letterSpacing: '0.5px'
             }}>
@@ -520,9 +506,9 @@ export function StatsmodelsPanel() {
                   style={{
                     flex: 1,
                     padding: '8px 14px',
-                    backgroundColor: dataSourceType === 'symbol' ? FINCEPT.TEAL : FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: dataSourceType === 'symbol' ? '#000000' : FINCEPT.WHITE,
+                    backgroundColor: dataSourceType === 'symbol' ? TEAL : colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: dataSourceType === 'symbol' ? '#000000' : colors.text,
                     opacity: dataSourceType === 'symbol' ? 1 : 0.7,
                     fontSize: '10px',
                     fontWeight: 700,
@@ -539,11 +525,11 @@ export function StatsmodelsPanel() {
                   style={{
                     flex: 1,
                     padding: '8px 14px',
-                    backgroundColor: dataSourceType === 'manual' ? FINCEPT.TEAL : FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
+                    backgroundColor: dataSourceType === 'manual' ? TEAL : colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                     borderLeft: '0',
                     marginLeft: '-1px',
-                    color: dataSourceType === 'manual' ? '#000000' : FINCEPT.WHITE,
+                    color: dataSourceType === 'manual' ? '#000000' : colors.text,
                     opacity: dataSourceType === 'manual' ? 1 : 0.7,
                     fontSize: '10px',
                     fontWeight: 700,
@@ -570,9 +556,9 @@ export function StatsmodelsPanel() {
                         padding: '8px 10px',
                         fontSize: '11px',
                         fontFamily: 'monospace',
-                        backgroundColor: FINCEPT.DARK_BG,
-                        color: FINCEPT.WHITE,
-                        border: `1px solid ${FINCEPT.BORDER}`,
+                        backgroundColor: colors.background,
+                        color: colors.text,
+                        border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                         outline: 'none'
                       }}
                     />
@@ -581,7 +567,7 @@ export function StatsmodelsPanel() {
                       disabled={priceDataLoading}
                       style={{
                         padding: '8px 12px',
-                        backgroundColor: FINCEPT.TEAL,
+                        backgroundColor: TEAL,
                         border: 'none',
                         color: '#000000',
                         cursor: priceDataLoading ? 'not-allowed' : 'pointer',
@@ -599,7 +585,7 @@ export function StatsmodelsPanel() {
                       display: 'block',
                       fontSize: '9px',
                       marginBottom: '6px',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       fontFamily: 'monospace',
                       letterSpacing: '0.5px',
                       opacity: 0.7
@@ -614,9 +600,9 @@ export function StatsmodelsPanel() {
                         padding: '8px 10px',
                         fontSize: '11px',
                         fontFamily: 'monospace',
-                        backgroundColor: FINCEPT.DARK_BG,
-                        color: FINCEPT.WHITE,
-                        border: `1px solid ${FINCEPT.BORDER}`,
+                        backgroundColor: colors.background,
+                        color: colors.text,
+                        border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                         outline: 'none'
                       }}
                     >
@@ -632,10 +618,10 @@ export function StatsmodelsPanel() {
                     <div style={{
                       fontSize: '10px',
                       fontFamily: 'monospace',
-                      color: FINCEPT.GREEN,
+                      color: colors.success,
                       padding: '6px 10px',
-                      backgroundColor: FINCEPT.GREEN + '20',
-                      border: `1px solid ${FINCEPT.GREEN}`
+                      backgroundColor: colors.success + '20',
+                      border: `1px solid ${colors.success}`
                     }}>
                       Loaded {priceData.length} data points
                     </div>
@@ -652,9 +638,9 @@ export function StatsmodelsPanel() {
                     padding: '8px 10px',
                     fontSize: '11px',
                     fontFamily: 'monospace',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`,
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                     outline: 'none',
                     resize: 'vertical'
                   }}
@@ -665,11 +651,11 @@ export function StatsmodelsPanel() {
             {/* Category Section */}
             <div style={{
               padding: '10px 12px',
-              borderTop: `1px solid ${FINCEPT.BORDER}`,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+              borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
               fontSize: '10px',
               fontWeight: 700,
-              color: FINCEPT.TEAL,
+              color: TEAL,
               fontFamily: 'monospace',
               letterSpacing: '0.5px'
             }}>
@@ -692,9 +678,9 @@ export function StatsmodelsPanel() {
                   padding: '8px 10px',
                   fontSize: '11px',
                   fontFamily: 'monospace',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                   outline: 'none'
                 }}
               >
@@ -707,11 +693,11 @@ export function StatsmodelsPanel() {
             {/* Analysis Type Section */}
             <div style={{
               padding: '10px 12px',
-              borderTop: `1px solid ${FINCEPT.BORDER}`,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+              borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
               fontSize: '10px',
               fontWeight: 700,
-              color: FINCEPT.TEAL,
+              color: TEAL,
               fontFamily: 'monospace',
               letterSpacing: '0.5px'
             }}>
@@ -729,9 +715,9 @@ export function StatsmodelsPanel() {
                   padding: '8px 10px',
                   fontSize: '11px',
                   fontFamily: 'monospace',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                   outline: 'none',
                   marginBottom: '10px'
                 }}
@@ -744,7 +730,7 @@ export function StatsmodelsPanel() {
               </select>
               <div style={{
                 fontSize: '10px',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.6,
                 lineHeight: '1.5',
                 fontFamily: 'monospace'
@@ -756,10 +742,10 @@ export function StatsmodelsPanel() {
                   marginTop: '10px',
                   padding: '10px',
                   fontSize: '10px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.TEAL}`,
-                  borderLeft: `3px solid ${FINCEPT.TEAL}`,
-                  color: FINCEPT.WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${TEAL}`,
+                  borderLeft: `3px solid ${TEAL}`,
+                  color: colors.text,
                   lineHeight: '1.5',
                   fontFamily: 'monospace'
                 }}>
@@ -773,11 +759,11 @@ export function StatsmodelsPanel() {
               <>
                 <div style={{
                   padding: '10px 12px',
-                  borderTop: `1px solid ${FINCEPT.BORDER}`,
-                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                   fontSize: '10px',
                   fontWeight: 700,
-                  color: FINCEPT.TEAL,
+                  color: TEAL,
                   fontFamily: 'monospace',
                   letterSpacing: '0.5px'
                 }}>
@@ -790,7 +776,7 @@ export function StatsmodelsPanel() {
                         display: 'block',
                         fontSize: '9px',
                         marginBottom: '6px',
-                        color: FINCEPT.WHITE,
+                        color: colors.text,
                         fontFamily: 'monospace',
                         letterSpacing: '0.5px',
                         opacity: 0.7
@@ -806,9 +792,9 @@ export function StatsmodelsPanel() {
                             padding: '8px 10px',
                             fontSize: '11px',
                             fontFamily: 'monospace',
-                            backgroundColor: FINCEPT.DARK_BG,
-                            color: FINCEPT.WHITE,
-                            border: `1px solid ${FINCEPT.BORDER}`,
+                            backgroundColor: colors.background,
+                            color: colors.text,
+                            border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                             outline: 'none'
                           }}
                         >
@@ -827,9 +813,9 @@ export function StatsmodelsPanel() {
                             padding: '8px 10px',
                             fontSize: '11px',
                             fontFamily: 'monospace',
-                            backgroundColor: FINCEPT.DARK_BG,
-                            color: FINCEPT.WHITE,
-                            border: `1px solid ${FINCEPT.BORDER}`,
+                            backgroundColor: colors.background,
+                            color: colors.text,
+                            border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                             outline: 'none'
                           }}
                         />
@@ -842,14 +828,14 @@ export function StatsmodelsPanel() {
           </div>
 
           {/* Run Button */}
-          <div style={{ borderTop: `1px solid ${FINCEPT.BORDER}`, padding: '12px' }}>
+          <div style={{ borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`, padding: '12px' }}>
             <button
               onClick={runAnalysis}
               disabled={isLoading}
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                backgroundColor: FINCEPT.TEAL,
+                backgroundColor: TEAL,
                 border: 'none',
                 color: '#000000',
                 fontSize: '11px',
@@ -884,13 +870,13 @@ export function StatsmodelsPanel() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{
             padding: '10px 16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.TEAL,
+            color: TEAL,
             fontFamily: 'monospace',
             letterSpacing: '0.5px',
-            backgroundColor: FINCEPT.PANEL_BG
+            backgroundColor: colors.panel
           }}>
             STATISTICAL MODELING & ECONOMETRIC ANALYSIS
           </div>
@@ -914,38 +900,38 @@ export function StatsmodelsPanel() {
                     }}
                     style={{
                       padding: '12px',
-                      backgroundColor: isSelected ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-                      border: `1px solid ${isSelected ? FINCEPT.TEAL : FINCEPT.BORDER}`,
+                      backgroundColor: isSelected ? '#1F1F1F' : colors.panel,
+                      border: `1px solid ${isSelected ? TEAL : 'var(--ft-border-color, #2A2A2A)'}`,
                       cursor: 'pointer',
                       textAlign: 'left',
                       transition: 'all 0.15s'
                     }}
                     onMouseEnter={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                        e.currentTarget.style.borderColor = FINCEPT.TEAL;
+                        e.currentTarget.style.backgroundColor = colors.background;
+                        e.currentTarget.style.borderColor = TEAL;
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
-                        e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                        e.currentTarget.style.backgroundColor = colors.panel;
+                        e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                       }
                     }}
                   >
-                    <Icon size={16} color={FINCEPT.TEAL} />
+                    <Icon size={16} color={TEAL} />
                     <div style={{
                       fontSize: '11px',
                       fontWeight: 600,
                       marginTop: '8px',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       fontFamily: 'monospace'
                     }}>
                       {label}
                     </div>
                     <div style={{
                       fontSize: '9px',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.5,
                       marginTop: '4px',
                       fontFamily: 'monospace'
@@ -963,7 +949,7 @@ export function StatsmodelsPanel() {
                 fontSize: '10px',
                 fontWeight: 700,
                 marginBottom: '12px',
-                color: FINCEPT.TEAL,
+                color: TEAL,
                 letterSpacing: '0.5px',
                 fontFamily: 'monospace'
               }}>
@@ -983,29 +969,29 @@ export function StatsmodelsPanel() {
                         }}
                         style={{
                           padding: '10px',
-                          backgroundColor: isSelected ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-                          border: `1px solid ${isSelected ? FINCEPT.TEAL : FINCEPT.BORDER}`,
+                          backgroundColor: isSelected ? '#1F1F1F' : colors.panel,
+                          border: `1px solid ${isSelected ? TEAL : 'var(--ft-border-color, #2A2A2A)'}`,
                           cursor: 'pointer',
                           textAlign: 'left',
                           transition: 'all 0.15s'
                         }}
                         onMouseEnter={(e) => {
                           if (!isSelected) {
-                            e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                            e.currentTarget.style.borderColor = FINCEPT.TEAL;
+                            e.currentTarget.style.backgroundColor = colors.background;
+                            e.currentTarget.style.borderColor = TEAL;
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (!isSelected) {
-                            e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
-                            e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                            e.currentTarget.style.backgroundColor = colors.panel;
+                            e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                           }
                         }}
                       >
                         <div style={{
                           fontSize: '11px',
                           fontWeight: 600,
-                          color: isSelected ? FINCEPT.TEAL : FINCEPT.WHITE,
+                          color: isSelected ? TEAL : colors.text,
                           fontFamily: 'monospace',
                           marginBottom: '4px'
                         }}>
@@ -1013,7 +999,7 @@ export function StatsmodelsPanel() {
                         </div>
                         <div style={{
                           fontSize: '10px',
-                          color: FINCEPT.WHITE,
+                          color: colors.text,
                           opacity: 0.6,
                           lineHeight: '1.4',
                           fontFamily: 'monospace'
@@ -1030,10 +1016,10 @@ export function StatsmodelsPanel() {
             {error && (
               <div style={{
                 padding: '12px 14px',
-                backgroundColor: FINCEPT.RED + '15',
-                border: `1px solid ${FINCEPT.RED}`,
-                borderLeft: `3px solid ${FINCEPT.RED}`,
-                color: FINCEPT.RED,
+                backgroundColor: colors.alert + '15',
+                border: `1px solid ${colors.alert}`,
+                borderLeft: `3px solid ${colors.alert}`,
+                color: colors.alert,
                 fontSize: '11px',
                 display: 'flex',
                 alignItems: 'center',
@@ -1055,13 +1041,13 @@ export function StatsmodelsPanel() {
               <div style={{
                 padding: '40px 20px',
                 textAlign: 'center',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.BORDER}`
+                backgroundColor: colors.panel,
+                border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
               }}>
-                <Database size={48} color={FINCEPT.MUTED} style={{ margin: '0 auto 16px' }} />
+                <Database size={48} color={colors.textMuted} style={{ margin: '0 auto 16px' }} />
                 <div style={{
                   fontSize: '11px',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   marginBottom: '8px',
                   fontFamily: 'monospace'
                 }}>
@@ -1069,7 +1055,7 @@ export function StatsmodelsPanel() {
                 </div>
                 <div style={{
                   fontSize: '10px',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   opacity: 0.5,
                   fontFamily: 'monospace'
                 }}>

@@ -23,21 +23,7 @@ import {
 import { deepAgentService, ExecuteTaskRequest, Todo, PlanTodo, AgentConfig } from '@/services/aiQuantLab/deepAgentService';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveLLMConfig } from '@/services/core/sqliteService';
-
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  GREEN: '#00D66F',
-  RED: '#FF3B3B',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  PURPLE: '#9D4EDD',
-  BORDER: '#2A2A2A',
-  PANEL_BG: '#0F0F0F',
-  DARK_BG: '#000000',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface AgentType {
   id: string;
@@ -48,48 +34,8 @@ interface AgentType {
   subagents: string[];
 }
 
-const AGENT_TYPES: AgentType[] = [
-  {
-    id: 'research',
-    name: 'Research Agent',
-    description: 'Autonomous research, data analysis, and report generation',
-    icon: FileText,
-    color: FINCEPT.CYAN,
-    subagents: ['data_analyst', 'reporter']
-  },
-  {
-    id: 'trading_strategy',
-    name: 'Strategy Builder',
-    description: 'Design, backtest, and validate trading strategies',
-    icon: Zap,
-    color: FINCEPT.YELLOW,
-    subagents: ['data_analyst', 'trading', 'backtester', 'risk_analyzer', 'reporter']
-  },
-  {
-    id: 'portfolio_management',
-    name: 'Portfolio Manager',
-    description: 'Optimize portfolios with risk management',
-    icon: GitBranch,
-    color: FINCEPT.GREEN,
-    subagents: ['data_analyst', 'portfolio_optimizer', 'risk_analyzer', 'reporter']
-  },
-  {
-    id: 'risk_assessment',
-    name: 'Risk Analyzer',
-    description: 'Comprehensive risk assessment and stress testing',
-    icon: AlertCircle,
-    color: FINCEPT.RED,
-    subagents: ['data_analyst', 'risk_analyzer', 'reporter']
-  },
-  {
-    id: 'general',
-    name: 'General Agent',
-    description: 'Full-featured agent with all specialists',
-    icon: Brain,
-    color: FINCEPT.PURPLE,
-    subagents: ['research', 'data_analyst', 'trading', 'risk_analyzer', 'portfolio_optimizer', 'backtester', 'reporter']
-  }
-];
+// Agent types are defined inside the component to use theme colors
+// See getAgentTypes() function inside DeepAgentPanel
 
 const EXAMPLE_TASKS = {
   research: [
@@ -128,7 +74,7 @@ export function formatResultText(text: string): React.ReactNode[] {
 
     // Horizontal rule
     if (/^-{3,}$/.test(trimmed) || /^\*{3,}$/.test(trimmed)) {
-      nodes.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid #2A2A2A', margin: '12px 0' }} />);
+      nodes.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid var(--ft-border-color, #2A2A2A)', margin: '12px 0' }} />);
       return;
     }
 
@@ -138,7 +84,7 @@ export function formatResultText(text: string): React.ReactNode[] {
       const level = headingMatch[1].length;
       const sizes = { 1: '16px', 2: '14px', 3: '13px' } as Record<number, string>;
       nodes.push(
-        <div key={i} style={{ fontSize: sizes[level] || '13px', fontWeight: 700, color: '#FF8800', margin: '14px 0 6px 0' }}>
+        <div key={i} style={{ fontSize: sizes[level] || '13px', fontWeight: 700, color: 'var(--ft-color-primary, #FF8800)', margin: '14px 0 6px 0' }}>
           {renderInlineFormatting(headingMatch[2])}
         </div>
       );
@@ -149,7 +95,7 @@ export function formatResultText(text: string): React.ReactNode[] {
     if (/^[-*]\s+/.test(trimmed)) {
       nodes.push(
         <div key={i} style={{ paddingLeft: '16px', position: 'relative', marginBottom: '2px' }}>
-          <span style={{ position: 'absolute', left: '4px', color: '#FF8800' }}>•</span>
+          <span style={{ position: 'absolute', left: '4px', color: 'var(--ft-color-primary, #FF8800)' }}>•</span>
           {renderInlineFormatting(trimmed.replace(/^[-*]\s+/, ''))}
         </div>
       );
@@ -180,7 +126,7 @@ function renderInlineFormatting(text: string): React.ReactNode {
       if (boldMatch.index > 0) {
         parts.push(remaining.slice(0, boldMatch.index));
       }
-      parts.push(<span key={key++} style={{ fontWeight: 700, color: '#FFFFFF' }}>{boldMatch[1]}</span>);
+      parts.push(<span key={key++} style={{ fontWeight: 700, color: 'var(--ft-color-text, #FFFFFF)' }}>{boldMatch[1]}</span>);
       remaining = remaining.slice(boldMatch.index + boldMatch[0].length);
       continue;
     }
@@ -204,8 +150,53 @@ interface DeepAgentPanelProps {
 }
 
 export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const { session } = useAuth();
   const [selectedAgent, setSelectedAgent] = useState<string>('research');
+
+  // Agent types using theme colors
+  const AGENT_TYPES: AgentType[] = [
+    {
+      id: 'research',
+      name: 'Research Agent',
+      description: 'Autonomous research, data analysis, and report generation',
+      icon: FileText,
+      color: colors.accent,
+      subagents: ['data_analyst', 'reporter']
+    },
+    {
+      id: 'trading_strategy',
+      name: 'Strategy Builder',
+      description: 'Design, backtest, and validate trading strategies',
+      icon: Zap,
+      color: colors.warning,
+      subagents: ['data_analyst', 'trading', 'backtester', 'risk_analyzer', 'reporter']
+    },
+    {
+      id: 'portfolio_management',
+      name: 'Portfolio Manager',
+      description: 'Optimize portfolios with risk management',
+      icon: GitBranch,
+      color: colors.success,
+      subagents: ['data_analyst', 'portfolio_optimizer', 'risk_analyzer', 'reporter']
+    },
+    {
+      id: 'risk_assessment',
+      name: 'Risk Analyzer',
+      description: 'Comprehensive risk assessment and stress testing',
+      icon: AlertCircle,
+      color: colors.alert,
+      subagents: ['data_analyst', 'risk_analyzer', 'reporter']
+    },
+    {
+      id: 'general',
+      name: 'General Agent',
+      description: 'Full-featured agent with all specialists',
+      icon: Brain,
+      color: colors.purple,
+      subagents: ['research', 'data_analyst', 'trading', 'risk_analyzer', 'portfolio_optimizer', 'backtester', 'reporter']
+    }
+  ];
   const [task, setTask] = useState<string>('');
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<string>('');
@@ -386,9 +377,9 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
     const hasSubtasks = todo.subtasks && todo.subtasks.length > 0;
 
     const statusColors = {
-      pending: FINCEPT.MUTED,
-      in_progress: FINCEPT.YELLOW,
-      completed: FINCEPT.GREEN
+      pending: colors.textMuted,
+      in_progress: colors.warning,
+      completed: colors.success
     };
 
     const statusIcon = {
@@ -402,7 +393,7 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
         <div
           style={{
             padding: '8px 12px',
-            backgroundColor: FINCEPT.DARK_BG,
+            backgroundColor: colors.background,
             border: `1px solid ${statusColors[todo.status]}`,
             borderLeft: `3px solid ${statusColors[todo.status]}`,
             marginBottom: '5px',
@@ -417,11 +408,11 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
         >
           {hasSubtasks && (
             isExpanded ?
-              <ChevronDown size={10} style={{ color: FINCEPT.ORANGE }} /> :
-              <ChevronRight size={10} style={{ color: FINCEPT.ORANGE }} />
+              <ChevronDown size={10} style={{ color: colors.primary }} /> :
+              <ChevronRight size={10} style={{ color: colors.primary }} />
           )}
           <span style={{ color: statusColors[todo.status] }}>{statusIcon}</span>
-          <span style={{ flex: 1, color: FINCEPT.WHITE }}>
+          <span style={{ flex: 1, color: colors.text }}>
             {todo.task}
           </span>
         </div>
@@ -443,20 +434,20 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Network size={16} color={FINCEPT.ORANGE} />
+        <Network size={16} color={colors.primary} />
         <span style={{
-          color: FINCEPT.ORANGE,
+          color: colors.primary,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -469,9 +460,9 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: FINCEPT.GREEN + '20',
-          border: `1px solid ${FINCEPT.GREEN}`,
-          color: FINCEPT.GREEN
+          backgroundColor: colors.success + '20',
+          border: `1px solid ${colors.success}`,
+          color: colors.success
         }}>
           READY
         </div>
@@ -481,17 +472,17 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
         {/* Left Sidebar - Agent Selection */}
         <div style={{
           width: '240px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.MUTED,
+            color: colors.textMuted,
             fontFamily: 'monospace',
             letterSpacing: '0.5px'
           }}>
@@ -507,31 +498,31 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                   onClick={() => setSelectedAgent(agent.id)}
                   style={{
                     padding: '10px',
-                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
-                    border: `1px solid ${isSelected ? agent.color : FINCEPT.BORDER}`,
+                    backgroundColor: isSelected ? '#1F1F1F' : 'transparent',
+                    border: `1px solid ${isSelected ? agent.color : 'var(--ft-border-color, #2A2A2A)'}`,
                     cursor: 'pointer',
                     transition: 'all 0.15s'
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
+                      e.currentTarget.style.backgroundColor = colors.background;
                       e.currentTarget.style.borderColor = agent.color;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected) {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                     }
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                     <Icon size={14} style={{ color: agent.color }} />
-                    <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
+                    <span style={{ color: colors.text, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
                       {agent.name}
                     </span>
                   </div>
-                  <p style={{ color: FINCEPT.MUTED, fontSize: '9px', margin: '0 0 6px 0', lineHeight: '1.3' }}>
+                  <p style={{ color: colors.textMuted, fontSize: '9px', margin: '0 0 6px 0', lineHeight: '1.3' }}>
                     {agent.description}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
@@ -540,7 +531,7 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                         key={sub}
                         style={{
                           padding: '1px 4px',
-                          backgroundColor: FINCEPT.DARK_BG,
+                          backgroundColor: colors.background,
                           fontSize: '8px',
                           color: agent.color,
                           fontFamily: 'monospace'
@@ -550,7 +541,7 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                       </span>
                     ))}
                     {agent.subagents.length > 2 && (
-                      <span style={{ fontSize: '8px', color: FINCEPT.MUTED, fontFamily: 'monospace' }}>
+                      <span style={{ fontSize: '8px', color: colors.textMuted, fontFamily: 'monospace' }}>
                         +{agent.subagents.length - 2}
                       </span>
                     )}
@@ -566,18 +557,18 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
           {/* Task Input Section */}
           <div style={{
             padding: '16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             display: 'flex',
             flexDirection: 'column',
             gap: '12px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {AgentIcon && <AgentIcon size={14} style={{ color: selectedAgentInfo?.color }} />}
-              <span style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: colors.text, fontFamily: 'monospace' }}>
                 {selectedAgentInfo?.name.toUpperCase()}
               </span>
-              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>•</span>
-              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>
+              <span style={{ fontSize: '10px', color: colors.textMuted }}>•</span>
+              <span style={{ fontSize: '10px', color: colors.textMuted }}>
                 {selectedAgentInfo?.subagents.length} SUBAGENTS
               </span>
             </div>
@@ -590,9 +581,9 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                 width: '100%',
                 height: '100px',
                 padding: '10px',
-                backgroundColor: FINCEPT.DARK_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                color: FINCEPT.WHITE,
+                backgroundColor: colors.background,
+                border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                color: colors.text,
                 fontSize: '11px',
                 fontFamily: 'monospace',
                 resize: 'vertical'
@@ -604,9 +595,9 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
               disabled={isExecuting || !task.trim()}
               style={{
                 padding: '8px 16px',
-                backgroundColor: selectedAgentInfo?.color || FINCEPT.ORANGE,
+                backgroundColor: selectedAgentInfo?.color || colors.primary,
                 border: 'none',
-                color: FINCEPT.DARK_BG,
+                color: colors.background,
                 fontSize: '11px',
                 fontWeight: 700,
                 cursor: isExecuting ? 'not-allowed' : 'pointer',
@@ -636,10 +627,10 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
           {/* Examples Section */}
           <div style={{
             padding: '12px 16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            backgroundColor: FINCEPT.PANEL_BG
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+            backgroundColor: colors.panel
           }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: FINCEPT.MUTED, marginBottom: '8px', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: colors.textMuted, marginBottom: '8px', fontFamily: 'monospace' }}>
               EXAMPLE TASKS
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -649,9 +640,9 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                   onClick={() => loadExample(example)}
                   style={{
                     padding: '6px 8px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: selectedAgentInfo?.color || FINCEPT.CYAN,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: selectedAgentInfo?.color || colors.accent,
                     fontSize: '10px',
                     textAlign: 'left',
                     cursor: 'pointer',
@@ -659,12 +650,12 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                     transition: 'all 0.15s'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                    e.currentTarget.style.borderColor = selectedAgentInfo?.color || FINCEPT.CYAN;
+                    e.currentTarget.style.backgroundColor = '#1F1F1F';
+                    e.currentTarget.style.borderColor = selectedAgentInfo?.color || colors.accent;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    e.currentTarget.style.backgroundColor = colors.background;
+                    e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                   }}
                 >
                   › {example}
@@ -681,7 +672,7 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                 <div style={{
                   fontSize: '11px',
                   fontWeight: 700,
-                  color: FINCEPT.CYAN,
+                  color: colors.accent,
                   marginBottom: '8px',
                   fontFamily: 'monospace',
                   letterSpacing: '0.5px',
@@ -689,19 +680,19 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                   alignItems: 'center',
                   gap: '6px'
                 }}>
-                  <Cpu size={13} color={FINCEPT.CYAN} />
+                  <Cpu size={13} color={colors.accent} />
                   EXECUTION LOG
                 </div>
                 <div style={{
                   padding: '12px 14px',
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  borderLeft: `3px solid ${FINCEPT.CYAN}`,
+                  backgroundColor: colors.panel,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  borderLeft: `3px solid ${colors.accent}`,
                   maxHeight: '180px',
                   overflowY: 'auto',
                   fontSize: '13px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.CYAN,
+                  color: colors.accent,
                   lineHeight: '1.7'
                 }}>
                   {executionLog.map((log, idx) => (
@@ -716,10 +707,10 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
             {error && (
               <div style={{
                 padding: '12px 14px',
-                backgroundColor: FINCEPT.RED + '15',
-                border: `1px solid ${FINCEPT.RED}`,
-                borderLeft: `3px solid ${FINCEPT.RED}`,
-                color: FINCEPT.RED,
+                backgroundColor: colors.alert + '15',
+                border: `1px solid ${colors.alert}`,
+                borderLeft: `3px solid ${colors.alert}`,
+                color: colors.alert,
                 fontSize: '13px',
                 display: 'flex',
                 alignItems: 'center',
@@ -738,7 +729,7 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                 <div style={{
                   fontSize: '11px',
                   fontWeight: 700,
-                  color: FINCEPT.YELLOW,
+                  color: colors.warning,
                   marginBottom: '8px',
                   fontFamily: 'monospace',
                   letterSpacing: '0.5px',
@@ -746,7 +737,7 @@ export function DeepAgentPanel({ onOutputChange }: DeepAgentPanelProps) {
                   alignItems: 'center',
                   gap: '6px'
                 }}>
-                  <GitBranch size={13} color={FINCEPT.YELLOW} />
+                  <GitBranch size={13} color={colors.warning} />
                   TASK BREAKDOWN
                 </div>
                 {todos.map(todo => renderTodo(todo))}

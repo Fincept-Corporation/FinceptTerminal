@@ -942,46 +942,29 @@ pub async fn search_indian_symbols(
 ) -> Result<Vec<Value>, String> {
     eprintln!("[search_indian_symbols] Searching for '{}' in {} broker", query, broker_id);
 
-    use crate::commands::master_contract::get_master_contract_cache;
+    use crate::database::symbol_master;
 
-    // Get cached master contract
-    let cache_data = get_master_contract_cache(broker_id.clone()).await?;
-
-    // Parse the cached data
-    let instruments: Vec<Value> = serde_json::from_str(&cache_data)
-        .map_err(|e| format!("Failed to parse master contract: {}", e))?;
-
-    // Filter instruments
-    let query_lower = query.to_lowercase();
-    let results: Vec<Value> = instruments
-        .into_iter()
-        .filter(|inst| {
-            let symbol = inst.get("symbol")
-                .or(inst.get("tradingsymbol"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_lowercase();
-
-            let name = inst.get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_lowercase();
-
-            let inst_exchange = inst.get("exchange")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-
-            let matches_query = symbol.contains(&query_lower) || name.contains(&query_lower);
-            let matches_exchange = exchange.as_ref()
-                .map(|e| inst_exchange.eq_ignore_ascii_case(e))
-                .unwrap_or(true);
-
-            matches_query && matches_exchange
-        })
-        .take(50) // Limit results
-        .collect();
-
-    Ok(results)
+    // Search using symbol master DB
+    match symbol_master::search_symbols(&broker_id, &query, exchange.as_deref(), None, 50) {
+        Ok(results) => {
+            let values: Vec<Value> = results.iter().map(|r| {
+                json!({
+                    "symbol": r.symbol,
+                    "tradingsymbol": r.br_symbol,
+                    "name": r.name,
+                    "exchange": r.exchange,
+                    "token": r.token,
+                    "instrumenttype": r.instrument_type,
+                    "lotsize": r.lot_size,
+                    "ticksize": r.tick_size,
+                    "expiry": r.expiry,
+                    "strike": r.strike,
+                })
+            }).collect();
+            Ok(values)
+        }
+        Err(e) => Err(format!("Search failed: {}", e)),
+    }
 }
 
 /// Get symbol token from master contract
@@ -993,37 +976,25 @@ pub async fn get_indian_symbol_token(
 ) -> Result<Option<Value>, String> {
     eprintln!("[get_indian_symbol_token] Getting token for {}:{}", exchange, symbol);
 
-    use crate::commands::master_contract::get_master_contract_cache;
+    use crate::database::symbol_master;
 
-    // Get cached master contract
-    let cache_data = get_master_contract_cache(broker_id.clone()).await?;
-
-    // Parse the cached data
-    let instruments: Vec<Value> = serde_json::from_str(&cache_data)
-        .map_err(|e| format!("Failed to parse master contract: {}", e))?;
-
-    // Find matching instrument
-    let symbol_upper = symbol.to_uppercase();
-    let exchange_upper = exchange.to_uppercase();
-
-    let result = instruments
-        .into_iter()
-        .find(|inst| {
-            let inst_symbol = inst.get("symbol")
-                .or(inst.get("tradingsymbol"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_uppercase();
-
-            let inst_exchange = inst.get("exchange")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_uppercase();
-
-            inst_symbol == symbol_upper && inst_exchange == exchange_upper
-        });
-
-    Ok(result)
+    // Search using symbol master DB
+    match symbol_master::get_symbol(&broker_id, &symbol, &exchange) {
+        Ok(Some(r)) => Ok(Some(json!({
+            "symbol": r.symbol,
+            "tradingsymbol": r.br_symbol,
+            "name": r.name,
+            "exchange": r.exchange,
+            "token": r.token,
+            "instrumenttype": r.instrument_type,
+            "lotsize": r.lot_size,
+            "ticksize": r.tick_size,
+            "expiry": r.expiry,
+            "strike": r.strike,
+        }))),
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("Lookup failed: {}", e)),
+    }
 }
 
 /// Get master contract last updated timestamp
@@ -1033,9 +1004,9 @@ pub async fn get_master_contract_timestamp(
 ) -> Result<Option<i64>, String> {
     eprintln!("[get_master_contract_timestamp] Getting timestamp for: {}", broker_id);
 
-    use crate::commands::master_contract::get_master_contract_cache_info;
+    use crate::database::symbol_master;
 
-    match get_master_contract_cache_info(broker_id).await {
+    match symbol_master::get_status(&broker_id) {
         Ok(info) => Ok(Some(info.last_updated)),
         Err(_) => Ok(None),
     }

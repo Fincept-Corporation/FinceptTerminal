@@ -12,7 +12,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { showConfirm } from '@/utils/notifications';
 import {
-  Bot, Trophy, Play, Pause, RotateCcw, Plus, Settings, Key,
+  Bot, Trophy, Play, Pause, RotateCcw, Plus, Settings,
   TrendingUp, TrendingDown, Activity, Zap, AlertCircle, CheckCircle,
   ChevronRight, Loader2, BarChart3, Clock, Target, Brain,
   RefreshCw, Eye, Users, Sparkles, Check, Circle, History, Trash2, PlayCircle,
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
-import { sqliteService, type LLMModelConfig, type LLMConfig } from '@/services/core/sqliteService';
+import { sqliteService, type LLMModelConfig, type LLMConfig, type LLMGlobalSettings } from '@/services/core/sqliteService';
 import { withTimeout } from '@/services/core/apiUtils';
 import { validateString } from '@/services/core/validators';
 import { useCache, cacheKey } from '@/hooks/useCache';
@@ -156,6 +156,7 @@ const AlphaArenaTab: React.FC = () => {
   // LLM state - from Settings
   const [configuredLLMs, setConfiguredLLMs] = useState<AlphaArenaModel[]>([]);
   const [selectedModels, setSelectedModels] = useState<AlphaArenaModel[]>([]);
+  const [llmGlobalSettings, setLlmGlobalSettings] = useState<LLMGlobalSettings>({ temperature: 0.7, max_tokens: 2000, system_prompt: '' });
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -216,6 +217,16 @@ const AlphaArenaTab: React.FC = () => {
       const modelConfigs = await withTimeout(sqliteService.getLLMModelConfigs(), 15000);
       // Load provider configs for API key fallback and for fincept (which is auto-configured)
       const providerConfigs = await withTimeout(sqliteService.getLLMConfigs(), 15000);
+
+      // Load global LLM settings (temperature, max_tokens, system_prompt)
+      try {
+        const globalSettings = await withTimeout(sqliteService.getLLMGlobalSettings(), 10000);
+        if (mountedRef.current && globalSettings) {
+          setLlmGlobalSettings(globalSettings);
+        }
+      } catch (settingsErr) {
+        console.warn('[AlphaArena] Failed to load global LLM settings, using defaults:', settingsErr);
+      }
 
       // Process models - filter and validate
       const validModels: AlphaArenaModel[] = [];
@@ -290,6 +301,17 @@ const AlphaArenaTab: React.FC = () => {
 
   useEffect(() => {
     loadLLMConfigs();
+  }, [loadLLMConfigs]);
+
+  // Reload LLM configs when user changes them in Settings tab
+  useEffect(() => {
+    const handler = () => {
+      loadLLMConfigs();
+    };
+    window.addEventListener('llm-config-changed', handler);
+    return () => {
+      window.removeEventListener('llm-config-changed', handler);
+    };
   }, [loadLLMConfigs]);
 
   // =============================================================================
@@ -506,6 +528,12 @@ const AlphaArenaTab: React.FC = () => {
         initial_capital: initialCapital,
         mode,
         cycle_interval_seconds: cycleInterval,
+        // Pass global LLM settings from Settings tab
+        llm_settings: {
+          temperature: llmGlobalSettings.temperature,
+          max_tokens: llmGlobalSettings.max_tokens,
+          system_prompt: llmGlobalSettings.system_prompt,
+        },
       });
 
       if (!mountedRef.current) return;

@@ -937,26 +937,26 @@ fn get_upstox_metadata() -> Result<Option<(i64, i64)>, String> {
 pub async fn upstox_download_master_contract() -> Result<ApiResponse<Value>, String> {
     let timestamp = chrono::Utc::now().timestamp();
 
-    match download_and_store_upstox_symbols().await {
-        Ok((total, segments)) => {
-            Ok(ApiResponse {
-                success: true,
-                data: Some(json!({
-                    "total_symbols": total,
-                    "segments": segments
-                })),
-                error: None,
-                timestamp,
-            })
-        }
-        Err(e) => {
-            Ok(ApiResponse {
-                success: false,
-                data: None,
-                error: Some(e),
-                timestamp,
-            })
-        }
+    // Use the new unified broker downloads system
+    let result = crate::commands::broker_downloads::upstox::upstox_download_symbols().await;
+
+    if result.success {
+        Ok(ApiResponse {
+            success: true,
+            data: Some(json!({
+                "total_symbols": result.total_symbols,
+                "message": result.message
+            })),
+            error: None,
+            timestamp,
+        })
+    } else {
+        Ok(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(result.message),
+            timestamp,
+        })
     }
 }
 

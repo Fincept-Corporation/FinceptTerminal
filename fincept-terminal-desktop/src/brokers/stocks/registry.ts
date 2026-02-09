@@ -713,6 +713,62 @@ export const STOCK_BROKER_REGISTRY: Record<string, StockBrokerMetadata> = {
     defaultSymbols: NIFTY_50_SYMBOLS,
   },
 
+  flattrade: {
+    id: 'flattrade',
+    name: 'flattrade',
+    displayName: 'Flattrade',
+    logo: 'https://fincept.in/brokers/flattrade.png',
+    website: 'https://flattrade.in',
+
+    region: 'india',
+    country: 'IN',
+    currency: 'INR',
+    exchanges: ['NSE', 'BSE', 'NFO', 'BFO', 'CDS', 'MCX'],
+    marketHours: {
+      open: '09:15',
+      close: '15:30',
+      timezone: 'Asia/Kolkata',
+      preMarketOpen: '09:00',
+      preMarketClose: '09:08',
+    },
+
+    features: {
+      webSocket: true,
+      amo: true,
+      gtt: false,
+      bracketOrder: true,
+      coverOrder: true,
+      marginCalculator: true,
+      optionsChain: true,
+      paperTrading: false,
+    },
+
+    tradingFeatures: {
+      marketOrders: true,
+      limitOrders: true,
+      stopOrders: true,
+      stopLimitOrders: true,
+      trailingStopOrders: false,
+    },
+
+    productTypes: ['CASH', 'INTRADAY', 'MARGIN'],
+
+    authType: 'oauth', // OAuth redirect + SHA256 hash
+
+    rateLimit: {
+      ordersPerSecond: 10,
+      quotesPerSecond: 5,
+    },
+
+    fees: {
+      equity: { brokerage: 0, stt: 0.001 },   // Zero brokerage
+      intraday: { brokerage: 0 },              // Zero brokerage
+      fno: { brokerage: 0 },                   // Zero brokerage
+    },
+
+    defaultSymbols: NIFTY_50_SYMBOLS,
+  },
+
   // ============================================================================
   // US BROKERS
   // ============================================================================

@@ -145,8 +145,14 @@ pub mod brokers;
 // Broker Credentials - Secure encrypted storage for broker API credentials
 pub mod broker_credentials;
 
-// Master Contract Cache - Broker symbol data caching
-pub mod master_contract;
+// Master Contract Cache - REMOVED (use symbol_master instead)
+// pub mod master_contract;
+
+// Unified Symbol Master - Cross-broker symbol database
+pub mod symbol_master;
+
+// Broker Master Contract Downloads - Unified symbol download for all brokers
+pub mod broker_downloads;
 
 // Generic Storage - SQLite key-value storage
 pub mod storage;
@@ -168,3 +174,6 @@ pub mod ma_analytics;
 
 // Strategy Engine - 400+ algorithmic trading strategies
 pub mod strategies;
+
+// Algo Trading - Visual condition-based strategy builder, deployment, scanner
+pub mod algo_trading;

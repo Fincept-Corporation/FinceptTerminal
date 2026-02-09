@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { marketDataService } from '../../../../services/markets/marketDataService';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../finceptStyles';
 
 interface SellAssetModalProps {
   show: boolean;
@@ -25,6 +26,8 @@ const SellAssetModal: React.FC<SellAssetModalProps> = ({
   onClose,
   onSell
 }) => {
+  const { t } = useTranslation('portfolio');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [fetchingPrice, setFetchingPrice] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
 
@@ -65,85 +68,133 @@ const SellAssetModal: React.FC<SellAssetModalProps> = ({
   if (!show) return null;
 
   return (
-    <div style={COMMON_STYLES.modalOverlay}>
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.85)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999,
+    }}>
       <div style={{
-        ...COMMON_STYLES.modalPanel,
-        border: BORDERS.RED,
-        borderWidth: '2px',
-        fontFamily: TYPOGRAPHY.MONO
+        backgroundColor: colors.panel,
+        border: `2px solid ${colors.alert}`,
+        padding: '24px',
+        minWidth: '400px',
+        maxWidth: '600px',
+        boxShadow: `0 4px 16px ${colors.background}80`,
+        fontFamily,
       }}>
         <div style={{
-          color: FINCEPT.RED,
-          fontSize: TYPOGRAPHY.HEADING,
-          fontWeight: TYPOGRAPHY.BOLD,
-          marginBottom: SPACING.LARGE,
-          letterSpacing: TYPOGRAPHY.WIDE
+          color: colors.alert,
+          fontSize: fontSize.heading,
+          fontWeight: 700,
+          marginBottom: '16px',
+          letterSpacing: '0.5px',
         }}>
-          SELL ASSET FROM PORTFOLIO
+          {t('modals.sellAssetTitle')}
         </div>
 
-        <div style={{ marginBottom: SPACING.DEFAULT }}>
+        <div style={{ marginBottom: '12px' }}>
           <label style={{
-            ...COMMON_STYLES.dataLabel,
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase',
             display: 'block',
-            marginBottom: SPACING.SMALL
+            marginBottom: '4px',
           }}>
-            SYMBOL *
+            {t('modals.symbol')} *
           </label>
           <input
             type="text"
             value={formState.symbol}
             onChange={(e) => onSymbolChange(e.target.value.toUpperCase())}
             style={{
-              ...COMMON_STYLES.inputField,
-              textTransform: 'uppercase'
+              width: '100%',
+              padding: '8px 10px',
+              backgroundColor: colors.background,
+              color: colors.text,
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
+              borderRadius: '2px',
+              fontSize: fontSize.small,
+              fontFamily,
+              outline: 'none',
+              textTransform: 'uppercase',
             }}
-            {...createFocusHandlers()}
+            onFocus={(e) => { e.currentTarget.style.borderColor = colors.alert; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ft-color-border, #2A2A2A)'; }}
             placeholder="AAPL"
           />
         </div>
 
-        <div style={{ marginBottom: SPACING.DEFAULT }}>
+        <div style={{ marginBottom: '12px' }}>
           <label style={{
-            ...COMMON_STYLES.dataLabel,
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase',
             display: 'block',
-            marginBottom: SPACING.SMALL
+            marginBottom: '4px',
           }}>
-            QUANTITY *
+            {t('modals.quantity')} *
           </label>
           <input
             type="text"
             inputMode="decimal"
             value={formState.quantity}
             onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) onQuantityChange(v); }}
-            style={COMMON_STYLES.inputField}
-            {...createFocusHandlers()}
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              backgroundColor: colors.background,
+              color: colors.text,
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
+              borderRadius: '2px',
+              fontSize: fontSize.small,
+              fontFamily,
+              outline: 'none',
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = colors.alert; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ft-color-border, #2A2A2A)'; }}
             placeholder="50"
           />
         </div>
 
-        <div style={{ marginBottom: SPACING.LARGE }}>
+        <div style={{ marginBottom: '16px' }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: SPACING.SMALL
+            marginBottom: '4px'
           }}>
-            <label style={COMMON_STYLES.dataLabel}>
-              SELL PRICE *
+            <label style={{
+              color: colors.textMuted,
+              fontSize: fontSize.tiny,
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase',
+            }}>
+              {t('modals.price')} *
             </label>
             {fetchingPrice && (
-              <span style={{ color: FINCEPT.YELLOW, fontSize: TYPOGRAPHY.TINY }}>
+              <span style={{ color: 'var(--ft-color-warning, #FFD700)', fontSize: fontSize.tiny }}>
                 ● Fetching...
               </span>
             )}
             {!fetchingPrice && priceError && (
-              <span style={{ color: FINCEPT.RED, fontSize: TYPOGRAPHY.TINY }}>
+              <span style={{ color: colors.alert, fontSize: fontSize.tiny }}>
                 {priceError}
               </span>
             )}
             {!fetchingPrice && !priceError && formState.price && formState.symbol && (
-              <span style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.TINY }}>
+              <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.tiny }}>
                 ✓ Auto-fetched
               </span>
             )}
@@ -154,34 +205,61 @@ const SellAssetModal: React.FC<SellAssetModalProps> = ({
             value={formState.price}
             onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) onPriceChange(v); }}
             style={{
-              ...COMMON_STYLES.inputField,
-              borderColor: fetchingPrice ? FINCEPT.YELLOW : FINCEPT.BORDER
+              width: '100%',
+              padding: '8px 10px',
+              backgroundColor: colors.background,
+              color: colors.text,
+              border: `1px solid ${fetchingPrice ? 'var(--ft-color-warning, #FFD700)' : 'var(--ft-color-border, #2A2A2A)'}`,
+              borderRadius: '2px',
+              fontSize: fontSize.small,
+              fontFamily,
+              outline: 'none',
             }}
-            {...createFocusHandlers()}
+            onFocus={(e) => { e.currentTarget.style.borderColor = colors.alert; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = fetchingPrice ? 'var(--ft-color-warning, #FFD700)' : 'var(--ft-color-border, #2A2A2A)'; }}
             placeholder="180.00"
           />
         </div>
 
-        <div style={{ display: 'flex', gap: SPACING.MEDIUM, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button
             onClick={onClose}
-            style={COMMON_STYLES.buttonSecondary}
+            style={{
+              padding: '6px 10px',
+              backgroundColor: 'transparent',
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
+              color: colors.textMuted,
+              borderRadius: '2px',
+              fontSize: fontSize.tiny,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+              e.currentTarget.style.backgroundColor = 'var(--ft-color-hover, #1F1F1F)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
-            CANCEL
+            {t('modals.cancel')}
           </button>
           <button
             onClick={onSell}
             style={{
-              ...COMMON_STYLES.buttonPrimary,
-              backgroundColor: FINCEPT.RED,
-              borderColor: FINCEPT.RED,
-              color: FINCEPT.WHITE
+              padding: '8px 16px',
+              backgroundColor: colors.alert,
+              color: colors.text,
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: fontSize.tiny,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';
@@ -190,7 +268,7 @@ const SellAssetModal: React.FC<SellAssetModalProps> = ({
               e.currentTarget.style.opacity = '1';
             }}
           >
-            SELL
+            {t('modals.sell')}
           </button>
         </div>
       </div>

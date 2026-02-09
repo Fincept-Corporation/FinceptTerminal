@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createChart, IChartApi, ColorType, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 
 interface PlotPoint {
@@ -21,9 +22,21 @@ interface PlotData {
 interface FinScriptChartProps {
   plot: PlotData;
   height?: number;
+  colors?: {
+    background?: string;
+    text?: string;
+    panel?: string;
+  };
+  fontFamily?: string;
 }
 
-export const FinScriptChart: React.FC<FinScriptChartProps> = ({ plot, height = 250 }) => {
+export const FinScriptChart: React.FC<FinScriptChartProps> = ({
+  plot,
+  height = 250,
+  colors = { background: '#0a0a0a', text: '#a0a0a0', panel: '#2a2a2a' },
+  fontFamily = 'Consolas, monospace'
+}) => {
+  const { t } = useTranslation('codeEditor');
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -40,8 +53,8 @@ export const FinScriptChart: React.FC<FinScriptChartProps> = ({ plot, height = 2
       width: containerRef.current.clientWidth,
       height,
       layout: {
-        background: { type: ColorType.Solid, color: '#0a0a0a' },
-        textColor: '#a0a0a0',
+        background: { type: ColorType.Solid, color: colors.background || '#0a0a0a' },
+        textColor: colors.text || '#a0a0a0',
         fontSize: 11,
       },
       grid: {
@@ -52,10 +65,10 @@ export const FinScriptChart: React.FC<FinScriptChartProps> = ({ plot, height = 2
         mode: 0,
       },
       rightPriceScale: {
-        borderColor: '#2a2a2a',
+        borderColor: colors.panel || '#2a2a2a',
       },
       timeScale: {
-        borderColor: '#2a2a2a',
+        borderColor: colors.panel || '#2a2a2a',
         timeVisible: true,
       },
     });
@@ -147,19 +160,19 @@ export const FinScriptChart: React.FC<FinScriptChartProps> = ({ plot, height = 2
   return (
     <div style={{ marginBottom: '12px' }}>
       <div style={{
-        color: '#a0a0a0',
+        color: colors.text,
         fontSize: '11px',
         fontWeight: 'bold',
         marginBottom: '4px',
-        fontFamily: 'Consolas, monospace',
+        fontFamily,
       }}>
-        {plot.label} ({plot.plot_type === 'candlestick' ? 'OHLC' : plot.plot_type === 'histogram' ? 'Histogram' : 'Line'} - {plot.data.length} points)
+        {plot.label} ({plot.plot_type === 'candlestick' ? t('chart.ohlc') : plot.plot_type === 'histogram' ? t('chart.histogram') : t('chart.line')} - {plot.data.length} {t('chart.points')})
       </div>
       <div
         ref={containerRef}
         style={{
           width: '100%',
-          border: '1px solid #2a2a2a',
+          border: `1px solid ${colors.panel}`,
           borderRadius: '2px',
         }}
       />

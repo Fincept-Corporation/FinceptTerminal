@@ -64,18 +64,47 @@ class CoreAgent:
         session_id: Optional[str] = None,
         stream: bool = False
     ) -> Any:
-        """Execute agent with given configuration."""
+        """
+        Execute agent with given configuration.
+
+        Args:
+            query: User query/prompt
+            config: Agent configuration dict containing:
+                - model: {provider, model_id, temperature, max_tokens}
+                - instructions: System prompt
+                - tools: List of tool names
+                - memory: Memory configuration (bool or dict)
+                - knowledge: Knowledge base configuration
+                - reasoning: Reasoning configuration (bool or dict)
+                - markdown: Output format
+            session_id: Session ID for memory persistence
+            stream: Enable streaming response
+
+        Returns:
+            Agent response
+        """
+        # Inject session_id into config for storage setup
+        if session_id:
+            config = {**config, "session_id": session_id}
+
+        # Recreate agent if config changed
         if self._should_recreate_agent(config):
             self._agent = self._create_agent(config)
             self._current_config = config
 
-        run_kwargs = {"input": query}
+        # Build run kwargs
+        run_kwargs = {"message": query}  # Agno uses 'message' not 'input'
+
         if session_id:
             run_kwargs["session_id"] = session_id
-        if stream:
-            run_kwargs["stream"] = stream
 
-        return self._agent.run(**run_kwargs)
+        if stream:
+            run_kwargs["stream"] = True
+            return self._agent.run(**run_kwargs)
+
+        # Non-streaming run
+        response = self._agent.run(**run_kwargs)
+        return response
 
     def run_team(
         self,
@@ -91,7 +120,12 @@ class CoreAgent:
             agent = self._create_agent(agent_config)
             agents.append(agent)
 
-        team_module = TeamModule.from_config(team_config, agents)
+        # Create coordinator model from team_config if specified
+        coordinator_model = None
+        if team_config.get("model"):
+            coordinator_model = self._create_model(team_config["model"])
+
+        team_module = TeamModule.from_config(team_config, agents, model=coordinator_model)
         return team_module.run(query, session_id=session_id)
 
     def run_workflow(
@@ -388,11 +422,36 @@ class CoreAgent:
                 return True
         return False
 
+    def _create_model(self, model_config: Dict[str, Any]) -> Any:
+        """Create a model instance from config (used for team coordinator)."""
+        from finagent_core.registries import ModelsRegistry
+        return ModelsRegistry.create_model(
+            provider=model_config.get("provider", "openai"),
+            model_id=model_config.get("model_id"),
+            api_keys=self.api_keys,
+            temperature=model_config.get("temperature"),
+            max_tokens=model_config.get("max_tokens"),
+        )
+
     def _create_agent(self, config: Dict[str, Any]) -> Any:
-        """Create Agno agent from config."""
+        """
+        Create Agno agent from config with full feature integration.
+
+        Supports all Agno Agent parameters:
+        - model: LLM model instance
+        - instructions: System prompt
+        - tools: List of Toolkit instances
+        - memory: Memory backend for persistence
+        - knowledge: Knowledge base for RAG
+        - reasoning: Extended thinking capabilities
+        - structured_outputs: Pydantic model outputs
+        """
         from agno.agent import Agent
         from finagent_core.registries import ModelsRegistry, ToolsRegistry
 
+        # =================================================================
+        # 1. Create Model
+        # =================================================================
         model_config = config.get("model", {})
         model = ModelsRegistry.create_model(
             provider=model_config.get("provider", "openai"),
@@ -404,33 +463,171 @@ class CoreAgent:
 
         agent_kwargs = {"model": model}
 
+        # =================================================================
+        # 2. Basic Identity
+        # =================================================================
         if config.get("name"):
             agent_kwargs["name"] = config["name"]
 
+        if config.get("role"):
+            agent_kwargs["role"] = config["role"]
+
+        if config.get("description"):
+            agent_kwargs["description"] = config["description"]
+
+        # =================================================================
+        # 3. Instructions
+        # =================================================================
         instructions = config.get("instructions", "You are a helpful AI assistant.")
-        if config.get("reasoning"):
-            instructions = self._enhance_with_reasoning(instructions, config["reasoning"])
         agent_kwargs["instructions"] = instructions
 
+        # =================================================================
+        # 4. Tools - Load and validate
+        # =================================================================
         tool_names = config.get("tools", [])
         if tool_names:
-            tools = ToolsRegistry.get_tools(tool_names)
+            tools = ToolsRegistry.get_tools(tool_names, api_keys=self.api_keys)
             if tools:
                 agent_kwargs["tools"] = tools
+            else:
+                logger.warning(f"No tools loaded from: {tool_names}")
 
-        if config.get("knowledge"):
-            agent_kwargs.update(self._setup_knowledge(config["knowledge"]))
+        # =================================================================
+        # 5. Memory Integration
+        # =================================================================
+        memory_config = config.get("memory", {})
+        enable_memory = memory_config if isinstance(memory_config, bool) else memory_config.get("enabled", False)
 
-        if config.get("reasoning"):
+        if enable_memory:
+            agent_kwargs["enable_agentic_memory"] = True
+            agent_kwargs["add_memories_to_context"] = True
+
+            # Create memory backend if configured
+            memory_backend = self._create_memory_backend(memory_config)
+            if memory_backend:
+                agent_kwargs["memory"] = memory_backend
+
+        # =================================================================
+        # 6. Knowledge Base (RAG)
+        # =================================================================
+        knowledge_config = config.get("knowledge", {})
+        enable_knowledge = knowledge_config if isinstance(knowledge_config, bool) else bool(knowledge_config)
+
+        if enable_knowledge and isinstance(knowledge_config, dict):
+            knowledge_setup = self._setup_knowledge(knowledge_config)
+            agent_kwargs.update(knowledge_setup)
+            agent_kwargs["search_knowledge"] = True
+            agent_kwargs["add_knowledge_to_context"] = True
+
+        # =================================================================
+        # 7. Reasoning (Extended Thinking)
+        # =================================================================
+        reasoning_config = config.get("reasoning", {})
+        enable_reasoning = reasoning_config if isinstance(reasoning_config, bool) else reasoning_config.get("enabled", False)
+
+        if enable_reasoning:
             agent_kwargs["reasoning"] = True
 
-        if config.get("output_format") == "markdown":
+            # Optional: separate reasoning model
+            if isinstance(reasoning_config, dict):
+                if reasoning_config.get("min_steps"):
+                    agent_kwargs["reasoning_min_steps"] = reasoning_config["min_steps"]
+                if reasoning_config.get("max_steps"):
+                    agent_kwargs["reasoning_max_steps"] = reasoning_config["max_steps"]
+
+                # Create reasoning model if specified
+                if reasoning_config.get("model"):
+                    reasoning_model = ModelsRegistry.create_model(
+                        provider=reasoning_config["model"].get("provider", model_config.get("provider", "openai")),
+                        model_id=reasoning_config["model"].get("model_id"),
+                        api_keys=self.api_keys,
+                        temperature=0.3,  # Lower temperature for reasoning
+                    )
+                    agent_kwargs["reasoning_model"] = reasoning_model
+
+        # =================================================================
+        # 8. Structured Outputs
+        # =================================================================
+        if config.get("response_model"):
+            agent_kwargs["response_model"] = config["response_model"]
+        elif config.get("structured_outputs"):
+            agent_kwargs["structured_outputs"] = config["structured_outputs"]
+
+        # =================================================================
+        # 9. Output Settings
+        # =================================================================
+        if config.get("markdown", True):
             agent_kwargs["markdown"] = True
 
         if config.get("debug"):
             agent_kwargs["debug_mode"] = True
 
+        if config.get("show_tool_calls"):
+            agent_kwargs["show_tool_calls"] = True
+
+        # =================================================================
+        # 10. Session/Storage for persistence
+        # =================================================================
+        if config.get("session_id") or config.get("storage"):
+            storage = self._create_storage(config)
+            if storage:
+                agent_kwargs["storage"] = storage
+
+        logger.debug(f"Creating agent with params: {list(agent_kwargs.keys())}")
         return Agent(**agent_kwargs)
+
+    def _create_memory_backend(self, memory_config: Any) -> Optional[Any]:
+        """Create Agno memory backend."""
+        if isinstance(memory_config, bool):
+            return None
+
+        try:
+            from agno.memory import AgentMemory
+            from agno.memory.db.sqlite import SqliteMemoryDb
+
+            db_path = memory_config.get("db_path", "agent_memory.db")
+            table_name = memory_config.get("table_name", "agent_memory")
+
+            db = SqliteMemoryDb(
+                table_name=table_name,
+                db_file=db_path,
+            )
+
+            return AgentMemory(
+                db=db,
+                create_user_memories=memory_config.get("create_user_memories", True),
+                create_session_summary=memory_config.get("create_session_summary", True),
+            )
+        except ImportError as e:
+            logger.warning(f"Memory backend not available: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to create memory backend: {e}")
+            return None
+
+    def _create_storage(self, config: Dict[str, Any]) -> Optional[Any]:
+        """Create storage backend for session persistence."""
+        try:
+            storage_config = config.get("storage", {})
+            storage_type = storage_config.get("type", "sqlite")
+
+            if storage_type == "sqlite":
+                from agno.storage.sqlite import SqliteStorage
+                return SqliteStorage(
+                    table_name=storage_config.get("table_name", "agent_sessions"),
+                    db_file=storage_config.get("db_path", "agent_storage.db"),
+                )
+            elif storage_type == "postgres":
+                from agno.storage.postgres import PostgresStorage
+                return PostgresStorage(
+                    table_name=storage_config.get("table_name", "agent_sessions"),
+                    db_url=storage_config.get("db_url"),
+                )
+        except ImportError as e:
+            logger.warning(f"Storage backend not available: {e}")
+        except Exception as e:
+            logger.error(f"Failed to create storage: {e}")
+        return None
 
     def _setup_knowledge(self, knowledge_config: Dict[str, Any]) -> Dict[str, Any]:
         """Setup knowledge module."""
@@ -529,197 +726,7 @@ class CoreAgentBuilder:
         return self._config.copy()
 
 
-# =============================================================================
-# Entry Point - Single JSON Payload
-# =============================================================================
 
-def main(args=None):
-    """
-    Entry point - accepts single JSON payload from Rust/Tauri.
-
-    Payload format:
-    {
-        "action": "run|run_team|run_workflow|...",
-        "api_keys": {...},
-        "user_id": "optional",
-        "config": {...},
-        "params": {...}  // action-specific parameters
-    }
-    """
-    import sys
-    from pathlib import Path
-
-    # Add parent directory to path for imports
-    parent_dir = str(Path(__file__).parent.parent)
-    if parent_dir not in sys.path:
-        sys.path.insert(0, parent_dir)
-
-    if args is None:
-        args = sys.argv[1:]
-
-    try:
-        if len(args) == 0:
-            return json.dumps({"success": False, "error": "No payload provided"})
-
-        # Parse single JSON payload
-        payload = json.loads(args[0])
-        action = payload.get("action")
-        api_keys = payload.get("api_keys", {})
-        user_id = payload.get("user_id")
-        config = payload.get("config", {})
-        params = payload.get("params", {})
-
-        if not action:
-            return json.dumps({"success": False, "error": "Missing 'action' in payload"})
-
-        # Create agent
-        agent = CoreAgent(api_keys=api_keys, user_id=user_id)
-
-        # Setup optional modules from config
-        if config.get("guardrails"):
-            agent.setup_guardrails(config["guardrails"])
-        if config.get("tracing"):
-            agent.setup_tracing(config["tracing"])
-        if config.get("agentic_memory"):
-            agent.setup_agentic_memory(config["agentic_memory"])
-
-        # Dispatch action
-        result = _dispatch_action(agent, action, config, params)
-        return json.dumps(result)
-
-    except json.JSONDecodeError as e:
-        return json.dumps({"success": False, "error": f"Invalid JSON: {str(e)}"})
-    except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
-
-
-def _dispatch_action(agent: CoreAgent, action: str, config: Dict, params: Dict) -> Dict[str, Any]:
-    """Dispatch action to appropriate agent method."""
-
-    # Run single agent
-    if action == "run":
-        query = params.get("query")
-        if not query:
-            return {"success": False, "error": "Missing 'query' in params"}
-
-        # Check guardrails if enabled
-        if agent._guardrails:
-            guard_result = agent.check_input(query)
-            if not guard_result["passed"]:
-                return {"success": False, "error": "Input rejected by guardrails", "violations": guard_result["violations"]}
-            query = guard_result["text"]
-
-        response = agent.run(query, config, params.get("session_id"))
-        return {"success": True, "response": agent.get_response_content(response)}
-
-    # Run with structured output
-    if action == "run_structured":
-        query = params.get("query")
-        output_model = params.get("output_model")
-        if not query or not output_model:
-            return {"success": False, "error": "Missing 'query' or 'output_model' in params"}
-        return agent.run_with_output_model(query, config, output_model, params.get("session_id"))
-
-    # Run team
-    if action == "run_team":
-        query = params.get("query")
-        team_config = params.get("team_config", config)
-        if not query:
-            return {"success": False, "error": "Missing 'query' in params"}
-        response = agent.run_team(query, team_config, params.get("session_id"))
-        return {"success": True, "response": agent.get_response_content(response)}
-
-    # Run workflow
-    if action == "run_workflow":
-        workflow_config = params.get("workflow_config", config)
-        input_data = params.get("input_data", {})
-        result = agent.run_workflow(workflow_config, input_data)
-        return {"success": True, "result": result if isinstance(result, dict) else str(result)}
-
-    # Stock analysis
-    if action == "stock_analysis":
-        symbol = params.get("symbol")
-        if not symbol:
-            return {"success": False, "error": "Missing 'symbol' in params"}
-        result = agent.run_stock_analysis(symbol, config)
-        return {"success": True, "symbol": symbol, "result": result if isinstance(result, dict) else str(result)}
-
-    # Portfolio rebalancing
-    if action == "portfolio_rebal":
-        portfolio_data = params.get("portfolio_data", params)
-        result = agent.run_portfolio_rebalancing(portfolio_data, config)
-        return {"success": True, "result": result if isinstance(result, dict) else str(result)}
-
-    # Risk assessment
-    if action == "risk_assessment":
-        portfolio_data = params.get("portfolio_data", params)
-        result = agent.run_risk_assessment(portfolio_data, config)
-        return {"success": True, "result": result if isinstance(result, dict) else str(result)}
-
-    # Search knowledge
-    if action == "search":
-        query = params.get("query")
-        if not query:
-            return {"success": False, "error": "Missing 'query' in params"}
-        results = agent.search_knowledge(query, params.get("limit", 5))
-        return {"success": True, "results": results, "count": len(results)}
-
-    # Store memory
-    if action == "store_memory":
-        content = params.get("content")
-        if not content:
-            return {"success": False, "error": "Missing 'content' in params"}
-        memory_id = agent.store_memory(content, params.get("type", "fact"), params.get("metadata"))
-        return {"success": True, "memory_id": memory_id}
-
-    # Recall memories
-    if action == "recall_memories":
-        memories = agent.recall_memories(params.get("query"), params.get("type"), params.get("limit", 5))
-        return {"success": True, "memories": memories, "count": len(memories)}
-
-    # Check guardrails
-    if action == "check_guardrails":
-        agent.setup_guardrails(config.get("guardrails"))
-        if params.get("check_type") == "output":
-            result = agent.check_output(params.get("output", {}))
-            return {"success": True, "check_type": "output", **result}
-        text = params.get("text")
-        if not text:
-            return {"success": False, "error": "Missing 'text' in params"}
-        result = agent.check_input(text, params.get("context"))
-        return {"success": True, "check_type": "input", **result}
-
-    # Evaluate
-    if action == "evaluate":
-        agent.setup_evaluation(config.get("evaluation"))
-        if params.get("type") == "prediction":
-            result = agent.evaluate_prediction(params.get("prediction", {}), params.get("actual", {}))
-        else:
-            result = agent.evaluate_response(params.get("query", ""), params.get("response", ""), params.get("context"))
-        return {"success": True, **result}
-
-    # List tools
-    if action == "list_tools":
-        tools = agent.list_available_tools()
-        return {"success": True, "tools": tools, "categories": list(tools.keys()), "total_count": sum(len(v) for v in tools.values())}
-
-    # List models
-    if action == "list_models":
-        providers = agent.list_available_models()
-        return {"success": True, "providers": providers, "count": len(providers)}
-
-    # List output models
-    if action == "list_outputs":
-        models = agent.list_output_models()
-        return {"success": True, "models": models, "count": len(models)}
-
-    # System info
-    if action == "system_info":
-        return agent.get_system_info()
-
-    return {"success": False, "error": f"Unknown action: {action}"}
-
-
-if __name__ == "__main__":
-    result = main()
-    print(result)
+# NOTE: All dispatch logic lives in finagent_core/main.py which is the
+# single entry point called by Rust/Tauri. Do not add a separate main()
+# here — it creates confusion and duplicated logic.

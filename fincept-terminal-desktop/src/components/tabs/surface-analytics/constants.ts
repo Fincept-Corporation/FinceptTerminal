@@ -98,32 +98,5 @@ export const PLOTLY_CONFIG = {
   responsive: true,
 } as const;
 
-// Terminal styling - UI Design System compliant
-export const FINCEPT_COLORS = {
-  ORANGE: '#FF8800',      // Primary accent, CTAs, selected states
-  WHITE: '#FFFFFF',       // Primary text
-  BLACK: '#000000',       // Main background
-  RED: '#FF3B3B',         // Negative, errors, sell
-  GREEN: '#00D66F',       // Positive, success, buy
-  GRAY: '#787878',        // Secondary text, labels
-  DARK_BG: '#000000',     // Main background
-  PANEL_BG: '#0F0F0F',    // Card/panel background
-  HEADER_BG: '#1A1A1A',   // Header/toolbar background
-  BORDER: '#2A2A2A',      // Borders, dividers
-  HOVER: '#1F1F1F',       // Hover state background
-  MUTED: '#4A4A4A',       // Disabled, inactive
-  CYAN: '#00E5FF',        // Info, data values
-  YELLOW: '#FFD700',      // Alerts, prices
-  BLUE: '#0088FF',        // Secondary accent
-  PURPLE: '#9D4EDD',      // Tertiary accent
-  ACCENT: '#FF8800',
-} as const;
-
-// Typography
-export const TYPOGRAPHY = {
-  FONT_FAMILY: '"IBM Plex Mono", "Consolas", monospace',
-  LABEL_SIZE: '9px',
-  BODY_SIZE: '10px',
-  HEADER_SIZE: '11px',
-  DATA_SIZE: '10px',
-} as const;
+// Note: Colors and typography are now sourced from ThemeContext (useTerminalTheme hook)
+// Old FINCEPT_COLORS and TYPOGRAPHY constants have been removed in favor of the theme system

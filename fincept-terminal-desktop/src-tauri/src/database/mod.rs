@@ -1,5 +1,5 @@
 // Database Module - High-performance SQLite with connection pooling
-// Structure: 8 files for optimal organization and performance
+// Structure: Modular organization for optimal performance
 
 pub mod pool;
 pub mod schema;
@@ -9,8 +9,11 @@ pub mod queries;
 pub mod cache;
 pub mod notes_excel;
 pub mod broker_credentials;
-pub mod master_contract;
+// pub mod master_contract; // REMOVED - use symbol_master instead
 pub mod storage;
+pub mod symbol_master; // Unified symbol database (preferred)
+
+// Legacy broker-specific symbol tables (deprecated - use symbol_master instead)
 pub mod fyers_symbols;
 pub mod shoonya_symbols;
 
@@ -34,12 +37,19 @@ pub async fn initialize() -> Result<()> {
     } else {
     }
 
-    // Initialize Fyers symbols table
+    // Initialize unified symbol master status table
+    if let Err(_e) = symbol_master::init_master_contract_status_table() {
+        eprintln!("[database] Failed to initialize master_contract_status table");
+    } else {
+        eprintln!("[database] Master contract status table initialized");
+    }
+
+    // Legacy: Initialize Fyers symbols table (deprecated)
     if let Err(_e) = fyers_symbols::init_fyers_symbols_table() {
     } else {
     }
 
-    // Initialize Shoonya symbols table
+    // Legacy: Initialize Shoonya symbols table (deprecated)
     if let Err(_e) = shoonya_symbols::init_shoonya_symbols_table() {
     } else {
     }

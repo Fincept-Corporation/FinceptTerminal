@@ -4,7 +4,7 @@
  * Right sidebar panel for configuring selected node properties
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Node } from 'reactflow';
 import {
   Settings2,
@@ -13,9 +13,18 @@ import {
   Plus,
   Edit3,
   AlertCircle,
+  Database,
+  TrendingUp,
+  Brain,
+  Wrench,
+  Play,
+  BarChart3,
+  Zap,
+  Info,
 } from 'lucide-react';
 import { NodeParameterInput } from '../nodes/NodeParameterInput';
 import type { INodeProperties, NodeParameterValue } from '@/services/nodeSystem';
+import { useDataSources } from '@/contexts/DataSourceContext';
 
 interface NodeConfigPanelProps {
   selectedNode: Node;
@@ -25,6 +34,21 @@ interface NodeConfigPanelProps {
   onDelete: () => void;
   onDuplicate: () => void;
 }
+
+// Design system colors
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  CYAN: '#00E5FF',
+  BLUE: '#0088FF',
+};
 
 const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   selectedNode,
@@ -37,6 +61,48 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const registryData = selectedNode.data.registryData;
   const nodeProperties: INodeProperties[] = registryData?.properties || [];
   const nodeColor = selectedNode.data.color || '#FF8800';
+
+  // Data source context for data-source nodes
+  const { connections } = useDataSources();
+
+  // Local state for custom node configs
+  const [localConnection, setLocalConnection] = useState(selectedNode.data.selectedConnectionId || '');
+  const [localQuery, setLocalQuery] = useState(selectedNode.data.query || '');
+
+  // Technical indicator state
+  const [tiDataSource, setTiDataSource] = useState(selectedNode.data.dataSource || 'yfinance');
+  const [tiSymbol, setTiSymbol] = useState(selectedNode.data.symbol || 'AAPL');
+  const [tiPeriod, setTiPeriod] = useState(selectedNode.data.period || '1y');
+  const [tiCategories, setTiCategories] = useState<string[]>(selectedNode.data.categories || ['momentum', 'volume', 'volatility', 'trend', 'others']);
+
+  // Agent mediator state
+  const [amProvider, setAmProvider] = useState(selectedNode.data.selectedProvider || '');
+  const [amPrompt, setAmPrompt] = useState(selectedNode.data.customPrompt || '');
+
+  // Sync local state when node changes
+  useEffect(() => {
+    setLocalConnection(selectedNode.data.selectedConnectionId || '');
+    setLocalQuery(selectedNode.data.query || '');
+    setTiDataSource(selectedNode.data.dataSource || 'yfinance');
+    setTiSymbol(selectedNode.data.symbol || 'AAPL');
+    setTiPeriod(selectedNode.data.period || '1y');
+    setTiCategories(selectedNode.data.categories || ['momentum', 'volume', 'volatility', 'trend', 'others']);
+    setAmProvider(selectedNode.data.selectedProvider || '');
+    setAmPrompt(selectedNode.data.customPrompt || '');
+  }, [selectedNode.id]);
+
+  // Check if this is a custom node type that needs special handling
+  const isDataSourceNode = selectedNode.type === 'data-source';
+  const isTechnicalIndicatorNode = selectedNode.type === 'technical-indicator';
+  const isAgentMediatorNode = selectedNode.type === 'agent-mediator';
+  const isPythonAgentNode = selectedNode.type === 'python-agent';
+  const isMCPToolNode = selectedNode.type === 'mcp-tool';
+  const isBacktestNode = selectedNode.type === 'backtest';
+  const isOptimizationNode = selectedNode.type === 'optimization';
+  const isResultsDisplayNode = selectedNode.type === 'results-display';
+
+  const hasCustomConfig = isDataSourceNode || isTechnicalIndicatorNode || isAgentMediatorNode ||
+                          isPythonAgentNode || isMCPToolNode || isBacktestNode || isOptimizationNode;
 
   return (
     <div
@@ -205,6 +271,753 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             Display name for this node in the workflow
           </div>
         </div>
+
+        {/* ==================== DATA SOURCE NODE CONFIG ==================== */}
+        {isDataSourceNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <Database size={14} color={FINCEPT.ORANGE} />
+              <span style={{
+                color: FINCEPT.ORANGE,
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                DATA SOURCE CONFIG
+              </span>
+            </div>
+
+            {/* Connection Selector */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                CONNECTION
+              </label>
+              <select
+                value={localConnection}
+                onChange={(e) => {
+                  setLocalConnection(e.target.value);
+                  selectedNode.data.onConnectionChange?.(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                }}
+              >
+                <option value="">-- Select Connection --</option>
+                {connections.filter(c => c.status === 'connected' || c.status === 'disconnected').map((conn) => (
+                  <option key={conn.id} value={conn.id}>
+                    {conn.name} ({conn.type})
+                  </option>
+                ))}
+              </select>
+              {connections.length === 0 && (
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '4px' }}>
+                  No connections. Add them in Data Sources tab.
+                </div>
+              )}
+            </div>
+
+            {/* Query Editor */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                QUERY
+              </label>
+              <textarea
+                value={localQuery}
+                onChange={(e) => {
+                  setLocalQuery(e.target.value);
+                  selectedNode.data.onQueryChange?.(e.target.value);
+                }}
+                placeholder="SELECT * FROM table..."
+                style={{
+                  width: '100%',
+                  height: '100px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Execute Button */}
+            <button
+              onClick={() => selectedNode.data.onExecute?.()}
+              disabled={!localConnection || !localQuery}
+              style={{
+                width: '100%',
+                backgroundColor: (!localConnection || !localQuery) ? FINCEPT.BORDER : FINCEPT.ORANGE,
+                color: FINCEPT.DARK_BG,
+                border: 'none',
+                padding: '8px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: (!localConnection || !localQuery) ? 'not-allowed' : 'pointer',
+                opacity: (!localConnection || !localQuery) ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <Play size={10} />
+              EXECUTE QUERY
+            </button>
+          </div>
+        )}
+
+        {/* ==================== TECHNICAL INDICATOR NODE CONFIG ==================== */}
+        {isTechnicalIndicatorNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <TrendingUp size={14} color={FINCEPT.CYAN} />
+              <span style={{
+                color: FINCEPT.CYAN,
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                TECHNICAL INDICATOR CONFIG
+              </span>
+            </div>
+
+            {/* Data Source */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                DATA SOURCE
+              </label>
+              <select
+                value={tiDataSource}
+                onChange={(e) => {
+                  setTiDataSource(e.target.value);
+                  selectedNode.data.onParameterChange?.({ dataSource: e.target.value });
+                }}
+                style={{
+                  width: '100%',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                }}
+              >
+                <option value="yfinance">Yahoo Finance</option>
+                <option value="csv">CSV File</option>
+                <option value="json">JSON Data</option>
+              </select>
+            </div>
+
+            {/* Symbol */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                SYMBOL
+              </label>
+              <input
+                type="text"
+                value={tiSymbol}
+                onChange={(e) => {
+                  setTiSymbol(e.target.value);
+                  selectedNode.data.onParameterChange?.({ symbol: e.target.value });
+                }}
+                placeholder="AAPL, MSFT, BTC-USD..."
+                style={{
+                  width: '100%',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Period */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                PERIOD
+              </label>
+              <select
+                value={tiPeriod}
+                onChange={(e) => {
+                  setTiPeriod(e.target.value);
+                  selectedNode.data.onParameterChange?.({ period: e.target.value });
+                }}
+                style={{
+                  width: '100%',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                }}
+              >
+                <option value="1d">1 Day</option>
+                <option value="5d">5 Days</option>
+                <option value="1mo">1 Month</option>
+                <option value="3mo">3 Months</option>
+                <option value="6mo">6 Months</option>
+                <option value="1y">1 Year</option>
+                <option value="2y">2 Years</option>
+                <option value="5y">5 Years</option>
+              </select>
+            </div>
+
+            {/* Indicator Categories */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                INDICATOR CATEGORIES
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {['momentum', 'volume', 'volatility', 'trend', 'others'].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      const newCats = tiCategories.includes(cat)
+                        ? tiCategories.filter(c => c !== cat)
+                        : [...tiCategories, cat];
+                      setTiCategories(newCats);
+                      selectedNode.data.onParameterChange?.({ categories: newCats });
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '9px',
+                      fontWeight: 600,
+                      backgroundColor: tiCategories.includes(cat) ? FINCEPT.CYAN + '30' : FINCEPT.DARK_BG,
+                      border: `1px solid ${tiCategories.includes(cat) ? FINCEPT.CYAN : FINCEPT.BORDER}`,
+                      color: tiCategories.includes(cat) ? FINCEPT.CYAN : FINCEPT.GRAY,
+                      cursor: 'pointer',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Execute Button */}
+            <button
+              onClick={() => selectedNode.data.onExecute?.()}
+              style={{
+                width: '100%',
+                backgroundColor: FINCEPT.CYAN,
+                color: FINCEPT.DARK_BG,
+                border: 'none',
+                padding: '8px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <Play size={10} />
+              CALCULATE INDICATORS
+            </button>
+          </div>
+        )}
+
+        {/* ==================== AGENT MEDIATOR NODE CONFIG ==================== */}
+        {isAgentMediatorNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <Brain size={14} color="#a855f7" />
+              <span style={{
+                color: '#a855f7',
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                AI MEDIATOR CONFIG
+              </span>
+            </div>
+
+            {/* LLM Provider */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                LLM PROVIDER
+              </label>
+              <select
+                value={amProvider}
+                onChange={(e) => {
+                  setAmProvider(e.target.value);
+                  selectedNode.data.onConfigChange?.({ selectedProvider: e.target.value, customPrompt: amPrompt });
+                }}
+                style={{
+                  width: '100%',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                }}
+              >
+                <option value="">-- Select Provider --</option>
+                <option value="ollama">Ollama (Local)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="groq">Groq</option>
+              </select>
+            </div>
+
+            {/* Custom Prompt */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                CUSTOM PROMPT
+              </label>
+              <textarea
+                value={amPrompt}
+                onChange={(e) => {
+                  setAmPrompt(e.target.value);
+                  selectedNode.data.onConfigChange?.({ selectedProvider: amProvider, customPrompt: e.target.value });
+                }}
+                placeholder="Enter instructions for the AI agent..."
+                style={{
+                  width: '100%',
+                  height: '100px',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Execute Button */}
+            <button
+              onClick={() => selectedNode.data.onExecute?.()}
+              disabled={!amProvider}
+              style={{
+                width: '100%',
+                backgroundColor: !amProvider ? FINCEPT.BORDER : '#a855f7',
+                color: FINCEPT.DARK_BG,
+                border: 'none',
+                padding: '8px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: !amProvider ? 'not-allowed' : 'pointer',
+                opacity: !amProvider ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <Play size={10} />
+              RUN AI MEDIATOR
+            </button>
+          </div>
+        )}
+
+        {/* ==================== PYTHON AGENT NODE CONFIG ==================== */}
+        {isPythonAgentNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <span style={{ fontSize: '14px' }}>🐍</span>
+              <span style={{
+                color: '#fbbf24',
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                PYTHON AGENT CONFIG
+              </span>
+            </div>
+
+            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '12px' }}>
+              <strong style={{ color: FINCEPT.WHITE }}>Agent:</strong> {selectedNode.data.agentType || 'Unknown'}
+            </div>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '12px' }}>
+              <strong style={{ color: FINCEPT.WHITE }}>Category:</strong> {selectedNode.data.agentCategory || 'Unknown'}
+            </div>
+
+            {/* LLM Selection */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{
+                display: 'block',
+                color: FINCEPT.GRAY,
+                fontSize: '9px',
+                fontWeight: 700,
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+              }}>
+                LLM PROVIDER
+              </label>
+              <select
+                value={selectedNode.data.selectedLLM || 'active'}
+                onChange={(e) => selectedNode.data.onLLMChange?.(e.target.value)}
+                style={{
+                  width: '100%',
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  color: FINCEPT.WHITE,
+                  padding: '8px',
+                  fontSize: '10px',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                }}
+              >
+                <option value="active">Active LLM</option>
+                <option value="ollama">Ollama</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </div>
+
+            {/* Execute Button */}
+            <button
+              onClick={() => selectedNode.data.onExecute?.(selectedNode.id)}
+              disabled={selectedNode.data.status === 'running'}
+              style={{
+                width: '100%',
+                backgroundColor: selectedNode.data.status === 'running' ? FINCEPT.BORDER : '#fbbf24',
+                color: FINCEPT.DARK_BG,
+                border: 'none',
+                padding: '8px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: selectedNode.data.status === 'running' ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <Play size={10} />
+              {selectedNode.data.status === 'running' ? 'RUNNING...' : 'RUN AGENT'}
+            </button>
+          </div>
+        )}
+
+        {/* ==================== MCP TOOL NODE CONFIG ==================== */}
+        {isMCPToolNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <Wrench size={14} color={FINCEPT.ORANGE} />
+              <span style={{
+                color: FINCEPT.ORANGE,
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                MCP TOOL CONFIG
+              </span>
+            </div>
+
+            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '8px' }}>
+              <strong style={{ color: FINCEPT.WHITE }}>Server:</strong> {selectedNode.data.serverId || 'Unknown'}
+            </div>
+            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '12px' }}>
+              <strong style={{ color: FINCEPT.WHITE }}>Tool:</strong> {selectedNode.data.toolName || 'Unknown'}
+            </div>
+
+            {/* Dynamic parameters would go here based on tool schema */}
+            <div style={{
+              padding: '8px',
+              backgroundColor: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              marginBottom: '12px',
+            }}>
+              Configure tool parameters in the node directly
+            </div>
+
+            {/* Execute Button */}
+            <button
+              onClick={() => selectedNode.data.onExecute?.()}
+              style={{
+                width: '100%',
+                backgroundColor: FINCEPT.ORANGE,
+                color: FINCEPT.DARK_BG,
+                border: 'none',
+                padding: '8px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <Play size={10} />
+              EXECUTE TOOL
+            </button>
+          </div>
+        )}
+
+        {/* ==================== BACKTEST NODE CONFIG ==================== */}
+        {isBacktestNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <BarChart3 size={14} color={FINCEPT.GREEN} />
+              <span style={{
+                color: FINCEPT.GREEN,
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                BACKTEST CONFIG
+              </span>
+            </div>
+
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '10px',
+              textAlign: 'center',
+            }}>
+              Backtest configuration coming soon.<br/>
+              Connect data source and strategy nodes.
+            </div>
+          </div>
+        )}
+
+        {/* ==================== OPTIMIZATION NODE CONFIG ==================== */}
+        {isOptimizationNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <Zap size={14} color="#f97316" />
+              <span style={{
+                color: '#f97316',
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                OPTIMIZATION CONFIG
+              </span>
+            </div>
+
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '10px',
+              textAlign: 'center',
+            }}>
+              Optimization configuration coming soon.<br/>
+              Connect backtest node for parameter optimization.
+            </div>
+          </div>
+        )}
+
+        {/* ==================== CUSTOM/REGISTRY NODE (no registryData) ==================== */}
+        {selectedNode.type === 'custom' && !registryData && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <Settings2 size={14} color={FINCEPT.ORANGE} />
+              <span style={{
+                color: FINCEPT.ORANGE,
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                NODE CONFIG
+              </span>
+            </div>
+
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '10px',
+              textAlign: 'center',
+            }}>
+              {selectedNode.data.nodeTypeName ? (
+                <>
+                  <div style={{ marginBottom: '8px', color: FINCEPT.WHITE }}>
+                    <strong>Type:</strong> {selectedNode.data.nodeTypeName}
+                  </div>
+                  <div style={{ fontSize: '9px' }}>
+                    This node's configuration will be available when executed in a workflow.
+                  </div>
+                </>
+              ) : (
+                <div>Configure this node's connections and parameters.</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ==================== RESULTS DISPLAY NODE ==================== */}
+        {isResultsDisplayNode && (
+          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '8px',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            }}>
+              <span style={{ fontSize: '14px' }}>📊</span>
+              <span style={{
+                color: FINCEPT.GREEN,
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                RESULTS DISPLAY
+              </span>
+            </div>
+
+            <div style={{
+              padding: '12px',
+              backgroundColor: FINCEPT.DARK_BG,
+              border: `1px solid ${FINCEPT.BORDER}`,
+              color: FINCEPT.GRAY,
+              fontSize: '10px',
+            }}>
+              This node displays output from connected nodes.<br/>
+              Connect input from any data-producing node.
+            </div>
+          </div>
+        )}
 
         {/* Registry Node Parameters */}
         {nodeProperties.length > 0 && (

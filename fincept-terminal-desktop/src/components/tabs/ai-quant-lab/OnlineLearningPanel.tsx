@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import {
   Zap,
   Activity,
@@ -24,24 +25,6 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
-};
-
 interface ModelMetrics {
   model_id: string;
   current_mae: number;
@@ -58,6 +41,7 @@ interface UpdateHistory {
 }
 
 export function OnlineLearningPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [modelType, setModelType] = useState('linear');
   const [modelId, setModelId] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
@@ -135,20 +119,20 @@ export function OnlineLearningPanel() {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Zap size={16} color={FINCEPT.YELLOW} />
+        <Zap size={16} color={colors.warning} />
         <span style={{
-          color: FINCEPT.YELLOW,
+          color: colors.warning,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -165,9 +149,9 @@ export function OnlineLearningPanel() {
               fontSize: '10px',
               fontFamily: 'monospace',
               padding: '3px 8px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.CYAN}`,
-              color: FINCEPT.CYAN
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.accent}`,
+              color: colors.accent
             }}>
               MODEL: {modelId.substring(0, 12)}...
             </div>
@@ -176,14 +160,14 @@ export function OnlineLearningPanel() {
                 fontSize: '10px',
                 fontFamily: 'monospace',
                 padding: '3px 8px',
-                backgroundColor: FINCEPT.GREEN + '20',
-                border: `1px solid ${FINCEPT.GREEN}`,
-                color: FINCEPT.GREEN,
+                backgroundColor: colors.success + '20',
+                border: `1px solid ${colors.success}`,
+                color: colors.success,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: FINCEPT.GREEN, animation: 'pulse 2s infinite' }} />
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: colors.success, animation: 'pulse 2s infinite' }} />
                 LIVE
               </div>
             )}
@@ -194,9 +178,9 @@ export function OnlineLearningPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: modelId ? (isLive ? FINCEPT.GREEN + '20' : FINCEPT.DARK_BG) : FINCEPT.DARK_BG,
-          border: `1px solid ${modelId ? (isLive ? FINCEPT.GREEN : FINCEPT.BORDER) : FINCEPT.BORDER}`,
-          color: modelId ? (isLive ? FINCEPT.GREEN : FINCEPT.MUTED) : FINCEPT.MUTED
+          backgroundColor: modelId ? (isLive ? colors.success + '20' : colors.background) : colors.background,
+          border: `1px solid ${modelId ? (isLive ? colors.success : 'var(--ft-border-color, #2A2A2A)') : 'var(--ft-border-color, #2A2A2A)'}`,
+          color: modelId ? (isLive ? colors.success : colors.textMuted) : colors.textMuted
         }}>
           {isLive ? 'ACTIVE' : modelId ? 'READY' : 'IDLE'}
         </div>
@@ -206,17 +190,17 @@ export function OnlineLearningPanel() {
         {/* Left Sidebar - Model Type Selection */}
         <div style={{
           width: '220px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.MUTED,
+            color: colors.textMuted,
             fontFamily: 'monospace',
             letterSpacing: '0.5px'
           }}>
@@ -231,32 +215,32 @@ export function OnlineLearningPanel() {
                   onClick={() => !modelId && setModelType(type.id)}
                   style={{
                     padding: '10px',
-                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
-                    border: `1px solid ${isSelected ? FINCEPT.YELLOW : FINCEPT.BORDER}`,
+                    backgroundColor: isSelected ? '#1F1F1F' : 'transparent',
+                    border: `1px solid ${isSelected ? colors.warning : 'var(--ft-border-color, #2A2A2A)'}`,
                     cursor: modelId ? 'not-allowed' : 'pointer',
                     opacity: modelId ? 0.5 : 1,
                     transition: 'all 0.15s'
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected && !modelId) {
-                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                      e.currentTarget.style.borderColor = FINCEPT.YELLOW;
+                      e.currentTarget.style.backgroundColor = colors.background;
+                      e.currentTarget.style.borderColor = colors.warning;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected && !modelId) {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                     }
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                    <Activity size={14} style={{ color: FINCEPT.YELLOW }} />
-                    <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
+                    <Activity size={14} style={{ color: colors.warning }} />
+                    <span style={{ color: colors.text, fontSize: '11px', fontWeight: 600, fontFamily: 'monospace' }}>
                       {type.name}
                     </span>
                   </div>
-                  <p style={{ color: FINCEPT.MUTED, fontSize: '9px', margin: 0, lineHeight: '1.3' }}>
+                  <p style={{ color: colors.textMuted, fontSize: '9px', margin: 0, lineHeight: '1.3' }}>
                     {type.desc}
                   </p>
                 </div>
@@ -267,13 +251,13 @@ export function OnlineLearningPanel() {
           {/* Drift Strategy Section */}
           <div style={{
             padding: '12px',
-            borderTop: `1px solid ${FINCEPT.BORDER}`,
+            borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             marginTop: 'auto'
           }}>
             <div style={{
               fontSize: '10px',
               fontWeight: 700,
-              color: FINCEPT.MUTED,
+              color: colors.textMuted,
               marginBottom: '8px',
               fontFamily: 'monospace',
               letterSpacing: '0.5px'
@@ -287,9 +271,9 @@ export function OnlineLearningPanel() {
               style={{
                 width: '100%',
                 padding: '6px 8px',
-                backgroundColor: FINCEPT.DARK_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                color: FINCEPT.WHITE,
+                backgroundColor: colors.background,
+                border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                color: colors.text,
                 fontSize: '10px',
                 fontFamily: 'monospace',
                 opacity: isLive ? 0.5 : 1
@@ -307,18 +291,18 @@ export function OnlineLearningPanel() {
           {/* Configuration & Control Section */}
           <div style={{
             padding: '16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             display: 'flex',
             flexDirection: 'column',
             gap: '12px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Zap size={14} style={{ color: FINCEPT.YELLOW }} />
-              <span style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
+              <Zap size={14} style={{ color: colors.warning }} />
+              <span style={{ fontSize: '11px', fontWeight: 600, color: colors.text, fontFamily: 'monospace' }}>
                 MODEL CONTROL
               </span>
-              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>•</span>
-              <span style={{ fontSize: '10px', color: FINCEPT.MUTED }}>
+              <span style={{ fontSize: '10px', color: colors.textMuted }}>•</span>
+              <span style={{ fontSize: '10px', color: colors.textMuted }}>
                 {modelId ? 'MODEL INITIALIZED' : 'NO MODEL'}
               </span>
             </div>
@@ -326,7 +310,7 @@ export function OnlineLearningPanel() {
             {/* Control Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'end' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   UPDATE FREQUENCY
                 </label>
                 <select
@@ -336,9 +320,9 @@ export function OnlineLearningPanel() {
                   style={{
                     width: '100%',
                     padding: '8px 10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    color: colors.text,
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     opacity: isLive ? 0.5 : 1
@@ -351,14 +335,14 @@ export function OnlineLearningPanel() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: FINCEPT.GRAY, fontFamily: 'monospace' }}>
+                <label style={{ display: 'block', fontSize: '10px', marginBottom: '6px', color: colors.textMuted, fontFamily: 'monospace' }}>
                   SELECTED MODEL
                 </label>
                 <div style={{
                   padding: '8px 10px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.YELLOW}`,
-                  color: FINCEPT.YELLOW,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.warning}`,
+                  color: colors.warning,
                   fontSize: '11px',
                   fontFamily: 'monospace',
                   fontWeight: 600
@@ -376,9 +360,9 @@ export function OnlineLearningPanel() {
                   style={{
                     flex: 1,
                     padding: '10px 16px',
-                    backgroundColor: FINCEPT.ORANGE,
+                    backgroundColor: colors.primary,
                     border: 'none',
-                    color: FINCEPT.DARK_BG,
+                    color: colors.background,
                     fontSize: '11px',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -400,9 +384,9 @@ export function OnlineLearningPanel() {
                   style={{
                     flex: 1,
                     padding: '10px 16px',
-                    backgroundColor: FINCEPT.GREEN,
+                    backgroundColor: colors.success,
                     border: 'none',
-                    color: FINCEPT.DARK_BG,
+                    color: colors.background,
                     fontSize: '11px',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -424,9 +408,9 @@ export function OnlineLearningPanel() {
                   style={{
                     flex: 1,
                     padding: '10px 16px',
-                    backgroundColor: FINCEPT.RED,
+                    backgroundColor: colors.alert,
                     border: 'none',
-                    color: FINCEPT.WHITE,
+                    color: colors.text,
                     fontSize: '11px',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -450,13 +434,13 @@ export function OnlineLearningPanel() {
           {metrics && (
             <div style={{
               padding: '16px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-              backgroundColor: FINCEPT.PANEL_BG
+              borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+              backgroundColor: colors.panel
             }}>
               <div style={{
                 fontSize: '11px',
                 fontWeight: 700,
-                color: FINCEPT.CYAN,
+                color: colors.accent,
                 marginBottom: '12px',
                 fontFamily: 'monospace',
                 letterSpacing: '0.5px',
@@ -464,62 +448,62 @@ export function OnlineLearningPanel() {
                 alignItems: 'center',
                 gap: '6px'
               }}>
-                <Cpu size={13} color={FINCEPT.CYAN} />
+                <Cpu size={13} color={colors.accent} />
                 REAL-TIME METRICS
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                 <div style={{
                   padding: '12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.CYAN}`,
-                  borderLeft: `3px solid ${FINCEPT.CYAN}`
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.accent}`,
+                  borderLeft: `3px solid ${colors.accent}`
                 }}>
-                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '4px', fontFamily: 'monospace' }}>
                     CURRENT MAE
                   </div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.CYAN, fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: colors.accent, fontFamily: 'monospace' }}>
                     {metrics.current_mae.toFixed(4)}
                   </div>
                 </div>
 
                 <div style={{
                   padding: '12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.GREEN}`,
-                  borderLeft: `3px solid ${FINCEPT.GREEN}`
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.success}`,
+                  borderLeft: `3px solid ${colors.success}`
                 }}>
-                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '4px', fontFamily: 'monospace' }}>
                     SAMPLES TRAINED
                   </div>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: FINCEPT.GREEN, fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: colors.success, fontFamily: 'monospace' }}>
                     {metrics.samples_trained.toLocaleString()}
                   </div>
                 </div>
 
                 <div style={{
                   padding: '12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${metrics.drift_detected ? FINCEPT.RED : FINCEPT.GREEN}`,
-                  borderLeft: `3px solid ${metrics.drift_detected ? FINCEPT.RED : FINCEPT.GREEN}`
+                  backgroundColor: colors.background,
+                  border: `1px solid ${metrics.drift_detected ? colors.alert : colors.success}`,
+                  borderLeft: `3px solid ${metrics.drift_detected ? colors.alert : colors.success}`
                 }}>
-                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '4px', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     DRIFT STATUS
-                    {metrics.drift_detected && <Bell size={10} color={FINCEPT.RED} />}
+                    {metrics.drift_detected && <Bell size={10} color={colors.alert} />}
                   </div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: metrics.drift_detected ? FINCEPT.RED : FINCEPT.GREEN, fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: metrics.drift_detected ? colors.alert : colors.success, fontFamily: 'monospace' }}>
                     {metrics.drift_detected ? 'DETECTED' : 'STABLE'}
                   </div>
                 </div>
 
                 <div style={{
                   padding: '12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`
+                  backgroundColor: colors.background,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                 }}>
-                  <div style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '4px', fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '4px', fontFamily: 'monospace' }}>
                     LAST UPDATE
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: FINCEPT.WHITE, fontFamily: 'monospace' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: colors.text, fontFamily: 'monospace' }}>
                     {new Date(metrics.last_updated).toLocaleTimeString()}
                   </div>
                 </div>
@@ -532,10 +516,10 @@ export function OnlineLearningPanel() {
             {error && (
               <div style={{
                 padding: '12px 14px',
-                backgroundColor: FINCEPT.RED + '15',
-                border: `1px solid ${FINCEPT.RED}`,
-                borderLeft: `3px solid ${FINCEPT.RED}`,
-                color: FINCEPT.RED,
+                backgroundColor: colors.alert + '15',
+                border: `1px solid ${colors.alert}`,
+                borderLeft: `3px solid ${colors.alert}`,
+                color: colors.alert,
                 fontSize: '13px',
                 display: 'flex',
                 alignItems: 'center',
@@ -554,7 +538,7 @@ export function OnlineLearningPanel() {
                 <div style={{
                   fontSize: '11px',
                   fontWeight: 700,
-                  color: FINCEPT.CYAN,
+                  color: colors.accent,
                   marginBottom: '8px',
                   fontFamily: 'monospace',
                   letterSpacing: '0.5px',
@@ -562,7 +546,7 @@ export function OnlineLearningPanel() {
                   alignItems: 'center',
                   gap: '6px'
                 }}>
-                  <Clock size={13} color={FINCEPT.CYAN} />
+                  <Clock size={13} color={colors.accent} />
                   UPDATE HISTORY
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -571,13 +555,13 @@ export function OnlineLearningPanel() {
                       key={idx}
                       style={{
                         padding: '10px 12px',
-                        backgroundColor: FINCEPT.PANEL_BG,
-                        border: `1px solid ${update.drift ? FINCEPT.RED : FINCEPT.BORDER}`,
-                        borderLeft: `3px solid ${update.drift ? FINCEPT.RED : FINCEPT.CYAN}`
+                        backgroundColor: colors.panel,
+                        border: `1px solid ${update.drift ? colors.alert : 'var(--ft-border-color, #2A2A2A)'}`,
+                        borderLeft: `3px solid ${update.drift ? colors.alert : colors.accent}`
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '10px', fontFamily: 'monospace', color: FINCEPT.GRAY }}>
+                        <span style={{ fontSize: '10px', fontFamily: 'monospace', color: colors.textMuted }}>
                           {new Date(update.timestamp).toLocaleTimeString()}
                         </span>
                         {update.drift && (
@@ -586,9 +570,9 @@ export function OnlineLearningPanel() {
                             alignItems: 'center',
                             gap: '4px',
                             padding: '2px 6px',
-                            backgroundColor: FINCEPT.RED + '20',
+                            backgroundColor: colors.alert + '20',
                             fontSize: '9px',
-                            color: FINCEPT.RED,
+                            color: colors.alert,
                             fontFamily: 'monospace',
                             fontWeight: 700
                           }}>
@@ -599,14 +583,14 @@ export function OnlineLearningPanel() {
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '10px' }}>
                         <div>
-                          <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>MAE: </span>
-                          <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                          <span style={{ color: colors.textMuted, fontFamily: 'monospace' }}>MAE: </span>
+                          <span style={{ color: colors.text, fontFamily: 'monospace', fontWeight: 600 }}>
                             {update.mae.toFixed(4)}
                           </span>
                         </div>
                         <div>
-                          <span style={{ color: FINCEPT.GRAY, fontFamily: 'monospace' }}>Samples: </span>
-                          <span style={{ color: FINCEPT.WHITE, fontFamily: 'monospace', fontWeight: 600 }}>
+                          <span style={{ color: colors.textMuted, fontFamily: 'monospace' }}>Samples: </span>
+                          <span style={{ color: colors.text, fontFamily: 'monospace', fontWeight: 600 }}>
                             {update.samples}
                           </span>
                         </div>
@@ -623,11 +607,11 @@ export function OnlineLearningPanel() {
                 padding: '40px 20px',
                 textAlign: 'center'
               }}>
-                <Activity size={48} color={FINCEPT.MUTED} style={{ margin: '0 auto 16px' }} />
-                <div style={{ fontSize: '11px', color: FINCEPT.WHITE, marginBottom: '8px', fontFamily: 'monospace' }}>
+                <Activity size={48} color={colors.textMuted} style={{ margin: '0 auto 16px' }} />
+                <div style={{ fontSize: '11px', color: colors.text, marginBottom: '8px', fontFamily: 'monospace' }}>
                   Ready for Online Learning
                 </div>
-                <div style={{ fontSize: '10px', color: FINCEPT.GRAY, lineHeight: '1.5' }}>
+                <div style={{ fontSize: '10px', color: colors.textMuted, lineHeight: '1.5' }}>
                   Create a model and start live updates to see real-time metrics and drift detection.
                   <br />Results and update history will appear here.
                 </div>

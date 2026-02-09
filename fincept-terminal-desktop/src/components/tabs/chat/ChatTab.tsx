@@ -19,28 +19,17 @@ import { sanitizeInput } from '@/services/core/validators';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { showConfirm, showError } from '@/utils/notifications';
 
-// Fincept Terminal Design System Colors
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-};
+// NOTE: All colors should use theme context
+// No hardcoded colors - use colors.* from useTerminalTheme()
 
 interface ChatTabProps {
   onNavigateToSettings?: () => void;
   onNavigateToTab?: (tabName: string) => void;
+}
+
+interface QuickPrompt {
+  cmd: string;
+  prompt: string;
 }
 
 // Constants
@@ -50,6 +39,8 @@ const MCP_RETRY_INTERVAL_MS = 10000;
 const MCP_MAX_RETRIES = 5;
 const CLOCK_UPDATE_INTERVAL_MS = 1000;
 const MCP_SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'deepseek', 'openrouter', 'fincept'];
+const STREAMING_SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'deepseek', 'openrouter', 'ollama', 'fincept'];
+const NO_API_KEY_PROVIDERS = ['ollama', 'fincept']; // Providers that don't require API key
 const API_TIMEOUT_MS = 30000;
 const DB_TIMEOUT_MS = 10000;
 
@@ -93,6 +84,19 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   });
   const [showLLMSelector, setShowLLMSelector] = useState(false);
 
+  // Quick Prompts state
+  const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
+    { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
+    { cmd: 'PORTFOLIO', prompt: 'Portfolio diversification recommendations' },
+    { cmd: 'RISK', prompt: 'Investment risk assessment strategies' },
+    { cmd: 'TECHNICAL', prompt: 'Key technical analysis indicators' }
+  ];
+  const [quickPrompts, setQuickPrompts] = useState<QuickPrompt[]>(DEFAULT_QUICK_PROMPTS);
+  const [isEditingPrompts, setIsEditingPrompts] = useState(false);
+  const [editingPromptIndex, setEditingPromptIndex] = useState<number | null>(null);
+  const [editPromptCmd, setEditPromptCmd] = useState('');
+  const [editPromptText, setEditPromptText] = useState('');
+
   const handleContextsChange = (contexts: RecordedContext[]) => {
     setLinkedContexts(contexts);
   };
@@ -113,6 +117,34 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const providerSupportsMCP = () => {
     if (!activeLLMConfig) return false;
     return MCP_SUPPORTED_PROVIDERS.includes(activeLLMConfig.provider.toLowerCase());
+  };
+
+  // Check if current provider supports streaming
+  const providerSupportsStreaming = () => {
+    if (!activeLLMConfig) return false;
+    return STREAMING_SUPPORTED_PROVIDERS.includes(activeLLMConfig.provider.toLowerCase());
+  };
+
+  // Check if current provider requires API key and if it's configured
+  const getApiKeyStatus = (): { required: boolean; configured: boolean } => {
+    if (!activeLLMConfig) return { required: false, configured: false };
+    const provider = activeLLMConfig.provider.toLowerCase();
+    const required = !NO_API_KEY_PROVIDERS.includes(provider);
+    const configured = !required || (activeLLMConfig.api_key && activeLLMConfig.api_key.trim().length > 0);
+    return { required, configured: !!configured };
+  };
+
+  // Check if a custom system prompt is configured
+  const hasCustomSystemPrompt = () => {
+    return llmGlobalSettings.system_prompt && llmGlobalSettings.system_prompt.trim().length > 0;
+  };
+
+  // Check if base URL should be shown (for Ollama or custom endpoints)
+  const shouldShowBaseUrl = () => {
+    if (!activeLLMConfig) return false;
+    const provider = activeLLMConfig.provider.toLowerCase();
+    // Show for Ollama, or if a custom base_url is set
+    return provider === 'ollama' || (activeLLMConfig.base_url && activeLLMConfig.base_url.trim().length > 0);
   };
 
   // Cleanup on unmount
@@ -303,6 +335,82 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       setSystemStatus('ERROR: Failed to load LLM configuration');
     }
   }, []);
+
+  // Listen for LLM configuration changes from Settings tab
+  useEffect(() => {
+    const handleLLMConfigChange = () => {
+      console.log('[ChatTab] LLM configuration changed, reloading...');
+      loadLLMConfiguration();
+    };
+
+    window.addEventListener('llm-config-changed', handleLLMConfigChange);
+    return () => {
+      window.removeEventListener('llm-config-changed', handleLLMConfigChange);
+    };
+  }, [loadLLMConfiguration]);
+
+  // Load quick prompts from database
+  const loadQuickPrompts = useCallback(async () => {
+    try {
+      const savedPrompts = await sqliteService.getSetting('chat_quick_prompts');
+      if (savedPrompts) {
+        const parsed = JSON.parse(savedPrompts);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setQuickPrompts(parsed);
+        }
+      }
+    } catch (error) {
+      console.error('[ChatTab] Failed to load quick prompts:', error);
+      // Keep default prompts on error
+    }
+  }, []);
+
+  // Save quick prompts to database
+  const saveQuickPrompts = useCallback(async (prompts: QuickPrompt[]) => {
+    try {
+      await sqliteService.saveSetting('chat_quick_prompts', JSON.stringify(prompts), 'chat');
+      setQuickPrompts(prompts);
+    } catch (error) {
+      console.error('[ChatTab] Failed to save quick prompts:', error);
+    }
+  }, []);
+
+  // Quick prompt editing handlers
+  const startEditingPrompt = (index: number) => {
+    setEditingPromptIndex(index);
+    setEditPromptCmd(quickPrompts[index].cmd);
+    setEditPromptText(quickPrompts[index].prompt);
+    setIsEditingPrompts(true);
+  };
+
+  const saveEditedPrompt = async () => {
+    if (editingPromptIndex === null || !editPromptCmd.trim() || !editPromptText.trim()) return;
+
+    const newPrompts = [...quickPrompts];
+    newPrompts[editingPromptIndex] = {
+      cmd: editPromptCmd.trim().toUpperCase(),
+      prompt: editPromptText.trim()
+    };
+    await saveQuickPrompts(newPrompts);
+    setEditingPromptIndex(null);
+    setIsEditingPrompts(false);
+  };
+
+  const cancelEditingPrompt = () => {
+    setEditingPromptIndex(null);
+    setIsEditingPrompts(false);
+    setEditPromptCmd('');
+    setEditPromptText('');
+  };
+
+  const resetQuickPrompts = async () => {
+    await saveQuickPrompts(DEFAULT_QUICK_PROMPTS);
+  };
+
+  // Load quick prompts on mount
+  useEffect(() => {
+    loadQuickPrompts();
+  }, [loadQuickPrompts]);
 
   const switchLLMProvider = useCallback(async (provider: string) => {
     try {
@@ -864,17 +972,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       alignItems: 'center',
       justifyContent: 'center',
       height: '100%',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       <div style={{
         textAlign: 'center',
         padding: '24px',
         maxWidth: '400px'
       }}>
-        <Bot size={48} color={FINCEPT.ORANGE} style={{ marginBottom: '16px', opacity: 0.8 }} />
+        <Bot size={48} color={colors.primary} style={{ marginBottom: '16px', opacity: 0.8 }} />
         <div style={{
-          color: FINCEPT.ORANGE,
-          fontSize: '16px',
+          color: colors.primary,
+          fontSize: fontSize.heading,
           fontWeight: 700,
           marginBottom: '8px',
           letterSpacing: '0.5px'
@@ -882,8 +990,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {t('title').toUpperCase()}
         </div>
         <div style={{
-          color: FINCEPT.WHITE,
-          fontSize: '11px',
+          color: colors.text,
+          fontSize: fontSize.body,
           marginBottom: '16px',
           lineHeight: '1.5'
         }}>
@@ -891,9 +999,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         </div>
         <div style={{
           padding: '6px 12px',
-          backgroundColor: `${FINCEPT.YELLOW}20`,
-          color: FINCEPT.YELLOW,
-          fontSize: '9px',
+          backgroundColor: `${colors.warning}20`,
+          color: colors.warning,
+          fontSize: fontSize.small,
           fontWeight: 700,
           borderRadius: '2px',
           marginBottom: '16px',
@@ -907,10 +1015,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           onClick={createNewSession}
           style={{
             padding: '8px 16px',
-            backgroundColor: FINCEPT.ORANGE,
-            color: FINCEPT.DARK_BG,
+            backgroundColor: colors.primary,
+            color: colors.background,
             border: 'none',
-            fontSize: '9px',
+            fontSize: fontSize.small,
             fontWeight: 700,
             borderRadius: '2px',
             cursor: 'pointer',
@@ -936,8 +1044,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             <div style={{
               maxWidth: '85%',
               minWidth: '120px',
-              backgroundColor: FINCEPT.PANEL_BG,
-              border: `1px solid ${message.role === 'user' ? FINCEPT.YELLOW : FINCEPT.ORANGE}`,
+              backgroundColor: colors.panel,
+              border: `1px solid ${message.role === 'user' ? colors.warning : colors.primary}`,
               borderRadius: '2px',
               padding: '10px'
             }}>
@@ -947,25 +1055,25 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 gap: '6px',
                 marginBottom: '8px',
                 paddingBottom: '6px',
-                borderBottom: `1px solid ${FINCEPT.BORDER}`
+                borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
               }}>
                 {message.role === 'user' ? (
-                  <User size={12} color={FINCEPT.YELLOW} />
+                  <User size={12} color={colors.warning} />
                 ) : (
-                  <Bot size={12} color={FINCEPT.ORANGE} />
+                  <Bot size={12} color={colors.primary} />
                 )}
                 <span style={{
-                  color: message.role === 'user' ? FINCEPT.YELLOW : FINCEPT.ORANGE,
-                  fontSize: '9px',
+                  color: message.role === 'user' ? colors.warning : colors.primary,
+                  fontSize: fontSize.small,
                   fontWeight: 700,
                   letterSpacing: '0.5px'
                 }}>
                   {message.role === 'user' ? 'YOU' : 'AI'}
                 </span>
-                <Clock size={10} color={FINCEPT.GRAY} />
+                <Clock size={10} color={colors.textMuted} />
                 <span style={{
-                  color: FINCEPT.GRAY,
-                  fontSize: '9px',
+                  color: colors.textMuted,
+                  fontSize: fontSize.small,
                   letterSpacing: '0.5px',
                   fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                 }}>
@@ -973,8 +1081,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 </span>
                 {message.provider && (
                   <span style={{
-                    color: FINCEPT.GRAY,
-                    fontSize: '9px',
+                    color: colors.textMuted,
+                    fontSize: fontSize.small,
                     letterSpacing: '0.5px'
                   }}>
                     | {message.provider.toUpperCase()}
@@ -986,8 +1094,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 <div style={{
                   marginBottom: '12px',
                   padding: '8px 12px',
-                  background: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  background: colors.panel,
+                  border: `1px solid ${'rgba(255,255,255,0.1)'}`,
                   borderRadius: '4px',
                   display: 'flex',
                   flexWrap: 'wrap',
@@ -995,8 +1103,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   alignItems: 'center'
                 }}>
                   <span style={{
-                    color: FINCEPT.GRAY,
-                    fontSize: '9px',
+                    color: colors.textMuted,
+                    fontSize: fontSize.small,
                     letterSpacing: '0.5px',
                     textTransform: 'uppercase'
                   }}>
@@ -1007,14 +1115,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       key={idx}
                       style={{
                         padding: '4px 8px',
-                        background: tool.status === 'success' ? FINCEPT.GREEN + '20' :
-                                   tool.status === 'error' ? FINCEPT.RED + '20' : FINCEPT.ORANGE + '20',
-                        border: `1px solid ${tool.status === 'success' ? FINCEPT.GREEN :
-                                             tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE}`,
+                        background: tool.status === 'success' ? colors.success + '20' :
+                                   tool.status === 'error' ? colors.alert + '20' : colors.primary + '20',
+                        border: `1px solid ${tool.status === 'success' ? colors.success :
+                                             tool.status === 'error' ? colors.alert : colors.primary}`,
                         borderRadius: '3px',
-                        fontSize: '9px',
-                        color: tool.status === 'success' ? FINCEPT.GREEN :
-                               tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE,
+                        fontSize: fontSize.small,
+                        color: tool.status === 'success' ? colors.success :
+                               tool.status === 'error' ? colors.alert : colors.primary,
                         letterSpacing: '0.5px',
                         fontFamily: '"IBM Plex Mono", "Consolas", monospace',
                         display: 'flex',
@@ -1022,7 +1130,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                         gap: '4px'
                       }}
                     >
-                      <span style={{ fontSize: '8px' }}>
+                      <span style={{ fontSize: fontSize.tiny }}>
                         {tool.status === 'success' ? '✓' : tool.status === 'error' ? '✗' : '⋯'}
                       </span>
                       {tool.name.replace('edgar_', '').replace(/_/g, ' ')}
@@ -1045,8 +1153,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 </>
               ) : (
                 <div style={{
-                  color: FINCEPT.WHITE,
-                  fontSize: '11px',
+                  color: colors.text,
+                  fontSize: fontSize.body,
                   lineHeight: '1.6',
                   whiteSpace: 'pre-wrap',
                   fontFamily: '"IBM Plex Mono", "Consolas", monospace'
@@ -1063,8 +1171,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       return (
         <div key={message.id} style={{
           marginBottom: '12px',
-          color: FINCEPT.RED,
-          fontSize: '10px',
+          color: colors.alert,
+          fontSize: fontSize.small,
           letterSpacing: '0.5px'
         }}>
           ERROR RENDERING MESSAGE
@@ -1080,8 +1188,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'flex-start' }}>
         <div style={{
           maxWidth: '85%',
-          backgroundColor: FINCEPT.PANEL_BG,
-          border: `2px solid ${FINCEPT.ORANGE}`,
+          backgroundColor: colors.panel,
+          border: `2px solid ${colors.primary}`,
           borderRadius: '2px',
           padding: '10px'
         }}>
@@ -1091,16 +1199,16 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             gap: '6px',
             marginBottom: '8px',
             paddingBottom: '6px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`
+            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
           }}>
             <Bot
               size={12}
-              color={FINCEPT.ORANGE}
+              color={colors.primary}
               style={{ animation: 'spin 2s linear infinite' }}
             />
             <span style={{
-              color: FINCEPT.ORANGE,
-              fontSize: '9px',
+              color: colors.primary,
+              fontSize: fontSize.small,
               fontWeight: 700,
               letterSpacing: '0.5px',
               animation: 'fadeInOut 1.5s ease-in-out infinite'
@@ -1108,8 +1216,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               {t('messages.typing').toUpperCase()}
             </span>
             <span style={{
-              color: FINCEPT.ORANGE,
-              fontSize: '9px',
+              color: colors.primary,
+              fontSize: fontSize.small,
               animation: 'dots 1.5s steps(4, end) infinite'
             }}>
               <span>.</span>
@@ -1123,8 +1231,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             <div style={{
               marginBottom: streamingContent ? '12px' : '0',
               padding: '8px 12px',
-              background: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
+              background: colors.background,
+              border: `1px solid ${'rgba(255,255,255,0.1)'}`,
               borderRadius: '4px',
               display: 'flex',
               flexWrap: 'wrap',
@@ -1132,8 +1240,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               alignItems: 'center'
             }}>
               <span style={{
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
+                color: colors.textMuted,
+                fontSize: fontSize.small,
                 letterSpacing: '0.5px',
                 textTransform: 'uppercase'
               }}>
@@ -1144,14 +1252,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   key={idx}
                   style={{
                     padding: '4px 8px',
-                    background: tool.status === 'success' ? FINCEPT.GREEN + '20' :
-                               tool.status === 'error' ? FINCEPT.RED + '20' : FINCEPT.ORANGE + '20',
-                    border: `1px solid ${tool.status === 'success' ? FINCEPT.GREEN :
-                                         tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE}`,
+                    background: tool.status === 'success' ? colors.success + '20' :
+                               tool.status === 'error' ? colors.alert + '20' : colors.primary + '20',
+                    border: `1px solid ${tool.status === 'success' ? colors.success :
+                                         tool.status === 'error' ? colors.alert : colors.primary}`,
                     borderRadius: '3px',
-                    fontSize: '9px',
-                    color: tool.status === 'success' ? FINCEPT.GREEN :
-                           tool.status === 'error' ? FINCEPT.RED : FINCEPT.ORANGE,
+                    fontSize: fontSize.small,
+                    color: tool.status === 'success' ? colors.success :
+                           tool.status === 'error' ? colors.alert : colors.primary,
                     letterSpacing: '0.5px',
                     fontFamily: '"IBM Plex Mono", "Consolas", monospace',
                     display: 'flex',
@@ -1160,7 +1268,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                     animation: tool.status === 'calling' ? 'pulse 1.5s infinite' : 'none'
                   }}
                 >
-                  <span style={{ fontSize: '8px' }}>
+                  <span style={{ fontSize: fontSize.tiny }}>
                     {tool.status === 'success' ? '✓' : tool.status === 'error' ? '✗' : '⋯'}
                   </span>
                   {tool.name.replace('edgar_', '').replace('stock_', '').replace(/_/g, ' ')}
@@ -1171,15 +1279,15 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
           {streamingContent && (
             <div style={{
-              color: FINCEPT.WHITE,
-              fontSize: '11px',
+              color: colors.text,
+              fontSize: fontSize.body,
               lineHeight: '1.6',
               whiteSpace: 'pre-wrap',
               fontFamily: '"IBM Plex Mono", "Consolas", monospace'
             }}>
               {streamingContent}
               <span style={{
-                color: FINCEPT.ORANGE,
+                color: colors.primary,
                 animation: 'blink 1s infinite'
               }}>▊</span>
             </div>
@@ -1192,8 +1300,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   return (
     <div style={{
       height: '100%',
-      backgroundColor: FINCEPT.DARK_BG,
-      color: FINCEPT.WHITE,
+      backgroundColor: colors.background,
+      color: colors.text,
       fontFamily: '"IBM Plex Mono", "Consolas", monospace',
       display: 'flex',
       flexDirection: 'column'
@@ -1205,24 +1313,24 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           height: 6px;
         }
         *::-webkit-scrollbar-track {
-          background: ${FINCEPT.DARK_BG};
+          background: ${colors.background};
         }
         *::-webkit-scrollbar-thumb {
-          background: ${FINCEPT.BORDER};
+          background: ${'rgba(255,255,255,0.1)'};
           border-radius: 3px;
         }
         *::-webkit-scrollbar-thumb:hover {
-          background: ${FINCEPT.MUTED};
+          background: ${colors.textMuted};
         }
         /* For Firefox */
         * {
           scrollbar-width: thin;
-          scrollbar-color: ${FINCEPT.BORDER} ${FINCEPT.DARK_BG};
+          scrollbar-color: ${'rgba(255,255,255,0.1)'} ${colors.background};
         }
         /* Input focus states */
         input:focus, textarea:focus {
           outline: none;
-          border-color: ${FINCEPT.ORANGE} !important;
+          border-color: ${colors.primary} !important;
         }
         /* Blink animation for cursor */
         @keyframes blink {
@@ -1249,36 +1357,36 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       `}</style>
       {/* Top Navigation Bar */}
       <div style={{
-        backgroundColor: FINCEPT.HEADER_BG,
-        borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+        backgroundColor: colors.panel,
+        borderBottom: `2px solid ${colors.primary}`,
         padding: '8px 16px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexShrink: 0,
-        boxShadow: `0 2px 8px ${FINCEPT.ORANGE}20`
+        boxShadow: `0 2px 8px ${colors.primary}20`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{
-            color: FINCEPT.ORANGE,
+            color: colors.primary,
             fontWeight: 700,
-            fontSize: '11px',
+            fontSize: fontSize.body,
             letterSpacing: '0.5px'
           }}>
             {t('title').toUpperCase()}
           </span>
-          <span style={{ color: FINCEPT.GRAY }}>|</span>
+          <span style={{ color: colors.textMuted }}>|</span>
 
           {/* LLM Provider Selector */}
           <div ref={llmSelectorRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setShowLLMSelector(!showLLMSelector)}
               style={{
-                backgroundColor: `${FINCEPT.YELLOW}20`,
-                border: `1px solid ${FINCEPT.YELLOW}40`,
-                color: FINCEPT.YELLOW,
+                backgroundColor: `${colors.warning}20`,
+                border: `1px solid ${colors.warning}40`,
+                color: colors.warning,
                 padding: '4px 10px',
-                fontSize: '9px',
+                fontSize: fontSize.small,
                 fontWeight: 700,
                 borderRadius: '2px',
                 cursor: 'pointer',
@@ -1289,18 +1397,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 transition: 'all 0.2s'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = `${FINCEPT.YELLOW}30`;
-                e.currentTarget.style.borderColor = FINCEPT.YELLOW;
+                e.currentTarget.style.backgroundColor = `${colors.warning}30`;
+                e.currentTarget.style.borderColor = colors.warning;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = `${FINCEPT.YELLOW}20`;
-                e.currentTarget.style.borderColor = `${FINCEPT.YELLOW}40`;
+                e.currentTarget.style.backgroundColor = `${colors.warning}20`;
+                e.currentTarget.style.borderColor = `${colors.warning}40`;
               }}
               title="Switch LLM Provider"
             >
               <Bot size={10} />
               {activeLLMConfig?.provider.toUpperCase() || 'NO PROVIDER'}
-              <span style={{ fontSize: '7px' }}>▼</span>
+              <span style={{ fontSize: fontSize.tiny }}>▼</span>
             </button>
 
             {/* Dropdown Menu */}
@@ -1310,23 +1418,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 top: '100%',
                 left: 0,
                 marginTop: '4px',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.ORANGE}`,
+                backgroundColor: colors.panel,
+                border: `1px solid ${colors.primary}`,
                 borderRadius: '2px',
                 padding: '4px',
                 minWidth: '220px',
                 maxHeight: '400px',
                 overflowY: 'auto',
                 zIndex: 1000,
-                boxShadow: `0 4px 12px ${FINCEPT.DARK_BG}80`
+                boxShadow: `0 4px 12px ${colors.background}80`
               }}>
                 <div style={{
                   padding: '6px 8px',
-                  fontSize: '8px',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
-                  color: FINCEPT.GRAY,
+                  color: colors.textMuted,
                   letterSpacing: '0.5px',
-                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`,
                   marginBottom: '4px'
                 }}>
                   SELECT LLM PROVIDER
@@ -1338,11 +1446,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       onClick={() => switchLLMProvider(config.provider)}
                       style={{
                         width: '100%',
-                        backgroundColor: activeLLMConfig?.provider === config.provider ? `${FINCEPT.ORANGE}20` : 'transparent',
-                        border: activeLLMConfig?.provider === config.provider ? `1px solid ${FINCEPT.ORANGE}` : `1px solid ${FINCEPT.BORDER}`,
-                        color: activeLLMConfig?.provider === config.provider ? FINCEPT.ORANGE : FINCEPT.WHITE,
+                        backgroundColor: activeLLMConfig?.provider === config.provider ? `${colors.primary}20` : 'transparent',
+                        border: activeLLMConfig?.provider === config.provider ? `1px solid ${colors.primary}` : `1px solid ${'rgba(255,255,255,0.1)'}`,
+                        color: activeLLMConfig?.provider === config.provider ? colors.primary : colors.text,
                         padding: '8px',
-                        fontSize: '9px',
+                        fontSize: fontSize.small,
                         fontWeight: 600,
                         borderRadius: '2px',
                         cursor: 'pointer',
@@ -1355,14 +1463,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       onMouseEnter={(e) => {
                         if (activeLLMConfig?.provider !== config.provider) {
-                          e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                          e.currentTarget.style.borderColor = FINCEPT.MUTED;
+                          e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                          e.currentTarget.style.borderColor = colors.textMuted;
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (activeLLMConfig?.provider !== config.provider) {
                           e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
                         }
                       }}
                     >
@@ -1371,14 +1479,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                           {config.provider.toUpperCase()}
                         </span>
                         {activeLLMConfig?.provider === config.provider && (
-                          <span style={{ color: FINCEPT.GREEN, fontSize: '8px' }}>● ACTIVE</span>
+                          <span style={{ color: colors.success, fontSize: fontSize.tiny }}>● ACTIVE</span>
                         )}
                       </div>
-                      <div style={{ fontSize: '8px', color: FINCEPT.GRAY }}>
+                      <div style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                         Model: {config.model || 'N/A'}
                       </div>
                       {config.base_url && (
-                        <div style={{ fontSize: '7px', color: FINCEPT.MUTED }}>
+                        <div style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                           {config.base_url}
                         </div>
                       )}
@@ -1388,8 +1496,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   <div style={{
                     padding: '12px',
                     textAlign: 'center',
-                    fontSize: '9px',
-                    color: FINCEPT.MUTED
+                    fontSize: fontSize.small,
+                    color: colors.textMuted
                   }}>
                     No LLM providers configured. Go to Settings to add one.
                   </div>
@@ -1398,10 +1506,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             )}
           </div>
 
-          <span style={{ color: FINCEPT.GRAY }}>|</span>
+          <span style={{ color: colors.textMuted }}>|</span>
           <span style={{
-            color: FINCEPT.WHITE,
-            fontSize: '9px',
+            color: colors.text,
+            fontSize: fontSize.small,
             letterSpacing: '0.5px'
           }}>
             {currentTime.toLocaleTimeString('en-US', { hour12: false })}
@@ -1412,10 +1520,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             onClick={() => onNavigateToSettings?.()}
             style={{
               backgroundColor: 'transparent',
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.GRAY,
+              border: `1px solid ${'rgba(255,255,255,0.1)'}`,
+              color: colors.textMuted,
               padding: '6px 10px',
-              fontSize: '9px',
+              fontSize: fontSize.small,
               fontWeight: 700,
               borderRadius: '2px',
               cursor: 'pointer',
@@ -1426,12 +1534,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = FINCEPT.ORANGE;
-              e.currentTarget.style.color = FINCEPT.WHITE;
+              e.currentTarget.style.borderColor = colors.primary;
+              e.currentTarget.style.color = colors.text;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = FINCEPT.BORDER;
-              e.currentTarget.style.color = FINCEPT.GRAY;
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+              e.currentTarget.style.color = colors.textMuted;
             }}
             title="Go to Settings tab to configure LLM providers"
           >
@@ -1441,11 +1549,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           <button
             onClick={createNewSession}
             style={{
-              backgroundColor: FINCEPT.ORANGE,
+              backgroundColor: colors.primary,
               border: 'none',
-              color: FINCEPT.DARK_BG,
+              color: colors.background,
               padding: '8px 16px',
-              fontSize: '9px',
+              fontSize: fontSize.small,
               fontWeight: 700,
               borderRadius: '2px',
               cursor: 'pointer',
@@ -1468,8 +1576,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         {/* Left Panel - Sessions */}
         <div style={{
           width: '280px',
-          backgroundColor: FINCEPT.PANEL_BG,
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: colors.panel,
+          borderRight: `1px solid ${'rgba(255,255,255,0.1)'}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -1477,14 +1585,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {/* Section Header */}
           <div style={{
             padding: '12px',
-            backgroundColor: FINCEPT.HEADER_BG,
-            borderBottom: `1px solid ${FINCEPT.BORDER}`
+            backgroundColor: colors.panel,
+            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={{
-                fontSize: '9px',
+                fontSize: fontSize.small,
                 fontWeight: 700,
-                color: FINCEPT.GRAY,
+                color: colors.textMuted,
                 letterSpacing: '0.5px'
               }}>
                 {t('history.sessions').toUpperCase()} ({statistics.totalSessions})
@@ -1494,10 +1602,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   onClick={deleteAllSessions}
                   style={{
                     padding: '2px 6px',
-                    backgroundColor: `${FINCEPT.RED}20`,
-                    color: FINCEPT.RED,
+                    backgroundColor: `${colors.alert}20`,
+                    color: colors.alert,
                     border: 'none',
-                    fontSize: '8px',
+                    fontSize: fontSize.tiny,
                     fontWeight: 700,
                     borderRadius: '2px',
                     cursor: 'pointer',
@@ -1513,7 +1621,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: '8px' }}>
-              <Search size={12} color={FINCEPT.GRAY} style={{ position: 'absolute', left: '8px', top: '9px' }} />
+              <Search size={12} color={colors.textMuted} style={{ position: 'absolute', left: '8px', top: '9px' }} />
               <input
                 id="session-search"
                 type="text"
@@ -1523,11 +1631,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 style={{
                   width: '100%',
                   padding: '8px 10px 8px 32px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${'rgba(255,255,255,0.1)'}`,
                   borderRadius: '2px',
-                  fontSize: '10px',
+                  fontSize: fontSize.small,
                   fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                 }}
               />
@@ -1535,8 +1643,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
             {/* Stats */}
             <div style={{
-              fontSize: '9px',
-              color: FINCEPT.CYAN,
+              fontSize: fontSize.small,
+              color: colors.secondary,
               letterSpacing: '0.5px',
               fontFamily: '"IBM Plex Mono", "Consolas", monospace'
             }}>
@@ -1558,8 +1666,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 key={session.session_uuid}
                 style={{
                   padding: '10px 12px',
-                  backgroundColor: currentSessionUuid === session.session_uuid ? `${FINCEPT.ORANGE}15` : 'transparent',
-                  borderLeft: currentSessionUuid === session.session_uuid ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                  backgroundColor: currentSessionUuid === session.session_uuid ? `${colors.primary}15` : 'transparent',
+                  borderLeft: currentSessionUuid === session.session_uuid ? `2px solid ${colors.primary}` : '2px solid transparent',
                   cursor: renamingSessionId === session.session_uuid ? 'default' : 'pointer',
                   transition: 'all 0.2s',
                   marginBottom: '4px'
@@ -1567,7 +1675,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 onClick={() => renamingSessionId !== session.session_uuid && selectSession(session.session_uuid)}
                 onMouseEnter={(e) => {
                   if (currentSessionUuid !== session.session_uuid && renamingSessionId !== session.session_uuid) {
-                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
                   }
                 }}
                 onMouseLeave={(e) => {
@@ -1591,10 +1699,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       style={{
                         flex: 1,
                         padding: '4px 6px',
-                        backgroundColor: FINCEPT.DARK_BG,
-                        border: `1px solid ${FINCEPT.ORANGE}`,
-                        color: FINCEPT.WHITE,
-                        fontSize: '10px',
+                        backgroundColor: colors.background,
+                        border: `1px solid ${colors.primary}`,
+                        color: colors.text,
+                        fontSize: fontSize.small,
                         borderRadius: '2px',
                         fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                       }}
@@ -1606,7 +1714,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: FINCEPT.GREEN,
+                        color: colors.success,
                         border: 'none',
                         cursor: 'pointer',
                         padding: '0',
@@ -1623,7 +1731,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: FINCEPT.RED,
+                        color: colors.alert,
                         border: 'none',
                         cursor: 'pointer',
                         padding: '0',
@@ -1636,8 +1744,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   </div>
                 ) : (
                   <div style={{
-                    color: FINCEPT.WHITE,
-                    fontSize: '10px',
+                    color: colors.text,
+                    fontSize: fontSize.small,
                     marginBottom: '6px',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -1651,8 +1759,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 {/* Actions Row */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{
-                    color: FINCEPT.GRAY,
-                    fontSize: '9px',
+                    color: colors.textMuted,
+                    fontSize: fontSize.small,
                     letterSpacing: '0.5px',
                     fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                   }}>
@@ -1666,9 +1774,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: FINCEPT.YELLOW,
+                        color: colors.warning,
                         border: 'none',
-                        fontSize: '9px',
+                        fontSize: fontSize.small,
                         cursor: 'pointer',
                         padding: '0',
                         display: 'flex',
@@ -1685,9 +1793,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: FINCEPT.RED,
+                        color: colors.alert,
                         border: 'none',
-                        fontSize: '9px',
+                        fontSize: fontSize.small,
                         cursor: 'pointer',
                         padding: '0',
                         display: 'flex',
@@ -1707,7 +1815,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         {/* Center Panel - Chat */}
         <div style={{
           flex: 1,
-          backgroundColor: FINCEPT.PANEL_BG,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -1715,16 +1823,16 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {/* Chat Header */}
           <div style={{
             padding: '12px',
-            backgroundColor: FINCEPT.HEADER_BG,
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            backgroundColor: colors.panel,
+            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
             <span style={{
-              fontSize: '9px',
+              fontSize: fontSize.small,
               fontWeight: 700,
-              color: FINCEPT.GRAY,
+              color: colors.textMuted,
               letterSpacing: '0.5px'
             }}>
               {currentSessionUuid ? (sessions.find(s => s.session_uuid === currentSessionUuid)?.title || 'CHAT').toUpperCase() : 'NO ACTIVE SESSION'}
@@ -1734,10 +1842,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 onClick={clearCurrentChat}
                 style={{
                   padding: '2px 6px',
-                  backgroundColor: `${FINCEPT.RED}20`,
-                  color: FINCEPT.RED,
+                  backgroundColor: `${colors.alert}20`,
+                  color: colors.alert,
                   border: 'none',
-                  fontSize: '8px',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   borderRadius: '2px',
                   cursor: 'pointer',
@@ -1755,7 +1863,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             flex: 1,
             padding: '16px',
             overflow: 'auto',
-            backgroundColor: FINCEPT.DARK_BG
+            backgroundColor: colors.background
           }}>
             {messages.length === 0 && !streamingContent ? renderWelcomeScreen() : (
               <div>
@@ -1766,11 +1874,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    color: FINCEPT.GRAY,
-                    fontSize: '9px',
+                    color: colors.textMuted,
+                    fontSize: fontSize.small,
                     letterSpacing: '0.5px'
                   }}>
-                    <Bot size={12} color={FINCEPT.GRAY} />
+                    <Bot size={12} color={colors.textMuted} />
                     <span>{t('messages.thinking').toUpperCase()}</span>
                   </div>
                 )}
@@ -1782,8 +1890,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {/* Input Area */}
           <div style={{
             padding: '12px',
-            backgroundColor: FINCEPT.HEADER_BG,
-            borderTop: `1px solid ${FINCEPT.BORDER}`
+            backgroundColor: colors.panel,
+            borderTop: `1px solid ${'rgba(255,255,255,0.1)'}`
           }}>
             <div style={{ display: 'flex', gap: '8px' }}>
               <textarea
@@ -1799,11 +1907,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 style={{
                   flex: 1,
                   padding: '8px 10px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${'rgba(255,255,255,0.1)'}`,
                   borderRadius: '2px',
-                  fontSize: '10px',
+                  fontSize: fontSize.small,
                   resize: 'none',
                   height: '60px',
                   fontFamily: '"IBM Plex Mono", "Consolas", monospace'
@@ -1814,11 +1922,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 disabled={!messageInput.trim() || isTyping}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: messageInput.trim() && !isTyping ? FINCEPT.ORANGE : FINCEPT.MUTED,
-                  color: FINCEPT.DARK_BG,
+                  backgroundColor: messageInput.trim() && !isTyping ? colors.primary : colors.textMuted,
+                  color: colors.background,
                   border: 'none',
                   borderRadius: '2px',
-                  fontSize: '9px',
+                  fontSize: fontSize.small,
                   fontWeight: 700,
                   cursor: messageInput.trim() && !isTyping ? 'pointer' : 'not-allowed',
                   display: 'flex',
@@ -1834,8 +1942,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               </button>
             </div>
             <div style={{
-              color: FINCEPT.GRAY,
-              fontSize: '9px',
+              color: colors.textMuted,
+              fontSize: fontSize.small,
               marginTop: '6px',
               letterSpacing: '0.5px',
               fontFamily: '"IBM Plex Mono", "Consolas", monospace'
@@ -1848,25 +1956,25 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         {/* Right Panel - Quick Actions & Context Selector */}
         <div style={{
           width: '300px',
-          backgroundColor: FINCEPT.PANEL_BG,
-          borderLeft: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: colors.panel,
+          borderLeft: `1px solid ${'rgba(255,255,255,0.1)'}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
           {/* Context Selector Section */}
           <div style={{
-            borderBottom: `1px solid ${FINCEPT.BORDER}`
+            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
           }}>
             <div style={{
               padding: '12px',
-              backgroundColor: FINCEPT.HEADER_BG,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`
+              backgroundColor: colors.panel,
+              borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
             }}>
               <span style={{
-                fontSize: '9px',
+                fontSize: fontSize.small,
                 fontWeight: 700,
-                color: FINCEPT.GRAY,
+                color: colors.textMuted,
                 letterSpacing: '0.5px'
               }}>
                 {t('panel.dataContexts').toUpperCase()}
@@ -1882,58 +1990,200 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
           {/* Quick Prompts Section */}
           <div style={{
-            borderBottom: `1px solid ${FINCEPT.BORDER}`
+            borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
           }}>
             <div style={{
               padding: '12px',
-              backgroundColor: FINCEPT.HEADER_BG,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`
+              backgroundColor: colors.panel,
+              borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
               <span style={{
-                fontSize: '9px',
+                fontSize: fontSize.small,
                 fontWeight: 700,
-                color: FINCEPT.GRAY,
+                color: colors.textMuted,
                 letterSpacing: '0.5px'
               }}>
                 {t('panel.quickPrompts').toUpperCase()}
               </span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {isEditingPrompts ? (
+                  <>
+                    <button
+                      onClick={cancelEditingPrompt}
+                      style={{
+                        padding: '2px 6px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${colors.alert}`,
+                        color: colors.alert,
+                        fontSize: fontSize.tiny,
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        cursor: 'pointer',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      <X size={10} />
+                    </button>
+                    <button
+                      onClick={saveEditedPrompt}
+                      style={{
+                        padding: '2px 6px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${colors.success}`,
+                        color: colors.success,
+                        fontSize: fontSize.tiny,
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        cursor: 'pointer',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      <Check size={10} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={resetQuickPrompts}
+                    style={{
+                      padding: '2px 6px',
+                      backgroundColor: 'transparent',
+                      border: `1px solid ${colors.textMuted}`,
+                      color: colors.textMuted,
+                      fontSize: fontSize.tiny,
+                      fontWeight: 700,
+                      borderRadius: '2px',
+                      cursor: 'pointer',
+                      letterSpacing: '0.5px'
+                    }}
+                    title="Reset to default prompts"
+                  >
+                    RESET
+                  </button>
+                )}
+              </div>
             </div>
             <div style={{ padding: '12px' }}>
-              {[
-                { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
-                { cmd: 'PORTFOLIO', prompt: 'Portfolio diversification recommendations' },
-                { cmd: 'RISK', prompt: 'Investment risk assessment strategies' },
-                { cmd: 'TECHNICAL', prompt: 'Key technical analysis indicators' }
-              ].map(item => (
-                <button
-                  key={item.cmd}
-                  onClick={() => setMessageInput(item.prompt)}
+              {/* Editing form */}
+              {isEditingPrompts && editingPromptIndex !== null && (
+                <div style={{
+                  marginBottom: '8px',
+                  padding: '8px',
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.primary}`,
+                  borderRadius: '2px'
+                }}>
+                  <input
+                    type="text"
+                    value={editPromptCmd}
+                    onChange={(e) => setEditPromptCmd(e.target.value.toUpperCase())}
+                    placeholder="LABEL"
+                    style={{
+                      width: '100%',
+                      padding: '4px 6px',
+                      backgroundColor: colors.panel,
+                      border: `1px solid ${'rgba(255,255,255,0.1)'}`,
+                      color: colors.text,
+                      fontSize: fontSize.small,
+                      borderRadius: '2px',
+                      marginBottom: '4px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                    }}
+                  />
+                  <textarea
+                    value={editPromptText}
+                    onChange={(e) => setEditPromptText(e.target.value)}
+                    placeholder="Prompt text..."
+                    style={{
+                      width: '100%',
+                      padding: '4px 6px',
+                      backgroundColor: colors.panel,
+                      border: `1px solid ${'rgba(255,255,255,0.1)'}`,
+                      color: colors.text,
+                      fontSize: fontSize.small,
+                      borderRadius: '2px',
+                      resize: 'vertical',
+                      minHeight: '40px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace'
+                    }}
+                  />
+                </div>
+              )}
+              {/* Quick prompt buttons */}
+              {quickPrompts.map((item, index) => (
+                <div
+                  key={`${item.cmd}-${index}`}
                   style={{
-                    width: '100%',
-                    padding: '6px 10px',
-                    backgroundColor: 'transparent',
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    color: FINCEPT.GRAY,
-                    fontSize: '9px',
-                    fontWeight: 700,
-                    borderRadius: '2px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    marginBottom: '6px',
-                    letterSpacing: '0.5px',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = FINCEPT.ORANGE;
-                    e.currentTarget.style.color = FINCEPT.WHITE;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
-                    e.currentTarget.style.color = FINCEPT.GRAY;
+                    display: 'flex',
+                    gap: '4px',
+                    marginBottom: '6px'
                   }}
                 >
-                  {item.cmd}
-                </button>
+                  <button
+                    onClick={() => !isEditingPrompts && setMessageInput(item.prompt)}
+                    disabled={isEditingPrompts}
+                    style={{
+                      flex: 1,
+                      padding: '6px 10px',
+                      backgroundColor: editingPromptIndex === index ? `${colors.primary}20` : 'transparent',
+                      border: `1px solid ${editingPromptIndex === index ? colors.primary : 'rgba(255,255,255,0.1)'}`,
+                      color: editingPromptIndex === index ? colors.primary : colors.textMuted,
+                      fontSize: fontSize.small,
+                      fontWeight: 700,
+                      borderRadius: '2px',
+                      textAlign: 'left',
+                      cursor: isEditingPrompts ? 'default' : 'pointer',
+                      letterSpacing: '0.5px',
+                      transition: 'all 0.2s',
+                      opacity: isEditingPrompts && editingPromptIndex !== index ? 0.5 : 1
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isEditingPrompts) {
+                        e.currentTarget.style.borderColor = colors.primary;
+                        e.currentTarget.style.color = colors.text;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isEditingPrompts && editingPromptIndex !== index) {
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                        e.currentTarget.style.color = colors.textMuted;
+                      }
+                    }}
+                    title={item.prompt}
+                  >
+                    {item.cmd}
+                  </button>
+                  {!isEditingPrompts && (
+                    <button
+                      onClick={() => startEditingPrompt(index)}
+                      style={{
+                        padding: '4px 6px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${'rgba(255,255,255,0.1)'}`,
+                        color: colors.textMuted,
+                        fontSize: fontSize.tiny,
+                        borderRadius: '2px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = colors.warning;
+                        e.currentTarget.style.color = colors.warning;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                        e.currentTarget.style.color = colors.textMuted;
+                      }}
+                      title="Edit this prompt"
+                    >
+                      <Edit2 size={10} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -1942,13 +2192,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           <div style={{ flex: 1, overflow: 'auto' }}>
             <div style={{
               padding: '12px',
-              backgroundColor: FINCEPT.HEADER_BG,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`
+              backgroundColor: colors.panel,
+              borderBottom: `1px solid ${'rgba(255,255,255,0.1)'}`
             }}>
               <span style={{
-                fontSize: '9px',
+                fontSize: fontSize.small,
                 fontWeight: 700,
-                color: FINCEPT.GRAY,
+                color: colors.textMuted,
                 letterSpacing: '0.5px'
               }}>
                 {t('panel.systemInfo').toUpperCase()}
@@ -1958,8 +2208,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               {activeLLMConfig ? (
                 <>
                   <div style={{
-                    color: FINCEPT.CYAN,
-                    fontSize: '9px',
+                    color: colors.secondary,
+                    fontSize: fontSize.small,
                     marginBottom: '4px',
                     letterSpacing: '0.5px',
                     fontFamily: '"IBM Plex Mono", "Consolas", monospace'
@@ -1967,42 +2217,104 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                     PROVIDER: {activeLLMConfig.provider.toUpperCase()}
                   </div>
                   <div style={{
-                    color: FINCEPT.CYAN,
-                    fontSize: '9px',
+                    color: colors.secondary,
+                    fontSize: fontSize.small,
                     marginBottom: '4px',
                     letterSpacing: '0.5px',
                     fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                   }}>
                     MODEL: {activeLLMConfig.model}
                   </div>
+                  {/* Base URL - shown for Ollama or custom endpoints */}
+                  {shouldShowBaseUrl() && activeLLMConfig.base_url && (
+                    <div style={{
+                      color: colors.textMuted,
+                      fontSize: fontSize.tiny,
+                      marginBottom: '4px',
+                      letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      wordBreak: 'break-all'
+                    }}>
+                      ENDPOINT: {activeLLMConfig.base_url}
+                    </div>
+                  )}
                   <div style={{
-                    color: FINCEPT.CYAN,
-                    fontSize: '9px',
+                    color: colors.secondary,
+                    fontSize: fontSize.small,
                     marginBottom: '4px',
                     letterSpacing: '0.5px',
                     fontFamily: '"IBM Plex Mono", "Consolas", monospace'
                   }}>
-                    TEMP: {llmGlobalSettings.temperature}
+                    TEMP: {llmGlobalSettings.temperature} | MAX TOKENS: {llmGlobalSettings.max_tokens}
                   </div>
-                  <div style={{
-                    padding: '2px 6px',
-                    backgroundColor: `${FINCEPT.GREEN}20`,
-                    color: FINCEPT.GREEN,
-                    fontSize: '8px',
-                    fontWeight: 700,
-                    borderRadius: '2px',
-                    display: 'inline-block',
-                    letterSpacing: '0.5px'
-                  }}>
-                    STREAMING: ENABLED
+                  {/* Status badges row */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+                    {/* Streaming status */}
+                    <div style={{
+                      padding: '2px 6px',
+                      backgroundColor: providerSupportsStreaming() ? `${colors.success}20` : `${colors.textMuted}20`,
+                      color: providerSupportsStreaming() ? colors.success : colors.textMuted,
+                      fontSize: fontSize.tiny,
+                      fontWeight: 700,
+                      borderRadius: '2px',
+                      letterSpacing: '0.5px'
+                    }}>
+                      STREAMING: {providerSupportsStreaming() ? 'ENABLED' : 'DISABLED'}
+                    </div>
+                    {/* API Key status */}
+                    {(() => {
+                      const apiKeyStatus = getApiKeyStatus();
+                      if (!apiKeyStatus.required) {
+                        return (
+                          <div style={{
+                            padding: '2px 6px',
+                            backgroundColor: `${colors.secondary}20`,
+                            color: colors.secondary,
+                            fontSize: fontSize.tiny,
+                            fontWeight: 700,
+                            borderRadius: '2px',
+                            letterSpacing: '0.5px'
+                          }}>
+                            API KEY: NOT REQUIRED
+                          </div>
+                        );
+                      }
+                      return (
+                        <div style={{
+                          padding: '2px 6px',
+                          backgroundColor: apiKeyStatus.configured ? `${colors.success}20` : `${colors.alert}20`,
+                          color: apiKeyStatus.configured ? colors.success : colors.alert,
+                          fontSize: fontSize.tiny,
+                          fontWeight: 700,
+                          borderRadius: '2px',
+                          letterSpacing: '0.5px'
+                        }}>
+                          API KEY: {apiKeyStatus.configured ? 'CONFIGURED' : 'MISSING'}
+                        </div>
+                      );
+                    })()}
+                    {/* Custom system prompt indicator */}
+                    {hasCustomSystemPrompt() && (
+                      <div style={{
+                        padding: '2px 6px',
+                        backgroundColor: `${colors.primary}20`,
+                        color: colors.primary,
+                        fontSize: fontSize.tiny,
+                        fontWeight: 700,
+                        borderRadius: '2px',
+                        letterSpacing: '0.5px'
+                      }}>
+                        CUSTOM PROMPT: YES
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
                 <div style={{
                   padding: '2px 6px',
-                  backgroundColor: `${FINCEPT.RED}20`,
-                  color: FINCEPT.RED,
-                  fontSize: '8px',
+                  backgroundColor: `${colors.alert}20`,
+                  color: colors.alert,
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   borderRadius: '2px',
                   letterSpacing: '0.5px'
@@ -2013,13 +2325,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               <div style={{
                 marginTop: '12px',
                 paddingTop: '12px',
-                borderTop: `1px solid ${FINCEPT.BORDER}`
+                borderTop: `1px solid ${'rgba(255,255,255,0.1)'}`
               }}>
                 <div style={{
                   padding: '2px 6px',
-                  backgroundColor: mcpToolsCount > 0 ? `${FINCEPT.CYAN}20` : `${FINCEPT.MUTED}20`,
-                  color: mcpToolsCount > 0 ? FINCEPT.CYAN : FINCEPT.MUTED,
-                  fontSize: '8px',
+                  backgroundColor: mcpToolsCount > 0 ? `${colors.secondary}20` : `${colors.textMuted}20`,
+                  color: mcpToolsCount > 0 ? colors.secondary : colors.textMuted,
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   borderRadius: '2px',
                   marginBottom: '8px',
@@ -2033,10 +2345,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   style={{
                     width: '100%',
                     padding: '8px 16px',
-                    backgroundColor: FINCEPT.ORANGE,
-                    color: FINCEPT.DARK_BG,
+                    backgroundColor: colors.primary,
+                    color: colors.background,
                     border: 'none',
-                    fontSize: '9px',
+                    fontSize: fontSize.small,
                     fontWeight: 700,
                     borderRadius: '2px',
                     cursor: 'pointer',
@@ -2051,11 +2363,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 {mcpToolsCount > 0 && !providerSupportsMCP() && activeLLMConfig && (
                   <div style={{
                     padding: '6px',
-                    backgroundColor: FINCEPT.PANEL_BG,
-                    border: `1px solid ${FINCEPT.RED}`,
+                    backgroundColor: colors.panel,
+                    border: `1px solid ${colors.alert}`,
                     borderRadius: '2px',
-                    color: FINCEPT.RED,
-                    fontSize: '8px',
+                    color: colors.alert,
+                    fontSize: fontSize.tiny,
                     fontWeight: 700,
                     letterSpacing: '0.5px'
                   }}>
@@ -2071,11 +2383,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
       {/* Status Bar (Bottom) */}
       <div style={{
-        backgroundColor: FINCEPT.HEADER_BG,
-        borderTop: `1px solid ${FINCEPT.BORDER}`,
+        backgroundColor: colors.panel,
+        borderTop: `1px solid ${'rgba(255,255,255,0.1)'}`,
         padding: '4px 16px',
-        fontSize: '9px',
-        color: FINCEPT.GRAY,
+        fontSize: fontSize.small,
+        color: colors.textMuted,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',

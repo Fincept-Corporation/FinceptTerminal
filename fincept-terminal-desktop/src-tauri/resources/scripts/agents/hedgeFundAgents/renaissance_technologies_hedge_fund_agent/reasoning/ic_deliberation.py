@@ -135,6 +135,15 @@ class ICDeliberator:
         """
         Perform full IC deliberation on a proposed trade.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Log LLM configuration being used
+        logger.info(f"=== IC DELIBERATION STARTING ===")
+        logger.info(f"Model Provider: {self.config.models.provider.value}")
+        logger.info(f"Model ID: {self.config.models.model_id}")
+        logger.info(f"Temperature: {self.config.models.temperature}")
+
         ticker = signal.get("ticker", "UNKNOWN")
         direction = signal.get("direction", "long")
         signal_type = signal.get("signal_type", "unknown")
@@ -354,125 +363,182 @@ Overall Score: {evaluation.get('overall_score', 0):.0f}/100
         cons: List[str],
         precedents: List[Dict[str, Any]],
     ) -> List[ICMemberOpinion]:
-        """Gather opinions from each IC member"""
+        """Gather opinions from each IC member using REAL Agno agents"""
+        import logging
+        from ..agents import (
+            create_investment_committee_chair,
+            create_research_lead,
+            create_risk_quant,
+            create_execution_trader,
+            create_portfolio_manager,
+        )
+
+        logger = logging.getLogger(__name__)
         opinions = []
 
+        # Create actual agents for each IC member role
+        agent_creators = {
+            "Chief Investment Officer": create_investment_committee_chair,
+            "Research Lead": create_research_lead,
+            "Chief Risk Officer": create_risk_quant,
+            "Head of Trading": create_execution_trader,
+            "Portfolio Manager": create_portfolio_manager,
+        }
+
         for member in self.ic_members:
-            opinion = self._get_member_opinion(
-                member, signal, evaluation, risk, sizing, pros, cons
+            role = member["role"]
+            perspective = member["perspective"]
+
+            # Get the agent creator
+            creator = agent_creators.get(role)
+            if not creator:
+                continue
+
+            # Create agent
+            logger.info(f"Creating agent for {role} using {self.config.models.provider.value}/{self.config.models.model_id}")
+            agent = creator(self.config)
+
+            # Build deliberation prompt
+            prompt = self._build_deliberation_prompt(
+                role, perspective, signal, evaluation, risk, sizing, pros, cons, precedents
             )
+
+            # Get agent's opinion via LLM
+            opinion = await self._get_agent_opinion(agent, role, prompt, member["weight"])
             opinions.append(opinion)
 
         return opinions
 
-    def _get_member_opinion(
+    def _build_deliberation_prompt(
         self,
-        member: Dict[str, Any],
+        role: str,
+        perspective: str,
         signal: Dict[str, Any],
         evaluation: Dict[str, Any],
         risk: Dict[str, Any],
         sizing: Dict[str, Any],
         pros: List[str],
         cons: List[str],
+        precedents: List[Dict[str, Any]],
+    ) -> str:
+        """Build deliberation prompt for agent"""
+        ticker = signal.get("ticker", "N/A")
+        direction = signal.get("direction", "N/A")
+        signal_type = signal.get("signal_type", "N/A")
+
+        precedent_text = "\n".join([
+            f"  - {p.get('subject', 'N/A')}: {p.get('decision', 'N/A')} → {p.get('outcome', 'N/A')}"
+            for p in precedents[:3]
+        ]) if precedents else "  - No similar precedents found"
+
+        return f"""# Investment Committee Deliberation
+
+You are participating in an IC meeting to decide on a proposed trade.
+
+**Your Role**: {role}
+**Your Focus**: {perspective}
+
+## Proposed Trade
+
+- **Ticker**: {ticker}
+- **Direction**: {direction.upper()}
+- **Signal Type**: {signal_type}
+- **P-value**: {signal.get('p_value', 1.0):.4f}
+- **Confidence**: {signal.get('confidence', 0):.1%}
+- **Expected Return**: {signal.get('expected_return_bps', 0):.0f} bps
+
+## Analysis Summary
+
+**Overall Score**: {evaluation.get('overall_score', 0)}/100
+**Statistical Quality**: {evaluation.get('statistical_quality', 'unknown')}
+
+**Risk Assessment**:
+- Risk Level: {risk.get('risk_level', 'unknown')}
+- VaR Utilization: {risk.get('var_utilization_pct', 0):.0f}%
+- Risk Flags: {', '.join(risk.get('risk_flags', [])) or 'None'}
+- Sector Concentration: {risk.get('sector_concentrations', {})}
+
+**Proposed Size**: {sizing.get('final_size_pct', 0):.2f}% of portfolio
+
+## Pros
+{chr(10).join([f'+ {p}' for p in pros]) or '+ None identified'}
+
+## Cons
+{chr(10).join([f'- {c}' for c in cons]) or '- None identified'}
+
+## Historical Precedents
+{precedent_text}
+
+## Your Task
+
+As the **{role}**, provide your vote and detailed rationale.
+
+**Respond EXACTLY in this format**:
+
+VOTE: [APPROVE/REJECT/CONDITIONAL/ABSTAIN]
+CONFIDENCE: [0-100]%
+RATIONALE:
+[Your detailed reasoning from your perspective as {role}]
+
+CONDITIONS (if CONDITIONAL):
+- [List specific conditions, or write "None" if APPROVE/REJECT]
+"""
+
+    async def _get_agent_opinion(
+        self,
+        agent,
+        role: str,
+        prompt: str,
+        weight: float,
     ) -> ICMemberOpinion:
-        """Get opinion from a specific IC member based on their perspective"""
-        role = member["role"]
-        perspective = member["perspective"]
+        """Get opinion from agent via LLM"""
+        import re
 
-        # CIO focuses on overall fit
-        if role == "Chief Investment Officer":
-            overall_score = evaluation.get("overall_score", 50)
-            if overall_score >= 70:
-                vote = ICVote.APPROVE
-                rationale = f"Strong overall signal (score={overall_score}), fits strategy"
-                confidence = 0.8
-            elif overall_score >= 50:
-                vote = ICVote.CONDITIONAL
-                rationale = f"Moderate signal (score={overall_score}), proceed with caution"
-                confidence = 0.6
-                conditions = ["Reduce size by 30%"]
-            else:
-                vote = ICVote.REJECT
-                rationale = f"Weak signal (score={overall_score}), doesn't meet threshold"
-                confidence = 0.7
-                conditions = []
+        try:
+            # Run agent with deliberation prompt
+            response = agent.run(prompt)
+            response_text = response.content if hasattr(response, 'content') else str(response)
 
-        # Research Lead focuses on statistical quality
-        elif role == "Research Lead":
-            p_value = signal.get("p_value", 1.0)
-            if p_value < 0.01:
-                vote = ICVote.APPROVE
-                rationale = f"Excellent statistical significance (p={p_value:.4f})"
-                confidence = 0.85
-            elif p_value < 0.02:
-                vote = ICVote.CONDITIONAL
-                rationale = f"Borderline p-value ({p_value:.4f}), reduce size"
-                confidence = 0.55
-            else:
-                vote = ICVote.REJECT
-                rationale = f"Insufficient statistical significance (p={p_value:.4f})"
-                confidence = 0.75
+            # Parse response
+            vote_match = re.search(r'VOTE:\s*(APPROVE|REJECT|CONDITIONAL|ABSTAIN)', response_text, re.IGNORECASE)
+            conf_match = re.search(r'CONFIDENCE:\s*(\d+)%?', response_text)
+            rationale_match = re.search(r'RATIONALE:\s*(.+?)(?=CONDITIONS:|$)', response_text, re.DOTALL | re.IGNORECASE)
+            conditions_match = re.search(r'CONDITIONS.*?:\s*(.+?)$', response_text, re.DOTALL | re.IGNORECASE)
 
-        # CRO focuses on risk
-        elif role == "Chief Risk Officer":
-            risk_level = risk.get("risk_level", "medium")
-            risk_flags = risk.get("risk_flags", [])
-            if risk_level == "low" and not risk_flags:
-                vote = ICVote.APPROVE
-                rationale = "Risk within acceptable limits"
-                confidence = 0.8
-            elif risk_level in ["high", "critical"]:
-                vote = ICVote.REJECT
-                rationale = f"Risk level {risk_level} is unacceptable: {', '.join(risk_flags[:2])}"
-                confidence = 0.85
-            else:
-                vote = ICVote.CONDITIONAL
-                rationale = f"Moderate risk, require monitoring: {', '.join(risk_flags[:1])}"
-                confidence = 0.65
+            # Extract values
+            vote_str = vote_match.group(1).upper() if vote_match else "ABSTAIN"
+            confidence = float(conf_match.group(1)) / 100 if conf_match else 0.5
+            rationale = rationale_match.group(1).strip() if rationale_match else "No rationale provided"
+            conditions_text = conditions_match.group(1).strip() if conditions_match else ""
 
-        # Head of Trading focuses on execution
-        elif role == "Head of Trading":
-            adv = signal.get("average_daily_volume", 1000000)
-            size = sizing.get("final_notional", 0)
-            if adv > 5000000 or size < adv * 0.01:
-                vote = ICVote.APPROVE
-                rationale = "Execution should be straightforward"
-                confidence = 0.75
-            else:
-                vote = ICVote.CONDITIONAL
-                rationale = "Need to use careful execution to minimize impact"
-                confidence = 0.6
+            # Parse vote
+            vote = ICVote.APPROVE if vote_str == "APPROVE" else \
+                   ICVote.REJECT if vote_str == "REJECT" else \
+                   ICVote.CONDITIONAL if vote_str == "CONDITIONAL" else \
+                   ICVote.ABSTAIN
 
-        # Portfolio Manager focuses on construction
-        elif role == "Portfolio Manager":
-            # Check correlation
-            sector_concentration = risk.get("sector_concentrations", {})
-            max_concentration = max(sector_concentration.values()) if sector_concentration else 0
-            if max_concentration > 20:
-                vote = ICVote.CONDITIONAL
-                rationale = f"Sector concentration at {max_concentration:.0f}%, reduce size"
-                confidence = 0.6
-            else:
-                vote = ICVote.APPROVE
-                rationale = "Fits portfolio construction, good diversification"
-                confidence = 0.7
+            # Parse conditions
+            conditions = []
+            if vote == ICVote.CONDITIONAL and conditions_text and "none" not in conditions_text.lower():
+                conditions = [c.strip().lstrip('-•').strip() for c in conditions_text.split('\n') if c.strip()]
 
-        else:
-            vote = ICVote.ABSTAIN
-            rationale = "No specific view"
-            confidence = 0.5
+            return ICMemberOpinion(
+                member_role=role,
+                vote=vote,
+                rationale=rationale[:500],  # Truncate if too long
+                conditions=conditions,
+                confidence=confidence,
+            )
 
-        conditions = []
-        if vote == ICVote.CONDITIONAL:
-            conditions = ["Monitor closely", "Review at EOD"]
-
-        return ICMemberOpinion(
-            member_role=role,
-            vote=vote,
-            rationale=rationale,
-            conditions=conditions,
-            confidence=confidence,
-        )
+        except Exception as e:
+            # Fallback if agent fails
+            return ICMemberOpinion(
+                member_role=role,
+                vote=ICVote.ABSTAIN,
+                rationale=f"Error getting opinion: {str(e)}",
+                conditions=[],
+                confidence=0.5,
+            )
 
     def _tally_votes(
         self,

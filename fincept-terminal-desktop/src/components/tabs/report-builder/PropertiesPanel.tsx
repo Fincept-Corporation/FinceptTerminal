@@ -8,8 +8,9 @@ import {
   BookmarkPlus,
   FileX,
 } from 'lucide-react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { PropertiesPanelProps } from './types';
-import { FINCEPT_COLORS, FONT_SIZES, CHART_TYPES } from './constants';
+import { FONT_SIZES, CHART_TYPES } from './constants';
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   selectedComponent,
@@ -20,9 +21,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   onSaveAsTemplate,
   onImageUpload,
 }) => {
+  const { colors, fontSize } = useTerminalTheme();
+
   if (!selectedComponent) {
     return (
-      <div className="p-4 text-center" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+      <div className="p-4 text-center" style={{ color: colors.textMuted }}>
         <SettingsIcon size={32} className="mx-auto mb-2 opacity-30" />
         <p className="text-xs">Select a component to edit properties</p>
       </div>
@@ -32,11 +35,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold" style={{ color: FINCEPT_COLORS.ORANGE }}>PROPERTIES</h3>
+        <h3 className="text-sm font-bold" style={{ color: colors.primary }}>PROPERTIES</h3>
         <button
           onClick={onClearSelection}
           className="p-1 hover:bg-[#2a2a2a] rounded"
-          style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}
+          style={{ color: colors.textMuted }}
         >
           <X size={16} />
         </button>
@@ -45,7 +48,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       <div className="space-y-4">
         {/* Component Type */}
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
             Type
           </label>
           <div className="px-3 py-2 text-xs rounded bg-[#0a0a0a] capitalize">
@@ -56,14 +59,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Content Editor */}
         {(selectedComponent.type === 'heading' || selectedComponent.type === 'text' || selectedComponent.type === 'code') && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Content
             </label>
             <textarea
               value={selectedComponent.content || ''}
               onChange={(e) => onUpdateComponent(selectedComponent.id, { content: e.target.value })}
               className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ color: colors.text }}
               rows={selectedComponent.type === 'code' ? 10 : 4}
               placeholder="Enter content..."
             />
@@ -74,20 +77,20 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'quote' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Quote Text
               </label>
               <textarea
                 value={selectedComponent.content || ''}
                 onChange={(e) => onUpdateComponent(selectedComponent.id, { content: e.target.value })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 rows={3}
                 placeholder="Enter quote text..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Author
               </label>
               <input
@@ -97,12 +100,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, author: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter author name..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Style
               </label>
               <select
@@ -111,7 +114,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, quoteType: e.target.value as 'quote' | 'info' | 'warning' | 'success' | 'error' }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
               >
                 <option value="quote">Quote</option>
                 <option value="info">Info</option>
@@ -127,20 +130,20 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'disclaimer' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Disclaimer Text
               </label>
               <textarea
                 value={selectedComponent.content || ''}
                 onChange={(e) => onUpdateComponent(selectedComponent.id, { content: e.target.value })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 rows={4}
                 placeholder="Enter disclaimer text..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Disclaimer Type
               </label>
               <div className="flex gap-2">
@@ -167,7 +170,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Alignment */}
         {(selectedComponent.type === 'heading' || selectedComponent.type === 'text') && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Alignment
             </label>
             <div className="flex gap-2">
@@ -193,7 +196,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Font Size */}
         {(selectedComponent.type === 'heading' || selectedComponent.type === 'text') && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Font Size
             </label>
             <select
@@ -202,7 +205,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 config: { ...selectedComponent.config, fontSize: e.target.value }
               })}
               className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ color: colors.text }}
             >
               {FONT_SIZES.map(size => (
                 <option key={size.value} value={size.value}>{size.label}</option>
@@ -214,7 +217,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Image Upload */}
         {selectedComponent.type === 'image' && (
           <div>
-            <label className="text-xs font-semibold mb-2 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-2 block" style={{ color: colors.textMuted }}>
               Image
             </label>
             {selectedComponent.config.imageUrl ? (
@@ -243,7 +246,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               <button
                 onClick={onImageUpload}
                 className="w-full px-3 py-2 text-xs rounded transition-colors flex items-center justify-center gap-2"
-                style={{ backgroundColor: FINCEPT_COLORS.ORANGE, color: FINCEPT_COLORS.BLACK }}
+                style={{ backgroundColor: colors.primary, color: '#000' }}
               >
                 <Plus size={14} />
                 Upload Image
@@ -255,7 +258,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Table Columns */}
         {selectedComponent.type === 'table' && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Columns (comma-separated)
             </label>
             <input
@@ -265,7 +268,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 config: { ...selectedComponent.config, columns: e.target.value.split(',').map(s => s.trim()) }
               })}
               className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ color: colors.text }}
               placeholder="Column 1, Column 2, Column 3"
             />
           </div>
@@ -274,7 +277,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Chart Type */}
         {selectedComponent.type === 'chart' && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Chart Type
             </label>
             <select
@@ -283,7 +286,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 config: { ...selectedComponent.config, chartType: e.target.value }
               })}
               className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ color: colors.text }}
             >
               {CHART_TYPES.map(chart => (
                 <option key={chart.value} value={chart.value}>{chart.label}</option>
@@ -296,7 +299,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'section' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Section Title
               </label>
               <input
@@ -306,12 +309,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, sectionTitle: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter section title..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Border Color
               </label>
               <input
@@ -324,7 +327,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Background Color
               </label>
               <input
@@ -342,7 +345,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Columns Count */}
         {selectedComponent.type === 'columns' && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Number of Columns
             </label>
             <select
@@ -351,7 +354,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 config: { ...selectedComponent.config, columnCount: Number(e.target.value) as 2 | 3 }
               })}
               className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ color: colors.text }}
             >
               <option value={2}>2 Columns</option>
               <option value={3}>3 Columns</option>
@@ -362,14 +365,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* KPI Settings */}
         {selectedComponent.type === 'kpi' && (
           <div>
-            <label className="text-xs font-semibold mb-2 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-2 block" style={{ color: colors.textMuted }}>
               KPI Cards
             </label>
             <div className="space-y-3">
               {(selectedComponent.config.kpis || []).map((kpi: any, idx: number) => (
                 <div key={idx} className="p-3 bg-[#0a0a0a] rounded border border-[#333333] space-y-2">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold" style={{ color: FINCEPT_COLORS.ORANGE }}>KPI {idx + 1}</span>
+                    <span className="text-xs font-semibold" style={{ color: colors.primary }}>KPI {idx + 1}</span>
                     <button
                       onClick={() => {
                         const newKpis = [...(selectedComponent.config.kpis || [])];
@@ -394,7 +397,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       });
                     }}
                     className="w-full px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                    style={{ color: colors.text }}
                     placeholder="Label (e.g., Revenue)"
                   />
                   <input
@@ -408,7 +411,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       });
                     }}
                     className="w-full px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                    style={{ color: colors.text }}
                     placeholder="Value (e.g., $1.2M)"
                   />
                   <div className="flex gap-2">
@@ -427,7 +430,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         }
                       }}
                       className="flex-1 px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                      style={{ color: colors.text }}
                       placeholder="Change %"
                     />
                     <select
@@ -440,7 +443,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         });
                       }}
                       className="flex-1 px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                      style={{ color: colors.text }}
                     >
                       <option value="up">Up</option>
                       <option value="down">Down</option>
@@ -456,7 +459,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   });
                 }}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors flex items-center justify-center gap-2"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
               >
                 <Plus size={14} />
                 Add KPI Card
@@ -468,7 +471,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Sparkline Settings */}
         {selectedComponent.type === 'sparkline' && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Data (comma-separated numbers)
             </label>
             <input
@@ -481,11 +484,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 });
               }}
               className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ color: colors.text }}
               placeholder="10, 25, 15, 30, 20, 35, 28"
             />
             <div className="mt-2">
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Color
               </label>
               <input
@@ -504,7 +507,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'liveTable' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Data Source
               </label>
               <select
@@ -513,7 +516,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, dataSource: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
               >
                 <option value="portfolio">Portfolio</option>
                 <option value="watchlist">Watchlist</option>
@@ -521,7 +524,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Columns (comma-separated)
               </label>
               <input
@@ -531,7 +534,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, columns: e.target.value.split(',').map(s => s.trim()) }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Symbol, Price, Change"
               />
             </div>
@@ -542,7 +545,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'dynamicChart' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Chart Type
               </label>
               <select
@@ -551,7 +554,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, chartType: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
               >
                 <option value="line">Line Chart</option>
                 <option value="bar">Bar Chart</option>
@@ -560,7 +563,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold mb-2 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-2 block" style={{ color: colors.textMuted }}>
                 Chart Data
               </label>
               <div className="space-y-2">
@@ -577,7 +580,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         });
                       }}
                       className="flex-1 px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                      style={{ color: colors.text }}
                       placeholder="Label"
                     />
                     <input
@@ -595,7 +598,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         }
                       }}
                       className="w-20 px-2 py-1 text-xs rounded bg-[#1a1a1a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                      style={{ color: colors.text }}
                       placeholder="Value"
                     />
                     <button
@@ -620,7 +623,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     });
                   }}
                   className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors flex items-center justify-center gap-2"
-                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                  style={{ color: colors.text }}
                 >
                   <Plus size={14} />
                   Add Data Point
@@ -634,7 +637,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'list' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 List Type
               </label>
               <div className="flex gap-2">
@@ -665,7 +668,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold mb-2 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-2 block" style={{ color: colors.textMuted }}>
                 Items
               </label>
               <div className="space-y-2">
@@ -682,7 +685,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         });
                       }}
                       className="flex-1 px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                      style={{ color: colors.text }}
                       placeholder={`Item ${idx + 1}`}
                     />
                     <button
@@ -707,7 +710,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     });
                   }}
                   className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors flex items-center justify-center gap-2"
-                  style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                  style={{ color: colors.text }}
                 >
                   <Plus size={14} />
                   Add Item
@@ -720,7 +723,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Table of Contents Settings */}
         {selectedComponent.type === 'toc' && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Show Page Numbers
             </label>
             <div className="flex gap-2">
@@ -758,7 +761,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {/* Divider Settings */}
         {selectedComponent.type === 'divider' && (
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
               Color
             </label>
             <input
@@ -779,7 +782,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'pagebreak' && (
           <div className="text-center py-4">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#0a0a0a] mb-2">
-              <FileX size={24} style={{ color: FINCEPT_COLORS.ORANGE }} />
+              <FileX size={24} style={{ color: colors.primary }} />
             </div>
             <p className="text-xs text-gray-400">
               Page Break
@@ -794,7 +797,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'coverpage' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Title
               </label>
               <input
@@ -802,12 +805,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 value={selectedComponent.content || ''}
                 onChange={(e) => onUpdateComponent(selectedComponent.id, { content: e.target.value })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter cover page title..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Subtitle
               </label>
               <input
@@ -817,12 +820,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, subtitle: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter subtitle..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Background Color
               </label>
               <input
@@ -835,7 +838,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-2 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-2 block" style={{ color: colors.textMuted }}>
                 Logo
               </label>
               {selectedComponent.config.logo ? (
@@ -864,7 +867,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 <button
                   onClick={onImageUpload}
                   className="w-full px-3 py-2 text-xs rounded transition-colors flex items-center justify-center gap-2"
-                  style={{ backgroundColor: FINCEPT_COLORS.ORANGE, color: FINCEPT_COLORS.BLACK }}
+                  style={{ backgroundColor: colors.primary, color: '#000' }}
                 >
                   <Plus size={14} />
                   Upload Logo
@@ -878,7 +881,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'subheading' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Content
               </label>
               <input
@@ -886,12 +889,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 value={selectedComponent.content || ''}
                 onChange={(e) => onUpdateComponent(selectedComponent.id, { content: e.target.value })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter subheading..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Alignment
               </label>
               <div className="flex gap-2">
@@ -919,7 +922,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'signature' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Name
               </label>
               <input
@@ -929,12 +932,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, name: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter name..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Title
               </label>
               <input
@@ -944,12 +947,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, title: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter title..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Signature Line
               </label>
               <div className="flex gap-2">
@@ -986,7 +989,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'qrcode' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 URL/Value
               </label>
               <input
@@ -996,12 +999,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, value: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter URL..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Label
               </label>
               <input
@@ -1011,12 +1014,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, label: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter label..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Size
               </label>
               <div className="flex items-center gap-2">
@@ -1030,9 +1033,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     config: { ...selectedComponent.config, size: Number(e.target.value) }
                   })}
                   className="flex-1"
-                  style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+                  style={{ accentColor: colors.primary }}
                 />
-                <span className="text-xs" style={{ color: FINCEPT_COLORS.TEXT_PRIMARY, minWidth: '35px' }}>
+                <span className="text-xs" style={{ color: colors.text, minWidth: '35px' }}>
                   {selectedComponent.config.size || 100}px
                 </span>
               </div>
@@ -1044,7 +1047,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         {selectedComponent.type === 'watermark' && (
           <>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Text
               </label>
               <input
@@ -1054,12 +1057,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, text: e.target.value }
                 })}
                 className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ color: colors.text }}
                 placeholder="Enter watermark text..."
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Opacity ({Math.round((selectedComponent.config.opacity || 0.1) * 100)}%)
               </label>
               <input
@@ -1072,11 +1075,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, opacity: Number(e.target.value) }
                 })}
                 className="w-full"
-                style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+                style={{ accentColor: colors.primary }}
               />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: colors.textMuted }}>
                 Rotation ({selectedComponent.config.rotation || -45}°)
               </label>
               <input
@@ -1089,14 +1092,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   config: { ...selectedComponent.config, rotation: Number(e.target.value) }
                 })}
                 className="w-full"
-                style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+                style={{ accentColor: colors.primary }}
               />
             </div>
           </>
         )}
 
         {/* Actions */}
-        <div className="pt-4 border-t" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
+        <div className="pt-4 border-t" style={{ borderColor: colors.panel }}>
           <div className="flex gap-2 mb-2">
             <button
               onClick={() => onDuplicateComponent(selectedComponent.id)}
@@ -1116,7 +1119,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           <button
             onClick={onSaveAsTemplate}
             className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors flex items-center justify-center gap-2"
-            style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+            style={{ color: colors.text }}
           >
             <BookmarkPlus size={14} />
             Save as Template

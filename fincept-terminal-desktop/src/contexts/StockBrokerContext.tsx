@@ -53,6 +53,7 @@ import {
   type UnifiedPosition,
   type PaperOrder,
 } from '@/services/unifiedTradingService';
+import * as symbolMaster from '@/services/symbolMasterService';
 
 // ============================================================================
 // CONSTANTS
@@ -619,6 +620,17 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
           // Fetch initial data
           await refreshAllData(adapterToUse);
 
+          // Auto-download master contract if needed (background task)
+          symbolMaster.ensureMasterContract(activeBroker).then((result) => {
+            if (result.success) {
+              console.log(`[StockBrokerContext] ✓ Master contract ready: ${result.total_symbols} symbols`);
+            } else {
+              console.warn(`[StockBrokerContext] Master contract download issue: ${result.message}`);
+            }
+          }).catch((err) => {
+            console.warn(`[StockBrokerContext] Master contract download failed:`, err);
+          });
+
           // Connect WebSocket for real-time data streaming
           try {
             await adapterToUse.connectWebSocket();
@@ -718,6 +730,17 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
 
           // Fetch initial data
           await refreshAllData(adapter);
+
+          // Auto-download master contract if needed (background task)
+          symbolMaster.ensureMasterContract(activeBroker).then((result) => {
+            if (result.success) {
+              console.log(`[StockBrokerContext] ✓ Master contract ready: ${result.total_symbols} symbols`);
+            } else {
+              console.warn(`[StockBrokerContext] Master contract download issue: ${result.message}`);
+            }
+          }).catch((err) => {
+            console.warn(`[StockBrokerContext] Master contract download failed:`, err);
+          });
 
           // Connect WebSocket for real-time data streaming
           try {

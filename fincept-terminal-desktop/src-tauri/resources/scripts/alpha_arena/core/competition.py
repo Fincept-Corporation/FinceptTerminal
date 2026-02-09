@@ -138,15 +138,24 @@ class AlphaArenaCompetition:
                 elif hasattr(model, 'metadata') and model.metadata:
                     trading_style = model.metadata.get('trading_style')
 
+                # Build instructions from custom system prompt (from Settings tab)
+                custom_instructions = None
+                if self.config.custom_prompt:
+                    custom_instructions = [self.config.custom_prompt]
+
                 # Create agent with optional trading style
+                # Temperature and system prompt come from Settings > LLM Config global settings
+                agent_capital = model.initial_capital or self.config.initial_capital
                 agent = LLMTradingAgent(
                     name=model.name,
                     provider=provider,
                     model_id=model_id,
                     api_key=api_key,
-                    temperature=0.7,
+                    temperature=self.config.temperature,
+                    instructions=custom_instructions,
                     mode=self.config.mode.value if hasattr(self.config.mode, 'value') else self.config.mode,
                     trading_style=trading_style,
+                    initial_capital=agent_capital,
                 )
 
                 # Initialize with timeout
@@ -156,7 +165,11 @@ class AlphaArenaCompetition:
                         timeout=30.0
                     )
                     if init_success:
-                        logger.info(f"Agent {model.name} initialized successfully")
+                        if hasattr(agent, 'is_mock_mode') and agent.is_mock_mode:
+                            reason = agent.mock_mode_reason or 'unknown'
+                            logger.warning(f"Agent {model.name} is in MOCK MODE: {reason}")
+                        else:
+                            logger.info(f"Agent {model.name} initialized successfully with real LLM")
                     else:
                         logger.warning(f"Agent {model.name} initialization returned False, using mock mode")
                 except asyncio.TimeoutError:

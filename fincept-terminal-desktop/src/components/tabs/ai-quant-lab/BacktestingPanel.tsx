@@ -23,25 +23,7 @@ import {
   Info
 } from 'lucide-react';
 import { qlibService } from '@/services/aiQuantLab/qlibService';
-
-// Fincept Professional Color Palette
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface BacktestMetrics {
   annual_return?: number;
@@ -57,6 +39,8 @@ interface BacktestMetrics {
 }
 
 export function BacktestingPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
+
   // Strategy Configuration
   const [strategyType, setStrategyType] = useState('topk_dropout');
   const [instruments, setInstruments] = useState('AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA,META,NFLX');
@@ -130,36 +114,36 @@ export function BacktestingPanel() {
   };
 
   return (
-    <div className="flex h-full" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+    <div className="flex h-full" style={{ backgroundColor: colors.background }}>
       {/* Left Panel - Configuration */}
       <div
         className="w-96 border-r overflow-auto flex-shrink-0"
-        style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
+        style={{ backgroundColor: colors.panel, borderColor: 'var(--ft-border-color, #2A2A2A)' }}
       >
         <div className="p-4 space-y-4">
           {/* Header */}
-          <div className="pb-3 border-b" style={{ borderColor: FINCEPT.BORDER }}>
+          <div className="pb-3 border-b" style={{ borderColor: 'var(--ft-border-color, #2A2A2A)' }}>
             <div className="flex items-center gap-2 mb-1">
-              <BarChart3 size={18} color={FINCEPT.ORANGE} />
-              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
+              <BarChart3 size={18} color={colors.primary} />
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: colors.text }}>
                 STRATEGY BACKTESTING
               </h2>
             </div>
-            <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+            <p className="text-xs font-mono" style={{ color: colors.textMuted }}>
               Test trading strategies with historical data
             </p>
           </div>
 
           {/* Strategy Configuration */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wide mb-3 flex items-center gap-1" style={{ color: FINCEPT.GRAY }}>
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-3 flex items-center gap-1" style={{ color: colors.textMuted }}>
               <Layers size={12} />
               STRATEGY CONFIGURATION
             </h3>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                   Strategy Type
                 </label>
                 <select
@@ -167,9 +151,9 @@ export function BacktestingPanel() {
                   onChange={(e) => setStrategyType(e.target.value)}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none uppercase"
                   style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                   }}
                 >
                   <option value="topk_dropout">Top-K Dropout</option>
@@ -179,7 +163,7 @@ export function BacktestingPanel() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                   Universe (Comma-separated)
                 </label>
                 <textarea
@@ -188,16 +172,16 @@ export function BacktestingPanel() {
                   rows={3}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none resize-none"
                   style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                   }}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                     <Calendar size={12} className="inline mr-1" />
                     Start Date
                   </label>
@@ -207,14 +191,14 @@ export function BacktestingPanel() {
                     onChange={(e) => setStartDate(e.target.value)}
                     className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                     style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      color: FINCEPT.WHITE,
-                      border: `1px solid ${FINCEPT.BORDER}`
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                      border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                     <Calendar size={12} className="inline mr-1" />
                     End Date
                   </label>
@@ -224,16 +208,16 @@ export function BacktestingPanel() {
                     onChange={(e) => setEndDate(e.target.value)}
                     className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                     style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      color: FINCEPT.WHITE,
-                      border: `1px solid ${FINCEPT.BORDER}`
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                      border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                     }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                   Top K Positions
                 </label>
                 <input
@@ -243,9 +227,9 @@ export function BacktestingPanel() {
                   onChange={(e) => { const v = e.target.value; if (v === '' || /^\d+$/.test(v)) { setTopK(Number(v) || 0) } }}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                   style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                   }}
                 />
               </div>
@@ -253,15 +237,15 @@ export function BacktestingPanel() {
           </div>
 
           {/* Portfolio Configuration */}
-          <div className="pt-3 border-t" style={{ borderColor: FINCEPT.BORDER }}>
-            <h3 className="text-xs font-bold uppercase tracking-wide mb-3 flex items-center gap-1" style={{ color: FINCEPT.GRAY }}>
+          <div className="pt-3 border-t" style={{ borderColor: 'var(--ft-border-color, #2A2A2A)' }}>
+            <h3 className="text-xs font-bold uppercase tracking-wide mb-3 flex items-center gap-1" style={{ color: colors.textMuted }}>
               <Settings size={12} />
               PORTFOLIO SETTINGS
             </h3>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                   Initial Capital (USD)
                 </label>
                 <input
@@ -271,15 +255,15 @@ export function BacktestingPanel() {
                   onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setInitialCapital(Number(v) || 0) } }}
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                   style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                   }}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                   Benchmark
                 </label>
                 <input
@@ -289,16 +273,16 @@ export function BacktestingPanel() {
                   placeholder="SPY"
                   className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                   style={{
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                   }}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                     Commission (%)
                   </label>
                   <input
@@ -308,14 +292,14 @@ export function BacktestingPanel() {
                     onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setCommission((Number(v) || 0) / 100) } }}
                     className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                     style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      color: FINCEPT.WHITE,
-                      border: `1px solid ${FINCEPT.BORDER}`
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                      border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                     }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: FINCEPT.GRAY }}>
+                  <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: colors.textMuted }}>
                     Slippage (%)
                   </label>
                   <input
@@ -325,9 +309,9 @@ export function BacktestingPanel() {
                     onChange={(e) => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) { setSlippage((Number(v) || 0) / 100) } }}
                     className="w-full px-3 py-2 rounded text-xs font-mono outline-none"
                     style={{
-                      backgroundColor: FINCEPT.DARK_BG,
-                      color: FINCEPT.WHITE,
-                      border: `1px solid ${FINCEPT.BORDER}`
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                      border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                     }}
                   />
                 </div>
@@ -341,7 +325,7 @@ export function BacktestingPanel() {
               onClick={handleRunBacktest}
               disabled={isRunning || !instruments || !startDate || !endDate}
               className="w-full py-3 rounded font-bold uppercase text-sm tracking-wide hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: FINCEPT.ORANGE, color: FINCEPT.DARK_BG }}
+              style={{ backgroundColor: colors.primary, color: colors.background }}
             >
               {isRunning ? (
                 <>
@@ -360,20 +344,20 @@ export function BacktestingPanel() {
       </div>
 
       {/* Right Panel - Results */}
-      <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: FINCEPT.DARK_BG }}>
+      <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: colors.background }}>
         {error ? (
           <div className="flex items-center justify-center h-full">
             <div
               className="max-w-md p-6 rounded border"
-              style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.RED }}
+              style={{ backgroundColor: colors.panel, borderColor: colors.alert }}
             >
               <div className="flex items-center gap-3 mb-3">
-                <AlertCircle size={24} color={FINCEPT.RED} />
-                <h3 className="text-sm font-bold uppercase tracking-wide" style={{ color: FINCEPT.WHITE }}>
+                <AlertCircle size={24} color={colors.alert} />
+                <h3 className="text-sm font-bold uppercase tracking-wide" style={{ color: colors.text }}>
                   BACKTEST ERROR
                 </h3>
               </div>
-              <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+              <p className="text-xs font-mono" style={{ color: colors.textMuted }}>
                 {error}
               </p>
             </div>
@@ -383,16 +367,16 @@ export function BacktestingPanel() {
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold uppercase tracking-wide mb-1" style={{ color: FINCEPT.WHITE }}>
+                <h2 className="text-xl font-bold uppercase tracking-wide mb-1" style={{ color: colors.text }}>
                   BACKTEST RESULTS
                 </h2>
-                <p className="text-xs font-mono" style={{ color: FINCEPT.GRAY }}>
+                <p className="text-xs font-mono" style={{ color: colors.textMuted }}>
                   {startDate} to {endDate} • {instruments.split(',').length} instruments
                 </p>
               </div>
               <button
                 className="px-4 py-2 rounded font-bold uppercase text-xs tracking-wide hover:bg-opacity-80 transition-colors flex items-center gap-2"
-                style={{ backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE }}
+                style={{ backgroundColor: colors.panel, color: colors.text }}
               >
                 <Download size={14} />
                 EXPORT
@@ -401,7 +385,7 @@ export function BacktestingPanel() {
 
             {/* Performance Metrics */}
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: FINCEPT.GRAY }}>
+              <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: colors.textMuted }}>
                 PERFORMANCE METRICS
               </h3>
               <div className="grid grid-cols-3 gap-4">
@@ -409,38 +393,38 @@ export function BacktestingPanel() {
                   label="Annual Return"
                   value={backtestResults.annual_return ? `${(backtestResults.annual_return * 100).toFixed(2)}%` : 'N/A'}
                   icon={<TrendingUp size={18} />}
-                  color={backtestResults.annual_return && backtestResults.annual_return > 0 ? FINCEPT.GREEN : FINCEPT.RED}
+                  color={backtestResults.annual_return && backtestResults.annual_return > 0 ? colors.success : colors.alert}
                   positive={backtestResults.annual_return ? backtestResults.annual_return > 0 : undefined}
                 />
                 <MetricCard
                   label="Sharpe Ratio"
                   value={backtestResults.sharpe_ratio?.toFixed(2) || 'N/A'}
                   icon={<Activity size={18} />}
-                  color={FINCEPT.ORANGE}
+                  color={colors.primary}
                 />
                 <MetricCard
                   label="Max Drawdown"
                   value={backtestResults.max_drawdown ? `${(backtestResults.max_drawdown * 100).toFixed(2)}%` : 'N/A'}
                   icon={<TrendingDown size={18} />}
-                  color={FINCEPT.RED}
+                  color={colors.alert}
                 />
                 <MetricCard
                   label="Volatility"
                   value={backtestResults.volatility ? `${(backtestResults.volatility * 100).toFixed(2)}%` : 'N/A'}
                   icon={<Activity size={18} />}
-                  color={FINCEPT.CYAN}
+                  color={colors.accent}
                 />
                 <MetricCard
                   label="Win Rate"
                   value={backtestResults.win_rate ? `${(backtestResults.win_rate * 100).toFixed(1)}%` : 'N/A'}
                   icon={<Target size={18} />}
-                  color={FINCEPT.GREEN}
+                  color={colors.success}
                 />
                 <MetricCard
                   label="Total Trades"
                   value={backtestResults.total_trades?.toString() || 'N/A'}
                   icon={<BarChart3 size={18} />}
-                  color={FINCEPT.WHITE}
+                  color={colors.text}
                 />
               </div>
             </div>
@@ -448,7 +432,7 @@ export function BacktestingPanel() {
             {/* Trade Statistics */}
             {(backtestResults.avg_win !== undefined || backtestResults.avg_loss !== undefined) && (
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: FINCEPT.GRAY }}>
+                <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: colors.textMuted }}>
                   TRADE STATISTICS
                 </h3>
                 <div className="grid grid-cols-3 gap-4">
@@ -456,19 +440,19 @@ export function BacktestingPanel() {
                     label="Profitable Trades"
                     value={backtestResults.profitable_trades?.toString() || 'N/A'}
                     icon={<CheckCircle2 size={18} />}
-                    color={FINCEPT.GREEN}
+                    color={colors.success}
                   />
                   <MetricCard
                     label="Average Win"
                     value={backtestResults.avg_win ? `${(backtestResults.avg_win * 100).toFixed(2)}%` : 'N/A'}
                     icon={<TrendingUp size={18} />}
-                    color={FINCEPT.GREEN}
+                    color={colors.success}
                   />
                   <MetricCard
                     label="Average Loss"
                     value={backtestResults.avg_loss ? `${(backtestResults.avg_loss * 100).toFixed(2)}%` : 'N/A'}
                     icon={<TrendingDown size={18} />}
-                    color={FINCEPT.RED}
+                    color={colors.alert}
                   />
                 </div>
               </div>
@@ -476,16 +460,16 @@ export function BacktestingPanel() {
 
             {/* Full Results JSON */}
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: FINCEPT.GRAY }}>
+              <h3 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: colors.textMuted }}>
                 <Info size={12} className="inline mr-1" />
                 DETAILED RESULTS
               </h3>
               <pre
                 className="p-4 rounded text-xs font-mono overflow-x-auto border"
                 style={{
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  color: FINCEPT.WHITE,
-                  borderColor: FINCEPT.BORDER
+                  backgroundColor: colors.panel,
+                  color: colors.text,
+                  borderColor: 'var(--ft-border-color, #2A2A2A)'
                 }}
               >
                 {JSON.stringify(backtestResults, null, 2)}
@@ -495,11 +479,11 @@ export function BacktestingPanel() {
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-md">
-              <BarChart3 size={64} color={FINCEPT.GRAY} className="mx-auto mb-4" />
-              <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: FINCEPT.WHITE }}>
+              <BarChart3 size={64} color={colors.textMuted} className="mx-auto mb-4" />
+              <h3 className="text-base font-bold uppercase tracking-wide mb-2" style={{ color: colors.text }}>
                 NO BACKTEST RESULTS
               </h3>
-              <p className="text-sm font-mono" style={{ color: FINCEPT.GRAY }}>
+              <p className="text-sm font-mono" style={{ color: colors.textMuted }}>
                 Configure your strategy parameters and run a backtest<br/>
                 to see performance metrics and trade analysis
               </p>
@@ -524,13 +508,15 @@ function MetricCard({
   color: string;
   positive?: boolean;
 }) {
+  const { colors } = useTerminalTheme();
+
   return (
     <div
       className="p-4 rounded border"
-      style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
+      style={{ backgroundColor: colors.panel, borderColor: 'var(--ft-border-color, #2A2A2A)' }}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs uppercase font-mono" style={{ color: FINCEPT.GRAY }}>
+        <span className="text-xs uppercase font-mono" style={{ color: colors.textMuted }}>
           {label}
         </span>
         <div style={{ color }}>{icon}</div>
@@ -538,7 +524,7 @@ function MetricCard({
       <div className="text-2xl font-bold font-mono flex items-center gap-2" style={{ color }}>
         {value}
         {positive !== undefined && (
-          positive ? <TrendingUp size={16} color={FINCEPT.GREEN} /> : <TrendingDown size={16} color={FINCEPT.RED} />
+          positive ? <TrendingUp size={16} color={colors.success} /> : <TrendingDown size={16} color={colors.alert} />
         )}
       </div>
     </div>

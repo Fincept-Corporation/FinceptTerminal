@@ -35,7 +35,7 @@ import type {
   YieldCurveData,
   PCAData,
 } from './types';
-import { CORRELATION_ASSETS, FINCEPT_COLORS, TREASURY_MATURITIES, TYPOGRAPHY } from './constants';
+import { CORRELATION_ASSETS, TREASURY_MATURITIES } from './constants';
 
 // Default configuration
 const DEFAULT_CONFIG: SurfaceAnalyticsConfig = {
@@ -57,9 +57,11 @@ const DEFAULT_CONFIG: SurfaceAnalyticsConfig = {
 const ApiKeySetupScreen: React.FC<{
   onOpenSettings: () => void;
   onUseDemoData: () => void;
-  accentColor: string;
-  textColor: string;
-}> = ({ onOpenSettings, onUseDemoData, accentColor, textColor }) => (
+  colors: { primary: string; text: string; textMuted: string; background: string; panel: string; info: string; success: string; warning: string };
+  fontSize: { heading: string; subheading: string; body: string; small: string; tiny: string };
+  fontFamily: string;
+  t: (key: string) => string;
+}> = ({ onOpenSettings, onUseDemoData, colors, fontSize, fontFamily, t }) => (
   <div
     style={{
       display: 'flex',
@@ -68,7 +70,7 @@ const ApiKeySetupScreen: React.FC<{
       justifyContent: 'center',
       height: '100%',
       padding: '48px',
-      backgroundColor: FINCEPT_COLORS.BLACK,
+      backgroundColor: colors.background,
     }}
   >
     {/* Main Container */}
@@ -76,9 +78,9 @@ const ApiKeySetupScreen: React.FC<{
       style={{
         maxWidth: '560px',
         padding: '32px',
-        backgroundColor: FINCEPT_COLORS.PANEL_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.panel,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         textAlign: 'center',
       }}
     >
@@ -91,40 +93,38 @@ const ApiKeySetupScreen: React.FC<{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: accentColor + '15',
+          backgroundColor: colors.primary + '15',
           borderRadius: '50%',
         }}
       >
-        <Database size={32} style={{ color: accentColor }} />
+        <Database size={32} style={{ color: colors.primary }} />
       </div>
 
       {/* Title */}
       <h2
         style={{
-          fontSize: '16px',
+          fontSize: fontSize.heading,
           fontWeight: 700,
-          color: textColor,
+          color: colors.text,
           marginBottom: '12px',
-          fontFamily: TYPOGRAPHY.FONT_FAMILY,
+          fontFamily,
           letterSpacing: '0.5px',
         }}
       >
-        DATABENTO API KEY REQUIRED
+        {t('surfaceAnalytics.apiKeyRequired')}
       </h2>
 
       {/* Description */}
       <p
         style={{
-          fontSize: '11px',
-          color: FINCEPT_COLORS.GRAY,
+          fontSize: fontSize.body,
+          color: colors.textMuted,
           marginBottom: '24px',
           lineHeight: '1.6',
-          fontFamily: TYPOGRAPHY.FONT_FAMILY,
+          fontFamily,
         }}
       >
-        Surface Analytics requires a Databento API key to fetch real-time options data,
-        historical prices, and market information. Databento provides institutional-grade
-        market data for professional financial analysis.
+        {t('surfaceAnalytics.apiKeyDescription')}
       </p>
 
       {/* Features List */}
@@ -138,10 +138,10 @@ const ApiKeySetupScreen: React.FC<{
         }}
       >
         {[
-          { icon: TrendingUp, label: 'Volatility Surfaces', desc: 'Options IV analysis' },
-          { icon: Network, label: 'Correlation Matrix', desc: 'Multi-asset correlations' },
-          { icon: Activity, label: 'Yield Curves', desc: 'Treasury rate evolution' },
-          { icon: BarChart3, label: 'PCA Factors', desc: 'Factor decomposition' },
+          { icon: TrendingUp, label: t('surfaceAnalytics.features.volatility'), desc: t('surfaceAnalytics.features.volatilityDesc') },
+          { icon: Network, label: t('surfaceAnalytics.features.correlation'), desc: t('surfaceAnalytics.features.correlationDesc') },
+          { icon: Activity, label: t('surfaceAnalytics.features.yieldCurves'), desc: t('surfaceAnalytics.features.yieldCurvesDesc') },
+          { icon: BarChart3, label: t('surfaceAnalytics.features.pca'), desc: t('surfaceAnalytics.features.pcaDesc') },
         ].map(({ icon: Icon, label, desc }) => (
           <div
             key={label}
@@ -150,17 +150,17 @@ const ApiKeySetupScreen: React.FC<{
               alignItems: 'flex-start',
               gap: '8px',
               padding: '8px',
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
             }}
           >
-            <Icon size={14} style={{ color: accentColor, marginTop: '2px' }} />
+            <Icon size={14} style={{ color: colors.primary, marginTop: '2px' }} />
             <div>
-              <div style={{ fontSize: '9px', fontWeight: 700, color: textColor, letterSpacing: '0.5px' }}>
+              <div style={{ fontSize: fontSize.tiny, fontWeight: 700, color: colors.text, letterSpacing: '0.5px' }}>
                 {label}
               </div>
-              <div style={{ fontSize: '9px', color: FINCEPT_COLORS.MUTED }}>
+              <div style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                 {desc}
               </div>
             </div>
@@ -179,19 +179,19 @@ const ApiKeySetupScreen: React.FC<{
               alignItems: 'center',
               gap: '8px',
               padding: '10px 20px',
-              backgroundColor: accentColor,
-              color: FINCEPT_COLORS.BLACK,
+              backgroundColor: colors.primary,
+              color: colors.background,
               border: 'none',
-              borderRadius: '2px',
-              fontSize: '10px',
+              borderRadius: 'var(--ft-border-radius)',
+              fontSize: fontSize.small,
               fontWeight: 700,
               cursor: 'pointer',
-              fontFamily: TYPOGRAPHY.FONT_FAMILY,
+              fontFamily,
               letterSpacing: '0.5px',
             }}
           >
             <Key size={14} />
-            CONFIGURE API KEY
+            {t('surfaceAnalytics.configureApiKey')}
           </button>
 
           <a
@@ -204,25 +204,25 @@ const ApiKeySetupScreen: React.FC<{
               gap: '8px',
               padding: '10px 20px',
               backgroundColor: 'transparent',
-              color: FINCEPT_COLORS.CYAN,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
-              fontSize: '10px',
+              color: colors.info,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
+              fontSize: fontSize.small,
               fontWeight: 700,
               cursor: 'pointer',
               textDecoration: 'none',
-              fontFamily: TYPOGRAPHY.FONT_FAMILY,
+              fontFamily,
               letterSpacing: '0.5px',
             }}
           >
             <ExternalLink size={14} />
-            GET API KEY
+            {t('surfaceAnalytics.getApiKey')}
           </a>
         </div>
 
         {/* Demo mode option */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '9px', color: FINCEPT_COLORS.MUTED }}>or</span>
+          <span style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>{t('common.or')}</span>
           <button
             onClick={onUseDemoData}
             style={{
@@ -231,20 +231,20 @@ const ApiKeySetupScreen: React.FC<{
               gap: '6px',
               padding: '8px 16px',
               backgroundColor: 'transparent',
-              color: FINCEPT_COLORS.GREEN,
-              border: `1px solid ${FINCEPT_COLORS.GREEN}50`,
-              borderRadius: '2px',
-              fontSize: '9px',
+              color: colors.success,
+              border: `1px solid ${colors.success}50`,
+              borderRadius: 'var(--ft-border-radius)',
+              fontSize: fontSize.tiny,
               fontWeight: 700,
               cursor: 'pointer',
-              fontFamily: TYPOGRAPHY.FONT_FAMILY,
+              fontFamily,
               letterSpacing: '0.5px',
             }}
           >
             <BarChart3 size={12} />
-            USE DEMO DATA
+            {t('surfaceAnalytics.useDemoData')}
           </button>
-          <span style={{ fontSize: '9px', color: FINCEPT_COLORS.MUTED }}>(synthetic data for visualization)</span>
+          <span style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>({t('surfaceAnalytics.syntheticData')})</span>
         </div>
       </div>
 
@@ -253,18 +253,17 @@ const ApiKeySetupScreen: React.FC<{
         style={{
           marginTop: '20px',
           padding: '10px',
-          backgroundColor: FINCEPT_COLORS.YELLOW + '10',
-          border: `1px solid ${FINCEPT_COLORS.YELLOW}30`,
-          borderRadius: '2px',
+          backgroundColor: colors.warning + '10',
+          border: `1px solid ${colors.warning}30`,
+          borderRadius: 'var(--ft-border-radius)',
           display: 'flex',
           alignItems: 'flex-start',
           gap: '8px',
         }}
       >
-        <AlertTriangle size={14} style={{ color: FINCEPT_COLORS.YELLOW, flexShrink: 0, marginTop: '2px' }} />
-        <span style={{ fontSize: '9px', color: FINCEPT_COLORS.GRAY, textAlign: 'left' }}>
-          <strong style={{ color: FINCEPT_COLORS.YELLOW }}>Note:</strong> Databento is a paid service.
-          API calls consume data credits. Review their pricing at databento.com/pricing before proceeding.
+        <AlertTriangle size={14} style={{ color: colors.warning, flexShrink: 0, marginTop: '2px' }} />
+        <span style={{ fontSize: fontSize.tiny, color: colors.textMuted, textAlign: 'left' }}>
+          <strong style={{ color: colors.warning }}>{t('common.note')}:</strong> {t('surfaceAnalytics.paidServiceNotice')}
         </span>
       </div>
     </div>
@@ -272,8 +271,22 @@ const ApiKeySetupScreen: React.FC<{
 );
 
 const SurfaceAnalyticsTab: React.FC = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('surfaceAnalytics');
   const { colors, fontSize, fontFamily } = useTerminalTheme();
+
+  // Theme-aware color mappings
+  const themeColors = {
+    primary: colors.primary,
+    text: colors.text,
+    textMuted: colors.textMuted,
+    background: colors.background,
+    panel: colors.panel,
+    info: colors.info,
+    success: colors.success,
+    warning: colors.warning,
+    alert: colors.alert,
+    accent: colors.accent,
+  };
 
   // State
   const [activeChart, setActiveChart] = useState<ChartType>('volatility');
@@ -598,14 +611,14 @@ const SurfaceAnalyticsTab: React.FC = () => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: FINCEPT_COLORS.BLACK,
+          backgroundColor: colors.background,
           color: colors.text,
           fontFamily,
         }}
       >
         <RefreshCw size={32} className="animate-spin" style={{ color: colors.accent }} />
-        <span style={{ marginTop: '16px', fontSize: '11px', color: FINCEPT_COLORS.MUTED }}>
-          INITIALIZING SURFACE ANALYTICS...
+        <span style={{ marginTop: '16px', fontSize: fontSize.body, color: colors.textMuted }}>
+          {t('initializing')}
         </span>
       </div>
     );
@@ -619,7 +632,7 @@ const SurfaceAnalyticsTab: React.FC = () => {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: FINCEPT_COLORS.BLACK,
+          backgroundColor: colors.background,
           color: colors.text,
           fontFamily,
           overflow: 'hidden',
@@ -632,15 +645,15 @@ const SurfaceAnalyticsTab: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '8px 16px',
-            backgroundColor: FINCEPT_COLORS.HEADER_BG,
+            backgroundColor: colors.panel,
             borderBottom: `2px solid ${colors.accent}`,
             boxShadow: `0 2px 8px ${colors.accent}20`,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Database size={14} style={{ color: colors.accent }} />
-            <span style={{ fontSize: '11px', fontWeight: 700, color: colors.accent, letterSpacing: '0.5px' }}>
-              SURFACE ANALYTICS
+            <span style={{ fontSize: fontSize.body, fontWeight: 700, color: colors.accent, letterSpacing: '0.5px' }}>
+              {t('title')}
             </span>
           </div>
           <button
@@ -651,16 +664,16 @@ const SurfaceAnalyticsTab: React.FC = () => {
               gap: '6px',
               padding: '6px 12px',
               backgroundColor: colors.accent,
-              color: FINCEPT_COLORS.BLACK,
+              color: colors.background,
               border: 'none',
-              borderRadius: '2px',
-              fontSize: '9px',
+              borderRadius: 'var(--ft-border-radius)',
+              fontSize: fontSize.tiny,
               fontWeight: 700,
               cursor: 'pointer',
             }}
           >
             <Settings size={12} />
-            SETTINGS
+            {t('common:settings')}
           </button>
         </div>
 
@@ -668,15 +681,17 @@ const SurfaceAnalyticsTab: React.FC = () => {
         <ApiKeySetupScreen
           onOpenSettings={() => setShowSettings(true)}
           onUseDemoData={handleUseDemoData}
-          accentColor={colors.accent}
-          textColor={colors.text}
+          colors={themeColors}
+          fontSize={fontSize}
+          fontFamily={fontFamily}
+          t={t}
         />
 
         {/* Footer */}
         <div style={{ flexShrink: 0 }}>
           <TabFooter
-            tabName="SURFACE ANALYTICS"
-            statusInfo="API KEY REQUIRED | Configure Databento credentials or use demo data"
+            tabName={t('title')}
+            statusInfo={t('apiKeyRequiredStatus')}
           />
         </div>
 
@@ -700,7 +715,7 @@ const SurfaceAnalyticsTab: React.FC = () => {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: FINCEPT_COLORS.BLACK,
+        backgroundColor: colors.background,
         color: colors.text,
         fontFamily,
         overflow: 'hidden',
@@ -725,9 +740,9 @@ const SurfaceAnalyticsTab: React.FC = () => {
         <MetricsPanel
           chartType={activeChart}
           metrics={currentMetrics}
-          dataSource={isDemoMode ? 'DEMO DATA' : 'DATABENTO'}
-          frequency={isDemoMode ? 'SYNTHETIC' : (config.refreshInterval > 0 ? `${config.refreshInterval / 60000}M AUTO` : 'MANUAL')}
-          quality={dataError ? 'ERROR' : (isDemoMode ? 'SYNTHETIC' : (lastUpdate ? '99.8%' : 'READY'))}
+          dataSource={isDemoMode ? t('demoData') : 'DATABENTO'}
+          frequency={isDemoMode ? t('synthetic') : (config.refreshInterval > 0 ? `${config.refreshInterval / 60000}M AUTO` : t('manual'))}
+          quality={dataError ? t('error') : (isDemoMode ? t('synthetic') : (lastUpdate ? '99.8%' : t('ready')))}
           symbol={activeChart === 'volatility' ? config.selectedSymbol : undefined}
           textColor={colors.text}
           accentColor={colors.accent}
@@ -752,8 +767,8 @@ const SurfaceAnalyticsTab: React.FC = () => {
       {/* Footer */}
       <div style={{ flexShrink: 0 }}>
         <TabFooter
-          tabName="SURFACE ANALYTICS"
-          statusInfo={`${activeChart.toUpperCase()} | ${currentMetrics.length} Metrics | ${isDemoMode ? 'DEMO DATA (synthetic)' : 'DATABENTO'} | ${lastUpdate ? `Updated: ${lastUpdate.toLocaleTimeString()}` : 'Click REFRESH to load data'}`}
+          tabName={t('title')}
+          statusInfo={`${activeChart.toUpperCase()} | ${currentMetrics.length} ${t('metrics')} | ${isDemoMode ? t('demoDataSynthetic') : 'DATABENTO'} | ${lastUpdate ? `${t('updated')}: ${lastUpdate.toLocaleTimeString()}` : t('clickRefresh')}`}
         />
       </div>
 

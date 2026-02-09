@@ -298,24 +298,52 @@ class TradeService {
   }
 
   /**
+   * Check if trade API is healthy
+   */
+  async isApiHealthy(): Promise<{ healthy: boolean; error?: string }> {
+    try {
+      const response: any = await this.apiRequest('/trade/health');
+      const status = response.data?.status;
+      if (status === 'healthy') {
+        return { healthy: true };
+      }
+      return { healthy: false, error: response.data?.error || 'Trade API is unavailable' };
+    } catch (error: any) {
+      return { healthy: false, error: error.message || 'Trade API is unavailable' };
+    }
+  }
+
+  /**
    * Get list of all countries
    */
   async getCountries(continent?: string, search?: string): Promise<Country[]> {
-    const response: any = await this.apiRequest('/trade/countries', {
-      continent,
-      search,
-    });
-    return response.data?.countries || [];
+    try {
+      const response: any = await this.apiRequest('/trade/countries', {
+        continent,
+        search,
+      });
+      return response.data?.countries || [];
+    } catch (error: any) {
+      // Return empty array on failure to prevent tab from crashing
+      console.error('[TradeService] getCountries failed:', error);
+      return [];
+    }
   }
 
   /**
    * Get list of products (HS codes)
    */
   async getProducts(level?: number, parent?: string): Promise<Product[]> {
-    return this.apiRequest<Product[]>('/trade/products', {
-      level,
-      parent,
-    });
+    try {
+      return await this.apiRequest<Product[]>('/trade/products', {
+        level,
+        parent,
+      });
+    } catch (error: any) {
+      // Return empty array on failure to prevent tab from crashing
+      console.error('[TradeService] getProducts failed:', error);
+      return [];
+    }
   }
 
   /**

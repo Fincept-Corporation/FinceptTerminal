@@ -686,18 +686,8 @@ class LLMApiService {
       const supportsTools = ['openai', 'anthropic', 'gemini', 'google', 'groq', 'openrouter', 'fincept'].includes(activeConfig.provider);
 
       if (!supportsTools && tools.length > 0) {
-        llmLogger.warn(`Provider '${activeConfig.provider}' does not support function calling. Available tools: ${tools.length}`);
-
-        const warningMessage = `[WARN] MCP Tools Not Supported\n\n` +
-          `Your current LLM provider (${activeConfig.provider.toUpperCase()}) does not support function calling with MCP tools.\n\n` +
-          `**Available MCP Tools:** ${tools.length} tools detected\n` +
-          `**Supported Providers:** OpenAI, Anthropic, Gemini, Groq, OpenRouter\n\n` +
-          `To use MCP tools, please switch to a supported provider in Settings.`;
-
-        return {
-          content: warningMessage,
-          error: undefined
-        };
+        llmLogger.warn(`Provider '${activeConfig.provider}' does not support tools, falling back to regular chat`);
+        return this.chat(userMessage, conversationHistory, onStream);
       }
 
       // If no tools provided, fall back to regular chat
@@ -1014,10 +1004,8 @@ Mention the year-over-year growth percentages when discussing financial performa
         tools: tools.map(t => t.function) // Send tools in OpenAI format
       };
 
-      // Only add tool_choice if tools are present
-      if (tools.length > 0) {
-        requestBody.tool_choice = { type: 'auto' };
-      }
+      // Let LLM decide whether to use tools or respond directly
+      // Don't force tool_choice - allow natural responses for general questions
 
       console.log('[Fincept Tools] Request body:', JSON.stringify(requestBody, null, 2));
       llmLogger.debug('Fincept API with tools request:', { url, tools: tools.length });
@@ -1153,8 +1141,9 @@ Mention the year-over-year growth percentages when discussing financial performa
       }
 
       // No tool calls, return the response content
-      const content = responseData.response || responseData.content || responseData.answer || responseData.text || '';
-      console.log('[Fincept Tools] No tool calls, returning content:', content?.substring(0, 100));
+      console.log('[Fincept Tools] Full responseData:', JSON.stringify(responseData, null, 2));
+      const content = responseData.response || responseData.content || responseData.answer || responseData.text || responseData.result || '';
+      console.log('[Fincept Tools] Extracted content:', content?.substring(0, 200));
 
       if (onStream && content) {
         onStream(content, false);

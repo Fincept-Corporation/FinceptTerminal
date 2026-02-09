@@ -6,19 +6,7 @@
 
 import React, { useState } from 'react';
 import { Layers, Zap, Info, Play, FileText } from 'lucide-react';
-
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  BORDER: '#2A2A2A',
-  PURPLE: '#9D4EDD',
-  MUTED: '#4A4A4A',
-  HOVER: '#1F1F1F'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface ModelInfo {
   id: string;
@@ -29,6 +17,7 @@ interface ModelInfo {
 }
 
 export function AdvancedModelsPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const models: ModelInfo[] = [
     {
       id: 'lstm_ts',
@@ -81,20 +70,20 @@ export function AdvancedModelsPanel() {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Layers size={16} color={FINCEPT.PURPLE} />
+        <Layers size={16} color={colors.purple} />
         <span style={{
-          color: FINCEPT.PURPLE,
+          color: colors.purple,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -107,9 +96,9 @@ export function AdvancedModelsPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: FINCEPT.PURPLE + '20',
-          border: `1px solid ${FINCEPT.PURPLE}`,
-          color: FINCEPT.PURPLE
+          backgroundColor: colors.purple + '20',
+          border: `1px solid ${colors.purple}`,
+          color: colors.purple
         }}>
           {models.length} MODELS AVAILABLE
         </div>
@@ -119,19 +108,19 @@ export function AdvancedModelsPanel() {
         {/* Left Panel - Model Selection */}
         <div style={{
           width: '320px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
           display: 'flex',
           flexDirection: 'column'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.PURPLE,
+            color: colors.purple,
             fontFamily: 'monospace',
             letterSpacing: '0.5px',
-            backgroundColor: FINCEPT.PANEL_BG
+            backgroundColor: colors.panel
           }}>
             SELECT MODEL ARCHITECTURE
           </div>
@@ -146,29 +135,29 @@ export function AdvancedModelsPanel() {
                   onClick={() => setSelectedModel(model)}
                   style={{
                     padding: '12px',
-                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
-                    border: `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
-                    borderTop: idx === 0 ? `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}` : '0',
+                    backgroundColor: isSelected ? '#1F1F1F' : 'transparent',
+                    border: `1px solid ${isSelected ? colors.purple : 'var(--ft-border-color, #2A2A2A)'}`,
+                    borderTop: idx === 0 ? `1px solid ${isSelected ? colors.purple : 'var(--ft-border-color, #2A2A2A)'}` : '0',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     marginTop: idx === 0 ? '0' : '-1px'
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                      e.currentTarget.style.borderColor = FINCEPT.PURPLE;
+                      e.currentTarget.style.backgroundColor = colors.background;
+                      e.currentTarget.style.borderColor = colors.purple;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected) {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                     }
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <span style={{
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       fontSize: '12px',
                       fontWeight: 700,
                       fontFamily: 'monospace'
@@ -179,15 +168,15 @@ export function AdvancedModelsPanel() {
                       fontSize: '8px',
                       fontFamily: 'monospace',
                       padding: '2px 6px',
-                      backgroundColor: FINCEPT.PURPLE + '30',
-                      border: `1px solid ${FINCEPT.PURPLE}`,
-                      color: FINCEPT.PURPLE
+                      backgroundColor: colors.purple + '30',
+                      border: `1px solid ${colors.purple}`,
+                      color: colors.purple
                     }}>
                       {model.category.toUpperCase()}
                     </div>
                   </div>
                   <div style={{
-                    color: FINCEPT.WHITE,
+                    color: colors.text,
                     opacity: 0.6,
                     fontSize: '10px',
                     lineHeight: '1.5',
@@ -205,13 +194,13 @@ export function AdvancedModelsPanel() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{
             padding: '10px 16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.PURPLE,
+            color: colors.purple,
             fontFamily: 'monospace',
             letterSpacing: '0.5px',
-            backgroundColor: FINCEPT.PANEL_BG
+            backgroundColor: colors.panel
           }}>
             MODEL DETAILS: {selectedModel.name}
           </div>
@@ -220,14 +209,14 @@ export function AdvancedModelsPanel() {
             {/* Model Description */}
             <div style={{
               padding: '14px',
-              backgroundColor: FINCEPT.PANEL_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              borderLeft: `3px solid ${FINCEPT.PURPLE}`,
+              backgroundColor: colors.panel,
+              border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+              borderLeft: `3px solid ${colors.purple}`,
               marginBottom: '16px'
             }}>
               <div style={{
                 fontSize: '9px',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 fontFamily: 'monospace',
                 marginBottom: '6px',
@@ -236,7 +225,7 @@ export function AdvancedModelsPanel() {
                 DESCRIPTION
               </div>
               <div style={{
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 fontSize: '11px',
                 lineHeight: '1.6',
                 fontFamily: 'monospace',
@@ -251,12 +240,12 @@ export function AdvancedModelsPanel() {
               {/* Key Features */}
               <div style={{
                 padding: '14px',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.BORDER}`
+                backgroundColor: colors.panel,
+                border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
               }}>
                 <div style={{
                   fontSize: '10px',
-                  color: FINCEPT.PURPLE,
+                  color: colors.purple,
                   fontFamily: 'monospace',
                   marginBottom: '12px',
                   fontWeight: 700,
@@ -270,12 +259,12 @@ export function AdvancedModelsPanel() {
                       <div style={{
                         width: '4px',
                         height: '4px',
-                        backgroundColor: FINCEPT.PURPLE,
+                        backgroundColor: colors.purple,
                         marginTop: '6px',
                         flexShrink: 0
                       }} />
                       <span style={{
-                        color: FINCEPT.WHITE,
+                        color: colors.text,
                         fontSize: '10px',
                         lineHeight: '1.5',
                         fontFamily: 'monospace',
@@ -291,12 +280,12 @@ export function AdvancedModelsPanel() {
               {/* Architecture Info */}
               <div style={{
                 padding: '14px',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.BORDER}`
+                backgroundColor: colors.panel,
+                border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
               }}>
                 <div style={{
                   fontSize: '10px',
-                  color: FINCEPT.PURPLE,
+                  color: colors.purple,
                   fontFamily: 'monospace',
                   marginBottom: '12px',
                   fontWeight: 700,
@@ -309,11 +298,11 @@ export function AdvancedModelsPanel() {
                     { label: 'INPUT TYPE', value: 'Time-series' },
                     { label: 'OUTPUT', value: 'Predictions' },
                     { label: 'FRAMEWORK', value: 'PyTorch' },
-                    { label: 'STATUS', value: 'AVAILABLE', color: FINCEPT.GREEN }
+                    { label: 'STATUS', value: 'AVAILABLE', color: colors.success }
                   ].map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{
-                        color: FINCEPT.WHITE,
+                        color: colors.text,
                         opacity: 0.5,
                         fontSize: '9px',
                         fontFamily: 'monospace',
@@ -322,7 +311,7 @@ export function AdvancedModelsPanel() {
                         {item.label}
                       </span>
                       <span style={{
-                        color: item.color || FINCEPT.WHITE,
+                        color: item.color || colors.text,
                         fontSize: '10px',
                         fontFamily: 'monospace',
                         fontWeight: 600,
@@ -342,7 +331,7 @@ export function AdvancedModelsPanel() {
                 style={{
                   flex: 1,
                   padding: '12px 16px',
-                  backgroundColor: FINCEPT.PURPLE,
+                  backgroundColor: colors.purple,
                   border: 'none',
                   color: '#000000',
                   fontSize: '11px',
@@ -371,8 +360,8 @@ export function AdvancedModelsPanel() {
                   flex: 1,
                   padding: '12px 16px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${FINCEPT.PURPLE}`,
-                  color: FINCEPT.PURPLE,
+                  border: `1px solid ${colors.purple}`,
+                  color: colors.purple,
                   fontSize: '11px',
                   fontWeight: 700,
                   fontFamily: 'monospace',
@@ -385,7 +374,7 @@ export function AdvancedModelsPanel() {
                   transition: 'all 0.15s'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = FINCEPT.PURPLE + '20';
+                  e.currentTarget.style.backgroundColor = colors.purple + '20';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';

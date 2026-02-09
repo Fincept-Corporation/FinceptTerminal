@@ -1,14 +1,13 @@
 /**
  * API Keys Modal Component
  *
- * Modal for configuring LLM provider API keys.
+ * @deprecated This component is no longer used. API keys are now managed
+ * exclusively through Settings > LLM Config. Kept for reference only.
  */
 
 import React, { useState, useEffect, useReducer, useRef } from 'react';
 import { X, Key, Eye, EyeOff, Save, Loader2, AlertCircle } from 'lucide-react';
 import { withErrorBoundary } from '@/components/common/ErrorBoundary';
-import { withTimeout } from '@/services/core/apiUtils';
-import alphaArenaService from '../services/alphaArenaService';
 
 interface ApiKeysModalProps {
   isOpen: boolean;
@@ -122,23 +121,8 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
 
   const loadApiKeys = async () => {
     dispatchLoad({ type: 'LOAD_START' });
-
-    try {
-      const result = await alphaArenaService.getApiKeys();
-      if (!mountedRef.current) return;
-      if (result.success && result.keys) {
-        setApiKeys((prev) =>
-          prev.map((key) => ({
-            ...key,
-            value: result.keys?.[key.provider] || '',
-          }))
-        );
-      }
-      dispatchLoad({ type: 'LOAD_SUCCESS' });
-    } catch (err) {
-      if (!mountedRef.current) return;
-      dispatchLoad({ type: 'LOAD_ERROR', error: err instanceof Error ? err.message : 'Failed to load API keys' });
-    }
+    // API keys are now managed in Settings > LLM Config
+    dispatchLoad({ type: 'LOAD_SUCCESS' });
   };
 
   const handleKeyChange = (provider: string, value: string) => {
@@ -158,31 +142,8 @@ const ApiKeysModal: React.FC<ApiKeysModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleSave = async () => {
-    if (saveState.status === 'saving') return;
-    dispatchSave({ type: 'SAVE_START' });
-
-    try {
-      const keysToSave: Record<string, string> = {};
-      apiKeys.forEach((key) => {
-        if (key.value.trim()) {
-          keysToSave[key.provider] = key.value.trim();
-        }
-      });
-
-      const result = await alphaArenaService.saveApiKeys(keysToSave);
-      if (!mountedRef.current) return;
-      if (result.success) {
-        dispatchSave({ type: 'SAVE_SUCCESS' });
-        setTimeout(() => {
-          if (mountedRef.current) dispatchSave({ type: 'SAVE_RESET' });
-        }, 3000);
-      } else {
-        dispatchSave({ type: 'SAVE_ERROR', error: result.error || 'Failed to save API keys' });
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      dispatchSave({ type: 'SAVE_ERROR', error: err instanceof Error ? err.message : 'Unknown error' });
-    }
+    // API keys are now managed in Settings > LLM Config
+    dispatchSave({ type: 'SAVE_ERROR', error: 'Please configure API keys in Settings > LLM Config instead.' });
   };
 
   const isLoading = loadState.status === 'loading';

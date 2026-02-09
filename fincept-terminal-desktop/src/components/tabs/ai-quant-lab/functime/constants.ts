@@ -4,22 +4,23 @@
  */
 
 // Fincept Professional Color Palette
+// Components should prefer useTerminalTheme() hook for runtime values
 export const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-  BORDER: '#2A2A2A',
+  ORANGE: 'var(--ft-color-primary, #FF8800)',
+  WHITE: 'var(--ft-color-text, #FFFFFF)',
+  RED: 'var(--ft-color-alert, #FF3B3B)',
+  GREEN: 'var(--ft-color-success, #00D66F)',
+  GRAY: 'var(--ft-color-text-muted, #787878)',
+  DARK_BG: 'var(--ft-color-background, #000000)',
+  PANEL_BG: 'var(--ft-color-panel, #0F0F0F)',
+  HEADER_BG: 'var(--ft-color-panel, #1A1A1A)',
+  CYAN: 'var(--ft-color-accent, #00E5FF)',
+  YELLOW: 'var(--ft-color-warning, #FFD700)',
+  BLUE: 'var(--ft-color-info, #0088FF)',
+  PURPLE: 'var(--ft-color-purple, #9D4EDD)',
+  BORDER: 'var(--ft-border-color, #2A2A2A)',
   HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
+  MUTED: 'var(--ft-color-text-muted, #4A4A4A)'
 };
 
 // Sample panel data for demonstration (kept for backward compatibility)

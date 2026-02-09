@@ -22,7 +22,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { showSuccess } from '@/utils/notifications';
 
 interface BatchJob {
@@ -56,12 +57,7 @@ interface BatchDownloadPanelProps {
   textColor: string;
 }
 
-const JOB_STATE_COLORS: Record<string, string> = {
-  queued: FINCEPT_COLORS.YELLOW,
-  processing: FINCEPT_COLORS.CYAN,
-  done: FINCEPT_COLORS.GREEN,
-  expired: FINCEPT_COLORS.RED,
-};
+// Colors will be set dynamically from theme
 
 const JOB_STATE_ICONS: Record<string, React.ReactNode> = {
   queued: <Clock size={12} />,
@@ -103,6 +99,15 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
   accentColor,
   textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors, fontSize } = useTerminalTheme();
+
+  const JOB_STATE_COLORS: Record<string, string> = {
+    queued: colors.warning,
+    processing: colors.info,
+    done: colors.success,
+    expired: colors.alert,
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<BatchJob[]>([]);
@@ -290,14 +295,14 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
       <div
         className="p-4 text-center"
         style={{
-          backgroundColor: FINCEPT_COLORS.DARK_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
-        <Download size={24} style={{ color: FINCEPT_COLORS.MUTED, margin: '0 auto 8px' }} />
-        <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
-          Configure Databento API key for batch downloads
+        <Download size={24} style={{ color: colors.textMuted, margin: '0 auto 8px' }} />
+        <div className="text-xs" style={{ color: colors.textMuted }}>
+          {t('batchDownload.configureApiKey')}
         </div>
       </div>
     );
@@ -306,9 +311,9 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         overflow: 'hidden',
       }}
     >
@@ -316,16 +321,16 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
       <div
         className="flex items-center justify-between p-2"
         style={{
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
         }}
       >
         <div className="flex items-center gap-2">
           <Archive size={14} style={{ color: accentColor }} />
           <span className="text-xs font-bold" style={{ color: accentColor }}>
-            BATCH DOWNLOADS
+            {t('batchDownload.title')}
           </span>
-          <span className="text-[9px] px-1" style={{ backgroundColor: FINCEPT_COLORS.BORDER, color: FINCEPT_COLORS.MUTED, borderRadius: '2px' }}>
+          <span className="text-[9px] px-1" style={{ backgroundColor: colors.textMuted, color: colors.textMuted, borderRadius: 'var(--ft-border-radius)' }}>
             {jobs.length}
           </span>
         </div>
@@ -333,7 +338,7 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
           <button
             onClick={() => setShowNewJobForm(!showNewJobForm)}
             className="p-1"
-            style={{ color: showNewJobForm ? FINCEPT_COLORS.GREEN : accentColor }}
+            style={{ color: showNewJobForm ? colors.success : accentColor }}
             title="New Job"
           >
             <Plus size={12} />
@@ -341,7 +346,7 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
           <button
             onClick={fetchJobs}
             disabled={loading}
-            style={{ color: loading ? FINCEPT_COLORS.MUTED : accentColor }}
+            style={{ color: loading ? colors.textMuted : accentColor }}
           >
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -353,10 +358,10 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
         <div
           className="flex items-center gap-2 m-2 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.RED}15`,
-            border: `1px solid ${FINCEPT_COLORS.RED}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.RED,
+            backgroundColor: `${colors.alert}15`,
+            border: `1px solid ${colors.alert}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.alert,
           }}
         >
           <AlertCircle size={12} />
@@ -366,24 +371,24 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
 
       {/* New Job Form */}
       {showNewJobForm && (
-        <div className="p-2" style={{ borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`, backgroundColor: FINCEPT_COLORS.BLACK }}>
+        <div className="p-2" style={{ borderBottom: `1px solid ${colors.textMuted}`, backgroundColor: colors.background }}>
           <div className="text-[10px] font-bold mb-2" style={{ color: accentColor }}>
-            NEW BATCH JOB
+            {t('batchDownload.newBatchJob')}
           </div>
 
           <div className="grid grid-cols-2 gap-2 mb-2">
             {/* Dataset */}
             <div>
-              <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.MUTED }}>Dataset</label>
+              <label className="text-[9px] mb-1 block" style={{ color: colors.textMuted }}>{t('batchDownload.dataset')}</label>
               <select
                 value={newJobDataset}
                 onChange={(e) => setNewJobDataset(e.target.value)}
                 className="w-full text-[10px] p-1"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.DARK_BG,
-                  border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
                   color: textColor,
-                  borderRadius: '2px',
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
                 {POPULAR_DATASETS.map((ds) => (
@@ -394,16 +399,16 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
 
             {/* Schema */}
             <div>
-              <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.MUTED }}>Schema</label>
+              <label className="text-[9px] mb-1 block" style={{ color: colors.textMuted }}>{t('batchDownload.schema')}</label>
               <select
                 value={newJobSchema}
                 onChange={(e) => setNewJobSchema(e.target.value)}
                 className="w-full text-[10px] p-1"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.DARK_BG,
-                  border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
                   color: textColor,
-                  borderRadius: '2px',
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
                 {SCHEMA_OPTIONS.map((s) => (
@@ -415,7 +420,7 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
 
           {/* Symbols */}
           <div className="mb-2">
-            <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.MUTED }}>Symbols (comma-separated)</label>
+            <label className="text-[9px] mb-1 block" style={{ color: colors.textMuted }}>{t('batchDownload.symbolsCommaSeparated')}</label>
             <input
               type="text"
               value={newJobSymbols}
@@ -423,10 +428,10 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
               placeholder="SPY, QQQ, AAPL"
               className="w-full text-[10px] p-1"
               style={{
-                backgroundColor: FINCEPT_COLORS.DARK_BG,
-                border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+                backgroundColor: colors.background,
+                border: `1px solid ${colors.textMuted}`,
                 color: textColor,
-                borderRadius: '2px',
+                borderRadius: 'var(--ft-border-radius)',
               }}
             />
           </div>
@@ -434,34 +439,34 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
           <div className="grid grid-cols-2 gap-2 mb-2">
             {/* Start Date */}
             <div>
-              <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.MUTED }}>Start Date</label>
+              <label className="text-[9px] mb-1 block" style={{ color: colors.textMuted }}>{t('batchDownload.startDate')}</label>
               <input
                 type="date"
                 value={newJobStartDate}
                 onChange={(e) => setNewJobStartDate(e.target.value)}
                 className="w-full text-[10px] p-1"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.DARK_BG,
-                  border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
                   color: textColor,
-                  borderRadius: '2px',
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               />
             </div>
 
             {/* End Date */}
             <div>
-              <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.MUTED }}>End Date</label>
+              <label className="text-[9px] mb-1 block" style={{ color: colors.textMuted }}>{t('batchDownload.endDate')}</label>
               <input
                 type="date"
                 value={newJobEndDate}
                 onChange={(e) => setNewJobEndDate(e.target.value)}
                 className="w-full text-[10px] p-1"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.DARK_BG,
-                  border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
                   color: textColor,
-                  borderRadius: '2px',
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               />
             </div>
@@ -470,16 +475,16 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
           <div className="grid grid-cols-2 gap-2 mb-2">
             {/* Encoding */}
             <div>
-              <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.MUTED }}>Encoding</label>
+              <label className="text-[9px] mb-1 block" style={{ color: colors.textMuted }}>{t('batchDownload.encoding')}</label>
               <select
                 value={newJobEncoding}
                 onChange={(e) => setNewJobEncoding(e.target.value)}
                 className="w-full text-[10px] p-1"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.DARK_BG,
-                  border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
                   color: textColor,
-                  borderRadius: '2px',
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
                 {ENCODING_OPTIONS.map((e) => (
@@ -490,16 +495,16 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
 
             {/* Compression */}
             <div>
-              <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.MUTED }}>Compression</label>
+              <label className="text-[9px] mb-1 block" style={{ color: colors.textMuted }}>{t('batchDownload.compression')}</label>
               <select
                 value={newJobCompression}
                 onChange={(e) => setNewJobCompression(e.target.value)}
                 className="w-full text-[10px] p-1"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.DARK_BG,
-                  border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
                   color: textColor,
-                  borderRadius: '2px',
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
                 {COMPRESSION_OPTIONS.map((c) => (
@@ -514,13 +519,13 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
             disabled={loading}
             className="w-full py-1.5 text-[10px] font-bold flex items-center justify-center gap-1"
             style={{
-              backgroundColor: loading ? FINCEPT_COLORS.BORDER : accentColor,
-              color: FINCEPT_COLORS.BLACK,
-              borderRadius: '2px',
+              backgroundColor: loading ? colors.textMuted : accentColor,
+              color: colors.background,
+              borderRadius: 'var(--ft-border-radius)',
             }}
           >
             {loading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-            SUBMIT JOB
+            {t('batchDownload.submitJob')}
           </button>
         </div>
       )}
@@ -532,8 +537,8 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
             <RefreshCw size={16} className="animate-spin" style={{ color: accentColor }} />
           </div>
         ) : jobs.length === 0 ? (
-          <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
-            No batch jobs found. Click + to create one.
+          <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
+            {t('batchDownload.noBatchJobs')}
           </div>
         ) : (
           <div className="space-y-2">
@@ -542,9 +547,9 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
                 key={job.job_id}
                 className="p-2"
                 style={{
-                  backgroundColor: selectedJob?.job_id === job.job_id ? `${accentColor}15` : FINCEPT_COLORS.BLACK,
-                  borderRadius: '2px',
-                  border: `1px solid ${selectedJob?.job_id === job.job_id ? accentColor : FINCEPT_COLORS.BORDER}`,
+                  backgroundColor: selectedJob?.job_id === job.job_id ? `${accentColor}15` : colors.background,
+                  borderRadius: 'var(--ft-border-radius)',
+                  border: `1px solid ${selectedJob?.job_id === job.job_id ? accentColor : colors.textMuted}`,
                 }}
               >
                 {/* Job Header */}
@@ -556,7 +561,7 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
                     <span className="text-[10px] font-bold" style={{ color: textColor }}>
                       {job.dataset}
                     </span>
-                    <span className="text-[9px] px-1" style={{ backgroundColor: FINCEPT_COLORS.BORDER, borderRadius: '2px', color: FINCEPT_COLORS.MUTED }}>
+                    <span className="text-[9px] px-1" style={{ backgroundColor: colors.textMuted, borderRadius: 'var(--ft-border-radius)', color: colors.textMuted }}>
                       {job.schema}
                     </span>
                   </div>
@@ -566,7 +571,7 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
                 </div>
 
                 {/* Job Details */}
-                <div className="grid grid-cols-3 gap-1 text-[9px] mb-1" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <div className="grid grid-cols-3 gap-1 text-[9px] mb-1" style={{ color: colors.textMuted }}>
                   <div className="flex items-center gap-1">
                     <FileText size={9} />
                     <span>{job.symbols?.slice(0, 3).join(', ')}{job.symbols?.length > 3 ? '...' : ''}</span>
@@ -577,16 +582,16 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
                   </div>
                   <div className="flex items-center gap-1">
                     <Database size={9} />
-                    <span>{formatRecordCount(job.record_count)} records</span>
+                    <span>{formatRecordCount(job.record_count)} {t('batchDownload.records')}</span>
                   </div>
                 </div>
 
                 {/* Job Size & Cost */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+                  <div className="flex items-center gap-2 text-[9px]" style={{ color: colors.textMuted }}>
                     <span>{formatBytes(job.size_bytes)}</span>
                     {job.cost > 0 && (
-                      <span style={{ color: FINCEPT_COLORS.YELLOW }}>${job.cost.toFixed(2)}</span>
+                      <span style={{ color: colors.warning }}>${job.cost.toFixed(2)}</span>
                     )}
                   </div>
 
@@ -599,8 +604,8 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
                         className="p-1 text-[9px] flex items-center gap-1"
                         style={{
                           backgroundColor: accentColor,
-                          color: FINCEPT_COLORS.BLACK,
-                          borderRadius: '2px',
+                          color: colors.background,
+                          borderRadius: 'var(--ft-border-radius)',
                         }}
                       >
                         {downloadingJob === job.job_id ? (
@@ -608,7 +613,7 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
                         ) : (
                           <FileDown size={10} />
                         )}
-                        Download
+                        {t('batchDownload.download')}
                       </button>
                     )}
                     <button
@@ -624,7 +629,7 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
                         }
                       }}
                       className="p-1"
-                      style={{ color: FINCEPT_COLORS.MUTED }}
+                      style={{ color: colors.textMuted }}
                     >
                       <ChevronRight
                         size={12}
@@ -639,19 +644,19 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
 
                 {/* Expanded Job Files */}
                 {selectedJob?.job_id === job.job_id && job.state === 'done' && jobFiles.length > 0 && (
-                  <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${FINCEPT_COLORS.BORDER}` }}>
-                    <div className="text-[9px] mb-1" style={{ color: FINCEPT_COLORS.MUTED }}>
-                      FILES ({jobFiles.length})
+                  <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${colors.textMuted}` }}>
+                    <div className="text-[9px] mb-1" style={{ color: colors.textMuted }}>
+                      {t('batchDownload.files')} ({jobFiles.length})
                     </div>
                     <div className="space-y-1 max-h-32 overflow-y-auto">
                       {jobFiles.map((file, idx) => (
                         <div
                           key={idx}
                           className="flex items-center justify-between p-1 text-[9px]"
-                          style={{ backgroundColor: FINCEPT_COLORS.DARK_BG, borderRadius: '2px' }}
+                          style={{ backgroundColor: colors.background, borderRadius: 'var(--ft-border-radius)' }}
                         >
                           <span style={{ color: textColor }}>{file.filename}</span>
-                          <span style={{ color: FINCEPT_COLORS.MUTED }}>{formatBytes(file.size_bytes)}</span>
+                          <span style={{ color: colors.textMuted }}>{formatBytes(file.size_bytes)}</span>
                         </div>
                       ))}
                     </div>
@@ -667,12 +672,12 @@ export const BatchDownloadPanel: React.FC<BatchDownloadPanelProps> = ({
       <div
         className="flex items-center gap-1 p-2 text-[9px]"
         style={{
-          borderTop: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          color: FINCEPT_COLORS.MUTED,
+          borderTop: `1px solid ${colors.textMuted}`,
+          color: colors.textMuted,
         }}
       >
         <Info size={10} />
-        <span>Jobs expire after 7 days. Download completed jobs promptly.</span>
+        <span>{t('batchDownload.jobsExpireNotice')}</span>
       </div>
     </div>
   );

@@ -74,6 +74,11 @@ interface ICDeliberationResult {
   vote_summary: Record<string, number>;
   approved_size_pct?: number;
   conditions?: string[];
+  llm_config?: {
+    provider: string;
+    model_id: string;
+    temperature: number;
+  };
 }
 
 interface ICVote {
@@ -152,19 +157,13 @@ export default function RenaissanceTechnologiesPanel() {
     setAnalysisResult(null);
 
     try {
-      const signalData = {
+      // Send only user inputs - backend will calculate signal metrics from real data
+      const cliInput = {
         ticker,
         signal_type: signalType,
-        direction: 'long',
-        strength: 0.75,
-        confidence: 0.65,
-        p_value: 0.008,
-        information_coefficient: 0.05,
-      };
-
-      const cliInput = {
-        signal: signalData,
-        config: riskLimits,
+        trade_value: 1_000_000, // Default $1M trade
+        period: '1y',
+        include_deliberation: true, // Include IC deliberation
       };
 
       const result = await invoke<string>('execute_renaissance_cli', {
@@ -259,8 +258,20 @@ export default function RenaissanceTechnologiesPanel() {
           </div>
         </div>
 
-        {/* Right: Time & Status */}
+        {/* Right: Time, LLM Status & System Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
+          {/* LLM Config Display */}
+          {analysisResult?.ic_decision?.llm_config && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+                <Cpu size={12} color={FINCEPT.CYAN} />
+                <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.CYAN }}>
+                  {analysisResult.ic_decision.llm_config.provider.toUpperCase()}/{analysisResult.ic_decision.llm_config.model_id}
+                </span>
+              </div>
+              <div style={COMMON_STYLES.verticalDivider} />
+            </>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
             <Clock size={12} color={FINCEPT.GRAY} />
             <span style={{ fontSize: TYPOGRAPHY.SMALL, color: FINCEPT.GRAY }}>

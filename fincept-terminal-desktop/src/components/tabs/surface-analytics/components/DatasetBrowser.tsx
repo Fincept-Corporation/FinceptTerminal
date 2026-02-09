@@ -6,7 +6,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Database, ChevronRight, RefreshCw, AlertCircle, Calendar, FileText, DollarSign } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { FINCEPT_COLORS, TYPOGRAPHY } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface DatasetInfo {
   id: string;
@@ -52,6 +53,8 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
   accentColor,
   textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
   const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,13 +160,13 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
       <div
         className="p-4 text-center"
         style={{
-          backgroundColor: FINCEPT_COLORS.DARK_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
-        <Database size={24} style={{ color: FINCEPT_COLORS.MUTED, margin: '0 auto 8px' }} />
-        <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+        <Database size={24} style={{ color: colors.textMuted, margin: '0 auto 8px' }} />
+        <div className="text-xs" style={{ color: colors.textMuted }}>
           Configure Databento API key to browse datasets
         </div>
       </div>
@@ -173,9 +176,9 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         overflow: 'hidden',
       }}
     >
@@ -183,8 +186,8 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
       <div
         className="flex items-center justify-between p-2"
         style={{
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
         }}
       >
         <div className="flex items-center gap-2">
@@ -192,14 +195,14 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
           <span className="text-xs font-bold" style={{ color: accentColor }}>
             AVAILABLE DATASETS
           </span>
-          <span className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+          <span className="text-xs" style={{ color: colors.textMuted }}>
             ({datasets.length})
           </span>
         </div>
         <button
           onClick={fetchDatasets}
           disabled={loading}
-          style={{ color: FINCEPT_COLORS.MUTED }}
+          style={{ color: colors.textMuted }}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
@@ -208,7 +211,7 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
       {/* Content */}
       <div className="max-h-64 overflow-y-auto p-2">
         {error ? (
-          <div className="flex items-center gap-2 p-2 text-xs" style={{ color: FINCEPT_COLORS.RED }}>
+          <div className="flex items-center gap-2 p-2 text-xs" style={{ color: colors.alert }}>
             <AlertCircle size={14} />
             {error}
           </div>
@@ -217,7 +220,7 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
             <RefreshCw size={16} className="animate-spin" style={{ color: accentColor }} />
           </div>
         ) : datasets.length === 0 ? (
-          <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+          <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
             No datasets available
           </div>
         ) : (
@@ -228,7 +231,7 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
               <div key={category} className="mb-3">
                 <div
                   className="text-xs font-bold mb-1 px-1"
-                  style={{ color: FINCEPT_COLORS.MUTED, letterSpacing: '0.5px' }}
+                  style={{ color: colors.textMuted, letterSpacing: '0.5px' }}
                 >
                   {category.toUpperCase()}
                 </div>
@@ -243,9 +246,9 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
                     <div
                       key={dataset.id}
                       style={{
-                        backgroundColor: isSelected ? `${accentColor}20` : FINCEPT_COLORS.BLACK,
-                        border: `1px solid ${isSelected ? accentColor : FINCEPT_COLORS.BORDER}`,
-                        borderRadius: '2px',
+                        backgroundColor: isSelected ? `${accentColor}20` : colors.background,
+                        border: `1px solid ${isSelected ? accentColor : colors.textMuted}`,
+                        borderRadius: 'var(--ft-border-radius)',
                         marginBottom: '4px',
                       }}
                     >
@@ -258,7 +261,7 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
                           <ChevronRight
                             size={12}
                             style={{
-                              color: FINCEPT_COLORS.MUTED,
+                              color: colors.textMuted,
                               transform: isExpanded ? 'rotate(90deg)' : 'none',
                               transition: 'transform 0.2s',
                             }}
@@ -275,9 +278,9 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
                           className="px-2 py-0.5 text-xs"
                           style={{
                             backgroundColor: isSelected ? accentColor : 'transparent',
-                            color: isSelected ? FINCEPT_COLORS.BLACK : accentColor,
+                            color: isSelected ? colors.background : accentColor,
                             border: `1px solid ${accentColor}`,
-                            borderRadius: '2px',
+                            borderRadius: 'var(--ft-border-radius)',
                           }}
                         >
                           {isSelected ? 'SELECTED' : 'SELECT'}
@@ -288,34 +291,34 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
                       {isExpanded && (
                         <div
                           className="px-2 pb-2"
-                          style={{ borderTop: `1px solid ${FINCEPT_COLORS.BORDER}` }}
+                          style={{ borderTop: `1px solid ${colors.textMuted}` }}
                         >
-                          <div className="text-xs mt-2 mb-2" style={{ color: FINCEPT_COLORS.MUTED }}>
+                          <div className="text-xs mt-2 mb-2" style={{ color: colors.textMuted }}>
                             {description}
                           </div>
 
                           {loadingDetails === dataset.id ? (
-                            <div className="flex items-center gap-2 text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+                            <div className="flex items-center gap-2 text-xs" style={{ color: colors.textMuted }}>
                               <RefreshCw size={10} className="animate-spin" />
                               Loading details...
                             </div>
                           ) : details ? (
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               {details.start_date && (
-                                <div className="flex items-center gap-1" style={{ color: FINCEPT_COLORS.CYAN }}>
+                                <div className="flex items-center gap-1" style={{ color: colors.info }}>
                                   <Calendar size={10} />
                                   <span>From: {details.start_date}</span>
                                 </div>
                               )}
                               {details.end_date && (
-                                <div className="flex items-center gap-1" style={{ color: FINCEPT_COLORS.CYAN }}>
+                                <div className="flex items-center gap-1" style={{ color: colors.info }}>
                                   <Calendar size={10} />
                                   <span>To: {details.end_date}</span>
                                 </div>
                               )}
                               {details.schemas && details.schemas.length > 0 && (
                                 <div className="col-span-2">
-                                  <div className="flex items-center gap-1 mb-1" style={{ color: FINCEPT_COLORS.GREEN }}>
+                                  <div className="flex items-center gap-1 mb-1" style={{ color: colors.success }}>
                                     <FileText size={10} />
                                     <span>Schemas:</span>
                                   </div>
@@ -325,17 +328,17 @@ export const DatasetBrowser: React.FC<DatasetBrowserProps> = ({
                                         key={schema}
                                         className="px-1 py-0.5"
                                         style={{
-                                          backgroundColor: FINCEPT_COLORS.BORDER,
+                                          backgroundColor: colors.textMuted,
                                           color: textColor,
                                           fontSize: '9px',
-                                          borderRadius: '2px',
+                                          borderRadius: 'var(--ft-border-radius)',
                                         }}
                                       >
                                         {schema}
                                       </span>
                                     ))}
                                     {details.schemas.length > 8 && (
-                                      <span className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+                                      <span className="text-xs" style={{ color: colors.textMuted }}>
                                         +{details.schemas.length - 8} more
                                       </span>
                                     )}

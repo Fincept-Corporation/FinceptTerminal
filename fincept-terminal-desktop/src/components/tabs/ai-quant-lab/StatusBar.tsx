@@ -6,25 +6,7 @@
 import React from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { APP_VERSION } from '@/constants/version';
-
-// Fincept Professional Color Palette
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface StatusBarProps {
   qlibStatus: { available: boolean };
@@ -32,34 +14,36 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ qlibStatus, rdAgentStatus }: StatusBarProps) {
+  const { colors } = useTerminalTheme();
+
   return (
     <div
       className="flex items-center justify-between px-6 py-2 border-t text-xs uppercase"
-      style={{ backgroundColor: FINCEPT.PANEL_BG, borderColor: FINCEPT.BORDER }}
+      style={{ backgroundColor: colors.panel, borderColor: 'var(--ft-border-color, #2A2A2A)' }}
     >
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
           {qlibStatus.available ? (
-            <CheckCircle size={14} color={FINCEPT.GREEN} />
+            <CheckCircle size={14} color={colors.success} />
           ) : (
-            <XCircle size={14} color={FINCEPT.RED} />
+            <XCircle size={14} color={colors.alert} />
           )}
-          <span style={{ color: FINCEPT.GRAY }}>
+          <span style={{ color: colors.textMuted }}>
             Qlib: {qlibStatus.available ? 'Installed' : 'Not Installed'}
           </span>
         </div>
         <div className="flex items-center gap-2">
           {rdAgentStatus.available ? (
-            <CheckCircle size={14} color={FINCEPT.GREEN} />
+            <CheckCircle size={14} color={colors.success} />
           ) : (
-            <XCircle size={14} color={FINCEPT.RED} />
+            <XCircle size={14} color={colors.alert} />
           )}
-          <span style={{ color: FINCEPT.GRAY }}>
+          <span style={{ color: colors.textMuted }}>
             RD-Agent: {rdAgentStatus.available ? 'Installed' : 'Not Installed'}
           </span>
         </div>
       </div>
-      <div style={{ color: FINCEPT.GRAY }}>
+      <div style={{ color: colors.textMuted }}>
         AI Quant Lab v{APP_VERSION} | Microsoft Qlib + RD-Agent Integration
       </div>
     </div>

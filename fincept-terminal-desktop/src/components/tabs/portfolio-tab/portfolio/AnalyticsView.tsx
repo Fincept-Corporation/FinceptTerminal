@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { PortfolioSummary, portfolioService } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent, formatLargeNumber } from './utils';
-import { TrendingUp, Activity, PieChart, Target } from 'lucide-react';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, GRID_TEMPLATES, EFFECTS } from '../finceptStyles';
+import { Activity, Target } from 'lucide-react';
 
 interface AnalyticsViewProps {
   portfolioSummary: PortfolioSummary;
 }
 
 const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
+  const { t } = useTranslation('portfolio');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const currency = portfolioSummary.portfolio.currency;
 
   // Advanced analytics state
@@ -83,29 +86,36 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: FINCEPT.DARK_BG,
-      padding: SPACING.DEFAULT,
+      backgroundColor: colors.background,
+      padding: '12px',
       overflow: 'auto',
-      fontFamily: TYPOGRAPHY.MONO
+      fontFamily
     }}>
       {/* Section Header */}
       <div style={{
-        ...COMMON_STYLES.sectionHeader,
-        marginBottom: SPACING.LARGE
+        padding: '12px',
+        backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+        borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+        color: colors.primary,
+        fontSize: fontSize.body,
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        textTransform: 'uppercase' as const,
+        marginBottom: '16px',
       }}>
-        PORTFOLIO ANALYTICS DASHBOARD
+        {t('analytics.dashboard', 'PORTFOLIO ANALYTICS DASHBOARD')}
       </div>
 
       {/* Error Message */}
       {analyticsError && (
         <div style={{
-          backgroundColor: FINCEPT.PANEL_BG,
-          border: BORDERS.RED,
+          backgroundColor: colors.panel,
+          border: `1px solid ${colors.alert}`,
           borderRadius: '2px',
-          padding: SPACING.DEFAULT,
-          marginBottom: SPACING.LARGE,
-          color: FINCEPT.RED,
-          fontSize: '10px'
+          padding: '12px',
+          marginBottom: '16px',
+          color: colors.alert,
+          fontSize: fontSize.small
         }}>
           [WARN] {analyticsError}
         </div>
@@ -114,30 +124,30 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
       {/* Advanced Analytics Section */}
       {advancedMetrics && (
         <div style={{
-          backgroundColor: FINCEPT.PANEL_BG,
-          border: BORDERS.CYAN,
+          backgroundColor: colors.panel,
+          border: '1px solid var(--ft-color-accent, #00E5FF)',
           borderRadius: '2px',
-          padding: SPACING.LARGE,
-          marginBottom: SPACING.LARGE,
+          padding: '16px',
+          marginBottom: '16px',
         }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: SPACING.DEFAULT
+            marginBottom: '12px'
           }}>
             <div style={{
-              color: FINCEPT.CYAN,
-              fontSize: '11px',
+              color: 'var(--ft-color-accent, #00E5FF)',
+              fontSize: fontSize.body,
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
-              gap: SPACING.SMALL,
+              gap: '4px',
               letterSpacing: '0.5px',
               textTransform: 'uppercase' as const
             }}>
-              <Activity size={14} color={FINCEPT.CYAN} />
-              ADVANCED PORTFOLIO METRICS (Python-Powered)
+              <Activity size={14} color="var(--ft-color-accent, #00E5FF)" />
+              {t('analytics.advancedMetrics', 'ADVANCED PORTFOLIO METRICS (Python-Powered)')}
             </div>
             <button
               onClick={loadOptimization}
@@ -145,48 +155,55 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
               onMouseEnter={() => setHoveredOptimize(true)}
               onMouseLeave={() => setHoveredOptimize(false)}
               style={{
-                ...COMMON_STYLES.buttonPrimary,
-                background: loadingOptimization ? FINCEPT.MUTED : (hoveredOptimize ? '#FF9922' : FINCEPT.ORANGE),
+                padding: '8px 16px',
+                backgroundColor: loadingOptimization ? '#4A4A4A' : (hoveredOptimize ? '#FF9922' : colors.primary),
+                color: colors.background,
+                border: 'none',
+                borderRadius: '2px',
+                fontSize: fontSize.tiny,
+                fontWeight: 700,
                 cursor: loadingOptimization ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: SPACING.SMALL,
+                gap: '4px',
                 opacity: loadingOptimization ? 0.6 : 1,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
               }}
             >
               <Target size={10} />
-              {loadingOptimization ? 'OPTIMIZING...' : 'OPTIMIZE WEIGHTS'}
+              {loadingOptimization ? t('analytics.optimizing', 'OPTIMIZING...') : t('analytics.optimizeWeights', 'OPTIMIZE WEIGHTS')}
             </button>
           </div>
 
-          <div style={{ ...GRID_TEMPLATES.autoFit('120px'), marginTop: SPACING.DEFAULT }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginTop: '12px' }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>SHARPE RATIO</div>
-              <div style={{ color: FINCEPT.GREEN, fontSize: '15px', fontWeight: 700 }}>
+              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>{t('analytics.sharpeRatio', 'SHARPE RATIO')}</div>
+              <div style={{ color: colors.success, fontSize: '15px', fontWeight: 700 }}>
                 {advancedMetrics.sharpe_ratio?.toFixed(2) || 'N/A'}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>VOLATILITY</div>
-              <div style={{ color: FINCEPT.YELLOW, fontSize: '15px', fontWeight: 700 }}>
+              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>{t('analytics.volatility', 'VOLATILITY')}</div>
+              <div style={{ color: 'var(--ft-color-warning, #FFD700)', fontSize: '15px', fontWeight: 700 }}>
                 {(advancedMetrics.portfolio_volatility * 100)?.toFixed(2)}%
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>VaR (95%)</div>
-              <div style={{ color: FINCEPT.RED, fontSize: '15px', fontWeight: 700 }}>
+              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>{t('analytics.var95', 'VaR (95%)')}</div>
+              <div style={{ color: colors.alert, fontSize: '15px', fontWeight: 700 }}>
                 {(advancedMetrics.value_at_risk_95 * 100)?.toFixed(2)}%
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>MAX DRAWDOWN</div>
-              <div style={{ color: FINCEPT.RED, fontSize: '15px', fontWeight: 700 }}>
+              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>{t('analytics.maxDrawdown', 'MAX DRAWDOWN')}</div>
+              <div style={{ color: colors.alert, fontSize: '15px', fontWeight: 700 }}>
                 {(advancedMetrics.max_drawdown * 100)?.toFixed(2)}%
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>ANNUAL RETURN</div>
-              <div style={{ color: FINCEPT.GREEN, fontSize: '15px', fontWeight: 700 }}>
+              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '4px' }}>{t('analytics.annualReturn', 'ANNUAL RETURN')}</div>
+              <div style={{ color: colors.success, fontSize: '15px', fontWeight: 700 }}>
                 {(advancedMetrics.portfolio_return * 100)?.toFixed(2)}%
               </div>
             </div>
@@ -195,21 +212,21 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
           {/* Optimized Portfolio Section */}
           {optimizedPortfolio && (
             <div style={{
-              marginTop: SPACING.DEFAULT,
-              paddingTop: SPACING.DEFAULT,
-              borderTop: BORDERS.STANDARD
+              marginTop: '12px',
+              paddingTop: '12px',
+              borderTop: '1px solid var(--ft-color-border, #2A2A2A)'
             }}>
               <div style={{
-                color: FINCEPT.ORANGE,
-                fontSize: '10px',
+                color: colors.primary,
+                fontSize: fontSize.small,
                 fontWeight: 700,
                 letterSpacing: '0.5px',
                 textTransform: 'uppercase' as const,
-                marginBottom: SPACING.MEDIUM
+                marginBottom: '8px'
               }}>
-                OPTIMIZED ALLOCATION (Max Sharpe Ratio)
+                {t('analytics.optimizedAllocation', 'OPTIMIZED ALLOCATION (Max Sharpe Ratio)')}
               </div>
-              <div style={{ ...GRID_TEMPLATES.autoFit('120px') }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
                 {portfolioSummary.holdings.map((holding, idx) => {
                   const currentWeight = holding.weight;
                   const optimalWeight = (optimizedPortfolio.optimal_weights[idx] * 100);
@@ -217,28 +234,28 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
 
                   return (
                     <div key={holding.id} style={{
-                      padding: SPACING.SMALL,
-                      backgroundColor: FINCEPT.DARK_BG,
-                      border: BORDERS.STANDARD,
+                      padding: '4px',
+                      backgroundColor: colors.background,
+                      border: '1px solid var(--ft-color-border, #2A2A2A)',
                       borderRadius: '2px',
                     }}>
                       <div style={{
-                        color: FINCEPT.CYAN,
-                        fontSize: '10px',
+                        color: 'var(--ft-color-accent, #00E5FF)',
+                        fontSize: fontSize.small,
                         fontWeight: 700,
-                        marginBottom: SPACING.TINY
+                        marginBottom: '2px'
                       }}>
                         {holding.symbol}
                       </div>
-                      <div style={{ fontSize: '9px', color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: fontSize.tiny, color: colors.textMuted, letterSpacing: '0.5px' }}>
                         Current: {currentWeight.toFixed(1)}%
                       </div>
-                      <div style={{ fontSize: '9px', color: FINCEPT.YELLOW }}>
+                      <div style={{ fontSize: fontSize.tiny, color: 'var(--ft-color-warning, #FFD700)' }}>
                         Optimal: {optimalWeight.toFixed(1)}%
                       </div>
                       <div style={{
-                        fontSize: '9px',
-                        color: diff > 0 ? FINCEPT.GREEN : diff < 0 ? FINCEPT.RED : FINCEPT.GRAY
+                        fontSize: fontSize.tiny,
+                        color: diff > 0 ? colors.success : diff < 0 ? colors.alert : colors.textMuted
                       }}>
                         {diff > 0 ? '\u2191' : diff < 0 ? '\u2193' : '='} {Math.abs(diff).toFixed(1)}%
                       </div>
@@ -247,17 +264,17 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
                 })}
               </div>
               <div style={{
-                marginTop: SPACING.MEDIUM,
-                fontSize: '10px',
-                color: FINCEPT.GRAY
+                marginTop: '8px',
+                fontSize: fontSize.small,
+                color: colors.textMuted
               }}>
-                Optimized Sharpe: <span style={{ color: FINCEPT.GREEN, fontWeight: 700 }}>
+                Optimized Sharpe: <span style={{ color: colors.success, fontWeight: 700 }}>
                   {optimizedPortfolio.sharpe_ratio?.toFixed(2)}
                 </span> |
-                Expected Return: <span style={{ color: FINCEPT.GREEN, fontWeight: 700 }}>
+                Expected Return: <span style={{ color: colors.success, fontWeight: 700 }}>
                   {(optimizedPortfolio.expected_return * 100)?.toFixed(2)}%
                 </span> |
-                Volatility: <span style={{ color: FINCEPT.YELLOW, fontWeight: 700 }}>
+                Volatility: <span style={{ color: 'var(--ft-color-warning, #FFD700)', fontWeight: 700 }}>
                   {(optimizedPortfolio.volatility * 100)?.toFixed(2)}%
                 </span>
               </div>
@@ -269,14 +286,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
       {/* Loading State */}
       {loadingMetrics && !advancedMetrics && (
         <div style={{
-          backgroundColor: FINCEPT.PANEL_BG,
-          border: BORDERS.CYAN,
+          backgroundColor: colors.panel,
+          border: '1px solid var(--ft-color-accent, #00E5FF)',
           borderRadius: '2px',
-          padding: SPACING.LARGE,
-          marginBottom: SPACING.LARGE,
+          padding: '16px',
+          marginBottom: '16px',
           textAlign: 'center',
-          color: FINCEPT.CYAN,
-          fontSize: '10px'
+          color: 'var(--ft-color-accent, #00E5FF)',
+          fontSize: fontSize.small
         }}>
           Loading advanced analytics...
         </div>
@@ -284,27 +301,34 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
 
       {/* Key Metrics Grid */}
       <div style={{
-        ...GRID_TEMPLATES.fourColumn,
-        marginBottom: SPACING.LARGE
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '12px',
+        marginBottom: '16px'
       }}>
         {/* Total Value Card */}
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: BORDERS.ORANGE
+          backgroundColor: colors.panel,
+          border: `1px solid ${colors.primary}`,
+          borderRadius: '2px',
+          padding: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
         }}>
-          <div style={{ ...COMMON_STYLES.dataLabel }}>TOTAL VALUE</div>
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('analytics.totalValue', 'TOTAL VALUE')}</div>
           <div style={{
-            color: FINCEPT.CYAN,
+            color: 'var(--ft-color-accent, #00E5FF)',
             fontSize: '16px',
             fontWeight: 700
           }}>
             {formatLargeNumber(totalValue, currency)}
           </div>
           <div style={{
-            color: FINCEPT.GRAY,
-            fontSize: '9px',
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
             letterSpacing: '0.5px',
-            marginTop: SPACING.TINY
+            marginTop: '2px'
           }}>
             {formatCurrency(totalValue, currency)}
           </div>
@@ -312,21 +336,32 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
 
         {/* Total P&L Card */}
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: totalPnL >= 0 ? BORDERS.GREEN : BORDERS.RED
+          backgroundColor: colors.panel,
+          border: `1px solid ${totalPnL >= 0 ? colors.success : colors.alert}`,
+          borderRadius: '2px',
+          padding: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
         }}>
-          <div style={{ ...COMMON_STYLES.dataLabel }}>TOTAL P&L</div>
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('analytics.totalPnl', 'TOTAL P&L')}</div>
           <div style={{
-            color: totalPnL >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
+            color: totalPnL >= 0 ? colors.success : colors.alert,
             fontSize: '16px',
             fontWeight: 700
           }}>
             {totalPnL >= 0 ? '+' : ''}{formatLargeNumber(totalPnL, currency)}
           </div>
           <div style={{
-            ...(totalPnL >= 0 ? COMMON_STYLES.badgeSuccess : COMMON_STYLES.badgeError),
-            marginTop: SPACING.TINY,
-            display: 'inline-block'
+            padding: '2px 6px',
+            backgroundColor: totalPnL >= 0 ? `${colors.success}20` : `${colors.alert}20`,
+            color: totalPnL >= 0 ? colors.success : colors.alert,
+            fontSize: '8px',
+            fontWeight: 700,
+            borderRadius: '2px',
+            marginTop: '2px',
+            display: 'inline-block',
+            width: 'fit-content'
           }}>
             {formatPercent(totalPnLPercent)}
           </div>
@@ -334,21 +369,32 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
 
         {/* Day Change Card */}
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: dayChange >= 0 ? BORDERS.GREEN : BORDERS.RED
+          backgroundColor: colors.panel,
+          border: `1px solid ${dayChange >= 0 ? colors.success : colors.alert}`,
+          borderRadius: '2px',
+          padding: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
         }}>
-          <div style={{ ...COMMON_STYLES.dataLabel }}>DAY CHANGE</div>
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('analytics.dayChange', 'DAY CHANGE')}</div>
           <div style={{
-            color: dayChange >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
+            color: dayChange >= 0 ? colors.success : colors.alert,
             fontSize: '16px',
             fontWeight: 700
           }}>
             {dayChange >= 0 ? '+' : ''}{formatLargeNumber(dayChange, currency)}
           </div>
           <div style={{
-            ...(dayChange >= 0 ? COMMON_STYLES.badgeSuccess : COMMON_STYLES.badgeError),
-            marginTop: SPACING.TINY,
-            display: 'inline-block'
+            padding: '2px 6px',
+            backgroundColor: dayChange >= 0 ? `${colors.success}20` : `${colors.alert}20`,
+            color: dayChange >= 0 ? colors.success : colors.alert,
+            fontSize: '8px',
+            fontWeight: 700,
+            borderRadius: '2px',
+            marginTop: '2px',
+            display: 'inline-block',
+            width: 'fit-content'
           }}>
             {formatPercent(dayChangePercent)}
           </div>
@@ -356,21 +402,32 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
 
         {/* Positions Card */}
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: BORDERS.CYAN
+          backgroundColor: colors.panel,
+          border: '1px solid var(--ft-color-accent, #00E5FF)',
+          borderRadius: '2px',
+          padding: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
         }}>
-          <div style={{ ...COMMON_STYLES.dataLabel }}>POSITIONS</div>
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('analytics.positions', 'POSITIONS')}</div>
           <div style={{
-            color: FINCEPT.CYAN,
+            color: 'var(--ft-color-accent, #00E5FF)',
             fontSize: '16px',
             fontWeight: 700
           }}>
             {positionsCount}
           </div>
           <div style={{
-            ...COMMON_STYLES.badgeInfo,
-            marginTop: SPACING.TINY,
-            display: 'inline-block'
+            padding: '2px 6px',
+            backgroundColor: 'var(--ft-color-accent, #00E5FF)20',
+            color: 'var(--ft-color-accent, #00E5FF)',
+            fontSize: '8px',
+            fontWeight: 700,
+            borderRadius: '2px',
+            marginTop: '2px',
+            display: 'inline-block',
+            width: 'fit-content'
           }}>
             Active Holdings
           </div>
@@ -378,19 +435,24 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
       </div>
 
       {/* Performance Section */}
-      <div style={{ ...GRID_TEMPLATES.threeColumn, marginBottom: SPACING.LARGE }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
         {/* Top Gainers */}
         <div>
           <div style={{
-            ...COMMON_STYLES.sectionHeader,
-            color: FINCEPT.GREEN,
-            borderBottom: BORDERS.GREEN,
-            marginBottom: SPACING.MEDIUM,
+            padding: '12px',
+            backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+            borderBottom: `1px solid ${colors.success}`,
+            color: colors.success,
+            fontSize: fontSize.body,
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const,
+            marginBottom: '8px',
           }}>
-            TOP GAINERS
+            {t('analytics.topGainers', 'TOP GAINERS')}
           </div>
           {topGainers.length === 0 ? (
-            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', padding: SPACING.MEDIUM }}>No data</div>
+            <div style={{ color: colors.textMuted, fontSize: fontSize.small, padding: '8px' }}>{t('analytics.noData', 'No data')}</div>
           ) : (
             topGainers.map(holding => (
               <div
@@ -398,31 +460,31 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
                 onMouseEnter={() => setHoveredGainer(holding.id)}
                 onMouseLeave={() => setHoveredGainer(null)}
                 style={{
-                  padding: SPACING.MEDIUM,
-                  marginBottom: SPACING.SMALL,
-                  backgroundColor: hoveredGainer === holding.id ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-                  borderLeft: `3px solid ${FINCEPT.GREEN}`,
+                  padding: '8px',
+                  marginBottom: '4px',
+                  backgroundColor: hoveredGainer === holding.id ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+                  borderLeft: `3px solid ${colors.success}`,
                   borderRadius: '2px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  transition: EFFECTS.TRANSITION_STANDARD,
+                  transition: 'all 0.2s ease',
                   cursor: 'default'
                 }}
               >
                 <div>
-                  <div style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+                  <div style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontWeight: 700 }}>
                     {holding.symbol}
                   </div>
-                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', letterSpacing: '0.5px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, letterSpacing: '0.5px' }}>
                     {formatCurrency(holding.market_value, currency)}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ ...COMMON_STYLES.badgeSuccess }}>
+                  <div style={{ padding: '2px 6px', backgroundColor: `${colors.success}20`, color: colors.success, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                     +{formatPercent(holding.unrealized_pnl_percent)}
                   </div>
-                  <div style={{ color: FINCEPT.GREEN, fontSize: '9px', marginTop: SPACING.TINY }}>
+                  <div style={{ color: colors.success, fontSize: fontSize.tiny, marginTop: '2px' }}>
                     +{formatCurrency(holding.unrealized_pnl, currency)}
                   </div>
                 </div>
@@ -434,15 +496,20 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
         {/* Top Losers */}
         <div>
           <div style={{
-            ...COMMON_STYLES.sectionHeader,
-            color: FINCEPT.RED,
-            borderBottom: BORDERS.RED,
-            marginBottom: SPACING.MEDIUM,
+            padding: '12px',
+            backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+            borderBottom: `1px solid ${colors.alert}`,
+            color: colors.alert,
+            fontSize: fontSize.body,
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const,
+            marginBottom: '8px',
           }}>
-            TOP LOSERS
+            {t('analytics.topLosers', 'TOP LOSERS')}
           </div>
           {topLosers.length === 0 ? (
-            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', padding: SPACING.MEDIUM }}>No data</div>
+            <div style={{ color: colors.textMuted, fontSize: fontSize.small, padding: '8px' }}>{t('analytics.noData', 'No data')}</div>
           ) : (
             topLosers.map(holding => (
               <div
@@ -450,31 +517,31 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
                 onMouseEnter={() => setHoveredLoser(holding.id)}
                 onMouseLeave={() => setHoveredLoser(null)}
                 style={{
-                  padding: SPACING.MEDIUM,
-                  marginBottom: SPACING.SMALL,
-                  backgroundColor: hoveredLoser === holding.id ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-                  borderLeft: `3px solid ${FINCEPT.RED}`,
+                  padding: '8px',
+                  marginBottom: '4px',
+                  backgroundColor: hoveredLoser === holding.id ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+                  borderLeft: `3px solid ${colors.alert}`,
                   borderRadius: '2px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  transition: EFFECTS.TRANSITION_STANDARD,
+                  transition: 'all 0.2s ease',
                   cursor: 'default'
                 }}
               >
                 <div>
-                  <div style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+                  <div style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontWeight: 700 }}>
                     {holding.symbol}
                   </div>
-                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', letterSpacing: '0.5px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, letterSpacing: '0.5px' }}>
                     {formatCurrency(holding.market_value, currency)}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ ...COMMON_STYLES.badgeError }}>
+                  <div style={{ padding: '2px 6px', backgroundColor: `${colors.alert}20`, color: colors.alert, fontSize: '8px', fontWeight: 700, borderRadius: '2px' }}>
                     {formatPercent(holding.unrealized_pnl_percent)}
                   </div>
-                  <div style={{ color: FINCEPT.RED, fontSize: '9px', marginTop: SPACING.TINY }}>
+                  <div style={{ color: colors.alert, fontSize: fontSize.tiny, marginTop: '2px' }}>
                     {formatCurrency(holding.unrealized_pnl, currency)}
                   </div>
                 </div>
@@ -486,15 +553,20 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
         {/* Largest Positions */}
         <div>
           <div style={{
-            ...COMMON_STYLES.sectionHeader,
-            color: FINCEPT.CYAN,
-            borderBottom: BORDERS.CYAN,
-            marginBottom: SPACING.MEDIUM,
+            padding: '12px',
+            backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+            borderBottom: '1px solid var(--ft-color-accent, #00E5FF)',
+            color: 'var(--ft-color-accent, #00E5FF)',
+            fontSize: fontSize.body,
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const,
+            marginBottom: '8px',
           }}>
-            LARGEST POSITIONS
+            {t('analytics.largestPositions', 'LARGEST POSITIONS')}
           </div>
           {largestPositions.length === 0 ? (
-            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', padding: SPACING.MEDIUM }}>No data</div>
+            <div style={{ color: colors.textMuted, fontSize: fontSize.small, padding: '8px' }}>{t('analytics.noData', 'No data')}</div>
           ) : (
             largestPositions.map(holding => (
               <div
@@ -502,33 +574,38 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
                 onMouseEnter={() => setHoveredPosition(holding.id)}
                 onMouseLeave={() => setHoveredPosition(null)}
                 style={{
-                  padding: SPACING.MEDIUM,
-                  marginBottom: SPACING.SMALL,
-                  backgroundColor: hoveredPosition === holding.id ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-                  borderLeft: `3px solid ${FINCEPT.CYAN}`,
+                  padding: '8px',
+                  marginBottom: '4px',
+                  backgroundColor: hoveredPosition === holding.id ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+                  borderLeft: '3px solid var(--ft-color-accent, #00E5FF)',
                   borderRadius: '2px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  transition: EFFECTS.TRANSITION_STANDARD,
+                  transition: 'all 0.2s ease',
                   cursor: 'default'
                 }}
               >
                 <div>
-                  <div style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+                  <div style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontWeight: 700 }}>
                     {holding.symbol}
                   </div>
-                  <div style={{ color: FINCEPT.GRAY, fontSize: '9px', letterSpacing: '0.5px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, letterSpacing: '0.5px' }}>
                     Weight: {holding.weight.toFixed(1)}%
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+                  <div style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontWeight: 700 }}>
                     {formatLargeNumber(holding.market_value, currency)}
                   </div>
                   <div style={{
-                    ...(holding.unrealized_pnl >= 0 ? COMMON_STYLES.badgeSuccess : COMMON_STYLES.badgeError),
-                    marginTop: SPACING.TINY,
+                    padding: '2px 6px',
+                    backgroundColor: holding.unrealized_pnl >= 0 ? `${colors.success}20` : `${colors.alert}20`,
+                    color: holding.unrealized_pnl >= 0 ? colors.success : colors.alert,
+                    fontSize: '8px',
+                    fontWeight: 700,
+                    borderRadius: '2px',
+                    marginTop: '2px',
                     display: 'inline-block'
                   }}>
                     {formatPercent(holding.unrealized_pnl_percent)}
@@ -543,18 +620,23 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
       {/* Allocation Summary */}
       <div>
         <div style={{
-          ...COMMON_STYLES.sectionHeader,
-          color: FINCEPT.ORANGE,
-          borderBottom: BORDERS.ORANGE,
-          marginBottom: SPACING.DEFAULT,
+          padding: '12px',
+          backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+          borderBottom: `1px solid ${colors.primary}`,
+          color: colors.primary,
+          fontSize: fontSize.body,
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+          textTransform: 'uppercase' as const,
+          marginBottom: '12px',
         }}>
-          ALLOCATION BREAKDOWN
+          {t('analytics.allocationBreakdown', 'ALLOCATION BREAKDOWN')}
         </div>
 
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: SPACING.MEDIUM
+          gap: '8px'
         }}>
           {portfolioSummary.holdings.map(holding => (
             <div
@@ -562,11 +644,11 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
               onMouseEnter={() => setHoveredAllocation(holding.id)}
               onMouseLeave={() => setHoveredAllocation(null)}
               style={{
-                padding: SPACING.MEDIUM,
-                backgroundColor: hoveredAllocation === holding.id ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-                border: BORDERS.STANDARD,
+                padding: '8px',
+                backgroundColor: hoveredAllocation === holding.id ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+                border: '1px solid var(--ft-color-border, #2A2A2A)',
                 borderRadius: '2px',
-                transition: EFFECTS.TRANSITION_STANDARD,
+                transition: 'all 0.2s ease',
                 cursor: 'default'
               }}
             >
@@ -574,41 +656,46 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: SPACING.SMALL
+                marginBottom: '4px'
               }}>
-                <span style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+                <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontWeight: 700 }}>
                   {holding.symbol}
                 </span>
-                <span style={{ color: FINCEPT.YELLOW, fontSize: '10px', fontWeight: 700 }}>
+                <span style={{ color: 'var(--ft-color-warning, #FFD700)', fontSize: fontSize.small, fontWeight: 700 }}>
                   {holding.weight.toFixed(1)}%
                 </span>
               </div>
               <div style={{
                 width: '100%',
                 height: '4px',
-                backgroundColor: FINCEPT.BORDER,
+                backgroundColor: 'var(--ft-color-border, #2A2A2A)',
                 borderRadius: '2px',
                 overflow: 'hidden'
               }}>
                 <div style={{
                   width: `${holding.weight}%`,
                   height: '100%',
-                  backgroundColor: FINCEPT.YELLOW,
+                  backgroundColor: 'var(--ft-color-warning, #FFD700)',
                   transition: 'width 0.3s',
                   borderRadius: '2px'
                 }} />
               </div>
               <div style={{
-                marginTop: SPACING.SMALL,
+                marginTop: '4px',
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '9px',
-                color: FINCEPT.GRAY,
+                fontSize: fontSize.tiny,
+                color: colors.textMuted,
                 letterSpacing: '0.5px'
               }}>
                 <span>{formatLargeNumber(holding.market_value, currency)}</span>
                 <span style={{
-                  ...(holding.unrealized_pnl >= 0 ? COMMON_STYLES.badgeSuccess : COMMON_STYLES.badgeError),
+                  padding: '2px 6px',
+                  backgroundColor: holding.unrealized_pnl >= 0 ? `${colors.success}20` : `${colors.alert}20`,
+                  color: holding.unrealized_pnl >= 0 ? colors.success : colors.alert,
+                  fontSize: '8px',
+                  fontWeight: 700,
+                  borderRadius: '2px',
                 }}>
                   {formatPercent(holding.unrealized_pnl_percent)}
                 </span>

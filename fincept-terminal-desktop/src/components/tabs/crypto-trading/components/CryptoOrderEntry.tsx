@@ -2,8 +2,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { RefreshCw, TrendingUp, TrendingDown, AlertTriangle, Check, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { FINCEPT } from '../constants';
-import { useBrokerContext } from '@/contexts/BrokerContext';
-import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 interface CryptoOrderEntryProps {
   selectedSymbol: string;
@@ -17,6 +15,7 @@ interface CryptoOrderEntryProps {
   realAdapter: any;
   onTradingModeChange: (mode: 'paper' | 'live') => void;
   onRetryConnection?: () => void;
+  onOrderPlaced?: () => void;
 }
 
 type OrderType = 'market' | 'limit' | 'stop-limit';
@@ -34,6 +33,7 @@ export function CryptoOrderEntry({
   realAdapter,
   onTradingModeChange,
   onRetryConnection,
+  onOrderPlaced,
 }: CryptoOrderEntryProps) {
   // Order state
   const [side, setSide] = useState<OrderSide>('buy');
@@ -45,6 +45,7 @@ export function CryptoOrderEntry({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
+  const [orderMessage, setOrderMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Refs for input focus
   const quantityInputRef = useRef<HTMLInputElement>(null);
@@ -107,7 +108,9 @@ export function CryptoOrderEntry({
     if (quantityNum <= 0) errors.push('Enter quantity');
     if ((orderType === 'limit' || orderType === 'stop-limit') && priceNum <= 0) errors.push('Enter price');
     if (orderType === 'stop-limit' && (!stopPrice || parseFloat(stopPrice) <= 0)) errors.push('Enter stop price');
-    if (side === 'buy' && total > balance && total > 0) errors.push('Insufficient balance');
+    // Include estimated fee (0.1%) in balance check
+    const totalWithFees = total + (total * 0.001);
+    if (side === 'buy' && totalWithFees > balance && total > 0) errors.push(`Insufficient balance ($${balance.toFixed(2)} available, $${totalWithFees.toFixed(2)} needed)`);
     return { valid: errors.length === 0, errors };
   }, [quantityNum, priceNum, orderType, stopPrice, side, total, balance]);
 
@@ -134,6 +137,7 @@ export function CryptoOrderEntry({
     if (!validation.valid || !adapter || isPlacing) return;
 
     setIsPlacing(true);
+    setOrderMessage(null);
     try {
       const parsedStopLoss = parseFloat(stopLoss) || undefined;
       const parsedTakeProfit = parseFloat(takeProfit) || undefined;
@@ -166,12 +170,22 @@ export function CryptoOrderEntry({
         setPriceInitialized(true);
       }
 
-    } catch (err) {
+      setOrderMessage({ type: 'success', text: `${side.toUpperCase()} ${quantityNum} ${selectedSymbol} ${orderType} order placed` });
+
+      // Trigger data refresh in parent
+      onOrderPlaced?.();
+
+      // Auto-clear message after 4 seconds
+      setTimeout(() => setOrderMessage(null), 4000);
+
+    } catch (err: any) {
       console.error('[OrderEntry] Order failed:', err);
+      setOrderMessage({ type: 'error', text: err?.message || 'Order failed' });
+      setTimeout(() => setOrderMessage(null), 6000);
     } finally {
       setIsPlacing(false);
     }
-  }, [validation.valid, adapter, isPlacing, selectedSymbol, orderType, side, quantityNum, priceNum, currentPrice, stopLoss, takeProfit, stopPrice]);
+  }, [validation.valid, adapter, isPlacing, selectedSymbol, orderType, side, quantityNum, priceNum, currentPrice, stopLoss, takeProfit, stopPrice, onOrderPlaced]);
 
   // Handle retry connection
   const handleRetryConnection = useCallback(() => {
@@ -579,6 +593,24 @@ export function CryptoOrderEntry({
             fontSize: '10px',
           }}>
             {validation.errors.join(' • ')}
+          </div>
+        )}
+
+        {/* Order Result Message */}
+        {orderMessage && (
+          <div style={{
+            padding: '8px 12px',
+            marginBottom: '12px',
+            background: orderMessage.type === 'success' ? `${FINCEPT.GREEN}15` : `${FINCEPT.RED}15`,
+            borderLeft: `3px solid ${orderMessage.type === 'success' ? FINCEPT.GREEN : FINCEPT.RED}`,
+            color: orderMessage.type === 'success' ? FINCEPT.GREEN : FINCEPT.RED,
+            fontSize: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}>
+            {orderMessage.type === 'success' ? <Check size={12} /> : <AlertTriangle size={12} />}
+            {orderMessage.text}
           </div>
         )}
 

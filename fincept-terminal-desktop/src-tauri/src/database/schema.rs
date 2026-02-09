@@ -620,12 +620,22 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_broker_credentials_broker_id ON broker_credentials(broker_id);
 
-        -- Master Contract Cache table (Broker symbol data metadata)
+        -- Master Contract Cache table (DEPRECATED - use master_contract_status instead)
         CREATE TABLE IF NOT EXISTS master_contract_cache (
             broker_id TEXT PRIMARY KEY,
             symbols_data TEXT NOT NULL,
             symbol_count INTEGER NOT NULL,
             last_updated INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+
+        -- Master Contract Status table (New unified status tracking)
+        CREATE TABLE IF NOT EXISTS master_contract_status (
+            broker_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'pending',
+            message TEXT,
+            last_updated INTEGER NOT NULL,
+            total_symbols INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL
         );
 
@@ -881,7 +891,122 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
             change_percent REAL,
             updated_at INTEGER NOT NULL,
             PRIMARY KEY (symbol)
-        )
+        );
+
+        -- ============================================================================
+        -- ALGO TRADING SYSTEM TABLES
+        -- ============================================================================
+
+        -- User-created visual algo strategies (condition-based)
+        CREATE TABLE IF NOT EXISTS algo_strategies (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            entry_conditions TEXT NOT NULL DEFAULT '[]',
+            exit_conditions TEXT NOT NULL DEFAULT '[]',
+            entry_logic TEXT NOT NULL DEFAULT 'AND',
+            exit_logic TEXT NOT NULL DEFAULT 'AND',
+            stop_loss REAL,
+            take_profit REAL,
+            trailing_stop REAL,
+            trailing_stop_type TEXT DEFAULT 'percent',
+            timeframe TEXT NOT NULL DEFAULT '5m',
+            symbols TEXT NOT NULL DEFAULT '[]',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Aggregated OHLCV candles built from ticks
+        CREATE TABLE IF NOT EXISTS candle_cache (
+            symbol TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT '',
+            timeframe TEXT NOT NULL DEFAULT '5m',
+            open_time INTEGER NOT NULL,
+            o REAL NOT NULL,
+            h REAL NOT NULL,
+            l REAL NOT NULL,
+            c REAL NOT NULL,
+            volume REAL NOT NULL DEFAULT 0,
+            is_closed INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (symbol, provider, timeframe, open_time)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_candle_cache_lookup
+            ON candle_cache(symbol, timeframe, open_time DESC);
+
+        -- Algo deployments (live/paper strategy runs)
+        CREATE TABLE IF NOT EXISTS algo_deployments (
+            id TEXT PRIMARY KEY NOT NULL,
+            strategy_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT '',
+            mode TEXT NOT NULL DEFAULT 'paper',
+            status TEXT NOT NULL DEFAULT 'pending',
+            timeframe TEXT NOT NULL DEFAULT '5m',
+            quantity REAL NOT NULL DEFAULT 1,
+            params TEXT DEFAULT '{}',
+            pid INTEGER,
+            error_message TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            stopped_at TEXT,
+            FOREIGN KEY (strategy_id) REFERENCES algo_strategies(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_algo_deployments_status ON algo_deployments(status);
+        CREATE INDEX IF NOT EXISTS idx_algo_deployments_strategy ON algo_deployments(strategy_id);
+
+        -- Trade log per deployment
+        CREATE TABLE IF NOT EXISTS algo_trades (
+            id TEXT PRIMARY KEY NOT NULL,
+            deployment_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            price REAL NOT NULL,
+            pnl REAL DEFAULT 0,
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+            signal_reason TEXT DEFAULT '',
+            FOREIGN KEY (deployment_id) REFERENCES algo_deployments(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_algo_trades_deployment ON algo_trades(deployment_id);
+        CREATE INDEX IF NOT EXISTS idx_algo_trades_timestamp ON algo_trades(timestamp DESC);
+
+        -- Live metrics per deployment
+        CREATE TABLE IF NOT EXISTS algo_metrics (
+            deployment_id TEXT PRIMARY KEY NOT NULL,
+            total_pnl REAL NOT NULL DEFAULT 0,
+            unrealized_pnl REAL NOT NULL DEFAULT 0,
+            total_trades INTEGER NOT NULL DEFAULT 0,
+            win_rate REAL NOT NULL DEFAULT 0,
+            max_drawdown REAL NOT NULL DEFAULT 0,
+            current_position_qty REAL NOT NULL DEFAULT 0,
+            current_position_side TEXT DEFAULT '',
+            current_position_entry REAL DEFAULT 0,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (deployment_id) REFERENCES algo_deployments(id) ON DELETE CASCADE
+        );
+
+        -- Order signal queue (Python -> Rust for live execution)
+        CREATE TABLE IF NOT EXISTS algo_order_signals (
+            id TEXT PRIMARY KEY NOT NULL,
+            deployment_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            order_type TEXT NOT NULL DEFAULT 'MARKET',
+            price REAL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            result TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            executed_at TEXT,
+            FOREIGN KEY (deployment_id) REFERENCES algo_deployments(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_algo_order_signals_status ON algo_order_signals(status);
+        CREATE INDEX IF NOT EXISTS idx_algo_order_signals_deployment ON algo_order_signals(deployment_id)
         ",
     )?;
 

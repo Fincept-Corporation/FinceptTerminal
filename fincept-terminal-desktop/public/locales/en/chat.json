@@ -11,16 +11,47 @@
   },
   "messages": {
     "thinking": "Thinking...",
-    "typing": "AI is typing..."
+    "typing": "AI is typing...",
+    "empty": "(Empty message)"
   },
   "history": {
     "clearAll": "CLEAR ALL",
     "sessions": "SESSIONS",
-    "deleteAll": "Delete all sessions"
+    "deleteAll": "Delete all sessions",
+    "search": "Search sessions..."
   },
   "panel": {
     "dataContexts": "DATA CONTEXTS",
     "quickPrompts": "QUICK PROMPTS",
     "systemInfo": "SYSTEM INFO"
+  },
+  "llm": {
+    "selectProvider": "SELECT LLM PROVIDER",
+    "noProvider": "NO PROVIDER",
+    "active": "ACTIVE",
+    "model": "Model",
+    "provider": "PROVIDER",
+    "temperature": "TEMP",
+    "maxTokens": "MAX TOKENS",
+    "streaming": "STREAMING",
+    "mcpTools": "MCP TOOLS",
+    "apiKey": "API KEY",
+    "systemPrompt": "SYSTEM PROMPT",
+    "configured": "CONFIGURED",
+    "notConfigured": "NOT CONFIGURED"
+  },
+  "status": {
+    "initializing": "STATUS: INITIALIZING...",
+    "ready": "STATUS: READY",
+    "loading": "STATUS: LOADING MESSAGES...",
+    "error": "ERROR",
+    "switching": "STATUS: SWITCHING LLM PROVIDER..."
+  },
+  "buttons": {
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "reset": "Reset to Default",
+    "configure": "Configure MCP"
   }
 }

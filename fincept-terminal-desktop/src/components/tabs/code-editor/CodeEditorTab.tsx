@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
 import {
   Play, Save, FileText, Plus, X, Terminal as TerminalIcon,
@@ -11,27 +12,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { FinScriptOutputPanel, FinScriptExecutionResult } from './FinScriptOutputPanel';
 import { showConfirm } from '@/utils/notifications';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
-// ─── Design System Constants ────────────────────────────────────────────────
-const F = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A',
-  CYAN: '#00E5FF',
-  YELLOW: '#FFD700',
-  BLUE: '#0088FF',
-  PURPLE: '#9D4EDD',
-};
-
-const FONT = '"IBM Plex Mono", "Consolas", monospace';
+// Theme colors provided by useTerminalTheme() hook
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 interface EditorFile {
@@ -53,13 +36,7 @@ interface SearchState {
   currentMatch: number;
 }
 
-// ─── Language Config ────────────────────────────────────────────────────────
-const LANG_CONFIG: Record<string, { icon: React.ReactNode; color: string; ext: string }> = {
-  finscript: { icon: <Zap size={10} />, color: F.ORANGE, ext: '.fincept' },
-  python: { icon: <Code size={10} />, color: F.BLUE, ext: '.py' },
-  javascript: { icon: <Braces size={10} />, color: F.YELLOW, ext: '.js' },
-  json: { icon: <Hash size={10} />, color: F.GREEN, ext: '.json' },
-};
+// ─── Language Config (moved inside component to access theme colors) ────────────────
 
 const DEFAULT_FINSCRIPT = `// FinScript - EMA/RSI Crossover Strategy
 // Data is generated synthetically for instant execution
@@ -1208,6 +1185,17 @@ label_new(250, take_profit, "TP", "green")
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function CodeEditorTab() {
+  const { t } = useTranslation('codeEditor');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
+
+  // Language Config
+  const LANG_CONFIG: Record<string, { icon: React.ReactNode; color: string; ext: string }> = {
+    finscript: { icon: <Zap size={10} />, color: colors.primary, ext: '.fincept' },
+    python: { icon: <Code size={10} />, color: '#0088FF', ext: '.py' },
+    javascript: { icon: <Braces size={10} />, color: colors.warning, ext: '.js' },
+    json: { icon: <Hash size={10} />, color: colors.success, ext: '.json' },
+  };
+
   // ─── State ──────────────────────────────────────────────────────────────
   const [files, setFiles] = useState<EditorFile[]>([
     {
@@ -1357,8 +1345,8 @@ export default function CodeEditorTab() {
     const fileToClose = files.find(f => f.id === id);
     if (fileToClose?.unsaved) {
       const confirmed = await showConfirm(
-        'You have unsaved changes.',
-        { title: 'Close file without saving?', type: 'warning' }
+        t('dialogs.unsavedChanges'),
+        { title: t('dialogs.closeUnsaved'), type: 'warning' }
       );
       if (!confirmed) return;
     }
@@ -1506,52 +1494,54 @@ export default function CodeEditorTab() {
   // ─── Render ─────────────────────────────────────────────────────────────
   const effectiveOutputHeight = isOutputMaximized ? 500 : (showOutput ? outputHeight : 0);
 
+  const editorCSS = [
+    '.ce-scroll::-webkit-scrollbar { width: 6px; height: 6px; }',
+    `.ce-scroll::-webkit-scrollbar-track { background: ${colors.background}; }`,
+    `.ce-scroll::-webkit-scrollbar-thumb { background: ${colors.panel}; border-radius: 3px; }`,
+    `.ce-scroll::-webkit-scrollbar-thumb:hover { background: ${colors.textMuted}; }`,
+    '.ce-tab:hover { background-color: #1F1F1F !important; }',
+    '.ce-explorer-item:hover { background-color: #1F1F1F; }',
+    `.ce-resize-handle:hover { background-color: ${colors.primary}; }`,
+  ].join('\n');
+
   return (
     <div style={{
       width: '100%', height: '100%',
-      backgroundColor: F.DARK_BG,
-      color: F.WHITE,
-      fontFamily: FONT,
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>
       {/* ─── CSS ──────────────────────────────────────────────────────── */}
-      <style>{`
-        .ce-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .ce-scroll::-webkit-scrollbar-track { background: ${F.DARK_BG}; }
-        .ce-scroll::-webkit-scrollbar-thumb { background: ${F.BORDER}; border-radius: 3px; }
-        .ce-scroll::-webkit-scrollbar-thumb:hover { background: ${F.MUTED}; }
-        .ce-tab:hover { background-color: ${F.HOVER} !important; }
-        .ce-explorer-item:hover { background-color: ${F.HOVER}; }
-        .ce-resize-handle:hover { background-color: ${F.ORANGE}; }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: editorCSS }} />
 
       {/* ─── Top Navigation Bar ───────────────────────────────────────── */}
       <div style={{
-        backgroundColor: F.HEADER_BG,
-        borderBottom: `2px solid ${F.ORANGE}`,
+        backgroundColor: colors.panel,
+        borderBottom: `2px solid ${colors.primary}`,
         padding: '6px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        boxShadow: `0 2px 8px ${F.ORANGE}20`,
+        boxShadow: `0 2px 8px ${colors.primary}20`,
         minHeight: '38px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Zap size={14} style={{ color: F.ORANGE }} />
-          <span style={{ fontSize: '11px', fontWeight: 700, color: F.WHITE, letterSpacing: '0.5px' }}>FINSCRIPT IDE</span>
-          <span style={{ color: F.MUTED }}>|</span>
-          <span style={{ fontSize: '9px', color: F.GRAY, letterSpacing: '0.5px' }}>v1.0</span>
+          <Zap size={14} style={{ color: colors.primary }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: colors.text, letterSpacing: '0.5px' }}>{t('header.finscriptIde')}</span>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ fontSize: '9px', color: colors.textMuted, letterSpacing: '0.5px' }}>{t('header.version')}</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {/* Toggle Explorer */}
           <button
             onClick={() => setShowExplorer(v => !v)}
-            title="Toggle Explorer (Ctrl+B)"
+            title={t('toolbar.toggleExplorer')}
             style={{
-              padding: '4px 8px', backgroundColor: showExplorer ? `${F.ORANGE}20` : 'transparent',
-              border: `1px solid ${showExplorer ? F.ORANGE : F.BORDER}`, borderRadius: '2px',
-              color: showExplorer ? F.ORANGE : F.GRAY, fontSize: '9px', fontWeight: 700,
-              cursor: 'pointer', fontFamily: FONT, transition: 'all 0.2s',
+              padding: '4px 8px', backgroundColor: showExplorer ? `${colors.primary}20` : 'transparent',
+              border: `1px solid ${showExplorer ? colors.primary : colors.panel}`, borderRadius: '2px',
+              color: showExplorer ? colors.primary : colors.textMuted, fontSize: '9px', fontWeight: 700,
+              cursor: 'pointer', fontFamily: fontFamily, transition: 'all 0.2s',
             }}
           >
             <FolderOpen size={11} />
@@ -1560,12 +1550,12 @@ export default function CodeEditorTab() {
           {/* Open File */}
           <button
             onClick={openFileFromDisk}
-            title="Open File"
+            title={t('toolbar.openFile')}
             style={{
               padding: '4px 8px', backgroundColor: 'transparent',
-              border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-              color: F.GRAY, fontSize: '9px', fontWeight: 700,
-              cursor: 'pointer', fontFamily: FONT, transition: 'all 0.2s',
+              border: `1px solid ${colors.panel}`, borderRadius: '2px',
+              color: colors.textMuted, fontSize: '9px', fontWeight: 700,
+              cursor: 'pointer', fontFamily: fontFamily, transition: 'all 0.2s',
             }}
           >
             <Upload size={11} />
@@ -1575,12 +1565,12 @@ export default function CodeEditorTab() {
           <button
             onClick={saveFile}
             disabled={!activeFile.unsaved}
-            title="Save (Ctrl+S)"
+            title={t('toolbar.saveShortcut')}
             style={{
               padding: '4px 8px', backgroundColor: 'transparent',
-              border: `1px solid ${activeFile.unsaved ? F.YELLOW : F.BORDER}`, borderRadius: '2px',
-              color: activeFile.unsaved ? F.YELLOW : F.MUTED, fontSize: '9px', fontWeight: 700,
-              cursor: activeFile.unsaved ? 'pointer' : 'default', fontFamily: FONT,
+              border: `1px solid ${activeFile.unsaved ? colors.warning : colors.panel}`, borderRadius: '2px',
+              color: activeFile.unsaved ? colors.warning : colors.textMuted, fontSize: '9px', fontWeight: 700,
+              cursor: activeFile.unsaved ? 'pointer' : 'default', fontFamily: fontFamily,
               opacity: activeFile.unsaved ? 1 : 0.5, transition: 'all 0.2s',
             }}
           >
@@ -1590,35 +1580,35 @@ export default function CodeEditorTab() {
           {/* Search */}
           <button
             onClick={() => setSearch(s => ({ ...s, isOpen: !s.isOpen }))}
-            title="Find (Ctrl+F)"
+            title={t('toolbar.findShortcut')}
             style={{
-              padding: '4px 8px', backgroundColor: search.isOpen ? `${F.CYAN}20` : 'transparent',
-              border: `1px solid ${search.isOpen ? F.CYAN : F.BORDER}`, borderRadius: '2px',
-              color: search.isOpen ? F.CYAN : F.GRAY, fontSize: '9px', fontWeight: 700,
-              cursor: 'pointer', fontFamily: FONT, transition: 'all 0.2s',
+              padding: '4px 8px', backgroundColor: search.isOpen ? '#00E5FF20' : 'transparent',
+              border: `1px solid ${search.isOpen ? '#00E5FF' : colors.panel}`, borderRadius: '2px',
+              color: search.isOpen ? '#00E5FF' : colors.textMuted, fontSize: '9px', fontWeight: 700,
+              cursor: 'pointer', fontFamily: fontFamily, transition: 'all 0.2s',
             }}
           >
             <Search size={11} />
           </button>
 
-          <div style={{ width: '1px', height: '18px', backgroundColor: F.BORDER, margin: '0 4px' }} />
+          <div style={{ width: '1px', height: '18px', backgroundColor: colors.panel, margin: '0 4px' }} />
 
           {/* Run Button */}
           <button
             onClick={runCode}
             disabled={isRunning || activeFile.language !== 'finscript'}
-            title="Run (Ctrl+Enter)"
+            title={t('toolbar.runShortcut')}
             style={{
               padding: '5px 14px', display: 'flex', alignItems: 'center', gap: '6px',
-              backgroundColor: isRunning ? F.MUTED : F.ORANGE,
-              color: F.DARK_BG, border: 'none', borderRadius: '2px',
+              backgroundColor: isRunning ? colors.textMuted : colors.primary,
+              color: colors.background, border: 'none', borderRadius: '2px',
               fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
-              cursor: isRunning ? 'not-allowed' : 'pointer', fontFamily: FONT,
+              cursor: isRunning ? 'not-allowed' : 'pointer', fontFamily: fontFamily,
               transition: 'all 0.2s',
             }}
           >
-            <Play size={11} fill={F.DARK_BG} />
-            {isRunning ? 'RUNNING...' : 'RUN'}
+            <Play size={11} fill={colors.background} />
+            {isRunning ? t('toolbar.running') : t('toolbar.run')}
           </button>
         </div>
       </div>
@@ -1629,26 +1619,26 @@ export default function CodeEditorTab() {
         {/* ─── Explorer Panel ─────────────────────────────────────────── */}
         {showExplorer && (
           <div style={{
-            width: '220px', backgroundColor: F.PANEL_BG,
-            borderRight: `1px solid ${F.BORDER}`,
+            width: '220px', backgroundColor: colors.panel,
+            borderRight: `1px solid ${colors.panel}`,
             display: 'flex', flexDirection: 'column',
           }}>
             {/* Explorer Header */}
             <div style={{
               padding: '10px 12px',
-              backgroundColor: F.HEADER_BG,
-              borderBottom: `1px solid ${F.BORDER}`,
+              backgroundColor: colors.panel,
+              borderBottom: `1px solid ${colors.panel}`,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <span style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>
-                EXPLORER
+              <span style={{ fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px' }}>
+                {t('explorer.title')}
               </span>
               <button
                 onClick={createNewFile}
-                title="New File (Ctrl+N)"
+                title={t('toolbar.newFile')}
                 style={{
                   padding: '2px 4px', backgroundColor: 'transparent',
-                  border: 'none', color: F.GRAY, cursor: 'pointer',
+                  border: 'none', color: colors.textMuted, cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}
               >
@@ -1661,10 +1651,10 @@ export default function CodeEditorTab() {
               {/* Section Label */}
               <div style={{
                 padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px',
-                fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px',
+                fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px',
               }}>
                 <ChevronDown size={10} />
-                OPEN FILES ({files.length})
+                {t('explorer.openFiles')} ({files.length})
               </div>
 
               {files.map(file => {
@@ -1678,25 +1668,25 @@ export default function CodeEditorTab() {
                     style={{
                       padding: '6px 12px 6px 24px',
                       display: 'flex', alignItems: 'center', gap: '8px',
-                      backgroundColor: isActive ? `${F.ORANGE}15` : 'transparent',
-                      borderLeft: isActive ? `2px solid ${F.ORANGE}` : '2px solid transparent',
+                      backgroundColor: isActive ? `${colors.primary}15` : 'transparent',
+                      borderLeft: isActive ? `2px solid ${colors.primary}` : '2px solid transparent',
                       cursor: 'pointer', transition: 'all 0.2s',
                     }}
                   >
                     <span style={{ color: lang.color }}>{lang.icon}</span>
                     <span style={{
-                      fontSize: '10px', color: isActive ? F.WHITE : F.GRAY,
+                      fontSize: '10px', color: isActive ? colors.text : colors.textMuted,
                       flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {file.name}
                     </span>
                     {file.unsaved && (
-                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: F.YELLOW }} />
+                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: colors.warning }} />
                     )}
                     {files.length > 1 && (
                       <X size={10}
                         onClick={(e) => { e.stopPropagation(); closeFile(file.id); }}
-                        style={{ color: F.MUTED, cursor: 'pointer', opacity: 0.6 }}
+                        style={{ color: colors.textMuted, cursor: 'pointer', opacity: 0.6 }}
                       />
                     )}
                   </div>
@@ -1705,13 +1695,13 @@ export default function CodeEditorTab() {
 
               {/* Examples Section */}
               <div style={{
-                borderTop: `1px solid ${F.BORDER}`, marginTop: '8px',
+                borderTop: `1px solid ${colors.panel}`, marginTop: '8px',
               }}>
                 <div
                   onClick={() => setExamplesExpanded(!examplesExpanded)}
                   style={{
                     padding: '10px 12px 6px', display: 'flex', alignItems: 'center', gap: '4px',
-                    fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px',
+                    fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px',
                     cursor: 'pointer',
                   }}
                 >
@@ -1719,8 +1709,8 @@ export default function CodeEditorTab() {
                     transform: examplesExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
                     transition: 'transform 0.2s',
                   }} />
-                  <BookOpen size={10} style={{ color: F.ORANGE }} />
-                  EXAMPLES
+                  <BookOpen size={10} style={{ color: colors.primary }} />
+                  {t('explorer.examples')}
                 </div>
                 {examplesExpanded && (
                   <div>
@@ -1728,7 +1718,7 @@ export default function CodeEditorTab() {
                       <div key={category}>
                         <div style={{
                           padding: '4px 12px 2px 20px',
-                          fontSize: '9px', color: F.MUTED, fontWeight: 600,
+                          fontSize: '9px', color: colors.textMuted, fontWeight: 600,
                           letterSpacing: '0.3px',
                         }}>
                           {category}
@@ -1745,9 +1735,9 @@ export default function CodeEditorTab() {
                               cursor: 'pointer', transition: 'all 0.2s',
                             }}
                           >
-                            <Zap size={9} style={{ color: F.ORANGE, flexShrink: 0 }} />
+                            <Zap size={9} style={{ color: colors.primary, flexShrink: 0 }} />
                             <span style={{
-                              fontSize: '10px', color: F.GRAY,
+                              fontSize: '10px', color: colors.textMuted,
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                             }}>
                               {example.name.replace('.fincept', '')}
@@ -1765,11 +1755,11 @@ export default function CodeEditorTab() {
                 <>
                   <div style={{
                     padding: '10px 12px 6px', display: 'flex', alignItems: 'center', gap: '4px',
-                    fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px',
-                    borderTop: `1px solid ${F.BORDER}`, marginTop: '8px',
+                    fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px',
+                    borderTop: `1px solid ${colors.panel}`, marginTop: '8px',
                   }}>
                     <ChevronDown size={10} />
-                    RUN HISTORY
+                    {t('explorer.runHistory')}
                   </div>
                   {executionHistory.slice().reverse().map((h, idx) => (
                     <div key={idx} style={{
@@ -1778,11 +1768,11 @@ export default function CodeEditorTab() {
                       fontSize: '9px',
                     }}>
                       {h.status === 'success'
-                        ? <CheckCircle size={9} style={{ color: F.GREEN }} />
-                        : <AlertTriangle size={9} style={{ color: F.RED }} />
+                        ? <CheckCircle size={9} style={{ color: colors.success }} />
+                        : <AlertTriangle size={9} style={{ color: colors.alert }} />
                       }
-                      <span style={{ color: F.MUTED }}>{h.time}</span>
-                      <span style={{ color: F.GRAY }}>{h.ms}ms</span>
+                      <span style={{ color: colors.textMuted }}>{h.time}</span>
+                      <span style={{ color: colors.textMuted }}>{h.ms}ms</span>
                     </div>
                   ))}
                 </>
@@ -1792,12 +1782,12 @@ export default function CodeEditorTab() {
             {/* Explorer Footer */}
             <div style={{
               padding: '8px 12px',
-              borderTop: `1px solid ${F.BORDER}`,
-              fontSize: '9px', color: F.MUTED,
+              borderTop: `1px solid ${colors.panel}`,
+              fontSize: '9px', color: colors.textMuted,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Zap size={9} style={{ color: F.ORANGE }} />
-                <span>FinScript Engine</span>
+                <Zap size={9} style={{ color: colors.primary }} />
+                <span>{t('explorer.finscriptEngine')}</span>
               </div>
             </div>
           </div>
@@ -1808,8 +1798,8 @@ export default function CodeEditorTab() {
 
           {/* ─── Tab Bar ──────────────────────────────────────────────── */}
           <div style={{
-            backgroundColor: F.HEADER_BG,
-            borderBottom: `1px solid ${F.BORDER}`,
+            backgroundColor: colors.panel,
+            borderBottom: `1px solid ${colors.panel}`,
             display: 'flex', alignItems: 'center',
             overflow: 'hidden',
           }}>
@@ -1825,9 +1815,9 @@ export default function CodeEditorTab() {
                     style={{
                       padding: '7px 14px',
                       display: 'flex', alignItems: 'center', gap: '6px',
-                      backgroundColor: isActive ? F.PANEL_BG : 'transparent',
-                      borderRight: `1px solid ${F.BORDER}`,
-                      borderBottom: isActive ? `2px solid ${F.ORANGE}` : '2px solid transparent',
+                      backgroundColor: isActive ? colors.panel : 'transparent',
+                      borderRight: `1px solid ${colors.panel}`,
+                      borderBottom: isActive ? `2px solid ${colors.primary}` : '2px solid transparent',
                       cursor: 'pointer', transition: 'all 0.2s',
                       maxWidth: '180px',
                     }}
@@ -1835,7 +1825,7 @@ export default function CodeEditorTab() {
                     <span style={{ color: lang.color }}>{lang.icon}</span>
                     <span style={{
                       fontSize: '10px',
-                      color: isActive ? F.WHITE : F.GRAY,
+                      color: isActive ? colors.text : colors.textMuted,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {file.name}{file.unsaved ? ' *' : ''}
@@ -1843,7 +1833,7 @@ export default function CodeEditorTab() {
                     {files.length > 1 && (
                       <X size={10}
                         onClick={(e) => { e.stopPropagation(); closeFile(file.id); }}
-                        style={{ color: F.MUTED, cursor: 'pointer' }}
+                        style={{ color: colors.textMuted, cursor: 'pointer' }}
                       />
                     )}
                   </div>
@@ -1855,12 +1845,12 @@ export default function CodeEditorTab() {
           {/* ─── Search Bar ───────────────────────────────────────────── */}
           {search.isOpen && (
             <div style={{
-              backgroundColor: F.HEADER_BG,
-              borderBottom: `1px solid ${F.BORDER}`,
+              backgroundColor: colors.panel,
+              borderBottom: `1px solid ${colors.panel}`,
               padding: '6px 12px',
               display: 'flex', alignItems: 'center', gap: '8px',
             }}>
-              <Search size={12} style={{ color: F.GRAY }} />
+              <Search size={12} style={{ color: colors.textMuted }} />
               <input
                 autoFocus
                 type="text"
@@ -1869,14 +1859,14 @@ export default function CodeEditorTab() {
                 placeholder="Find..."
                 style={{
                   width: '200px', padding: '4px 8px',
-                  backgroundColor: F.DARK_BG, color: F.WHITE,
-                  border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-                  fontSize: '10px', fontFamily: FONT,
+                  backgroundColor: colors.background, color: colors.text,
+                  border: `1px solid ${colors.panel}`, borderRadius: '2px',
+                  fontSize: '10px', fontFamily: fontFamily,
                   outline: 'none',
                 }}
               />
               {search.query && (
-                <span style={{ fontSize: '9px', color: F.GRAY }}>
+                <span style={{ fontSize: '9px', color: colors.textMuted }}>
                   {getMatchCount()} matches
                 </span>
               )}
@@ -1884,14 +1874,14 @@ export default function CodeEditorTab() {
                 onClick={() => setSearch(s => ({ ...s, showReplace: !s.showReplace }))}
                 style={{
                   padding: '2px 6px', backgroundColor: 'transparent',
-                  border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-                  color: F.GRAY, fontSize: '9px', cursor: 'pointer', fontFamily: FONT,
+                  border: `1px solid ${colors.panel}`, borderRadius: '2px',
+                  color: colors.textMuted, fontSize: '9px', cursor: 'pointer', fontFamily: fontFamily,
                 }}
               >
                 <Replace size={10} />
               </button>
               <X size={12}
-                style={{ color: F.GRAY, cursor: 'pointer' }}
+                style={{ color: colors.textMuted, cursor: 'pointer' }}
                 onClick={() => setSearch(s => ({ ...s, isOpen: false }))}
               />
             </div>
@@ -1901,8 +1891,8 @@ export default function CodeEditorTab() {
           <div ref={editorContainerRef} style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
             {/* Line Numbers Gutter */}
             <div className="ce-scroll" style={{
-              width: '48px', backgroundColor: F.DARK_BG,
-              borderRight: `1px solid ${F.BORDER}`,
+              width: '48px', backgroundColor: colors.background,
+              borderRight: `1px solid ${colors.panel}`,
               overflowY: 'hidden', padding: '12px 0',
               userSelect: 'none',
             }}>
@@ -1910,8 +1900,8 @@ export default function CodeEditorTab() {
                 <div key={i} style={{
                   padding: '0 8px', textAlign: 'right',
                   fontSize: '11px', lineHeight: '20px',
-                  color: (i + 1) === activeFile.cursorLine ? F.WHITE : F.MUTED,
-                  fontFamily: FONT,
+                  color: (i + 1) === activeFile.cursorLine ? colors.text : colors.textMuted,
+                  fontFamily: fontFamily,
                 }}>
                   {i + 1}
                 </div>
@@ -1930,12 +1920,12 @@ export default function CodeEditorTab() {
               spellCheck={false}
               style={{
                 flex: 1,
-                backgroundColor: F.PANEL_BG,
-                color: F.WHITE,
+                backgroundColor: colors.panel,
+                color: colors.text,
                 border: 'none', outline: 'none', resize: 'none',
                 padding: '12px 16px',
                 fontSize: '12px', lineHeight: '20px',
-                fontFamily: FONT,
+                fontFamily: fontFamily,
                 whiteSpace: 'pre', overflowWrap: 'normal',
                 overflowX: 'auto',
                 tabSize: 4,
@@ -1944,15 +1934,15 @@ export default function CodeEditorTab() {
 
             {/* Minimap Gutter */}
             <div style={{
-              width: '4px', backgroundColor: F.DARK_BG,
-              borderLeft: `1px solid ${F.BORDER}`,
+              width: '4px', backgroundColor: colors.background,
+              borderLeft: `1px solid ${colors.panel}`,
               position: 'relative',
             }}>
               {/* Simple scrollbar indicator */}
               <div style={{
                 position: 'absolute', top: '0',
                 width: '100%', height: `${Math.min(100, (20 / lines.length) * 100)}%`,
-                backgroundColor: `${F.ORANGE}40`, borderRadius: '2px',
+                backgroundColor: `${colors.primary}40`, borderRadius: '2px',
               }} />
             </div>
           </div>
@@ -1963,7 +1953,7 @@ export default function CodeEditorTab() {
               className="ce-resize-handle"
               onMouseDown={handleResizeStart}
               style={{
-                height: '3px', backgroundColor: F.BORDER,
+                height: '3px', backgroundColor: colors.panel,
                 cursor: 'ns-resize', transition: 'background-color 0.2s',
               }}
             />
@@ -1974,27 +1964,27 @@ export default function CodeEditorTab() {
             <div style={{
               height: `${effectiveOutputHeight}px`,
               display: 'flex', flexDirection: 'column',
-              borderTop: `1px solid ${F.BORDER}`,
+              borderTop: `1px solid ${colors.panel}`,
             }}>
               {/* Output Header */}
               <div style={{
-                backgroundColor: F.HEADER_BG,
+                backgroundColor: colors.panel,
                 padding: '6px 12px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                borderBottom: `1px solid ${F.BORDER}`,
+                borderBottom: `1px solid ${colors.panel}`,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <TerminalIcon size={11} style={{ color: F.GREEN }} />
-                  <span style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>
-                    OUTPUT
+                  <TerminalIcon size={11} style={{ color: colors.success }} />
+                  <span style={{ fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px' }}>
+                    {t('output.title')}
                   </span>
                   {finscriptResult && (
                     <span style={{
                       padding: '1px 5px', borderRadius: '2px', fontSize: '8px', fontWeight: 700,
-                      backgroundColor: finscriptResult.success ? `${F.GREEN}20` : `${F.RED}20`,
-                      color: finscriptResult.success ? F.GREEN : F.RED,
+                      backgroundColor: finscriptResult.success ? `${colors.success}20` : `${colors.alert}20`,
+                      color: finscriptResult.success ? colors.success : colors.alert,
                     }}>
-                      {finscriptResult.success ? 'SUCCESS' : 'ERROR'}
+                      {finscriptResult.success ? t('output.success') : t('output.error')}
                     </span>
                   )}
                 </div>
@@ -2003,7 +1993,7 @@ export default function CodeEditorTab() {
                     onClick={() => setIsOutputMaximized(v => !v)}
                     style={{
                       padding: '2px 4px', backgroundColor: 'transparent',
-                      border: 'none', color: F.GRAY, cursor: 'pointer',
+                      border: 'none', color: colors.textMuted, cursor: 'pointer',
                     }}
                   >
                     {isOutputMaximized ? <Minimize2 size={10} /> : <Maximize2 size={10} />}
@@ -2012,7 +2002,7 @@ export default function CodeEditorTab() {
                     onClick={() => setShowOutput(false)}
                     style={{
                       padding: '2px 4px', backgroundColor: 'transparent',
-                      border: 'none', color: F.GRAY, cursor: 'pointer',
+                      border: 'none', color: colors.textMuted, cursor: 'pointer',
                     }}
                   >
                     <X size={10} />
@@ -2027,17 +2017,18 @@ export default function CodeEditorTab() {
                   isRunning={isRunning}
                   onClear={() => setFinscriptResult(null)}
                   colors={{
-                    primary: F.ORANGE,
-                    text: F.WHITE,
-                    secondary: F.GREEN,
-                    alert: F.RED,
-                    warning: F.YELLOW,
-                    info: F.BLUE,
-                    accent: F.CYAN,
-                    textMuted: F.GRAY,
-                    background: F.DARK_BG,
-                    panel: F.PANEL_BG,
+                    primary: colors.primary,
+                    text: colors.text,
+                    secondary: colors.success,
+                    alert: colors.alert,
+                    warning: colors.warning,
+                    info: '#0088FF',
+                    accent: '#00E5FF',
+                    textMuted: colors.textMuted,
+                    background: colors.background,
+                    panel: colors.panel,
                   }}
+                  fontFamily={fontFamily}
                 />
               </div>
             </div>
@@ -2047,11 +2038,11 @@ export default function CodeEditorTab() {
 
       {/* ─── Status Bar ───────────────────────────────────────────────── */}
       <div style={{
-        backgroundColor: F.HEADER_BG,
-        borderTop: `1px solid ${F.BORDER}`,
+        backgroundColor: colors.panel,
+        borderTop: `1px solid ${colors.panel}`,
         padding: '3px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontSize: '9px', color: F.GRAY, fontFamily: FONT,
+        fontSize: '9px', color: colors.textMuted, fontFamily: fontFamily,
         minHeight: '22px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -2063,20 +2054,20 @@ export default function CodeEditorTab() {
             <span style={{ letterSpacing: '0.5px' }}>{activeFile.language.toUpperCase()}</span>
           </div>
 
-          <span style={{ color: F.MUTED }}>|</span>
+          <span style={{ color: colors.textMuted }}>|</span>
 
           {/* Cursor Position */}
           <span>Ln {activeFile.cursorLine}, Col {activeFile.cursorCol}</span>
 
-          <span style={{ color: F.MUTED }}>|</span>
+          <span style={{ color: colors.textMuted }}>|</span>
 
           {/* Line Count */}
-          <span>{lines.length} lines</span>
+          <span>{lines.length} {t('statusBar.lines')}</span>
 
           {activeFile.unsaved && (
             <>
-              <span style={{ color: F.MUTED }}>|</span>
-              <span style={{ color: F.YELLOW }}>MODIFIED</span>
+              <span style={{ color: colors.textMuted }}>|</span>
+              <span style={{ color: colors.warning }}>{t('statusBar.modified')}</span>
             </>
           )}
         </div>
@@ -2088,22 +2079,22 @@ export default function CodeEditorTab() {
               onClick={() => setShowOutput(true)}
               style={{
                 padding: '1px 6px', backgroundColor: 'transparent',
-                border: `1px solid ${F.BORDER}`, borderRadius: '2px',
-                color: F.GRAY, fontSize: '8px', cursor: 'pointer', fontFamily: FONT,
+                border: `1px solid ${colors.panel}`, borderRadius: '2px',
+                color: colors.textMuted, fontSize: '8px', cursor: 'pointer', fontFamily: fontFamily,
               }}
             >
-              SHOW OUTPUT
+              {t('statusBar.showOutput')}
             </button>
           )}
 
           {/* Encoding */}
-          <span>UTF-8</span>
-          <span style={{ color: F.MUTED }}>|</span>
-          <span>4 Spaces</span>
-          <span style={{ color: F.MUTED }}>|</span>
+          <span>{t('statusBar.encoding')}</span>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span>{t('statusBar.spaces')}</span>
+          <span style={{ color: colors.textMuted }}>|</span>
 
           {/* Shortcuts */}
-          <span style={{ color: F.MUTED }}>Ctrl+Enter: Run</span>
+          <span style={{ color: colors.textMuted }}>{t('statusBar.runShortcut')}</span>
         </div>
       </div>
     </div>

@@ -779,112 +779,32 @@ fn init_dhan_symbols_table() -> Result<(), String> {
 /// Download and store master contract
 #[tauri::command]
 pub async fn dhan_download_master_contract() -> Result<ApiResponse<Value>, String> {
-    let client = reqwest::Client::new();
+    let timestamp = chrono::Utc::now().timestamp();
 
-    // Download CSV
-    let response = client
-        .get(DHAN_MASTER_CONTRACT_URL)
-        .timeout(std::time::Duration::from_secs(120))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    // Use the new unified broker downloads system
+    let result = crate::commands::broker_downloads::dhan::dhan_download_symbols().await;
 
-    let csv_text = response.text().await.map_err(|e| e.to_string())?;
-
-    // Initialize table
-    init_dhan_symbols_table()?;
-
-    let db = get_db().map_err(|e| e.to_string())?;
-
-    // Clear existing data
-    db.execute("DELETE FROM dhan_symbols", []).map_err(|e| e.to_string())?;
-
-    // Parse CSV and insert
-    let mut rdr = csv::ReaderBuilder::new()
-        .has_headers(true)
-        .flexible(true)
-        .from_reader(csv_text.as_bytes());
-
-    let mut count = 0;
-    for result in rdr.records() {
-        if let Ok(record) = result {
-            // Parse CSV columns based on Dhan format
-            // Columns: SEM_EXM_EXCH_ID, SEM_SEGMENT, SEM_SMST_SECURITY_ID, SEM_INSTRUMENT_NAME,
-            // SEM_EXPIRY_CODE, SEM_TRADING_SYMBOL, SEM_LOT_UNITS, SEM_CUSTOM_SYMBOL,
-            // SEM_EXPIRY_DATE, SEM_STRIKE_PRICE, SEM_TICK_SIZE, SEM_OPTION_TYPE, ...
-            let exch_id = record.get(0).unwrap_or("");
-            let security_id = record.get(2).unwrap_or("");
-            let instrument_name = record.get(3).unwrap_or("");
-            let trading_symbol = record.get(5).unwrap_or("");
-            let lot_size: i32 = record.get(6).unwrap_or("1").parse().unwrap_or(1);
-            let expiry = record.get(8).unwrap_or("");
-            let strike: f64 = record.get(9).unwrap_or("0").parse().unwrap_or(0.0);
-            let tick_size: f64 = record.get(10).unwrap_or("0.05").parse().unwrap_or(0.05);
-            let option_type = record.get(11).unwrap_or("");
-            let symbol_name = record.get(15).unwrap_or(trading_symbol);
-
-            // Map exchange
-            let (exchange, br_exchange, inst_type) = match (exch_id, instrument_name) {
-                ("NSE", "EQUITY") => ("NSE", "NSE_EQ", "EQ"),
-                ("BSE", "EQUITY") => ("BSE", "BSE_EQ", "EQ"),
-                ("NSE", "INDEX") => ("NSE_INDEX", "IDX_I", "INDEX"),
-                ("BSE", "INDEX") => ("BSE_INDEX", "IDX_I", "INDEX"),
-                ("NSE", s) if s.contains("FUT") || s.contains("OPT") => {
-                    let it = if option_type.is_empty() { "FUT" } else { option_type };
-                    ("NFO", "NSE_FNO", it)
-                }
-                ("BSE", s) if s.contains("FUT") || s.contains("OPT") => {
-                    let it = if option_type.is_empty() { "FUT" } else { option_type };
-                    ("BFO", "BSE_FNO", it)
-                }
-                ("MCX", _) => {
-                    let it = if option_type.is_empty() { "FUT" } else { option_type };
-                    ("MCX", "MCX_COMM", it)
-                }
-                ("NSE", s) if s.contains("CUR") => {
-                    let it = if option_type.is_empty() { "FUT" } else { option_type };
-                    ("CDS", "NSE_CURRENCY", it)
-                }
-                ("BSE", s) if s.contains("CUR") => {
-                    let it = if option_type.is_empty() { "FUT" } else { option_type };
-                    ("BCD", "BSE_CURRENCY", it)
-                }
-                _ => continue,
-            };
-
-            let _ = db.execute(
-                "INSERT INTO dhan_symbols (symbol, name, exchange, br_exchange, security_id, instrument_type, lot_size, tick_size, expiry, strike)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                rusqlite::params![trading_symbol, symbol_name, exchange, br_exchange, security_id, inst_type, lot_size, tick_size, expiry, strike],
-            );
-
-            count += 1;
-        }
+    if result.success {
+        Ok(ApiResponse {
+            success: true,
+            data: Some(json!({
+                "total_symbols": result.total_symbols,
+                "message": result.message
+            })),
+            error: None,
+            timestamp,
+        })
+    } else {
+        Ok(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(result.message),
+            timestamp,
+        })
     }
-
-    // Update metadata
-    db.execute(
-        "INSERT OR REPLACE INTO dhan_metadata (key, value) VALUES ('last_updated', ?1)",
-        rusqlite::params![get_timestamp().to_string()],
-    )
-    .map_err(|e| e.to_string())?;
-
-    db.execute(
-        "INSERT OR REPLACE INTO dhan_metadata (key, value) VALUES ('symbol_count', ?1)",
-        rusqlite::params![count.to_string()],
-    )
-    .map_err(|e| e.to_string())?;
-
-    Ok(ApiResponse {
-        success: true,
-        data: Some(json!({
-            "count": count,
-            "message": format!("Downloaded {} symbols", count)
-        })),
-        error: None,
-        timestamp: get_timestamp(),
-    })
 }
+
+// Legacy download code removed - now using broker_downloads::dhan module
 
 /// Search symbols in master contract
 #[tauri::command]
@@ -893,70 +813,43 @@ pub async fn dhan_search_symbol(
     exchange: Option<String>,
     limit: Option<i32>,
 ) -> Result<ApiResponse<Vec<Value>>, String> {
-    init_dhan_symbols_table()?;
-    let db = get_db().map_err(|e| e.to_string())?;
+    use crate::database::symbol_master;
 
-    let limit = limit.unwrap_or(20);
-    let search_pattern = format!("%{}%", keyword);
+    let search_limit = limit.unwrap_or(20);
 
-    let query = if let Some(ref exch) = exchange {
-        format!(
-            "SELECT symbol, name, exchange, br_exchange, security_id, lot_size, tick_size, instrument_type, strike
-             FROM dhan_symbols
-             WHERE (symbol LIKE '{}' OR name LIKE '{}') AND exchange = '{}'
-             LIMIT {}",
-            search_pattern, search_pattern, exch, limit
-        )
-    } else {
-        format!(
-            "SELECT symbol, name, exchange, br_exchange, security_id, lot_size, tick_size, instrument_type, strike
-             FROM dhan_symbols
-             WHERE symbol LIKE '{}' OR name LIKE '{}'
-             LIMIT {}",
-            search_pattern, search_pattern, limit
-        )
-    };
+    match symbol_master::search_symbols("dhan", &keyword, exchange.as_deref(), None, search_limit) {
+        Ok(results) => {
+            let symbols: Vec<Value> = results.iter().map(|r| {
+                json!({
+                    "symbol": r.symbol,
+                    "name": r.name,
+                    "exchange": r.exchange,
+                    "br_symbol": r.br_symbol,
+                    "token": r.token,
+                    "lot_size": r.lot_size,
+                    "tick_size": r.tick_size,
+                    "instrument_type": r.instrument_type,
+                    "strike": r.strike,
+                    "expiry": r.expiry,
+                })
+            }).collect();
 
-    let mut stmt = db.prepare(&query).map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, i32>(5)?,
-                row.get::<_, f64>(6)?,
-                row.get::<_, String>(7)?,
-                row.get::<_, f64>(8)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?;
-
-    let symbols: Vec<Value> = rows
-        .filter_map(|r| r.ok())
-        .map(|(symbol, name, exchange, br_exchange, security_id, lot_size, tick_size, instrument_type, strike)| {
-            json!({
-                "symbol": symbol,
-                "name": name,
-                "exchange": exchange,
-                "br_exchange": br_exchange,
-                "security_id": security_id,
-                "lot_size": lot_size,
-                "tick_size": tick_size,
-                "instrument_type": instrument_type,
-                "strike": strike
+            Ok(ApiResponse {
+                success: true,
+                data: Some(symbols),
+                error: None,
+                timestamp: get_timestamp(),
             })
-        })
-        .collect();
-
-    Ok(ApiResponse {
-        success: true,
-        data: Some(symbols),
-        error: None,
-        timestamp: get_timestamp(),
-    })
+        }
+        Err(e) => {
+            Ok(ApiResponse {
+                success: false,
+                data: Some(vec![]),
+                error: Some(format!("Search failed: {}", e)),
+                timestamp: get_timestamp(),
+            })
+        }
+    }
 }
 
 /// Get security ID for a symbol
@@ -965,26 +858,25 @@ pub async fn dhan_get_security_id(
     symbol: String,
     exchange: String,
 ) -> Result<ApiResponse<String>, String> {
-    init_dhan_symbols_table()?;
-    let db = get_db().map_err(|e| e.to_string())?;
+    use crate::database::symbol_master;
 
-    let result: Result<String, _> = db.query_row(
-        "SELECT security_id FROM dhan_symbols WHERE symbol = ?1 AND exchange = ?2 LIMIT 1",
-        rusqlite::params![symbol, exchange],
-        |row| row.get(0),
-    );
-
-    match result {
-        Ok(security_id) => Ok(ApiResponse {
+    match symbol_master::get_token_by_symbol("dhan", &symbol, &exchange) {
+        Ok(Some(token)) => Ok(ApiResponse {
             success: true,
-            data: Some(security_id),
+            data: Some(token),
             error: None,
             timestamp: get_timestamp(),
         }),
-        Err(_) => Ok(ApiResponse {
+        Ok(None) => Ok(ApiResponse {
             success: false,
             data: None,
             error: Some(format!("Symbol {} not found on {}", symbol, exchange)),
+            timestamp: get_timestamp(),
+        }),
+        Err(e) => Ok(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Lookup failed: {}", e)),
             timestamp: get_timestamp(),
         }),
     }
@@ -993,39 +885,28 @@ pub async fn dhan_get_security_id(
 /// Get master contract metadata
 #[tauri::command]
 pub async fn dhan_get_master_contract_metadata() -> Result<ApiResponse<Value>, String> {
-    init_dhan_symbols_table()?;
-    let db = get_db().map_err(|e| e.to_string())?;
+    use crate::database::symbol_master;
 
-    let last_updated: Result<String, _> = db.query_row(
-        "SELECT value FROM dhan_metadata WHERE key = 'last_updated'",
-        [],
-        |row| row.get(0),
-    );
-
-    let count: Result<String, _> = db.query_row(
-        "SELECT value FROM dhan_metadata WHERE key = 'symbol_count'",
-        [],
-        |row| row.get(0),
-    );
-
-    match last_updated {
-        Ok(timestamp_str) => {
-            let last_updated: i64 = timestamp_str.parse().unwrap_or(0);
-            let symbol_count: i64 = count.unwrap_or_default().parse().unwrap_or(0);
+    match symbol_master::get_status("dhan") {
+        Ok(info) => {
+            let now = chrono::Utc::now().timestamp();
             Ok(ApiResponse {
                 success: true,
                 data: Some(json!({
-                    "last_updated": last_updated,
-                    "symbol_count": symbol_count
+                    "last_updated": info.last_updated,
+                    "symbol_count": info.total_symbols,
+                    "age_seconds": now - info.last_updated,
+                    "status": info.status,
+                    "is_ready": info.is_ready,
                 })),
                 error: None,
                 timestamp: get_timestamp(),
             })
         }
-        Err(_) => Ok(ApiResponse {
+        Err(e) => Ok(ApiResponse {
             success: false,
             data: None,
-            error: Some("Master contract not downloaded".to_string()),
+            error: Some(format!("Failed to get metadata: {}", e)),
             timestamp: get_timestamp(),
         }),
     }

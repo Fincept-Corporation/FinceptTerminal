@@ -1,7 +1,6 @@
 /**
  * Surface Analytics - Control Bar Component
  * Top navigation with chart type selection and controls
- * Follows UI Design System (UI_DESIGN_SYSTEM.md)
  */
 
 import React from 'react';
@@ -14,8 +13,9 @@ import {
   Settings,
   AlertCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import type { ChartType } from '../types';
-import { FINCEPT_COLORS, TYPOGRAPHY } from '../constants';
 
 interface ControlBarProps {
   activeChart: ChartType;
@@ -38,13 +38,15 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   loading,
   hasApiKey,
   accentColor,
-  textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
+
   const chartButtons = [
-    { id: 'volatility' as ChartType, icon: TrendingUp, label: 'VOL SURFACE' },
-    { id: 'correlation' as ChartType, icon: Network, label: 'CORRELATION' },
-    { id: 'yield-curve' as ChartType, icon: Activity, label: 'YIELD CURVE' },
-    { id: 'pca' as ChartType, icon: BarChart3, label: 'PCA FACTORS' },
+    { id: 'volatility' as ChartType, icon: TrendingUp, label: t('charts.volatility') },
+    { id: 'correlation' as ChartType, icon: Network, label: t('charts.correlation') },
+    { id: 'yield-curve' as ChartType, icon: Activity, label: t('charts.yieldCurve') },
+    { id: 'pca' as ChartType, icon: BarChart3, label: t('charts.pca') },
   ];
 
   return (
@@ -54,7 +56,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '8px 16px',
-        backgroundColor: FINCEPT_COLORS.HEADER_BG,
+        backgroundColor: colors.panel,
         borderBottom: `2px solid ${accentColor}`,
         boxShadow: `0 2px 8px ${accentColor}20`,
         flexShrink: 0,
@@ -65,17 +67,17 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <BarChart3 size={14} style={{ color: accentColor }} />
           <span style={{
-            fontSize: TYPOGRAPHY.HEADER_SIZE,
+            fontSize: fontSize.body,
             fontWeight: 700,
             color: accentColor,
             letterSpacing: '0.5px',
-            fontFamily: TYPOGRAPHY.FONT_FAMILY,
+            fontFamily,
           }}>
-            SURFACE ANALYTICS
+            {t('title')}
           </span>
         </div>
 
-        <div style={{ height: '16px', width: '1px', backgroundColor: FINCEPT_COLORS.BORDER }} />
+        <div style={{ height: '16px', width: '1px', backgroundColor: colors.textMuted }} />
 
         {/* Chart Type Buttons - Tab style */}
         <div style={{ display: 'flex', gap: '4px' }}>
@@ -89,14 +91,14 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                 gap: '6px',
                 padding: '6px 12px',
                 backgroundColor: activeChart === id ? accentColor : 'transparent',
-                color: activeChart === id ? FINCEPT_COLORS.BLACK : FINCEPT_COLORS.GRAY,
+                color: activeChart === id ? colors.background : colors.textMuted,
                 border: 'none',
-                borderRadius: '2px',
-                fontSize: TYPOGRAPHY.LABEL_SIZE,
+                borderRadius: 'var(--ft-border-radius)',
+                fontSize: fontSize.tiny,
                 fontWeight: 700,
                 letterSpacing: '0.5px',
                 cursor: 'pointer',
-                fontFamily: TYPOGRAPHY.FONT_FAMILY,
+                fontFamily,
                 transition: 'all 0.2s',
               }}
             >
@@ -115,26 +117,26 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             alignItems: 'center',
             gap: '4px',
             padding: '2px 6px',
-            backgroundColor: `${FINCEPT_COLORS.RED}20`,
-            color: FINCEPT_COLORS.RED,
-            fontSize: '8px',
+            backgroundColor: `${colors.alert}20`,
+            color: colors.alert,
+            fontSize: fontSize.tiny,
             fontWeight: 700,
-            borderRadius: '2px',
+            borderRadius: 'var(--ft-border-radius)',
           }}>
             <AlertCircle size={10} />
-            <span>NO API KEY</span>
+            <span>{t('noApiKey')}</span>
           </div>
         )}
 
         {/* Last Update */}
         <span style={{
-          fontSize: TYPOGRAPHY.LABEL_SIZE,
-          color: FINCEPT_COLORS.GRAY,
-          fontFamily: TYPOGRAPHY.FONT_FAMILY,
+          fontSize: fontSize.tiny,
+          color: colors.textMuted,
+          fontFamily,
           letterSpacing: '0.5px',
         }}>
-          LAST UPDATE:{' '}
-          <span style={{ color: FINCEPT_COLORS.CYAN }}>
+          {t('lastUpdate')}:{' '}
+          <span style={{ color: colors.info }}>
             {lastUpdate.toLocaleTimeString()}
           </span>
         </span>
@@ -148,11 +150,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             gap: '4px',
             padding: '6px 10px',
             backgroundColor: 'transparent',
-            border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-            color: FINCEPT_COLORS.GRAY,
-            fontSize: TYPOGRAPHY.LABEL_SIZE,
+            border: `1px solid ${colors.textMuted}`,
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
             fontWeight: 700,
-            borderRadius: '2px',
+            borderRadius: 'var(--ft-border-radius)',
             cursor: 'pointer',
             transition: 'all 0.2s',
           }}
@@ -170,18 +172,18 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             gap: '6px',
             padding: '8px 16px',
             backgroundColor: accentColor,
-            color: FINCEPT_COLORS.BLACK,
+            color: colors.background,
             border: 'none',
-            borderRadius: '2px',
-            fontSize: TYPOGRAPHY.LABEL_SIZE,
+            borderRadius: 'var(--ft-border-radius)',
+            fontSize: fontSize.tiny,
             fontWeight: 700,
             cursor: loading ? 'not-allowed' : 'pointer',
             opacity: loading ? 0.7 : 1,
-            fontFamily: TYPOGRAPHY.FONT_FAMILY,
+            fontFamily,
           }}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-          {loading ? 'LOADING' : 'REFRESH'}
+          {loading ? t('common:loading') : t('refresh')}
         </button>
       </div>
     </div>

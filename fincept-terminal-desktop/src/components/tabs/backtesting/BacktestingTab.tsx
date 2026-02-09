@@ -27,7 +27,7 @@ import {
 } from './backtestingProviderConfigs';
 
 // ============================================================================
-// FINCEPT DESIGN SYSTEM
+// FINCEPT DESIGN SYSTEM - ENHANCED
 // ============================================================================
 
 const FINCEPT = {
@@ -35,6 +35,12 @@ const FINCEPT = {
   GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F', HEADER_BG: '#1A1A1A',
   BORDER: '#2A2A2A', HOVER: '#1F1F1F', MUTED: '#4A4A4A', CYAN: '#00E5FF',
   YELLOW: '#FFD700', BLUE: '#0088FF', PURPLE: '#9D4EDD',
+  // Enhanced gradients and effects
+  GRADIENT_ORANGE: 'linear-gradient(135deg, #FF8800 0%, #FF6B00 100%)',
+  GRADIENT_DARK: 'linear-gradient(180deg, #1A1A1A 0%, #0F0F0F 100%)',
+  GLASS_BG: 'rgba(15, 15, 15, 0.85)',
+  GLOW_ORANGE: '0 0 20px rgba(255, 136, 0, 0.3)',
+  GLOW_CYAN: '0 0 15px rgba(0, 229, 255, 0.2)',
 };
 
 // Provider accent colors for visual separation
@@ -508,89 +514,157 @@ const BacktestingTab: React.FC = () => {
 
   const renderTopNav = () => (
     <div style={{
-      backgroundColor: FINCEPT.HEADER_BG,
-      borderBottom: `2px solid ${providerColor}`,
-      padding: '8px 16px',
+      background: FINCEPT.GRADIENT_DARK,
+      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+      padding: '0',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      boxShadow: `0 2px 8px ${providerColor}20`,
+      flexDirection: 'column',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <Activity size={16} color={providerColor} />
-        <span style={{
-          fontSize: '12px',
-          fontWeight: 700,
-          color: FINCEPT.WHITE,
-          fontFamily: '"IBM Plex Mono", monospace',
-          letterSpacing: '0.5px',
-        }}>
-          BACKTESTING
-        </span>
-        <div style={{ display: 'flex', gap: '2px', marginLeft: '4px' }}>
-          {PROVIDER_OPTIONS.map(p => (
-            <button
-              key={p.slug}
-              onClick={() => setSelectedProvider(p.slug)}
-              style={{
-                padding: '4px 10px',
-                backgroundColor: selectedProvider === p.slug ? PROVIDER_COLORS[p.slug] : 'transparent',
-                color: selectedProvider === p.slug ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-                border: `1px solid ${selectedProvider === p.slug ? PROVIDER_COLORS[p.slug] : FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: '"IBM Plex Mono", monospace',
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={e => {
-                if (selectedProvider !== p.slug) {
-                  e.currentTarget.style.borderColor = PROVIDER_COLORS[p.slug];
-                  e.currentTarget.style.color = PROVIDER_COLORS[p.slug];
-                }
-              }}
-              onMouseLeave={e => {
-                if (selectedProvider !== p.slug) {
-                  e.currentTarget.style.borderColor = FINCEPT.BORDER;
-                  e.currentTarget.style.color = FINCEPT.GRAY;
-                }
-              }}
-            >
-              {p.displayName}
-            </button>
-          ))}
+      {/* Top accent bar */}
+      <div style={{
+        height: '3px',
+        background: `linear-gradient(90deg, ${providerColor} 0%, ${providerColor}40 50%, transparent 100%)`,
+        boxShadow: FINCEPT.GLOW_ORANGE,
+      }} />
+
+      {/* Main nav content */}
+      <div style={{
+        padding: '10px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Logo/Title with glow effect */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '6px 14px',
+            background: `${providerColor}10`,
+            borderRadius: '4px',
+            border: `1px solid ${providerColor}30`,
+          }}>
+            <Activity size={18} color={providerColor} style={{ filter: `drop-shadow(0 0 4px ${providerColor})` }} />
+            <span style={{
+              fontSize: '13px',
+              fontWeight: 800,
+              color: FINCEPT.WHITE,
+              fontFamily: '"IBM Plex Mono", monospace',
+              letterSpacing: '1px',
+              textShadow: `0 0 10px ${providerColor}40`,
+            }}>
+              BACKTESTING
+            </span>
+          </div>
+
+          {/* Provider selector - pill style */}
+          <div style={{
+            display: 'flex',
+            gap: '3px',
+            padding: '3px',
+            backgroundColor: FINCEPT.DARK_BG,
+            borderRadius: '6px',
+            border: `1px solid ${FINCEPT.BORDER}`,
+          }}>
+            {PROVIDER_OPTIONS.map(p => (
+              <button
+                key={p.slug}
+                onClick={() => setSelectedProvider(p.slug)}
+                style={{
+                  padding: '5px 12px',
+                  backgroundColor: selectedProvider === p.slug ? PROVIDER_COLORS[p.slug] : 'transparent',
+                  color: selectedProvider === p.slug ? FINCEPT.DARK_BG : FINCEPT.GRAY,
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.25s ease',
+                  boxShadow: selectedProvider === p.slug ? `0 2px 8px ${PROVIDER_COLORS[p.slug]}40` : 'none',
+                }}
+                onMouseEnter={e => {
+                  if (selectedProvider !== p.slug) {
+                    e.currentTarget.style.backgroundColor = `${PROVIDER_COLORS[p.slug]}20`;
+                    e.currentTarget.style.color = PROVIDER_COLORS[p.slug];
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (selectedProvider !== p.slug) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = FINCEPT.GRAY;
+                  }
+                }}
+              >
+                {p.displayName}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Right side controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            style={{
+              padding: '6px 12px',
+              background: showAdvanced ? `linear-gradient(135deg, ${FINCEPT.ORANGE}30 0%, ${FINCEPT.ORANGE}10 100%)` : 'transparent',
+              border: `1px solid ${showAdvanced ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+              color: showAdvanced ? FINCEPT.ORANGE : FINCEPT.GRAY,
+              borderRadius: '4px',
+              fontSize: '9px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: '"IBM Plex Mono", monospace',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Settings size={10} />
+            {showAdvanced ? 'HIDE' : 'SHOW'} ADVANCED
+          </button>
+
+          {/* Status indicator with pulse animation */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 10px',
+            backgroundColor: `${FINCEPT.GREEN}15`,
+            borderRadius: '4px',
+            border: `1px solid ${FINCEPT.GREEN}30`,
+          }}>
+            <div style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: FINCEPT.GREEN,
+              boxShadow: `0 0 8px ${FINCEPT.GREEN}`,
+              animation: 'pulse 2s infinite',
+            }} />
+            <span style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: FINCEPT.GREEN,
+              letterSpacing: '0.5px',
+            }}>
+              READY
+            </span>
+          </div>
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          style={{
-            padding: '4px 8px',
-            backgroundColor: showAdvanced ? `${FINCEPT.ORANGE}20` : 'transparent',
-            border: `1px solid ${showAdvanced ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
-            color: showAdvanced ? FINCEPT.ORANGE : FINCEPT.GRAY,
-            borderRadius: '2px',
-            fontSize: '8px',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontFamily: '"IBM Plex Mono", monospace',
-          }}
-        >
-          {showAdvanced ? 'HIDE' : 'SHOW'} ADVANCED
-        </button>
-        <div style={{
-          padding: '2px 6px',
-          backgroundColor: `${FINCEPT.GREEN}20`,
-          color: FINCEPT.GREEN,
-          fontSize: '8px',
-          fontWeight: 700,
-          borderRadius: '2px',
-        }}>
-          ACTIVE
-        </div>
-      </div>
+
+      {/* CSS for pulse animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.1); }
+        }
+      `}</style>
     </div>
   );
 
@@ -600,138 +674,225 @@ const BacktestingTab: React.FC = () => {
 
   const renderLeftPanel = () => (
     <div style={{
-      width: '280px',
-      backgroundColor: FINCEPT.DARK_BG,
+      width: '260px',
+      background: `linear-gradient(180deg, ${FINCEPT.PANEL_BG} 0%, ${FINCEPT.DARK_BG} 100%)`,
       borderRight: `1px solid ${FINCEPT.BORDER}`,
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      {/* Commands Header */}
+      {/* Commands Header - Enhanced */}
       <div style={{
-        padding: '12px',
-        backgroundColor: FINCEPT.HEADER_BG,
+        padding: '14px 16px',
+        background: FINCEPT.HEADER_BG,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
       }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{
+            width: '4px',
+            height: '14px',
+            background: providerColor,
+            borderRadius: '2px',
+            boxShadow: `0 0 8px ${providerColor}60`,
+          }} />
+          <span style={{
+            fontSize: '10px',
+            fontWeight: 800,
+            color: FINCEPT.WHITE,
+            letterSpacing: '1px',
+            fontFamily: '"IBM Plex Mono", monospace',
+          }}>
+            COMMANDS
+          </span>
+        </div>
         <span style={{
           fontSize: '9px',
-          fontWeight: 700,
-          color: FINCEPT.GRAY,
-          letterSpacing: '0.5px',
-          fontFamily: '"IBM Plex Mono", monospace',
+          fontWeight: 600,
+          color: providerColor,
+          backgroundColor: `${providerColor}15`,
+          padding: '2px 8px',
+          borderRadius: '10px',
         }}>
-          COMMANDS ({providerCommands.length})
+          {providerCommands.length}
         </span>
       </div>
 
-      {/* Command List (provider-specific) */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {providerCommands.map(cmd => {
-          const Icon = cmd.icon;
-          const isActive = activeCommand === cmd.id;
+      {/* Command List - Card Style */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {providerCommands.map(cmd => {
+            const Icon = cmd.icon;
+            const isActive = activeCommand === cmd.id;
 
-          return (
-            <div
-              key={cmd.id}
-              onClick={() => setActiveCommand(cmd.id)}
-              style={{
-                padding: '10px 12px',
-                backgroundColor: isActive ? `${cmd.color}15` : 'transparent',
-                borderLeft: isActive ? `2px solid ${cmd.color}` : '2px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-              }}
-              onMouseEnter={e => {
-                if (!isActive) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-              }}
-              onMouseLeave={e => {
-                if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              <Icon size={14} color={isActive ? cmd.color : FINCEPT.GRAY} />
-              <div style={{ flex: 1 }}>
+            return (
+              <div
+                key={cmd.id}
+                onClick={() => setActiveCommand(cmd.id)}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: isActive ? `${cmd.color}12` : FINCEPT.PANEL_BG,
+                  border: `1px solid ${isActive ? cmd.color : FINCEPT.BORDER}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  boxShadow: isActive ? `0 2px 12px ${cmd.color}20, inset 0 1px 0 ${cmd.color}20` : 'none',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                    e.currentTarget.style.borderColor = `${cmd.color}50`;
+                    e.currentTarget.style.transform = 'translateX(2px)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+                    e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }
+                }}
+              >
+                {/* Active indicator glow */}
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: '3px',
+                    background: cmd.color,
+                    boxShadow: `0 0 10px ${cmd.color}`,
+                  }} />
+                )}
                 <div style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: isActive ? FINCEPT.WHITE : FINCEPT.GRAY,
-                  fontFamily: '"IBM Plex Mono", monospace',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '6px',
+                  backgroundColor: `${cmd.color}15`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}>
-                  {cmd.label}
+                  <Icon size={14} color={isActive ? cmd.color : FINCEPT.GRAY} />
                 </div>
-                <div style={{ fontSize: '8px', color: FINCEPT.MUTED }}>
-                  {cmd.description}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Strategy Categories (provider-specific) */}
-      {['backtest', 'optimize', 'walk_forward'].includes(activeCommand) && (
-        <>
-          <div style={{
-            padding: '12px',
-            backgroundColor: FINCEPT.HEADER_BG,
-            borderTop: `1px solid ${FINCEPT.BORDER}`,
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
-          }}>
-            <span style={{
-              fontSize: '9px',
-              fontWeight: 700,
-              color: FINCEPT.GRAY,
-              letterSpacing: '0.5px',
-              fontFamily: '"IBM Plex Mono", monospace',
-            }}>
-              STRATEGY CATEGORIES
-            </span>
-          </div>
-          <div style={{ overflowY: 'auto', maxHeight: '300px' }}>
-            {Object.entries(providerCategoryInfo).map(([key, info]) => {
-              const Icon = info.icon;
-              const isActive = selectedCategory === key;
-              const count = providerStrategies[key]?.length || 0;
-
-              return (
-                <div
-                  key={key}
-                  onClick={() => setSelectedCategory(key)}
-                  style={{
-                    padding: '8px 12px',
-                    backgroundColor: isActive ? `${info.color}15` : 'transparent',
-                    borderLeft: isActive ? `2px solid ${info.color}` : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                  }}
-                  onMouseLeave={e => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <Icon size={12} color={isActive ? info.color : FINCEPT.GRAY} />
-                  <span style={{
-                    fontSize: '9px',
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '10px',
                     fontWeight: 700,
                     color: isActive ? FINCEPT.WHITE : FINCEPT.GRAY,
                     fontFamily: '"IBM Plex Mono", monospace',
-                    flex: 1,
+                    marginBottom: '2px',
                   }}>
-                    {info.label.toUpperCase()}
-                  </span>
-                  <span style={{ fontSize: '8px', color: FINCEPT.MUTED }}>
-                    {count}
-                  </span>
+                    {cmd.label}
+                  </div>
+                  <div style={{ fontSize: '8px', color: FINCEPT.MUTED, lineHeight: 1.3 }}>
+                    {cmd.description}
+                  </div>
                 </div>
-              );
-            })}
+                <ChevronRight size={12} color={isActive ? cmd.color : FINCEPT.MUTED} style={{
+                  opacity: isActive ? 1 : 0.5,
+                  transition: 'all 0.2s',
+                }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Strategy Categories - Enhanced */}
+      {['backtest', 'optimize', 'walk_forward'].includes(activeCommand) && (
+        <>
+          <div style={{
+            padding: '14px 16px',
+            background: FINCEPT.HEADER_BG,
+            borderTop: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <div style={{
+              width: '4px',
+              height: '14px',
+              background: FINCEPT.PURPLE,
+              borderRadius: '2px',
+            }} />
+            <span style={{
+              fontSize: '10px',
+              fontWeight: 800,
+              color: FINCEPT.WHITE,
+              letterSpacing: '1px',
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}>
+              STRATEGIES
+            </span>
+          </div>
+          <div style={{ overflowY: 'auto', maxHeight: '280px', padding: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              {Object.entries(providerCategoryInfo).map(([key, info]) => {
+                const Icon = info.icon;
+                const isActive = selectedCategory === key;
+                const count = providerStrategies[key]?.length || 0;
+
+                return (
+                  <div
+                    key={key}
+                    onClick={() => setSelectedCategory(key)}
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: isActive ? `${info.color}10` : 'transparent',
+                      border: `1px solid ${isActive ? `${info.color}40` : 'transparent'}`,
+                      borderRadius: '5px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                    }}
+                    onMouseEnter={e => {
+                      if (!isActive) {
+                        e.currentTarget.style.backgroundColor = `${info.color}08`;
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isActive) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    <Icon size={13} color={isActive ? info.color : FINCEPT.GRAY} />
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: isActive ? FINCEPT.WHITE : FINCEPT.GRAY,
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      flex: 1,
+                      letterSpacing: '0.3px',
+                    }}>
+                      {info.label.toUpperCase()}
+                    </span>
+                    <span style={{
+                      fontSize: '8px',
+                      fontWeight: 600,
+                      color: isActive ? info.color : FINCEPT.MUTED,
+                      backgroundColor: isActive ? `${info.color}20` : 'transparent',
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                    }}>
+                      {count}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </>
       )}
@@ -750,59 +911,99 @@ const BacktestingTab: React.FC = () => {
       flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      {/* Header */}
+      {/* Header - Enhanced with gradient */}
       <div style={{
-        padding: '12px 16px',
-        backgroundColor: FINCEPT.HEADER_BG,
+        padding: '14px 20px',
+        background: `linear-gradient(90deg, ${FINCEPT.HEADER_BG} 0%, ${FINCEPT.PANEL_BG} 100%)`,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
-        <span style={{
-          fontSize: '9px',
-          fontWeight: 700,
-          color: FINCEPT.GRAY,
-          letterSpacing: '0.5px',
-          fontFamily: '"IBM Plex Mono", monospace',
-        }}>
-          {activeCommand.toUpperCase()} CONFIGURATION
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            padding: '6px 12px',
+            background: `${providerColor}10`,
+            borderRadius: '6px',
+            border: `1px solid ${providerColor}30`,
+          }}>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 800,
+              color: FINCEPT.WHITE,
+              letterSpacing: '0.5px',
+              fontFamily: '"IBM Plex Mono", monospace',
+            }}>
+              {activeCommand.toUpperCase().replace('_', ' ')}
+            </span>
+          </div>
+          <span style={{
+            fontSize: '9px',
+            color: FINCEPT.MUTED,
+            fontFamily: '"IBM Plex Mono", monospace',
+          }}>
+            CONFIGURATION
+          </span>
+        </div>
+
+        {/* Run Button - Premium Style */}
         <button
           onClick={handleRunCommand}
           disabled={isRunning}
           style={{
-            padding: '6px 12px',
-            backgroundColor: isRunning ? FINCEPT.MUTED : FINCEPT.ORANGE,
+            padding: '8px 20px',
+            background: isRunning
+              ? FINCEPT.MUTED
+              : `linear-gradient(135deg, ${FINCEPT.ORANGE} 0%, #FF6B00 100%)`,
             color: FINCEPT.DARK_BG,
             border: 'none',
-            borderRadius: '2px',
-            fontSize: '9px',
-            fontWeight: 700,
+            borderRadius: '6px',
+            fontSize: '10px',
+            fontWeight: 800,
             cursor: isRunning ? 'wait' : 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            opacity: isRunning ? 0.7 : 1,
+            gap: '8px',
+            boxShadow: isRunning ? 'none' : `0 4px 15px ${FINCEPT.ORANGE}40`,
+            transition: 'all 0.3s ease',
             fontFamily: '"IBM Plex Mono", monospace',
+            letterSpacing: '0.5px',
+            transform: isRunning ? 'none' : 'translateY(0)',
+          }}
+          onMouseEnter={e => {
+            if (!isRunning) {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = `0 6px 20px ${FINCEPT.ORANGE}50`;
+            }
+          }}
+          onMouseLeave={e => {
+            if (!isRunning) {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = `0 4px 15px ${FINCEPT.ORANGE}40`;
+            }
           }}
         >
           {isRunning ? (
             <>
-              <Loader size={10} className="animate-spin" />
-              RUNNING...
+              <Loader size={12} className="animate-spin" />
+              EXECUTING...
             </>
           ) : (
             <>
-              <Play size={10} />
-              RUN {activeCommand.toUpperCase()}
+              <Play size={12} style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+              RUN {activeCommand.toUpperCase().replace('_', ' ')}
             </>
           )}
         </button>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      {/* Content with subtle gradient background */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '20px',
+        background: `radial-gradient(ellipse at top, ${FINCEPT.PANEL_BG}40 0%, transparent 70%)`,
+      }}>
         {activeCommand === 'backtest' && renderBacktestConfig()}
         {activeCommand === 'optimize' && renderOptimizeConfig()}
         {activeCommand === 'walk_forward' && renderWalkForwardConfig()}
@@ -1578,36 +1779,71 @@ const BacktestingTab: React.FC = () => {
       <div style={{
         backgroundColor: FINCEPT.PANEL_BG,
         border: `1px solid ${FINCEPT.BORDER}`,
-        borderRadius: '2px',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        transition: 'all 0.3s ease',
+        boxShadow: isExpanded ? `0 2px 10px rgba(0,0,0,0.2)` : 'none',
       }}>
         <div
           onClick={() => toggleSection(id)}
           style={{
-            padding: '12px',
-            backgroundColor: FINCEPT.HEADER_BG,
+            padding: '14px 16px',
+            background: isExpanded
+              ? `linear-gradient(90deg, ${FINCEPT.HEADER_BG} 0%, ${FINCEPT.PANEL_BG} 100%)`
+              : FINCEPT.HEADER_BG,
             borderBottom: isExpanded ? `1px solid ${FINCEPT.BORDER}` : 'none',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            transition: 'all 0.2s ease',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Icon size={12} color={FINCEPT.ORANGE} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '26px',
+              height: '26px',
+              borderRadius: '6px',
+              backgroundColor: `${FINCEPT.ORANGE}15`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: `1px solid ${FINCEPT.ORANGE}30`,
+            }}>
+              <Icon size={13} color={FINCEPT.ORANGE} />
+            </div>
             <span style={{
-              fontSize: '9px',
+              fontSize: '10px',
               fontWeight: 700,
-              color: FINCEPT.GRAY,
+              color: isExpanded ? FINCEPT.WHITE : FINCEPT.GRAY,
               letterSpacing: '0.5px',
               fontFamily: '"IBM Plex Mono", monospace',
+              transition: 'color 0.2s',
             }}>
               {title}
             </span>
           </div>
-          {isExpanded ? <Minimize2 size={10} color={FINCEPT.GRAY} /> : <Maximize2 size={10} color={FINCEPT.GRAY} />}
+          <div style={{
+            width: '20px',
+            height: '20px',
+            borderRadius: '4px',
+            backgroundColor: isExpanded ? `${FINCEPT.ORANGE}15` : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s',
+          }}>
+            {isExpanded
+              ? <Minimize2 size={11} color={FINCEPT.ORANGE} />
+              : <Maximize2 size={11} color={FINCEPT.GRAY} />
+            }
+          </div>
         </div>
         {isExpanded && (
-          <div style={{ padding: '12px' }}>
+          <div style={{
+            padding: '16px',
+            background: `linear-gradient(180deg, transparent 0%, ${FINCEPT.DARK_BG}30 100%)`,
+          }}>
             {content}
           </div>
         )}
@@ -1628,14 +1864,15 @@ const BacktestingTab: React.FC = () => {
     <div>
       <label style={{
         display: 'block',
-        fontSize: '9px',
+        fontSize: '8px',
         fontWeight: 700,
         color: FINCEPT.GRAY,
-        marginBottom: '4px',
-        letterSpacing: '0.5px',
+        marginBottom: '6px',
+        letterSpacing: '0.8px',
         fontFamily: '"IBM Plex Mono", monospace',
+        textTransform: 'uppercase',
       }}>
-        {label.toUpperCase()}
+        {label}
       </label>
       <input
         type={type}
@@ -1647,17 +1884,25 @@ const BacktestingTab: React.FC = () => {
         step={step}
         style={{
           width: '100%',
-          padding: '8px 10px',
+          padding: '10px 12px',
           backgroundColor: FINCEPT.DARK_BG,
           color: type === 'number' ? FINCEPT.CYAN : FINCEPT.WHITE,
           border: `1px solid ${FINCEPT.BORDER}`,
-          borderRadius: '2px',
-          fontSize: '10px',
+          borderRadius: '6px',
+          fontSize: '11px',
           fontFamily: '"IBM Plex Mono", monospace',
           outline: 'none',
+          transition: 'all 0.2s ease',
+          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)',
         }}
-        onFocus={e => (e.target.style.borderColor = FINCEPT.ORANGE)}
-        onBlur={e => (e.target.style.borderColor = FINCEPT.BORDER)}
+        onFocus={e => {
+          e.target.style.borderColor = FINCEPT.ORANGE;
+          e.target.style.boxShadow = `inset 0 1px 3px rgba(0,0,0,0.2), 0 0 0 2px ${FINCEPT.ORANGE}20`;
+        }}
+        onBlur={e => {
+          e.target.style.borderColor = FINCEPT.BORDER;
+          e.target.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.2)';
+        }}
       />
     </div>
   );
@@ -1709,47 +1954,68 @@ const BacktestingTab: React.FC = () => {
 
   const renderRightPanel = () => (
     <div style={{
-      width: '350px',
-      backgroundColor: FINCEPT.DARK_BG,
+      width: '360px',
+      background: `linear-gradient(180deg, ${FINCEPT.PANEL_BG} 0%, ${FINCEPT.DARK_BG} 100%)`,
       borderLeft: `1px solid ${FINCEPT.BORDER}`,
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      {/* Header */}
+      {/* Header - Enhanced */}
       <div style={{
-        padding: '12px',
-        backgroundColor: FINCEPT.HEADER_BG,
+        padding: '14px 16px',
+        background: FINCEPT.HEADER_BG,
         borderBottom: `1px solid ${FINCEPT.BORDER}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
-        <span style={{
-          fontSize: '9px',
-          fontWeight: 700,
-          color: FINCEPT.GRAY,
-          letterSpacing: '0.5px',
-          fontFamily: '"IBM Plex Mono", monospace',
-        }}>
-          RESULTS
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '6px',
+            background: `linear-gradient(135deg, ${FINCEPT.CYAN}20 0%, ${FINCEPT.BLUE}20 100%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `1px solid ${FINCEPT.CYAN}30`,
+          }}>
+            <BarChart3 size={14} color={FINCEPT.CYAN} />
+          </div>
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 800,
+            color: FINCEPT.WHITE,
+            letterSpacing: '0.5px',
+            fontFamily: '"IBM Plex Mono", monospace',
+          }}>
+            RESULTS
+          </span>
+        </div>
         {result && (
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div style={{
+            display: 'flex',
+            gap: '2px',
+            padding: '3px',
+            backgroundColor: FINCEPT.DARK_BG,
+            borderRadius: '6px',
+          }}>
             {(['summary', 'metrics', 'trades', 'raw'] as const).map(view => (
               <button
                 key={view}
                 onClick={() => setResultView(view)}
                 style={{
-                  padding: '4px 6px',
+                  padding: '5px 8px',
                   backgroundColor: resultView === view ? FINCEPT.ORANGE : 'transparent',
                   color: resultView === view ? FINCEPT.DARK_BG : FINCEPT.GRAY,
                   border: 'none',
-                  borderRadius: '2px',
-                  fontSize: '7px',
+                  borderRadius: '4px',
+                  fontSize: '8px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   fontFamily: '"IBM Plex Mono", monospace',
+                  transition: 'all 0.2s',
                 }}
               >
                 {view.toUpperCase()}
@@ -1879,66 +2145,109 @@ const BacktestingTab: React.FC = () => {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {/* Status Badge */}
+        {/* Status Badge - Enhanced */}
         <div style={{
-          padding: '4px 8px',
-          backgroundColor: `${FINCEPT.GREEN}20`,
-          color: FINCEPT.GREEN,
-          fontSize: '8px',
-          fontWeight: 700,
-          borderRadius: '2px',
-          display: 'inline-block',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 12px',
+          background: `linear-gradient(90deg, ${FINCEPT.GREEN}20 0%, transparent 100%)`,
+          borderRadius: '6px',
+          border: `1px solid ${FINCEPT.GREEN}30`,
           alignSelf: 'flex-start',
         }}>
-          ✓ COMPLETED
+          <CheckCircle size={12} color={FINCEPT.GREEN} />
+          <span style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            color: FINCEPT.GREEN,
+            letterSpacing: '0.5px',
+          }}>
+            BACKTEST COMPLETED
+          </span>
         </div>
 
-        {/* Main Performance Card */}
+        {/* Main Performance Card - Premium Style */}
         <div style={{
-          padding: '12px',
-          backgroundColor: `${isProfit ? FINCEPT.GREEN : FINCEPT.RED}10`,
-          border: `2px solid ${isProfit ? FINCEPT.GREEN : FINCEPT.RED}`,
-          borderRadius: '4px',
+          padding: '16px',
+          background: `linear-gradient(135deg, ${isProfit ? FINCEPT.GREEN : FINCEPT.RED}15 0%, ${isProfit ? FINCEPT.GREEN : FINCEPT.RED}05 100%)`,
+          border: `1px solid ${isProfit ? FINCEPT.GREEN : FINCEPT.RED}40`,
+          borderRadius: '10px',
+          position: 'relative',
+          overflow: 'hidden',
         }}>
+          {/* Decorative glow */}
+          <div style={{
+            position: 'absolute',
+            top: '-50%',
+            right: '-20%',
+            width: '150px',
+            height: '150px',
+            background: `radial-gradient(circle, ${isProfit ? FINCEPT.GREEN : FINCEPT.RED}20 0%, transparent 70%)`,
+            pointerEvents: 'none',
+          }} />
+
           <div style={{
             fontSize: '9px',
             color: FINCEPT.GRAY,
-            marginBottom: '4px',
-            fontWeight: 600,
+            marginBottom: '6px',
+            fontWeight: 700,
+            letterSpacing: '1px',
           }}>
             TOTAL RETURN
           </div>
           <div style={{
-            fontSize: '20px',
+            fontSize: '28px',
             color: isProfit ? FINCEPT.GREEN : FINCEPT.RED,
-            fontWeight: 700,
+            fontWeight: 800,
             fontFamily: '"IBM Plex Mono", monospace',
+            textShadow: `0 0 30px ${isProfit ? FINCEPT.GREEN : FINCEPT.RED}40`,
+            letterSpacing: '-1px',
           }}>
             {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(2)}%
           </div>
           <div style={{
-            fontSize: '8px',
+            fontSize: '10px',
             color: FINCEPT.MUTED,
-            marginTop: '4px',
+            marginTop: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
           }}>
-            {stats?.initialCapital ? `$${stats.initialCapital.toLocaleString()}` : ''} → {stats?.finalCapital ? `$${stats.finalCapital.toLocaleString()}` : ''}
+            <span style={{ color: FINCEPT.GRAY }}>
+              ${(stats?.initialCapital ?? 0).toLocaleString()}
+            </span>
+            <TrendingUp size={12} color={isProfit ? FINCEPT.GREEN : FINCEPT.RED} />
+            <span style={{ color: isProfit ? FINCEPT.GREEN : FINCEPT.RED, fontWeight: 600 }}>
+              ${(stats?.finalCapital ?? 0).toLocaleString()}
+            </span>
           </div>
         </div>
 
-        {/* Key Metrics Grid */}
+        {/* Key Metrics Grid - Enhanced Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           {/* Sharpe Ratio */}
           <div style={{
-            padding: '8px',
+            padding: '12px',
             backgroundColor: FINCEPT.PANEL_BG,
             border: `1px solid ${FINCEPT.BORDER}`,
-            borderRadius: '3px',
+            borderRadius: '8px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>SHARPE</div>
             <div style={{
-              fontSize: '14px',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '2px',
+              background: (perf.sharpeRatio ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.CYAN,
+            }} />
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600 }}>SHARPE RATIO</div>
+            <div style={{
+              fontSize: '18px',
               color: (perf.sharpeRatio ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.CYAN,
-              fontWeight: 700,
+              fontWeight: 800,
               fontFamily: '"IBM Plex Mono", monospace',
             }}>
               {(perf.sharpeRatio ?? 0).toFixed(2)}
@@ -1947,16 +2256,26 @@ const BacktestingTab: React.FC = () => {
 
           {/* Max Drawdown */}
           <div style={{
-            padding: '8px',
+            padding: '12px',
             backgroundColor: FINCEPT.PANEL_BG,
             border: `1px solid ${FINCEPT.BORDER}`,
-            borderRadius: '3px',
+            borderRadius: '8px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>MAX DD</div>
             <div style={{
-              fontSize: '14px',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '2px',
+              background: FINCEPT.RED,
+            }} />
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600 }}>MAX DRAWDOWN</div>
+            <div style={{
+              fontSize: '18px',
               color: FINCEPT.RED,
-              fontWeight: 700,
+              fontWeight: 800,
               fontFamily: '"IBM Plex Mono", monospace',
             }}>
               {((perf.maxDrawdown ?? 0) * 100).toFixed(2)}%
@@ -1965,16 +2284,26 @@ const BacktestingTab: React.FC = () => {
 
           {/* Win Rate */}
           <div style={{
-            padding: '8px',
+            padding: '12px',
             backgroundColor: FINCEPT.PANEL_BG,
             border: `1px solid ${FINCEPT.BORDER}`,
-            borderRadius: '3px',
+            borderRadius: '8px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>WIN RATE</div>
             <div style={{
-              fontSize: '14px',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '2px',
+              background: (perf.winRate ?? 0) > 0.5 ? FINCEPT.GREEN : FINCEPT.YELLOW,
+            }} />
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600 }}>WIN RATE</div>
+            <div style={{
+              fontSize: '18px',
               color: (perf.winRate ?? 0) > 0.5 ? FINCEPT.GREEN : FINCEPT.YELLOW,
-              fontWeight: 700,
+              fontWeight: 800,
               fontFamily: '"IBM Plex Mono", monospace',
             }}>
               {((perf.winRate ?? 0) * 100).toFixed(1)}%
@@ -1983,16 +2312,26 @@ const BacktestingTab: React.FC = () => {
 
           {/* Total Trades */}
           <div style={{
-            padding: '8px',
+            padding: '12px',
             backgroundColor: FINCEPT.PANEL_BG,
             border: `1px solid ${FINCEPT.BORDER}`,
-            borderRadius: '3px',
+            borderRadius: '8px',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div style={{ fontSize: '7px', color: FINCEPT.GRAY, marginBottom: '2px' }}>TRADES</div>
             <div style={{
-              fontSize: '14px',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '2px',
+              background: FINCEPT.CYAN,
+            }} />
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px', fontWeight: 600 }}>TOTAL TRADES</div>
+            <div style={{
+              fontSize: '18px',
               color: FINCEPT.CYAN,
-              fontWeight: 700,
+              fontWeight: 800,
               fontFamily: '"IBM Plex Mono", monospace',
             }}>
               {perf.totalTrades ?? 0}
@@ -2000,31 +2339,61 @@ const BacktestingTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Trade Breakdown */}
+        {/* Trade Breakdown - Enhanced */}
         {(perf.totalTrades ?? 0) > 0 && (
           <div style={{
-            padding: '8px',
+            padding: '12px',
             backgroundColor: FINCEPT.PANEL_BG,
             border: `1px solid ${FINCEPT.BORDER}`,
-            borderRadius: '3px',
-            fontSize: '8px',
+            borderRadius: '8px',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: FINCEPT.GRAY }}>Winning Trades</span>
-              <span style={{ color: FINCEPT.GREEN, fontWeight: 600 }}>{perf.winningTrades ?? 0}</span>
+            <div style={{ fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '10px', fontWeight: 700, letterSpacing: '0.5px' }}>
+              TRADE BREAKDOWN
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: FINCEPT.GRAY }}>Losing Trades</span>
-              <span style={{ color: FINCEPT.RED, fontWeight: 600 }}>{perf.losingTrades ?? 0}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: FINCEPT.GRAY }}>Profit Factor</span>
-              <span style={{
-                color: (perf.profitFactor ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.RED,
-                fontWeight: 600,
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Winning</span>
+                <span style={{
+                  fontSize: '11px',
+                  color: FINCEPT.GREEN,
+                  fontWeight: 700,
+                  backgroundColor: `${FINCEPT.GREEN}15`,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                }}>
+                  {perf.winningTrades ?? 0}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Losing</span>
+                <span style={{
+                  fontSize: '11px',
+                  color: FINCEPT.RED,
+                  fontWeight: 700,
+                  backgroundColor: `${FINCEPT.RED}15`,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                }}>
+                  {perf.losingTrades ?? 0}
+                </span>
+              </div>
+              <div style={{
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
+                paddingTop: '8px',
+                marginTop: '4px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}>
-                {(perf.profitFactor ?? 0).toFixed(2)}
-              </span>
+                <span style={{ fontSize: '9px', color: FINCEPT.GRAY }}>Profit Factor</span>
+                <span style={{
+                  fontSize: '12px',
+                  color: (perf.profitFactor ?? 0) > 1 ? FINCEPT.GREEN : FINCEPT.RED,
+                  fontWeight: 800,
+                }}>
+                  {(perf.profitFactor ?? 0).toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -2032,14 +2401,18 @@ const BacktestingTab: React.FC = () => {
         {/* Warning for zero trades */}
         {(perf.totalTrades ?? 0) === 0 && (
           <div style={{
-            padding: '8px',
-            backgroundColor: `${FINCEPT.YELLOW}10`,
-            border: `1px solid ${FINCEPT.YELLOW}`,
-            borderRadius: '3px',
-            fontSize: '8px',
-            color: FINCEPT.YELLOW,
+            padding: '12px',
+            background: `linear-gradient(90deg, ${FINCEPT.YELLOW}15 0%, transparent 100%)`,
+            border: `1px solid ${FINCEPT.YELLOW}40`,
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
           }}>
-            ⚠ No trades executed. Strategy generated no signals or all entries were skipped.
+            <AlertCircle size={14} color={FINCEPT.YELLOW} style={{ marginTop: '1px' }} />
+            <div style={{ fontSize: '9px', color: FINCEPT.YELLOW, lineHeight: 1.4 }}>
+              No trades executed. Strategy generated no signals or all entries were skipped.
+            </div>
           </div>
         )}
       </div>
@@ -2828,7 +3201,7 @@ const BacktestingTab: React.FC = () => {
     <div style={{
       backgroundColor: FINCEPT.HEADER_BG,
       borderTop: `1px solid ${FINCEPT.BORDER}`,
-      padding: '4px 16px',
+      padding: '8px 20px',
       fontSize: '9px',
       color: FINCEPT.GRAY,
       display: 'flex',
@@ -2836,23 +3209,72 @@ const BacktestingTab: React.FC = () => {
       justifyContent: 'space-between',
       fontFamily: '"IBM Plex Mono", monospace',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <span>PROVIDER: {providerConfig.displayName}</span>
-        <span>•</span>
-        <span>COMMAND: {activeCommand.toUpperCase()}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        {/* Provider badge */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '3px 10px',
+          backgroundColor: `${providerColor}10`,
+          borderRadius: '4px',
+          border: `1px solid ${providerColor}30`,
+        }}>
+          <div style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '2px',
+            backgroundColor: providerColor,
+          }} />
+          <span style={{ color: providerColor, fontWeight: 600 }}>
+            {providerConfig.displayName}
+          </span>
+        </div>
+
+        <span style={{ color: FINCEPT.MUTED }}>│</span>
+
+        {/* Command */}
+        <span>
+          <span style={{ color: FINCEPT.MUTED }}>CMD:</span>{' '}
+          <span style={{ color: FINCEPT.WHITE }}>{activeCommand.toUpperCase().replace('_', ' ')}</span>
+        </span>
+
         {currentStrategy && (
           <>
-            <span>•</span>
-            <span>STRATEGY: {currentStrategy.name.toUpperCase()}</span>
+            <span style={{ color: FINCEPT.MUTED }}>│</span>
+            <span>
+              <span style={{ color: FINCEPT.MUTED }}>STRATEGY:</span>{' '}
+              <span style={{ color: FINCEPT.CYAN }}>{currentStrategy.name.toUpperCase()}</span>
+            </span>
           </>
         )}
       </div>
-      <div>
-        {isRunning ? (
-          <span style={{ color: FINCEPT.ORANGE }}>● RUNNING</span>
-        ) : (
-          <span style={{ color: FINCEPT.GREEN }}>● READY</span>
-        )}
+
+      {/* Status indicator */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '4px 12px',
+        backgroundColor: isRunning ? `${FINCEPT.ORANGE}15` : `${FINCEPT.GREEN}15`,
+        borderRadius: '4px',
+        border: `1px solid ${isRunning ? FINCEPT.ORANGE : FINCEPT.GREEN}30`,
+      }}>
+        <div style={{
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          backgroundColor: isRunning ? FINCEPT.ORANGE : FINCEPT.GREEN,
+          boxShadow: `0 0 6px ${isRunning ? FINCEPT.ORANGE : FINCEPT.GREEN}`,
+          animation: isRunning ? 'pulse 1s infinite' : 'none',
+        }} />
+        <span style={{
+          color: isRunning ? FINCEPT.ORANGE : FINCEPT.GREEN,
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+        }}>
+          {isRunning ? 'RUNNING' : 'READY'}
+        </span>
       </div>
     </div>
   );

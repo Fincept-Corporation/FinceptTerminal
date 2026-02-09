@@ -5,6 +5,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWorkspaceTabState } from '@/hooks/useWorkspaceTabState';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import {
   Briefcase, TrendingUp, TrendingDown, DollarSign, BarChart3,
   RefreshCw, Plus, Download, Trash2, PieChart, Activity,
@@ -31,12 +33,13 @@ import ConfirmDeleteModal from './modals/ConfirmDeleteModal';
 import { usePortfolioOperations } from './hooks/usePortfolioOperations';
 import { formatCurrency, formatPercent } from './portfolio/utils';
 import { TabFooter } from '@/components/common/TabFooter';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, EFFECTS, COMMON_STYLES, LAYOUT } from './finceptStyles';
 import { showError } from '@/utils/notifications';
 
 type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization' | 'indices' | 'quantstats';
 
 const PortfolioTab: React.FC = () => {
+  const { t } = useTranslation('portfolio');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('positions');
 
@@ -171,48 +174,59 @@ const PortfolioTab: React.FC = () => {
 
   // Sub-tab configurations
   const subTabs = [
-    { id: 'positions' as SubTab, label: 'POSITIONS', icon: Briefcase },
-    { id: 'history' as SubTab, label: 'HISTORY', icon: Clock },
-    { id: 'indices' as SubTab, label: 'INDICES', icon: Layers },
-    { id: 'analytics' as SubTab, label: 'ANALYTICS', icon: BarChart3 },
-    { id: 'sectors' as SubTab, label: 'SECTORS', icon: PieChart },
-    { id: 'performance' as SubTab, label: 'PERFORMANCE', icon: TrendingUp },
-    { id: 'risk' as SubTab, label: 'RISK', icon: AlertCircle },
-    { id: 'optimization' as SubTab, label: 'OPTIMIZATION', icon: Target },
-    { id: 'active-mgmt' as SubTab, label: 'ACTIVE MGMT', icon: Activity },
-    { id: 'quantstats' as SubTab, label: 'QUANTSTATS', icon: Activity },
-    { id: 'reports' as SubTab, label: 'REPORTS', icon: BarChart3 },
-    { id: 'alerts' as SubTab, label: 'ALERTS', icon: AlertCircle }
+    { id: 'positions' as SubTab, label: t('views.positions'), icon: Briefcase },
+    { id: 'history' as SubTab, label: t('views.history'), icon: Clock },
+    { id: 'indices' as SubTab, label: t('views.indices', 'INDICES'), icon: Layers },
+    { id: 'analytics' as SubTab, label: t('views.analytics'), icon: BarChart3 },
+    { id: 'sectors' as SubTab, label: t('views.sectors'), icon: PieChart },
+    { id: 'performance' as SubTab, label: t('views.performance'), icon: TrendingUp },
+    { id: 'risk' as SubTab, label: t('views.risk', 'RISK'), icon: AlertCircle },
+    { id: 'optimization' as SubTab, label: t('views.optimization', 'OPTIMIZATION'), icon: Target },
+    { id: 'active-mgmt' as SubTab, label: t('views.activeMgmt'), icon: Activity },
+    { id: 'quantstats' as SubTab, label: t('views.quantstats', 'QUANTSTATS'), icon: Activity },
+    { id: 'reports' as SubTab, label: t('views.reports'), icon: BarChart3 },
+    { id: 'alerts' as SubTab, label: t('views.alerts'), icon: AlertCircle }
   ];
 
   return (
     <div style={{
-      ...COMMON_STYLES.container,
+      height: '100%',
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
       {/* Top Navigation Bar */}
       <div style={{
-        ...COMMON_STYLES.header,
-        height: 'auto',
+        backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+        borderBottom: `2px solid ${colors.primary}`,
         padding: '6px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+        boxShadow: `0 2px 8px ${colors.primary}20`,
         gap: '8px',
         flexWrap: 'nowrap',
       }}>
         {/* Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-          <Briefcase size={14} color={FINCEPT.ORANGE} style={{ filter: EFFECTS.ICON_GLOW_ORANGE }} />
+          <Briefcase size={14} color={colors.primary} style={{ filter: `drop-shadow(0 0 4px ${colors.primary})` }} />
           <span style={{
-            fontSize: TYPOGRAPHY.BODY,
-            fontWeight: TYPOGRAPHY.BOLD,
-            color: FINCEPT.ORANGE,
-            letterSpacing: TYPOGRAPHY.WIDE,
-            textShadow: EFFECTS.ORANGE_GLOW,
+            fontSize: fontSize.body,
+            fontWeight: 700,
+            color: colors.primary,
+            letterSpacing: '0.5px',
+            textShadow: `0 0 10px ${colors.primary}40`,
             textTransform: 'uppercase' as const,
           }}>
-            PORTFOLIO
+            {t('views.positions', 'PORTFOLIO')}
           </span>
         </div>
 
-        <div style={{ ...COMMON_STYLES.verticalDivider, height: '16px' }} />
+        <div style={{ width: '1px', backgroundColor: 'var(--ft-color-border, #2A2A2A)', alignSelf: 'stretch', height: '16px' }} />
 
         {/* Sub-tab Navigation */}
         <div id="portfolio-subtabs" style={{ display: 'flex', gap: '2px', flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
@@ -225,27 +239,35 @@ const PortfolioTab: React.FC = () => {
                 onClick={() => setActiveSubTab(tab.id)}
                 disabled={!selectedPortfolio}
                 style={{
-                  ...COMMON_STYLES.tabButton(isActive),
+                  padding: '6px 12px',
+                  backgroundColor: isActive ? colors.primary : 'transparent',
+                  color: isActive ? colors.background : colors.textMuted,
+                  border: 'none',
+                  borderRadius: '2px',
+                  fontSize: fontSize.tiny,
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  cursor: selectedPortfolio ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.15s ease',
+                  textTransform: 'uppercase' as const,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '3px',
-                  padding: '4px 8px',
-                  fontFamily: TYPOGRAPHY.MONO,
-                  cursor: selectedPortfolio ? 'pointer' : 'not-allowed',
+                  fontFamily,
                   opacity: selectedPortfolio ? 1 : 0.5,
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive && selectedPortfolio) {
-                    e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                    e.currentTarget.style.color = FINCEPT.WHITE;
+                    e.currentTarget.style.backgroundColor = 'var(--ft-color-hover, #1F1F1F)';
+                    e.currentTarget.style.color = colors.text;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = selectedPortfolio ? FINCEPT.GRAY : FINCEPT.MUTED;
+                    e.currentTarget.style.color = selectedPortfolio ? colors.textMuted : '#4A4A4A';
                   }
                 }}
               >
@@ -256,7 +278,7 @@ const PortfolioTab: React.FC = () => {
           })}
         </div>
 
-        <div style={{ ...COMMON_STYLES.verticalDivider, height: '16px' }} />
+        <div style={{ width: '1px', backgroundColor: 'var(--ft-color-border, #2A2A2A)', alignSelf: 'stretch', height: '16px' }} />
 
         {/* Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
@@ -268,22 +290,22 @@ const PortfolioTab: React.FC = () => {
                 style={{
                   padding: '3px 8px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${FINCEPT.GREEN}`,
+                  border: `1px solid ${colors.success}`,
                   borderRadius: '2px',
-                  color: FINCEPT.GREEN,
-                  fontSize: TYPOGRAPHY.TINY,
-                  fontWeight: TYPOGRAPHY.BOLD,
-                  fontFamily: TYPOGRAPHY.MONO,
-                  letterSpacing: TYPOGRAPHY.WIDE,
+                  color: colors.success,
+                  fontSize: fontSize.tiny,
+                  fontWeight: 700,
+                  fontFamily,
+                  letterSpacing: '0.5px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '3px',
-                  transition: EFFECTS.TRANSITION_FAST,
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <ArrowUpRight size={9} />
-                BUY
+                {t('actions.buy', 'BUY')}
               </button>
 
               <button
@@ -292,22 +314,22 @@ const PortfolioTab: React.FC = () => {
                 style={{
                   padding: '3px 8px',
                   backgroundColor: 'transparent',
-                  border: `1px solid ${FINCEPT.RED}`,
+                  border: `1px solid ${colors.alert}`,
                   borderRadius: '2px',
-                  color: FINCEPT.RED,
-                  fontSize: TYPOGRAPHY.TINY,
-                  fontWeight: TYPOGRAPHY.BOLD,
-                  fontFamily: TYPOGRAPHY.MONO,
-                  letterSpacing: TYPOGRAPHY.WIDE,
+                  color: colors.alert,
+                  fontSize: fontSize.tiny,
+                  fontWeight: 700,
+                  fontFamily,
+                  letterSpacing: '0.5px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '3px',
-                  transition: EFFECTS.TRANSITION_FAST,
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <ArrowDownRight size={9} />
-                SELL
+                {t('actions.sell', 'SELL')}
               </button>
 
               <button
@@ -317,14 +339,14 @@ const PortfolioTab: React.FC = () => {
                 style={{
                   padding: '3px 6px',
                   backgroundColor: 'transparent',
-                  border: BORDERS.STANDARD,
+                  border: '1px solid var(--ft-color-border, #2A2A2A)',
                   borderRadius: '2px',
-                  color: refreshing ? FINCEPT.MUTED : FINCEPT.CYAN,
-                  fontSize: TYPOGRAPHY.TINY,
+                  color: refreshing ? '#4A4A4A' : 'var(--ft-color-accent, #00E5FF)',
+                  fontSize: fontSize.tiny,
                   cursor: refreshing ? 'wait' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  transition: EFFECTS.TRANSITION_FAST,
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <RefreshCw size={9} className={refreshing ? 'animate-spin' : ''} />
@@ -336,15 +358,15 @@ const PortfolioTab: React.FC = () => {
                 style={{
                   padding: '3px 6px',
                   backgroundColor: 'transparent',
-                  border: BORDERS.STANDARD,
+                  border: '1px solid var(--ft-color-border, #2A2A2A)',
                   borderRadius: '2px',
-                  color: FINCEPT.CYAN,
-                  fontSize: TYPOGRAPHY.TINY,
+                  color: 'var(--ft-color-accent, #00E5FF)',
+                  fontSize: fontSize.tiny,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '3px',
-                  transition: EFFECTS.TRANSITION_FAST,
+                  transition: 'all 0.15s ease',
                 }}
               >
                 <Download size={9} />
@@ -360,22 +382,22 @@ const PortfolioTab: React.FC = () => {
             style={{
               padding: '3px 6px',
               backgroundColor: 'transparent',
-              border: `1px solid ${FINCEPT.BLUE}`,
+              border: `1px solid var(--ft-color-info, #0088FF)`,
               borderRadius: '2px',
-              color: FINCEPT.BLUE,
-              fontSize: TYPOGRAPHY.TINY,
-              fontWeight: TYPOGRAPHY.BOLD,
-              fontFamily: TYPOGRAPHY.MONO,
+              color: 'var(--ft-color-info, #0088FF)',
+              fontSize: fontSize.tiny,
+              fontWeight: 700,
+              fontFamily,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '2px',
-              transition: EFFECTS.TRANSITION_FAST,
+              transition: 'all 0.15s ease',
             }}
-            title="Start portfolio tour"
+            title={t('views.help')}
           >
             <Info size={9} />
-            HELP
+            {t('views.help')}
           </button>
         </div>
       </div>
@@ -386,44 +408,44 @@ const PortfolioTab: React.FC = () => {
         <div style={{
           width: '280px',
           flexShrink: 0,
-          backgroundColor: FINCEPT.PANEL_BG,
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: colors.panel,
+          borderRight: `1px solid var(--ft-color-border, #2A2A2A)`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}>
           {/* Left Panel Header */}
           <div style={{
-            padding: SPACING.DEFAULT,
-            backgroundColor: FINCEPT.HEADER_BG,
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            padding: '12px',
+            backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+            borderBottom: `1px solid var(--ft-color-border, #2A2A2A)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}>
-            <span style={{ ...COMMON_STYLES.dataLabel }}>PORTFOLIOS</span>
+            <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('sidebar.portfolios')}</span>
             <button
               id="portfolio-create"
               onClick={() => setShowCreatePortfolio(true)}
               style={{
                 padding: '2px 8px',
                 backgroundColor: 'transparent',
-                border: `1px solid ${FINCEPT.ORANGE}`,
+                border: `1px solid ${colors.primary}`,
                 borderRadius: '2px',
-                color: FINCEPT.ORANGE,
-                fontSize: TYPOGRAPHY.TINY,
-                fontWeight: TYPOGRAPHY.BOLD,
-                fontFamily: TYPOGRAPHY.MONO,
-                letterSpacing: TYPOGRAPHY.WIDE,
+                color: colors.primary,
+                fontSize: fontSize.tiny,
+                fontWeight: 700,
+                fontFamily,
+                letterSpacing: '0.5px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '3px',
-                transition: EFFECTS.TRANSITION_FAST,
+                transition: 'all 0.15s ease',
               }}
             >
               <Plus size={9} />
-              NEW
+              {t('actions.new', 'NEW')}
             </button>
           </div>
 
@@ -431,14 +453,20 @@ const PortfolioTab: React.FC = () => {
           <div style={{ flex: 1, overflow: 'auto' }}>
             {portfolios.length === 0 ? (
               <div style={{
-                ...COMMON_STYLES.emptyState,
-                padding: SPACING.XLARGE,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '24px',
                 height: 'auto',
+                color: '#4A4A4A',
+                fontSize: fontSize.small,
+                textAlign: 'center',
               }}>
                 <Briefcase size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                <span>No portfolios yet</span>
-                <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, marginTop: '4px' }}>
-                  Click NEW to create one
+                <span>{t('sidebar.noPortfolios')}</span>
+                <span style={{ fontSize: fontSize.tiny, color: colors.textMuted, marginTop: '4px' }}>
+                  {t('sidebar.clickCreate')}
                 </span>
               </div>
             ) : (
@@ -450,14 +478,14 @@ const PortfolioTab: React.FC = () => {
                     onClick={() => setSelectedPortfolio(portfolio)}
                     style={{
                       padding: '10px 12px',
-                      backgroundColor: isSelected ? `${FINCEPT.ORANGE}15` : 'transparent',
-                      borderLeft: isSelected ? `2px solid ${FINCEPT.ORANGE}` : '2px solid transparent',
+                      backgroundColor: isSelected ? `${colors.primary}15` : 'transparent',
+                      borderLeft: isSelected ? `2px solid ${colors.primary}` : '2px solid transparent',
                       cursor: 'pointer',
-                      transition: EFFECTS.TRANSITION_STANDARD,
-                      borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                      transition: 'all 0.2s ease',
+                      borderBottom: `1px solid var(--ft-color-border, #2A2A2A)`,
                     }}
                     onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+                      if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--ft-color-hover, #1F1F1F)';
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
@@ -465,10 +493,10 @@ const PortfolioTab: React.FC = () => {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <span style={{
-                        color: isSelected ? FINCEPT.ORANGE : FINCEPT.WHITE,
-                        fontSize: TYPOGRAPHY.SMALL,
-                        fontWeight: TYPOGRAPHY.BOLD,
-                        fontFamily: TYPOGRAPHY.MONO,
+                        color: isSelected ? colors.primary : colors.text,
+                        fontSize: fontSize.small,
+                        fontWeight: 700,
+                        fontFamily,
                       }}>
                         {portfolio.name}
                       </span>
@@ -480,24 +508,24 @@ const PortfolioTab: React.FC = () => {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: FINCEPT.MUTED,
+                          color: '#4A4A4A',
                           cursor: 'pointer',
                           padding: '2px',
                           display: 'flex',
-                          transition: EFFECTS.TRANSITION_FAST,
+                          transition: 'all 0.15s ease',
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = FINCEPT.RED; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = FINCEPT.MUTED; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = colors.alert; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = '#4A4A4A'; }}
                       >
                         <Trash2 size={10} />
                       </button>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <span style={{ ...COMMON_STYLES.dataLabel, fontSize: '8px' }}>
+                      <span style={{ color: colors.textMuted, fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                         {portfolio.currency}
                       </span>
                       {portfolio.owner && (
-                        <span style={{ ...COMMON_STYLES.dataLabel, fontSize: '8px' }}>
+                        <span style={{ color: colors.textMuted, fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                           {portfolio.owner}
                         </span>
                       )}
@@ -513,40 +541,54 @@ const PortfolioTab: React.FC = () => {
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {!selectedPortfolio ? (
             <div style={{
-              ...COMMON_STYLES.emptyState,
-              gap: SPACING.LARGE,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: '#4A4A4A',
+              fontSize: fontSize.small,
+              textAlign: 'center',
+              gap: '16px',
             }}>
-              <Briefcase size={48} color={FINCEPT.MUTED} style={{ opacity: 0.2 }} />
+              <Briefcase size={48} color="#4A4A4A" style={{ opacity: 0.2 }} />
               <div style={{
-                color: FINCEPT.GRAY,
-                fontSize: TYPOGRAPHY.SUBHEADING,
-                fontWeight: TYPOGRAPHY.BOLD,
+                color: colors.textMuted,
+                fontSize: fontSize.subheading,
+                fontWeight: 700,
                 letterSpacing: '1px',
-                fontFamily: TYPOGRAPHY.MONO,
+                fontFamily,
                 textTransform: 'uppercase' as const,
               }}>
-                NO PORTFOLIO SELECTED
+                {t('extracted.noPortfolioSelected')}
               </div>
               <div style={{
-                color: FINCEPT.MUTED,
-                fontSize: TYPOGRAPHY.SMALL,
-                fontFamily: TYPOGRAPHY.MONO,
+                color: '#4A4A4A',
+                fontSize: fontSize.small,
+                fontFamily,
               }}>
-                {portfolios.length === 0 ? 'Create a new portfolio to get started' : 'Select a portfolio from the left panel'}
+                {portfolios.length === 0 ? t('content.selectOrCreate') : t('content.selectOrCreate')}
               </div>
             </div>
           ) : !portfolioSummary ? (
             <div style={{
-              ...COMMON_STYLES.emptyState,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: '#4A4A4A',
+              fontSize: fontSize.small,
+              textAlign: 'center',
             }}>
               <div style={{
-                color: FINCEPT.GRAY,
-                fontSize: TYPOGRAPHY.BODY,
-                fontWeight: TYPOGRAPHY.SEMIBOLD,
+                color: colors.textMuted,
+                fontSize: fontSize.body,
+                fontWeight: 600,
                 letterSpacing: '1px',
-                fontFamily: TYPOGRAPHY.MONO,
+                fontFamily,
               }}>
-                LOADING PORTFOLIO DATA...
+                {t('extracted.loadingPortfolioData')}
               </div>
             </div>
           ) : (
@@ -575,7 +617,7 @@ const PortfolioTab: React.FC = () => {
                 </div>
               )}
               {activeSubTab === 'indices' && (
-                <div id="indices-view" style={{ height: '100%', padding: SPACING.DEFAULT }}>
+                <div id="indices-view" style={{ height: '100%', padding: '12px' }}>
                   <CustomIndexView
                     key={indexRefreshKey}
                     portfolioId={selectedPortfolio?.id}
@@ -591,46 +633,56 @@ const PortfolioTab: React.FC = () => {
         <div style={{
           width: '300px',
           flexShrink: 0,
-          backgroundColor: FINCEPT.PANEL_BG,
-          borderLeft: `1px solid ${FINCEPT.BORDER}`,
+          backgroundColor: colors.panel,
+          borderLeft: `1px solid var(--ft-color-border, #2A2A2A)`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}>
           {/* Right Panel Header */}
           <div style={{
-            padding: SPACING.DEFAULT,
-            backgroundColor: FINCEPT.HEADER_BG,
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            padding: '12px',
+            backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+            borderBottom: `1px solid var(--ft-color-border, #2A2A2A)`,
           }}>
-            <span style={{ ...COMMON_STYLES.dataLabel }}>PORTFOLIO SUMMARY</span>
+            <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('summary.portfolioSummary', 'PORTFOLIO SUMMARY')}</span>
           </div>
 
           {/* Summary Content */}
-          <div style={{ flex: 1, overflow: 'auto', padding: SPACING.DEFAULT }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
             {!portfolioSummary ? (
               <div style={{
-                ...COMMON_STYLES.emptyState,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
                 height: 'auto',
-                padding: SPACING.XLARGE,
+                padding: '24px',
+                color: '#4A4A4A',
+                fontSize: fontSize.small,
+                textAlign: 'center',
               }}>
                 <DollarSign size={24} style={{ marginBottom: '8px', opacity: 0.3 }} />
-                <span>Select a portfolio</span>
+                <span>{t('content.selectPortfolio', 'Select a portfolio')}</span>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {/* Total Value Card */}
                 <div style={{
-                  ...COMMON_STYLES.metricCard,
-                  borderColor: FINCEPT.ORANGE,
-                  padding: SPACING.DEFAULT,
+                  backgroundColor: colors.panel,
+                  border: `1px solid ${colors.primary}`,
+                  borderRadius: '2px',
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
                 }}>
-                  <div style={{ ...COMMON_STYLES.dataLabel }}>TOTAL VALUE</div>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('summary.totalValue')}</div>
                   <div style={{
-                    color: FINCEPT.ORANGE,
-                    fontSize: TYPOGRAPHY.HEADING,
-                    fontWeight: TYPOGRAPHY.BOLD,
-                    fontFamily: TYPOGRAPHY.MONO,
+                    color: colors.primary,
+                    fontSize: fontSize.heading,
+                    fontWeight: 700,
+                    fontFamily,
                   }}>
                     {formatCurrency(portfolioSummary.total_market_value, currency)}
                   </div>
@@ -638,88 +690,92 @@ const PortfolioTab: React.FC = () => {
 
                 {/* Total P&L */}
                 <div style={{
-                  ...COMMON_STYLES.metricCard,
-                  borderColor: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                  padding: SPACING.DEFAULT,
+                  backgroundColor: colors.panel,
+                  border: `1px solid ${portfolioSummary.total_unrealized_pnl >= 0 ? colors.success : colors.alert}`,
+                  borderRadius: '2px',
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
                 }}>
-                  <div style={{ ...COMMON_STYLES.dataLabel }}>UNREALIZED P&L</div>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('summary.unrealizedPnl', 'UNREALIZED P&L')}</div>
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
                   }}>
                     {portfolioSummary.total_unrealized_pnl >= 0
-                      ? <ArrowUpRight size={14} color={FINCEPT.GREEN} />
-                      : <ArrowDownRight size={14} color={FINCEPT.RED} />
+                      ? <ArrowUpRight size={14} color={colors.success} />
+                      : <ArrowDownRight size={14} color={colors.alert} />
                     }
                     <span style={{
-                      color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                      fontSize: TYPOGRAPHY.SUBHEADING,
-                      fontWeight: TYPOGRAPHY.BOLD,
-                      fontFamily: TYPOGRAPHY.MONO,
+                      color: portfolioSummary.total_unrealized_pnl >= 0 ? colors.success : colors.alert,
+                      fontSize: fontSize.subheading,
+                      fontWeight: 700,
+                      fontFamily,
                     }}>
                       {portfolioSummary.total_unrealized_pnl >= 0 ? '+' : ''}{formatCurrency(portfolioSummary.total_unrealized_pnl, currency)}
                     </span>
                   </div>
                   <div style={{
-                    color: portfolioSummary.total_unrealized_pnl_percent >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                    fontSize: TYPOGRAPHY.SMALL,
-                    fontFamily: TYPOGRAPHY.MONO,
+                    color: portfolioSummary.total_unrealized_pnl_percent >= 0 ? colors.success : colors.alert,
+                    fontSize: fontSize.small,
+                    fontFamily,
                   }}>
                     {formatPercent(portfolioSummary.total_unrealized_pnl_percent)}
                   </div>
                 </div>
 
                 {/* Cost Basis */}
-                <div style={{ ...COMMON_STYLES.metricCard, padding: SPACING.DEFAULT }}>
-                  <div style={{ ...COMMON_STYLES.dataLabel }}>COST BASIS</div>
+                <div style={{ backgroundColor: colors.panel, border: '1px solid var(--ft-color-border, #2A2A2A)', borderRadius: '2px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('summary.costBasis', 'COST BASIS')}</div>
                   <div style={{
-                    color: FINCEPT.CYAN,
-                    fontSize: TYPOGRAPHY.SUBHEADING,
-                    fontWeight: TYPOGRAPHY.BOLD,
-                    fontFamily: TYPOGRAPHY.MONO,
+                    color: 'var(--ft-color-accent, #00E5FF)',
+                    fontSize: fontSize.subheading,
+                    fontWeight: 700,
+                    fontFamily,
                   }}>
                     {formatCurrency(portfolioSummary.total_cost_basis, currency)}
                   </div>
                 </div>
 
                 {/* Day Change */}
-                <div style={{ ...COMMON_STYLES.metricCard, padding: SPACING.DEFAULT }}>
-                  <div style={{ ...COMMON_STYLES.dataLabel }}>DAY CHANGE</div>
+                <div style={{ backgroundColor: colors.panel, border: '1px solid var(--ft-color-border, #2A2A2A)', borderRadius: '2px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('summary.dayChange', 'DAY CHANGE')}</div>
                   <div style={{
-                    color: portfolioSummary.total_day_change >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                    fontSize: TYPOGRAPHY.BODY,
-                    fontWeight: TYPOGRAPHY.BOLD,
-                    fontFamily: TYPOGRAPHY.MONO,
+                    color: portfolioSummary.total_day_change >= 0 ? colors.success : colors.alert,
+                    fontSize: fontSize.body,
+                    fontWeight: 700,
+                    fontFamily,
                   }}>
                     {portfolioSummary.total_day_change >= 0 ? '+' : ''}{formatCurrency(portfolioSummary.total_day_change, currency)}
-                    <span style={{ marginLeft: '6px', fontSize: TYPOGRAPHY.SMALL }}>
+                    <span style={{ marginLeft: '6px', fontSize: fontSize.small }}>
                       ({formatPercent(portfolioSummary.total_day_change_percent)})
                     </span>
                   </div>
                 </div>
 
                 {/* Divider */}
-                <div style={COMMON_STYLES.divider} />
+                <div style={{ height: '1px', backgroundColor: 'var(--ft-color-border, #2A2A2A)', margin: '8px 0' }} />
 
                 {/* Quick Stats */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ ...COMMON_STYLES.dataLabel }}>POSITIONS</span>
-                    <span style={{ ...COMMON_STYLES.dataValue }}>{portfolioSummary.total_positions}</span>
+                    <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('summary.positions')}</span>
+                    <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontFamily }}>{portfolioSummary.total_positions}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ ...COMMON_STYLES.dataLabel }}>CURRENCY</span>
-                    <span style={{ ...COMMON_STYLES.dataValue }}>{currency}</span>
+                    <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{t('sidebar.currency')}</span>
+                    <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontFamily }}>{currency}</span>
                   </div>
                 </div>
 
                 {/* Divider */}
-                <div style={COMMON_STYLES.divider} />
+                <div style={{ height: '1px', backgroundColor: 'var(--ft-color-border, #2A2A2A)', margin: '8px 0' }} />
 
                 {/* Top Holdings */}
                 <div>
-                  <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.MEDIUM }}>TOP HOLDINGS</div>
+                  <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '8px' }}>{t('summary.topHoldings', 'TOP HOLDINGS')}</div>
                   {portfolioSummary.holdings
                     .slice()
                     .sort((a, b) => b.weight - a.weight)
@@ -730,29 +786,29 @@ const PortfolioTab: React.FC = () => {
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         padding: '4px 0',
-                        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                        borderBottom: `1px solid var(--ft-color-border, #2A2A2A)`,
                       }}>
                         <div>
-                          <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, fontFamily: TYPOGRAPHY.MONO }}>
+                          <div style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.small, fontWeight: 700, fontFamily }}>
                             {holding.symbol}
                           </div>
-                          <div style={{ color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.TINY, fontFamily: TYPOGRAPHY.MONO }}>
+                          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontFamily }}>
                             {holding.weight.toFixed(1)}%
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{
-                            color: holding.unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                            fontSize: TYPOGRAPHY.SMALL,
-                            fontWeight: TYPOGRAPHY.BOLD,
-                            fontFamily: TYPOGRAPHY.MONO,
+                            color: holding.unrealized_pnl >= 0 ? colors.success : colors.alert,
+                            fontSize: fontSize.small,
+                            fontWeight: 700,
+                            fontFamily,
                           }}>
                             {holding.unrealized_pnl >= 0 ? '+' : ''}{formatCurrency(holding.unrealized_pnl, currency)}
                           </div>
                           <div style={{
-                            color: holding.unrealized_pnl_percent >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-                            fontSize: TYPOGRAPHY.TINY,
-                            fontFamily: TYPOGRAPHY.MONO,
+                            color: holding.unrealized_pnl_percent >= 0 ? colors.success : colors.alert,
+                            fontSize: fontSize.tiny,
+                            fontFamily,
                           }}>
                             {formatPercent(holding.unrealized_pnl_percent)}
                           </div>
@@ -769,34 +825,34 @@ const PortfolioTab: React.FC = () => {
 
       {/* Status Bar (Bottom) */}
       <TabFooter
-        tabName="PORTFOLIO MANAGER"
-        backgroundColor={FINCEPT.HEADER_BG}
-        borderColor={FINCEPT.ORANGE}
+        tabName={t('title', 'PORTFOLIO MANAGER')}
+        backgroundColor="var(--ft-color-header, #1A1A1A)"
+        borderColor={colors.primary}
         leftInfo={
           portfolioSummary
             ? [
                 {
-                  label: 'Positions',
+                  label: t('summary.positions'),
                   value: portfolioSummary.total_positions.toString(),
-                  color: FINCEPT.WHITE
+                  color: colors.text
                 },
                 {
-                  label: 'Total Value',
+                  label: t('summary.totalValue'),
                   value: formatCurrency(portfolioSummary.total_market_value, currency),
-                  color: FINCEPT.WHITE
+                  color: colors.text
                 },
                 {
-                  label: 'Total P&L',
+                  label: t('summary.totalPnl'),
                   value: `${portfolioSummary.total_unrealized_pnl >= 0 ? '+' : ''}${formatCurrency(portfolioSummary.total_unrealized_pnl, currency)}`,
-                  color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED
+                  color: portfolioSummary.total_unrealized_pnl >= 0 ? colors.success : colors.alert
                 }
               ]
             : []
         }
         statusInfo={
-          <span style={{ color: FINCEPT.GRAY, fontFamily: TYPOGRAPHY.MONO }}>
+          <span style={{ color: colors.textMuted, fontFamily }}>
             {selectedPortfolio ? `${selectedPortfolio.name} | ` : ''}
-            Last Updated: {currentTime.toLocaleTimeString('en-US', { hour12: false })}
+            {t('status.lastUpdated')}: {currentTime.toLocaleTimeString('en-US', { hour12: false })}
           </span>
         }
       />
@@ -805,7 +861,20 @@ const PortfolioTab: React.FC = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
-        ${COMMON_STYLES.scrollbarCSS}
+        *::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        *::-webkit-scrollbar-track {
+          background: var(--ft-color-background, #000000);
+        }
+        *::-webkit-scrollbar-thumb {
+          background: var(--ft-color-border, #2A2A2A);
+          border-radius: 3px;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+          background: #4A4A4A;
+        }
 
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -813,7 +882,7 @@ const PortfolioTab: React.FC = () => {
         }
 
         @keyframes priceFlash {
-          0% { background-color: ${FINCEPT.YELLOW}40; }
+          0% { background-color: var(--ft-color-warning, #FFD700)40; }
           100% { background-color: transparent; }
         }
       `}</style>

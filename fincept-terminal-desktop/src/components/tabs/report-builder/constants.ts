@@ -1,15 +1,5 @@
-// Fincept color palette for Report Builder
-export const FINCEPT_COLORS = {
-  ORANGE: '#FFA500',
-  WHITE: '#FFFFFF',
-  BLACK: '#000000',
-  DARK_BG: '#0a0a0a',
-  PANEL_BG: '#1a1a1a',
-  BORDER: '#333333',
-  HOVER: '#2a2a2a',
-  TEXT_PRIMARY: '#FFFFFF',
-  TEXT_SECONDARY: '#999999',
-} as const;
+// Theme colors are now provided by useTerminalTheme() hook
+// Import with: import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 // Page theme options
 export const PAGE_THEMES = {

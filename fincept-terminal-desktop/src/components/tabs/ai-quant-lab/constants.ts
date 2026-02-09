@@ -108,33 +108,34 @@ export const CATEGORY_CONFIG: Record<string, CategoryConfig> = {
   'analytics': { icon: React.createElement(BarChart2, { size: 14 }), color: '#06b6d4' },
 };
 
-// Fincept color palette
+// Fincept color palette - use CSS variables for theme integration
+// Components should prefer useTerminalTheme() hook or CSS variables
 export const FINCEPT_COLORS = {
-  primary: '#FF8800',
-  orange: '#FFA500',
-  white: '#FFFFFF',
-  gray: '#787878',
-  darkBg: '#0a0a0a',
-  panelBg: '#1a1a1a',
-  border: '#2d2d2d',
-  green: '#10b981',
-  red: '#ef4444',
-  blue: '#3b82f6',
-  purple: '#8b5cf6',
-  cyan: '#06b6d4',
-  yellow: '#f59e0b',
+  primary: 'var(--ft-color-primary, #FF8800)',
+  orange: 'var(--ft-color-primary, #FFA500)',
+  white: 'var(--ft-color-text, #FFFFFF)',
+  gray: 'var(--ft-color-text-muted, #787878)',
+  darkBg: 'var(--ft-color-background, #0a0a0a)',
+  panelBg: 'var(--ft-color-panel, #1a1a1a)',
+  border: 'var(--ft-border-color, #2d2d2d)',
+  green: 'var(--ft-color-success, #10b981)',
+  red: 'var(--ft-color-alert, #ef4444)',
+  blue: 'var(--ft-color-info, #3b82f6)',
+  purple: 'var(--ft-color-purple, #8b5cf6)',
+  cyan: 'var(--ft-color-accent, #06b6d4)',
+  yellow: 'var(--ft-color-warning, #f59e0b)',
 };
 
 // Default edge options for ReactFlow
 export const DEFAULT_EDGE_OPTIONS = {
   animated: true,
-  style: { stroke: '#ea580c', strokeWidth: 2 },
+  style: { stroke: 'var(--ft-color-primary, #ea580c)', strokeWidth: 2 },
 };
 
 // ReactFlow background settings
 export const FLOW_BACKGROUND_CONFIG = {
-  color: '#2d2d2d',
+  color: 'var(--ft-border-color, #2d2d2d)',
   gap: 20,
   size: 1,
-  style: { backgroundColor: '#0a0a0a' },
+  style: { backgroundColor: 'var(--ft-color-background, #0a0a0a)' },
 };

@@ -1,7 +1,8 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { PortfolioSummary, Transaction } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent, calculateTaxLiability } from './utils';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, EFFECTS } from '../finceptStyles';
 
 interface ReportsViewProps {
   portfolioSummary: PortfolioSummary;
@@ -9,6 +10,8 @@ interface ReportsViewProps {
 }
 
 const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transactions }) => {
+  const { t } = useTranslation('portfolio');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const currency = portfolioSummary.portfolio.currency;
 
   // Calculate tax liability
@@ -24,133 +27,144 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
   return (
     <div style={{
       height: '100%',
-      backgroundColor: FINCEPT.DARK_BG,
-      padding: SPACING.DEFAULT,
+      backgroundColor: colors.background,
+      padding: '12px',
       overflow: 'auto',
-      fontFamily: TYPOGRAPHY.MONO
+      fontFamily
     }}>
       <div style={{
-        ...COMMON_STYLES.sectionHeader,
-        marginBottom: SPACING.LARGE
+        padding: '12px',
+        backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+        borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+        color: colors.primary,
+        fontSize: fontSize.body,
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        textTransform: 'uppercase' as const,
+        marginBottom: '16px',
       }}>
-        TAX REPORTS & STATEMENTS
+        {t('reports.taxReports')}
       </div>
 
       {/* Summary Cards */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: SPACING.DEFAULT,
-        marginBottom: SPACING.XLARGE
+        gap: '12px',
+        marginBottom: '24px'
       }}>
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: BORDERS.ORANGE,
+          padding: '12px',
+          backgroundColor: colors.panel,
+          border: `1px solid ${colors.primary}`,
           borderRadius: '2px',
-          transition: EFFECTS.TRANSITION_STANDARD
+          transition: 'all 0.2s ease'
         }}>
           <div style={{
-            fontSize: '9px',
+            fontSize: fontSize.tiny,
             fontWeight: 700,
-            color: FINCEPT.GRAY,
+            color: colors.textMuted,
             letterSpacing: '0.5px',
             textTransform: 'uppercase' as const
-          }}>TOTAL TAX LIABILITY</div>
+          }}>{t('reports.totalTaxLiability')}</div>
           <div style={{
-            color: FINCEPT.ORANGE,
-            fontSize: '15px',
+            color: colors.primary,
+            fontSize: fontSize.body,
             fontWeight: 700,
-            fontFamily: TYPOGRAPHY.MONO
+            fontFamily
           }}>
             {formatCurrency(taxCalculation.totalTax, currency)}
           </div>
         </div>
 
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: BORDERS.GREEN,
+          padding: '12px',
+          backgroundColor: colors.panel,
+          border: `1px solid ${colors.success}`,
           borderRadius: '2px',
-          transition: EFFECTS.TRANSITION_STANDARD
+          transition: 'all 0.2s ease'
         }}>
           <div style={{
-            fontSize: '9px',
+            fontSize: fontSize.tiny,
             fontWeight: 700,
-            color: FINCEPT.GRAY,
+            color: colors.textMuted,
             letterSpacing: '0.5px',
             textTransform: 'uppercase' as const
-          }}>LONG-TERM GAINS</div>
+          }}>{t('reports.longTermGains')}</div>
           <div style={{
-            color: FINCEPT.GREEN,
-            fontSize: '15px',
+            color: colors.success,
+            fontSize: fontSize.body,
             fontWeight: 700,
-            fontFamily: TYPOGRAPHY.MONO
+            fontFamily
           }}>
             {formatCurrency(taxCalculation.longTermGains, currency)}
           </div>
           <div style={{
-            color: FINCEPT.GRAY,
-            fontSize: '9px',
-            marginTop: SPACING.TINY
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
+            marginTop: '4px'
           }}>
             Tax: {formatCurrency(taxCalculation.longTermTax, currency)}
           </div>
         </div>
 
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: `1px solid ${FINCEPT.YELLOW}`,
+          padding: '12px',
+          backgroundColor: colors.panel,
+          border: `1px solid var(--ft-color-warning, #FFD700)`,
           borderRadius: '2px',
-          transition: EFFECTS.TRANSITION_STANDARD
+          transition: 'all 0.2s ease'
         }}>
           <div style={{
-            fontSize: '9px',
+            fontSize: fontSize.tiny,
             fontWeight: 700,
-            color: FINCEPT.GRAY,
+            color: colors.textMuted,
             letterSpacing: '0.5px',
             textTransform: 'uppercase' as const
-          }}>SHORT-TERM GAINS</div>
+          }}>{t('reports.shortTermGains')}</div>
           <div style={{
-            color: FINCEPT.YELLOW,
-            fontSize: '15px',
+            color: 'var(--ft-color-warning, #FFD700)',
+            fontSize: fontSize.body,
             fontWeight: 700,
-            fontFamily: TYPOGRAPHY.MONO
+            fontFamily
           }}>
             {formatCurrency(taxCalculation.shortTermGains, currency)}
           </div>
           <div style={{
-            color: FINCEPT.GRAY,
-            fontSize: '9px',
-            marginTop: SPACING.TINY
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
+            marginTop: '4px'
           }}>
             Tax: {formatCurrency(taxCalculation.shortTermTax, currency)}
           </div>
         </div>
 
         <div style={{
-          ...COMMON_STYLES.metricCard,
-          border: BORDERS.CYAN,
+          padding: '12px',
+          backgroundColor: colors.panel,
+          border: `1px solid var(--ft-color-accent, #00E5FF)`,
           borderRadius: '2px',
-          transition: EFFECTS.TRANSITION_STANDARD
+          transition: 'all 0.2s ease'
         }}>
           <div style={{
-            fontSize: '9px',
+            fontSize: fontSize.tiny,
             fontWeight: 700,
-            color: FINCEPT.GRAY,
+            color: colors.textMuted,
             letterSpacing: '0.5px',
             textTransform: 'uppercase' as const
-          }}>UNREALIZED GAINS</div>
+          }}>{t('reports.unrealizedGains')}</div>
           <div style={{
-            color: portfolioSummary.total_unrealized_pnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
-            fontSize: '15px',
+            color: portfolioSummary.total_unrealized_pnl >= 0 ? colors.success : colors.alert,
+            fontSize: fontSize.body,
             fontWeight: 700,
-            fontFamily: TYPOGRAPHY.MONO
+            fontFamily
           }}>
             {formatCurrency(portfolioSummary.total_unrealized_pnl, currency)}
           </div>
           <div style={{
-            color: FINCEPT.GRAY,
-            fontSize: '9px',
-            marginTop: SPACING.TINY
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
+            marginTop: '4px'
           }}>
             Not taxable until sold
           </div>
@@ -159,54 +173,61 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
       {/* Tax Breakdown */}
       <div style={{
-        ...COMMON_STYLES.sectionHeader,
-        marginBottom: SPACING.MEDIUM
+        padding: '12px',
+        backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+        borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+        color: colors.primary,
+        fontSize: fontSize.body,
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        textTransform: 'uppercase' as const,
+        marginBottom: '12px',
       }}>
-        TAX BREAKDOWN (FIFO METHOD)
+        {t('reports.taxBreakdown')}
       </div>
 
       <div style={{
-        padding: SPACING.DEFAULT,
-        backgroundColor: FINCEPT.PANEL_BG,
-        border: BORDERS.STANDARD,
+        padding: '12px',
+        backgroundColor: colors.panel,
+        border: '1px solid var(--ft-color-border, #2A2A2A)',
         borderRadius: '2px',
-        marginBottom: SPACING.XLARGE
+        marginBottom: '24px'
       }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr 1fr',
-          gap: SPACING.MEDIUM,
-          marginBottom: SPACING.MEDIUM,
-          padding: SPACING.MEDIUM,
-          backgroundColor: FINCEPT.HEADER_BG,
-          borderBottom: BORDERS.ORANGE,
+          gap: '12px',
+          marginBottom: '12px',
+          padding: '12px',
+          backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+          borderBottom: `1px solid ${colors.primary}`,
           borderRadius: '2px'
         }}>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>CATEGORY</div>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const, textAlign: 'right' }}>GAINS</div>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const, textAlign: 'right' }}>TAX RATE</div>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const, textAlign: 'right' }}>TAX DUE</div>
+          <div style={{ color: colors.primary, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{t('reports.category')}</div>
+          <div style={{ color: colors.primary, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const, textAlign: 'right' }}>{t('reports.gains')}</div>
+          <div style={{ color: colors.primary, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const, textAlign: 'right' }}>{t('reports.taxRate')}</div>
+          <div style={{ color: colors.primary, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const, textAlign: 'right' }}>{t('reports.taxDue')}</div>
         </div>
 
         <div style={{
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr 1fr',
-          gap: SPACING.MEDIUM,
-          padding: SPACING.MEDIUM,
+          gap: '12px',
+          padding: '12px',
           backgroundColor: 'rgba(255,215,0,0.05)',
-          borderLeft: `3px solid ${FINCEPT.YELLOW}`,
+          borderLeft: `3px solid var(--ft-color-warning, #FFD700)`,
           borderRadius: '2px',
-          marginBottom: SPACING.SMALL,
-          transition: EFFECTS.TRANSITION_STANDARD
+          marginBottom: '8px',
+          transition: 'all 0.2s ease'
         }}>
-          <div style={{ color: FINCEPT.YELLOW, fontSize: '10px', fontWeight: 700 }}>
+          <div style={{ color: 'var(--ft-color-warning, #FFD700)', fontSize: fontSize.tiny, fontWeight: 700 }}>
             Short-Term Capital Gains (&lt; 1 year)
           </div>
-          <div style={{ color: FINCEPT.CYAN, fontSize: '10px', textAlign: 'right' }}>
+          <div style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.tiny, textAlign: 'right' }}>
             {formatCurrency(taxCalculation.shortTermGains, currency)}
           </div>
-          <div style={{ color: FINCEPT.GRAY, fontSize: '10px', textAlign: 'right' }}>15%</div>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '10px', textAlign: 'right', fontWeight: 700 }}>
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, textAlign: 'right' }}>15%</div>
+          <div style={{ color: colors.primary, fontSize: fontSize.tiny, textAlign: 'right', fontWeight: 700 }}>
             {formatCurrency(taxCalculation.shortTermTax, currency)}
           </div>
         </div>
@@ -214,22 +235,22 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         <div style={{
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr 1fr',
-          gap: SPACING.MEDIUM,
-          padding: SPACING.MEDIUM,
+          gap: '12px',
+          padding: '12px',
           backgroundColor: 'rgba(0,214,111,0.05)',
-          borderLeft: `3px solid ${FINCEPT.GREEN}`,
+          borderLeft: `3px solid ${colors.success}`,
           borderRadius: '2px',
-          marginBottom: SPACING.SMALL,
-          transition: EFFECTS.TRANSITION_STANDARD
+          marginBottom: '8px',
+          transition: 'all 0.2s ease'
         }}>
-          <div style={{ color: FINCEPT.GREEN, fontSize: '10px', fontWeight: 700 }}>
+          <div style={{ color: colors.success, fontSize: fontSize.tiny, fontWeight: 700 }}>
             Long-Term Capital Gains (&gt; 1 year)
           </div>
-          <div style={{ color: FINCEPT.CYAN, fontSize: '10px', textAlign: 'right' }}>
+          <div style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.tiny, textAlign: 'right' }}>
             {formatCurrency(taxCalculation.longTermGains, currency)}
           </div>
-          <div style={{ color: FINCEPT.GRAY, fontSize: '10px', textAlign: 'right' }}>20%</div>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '10px', textAlign: 'right', fontWeight: 700 }}>
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, textAlign: 'right' }}>20%</div>
+          <div style={{ color: colors.primary, fontSize: fontSize.tiny, textAlign: 'right', fontWeight: 700 }}>
             {formatCurrency(taxCalculation.longTermTax, currency)}
           </div>
         </div>
@@ -237,49 +258,56 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         <div style={{
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr 1fr',
-          gap: SPACING.MEDIUM,
-          padding: SPACING.MEDIUM,
+          gap: '12px',
+          padding: '12px',
           backgroundColor: 'rgba(255,136,0,0.1)',
-          borderTop: `2px solid ${FINCEPT.ORANGE}`,
+          borderTop: `2px solid ${colors.primary}`,
           borderRadius: '2px',
-          marginTop: SPACING.SMALL
+          marginTop: '8px'
         }}>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '11px', fontWeight: 700 }}>TOTAL TAX DUE</div>
+          <div style={{ color: colors.primary, fontSize: fontSize.tiny, fontWeight: 700 }}>{t('reports.totalTaxDue')}</div>
           <div></div>
           <div></div>
-          <div style={{ color: FINCEPT.ORANGE, fontSize: '13px', textAlign: 'right', fontWeight: 700 }}>
+          <div style={{ color: colors.primary, fontSize: fontSize.small, textAlign: 'right', fontWeight: 700 }}>
             {formatCurrency(taxCalculation.totalTax, currency)}
           </div>
         </div>
       </div>
 
       {/* Additional Information */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         {/* Transaction Summary */}
         <div>
           <div style={{
-            ...COMMON_STYLES.sectionHeader,
-            marginBottom: SPACING.MEDIUM
+            padding: '12px',
+            backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+            borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+            color: colors.primary,
+            fontSize: fontSize.body,
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const,
+            marginBottom: '12px',
           }}>
-            TRANSACTION SUMMARY
+            {t('reports.transactionSummary')}
           </div>
 
           <div style={{
-            padding: SPACING.DEFAULT,
-            backgroundColor: FINCEPT.PANEL_BG,
-            border: BORDERS.STANDARD,
+            padding: '12px',
+            backgroundColor: colors.panel,
+            border: '1px solid var(--ft-color-border, #2A2A2A)',
             borderRadius: '2px'
           }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              marginBottom: SPACING.SMALL,
-              paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-              transition: EFFECTS.TRANSITION_STANDARD
+              marginBottom: '8px',
+              paddingBottom: '8px',
+              borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+              transition: 'all 0.2s ease'
             }}>
-              <span style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>Total Transactions:</span>
-              <span style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+              <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{t('reports.totalTransactions')}</span>
+              <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.tiny, fontWeight: 700 }}>
                 {transactions.length}
               </span>
             </div>
@@ -287,13 +315,13 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              marginBottom: SPACING.SMALL,
-              paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-              transition: EFFECTS.TRANSITION_STANDARD
+              marginBottom: '8px',
+              paddingBottom: '8px',
+              borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+              transition: 'all 0.2s ease'
             }}>
-              <span style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>Buy Transactions:</span>
-              <span style={{ color: FINCEPT.GREEN, fontSize: '10px', fontWeight: 700 }}>
+              <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{t('reports.buyTransactions')}</span>
+              <span style={{ color: colors.success, fontSize: fontSize.tiny, fontWeight: 700 }}>
                 {transactions.filter(t => t.transaction_type === 'BUY').length}
               </span>
             </div>
@@ -301,13 +329,13 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              marginBottom: SPACING.SMALL,
-              paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-              transition: EFFECTS.TRANSITION_STANDARD
+              marginBottom: '8px',
+              paddingBottom: '8px',
+              borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+              transition: 'all 0.2s ease'
             }}>
-              <span style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>Sell Transactions:</span>
-              <span style={{ color: FINCEPT.RED, fontSize: '10px', fontWeight: 700 }}>
+              <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{t('reports.sellTransactions')}</span>
+              <span style={{ color: colors.alert, fontSize: fontSize.tiny, fontWeight: 700 }}>
                 {transactions.filter(t => t.transaction_type === 'SELL').length}
               </span>
             </div>
@@ -315,10 +343,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}>
-              <span style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>Current Positions:</span>
-              <span style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+              <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{t('reports.currentPositions')}</span>
+              <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.tiny, fontWeight: 700 }}>
                 {portfolioSummary.holdings.length}
               </span>
             </div>
@@ -328,28 +356,35 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
         {/* Dividend Information */}
         <div>
           <div style={{
-            ...COMMON_STYLES.sectionHeader,
-            marginBottom: SPACING.MEDIUM
+            padding: '12px',
+            backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+            borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+            color: colors.primary,
+            fontSize: fontSize.body,
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase' as const,
+            marginBottom: '12px',
           }}>
-            DIVIDEND INCOME
+            {t('reports.dividendIncome')}
           </div>
 
           <div style={{
-            padding: SPACING.DEFAULT,
-            backgroundColor: FINCEPT.PANEL_BG,
-            border: BORDERS.STANDARD,
+            padding: '12px',
+            backgroundColor: colors.panel,
+            border: '1px solid var(--ft-color-border, #2A2A2A)',
             borderRadius: '2px'
           }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              marginBottom: SPACING.SMALL,
-              paddingBottom: SPACING.SMALL,
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-              transition: EFFECTS.TRANSITION_STANDARD
+              marginBottom: '8px',
+              paddingBottom: '8px',
+              borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+              transition: 'all 0.2s ease'
             }}>
-              <span style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>Total Dividends (YTD):</span>
-              <span style={{ color: FINCEPT.GREEN, fontSize: '10px', fontWeight: 700 }}>
+              <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{t('reports.totalDividends')}</span>
+              <span style={{ color: colors.success, fontSize: fontSize.tiny, fontWeight: 700 }}>
                 {formatCurrency(totalDividends, currency)}
               </span>
             </div>
@@ -357,10 +392,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}>
-              <span style={{ color: FINCEPT.GRAY, fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>Portfolio Yield:</span>
-              <span style={{ color: FINCEPT.CYAN, fontSize: '10px', fontWeight: 700 }}>
+              <span style={{ color: colors.textMuted, fontSize: fontSize.tiny, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase' as const }}>{t('reports.portfolioYield')}</span>
+              <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontSize: fontSize.tiny, fontWeight: 700 }}>
                 {dividendYield.toFixed(2)}%
               </span>
             </div>
@@ -370,28 +405,36 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
 
       {/* Export Options */}
       <div style={{
-        marginTop: SPACING.XLARGE,
-        padding: SPACING.DEFAULT,
+        marginTop: '24px',
+        padding: '12px',
         backgroundColor: 'rgba(255,136,0,0.05)',
-        border: BORDERS.ORANGE,
+        border: `1px solid ${colors.primary}`,
         borderRadius: '2px'
       }}>
         <div style={{
-          fontSize: '9px',
+          fontSize: fontSize.tiny,
           fontWeight: 700,
-          color: FINCEPT.ORANGE,
+          color: colors.primary,
           letterSpacing: '0.5px',
           textTransform: 'uppercase' as const,
-          marginBottom: SPACING.MEDIUM
+          marginBottom: '12px'
         }}>
-          EXPORT OPTIONS
+          {t('reports.exportOptions')}
         </div>
 
-        <div style={{ display: 'flex', gap: SPACING.MEDIUM }}>
+        <div style={{ display: 'flex', gap: '12px' }}>
           <button style={{
-            ...COMMON_STYLES.buttonPrimary,
-            backgroundColor: FINCEPT.ORANGE,
-            color: FINCEPT.DARK_BG
+            padding: '8px 16px',
+            backgroundColor: colors.primary,
+            color: colors.background,
+            border: 'none',
+            borderRadius: '2px',
+            fontSize: fontSize.tiny,
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
           }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';
@@ -399,13 +442,21 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
             onMouseLeave={(e) => {
               e.currentTarget.style.opacity = '1';
             }}>
-            EXPORT TAX REPORT (PDF)
+            {t('reports.exportTaxReport')}
           </button>
 
           <button style={{
-            ...COMMON_STYLES.buttonPrimary,
-            backgroundColor: FINCEPT.GREEN,
-            color: FINCEPT.DARK_BG
+            padding: '8px 16px',
+            backgroundColor: colors.success,
+            color: colors.background,
+            border: 'none',
+            borderRadius: '2px',
+            fontSize: fontSize.tiny,
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
           }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';
@@ -413,13 +464,21 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
             onMouseLeave={(e) => {
               e.currentTarget.style.opacity = '1';
             }}>
-            EXPORT TRANSACTIONS (CSV)
+            {t('reports.exportTransactions')}
           </button>
 
           <button style={{
-            ...COMMON_STYLES.buttonPrimary,
-            backgroundColor: FINCEPT.CYAN,
-            color: FINCEPT.DARK_BG
+            padding: '8px 16px',
+            backgroundColor: 'var(--ft-color-accent, #00E5FF)',
+            color: colors.background,
+            border: 'none',
+            borderRadius: '2px',
+            fontSize: fontSize.tiny,
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
           }}
             onMouseEnter={(e) => {
               e.currentTarget.style.opacity = '0.85';
@@ -427,14 +486,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ portfolioSummary, transaction
             onMouseLeave={(e) => {
               e.currentTarget.style.opacity = '1';
             }}>
-            EXPORT HOLDINGS (XLSX)
+            {t('reports.exportHoldings')}
           </button>
         </div>
 
         <div style={{
-          marginTop: SPACING.MEDIUM,
-          fontSize: '9px',
-          color: FINCEPT.GRAY
+          marginTop: '12px',
+          fontSize: fontSize.tiny,
+          color: colors.textMuted
         }}>
           Reports are generated for the current tax year. Consult with a tax professional for accurate filing.
         </div>

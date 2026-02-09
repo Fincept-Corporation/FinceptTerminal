@@ -943,59 +943,31 @@ const SHOONYA_MASTER_URLS: &[(&str, &str)] = &[
 /// Download and cache Shoonya master contract
 #[tauri::command]
 pub async fn shoonya_download_master_contract() -> Result<ApiResponse<Value>, String> {
-    eprintln!("[shoonya_download_master_contract] Downloading master contract");
+    eprintln!("[shoonya_download_master_contract] Downloading master contract via unified system");
 
     let timestamp = chrono::Utc::now().timestamp();
-    let client = reqwest::Client::new();
-    let mut total_symbols = 0;
-    let mut segment_counts: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
 
-    for (exchange, url) in SHOONYA_MASTER_URLS {
-        eprintln!("[shoonya_download_master_contract] Downloading {}", exchange);
+    // Use the new unified broker downloads system
+    let result = crate::commands::broker_downloads::shoonya::shoonya_download_symbols().await;
 
-        match client.get(*url).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    let bytes = response.bytes().await.map_err(|e| format!("Failed to read response: {}", e))?;
-
-                    // Unzip and parse CSV
-                    match parse_shoonya_zip(&bytes, exchange) {
-                        Ok(symbols) => {
-                            let count = symbols.len() as i32;
-                            eprintln!("[shoonya_download_master_contract] Parsed {} symbols for {}", count, exchange);
-
-                            // Save to database
-                            if let Err(e) = shoonya_symbols::save_symbols_bulk(&symbols) {
-                                eprintln!("[shoonya_download_master_contract] Failed to save {} symbols: {}", exchange, e);
-                            } else {
-                                segment_counts.insert(exchange.to_string(), count);
-                                total_symbols += count;
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("[shoonya_download_master_contract] Failed to parse {}: {}", exchange, e);
-                        }
-                    }
-                } else {
-                    eprintln!("[shoonya_download_master_contract] Failed to download {}: {}", exchange, response.status());
-                }
-            }
-            Err(e) => {
-                eprintln!("[shoonya_download_master_contract] Request failed for {}: {}", exchange, e);
-            }
-        }
+    if result.success {
+        Ok(ApiResponse {
+            success: true,
+            data: Some(json!({
+                "total_symbols": result.total_symbols,
+                "message": result.message
+            })),
+            error: None,
+            timestamp,
+        })
+    } else {
+        Ok(ApiResponse {
+            success: false,
+            data: None,
+            error: Some(result.message),
+            timestamp,
+        })
     }
-
-    Ok(ApiResponse {
-        success: total_symbols > 0,
-        data: Some(json!({
-            "total_symbols": total_symbols,
-            "segments": segment_counts,
-            "message": format!("Downloaded {} symbols", total_symbols)
-        })),
-        error: if total_symbols == 0 { Some("Failed to download any symbols".to_string()) } else { None },
-        timestamp,
-    })
 }
 
 /// Parse Shoonya ZIP file containing symbol CSV

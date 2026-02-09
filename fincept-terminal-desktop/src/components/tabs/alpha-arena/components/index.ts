@@ -7,8 +7,6 @@ export { default as Leaderboard } from './Leaderboard';
 export { default as DecisionsPanel } from './DecisionsPanel';
 export { default as PerformanceChart } from './PerformanceChart';
 export { default as CompetitionControls } from './CompetitionControls';
-export { default as ApiKeysModal } from './ApiKeysModal';
-
 // Enhanced Alpha Arena Components
 export { default as HITLApprovalPanel } from './HITLApprovalPanel';
 export { default as SentimentPanel } from './SentimentPanel';

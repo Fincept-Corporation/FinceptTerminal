@@ -24,19 +24,7 @@ import {
   Filter
 } from 'lucide-react';
 import { qlibService } from '@/services/aiQuantLab/qlibService';
-
-// Fincept Terminal Color Palette - GREEN THEME
-const FINCEPT = {
-  GREEN: '#00D66F',    // Primary theme color for Live Signals
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  ORANGE: '#FF8800',
-  DARK_BG: '#0F0F0F',
-  PANEL_BG: '#0F0F0F',
-  CYAN: '#00E5FF',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface Signal {
   id: string;
@@ -50,6 +38,7 @@ interface Signal {
 }
 
 export function LiveSignalsPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [isStreaming, setIsStreaming] = useState(false);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [selectedModel, setSelectedModel] = useState('lightgbm');
@@ -138,19 +127,19 @@ export function LiveSignalsPanel() {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: FINCEPT.DARK_BG }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: colors.background }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Activity size={16} color={FINCEPT.GREEN} />
+        <Activity size={16} color={colors.success} />
         <span style={{
-          color: FINCEPT.GREEN,
+          color: colors.success,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -163,9 +152,9 @@ export function LiveSignalsPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: isStreaming ? FINCEPT.GREEN + '20' : FINCEPT.BORDER,
-          border: `1px solid ${isStreaming ? FINCEPT.GREEN : FINCEPT.BORDER}`,
-          color: isStreaming ? FINCEPT.GREEN : FINCEPT.WHITE,
+          backgroundColor: isStreaming ? colors.success + '20' : 'var(--ft-border-color, #2A2A2A)',
+          border: `1px solid ${isStreaming ? colors.success : 'var(--ft-border-color, #2A2A2A)'}`,
+          color: isStreaming ? colors.success : colors.text,
           opacity: isStreaming ? 1 : 0.5
         }}>
           {isStreaming ? '● STREAMING' : '○ OFFLINE'}
@@ -175,9 +164,9 @@ export function LiveSignalsPanel() {
             fontSize: '10px',
             fontFamily: 'monospace',
             padding: '3px 8px',
-            backgroundColor: FINCEPT.GREEN + '20',
-            border: `1px solid ${FINCEPT.GREEN}`,
-            color: FINCEPT.GREEN
+            backgroundColor: colors.success + '20',
+            border: `1px solid ${colors.success}`,
+            color: colors.success
           }}>
             {filteredSignals.length} SIGNALS
           </div>
@@ -188,17 +177,17 @@ export function LiveSignalsPanel() {
         {/* Left Panel - Configuration */}
         <div style={{
           width: '320px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.GREEN,
+            color: colors.success,
             fontFamily: 'monospace',
             letterSpacing: '0.5px'
           }}>
@@ -215,7 +204,7 @@ export function LiveSignalsPanel() {
                 gap: '6px',
                 fontSize: '9px',
                 fontWeight: 700,
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 marginBottom: '8px',
                 fontFamily: 'monospace',
@@ -231,9 +220,9 @@ export function LiveSignalsPanel() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  color: colors.text,
                   fontSize: '10px',
                   fontFamily: 'monospace',
                   fontWeight: 700,
@@ -258,7 +247,7 @@ export function LiveSignalsPanel() {
                 gap: '6px',
                 fontSize: '9px',
                 fontWeight: 700,
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 marginBottom: '8px',
                 fontFamily: 'monospace',
@@ -275,9 +264,9 @@ export function LiveSignalsPanel() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  color: colors.text,
                   fontSize: '10px',
                   fontFamily: 'monospace',
                   outline: 'none',
@@ -296,7 +285,7 @@ export function LiveSignalsPanel() {
                 gap: '6px',
                 fontSize: '9px',
                 fontWeight: 700,
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 marginBottom: '8px',
                 fontFamily: 'monospace',
@@ -317,9 +306,9 @@ export function LiveSignalsPanel() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  color: colors.text,
                   fontSize: '10px',
                   fontFamily: 'monospace',
                   fontWeight: 700,
@@ -338,7 +327,7 @@ export function LiveSignalsPanel() {
                 gap: '6px',
                 fontSize: '9px',
                 fontWeight: 700,
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 marginBottom: '8px',
                 fontFamily: 'monospace',
@@ -355,11 +344,11 @@ export function LiveSignalsPanel() {
                     style={{
                       flex: 1,
                       padding: '8px 12px',
-                      backgroundColor: signalFilter === filter ? FINCEPT.GREEN : FINCEPT.DARK_BG,
-                      border: `1px solid ${FINCEPT.BORDER}`,
-                      borderLeft: idx === 0 ? `1px solid ${FINCEPT.BORDER}` : '0',
+                      backgroundColor: signalFilter === filter ? colors.success : colors.background,
+                      border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                      borderLeft: idx === 0 ? `1px solid ${'var(--ft-border-color, #2A2A2A)'}` : '0',
                       marginLeft: idx === 0 ? '0' : '-1px',
-                      color: signalFilter === filter ? '#000000' : FINCEPT.WHITE,
+                      color: signalFilter === filter ? '#000000' : colors.text,
                       opacity: signalFilter === filter ? 1 : 0.7,
                       fontSize: '10px',
                       fontWeight: 700,
@@ -370,14 +359,14 @@ export function LiveSignalsPanel() {
                     }}
                     onMouseEnter={(e) => {
                       if (signalFilter !== filter) {
-                        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                        e.currentTarget.style.borderColor = FINCEPT.GREEN;
+                        e.currentTarget.style.backgroundColor = '#1F1F1F';
+                        e.currentTarget.style.borderColor = colors.success;
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (signalFilter !== filter) {
-                        e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                        e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                        e.currentTarget.style.backgroundColor = colors.background;
+                        e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                       }
                     }}
                   >
@@ -389,7 +378,7 @@ export function LiveSignalsPanel() {
           </div>
 
           {/* Action Buttons */}
-          <div style={{ borderTop: `1px solid ${FINCEPT.BORDER}`, padding: '12px', display: 'flex', gap: '8px' }}>
+          <div style={{ borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`, padding: '12px', display: 'flex', gap: '8px' }}>
             {!isStreaming ? (
               <button
                 onClick={handleStartStreaming}
@@ -397,9 +386,9 @@ export function LiveSignalsPanel() {
                 style={{
                   flex: 1,
                   padding: '12px 16px',
-                  backgroundColor: (!instruments || !selectedModel) ? FINCEPT.DARK_BG : FINCEPT.GREEN,
+                  backgroundColor: (!instruments || !selectedModel) ? colors.background : colors.success,
                   border: 'none',
-                  color: (!instruments || !selectedModel) ? FINCEPT.WHITE : '#000000',
+                  color: (!instruments || !selectedModel) ? colors.text : '#000000',
                   opacity: (!instruments || !selectedModel) ? 0.5 : 1,
                   fontSize: '11px',
                   fontWeight: 700,
@@ -432,9 +421,9 @@ export function LiveSignalsPanel() {
                 style={{
                   flex: 1,
                   padding: '12px 16px',
-                  backgroundColor: FINCEPT.RED,
+                  backgroundColor: colors.alert,
                   border: 'none',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   fontSize: '11px',
                   fontWeight: 700,
                   fontFamily: 'monospace',
@@ -461,16 +450,16 @@ export function LiveSignalsPanel() {
         </div>
 
         {/* Right Panel - Signals Feed */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.DARK_BG }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: colors.background }}>
           <div style={{
             padding: '10px 16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.GREEN,
+            color: colors.success,
             fontFamily: 'monospace',
             letterSpacing: '0.5px',
-            backgroundColor: FINCEPT.PANEL_BG,
+            backgroundColor: colors.panel,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
@@ -479,7 +468,7 @@ export function LiveSignalsPanel() {
             {filteredSignals.length > 0 && (
               <span style={{
                 fontSize: '9px',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5
               }}>
                 LAST UPDATE: {new Date().toLocaleTimeString()}
@@ -505,11 +494,11 @@ export function LiveSignalsPanel() {
               }}>
                 {isStreaming ? (
                   <>
-                    <RefreshCw size={32} color={FINCEPT.GREEN} style={{ animation: 'spin 2s linear infinite' }} />
+                    <RefreshCw size={32} color={colors.success} style={{ animation: 'spin 2s linear infinite' }} />
                     <div style={{
                       fontSize: '11px',
                       fontFamily: 'monospace',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.7,
                       textAlign: 'center',
                       letterSpacing: '0.5px'
@@ -519,7 +508,7 @@ export function LiveSignalsPanel() {
                     <div style={{
                       fontSize: '10px',
                       fontFamily: 'monospace',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.5,
                       textAlign: 'center',
                       letterSpacing: '0.5px'
@@ -531,11 +520,11 @@ export function LiveSignalsPanel() {
                   </>
                 ) : (
                   <>
-                    <Activity size={32} color={FINCEPT.BORDER} />
+                    <Activity size={32} color={'var(--ft-border-color, #2A2A2A)'} />
                     <div style={{
                       fontSize: '11px',
                       fontFamily: 'monospace',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.5,
                       textAlign: 'center',
                       letterSpacing: '0.5px'
@@ -566,24 +555,24 @@ style.textContent = `
 document.head.appendChild(style);
 
 function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
-  const signalColor = signal.signal === 'BUY' ? FINCEPT.GREEN : signal.signal === 'SELL' ? FINCEPT.RED : FINCEPT.WHITE;
+  const signalColor = signal.signal === 'BUY' ? 'var(--ft-color-success, #00D66F)' : signal.signal === 'SELL' ? 'var(--ft-color-alert, #FF3B3B)' : 'var(--ft-color-text, #FFFFFF)';
 
   return (
     <div
       style={{
         padding: '14px',
-        backgroundColor: FINCEPT.PANEL_BG,
-        border: `1px solid ${FINCEPT.BORDER}`,
-        borderTop: isFirst ? `1px solid ${FINCEPT.BORDER}` : '0',
+        backgroundColor: 'var(--ft-color-panel, #0F0F0F)',
+        border: '1px solid var(--ft-border-color, #2A2A2A)',
+        borderTop: isFirst ? '1px solid var(--ft-border-color, #2A2A2A)' : '0',
         borderLeft: `3px solid ${signalColor}`,
         marginTop: isFirst ? '0' : '-1px',
         transition: 'all 0.15s'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
+        e.currentTarget.style.backgroundColor = '#1F1F1F';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
+        e.currentTarget.style.backgroundColor = 'var(--ft-color-panel, #0F0F0F)';
       }}
     >
       {/* Header Row */}
@@ -597,8 +586,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
           <span style={{
             fontSize: '14px',
             fontWeight: 700,
-            fontFamily: 'monospace',
-            color: FINCEPT.WHITE
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-text, #FFFFFF)'
           }}>
             {signal.instrument}
           </span>
@@ -608,7 +597,7 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
             color: '#000000',
             fontSize: '9px',
             fontWeight: 700,
-            fontFamily: 'monospace',
+            fontFamily: 'var(--ft-font-family, monospace)',
             letterSpacing: '0.5px'
           }}>
             {signal.signal}
@@ -619,8 +608,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
           alignItems: 'center',
           gap: '6px',
           fontSize: '9px',
-          fontFamily: 'monospace',
-          color: FINCEPT.WHITE,
+          fontFamily: 'var(--ft-font-family, monospace)',
+          color: 'var(--ft-color-text, #FFFFFF)',
           opacity: 0.5
         }}>
           <Clock size={12} />
@@ -638,8 +627,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
         <div>
           <div style={{
             fontSize: '9px',
-            fontFamily: 'monospace',
-            color: FINCEPT.WHITE,
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-text, #FFFFFF)',
             opacity: 0.5,
             marginBottom: '4px',
             letterSpacing: '0.5px'
@@ -649,7 +638,7 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
           <div style={{
             fontSize: '11px',
             fontWeight: 700,
-            fontFamily: 'monospace',
+            fontFamily: 'var(--ft-font-family, monospace)',
             color: signalColor
           }}>
             {signal.score.toFixed(4)}
@@ -659,8 +648,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
         <div>
           <div style={{
             fontSize: '9px',
-            fontFamily: 'monospace',
-            color: FINCEPT.WHITE,
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-text, #FFFFFF)',
             opacity: 0.5,
             marginBottom: '4px',
             letterSpacing: '0.5px'
@@ -670,8 +659,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
           <div style={{
             fontSize: '11px',
             fontWeight: 700,
-            fontFamily: 'monospace',
-            color: FINCEPT.WHITE
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-text, #FFFFFF)'
           }}>
             ${signal.price.toFixed(2)}
           </div>
@@ -680,8 +669,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
         <div>
           <div style={{
             fontSize: '9px',
-            fontFamily: 'monospace',
-            color: FINCEPT.WHITE,
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-text, #FFFFFF)',
             opacity: 0.5,
             marginBottom: '4px',
             letterSpacing: '0.5px'
@@ -691,8 +680,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
           <div style={{
             fontSize: '11px',
             fontWeight: 700,
-            fontFamily: 'monospace',
-            color: FINCEPT.CYAN
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-accent, #00E5FF)'
           }}>
             {(signal.confidence * 100).toFixed(1)}%
           </div>
@@ -701,8 +690,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
         <div>
           <div style={{
             fontSize: '9px',
-            fontFamily: 'monospace',
-            color: FINCEPT.WHITE,
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-text, #FFFFFF)',
             opacity: 0.5,
             marginBottom: '4px',
             letterSpacing: '0.5px'
@@ -712,8 +701,8 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
           <div style={{
             fontSize: '11px',
             fontWeight: 700,
-            fontFamily: 'monospace',
-            color: FINCEPT.GREEN,
+            fontFamily: 'var(--ft-font-family, monospace)',
+            color: 'var(--ft-color-success, #00D66F)',
             textTransform: 'uppercase'
           }}>
             {signal.model}
@@ -725,9 +714,9 @@ function SignalCard({ signal, isFirst }: { signal: Signal; isFirst: boolean }) {
       <div style={{
         width: '100%',
         height: '3px',
-        backgroundColor: FINCEPT.DARK_BG,
+        backgroundColor: 'var(--ft-color-background, #000000)',
         overflow: 'hidden',
-        border: `1px solid ${FINCEPT.BORDER}`
+        border: '1px solid var(--ft-border-color, #2A2A2A)'
       }}>
         <div
           style={{

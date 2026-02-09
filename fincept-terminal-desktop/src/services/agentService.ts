@@ -28,14 +28,66 @@ export interface AgentConfig {
   instructions?: string;
   tools?: string[];
   name?: string;
-  memory?: { enabled: boolean };
-  reasoning?: boolean | { strategy: string };
+  // Memory: basic toggle or detailed config
+  memory?: boolean | {
+    enabled: boolean;
+    db_path?: string;
+    table_name?: string;
+    create_user_memories?: boolean;
+    create_session_summary?: boolean;
+  };
+  // Knowledge Base (RAG)
+  knowledge?: {
+    enabled: boolean;
+    type?: 'url' | 'pdf' | 'text' | 'combined';
+    urls?: string[];
+    vector_db?: string;
+    embedder?: string;
+  };
+  // Reasoning: basic toggle or detailed config
+  reasoning?: boolean | {
+    enabled: boolean;
+    strategy?: string;
+    min_steps?: number;
+    max_steps?: number;
+    model?: { provider: string; model_id: string };
+  };
+  // Guardrails
+  guardrails?: boolean | {
+    enabled: boolean;
+    pii_detection?: boolean;
+    injection_check?: boolean;
+    financial_compliance?: boolean;
+  };
+  // Agentic Memory (separate from session memory)
+  agentic_memory?: boolean | {
+    enabled: boolean;
+    user_id?: string;
+  };
+  // Storage/Session persistence
+  storage?: {
+    enabled: boolean;
+    type?: 'sqlite' | 'postgres';
+    db_path?: string;
+    table_name?: string;
+  };
+  // Tracing for debugging
+  tracing?: boolean;
+  // Compression for token optimization
+  compression?: boolean;
+  // Hooks for pre/post processing
+  hooks?: boolean;
+  // Evaluation
+  evaluation?: boolean;
+  // Structured output model name
+  output_model?: string;
   debug?: boolean;
 }
 
 export interface TeamConfig {
   name: string;
   mode: 'coordinate' | 'route' | 'collaborate';
+  model?: AgentConfig['model'];  // Coordinator model for team orchestration
   members: Array<{
     name: string;
     role?: string;
@@ -43,6 +95,8 @@ export interface TeamConfig {
     tools?: string[];
     instructions?: string;
   }>;
+  show_members_responses?: boolean;
+  leader_index?: number; // Index of the leader agent in members list
 }
 
 export interface AgentPayload {
@@ -695,7 +749,7 @@ export async function searchKnowledge(
   limit: number = 5
 ): Promise<AgentResponse<{ results: any[]; count: number }>> {
   return execute({
-    action: 'search',
+    action: 'search_knowledge',
     params: { query, limit },
   });
 }
@@ -812,7 +866,7 @@ export async function getOutputModels(forceRefresh = false): Promise<string[]> {
     if (cached) return cached;
   }
 
-  const response = await execute<{ models: string[] }>({ action: 'list_outputs' });
+  const response = await execute<{ models: string[] }>({ action: 'list_output_models' });
 
   if (response.success && response.data?.models) {
     cache.set(cacheKey, response.data.models, 10 * 60 * 1000);
@@ -828,6 +882,216 @@ export async function getOutputModels(forceRefresh = false): Promise<string[]> {
     'market_analysis',
     'research_report',
   ];
+}
+
+// =============================================================================
+// Workflow Execution
+// =============================================================================
+
+/**
+ * Run a workflow (DAG of agent steps)
+ */
+export async function runWorkflow(
+  workflowConfig: Record<string, any>,
+  inputData: Record<string, any> = {},
+  apiKeys?: Record<string, string>,
+): Promise<AgentResponse> {
+  return execute({
+    action: 'run_workflow',
+    api_keys: apiKeys,
+    params: { workflow_config: workflowConfig, input_data: inputData },
+  });
+}
+
+// =============================================================================
+// Dynamic Agent Management
+// =============================================================================
+
+/**
+ * List agents by category
+ */
+export async function listAgents(
+  category?: string,
+): Promise<AgentResponse<{ agents: any[]; count: number; categories: string[] }>> {
+  return execute({
+    action: 'list_agents',
+    params: { category },
+  });
+}
+
+/**
+ * Create a dynamic agent from registry
+ */
+export async function createAgent(
+  agentId: string,
+  apiKeys?: Record<string, string>,
+  config?: Record<string, any>,
+): Promise<AgentResponse<{ agent_id: string; created: boolean }>> {
+  return execute({
+    action: 'create_agent',
+    api_keys: apiKeys,
+    config: config as any,
+    params: { agent_id: agentId },
+  });
+}
+
+// =============================================================================
+// Multi-Query Routing
+// =============================================================================
+
+/**
+ * Execute a query with multi-agent routing (routes to multiple agents)
+ */
+export async function executeMultiQuery(
+  query: string,
+  apiKeys?: Record<string, string>,
+  sessionId?: string,
+  aggregate = true,
+): Promise<AgentResponse> {
+  return execute({
+    action: 'execute_multi_query',
+    api_keys: apiKeys,
+    params: { query, session_id: sessionId, aggregate },
+  });
+}
+
+// =============================================================================
+// Portfolio Plan
+// =============================================================================
+
+/**
+ * Create a portfolio rebalancing plan
+ */
+export async function createPortfolioPlan(
+  portfolioId: string,
+): Promise<AgentResponse<{ plan: any }>> {
+  return execute({
+    action: 'create_portfolio_plan',
+    params: { portfolio_id: portfolioId },
+  });
+}
+
+// =============================================================================
+// Paper Trading
+// =============================================================================
+
+/**
+ * Execute a paper trade
+ */
+export async function paperExecuteTrade(
+  portfolioId: string,
+  symbol: string,
+  action: 'buy' | 'sell',
+  quantity: number,
+  price: number,
+): Promise<AgentResponse> {
+  return execute({
+    action: 'paper_execute_trade',
+    params: { portfolio_id: portfolioId, symbol, action, quantity, price },
+  });
+}
+
+/**
+ * Get paper trading portfolio value
+ */
+export async function paperGetPortfolio(
+  portfolioId: string,
+): Promise<AgentResponse> {
+  return execute({
+    action: 'paper_get_portfolio',
+    params: { portfolio_id: portfolioId },
+  });
+}
+
+/**
+ * Get paper trading positions
+ */
+export async function paperGetPositions(
+  portfolioId: string,
+): Promise<AgentResponse> {
+  return execute({
+    action: 'paper_get_positions',
+    params: { portfolio_id: portfolioId },
+  });
+}
+
+// =============================================================================
+// Session Management
+// =============================================================================
+
+/**
+ * Save an agent session
+ */
+export async function saveSession(
+  sessionData: { agent_id: string; user_id?: string; messages?: any[]; status?: string },
+): Promise<AgentResponse<{ session_id: string }>> {
+  return execute({
+    action: 'save_session',
+    params: sessionData,
+  });
+}
+
+/**
+ * Get an agent session by ID
+ */
+export async function getSession(
+  sessionId: string,
+): Promise<AgentResponse<{ session: any }>> {
+  return execute({
+    action: 'get_session',
+    params: { session_id: sessionId },
+  });
+}
+
+/**
+ * Add a message to an agent session
+ */
+export async function addSessionMessage(
+  sessionId: string,
+  role: 'user' | 'assistant' | 'system',
+  content: string,
+): Promise<AgentResponse> {
+  return execute({
+    action: 'add_message',
+    params: { session_id: sessionId, role, content },
+  });
+}
+
+// =============================================================================
+// Repository Memory Operations
+// =============================================================================
+
+/**
+ * Save a memory to the repository (persistent, searchable)
+ */
+export async function saveMemoryRepo(
+  content: string,
+  options?: {
+    agent_id?: string;
+    user_id?: string;
+    type?: string;
+    metadata?: Record<string, any>;
+    importance?: number;
+  },
+): Promise<AgentResponse<{ memory_id: string }>> {
+  return execute({
+    action: 'save_memory',
+    params: { content, ...options },
+  });
+}
+
+/**
+ * Search memories in the repository
+ */
+export async function searchMemoriesRepo(
+  query: string,
+  agentId?: string,
+  limit = 10,
+): Promise<AgentResponse<{ memories: any[] }>> {
+  return execute({
+    action: 'search_memories',
+    params: { query, agent_id: agentId, limit },
+  });
 }
 
 // =============================================================================
@@ -868,7 +1132,7 @@ export async function prewarmAgent(): Promise<void> {
 }
 
 /**
- * Build agent config from UI state
+ * Build agent config from UI state — wires ALL CoreAgent features
  */
 export function buildAgentConfig(
   provider: string,
@@ -878,11 +1142,22 @@ export function buildAgentConfig(
     tools?: string[];
     temperature?: number;
     maxTokens?: number;
-    reasoning?: boolean;
-    memory?: boolean;
+    // Core features
+    reasoning?: boolean | { enabled: boolean; strategy?: string; min_steps?: number; max_steps?: number; model?: { provider: string; model_id: string } };
+    memory?: boolean | { enabled: boolean; db_path?: string; table_name?: string; create_user_memories?: boolean; create_session_summary?: boolean };
+    // Advanced features
+    knowledge?: AgentConfig['knowledge'];
+    guardrails?: boolean | { enabled: boolean; pii_detection?: boolean; injection_check?: boolean; financial_compliance?: boolean };
+    agentic_memory?: boolean | { enabled: boolean; user_id?: string };
+    storage?: AgentConfig['storage'];
+    tracing?: boolean;
+    compression?: boolean;
+    hooks?: boolean;
+    evaluation?: boolean;
+    output_model?: string;
   }
 ): AgentConfig {
-  return {
+  const config: AgentConfig = {
     model: {
       provider,
       model_id: modelId,
@@ -891,9 +1166,54 @@ export function buildAgentConfig(
     },
     instructions,
     tools: options?.tools ?? [],
-    reasoning: options?.reasoning,
-    memory: options?.memory ? { enabled: true } : undefined,
   };
+
+  // Memory
+  if (options?.memory) {
+    config.memory = typeof options.memory === 'boolean'
+      ? { enabled: true }
+      : options.memory;
+  }
+
+  // Reasoning
+  if (options?.reasoning) {
+    config.reasoning = typeof options.reasoning === 'boolean'
+      ? true
+      : options.reasoning;
+  }
+
+  // Knowledge Base
+  if (options?.knowledge?.enabled) {
+    config.knowledge = options.knowledge;
+  }
+
+  // Guardrails
+  if (options?.guardrails) {
+    config.guardrails = typeof options.guardrails === 'boolean'
+      ? { enabled: true }
+      : options.guardrails;
+  }
+
+  // Agentic Memory
+  if (options?.agentic_memory) {
+    config.agentic_memory = typeof options.agentic_memory === 'boolean'
+      ? { enabled: true }
+      : options.agentic_memory;
+  }
+
+  // Storage
+  if (options?.storage?.enabled) {
+    config.storage = options.storage;
+  }
+
+  // Simple toggles
+  if (options?.tracing) config.tracing = true;
+  if (options?.compression) config.compression = true;
+  if (options?.hooks) config.hooks = true;
+  if (options?.evaluation) config.evaluation = true;
+  if (options?.output_model) config.output_model = options.output_model;
+
+  return config;
 }
 
 /**
@@ -909,11 +1229,18 @@ export function buildTeamConfig(
     modelId: string;
     tools?: string[];
     instructions?: string;
-  }>
+  }>,
+  options?: {
+    coordinatorModel?: { provider: string; model_id: string };
+    show_members_responses?: boolean;
+    leader_index?: number;
+  }
 ): TeamConfig {
-  return {
+  const config: TeamConfig = {
     name,
     mode,
+    // Coordinator model for team orchestration (uses first member's model if not specified)
+    model: options?.coordinatorModel || (members.length > 0 ? { provider: members[0].provider, model_id: members[0].modelId } : undefined),
     members: members.map(m => ({
       name: m.name,
       role: m.role,
@@ -922,6 +1249,15 @@ export function buildTeamConfig(
       instructions: m.instructions,
     })),
   };
+
+  if (options?.show_members_responses) {
+    config.show_members_responses = true;
+  }
+  if (options?.leader_index !== undefined && options.leader_index >= 0) {
+    config.leader_index = options.leader_index;
+  }
+
+  return config;
 }
 
 // =============================================================================
@@ -1188,6 +1524,33 @@ export const agentService = {
   // Trade Decisions (v2.1)
   saveTradeDecision,
   getTradeDecisions,
+
+  // Workflows
+  runWorkflow,
+
+  // Dynamic Agent Management
+  listAgents,
+  createAgent,
+
+  // Multi-Query Routing
+  executeMultiQuery,
+
+  // Portfolio Plan
+  createPortfolioPlan,
+
+  // Paper Trading
+  paperExecuteTrade,
+  paperGetPortfolio,
+  paperGetPositions,
+
+  // Session Management
+  saveSession,
+  getSession,
+  addSessionMessage,
+
+  // Repository Memory
+  saveMemoryRepo,
+  searchMemoriesRepo,
 
   // Utils
   clearCache,

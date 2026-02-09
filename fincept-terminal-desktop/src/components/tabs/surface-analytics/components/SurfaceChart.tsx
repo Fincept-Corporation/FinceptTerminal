@@ -1,13 +1,13 @@
 /**
  * Surface Analytics - 3D Surface Chart Component
  * Renders Plotly 3D surface visualizations
- * Follows UI Design System (UI_DESIGN_SYSTEM.md)
  */
 
 import React, { Suspense, lazy, useMemo } from 'react';
 import { RefreshCw, AlertCircle, TrendingUp } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import type { ChartType, VolatilitySurfaceData, CorrelationMatrixData, YieldCurveData, PCAData } from '../types';
-import { FINCEPT_COLORS, TYPOGRAPHY } from '../constants';
 
 // Lazy load Plotly
 const Plot = lazy(() => import('react-plotly.js'));
@@ -59,6 +59,9 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
   fontFamily,
   isDemoMode = false,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors, fontSize } = useTerminalTheme();
+
   const plotConfig = useMemo(() => ({
     displayModeBar: true,
     displaylogo: false,
@@ -71,42 +74,42 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
     len: 0.85,
     thickness: 18,
     x: 1.02,
-    bgcolor: FINCEPT_COLORS.BLACK,
+    bgcolor: colors.background,
     bordercolor: accentColor,
     borderwidth: 1,
-  }), [textColor, accentColor]);
+  }), [textColor, accentColor, colors.background]);
 
   const sceneConfig = useMemo(() => ({
-    bgcolor: FINCEPT_COLORS.BLACK,
+    bgcolor: colors.background,
     xaxis: {
-      gridcolor: FINCEPT_COLORS.BORDER,
+      gridcolor: colors.textMuted,
       color: textColor,
       titlefont: { size: 12, color: accentColor },
       tickfont: { size: 10 },
       showbackground: true,
-      backgroundcolor: FINCEPT_COLORS.PANEL_BG,
+      backgroundcolor: colors.panel,
     },
     yaxis: {
-      gridcolor: FINCEPT_COLORS.BORDER,
+      gridcolor: colors.textMuted,
       color: textColor,
       titlefont: { size: 12, color: accentColor },
       tickfont: { size: 10 },
       showbackground: true,
-      backgroundcolor: FINCEPT_COLORS.PANEL_BG,
+      backgroundcolor: colors.panel,
     },
     zaxis: {
-      gridcolor: FINCEPT_COLORS.BORDER,
+      gridcolor: colors.textMuted,
       color: textColor,
       titlefont: { size: 12, color: accentColor },
       tickfont: { size: 10 },
       showbackground: true,
-      backgroundcolor: FINCEPT_COLORS.PANEL_BG,
+      backgroundcolor: colors.panel,
     },
     camera: {
       eye: { x: 1.6, y: 1.6, z: 1.4 },
       center: { x: 0, y: 0, z: 0 },
     },
-  }), [textColor, accentColor]);
+  }), [textColor, accentColor, colors.background, colors.panel, colors.textMuted]);
 
   const baseLayout = useMemo(() => ({
     autosize: true,
@@ -115,11 +118,11 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
     plot_bgcolor: 'transparent',
     margin: { l: 10, r: 10, t: 10, b: 10 },
     hoverlabel: {
-      bgcolor: FINCEPT_COLORS.BORDER,
+      bgcolor: colors.textMuted,
       bordercolor: accentColor,
       font: { family: fontFamily, color: textColor, size: 11 },
     },
-  }), [textColor, accentColor, fontFamily]);
+  }), [textColor, accentColor, fontFamily, colors.textMuted]);
 
   const renderVolatilitySurface = () => {
     if (!volatilityData) return null;
@@ -136,15 +139,15 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
             title: { text: 'IV %', font: { size: 11, color: accentColor } },
             ...colorbarConfig,
           },
-          hovertemplate: '<b>STRIKE:</b> %{x:.1f}<br><b>DTE:</b> %{y:.0f}<br><b>IV:</b> %{z:.2f}%<extra></extra>'
+          hovertemplate: `<b>${t('chart.strike')}:</b> %{x:.1f}<br><b>${t('chart.dte')}:</b> %{y:.0f}<br><b>${t('chart.iv')}:</b> %{z:.2f}%<extra></extra>`
         } as any]}
         layout={{
           ...baseLayout,
           scene: {
             ...sceneConfig,
-            xaxis: { ...sceneConfig.xaxis, title: 'STRIKE PRICE' },
-            yaxis: { ...sceneConfig.yaxis, title: 'DAYS TO EXPIRY' },
-            zaxis: { ...sceneConfig.zaxis, title: 'IMPLIED VOL (%)' },
+            xaxis: { ...sceneConfig.xaxis, title: t('chart.strikePrice') },
+            yaxis: { ...sceneConfig.yaxis, title: t('chart.daysToExpiry') },
+            zaxis: { ...sceneConfig.zaxis, title: t('chart.impliedVol') },
           }
         } as any}
         config={plotConfig}
@@ -167,15 +170,15 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
             title: { text: 'ρ', font: { size: 12, color: accentColor } },
             ...colorbarConfig,
           },
-          hovertemplate: '<b>CORRELATION:</b> %{z:.3f}<extra></extra>'
+          hovertemplate: `<b>${t('chart.correlation')}:</b> %{z:.3f}<extra></extra>`
         } as any]}
         layout={{
           ...baseLayout,
           scene: {
             ...sceneConfig,
-            xaxis: { ...sceneConfig.xaxis, title: 'ASSET PAIR INDEX' },
-            yaxis: { ...sceneConfig.yaxis, title: 'TIME (DAYS)' },
-            zaxis: { ...sceneConfig.zaxis, title: 'CORRELATION COEFF' },
+            xaxis: { ...sceneConfig.xaxis, title: t('chart.assetPairIndex') },
+            yaxis: { ...sceneConfig.yaxis, title: t('chart.timeDays') },
+            zaxis: { ...sceneConfig.zaxis, title: t('chart.correlationCoeff') },
           }
         } as any}
         config={plotConfig}
@@ -200,15 +203,15 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
             title: { text: 'YIELD %', font: { size: 11, color: accentColor } },
             ...colorbarConfig,
           },
-          hovertemplate: '<b>MATURITY:</b> %{x}M<br><b>YIELD:</b> %{z:.2f}%<extra></extra>'
+          hovertemplate: `<b>${t('chart.maturity')}:</b> %{x}M<br><b>${t('chart.yield')}:</b> %{z:.2f}%<extra></extra>`
         } as any]}
         layout={{
           ...baseLayout,
           scene: {
             ...sceneConfig,
-            xaxis: { ...sceneConfig.xaxis, title: 'MATURITY (MONTHS)' },
-            yaxis: { ...sceneConfig.yaxis, title: 'HISTORICAL DAYS' },
-            zaxis: { ...sceneConfig.zaxis, title: 'YIELD (%)' },
+            xaxis: { ...sceneConfig.xaxis, title: t('chart.maturityMonths') },
+            yaxis: { ...sceneConfig.yaxis, title: t('chart.historicalDays') },
+            zaxis: { ...sceneConfig.zaxis, title: t('chart.yieldPercent') },
           }
         } as any}
         config={plotConfig}
@@ -228,18 +231,18 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
           z: pcaData.z,
           colorscale: COLOR_SCALES.pca,
           colorbar: {
-            title: { text: 'LOADING', font: { size: 11, color: accentColor } },
+            title: { text: t('chart.loading'), font: { size: 11, color: accentColor } },
             ...colorbarConfig,
           },
-          hovertemplate: '<b>LOADING:</b> %{z:.3f}<extra></extra>'
+          hovertemplate: `<b>${t('chart.loading')}:</b> %{z:.3f}<extra></extra>`
         } as any]}
         layout={{
           ...baseLayout,
           scene: {
             ...sceneConfig,
-            xaxis: { ...sceneConfig.xaxis, title: 'PRINCIPAL COMPONENT' },
-            yaxis: { ...sceneConfig.yaxis, title: 'ASSET INDEX' },
-            zaxis: { ...sceneConfig.zaxis, title: 'FACTOR LOADING' },
+            xaxis: { ...sceneConfig.xaxis, title: t('chart.principalComponent') },
+            yaxis: { ...sceneConfig.yaxis, title: t('chart.assetIndex') },
+            zaxis: { ...sceneConfig.zaxis, title: t('chart.factorLoading') },
           }
         } as any}
         config={plotConfig}
@@ -253,16 +256,16 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
     switch (chartType) {
       case 'volatility':
         return volatilityData
-          ? `${volatilityData.underlying} OPTIONS - IMPLIED VOLATILITY SURFACE`
-          : 'IMPLIED VOLATILITY SURFACE';
+          ? `${volatilityData.underlying} ${t('chartTitles.optionsIvSurface')}`
+          : t('chartTitles.ivSurface');
       case 'correlation':
         return correlationData
-          ? `MULTI-ASSET CORRELATION MATRIX - ${correlationData.window} DAY ROLLING`
-          : 'MULTI-ASSET CORRELATION MATRIX';
+          ? `${t('chartTitles.correlationMatrix')} - ${correlationData.window} ${t('chartTitles.dayRolling')}`
+          : t('chartTitles.correlationMatrix');
       case 'yield-curve':
-        return 'U.S. TREASURY YIELD CURVE - HISTORICAL EVOLUTION';
+        return t('chartTitles.yieldCurve');
       case 'pca':
-        return 'PRINCIPAL COMPONENT ANALYSIS - FACTOR LOADINGS';
+        return t('chartTitles.pcaFactors');
       default:
         return '';
     }
@@ -270,7 +273,7 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
 
   const getDataSource = (): string => {
     if (isDemoMode) {
-      return 'DEMO DATA (SYNTHETIC)';
+      return t('demoDataSynthetic');
     }
     switch (chartType) {
       case 'volatility':
@@ -299,12 +302,12 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
           <RefreshCw size={32} className="animate-spin" style={{ color: accentColor }} />
           <span style={{
             marginTop: '16px',
-            fontSize: TYPOGRAPHY.BODY_SIZE,
-            color: FINCEPT_COLORS.MUTED,
-            fontFamily: TYPOGRAPHY.FONT_FAMILY,
+            fontSize: fontSize.body,
+            color: colors.textMuted,
+            fontFamily,
             letterSpacing: '0.5px',
           }}>
-            LOADING DATA...
+            {t('loadingData')}
           </span>
         </div>
       );
@@ -346,18 +349,18 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
       const isAccessError = error.toLowerCase().includes('403') || error.toLowerCase().includes('access');
       const isNotFoundError = error.toLowerCase().includes('404') || error.toLowerCase().includes('not found');
 
-      let errorTitle = 'FAILED TO LOAD DATA';
+      let errorTitle = t('errors.failedToLoad');
       let errorHelp = '';
 
       if (isAuthError) {
-        errorTitle = 'AUTHENTICATION FAILED';
-        errorHelp = 'Your Databento API key may be invalid, expired, or missing required permissions. Please verify your key at databento.com/portal/api-keys';
+        errorTitle = t('errors.authFailed');
+        errorHelp = t('errors.authFailedHelp');
       } else if (isAccessError) {
-        errorTitle = 'ACCESS DENIED';
-        errorHelp = 'Your API key may not have access to this dataset. OPRA options data requires specific permissions.';
+        errorTitle = t('errors.accessDenied');
+        errorHelp = t('errors.accessDeniedHelp');
       } else if (isNotFoundError) {
-        errorTitle = 'SYMBOL NOT FOUND';
-        errorHelp = 'The requested symbol was not found. Try a different symbol like SPY, AAPL, or QQQ.';
+        errorTitle = t('errors.symbolNotFound');
+        errorHelp = t('errors.symbolNotFoundHelp');
       }
 
       return (
@@ -375,24 +378,24 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: `${FINCEPT_COLORS.RED}20`,
+            backgroundColor: `${colors.alert}20`,
             borderRadius: '50%',
             marginBottom: '16px',
           }}>
-            <AlertCircle size={24} style={{ color: FINCEPT_COLORS.RED }} />
+            <AlertCircle size={24} style={{ color: colors.alert }} />
           </div>
           <div style={{
-            fontSize: TYPOGRAPHY.HEADER_SIZE,
+            fontSize: fontSize.body,
             fontWeight: 700,
-            color: FINCEPT_COLORS.RED,
+            color: colors.alert,
             marginBottom: '8px',
           }}>
             {errorTitle}
           </div>
           {errorHelp && (
             <span style={{
-              fontSize: TYPOGRAPHY.BODY_SIZE,
-              color: FINCEPT_COLORS.YELLOW,
+              fontSize: fontSize.body,
+              color: colors.warning,
               textAlign: 'center',
               maxWidth: '500px',
               lineHeight: '1.5',
@@ -402,15 +405,15 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
             </span>
           )}
           <span style={{
-            fontSize: '9px',
-            color: FINCEPT_COLORS.MUTED,
+            fontSize: fontSize.tiny,
+            color: colors.textMuted,
             textAlign: 'center',
             maxWidth: '500px',
             lineHeight: '1.5',
             padding: '8px',
-            backgroundColor: FINCEPT_COLORS.DARK_BG,
-            border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-            borderRadius: '2px',
+            backgroundColor: colors.background,
+            border: `1px solid ${colors.textMuted}`,
+            borderRadius: 'var(--ft-border-radius)',
             fontFamily: 'monospace',
           }}>
             {error}
@@ -427,13 +430,13 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         height: '100%',
-        color: FINCEPT_COLORS.MUTED,
-        fontSize: TYPOGRAPHY.BODY_SIZE,
+        color: colors.textMuted,
+        fontSize: fontSize.body,
         textAlign: 'center',
       }}>
         <TrendingUp size={48} style={{ marginBottom: '16px', opacity: 0.3 }} />
-        <div style={{ fontWeight: 700, marginBottom: '8px' }}>NO DATA LOADED</div>
-        <span>Click REFRESH to fetch data</span>
+        <div style={{ fontWeight: 700, marginBottom: '8px' }}>{t('noDataLoaded')}</div>
+        <span>{t('clickRefresh')}</span>
       </div>
     );
   };
@@ -453,24 +456,24 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '8px 12px',
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
           flexShrink: 0,
         }}
       >
         <div style={{
-          fontSize: TYPOGRAPHY.LABEL_SIZE,
+          fontSize: fontSize.tiny,
           fontWeight: 700,
           color: accentColor,
           letterSpacing: '0.5px',
-          fontFamily: TYPOGRAPHY.FONT_FAMILY,
+          fontFamily,
         }}>
           {getChartTitle()}
         </div>
         <div style={{
-          fontSize: TYPOGRAPHY.LABEL_SIZE,
-          color: FINCEPT_COLORS.CYAN,
-          fontFamily: TYPOGRAPHY.FONT_FAMILY,
+          fontSize: fontSize.tiny,
+          color: colors.info,
+          fontFamily,
         }}>
           {getDataSource()}
         </div>
@@ -480,7 +483,7 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
       <div style={{
         flex: 1,
         overflow: 'hidden',
-        backgroundColor: FINCEPT_COLORS.BLACK,
+        backgroundColor: colors.background,
       }}>
         {renderContent()}
       </div>

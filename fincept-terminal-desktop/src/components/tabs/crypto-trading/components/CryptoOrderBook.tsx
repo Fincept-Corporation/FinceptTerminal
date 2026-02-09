@@ -2,28 +2,25 @@
 // Direct Kraken WebSocket connection with incremental updates
 import React, { useCallback, useRef, useEffect, memo, useState } from 'react';
 import { FINCEPT } from '../constants';
-import type { RightPanelViewType } from '../types';
 import { VolumeProfile } from '../../trading/charts';
-import { ModelChatPanel } from '../../trading/ai-agents/ModelChatPanel';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 const NUM_LEVELS = 12;
+
+type OrderBookViewType = 'orderbook' | 'volume';
 
 interface CryptoOrderBookProps {
   currentPrice: number;
   selectedSymbol: string;
   activeBroker: string | null;
-  rightPanelView: RightPanelViewType;
-  onViewChange: (view: RightPanelViewType) => void;
 }
 
 export const CryptoOrderBook = memo(function CryptoOrderBook({
   currentPrice,
   selectedSymbol,
   activeBroker,
-  rightPanelView,
-  onViewChange,
 }: CryptoOrderBookProps) {
+  const [activeView, setActiveView] = useState<OrderBookViewType>('orderbook');
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -262,10 +259,6 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
     }
   }, [currentPrice]);
 
-  const handleViewChange = useCallback((view: RightPanelViewType) => {
-    onViewChange(view);
-  }, [onViewChange]);
-
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: FINCEPT.PANEL_BG }}>
       <style>{`
@@ -360,17 +353,17 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
         backgroundColor: FINCEPT.HEADER_BG,
       }}>
         <div style={{ display: 'flex' }}>
-          {(['orderbook', 'volume', 'modelchat'] as RightPanelViewType[]).map((view) => (
+          {(['orderbook', 'volume'] as OrderBookViewType[]).map((view) => (
             <button
               key={view}
-              className={`tab-btn ${rightPanelView === view ? 'active' : ''}`}
-              onClick={() => handleViewChange(view)}
+              className={`tab-btn ${activeView === view ? 'active' : ''}`}
+              onClick={() => setActiveView(view)}
             >
-              {view === 'orderbook' ? 'ORDER BOOK' : view === 'volume' ? 'VOLUME' : 'AI CHAT'}
+              {view === 'orderbook' ? 'ORDER BOOK' : 'VOLUME'}
             </button>
           ))}
         </div>
-        {rightPanelView === 'orderbook' && (
+        {activeView === 'orderbook' && (
           <div style={{ padding: '0 12px', fontSize: '9px', color: FINCEPT.GRAY }}>
             <span ref={levelCountRef}>0</span> levels
           </div>
@@ -378,7 +371,7 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
       </div>
 
       {/* Order Book Content */}
-      {rightPanelView === 'orderbook' && (
+      {activeView === 'orderbook' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Connection Status */}
           <div style={{
@@ -497,19 +490,10 @@ export const CryptoOrderBook = memo(function CryptoOrderBook({
       )}
 
       {/* Volume Profile View */}
-      {rightPanelView === 'volume' && (
+      {activeView === 'volume' && (
         <div style={{ flex: 1, overflow: 'hidden', padding: '8px' }}>
           <ErrorBoundary name="VolumeProfile" variant="minimal">
             <VolumeProfile symbol={selectedSymbol} height={500} />
-          </ErrorBoundary>
-        </div>
-      )}
-
-      {/* AI Chat View */}
-      {rightPanelView === 'modelchat' && (
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <ErrorBoundary name="ModelChatPanel" variant="minimal">
-            <ModelChatPanel refreshInterval={5000} />
           </ErrorBoundary>
         </div>
       )}

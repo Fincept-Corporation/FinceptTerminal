@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { PortfolioSummary, portfolioService } from '../../../../services/portfolio/portfolioService';
 import {
   formatPercent,
@@ -8,13 +10,14 @@ import {
   calculateMaxDrawdown,
   calculateVaR
 } from './utils';
-import { FINCEPT, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, EFFECTS } from '../finceptStyles';
 
 interface RiskMetricsViewProps {
   portfolioSummary: PortfolioSummary;
 }
 
 const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) => {
+  const { t } = useTranslation('portfolio');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [loading, setLoading] = useState(true);
   const [portfolioReturns, setPortfolioReturns] = useState<number[]>([]);
   const [portfolioValues, setPortfolioValues] = useState<number[]>([]);
@@ -75,27 +78,27 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
 
   // Risk level determination
   const getRiskLevel = (sharpe: number) => {
-    if (sharpe > 2) return { level: 'LOW', color: FINCEPT.GREEN };
-    if (sharpe > 1) return { level: 'MODERATE', color: FINCEPT.YELLOW };
-    if (sharpe > 0) return { level: 'HIGH', color: FINCEPT.ORANGE };
-    return { level: 'VERY HIGH', color: FINCEPT.RED };
+    if (sharpe > 2) return { level: t('risk.low'), color: colors.success };
+    if (sharpe > 1) return { level: t('risk.moderate'), color: 'var(--ft-color-warning, #FFD700)' };
+    if (sharpe > 0) return { level: t('risk.high'), color: colors.primary };
+    return { level: t('risk.veryHigh'), color: colors.alert };
   };
 
   const riskLevel = getRiskLevel(sharpeRatio);
 
   const getBetaRating = (beta: number) => {
-    if (beta < 0.8) return { rating: 'DEFENSIVE', color: FINCEPT.BLUE };
-    if (beta < 1.2) return { rating: 'NEUTRAL', color: FINCEPT.CYAN };
-    return { rating: 'AGGRESSIVE', color: FINCEPT.ORANGE };
+    if (beta < 0.8) return { rating: t('risk.defensive'), color: 'var(--ft-color-blue, #3B82F6)' };
+    if (beta < 1.2) return { rating: t('risk.neutral'), color: 'var(--ft-color-accent, #00E5FF)' };
+    return { rating: t('risk.aggressive'), color: colors.primary };
   };
 
   const betaRating = getBetaRating(beta);
 
   const getVolatilityRating = (vol: number) => {
-    if (vol < 10) return { rating: 'LOW', color: FINCEPT.GREEN };
-    if (vol < 20) return { rating: 'MODERATE', color: FINCEPT.YELLOW };
-    if (vol < 30) return { rating: 'HIGH', color: FINCEPT.ORANGE };
-    return { rating: 'VERY HIGH', color: FINCEPT.RED };
+    if (vol < 10) return { rating: t('risk.low'), color: colors.success };
+    if (vol < 20) return { rating: t('risk.moderate'), color: 'var(--ft-color-warning, #FFD700)' };
+    if (vol < 30) return { rating: t('risk.high'), color: colors.primary };
+    return { rating: t('risk.veryHigh'), color: colors.alert };
   };
 
   const volatilityRating = getVolatilityRating(volatility);
@@ -104,15 +107,15 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
     return (
       <div style={{
         height: '100%',
-        backgroundColor: FINCEPT.DARK_BG,
+        backgroundColor: colors.background,
         padding: '24px',
         textAlign: 'center',
-        fontFamily: TYPOGRAPHY.MONO
+        fontFamily
       }}>
-        <div style={{ color: FINCEPT.ORANGE, fontSize: '11px', marginBottom: '4px' }}>
+        <div style={{ color: colors.primary, fontSize: fontSize.tiny, marginBottom: '4px' }}>
           Loading risk metrics...
         </div>
-        <div style={{ color: FINCEPT.GRAY, fontSize: '10px' }}>
+        <div style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
           Calculating portfolio risk from historical data
         </div>
       </div>
@@ -122,20 +125,24 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
   return (
     <div style={{
       height: '100%',
-      backgroundColor: FINCEPT.DARK_BG,
+      backgroundColor: colors.background,
       padding: '12px',
       overflow: 'auto',
-      fontFamily: TYPOGRAPHY.MONO
+      fontFamily
     }}>
       <div style={{
-        ...COMMON_STYLES.sectionHeader,
         padding: '12px',
-        backgroundColor: FINCEPT.HEADER_BG,
-        borderBottom: BORDERS.STANDARD,
+        backgroundColor: 'var(--ft-color-header, #1A1A1A)',
+        borderBottom: '1px solid var(--ft-color-border, #2A2A2A)',
+        color: colors.primary,
+        fontSize: fontSize.body,
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        textTransform: 'uppercase' as const,
         marginBottom: '16px',
         borderRadius: '2px'
       }}>
-        RISK METRICS & ANALYTICS {hasInsufficientData && '(LIMITED DATA)'}
+        {t('risk.riskMetrics')} {hasInsufficientData && t('risk.limitedData')}
       </div>
 
       {hasInsufficientData && (
@@ -143,13 +150,13 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           padding: '8px',
           marginBottom: '12px',
           backgroundColor: 'rgba(255,136,0,0.1)',
-          border: `1px solid ${FINCEPT.ORANGE}`,
+          border: `1px solid ${colors.primary}`,
           borderRadius: '2px',
-          fontSize: '10px',
-          color: FINCEPT.ORANGE
+          fontSize: fontSize.tiny,
+          color: colors.primary
         }}>
-          [WARN] <strong>INSUFFICIENT HISTORICAL DATA:</strong> Risk metrics require at least 5 days of portfolio snapshots for accurate calculations.
-          Current data points: {portfolioReturns.length}. Metrics shown are preliminary.
+          {t('risk.insufficientData')} {t('risk.insufficientDataDesc')}
+          {t('risk.currentDataPoints')} {portfolioReturns.length}. {t('risk.metricsShownPreliminary')}
         </div>
       )}
 
@@ -164,32 +171,32 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
         <div
           style={{
             padding: '12px',
-            backgroundColor: hoveredCard === 'risk' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
+            backgroundColor: hoveredCard === 'risk' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
             border: `2px solid ${riskLevel.color}`,
             borderRadius: '2px',
-            transition: EFFECTS.TRANSITION_STANDARD
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={() => setHoveredCard('risk')}
           onMouseLeave={() => setHoveredCard(null)}
         >
           <div style={{
-            color: FINCEPT.GRAY,
-            fontSize: '9px',
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
             fontWeight: 700,
             letterSpacing: '0.5px',
             textTransform: 'uppercase',
             marginBottom: '4px'
-          }}>OVERALL RISK</div>
+          }}>{t('risk.overallRisk')}</div>
           <div style={{
             color: riskLevel.color,
-            fontSize: '16px',
+            fontSize: fontSize.heading,
             fontWeight: 700,
             marginBottom: '2px'
           }}>
             {riskLevel.level}
           </div>
-          <div style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>
-            Based on Sharpe Ratio: {sharpeRatio.toFixed(2)}
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
+            {t('risk.sharpeRatio')}: {sharpeRatio.toFixed(2)}
           </div>
         </div>
 
@@ -197,32 +204,32 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
         <div
           style={{
             padding: '12px',
-            backgroundColor: hoveredCard === 'beta-overview' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
+            backgroundColor: hoveredCard === 'beta-overview' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
             border: `2px solid ${betaRating.color}`,
             borderRadius: '2px',
-            transition: EFFECTS.TRANSITION_STANDARD
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={() => setHoveredCard('beta-overview')}
           onMouseLeave={() => setHoveredCard(null)}
         >
           <div style={{
-            color: FINCEPT.GRAY,
-            fontSize: '9px',
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
             fontWeight: 700,
             letterSpacing: '0.5px',
             textTransform: 'uppercase',
             marginBottom: '4px'
-          }}>MARKET SENSITIVITY</div>
+          }}>{t('risk.marketSensitivity')}</div>
           <div style={{
             color: betaRating.color,
-            fontSize: '16px',
+            fontSize: fontSize.heading,
             fontWeight: 700,
             marginBottom: '2px'
           }}>
             {betaRating.rating}
           </div>
-          <div style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>
-            Beta: {beta.toFixed(2)}
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
+            {t('risk.beta')}: {beta.toFixed(2)}
           </div>
         </div>
 
@@ -230,31 +237,31 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
         <div
           style={{
             padding: '12px',
-            backgroundColor: hoveredCard === 'vol-overview' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
+            backgroundColor: hoveredCard === 'vol-overview' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
             border: `2px solid ${volatilityRating.color}`,
             borderRadius: '2px',
-            transition: EFFECTS.TRANSITION_STANDARD
+            transition: 'all 0.2s ease'
           }}
           onMouseEnter={() => setHoveredCard('vol-overview')}
           onMouseLeave={() => setHoveredCard(null)}
         >
           <div style={{
-            color: FINCEPT.GRAY,
-            fontSize: '9px',
+            color: colors.textMuted,
+            fontSize: fontSize.tiny,
             fontWeight: 700,
             letterSpacing: '0.5px',
             textTransform: 'uppercase',
             marginBottom: '4px'
-          }}>VOLATILITY</div>
+          }}>{t('risk.volatility')}</div>
           <div style={{
             color: volatilityRating.color,
-            fontSize: '16px',
+            fontSize: fontSize.heading,
             fontWeight: 700,
             marginBottom: '2px'
           }}>
             {volatilityRating.rating}
           </div>
-          <div style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>
+          <div style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
             Annualized: {volatility.toFixed(2)}%
           </div>
         </div>
@@ -265,16 +272,16 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
         {/* Left Column - Return Metrics */}
         <div>
           <div style={{
-            color: FINCEPT.ORANGE,
-            fontSize: '11px',
+            color: colors.primary,
+            fontSize: fontSize.tiny,
             fontWeight: 700,
             letterSpacing: '0.5px',
             textTransform: 'uppercase',
             marginBottom: '8px',
             paddingBottom: '4px',
-            borderBottom: `1px solid ${FINCEPT.ORANGE}`
+            borderBottom: `1px solid ${colors.primary}`
           }}>
-            RISK-ADJUSTED RETURNS
+            {t('risk.riskAdjustedReturns')}
           </div>
 
           {/* Sharpe Ratio */}
@@ -282,10 +289,10 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             style={{
               padding: '8px',
               marginBottom: '8px',
-              backgroundColor: hoveredCard === 'sharpe' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-              border: BORDERS.STANDARD,
+              backgroundColor: hoveredCard === 'sharpe' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
               borderRadius: '2px',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={() => setHoveredCard('sharpe')}
             onMouseLeave={() => setHoveredCard(null)}
@@ -293,25 +300,25 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{
-                  color: FINCEPT.CYAN,
-                  fontSize: '10px',
+                  color: 'var(--ft-color-accent, #00E5FF)',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   letterSpacing: '0.5px',
                   textTransform: 'uppercase'
-                }}>SHARPE RATIO</div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                }}>{t('risk.sharpeRatio')}</div>
+                <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginTop: '2px' }}>
                   Risk-adjusted return measure
                 </div>
               </div>
               <div style={{
-                color: sharpeRatio > 1 ? FINCEPT.GREEN : sharpeRatio > 0 ? FINCEPT.YELLOW : FINCEPT.RED,
-                fontSize: '16px',
+                color: sharpeRatio > 1 ? colors.success : sharpeRatio > 0 ? 'var(--ft-color-warning, #FFD700)' : colors.alert,
+                fontSize: fontSize.heading,
                 fontWeight: 700
               }}>
                 {sharpeRatio.toFixed(3)}
               </div>
             </div>
-            <div style={{ marginTop: '4px', fontSize: '9px', color: FINCEPT.GRAY }}>
+            <div style={{ marginTop: '4px', fontSize: fontSize.tiny, color: colors.textMuted }}>
               {'> 2: Excellent | 1-2: Good | 0-1: Fair | < 0: Poor'}
             </div>
           </div>
@@ -321,10 +328,10 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             style={{
               padding: '8px',
               marginBottom: '8px',
-              backgroundColor: hoveredCard === 'beta' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-              border: BORDERS.STANDARD,
+              backgroundColor: hoveredCard === 'beta' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
               borderRadius: '2px',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={() => setHoveredCard('beta')}
             onMouseLeave={() => setHoveredCard(null)}
@@ -332,21 +339,21 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{
-                  color: FINCEPT.CYAN,
-                  fontSize: '10px',
+                  color: 'var(--ft-color-accent, #00E5FF)',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   letterSpacing: '0.5px',
                   textTransform: 'uppercase'
-                }}>BETA ({'\u03B2'})</div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                }}>{t('risk.beta')} ({'\u03B2'})</div>
+                <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginTop: '2px' }}>
                   Market correlation coefficient
                 </div>
               </div>
-              <div style={{ color: betaRating.color, fontSize: '16px', fontWeight: 700 }}>
+              <div style={{ color: betaRating.color, fontSize: fontSize.heading, fontWeight: 700 }}>
                 {beta.toFixed(3)}
               </div>
             </div>
-            <div style={{ marginTop: '4px', fontSize: '9px', color: FINCEPT.GRAY }}>
+            <div style={{ marginTop: '4px', fontSize: fontSize.tiny, color: colors.textMuted }}>
               {'< 1: Less volatile | 1: Market neutral | > 1: More volatile'}
             </div>
           </div>
@@ -355,10 +362,10 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           <div
             style={{
               padding: '8px',
-              backgroundColor: hoveredCard === 'volatility' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-              border: BORDERS.STANDARD,
+              backgroundColor: hoveredCard === 'volatility' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
               borderRadius: '2px',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={() => setHoveredCard('volatility')}
             onMouseLeave={() => setHoveredCard(null)}
@@ -366,21 +373,21 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{
-                  color: FINCEPT.CYAN,
-                  fontSize: '10px',
+                  color: 'var(--ft-color-accent, #00E5FF)',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   letterSpacing: '0.5px',
                   textTransform: 'uppercase'
-                }}>VOLATILITY</div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                }}>{t('risk.volatility')}</div>
+                <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginTop: '2px' }}>
                   Annualized standard deviation
                 </div>
               </div>
-              <div style={{ color: volatilityRating.color, fontSize: '16px', fontWeight: 700 }}>
+              <div style={{ color: volatilityRating.color, fontSize: fontSize.heading, fontWeight: 700 }}>
                 {volatility.toFixed(2)}%
               </div>
             </div>
-            <div style={{ marginTop: '4px', fontSize: '9px', color: FINCEPT.GRAY }}>
+            <div style={{ marginTop: '4px', fontSize: fontSize.tiny, color: colors.textMuted }}>
               Lower volatility indicates more stable returns
             </div>
           </div>
@@ -389,16 +396,16 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
         {/* Right Column - Risk Metrics */}
         <div>
           <div style={{
-            color: FINCEPT.ORANGE,
-            fontSize: '11px',
+            color: colors.primary,
+            fontSize: fontSize.tiny,
             fontWeight: 700,
             letterSpacing: '0.5px',
             textTransform: 'uppercase',
             marginBottom: '8px',
             paddingBottom: '4px',
-            borderBottom: `1px solid ${FINCEPT.ORANGE}`
+            borderBottom: `1px solid ${colors.primary}`
           }}>
-            DOWNSIDE RISK METRICS
+            {t('risk.downsideRiskMetrics')}
           </div>
 
           {/* Maximum Drawdown */}
@@ -406,10 +413,10 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             style={{
               padding: '8px',
               marginBottom: '8px',
-              backgroundColor: hoveredCard === 'drawdown' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-              border: BORDERS.STANDARD,
+              backgroundColor: hoveredCard === 'drawdown' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
               borderRadius: '2px',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={() => setHoveredCard('drawdown')}
             onMouseLeave={() => setHoveredCard(null)}
@@ -417,25 +424,25 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{
-                  color: FINCEPT.CYAN,
-                  fontSize: '10px',
+                  color: 'var(--ft-color-accent, #00E5FF)',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   letterSpacing: '0.5px',
                   textTransform: 'uppercase'
-                }}>MAX DRAWDOWN</div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                }}>{t('risk.maxDrawdown')}</div>
+                <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginTop: '2px' }}>
                   Largest peak-to-trough decline
                 </div>
               </div>
               <div style={{
-                color: maxDrawdown > 20 ? FINCEPT.RED : maxDrawdown > 10 ? FINCEPT.ORANGE : FINCEPT.GREEN,
-                fontSize: '16px',
+                color: maxDrawdown > 20 ? colors.alert : maxDrawdown > 10 ? colors.primary : colors.success,
+                fontSize: fontSize.heading,
                 fontWeight: 700
               }}>
                 -{maxDrawdown.toFixed(2)}%
               </div>
             </div>
-            <div style={{ marginTop: '4px', fontSize: '9px', color: FINCEPT.GRAY }}>
+            <div style={{ marginTop: '4px', fontSize: fontSize.tiny, color: colors.textMuted }}>
               Maximum loss from peak value
             </div>
           </div>
@@ -445,10 +452,10 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             style={{
               padding: '8px',
               marginBottom: '8px',
-              backgroundColor: hoveredCard === 'var' ? FINCEPT.HOVER : FINCEPT.PANEL_BG,
-              border: BORDERS.STANDARD,
+              backgroundColor: hoveredCard === 'var' ? 'var(--ft-color-hover, #1F1F1F)' : colors.panel,
+              border: '1px solid var(--ft-color-border, #2A2A2A)',
               borderRadius: '2px',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={() => setHoveredCard('var')}
             onMouseLeave={() => setHoveredCard(null)}
@@ -456,25 +463,25 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{
-                  color: FINCEPT.CYAN,
-                  fontSize: '10px',
+                  color: 'var(--ft-color-accent, #00E5FF)',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   letterSpacing: '0.5px',
                   textTransform: 'uppercase'
-                }}>VALUE AT RISK (95%)</div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                }}>{t('risk.valueAtRisk')}</div>
+                <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginTop: '2px' }}>
                   Expected loss at 95% confidence
                 </div>
               </div>
               <div style={{
-                color: var95 < -0.03 ? FINCEPT.RED : var95 < -0.02 ? FINCEPT.ORANGE : FINCEPT.YELLOW,
-                fontSize: '16px',
+                color: var95 < -0.03 ? colors.alert : var95 < -0.02 ? colors.primary : 'var(--ft-color-warning, #FFD700)',
+                fontSize: fontSize.heading,
                 fontWeight: 700
               }}>
                 {(var95 * 100).toFixed(2)}%
               </div>
             </div>
-            <div style={{ marginTop: '4px', fontSize: '9px', color: FINCEPT.GRAY }}>
+            <div style={{ marginTop: '4px', fontSize: fontSize.tiny, color: colors.textMuted }}>
               5% chance of losing more than this in a day
             </div>
           </div>
@@ -486,7 +493,7 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
               backgroundColor: hoveredCard === 'composite' ? 'rgba(255,59,59,0.08)' : 'rgba(255,59,59,0.05)',
               border: `2px solid ${riskLevel.color}`,
               borderRadius: '2px',
-              transition: EFFECTS.TRANSITION_STANDARD
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={() => setHoveredCard('composite')}
             onMouseLeave={() => setHoveredCard(null)}
@@ -495,16 +502,16 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
               <div>
                 <div style={{
                   color: riskLevel.color,
-                  fontSize: '10px',
+                  fontSize: fontSize.tiny,
                   fontWeight: 700,
                   letterSpacing: '0.5px',
                   textTransform: 'uppercase'
-                }}>COMPOSITE RISK SCORE</div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '2px' }}>
+                }}>{t('risk.compositeRiskScore')}</div>
+                <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginTop: '2px' }}>
                   Weighted risk assessment
                 </div>
               </div>
-              <div style={{ color: riskLevel.color, fontSize: '16px', fontWeight: 700 }}>
+              <div style={{ color: riskLevel.color, fontSize: fontSize.heading, fontWeight: 700 }}>
                 {((1 / (sharpeRatio + 1)) * 100).toFixed(0)}/100
               </div>
             </div>
@@ -512,7 +519,7 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
               <div style={{
                 width: '100%',
                 height: '8px',
-                backgroundColor: FINCEPT.HOVER,
+                backgroundColor: 'var(--ft-color-hover, #1F1F1F)',
                 borderRadius: '2px',
                 overflow: 'hidden'
               }}>
@@ -532,25 +539,25 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
       <div style={{
         padding: '12px',
         backgroundColor: 'rgba(255,136,0,0.05)',
-        border: `1px solid ${FINCEPT.ORANGE}`,
+        border: `1px solid ${colors.primary}`,
         borderRadius: '2px'
       }}>
         <div style={{
-          color: FINCEPT.ORANGE,
-          fontSize: '11px',
+          color: colors.primary,
+          fontSize: fontSize.tiny,
           fontWeight: 700,
           letterSpacing: '0.5px',
           textTransform: 'uppercase',
           marginBottom: '8px'
         }}>
-          RISK MANAGEMENT RECOMMENDATIONS
+          {t('risk.riskManagementRecommendations')}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           {sharpeRatio < 1 && (
             <div style={{
-              fontSize: '10px',
-              color: FINCEPT.WHITE,
+              fontSize: fontSize.tiny,
+              color: colors.text,
               padding: '4px',
               backgroundColor: 'rgba(255,59,59,0.1)',
               borderRadius: '2px'
@@ -560,8 +567,8 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           )}
           {beta > 1.5 && (
             <div style={{
-              fontSize: '10px',
-              color: FINCEPT.WHITE,
+              fontSize: fontSize.tiny,
+              color: colors.text,
               padding: '4px',
               backgroundColor: 'rgba(255,136,0,0.1)',
               borderRadius: '2px'
@@ -571,8 +578,8 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           )}
           {volatility > 25 && (
             <div style={{
-              fontSize: '10px',
-              color: FINCEPT.WHITE,
+              fontSize: fontSize.tiny,
+              color: colors.text,
               padding: '4px',
               backgroundColor: 'rgba(255,59,59,0.1)',
               borderRadius: '2px'
@@ -582,8 +589,8 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           )}
           {maxDrawdown > 20 && (
             <div style={{
-              fontSize: '10px',
-              color: FINCEPT.WHITE,
+              fontSize: fontSize.tiny,
+              color: colors.text,
               padding: '4px',
               backgroundColor: 'rgba(255,59,59,0.1)',
               borderRadius: '2px'
@@ -593,8 +600,8 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           )}
           {sharpeRatio > 2 && (
             <div style={{
-              fontSize: '10px',
-              color: FINCEPT.WHITE,
+              fontSize: fontSize.tiny,
+              color: colors.text,
               padding: '4px',
               backgroundColor: 'rgba(0,214,111,0.1)',
               borderRadius: '2px'
@@ -604,8 +611,8 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           )}
           {beta >= 0.8 && beta <= 1.2 && (
             <div style={{
-              fontSize: '10px',
-              color: FINCEPT.WHITE,
+              fontSize: fontSize.tiny,
+              color: colors.text,
               padding: '4px',
               backgroundColor: 'rgba(0,229,255,0.1)',
               borderRadius: '2px'
@@ -620,13 +627,13 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
       <div style={{
         marginTop: '12px',
         padding: '8px',
-        backgroundColor: FINCEPT.HOVER,
-        border: BORDERS.STANDARD,
+        backgroundColor: 'var(--ft-color-hover, #1F1F1F)',
+        border: '1px solid var(--ft-color-border, #2A2A2A)',
         borderRadius: '2px',
-        fontSize: '9px',
-        color: FINCEPT.GRAY
+        fontSize: fontSize.tiny,
+        color: colors.textMuted
       }}>
-        <strong style={{ color: FINCEPT.ORANGE }}>DISCLAIMER:</strong> Risk metrics are calculated from portfolio snapshot history.
+        <strong style={{ color: colors.primary }}>{t('risk.disclaimer')}</strong> Risk metrics are calculated from portfolio snapshot history.
         {hasInsufficientData && ' More data points are needed for statistically significant results.'}
         {' '}Beta calculations use portfolio returns as market proxy until real market benchmarks are integrated.
         Past performance does not guarantee future results. Consult a financial advisor before making investment decisions.

@@ -214,8 +214,8 @@ class RenaissanceTechnologiesSystem:
         stat_arb_analysis = run_stat_arb_analysis(
             ticker=ticker,
             prices=inputs["prices"],
-            intrinsic_estimates=None,  # Would need analyst estimates
-            peer_prices=None,  # Would need peer selection
+            intrinsic_estimates=None,  # TODO: Integrate analyst estimates API
+            peer_prices=None,  # TODO: Integrate peer/sector data API
             metrics=inputs["metrics"]
         )
 

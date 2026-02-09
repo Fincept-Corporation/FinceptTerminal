@@ -80,6 +80,12 @@ export function PositionsTable() {
     );
   }
 
+  // Calculate totals
+  const totalPnl = positions.reduce((sum, pos) => sum + (pos.unrealizedPnl || 0), 0);
+  const totalNotional = positions.reduce((sum, pos) => sum + (pos.notionalValue || pos.entryPrice * pos.quantity || 0), 0);
+  const totalPnlPercent = totalNotional > 0 ? (totalPnl / totalNotional) * 100 : 0;
+  const totalPnlFormatted = formatPnL(totalPnl);
+
   return (
     <div style={{ width: '100%', overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
@@ -205,6 +211,39 @@ export function PositionsTable() {
             );
           })}
         </tbody>
+        {/* Total Row */}
+        {positions.length > 0 && (
+          <tfoot>
+            <tr style={{
+              borderTop: `2px solid ${FINCEPT.BORDER}`,
+              backgroundColor: FINCEPT.HEADER_BG,
+            }}>
+              <td style={{ padding: '10px', color: FINCEPT.ORANGE, fontWeight: 700, fontSize: '10px' }}>
+                TOTAL
+              </td>
+              <td style={{ padding: '10px', color: FINCEPT.GRAY, fontSize: '9px' }}>
+                {positions.length} position{positions.length !== 1 ? 's' : ''}
+              </td>
+              <td style={{ padding: '10px' }} />
+              <td style={{ padding: '10px' }} />
+              <td style={{ padding: '10px' }} />
+              <td style={{
+                padding: '10px',
+                textAlign: 'right',
+                color: totalPnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED,
+                fontWeight: 700,
+                fontSize: '11px',
+              }}>
+                {totalPnlFormatted.text}
+                <div style={{ fontSize: '8px', color: totalPnl >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>
+                  ({totalPnl >= 0 ? '+' : ''}{totalPnlPercent.toFixed(2)}%)
+                </div>
+              </td>
+              {capabilities.supportsLeverage && <td style={{ padding: '10px' }} />}
+              <td style={{ padding: '10px' }} />
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );

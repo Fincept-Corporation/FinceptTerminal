@@ -481,6 +481,10 @@ def run_ic_deliberation(json_str: str) -> str:
             historical_decisions=historical_decisions,
         ))
 
+        # Get model config for response
+        from .config import get_config
+        cfg = get_config()
+
         return success_response({
             "deliberation_id": result.deliberation_id,
             "subject": result.subject,
@@ -502,6 +506,11 @@ def run_ic_deliberation(json_str: str) -> str:
             "pros": result.pros,
             "cons": result.cons,
             "reasoning_summary": result.reasoning_chain_summary,
+            "llm_config": {
+                "provider": cfg.models.provider.value,
+                "model_id": cfg.models.model_id,
+                "temperature": cfg.models.temperature,
+            },
         }, f"IC Decision: {result.decision}")
 
     except Exception as e:
@@ -568,17 +577,37 @@ def analyze_signal(json_str: str) -> str:
 
         # Include IC deliberation if requested
         if include_deliberation:
+            # Calculate p-value from statistical significance
+            p_value = 1 - (decision.signal_score / 10.0)  # Convert 0-10 scale to p-value
+            p_value = max(0.001, min(0.5, p_value))  # Clamp between 0.001 and 0.5
+
             delib_result = run_ic_deliberation(json.dumps({
                 "signal": {
                     "ticker": ticker,
                     "direction": decision.signal.value,
-                    "signal_type": "combined",
-                    "p_value": 0.01,  # Placeholder
+                    "signal_type": data.get("signal_type", "combined"),
+                    "p_value": p_value,  # Use calculated p-value
                     "confidence": decision.confidence / 100,
                     "expected_return_bps": decision.statistical_edge * 10000,
+                    "average_daily_volume": 10_000_000,  # TODO: Fetch from yfinance/market data API
+                },
+                "signal_evaluation": {
+                    "statistical_quality": "good" if p_value < 0.02 else "moderate" if p_value < 0.05 else "weak",
+                    "overall_score": decision.signal_score * 10,  # Convert to 0-100 scale
+                },
+                "risk_assessment": {
+                    "risk_level": "high" if decision.risk_score < 4 else "medium" if decision.risk_score < 7 else "low",
+                    "var_utilization_pct": 50.0,  # TODO: Calculate from portfolio VaR
+                    "risk_flags": decision.risks,
+                    "sector_concentrations": {},  # TODO: Calculate from portfolio holdings
                 },
                 "sizing_recommendation": {
                     "final_size_pct": decision.position_sizing.recommended_size_pct,
+                    "final_notional": trade_value,
+                },
+                "market_context": {
+                    "vix": 20.0,  # TODO: Fetch real-time VIX from market data
+                    "regime": "bullish" if decision.signal.value == "long" else "bearish" if decision.signal.value == "short" else "neutral",
                 },
             }))
             result["ic_deliberation"] = json.loads(delib_result).get("data", {})

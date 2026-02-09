@@ -19,7 +19,13 @@
   },
   "messages": {
     "loadingFeeds": "Loading news feeds...",
-    "breaking": "BREAKING"
+    "breaking": "BREAKING",
+    "loadingFeedsModal": "Loading feeds...",
+    "failedToLoad": "Failed to load RSS feeds",
+    "noCustomFeeds": "No custom feeds yet. Add your first RSS feed above.",
+    "allFeedsDeleted": "All feeds have been deleted. Add a new feed or restore defaults.",
+    "allDefaultFeedsDeleted": "You have deleted all {{count}} default feeds. Click below to restore them.",
+    "defaultFeedsInfo": "Default RSS feeds included with Fincept Terminal. Toggle or remove as needed."
   },
   "feeds": {
     "primary": "PRIMARY NEWS FEED",
@@ -28,5 +34,57 @@
   },
   "analytics": {
     "title": "REAL-TIME NEWS ANALYTICS"
+  },
+  "rssSettings": {
+    "title": "RSS FEED SETTINGS",
+    "subtitle": "MANAGE YOUR NEWS SOURCES",
+    "close": "CLOSE",
+    "myFeeds": "MY FEEDS",
+    "defaultFeeds": "DEFAULT FEEDS",
+    "noFeedsAvailable": "NO RSS FEEDS AVAILABLE",
+    "allDefaultsDeleted": "ALL DEFAULT FEEDS DELETED",
+    "addNewFeed": "ADD NEW FEED",
+    "addNewRssFeed": "ADD NEW RSS FEED",
+    "editRssFeed": "EDIT RSS FEED",
+    "restoreDefaults": "RESTORE DEFAULTS",
+    "restoreAll": "RESTORE ALL",
+    "restoreAllDefaultFeeds": "RESTORE ALL DEFAULT FEEDS",
+    "displayName": "DISPLAY NAME",
+    "sourceName": "SOURCE NAME (SHORT)",
+    "feedUrl": "RSS FEED URL",
+    "category": "CATEGORY",
+    "region": "REGION",
+    "required": "*",
+    "testUrl": "TEST URL",
+    "testing": "TESTING...",
+    "valid": "VALID",
+    "cancel": "CANCEL",
+    "saving": "SAVING...",
+    "addFeed": "ADD FEED",
+    "updateFeed": "UPDATE FEED",
+    "on": "ON",
+    "off": "OFF",
+    "default": "DEFAULT",
+    "total": "TOTAL",
+    "active": "ACTIVE",
+    "custom": "CUSTOM",
+    "placeholders": {
+      "displayName": "e.g., Bloomberg Markets",
+      "sourceName": "e.g., BLOOMBERG",
+      "feedUrl": "https://example.com/rss/feed"
+    },
+    "errors": {
+      "nameRequired": "Name is required",
+      "sourceRequired": "Source name is required",
+      "invalidUrl": "Please enter a valid URL",
+      "invalidRss": "URL does not appear to be a valid RSS feed",
+      "testFailed": "Failed to test URL",
+      "addFailed": "Failed to add feed",
+      "updateFailed": "Failed to update feed"
+    },
+    "confirmDelete": {
+      "title": "Delete this RSS feed?",
+      "message": "This action cannot be undone."
+    }
   }
 }

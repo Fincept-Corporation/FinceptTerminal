@@ -162,22 +162,7 @@ pub async fn execute_agent_streaming(
     }).to_string())
 }
 
-/// Cancel an active stream
-#[tauri::command]
-pub async fn cancel_agent_stream(stream_id: String) -> Result<String, String> {
-    let streams = ACTIVE_STREAMS.read().await;
-
-    if let Some(cancel_flag) = streams.get(&stream_id) {
-        cancel_flag.store(true, Ordering::Relaxed);
-        Ok(serde_json::json!({
-            "success": true,
-            "stream_id": stream_id,
-            "status": "cancelled"
-        }).to_string())
-    } else {
-        Err(format!("Stream {} not found or already completed", stream_id))
-    }
-}
+// cancel_agent_stream is defined in agents.rs
 
 /// Execute multiple agent tasks in parallel
 ///
@@ -305,8 +290,8 @@ pub async fn get_active_agent_streams() -> Result<String, String> {
     }).to_string())
 }
 
-/// Internal: Execute with streaming callback (simulated for now)
-/// In production, this would use a named pipe or socket to get streaming output
+/// Internal: Execute with real streaming via stdout line-by-line reading
+/// Python script must print lines with flush=True for real-time output
 async fn execute_with_stream_callback<F>(
     app: &AppHandle,
     script_name: &str,
@@ -316,27 +301,83 @@ async fn execute_with_stream_callback<F>(
 where
     F: FnMut(&str, &str, Option<serde_json::Value>) -> bool + Send + 'static,
 {
-    // For now, execute normally and emit result as single chunk
-    // Future: Use named pipes or Unix sockets for true streaming
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
 
-    // Emit thinking indicator
-    callback("thinking", "Processing your request...", None);
+    let script_path = crate::python::get_script_path(app, script_name)?;
+    let python_path = crate::python::get_python_path(app, None)?;
 
-    let result = crate::python::execute(app, script_name, args).await?;
+    let mut cmd = Command::new(&python_path);
+    cmd.arg(&script_path)
+        .args(&args)
+        .arg("--stream")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
-    // Parse and emit tokens (simulated chunking for now)
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&result) {
-        if let Some(response) = parsed.get("response").and_then(|r| r.as_str()) {
-            // Emit in chunks for smoother UI
-            for chunk in response.chars().collect::<Vec<_>>().chunks(50) {
-                let chunk_str: String = chunk.iter().collect();
-                if !callback("token", &chunk_str, None) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let mut child = cmd.spawn()
+        .map_err(|e| format!("Failed to spawn Python: {}", e))?;
+
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to capture stdout".to_string())?;
+
+    let reader = BufReader::new(stdout);
+    let mut full_output = String::new();
+
+    // Read stdout line by line and invoke callback
+    for line in reader.lines() {
+        match line {
+            Ok(line_content) => {
+                let trimmed = line_content.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                // Determine chunk type based on content prefix
+                let (chunk_type, content) = if trimmed.starts_with("THINKING:") {
+                    ("thinking", trimmed.strip_prefix("THINKING:").unwrap_or(trimmed).trim())
+                } else if trimmed.starts_with("TOOL:") {
+                    ("tool_call", trimmed.strip_prefix("TOOL:").unwrap_or(trimmed).trim())
+                } else if trimmed.starts_with("TOOL_RESULT:") {
+                    ("tool_result", trimmed.strip_prefix("TOOL_RESULT:").unwrap_or(trimmed).trim())
+                } else if trimmed.starts_with("ERROR:") {
+                    ("error", trimmed.strip_prefix("ERROR:").unwrap_or(trimmed).trim())
+                } else if trimmed.starts_with("DONE:") {
+                    ("done", trimmed.strip_prefix("DONE:").unwrap_or(trimmed).trim())
+                } else if trimmed.starts_with('{') || trimmed.starts_with('[') {
+                    ("json", trimmed)
+                } else {
+                    ("token", trimmed)
+                };
+
+                full_output.push_str(content);
+                full_output.push('\n');
+
+                // Invoke callback - returns false if cancelled
+                if !callback(chunk_type, content, None) {
+                    let _ = child.kill();
                     return Err("Stream cancelled".to_string());
                 }
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            }
+            Err(e) => {
+                eprintln!("[Streaming] Error reading line: {}", e);
+                break;
             }
         }
     }
 
-    Ok(result)
+    // Wait for process to complete
+    let status = child.wait()
+        .map_err(|e| format!("Failed to wait for process: {}", e))?;
+
+    if status.success() {
+        Ok(full_output)
+    } else {
+        Err(format!("Script failed with exit code: {:?}", status.code()))
+    }
 }

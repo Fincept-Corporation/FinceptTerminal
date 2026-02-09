@@ -14,7 +14,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface FuturesContract {
   symbol: string;
@@ -52,6 +53,8 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
   accentColor,
   textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFuture, setSelectedFuture] = useState('ES');
@@ -145,13 +148,13 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
       <div
         className="p-4 text-center"
         style={{
-          backgroundColor: FINCEPT_COLORS.DARK_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
-        <LineChart size={24} style={{ color: FINCEPT_COLORS.MUTED, margin: '0 auto 8px' }} />
-        <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+        <LineChart size={24} style={{ color: colors.textMuted, margin: '0 auto 8px' }} />
+        <div className="text-xs" style={{ color: colors.textMuted }}>
           Configure Databento API key for futures data
         </div>
       </div>
@@ -163,9 +166,9 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         overflow: 'hidden',
       }}
     >
@@ -173,8 +176,8 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
       <div
         className="flex items-center justify-between p-2"
         style={{
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
         }}
       >
         <div className="flex items-center gap-2">
@@ -186,15 +189,15 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
         <button
           onClick={fetchContracts}
           disabled={loading}
-          style={{ color: loading ? FINCEPT_COLORS.MUTED : accentColor }}
+          style={{ color: loading ? colors.textMuted : accentColor }}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       {/* Popular Futures Selector */}
-      <div className="flex flex-wrap items-center gap-1 p-2" style={{ borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}` }}>
-        <span className="text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>Popular:</span>
+      <div className="flex flex-wrap items-center gap-1 p-2" style={{ borderBottom: `1px solid ${colors.textMuted}` }}>
+        <span className="text-[9px]" style={{ color: colors.textMuted }}>Popular:</span>
         {POPULAR_FUTURES.map((f) => (
           <button
             key={f.symbol}
@@ -204,9 +207,9 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
             }}
             className="px-2 py-0.5 text-[9px] font-bold"
             style={{
-              backgroundColor: selectedFuture === f.symbol ? accentColor : FINCEPT_COLORS.BORDER,
-              color: selectedFuture === f.symbol ? FINCEPT_COLORS.BLACK : textColor,
-              borderRadius: '2px',
+              backgroundColor: selectedFuture === f.symbol ? accentColor : colors.textMuted,
+              color: selectedFuture === f.symbol ? colors.background : textColor,
+              borderRadius: 'var(--ft-border-radius)',
             }}
             title={f.name}
           >
@@ -220,10 +223,10 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
         <div
           className="flex items-center gap-2 m-2 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.RED}15`,
-            border: `1px solid ${FINCEPT_COLORS.RED}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.RED,
+            backgroundColor: `${colors.alert}15`,
+            border: `1px solid ${colors.alert}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.alert,
           }}
         >
           <AlertCircle size={12} />
@@ -238,7 +241,7 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
             <RefreshCw size={16} className="animate-spin" style={{ color: accentColor }} />
           </div>
         ) : termStructure.length === 0 ? (
-          <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+          <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
             Click a futures symbol to view term structure
           </div>
         ) : (
@@ -248,34 +251,34 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
               <div
                 className="flex items-center justify-between mb-2 p-2 text-xs"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.BLACK,
-                  borderRadius: '2px',
+                  backgroundColor: colors.background,
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
                 <div className="flex items-center gap-2">
                   {contango.isContango ? (
-                    <TrendingUp size={12} style={{ color: FINCEPT_COLORS.YELLOW }} />
+                    <TrendingUp size={12} style={{ color: colors.warning }} />
                   ) : (
-                    <TrendingDown size={12} style={{ color: FINCEPT_COLORS.CYAN }} />
+                    <TrendingDown size={12} style={{ color: colors.info }} />
                   )}
-                  <span style={{ color: FINCEPT_COLORS.MUTED }}>Market Structure:</span>
+                  <span style={{ color: colors.textMuted }}>Market Structure:</span>
                   <span
                     style={{
-                      color: contango.isContango ? FINCEPT_COLORS.YELLOW : FINCEPT_COLORS.CYAN,
+                      color: contango.isContango ? colors.warning : colors.info,
                       fontWeight: 'bold',
                     }}
                   >
                     {contango.isContango ? 'CONTANGO' : 'BACKWARDATION'}
                   </span>
                 </div>
-                <span style={{ color: contango.isContango ? FINCEPT_COLORS.YELLOW : FINCEPT_COLORS.CYAN }}>
+                <span style={{ color: contango.isContango ? colors.warning : colors.info }}>
                   {contango.spread > 0 ? '+' : ''}{contango.spread.toFixed(2)}%
                 </span>
               </div>
             )}
 
             {/* Header Row */}
-            <div className="grid grid-cols-4 gap-2 mb-1 text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+            <div className="grid grid-cols-4 gap-2 mb-1 text-[9px]" style={{ color: colors.textMuted }}>
               <div>CONTRACT</div>
               <div className="text-right">PRICE</div>
               <div className="text-right">VOLUME</div>
@@ -293,7 +296,7 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
                   className="grid grid-cols-4 gap-2 py-1 text-[10px]"
                   style={{
                     backgroundColor: idx === 0 ? `${accentColor}15` : 'transparent',
-                    borderRadius: '2px',
+                    borderRadius: 'var(--ft-border-radius)',
                   }}
                 >
                   <div className="flex items-center gap-1">
@@ -302,21 +305,21 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
                       {point.smart_symbol}
                     </span>
                     {idx === 0 && (
-                      <span className="text-[8px] px-1" style={{ backgroundColor: accentColor, color: FINCEPT_COLORS.BLACK, borderRadius: '2px' }}>
+                      <span className="text-[8px] px-1" style={{ backgroundColor: accentColor, color: colors.background, borderRadius: 'var(--ft-border-radius)' }}>
                         FRONT
                       </span>
                     )}
                   </div>
-                  <div className="text-right font-mono" style={{ color: FINCEPT_COLORS.WHITE }}>
+                  <div className="text-right font-mono" style={{ color: textColor }}>
                     {formatPrice(point.close)}
                   </div>
-                  <div className="text-right" style={{ color: FINCEPT_COLORS.MUTED }}>
+                  <div className="text-right" style={{ color: colors.textMuted }}>
                     {formatVolume(point.volume)}
                   </div>
                   <div
                     className="text-right font-mono"
                     style={{
-                      color: idx === 0 ? FINCEPT_COLORS.MUTED : spread > 0 ? FINCEPT_COLORS.GREEN : spread < 0 ? FINCEPT_COLORS.RED : FINCEPT_COLORS.MUTED,
+                      color: idx === 0 ? colors.textMuted : spread > 0 ? colors.success : spread < 0 ? colors.alert : colors.textMuted,
                     }}
                   >
                     {idx === 0 ? '--' : `${spread > 0 ? '+' : ''}${spread.toFixed(3)}%`}
@@ -329,11 +332,11 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
       </div>
 
       {/* All Contracts Section */}
-      <div style={{ borderTop: `1px solid ${FINCEPT_COLORS.BORDER}` }}>
+      <div style={{ borderTop: `1px solid ${colors.textMuted}` }}>
         <button
           onClick={() => setShowAllContracts(!showAllContracts)}
           className="flex items-center justify-between w-full p-2 text-[10px]"
-          style={{ color: FINCEPT_COLORS.MUTED }}
+          style={{ color: colors.textMuted }}
         >
           <div className="flex items-center gap-1">
             <Info size={10} />
@@ -349,7 +352,7 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
         </button>
 
         {showAllContracts && (
-          <div className="p-2 max-h-48 overflow-y-auto" style={{ backgroundColor: FINCEPT_COLORS.BLACK }}>
+          <div className="p-2 max-h-48 overflow-y-auto" style={{ backgroundColor: colors.background }}>
             <div className="grid grid-cols-3 gap-1">
               {contracts.map((c) => (
                 <button
@@ -362,14 +365,14 @@ export const FuturesPanel: React.FC<FuturesPanelProps> = ({
                   className="text-left p-1 text-[9px]"
                   style={{
                     backgroundColor: selectedFuture === c.symbol ? `${accentColor}30` : 'transparent',
-                    borderRadius: '2px',
+                    borderRadius: 'var(--ft-border-radius)',
                   }}
                   title={`${c.name} (${c.exchange})`}
                 >
                   <div className="font-bold" style={{ color: selectedFuture === c.symbol ? accentColor : textColor }}>
                     {c.symbol}
                   </div>
-                  <div style={{ color: FINCEPT_COLORS.MUTED, fontSize: '8px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '8px' }}>
                     {c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name}
                   </div>
                 </button>

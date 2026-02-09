@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 interface MarkdownRendererProps {
   content: string;
@@ -12,6 +14,33 @@ marked.setOptions({
   gfm: true,
   breaks: true,
 });
+
+// Render LaTeX formulas using KaTeX
+const renderLatex = (text: string): string => {
+  // Block formulas: \[ ... \] or $$ ... $$
+  text = text.replace(/\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$/g, (match, b1, b2) => {
+    const formula = b1 || b2;
+    try {
+      return `<div class="katex-block">${katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false })}</div>`;
+    } catch (e) {
+      console.warn('[KaTeX] Block formula error:', e);
+      return match;
+    }
+  });
+
+  // Inline formulas: \( ... \) or $ ... $ (but not $$ which is block)
+  text = text.replace(/\\\((.*?)\\\)|\$([^\$\n]+?)\$/g, (match, i1, i2) => {
+    const formula = i1 || i2;
+    try {
+      return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false });
+    } catch (e) {
+      console.warn('[KaTeX] Inline formula error:', e);
+      return match;
+    }
+  });
+
+  return text;
+};
 
 const MARKDOWN_CSS = `
 .fincept-md h1 {
@@ -190,6 +219,29 @@ const MARKDOWN_CSS = `
 .fincept-md input[type="checkbox"] {
   margin-right: 4px;
 }
+/* KaTeX Formula Styles */
+.fincept-md .katex-block {
+  display: block;
+  text-align: center;
+  margin: 12px 0;
+  padding: 12px;
+  background-color: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-left: 2px solid #FF8800;
+  border-radius: 2px;
+  overflow-x: auto;
+}
+.fincept-md .katex {
+  color: #00E5FF;
+  font-size: 1.1em;
+}
+.fincept-md .katex-display {
+  margin: 0;
+  padding: 0;
+}
+.fincept-md .katex-display > .katex {
+  color: #00E5FF;
+}
 /* Price/Data Cards */
 .price-card {
   display: inline-flex;
@@ -273,14 +325,17 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
   const html = useMemo(() => {
     if (!content || typeof content !== 'string') return '';
     try {
-      // First, parse data cards from raw content
-      const withCards = parseDataCards(content);
+      // First, render LaTeX formulas
+      const withLatex = renderLatex(content);
+
+      // Then, parse data cards from raw content
+      const withCards = parseDataCards(withLatex);
 
       // Then parse markdown
       const raw = marked.parse(withCards) as string;
 
       return DOMPurify.sanitize(raw, {
-        ADD_ATTR: ['target', 'class'],
+        ADD_ATTR: ['target', 'class', 'style', 'xmlns', 'viewBox', 'd', 'fill', 'stroke', 'width', 'height', 'aria-hidden', 'focusable'],
         ALLOWED_TAGS: [
           'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
           'p', 'br', 'hr',
@@ -289,6 +344,11 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
           'blockquote', 'a', 'img',
           'table', 'thead', 'tbody', 'tr', 'th', 'td',
           'input', 'span', 'div', 'sub', 'sup',
+          // KaTeX elements
+          'math', 'semantics', 'mrow', 'mi', 'mo', 'mn', 'ms', 'mtext',
+          'mfrac', 'msqrt', 'mroot', 'msub', 'msup', 'msubsup', 'munder',
+          'mover', 'munderover', 'mtable', 'mtr', 'mtd', 'annotation',
+          'svg', 'path', 'line', 'rect', 'circle', 'g', 'use', 'defs',
         ],
       });
     } catch (error) {

@@ -240,6 +240,9 @@ async fn place_live_order(
         "zerodha" => {
             place_zerodha_order(order).await
         }
+        "fyers" => {
+            place_fyers_order(order).await
+        }
         _ => Err(format!("Live trading not implemented for {}", session.broker))
     }
 }
@@ -309,6 +312,82 @@ async fn place_zerodha_order(order: &UnifiedOrder) -> Result<UnifiedOrderRespons
         access_token,
         params,
         variety,
+    ).await.map_err(|e| e.to_string())?;
+
+    Ok(UnifiedOrderResponse {
+        success: response.success,
+        order_id: response.order_id,
+        message: response.error,
+        mode: TradingMode::Live,
+    })
+}
+
+/// Place order via Fyers API
+async fn place_fyers_order(order: &UnifiedOrder) -> Result<UnifiedOrderResponse, String> {
+    use crate::commands::brokers;
+
+    // Get stored credentials
+    let creds = brokers::get_indian_broker_credentials("fyers".to_string())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !creds.success || creds.data.is_none() {
+        return Err("Fyers credentials not found. Please authenticate first.".to_string());
+    }
+
+    let cred_data = creds.data.unwrap();
+    let api_key = cred_data.get("apiKey")
+        .and_then(|v| v.as_str())
+        .ok_or("Fyers API key not found")?
+        .to_string();
+    let access_token = cred_data.get("accessToken")
+        .and_then(|v| v.as_str())
+        .ok_or("Fyers access token not found. Please re-authenticate.")?
+        .to_string();
+
+    // Map order type: UnifiedOrder uses "market"/"limit"/"stop"/"stop_limit"
+    // Fyers uses: 1=Limit, 2=Market, 3=Stop Loss Limit, 4=Stop Loss Market
+    let fyers_order_type: i32 = match order.order_type.as_str() {
+        "market" => 2,
+        "limit" => 1,
+        "stop" => 4,       // Stop Loss Market
+        "stop_limit" => 3, // Stop Loss Limit
+        _ => 2,            // Default to market
+    };
+
+    // Map side: UnifiedOrder uses "buy"/"sell", Fyers uses 1=Buy, -1=Sell
+    let fyers_side: i32 = match order.side.to_lowercase().as_str() {
+        "buy" => 1,
+        "sell" => -1,
+        _ => 1,
+    };
+
+    // Map product type: default to INTRADAY for algo trading
+    let product_type = order.product_type.as_deref().unwrap_or("INTRADAY").to_string();
+
+    // Build Fyers symbol format: "NSE:SBIN-EQ" or use as-is if already formatted
+    let fyers_symbol = if order.symbol.contains(':') {
+        order.symbol.clone()
+    } else {
+        format!("{}:{}-EQ", order.exchange, order.symbol)
+    };
+
+    // Place order via Fyers API
+    let response = brokers::fyers_place_order(
+        api_key,
+        access_token,
+        fyers_symbol,
+        order.quantity as i32,
+        fyers_order_type,
+        fyers_side,
+        product_type,
+        order.price,       // limit_price
+        order.stop_price,  // stop_price
+        None,              // disclosed_qty
+        Some("DAY".to_string()), // validity
+        None,              // offline_order
+        None,              // stop_loss
+        None,              // take_profit
     ).await.map_err(|e| e.to_string())?;
 
     Ok(UnifiedOrderResponse {
@@ -487,6 +566,74 @@ async fn get_live_positions(session: &TradingSession) -> Result<Vec<UnifiedPosit
                             current_price: p.get("last_price").and_then(|v| v.as_f64()).unwrap_or(0.0),
                             unrealized_pnl: p.get("unrealised").and_then(|v| v.as_f64()).unwrap_or(0.0),
                             realized_pnl: p.get("realised").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            mode: TradingMode::Live,
+                        })
+                    }).collect()
+                } else {
+                    Vec::new()
+                }
+            }).unwrap_or_default();
+
+            Ok(positions)
+        }
+        "fyers" => {
+            use crate::commands::brokers;
+
+            let creds = brokers::get_indian_broker_credentials("fyers".to_string())
+                .await
+                .map_err(|e| e.to_string())?;
+
+            if !creds.success || creds.data.is_none() {
+                return Err("Fyers credentials not found".to_string());
+            }
+
+            let cred_data = creds.data.unwrap();
+            let api_key = cred_data.get("apiKey")
+                .and_then(|v| v.as_str())
+                .ok_or("API key not found")?
+                .to_string();
+            let access_token = cred_data.get("accessToken")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let response = brokers::fyers_get_positions(
+                api_key,
+                access_token,
+            ).await.map_err(|e| e.to_string())?;
+
+            if !response.success {
+                return Err(response.error.unwrap_or("Failed to get Fyers positions".to_string()));
+            }
+
+            // Map Fyers positions to unified format
+            // Fyers netPositions array has: symbol, qty, avgPrice, ltp, pl, unrealizedProfit, etc.
+            let positions: Vec<UnifiedPosition> = response.data.map(|data| {
+                if let Some(positions_arr) = data.as_array() {
+                    positions_arr.iter().filter_map(|p| {
+                        let qty = p.get("netQty").or_else(|| p.get("qty"))
+                            .and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        if qty == 0.0 { return None; }
+                        let side = if qty > 0.0 { "long" } else { "short" };
+
+                        // Fyers symbol format: "NSE:SBIN-EQ" -> extract parts
+                        let full_symbol = p.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
+                        let parts: Vec<&str> = full_symbol.splitn(2, ':').collect();
+                        let exchange = parts.first().unwrap_or(&"NSE").to_string();
+                        let symbol = parts.get(1).unwrap_or(&full_symbol).to_string();
+
+                        Some(UnifiedPosition {
+                            symbol,
+                            exchange,
+                            side: side.to_string(),
+                            quantity: qty.abs(),
+                            entry_price: p.get("avgPrice").or_else(|| p.get("buyAvg"))
+                                .and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            current_price: p.get("ltp").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            unrealized_pnl: p.get("unrealizedProfit").or_else(|| p.get("pl"))
+                                .and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            realized_pnl: p.get("realizedProfit")
+                                .and_then(|v| v.as_f64()).unwrap_or(0.0),
                             mode: TradingMode::Live,
                         })
                     }).collect()

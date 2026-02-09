@@ -145,12 +145,14 @@ class BaseTradingAgent(BaseAgent):
         instructions: Optional[List[str]] = None,
         enable_features: bool = True,
         enable_metrics: bool = True,
+        initial_capital: float = 10000.0,
     ):
         super().__init__(name)
         self.provider = provider
         self.model_id = model_id
         self.api_key = api_key
         self.temperature = temperature
+        self.initial_capital = initial_capital
         self.instructions = instructions or self._default_instructions()
         self._agent = None
         self._decisions: List[ModelDecision] = []
@@ -325,8 +327,9 @@ class LLMTradingAgent(BaseTradingAgent):
         mode: str = "baseline",
         trading_style: Optional[str] = None,  # Style ID (e.g., "aggressive", "conservative")
         style_config: Optional[Dict[str, Any]] = None,  # Full style configuration
+        initial_capital: float = 10000.0,
     ):
-        super().__init__(name, provider, model_id, api_key, temperature, instructions)
+        super().__init__(name, provider, model_id, api_key, temperature, instructions, initial_capital=initial_capital)
         self.mode = mode
         self._llm = None
 
@@ -362,19 +365,31 @@ class LLMTradingAgent(BaseTradingAgent):
 
     async def initialize(self) -> bool:
         """Initialize the LLM agent."""
+        self._mock_reason = None  # Track why we're in mock mode
         try:
             self._llm = await self._create_llm()
             if self._llm is None:
-                logger.warning(f"LLM agent '{self.name}' initialized in mock mode (agno library not available)")
+                self._mock_reason = "agno library not available"
+                logger.warning(f"LLM agent '{self.name}' initialized in MOCK mode ({self._mock_reason})")
             await super().initialize()
             return True
         except Exception as e:
             logger.error(f"Failed to initialize LLM agent '{self.name}': {e}")
-            # Still return True but use mock mode - don't block competition
             self._llm = None
+            self._mock_reason = str(e)
             await super().initialize()
-            logger.warning(f"Agent '{self.name}' will use mock decisions due to initialization error")
+            logger.warning(f"Agent '{self.name}' will use MOCK decisions: {self._mock_reason}")
             return True
+
+    @property
+    def is_mock_mode(self) -> bool:
+        """Whether this agent is running in mock mode (no real LLM)."""
+        return self._llm is None
+
+    @property
+    def mock_mode_reason(self) -> Optional[str]:
+        """Reason for being in mock mode, or None if using real LLM."""
+        return getattr(self, '_mock_reason', None)
 
     async def _create_llm(self):
         """Create the LLM instance based on provider."""
@@ -641,8 +656,8 @@ class LLMTradingAgent(BaseTradingAgent):
         """Build the trading prompt with optional features and metrics."""
         has_positions = len(portfolio.positions) > 0
         num_trades = portfolio.trades_count
-        pnl = portfolio.portfolio_value - 10000  # Assuming 10k initial
-        pnl_pct = (pnl / 10000) * 100
+        pnl = portfolio.portfolio_value - self.initial_capital
+        pnl_pct = (pnl / self.initial_capital) * 100 if self.initial_capital > 0 else 0
 
         if not has_positions and num_trades == 0:
             action_guidance = """
@@ -963,6 +978,7 @@ Respond ONLY with the JSON object, nothing else.
 
         actions = [TradeAction.BUY, TradeAction.SELL, TradeAction.HOLD]
         action = random.choice(actions)
+        mock_reason = getattr(self, '_mock_reason', 'unknown')
 
         return ModelDecision(
             competition_id="",
@@ -971,7 +987,7 @@ Respond ONLY with the JSON object, nothing else.
             action=action,
             symbol=market_data.symbol,
             quantity=0.01 if action != TradeAction.HOLD else 0,
-            confidence=random.uniform(0.5, 0.9),
-            reasoning=f"Mock decision: {action.value}",
+            confidence=0.0,  # Zero confidence for mock decisions
+            reasoning=f"[MOCK MODE - {mock_reason}] Random decision: {action.value}. Configure a valid API key in Settings > LLM Config to enable real LLM decisions.",
             price_at_decision=market_data.price,
         )

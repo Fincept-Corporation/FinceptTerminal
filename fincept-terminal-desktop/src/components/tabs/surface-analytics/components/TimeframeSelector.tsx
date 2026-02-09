@@ -5,7 +5,8 @@
 
 import React from 'react';
 import { Clock, AlertTriangle, TrendingUp } from 'lucide-react';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import type { OHLCVTimeframe, TimeframeInfo } from '../types';
 
 interface TimeframeSelectorProps {
@@ -55,22 +56,6 @@ const TIMEFRAMES: TimeframeInfo[] = [
   },
 ];
 
-const getCostLevelColor = (level: 'low' | 'medium' | 'high') => {
-  switch (level) {
-    case 'low': return FINCEPT_COLORS.GREEN;
-    case 'medium': return FINCEPT_COLORS.YELLOW;
-    case 'high': return FINCEPT_COLORS.RED;
-  }
-};
-
-const getCostLevelLabel = (level: 'low' | 'medium' | 'high') => {
-  switch (level) {
-    case 'low': return '$';
-    case 'medium': return '$$';
-    case 'high': return '$$$';
-  }
-};
-
 export const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
   value,
   onChange,
@@ -78,14 +63,33 @@ export const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
   textColor,
   disabled = false,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
+
+  const getCostLevelColor = (level: 'low' | 'medium' | 'high') => {
+    switch (level) {
+      case 'low': return colors.success;
+      case 'medium': return colors.warning;
+      case 'high': return colors.alert;
+    }
+  };
+
+  const getCostLevelLabel = (level: 'low' | 'medium' | 'high') => {
+    switch (level) {
+      case 'low': return '$';
+      case 'medium': return '$$';
+      case 'high': return '$$$';
+    }
+  };
+
   const selectedTimeframe = TIMEFRAMES.find(tf => tf.value === value) || TIMEFRAMES[0];
 
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         padding: '12px',
         opacity: disabled ? 0.6 : 1,
       }}
@@ -94,7 +98,7 @@ export const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
       <div className="flex items-center gap-2 mb-3">
         <Clock size={14} style={{ color: accentColor }} />
         <span className="text-xs font-bold" style={{ color: accentColor, letterSpacing: '0.5px' }}>
-          DATA TIMEFRAME
+          {t('timeframe.dataTimeframe')}
         </span>
       </div>
 
@@ -109,21 +113,21 @@ export const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
               disabled={disabled}
               className="flex flex-col items-center p-2 transition-all"
               style={{
-                backgroundColor: isSelected ? accentColor : FINCEPT_COLORS.BLACK,
-                border: `1px solid ${isSelected ? accentColor : FINCEPT_COLORS.BORDER}`,
-                borderRadius: '2px',
+                backgroundColor: isSelected ? accentColor : colors.background,
+                border: `1px solid ${isSelected ? accentColor : colors.textMuted}`,
+                borderRadius: 'var(--ft-border-radius)',
                 cursor: disabled ? 'not-allowed' : 'pointer',
               }}
             >
               <span
                 className="text-xs font-bold"
-                style={{ color: isSelected ? FINCEPT_COLORS.BLACK : textColor }}
+                style={{ color: isSelected ? colors.background : textColor }}
               >
                 {tf.label}
               </span>
               <span
                 className="text-[9px] mt-0.5"
-                style={{ color: isSelected ? FINCEPT_COLORS.BLACK : getCostLevelColor(tf.costLevel) }}
+                style={{ color: isSelected ? colors.background : getCostLevelColor(tf.costLevel) }}
               >
                 {getCostLevelLabel(tf.costLevel)}
               </span>
@@ -136,21 +140,21 @@ export const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
       <div
         className="p-2 text-xs"
         style={{
-          backgroundColor: FINCEPT_COLORS.BLACK,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
         <div className="flex items-center justify-between mb-1">
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Schema:</span>
+          <span style={{ color: colors.textMuted }}>{t('timeframe.schema')}:</span>
           <span className="font-mono" style={{ color: textColor }}>{selectedTimeframe.value}</span>
         </div>
         <div className="flex items-center justify-between mb-1">
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Description:</span>
+          <span style={{ color: colors.textMuted }}>{t('timeframe.description')}:</span>
           <span style={{ color: textColor }}>{selectedTimeframe.description}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Records/Day:</span>
+          <span style={{ color: colors.textMuted }}>{t('timeframe.recordsPerDay')}:</span>
           <span style={{ color: textColor }}>{selectedTimeframe.recordsPerDay}</span>
         </div>
       </div>
@@ -160,22 +164,22 @@ export const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
         <div
           className="flex items-center gap-2 mt-2 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.YELLOW}15`,
-            border: `1px solid ${FINCEPT_COLORS.YELLOW}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.YELLOW,
+            backgroundColor: `${colors.warning}15`,
+            border: `1px solid ${colors.warning}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.warning,
           }}
         >
           <AlertTriangle size={12} />
-          <span>High-frequency data generates many records and may incur higher costs</span>
+          <span>{t('timeframe.highFrequencyWarning')}</span>
         </div>
       )}
 
       {/* Data Volume Indicator */}
       <div className="mt-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
-            Data Volume
+          <span className="text-xs" style={{ color: colors.textMuted }}>
+            {t('timeframe.dataVolume')}
           </span>
           <div className="flex items-center gap-1">
             <TrendingUp size={10} style={{ color: getCostLevelColor(selectedTimeframe.costLevel) }} />
@@ -186,7 +190,7 @@ export const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
         </div>
         <div
           className="h-1 rounded"
-          style={{ backgroundColor: FINCEPT_COLORS.BORDER }}
+          style={{ backgroundColor: colors.textMuted }}
         >
           <div
             className="h-full rounded transition-all"

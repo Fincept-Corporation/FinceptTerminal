@@ -17,7 +17,8 @@ import {
   Globe,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface SecurityMaster {
   raw_symbol: string;
@@ -68,6 +69,8 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
   accentColor,
   textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
   const [activeTab, setActiveTab] = useState<TabType>('security');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,15 +189,15 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
   const formatActionType = (type: string): { label: string; color: string } => {
     switch (type.toLowerCase()) {
       case 'dividend':
-        return { label: 'DIVIDEND', color: FINCEPT_COLORS.GREEN };
+        return { label: 'DIVIDEND', color: colors.success };
       case 'split':
-        return { label: 'SPLIT', color: FINCEPT_COLORS.CYAN };
+        return { label: 'SPLIT', color: colors.info };
       case 'spinoff':
-        return { label: 'SPINOFF', color: FINCEPT_COLORS.YELLOW };
+        return { label: 'SPINOFF', color: colors.warning };
       case 'merger':
-        return { label: 'MERGER', color: FINCEPT_COLORS.PURPLE };
+        return { label: 'MERGER', color: colors.info };
       default:
-        return { label: type.toUpperCase(), color: FINCEPT_COLORS.MUTED };
+        return { label: type.toUpperCase(), color: colors.textMuted };
     }
   };
 
@@ -203,13 +206,13 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
       <div
         className="p-4 text-center"
         style={{
-          backgroundColor: FINCEPT_COLORS.DARK_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
-        <Building2 size={24} style={{ color: FINCEPT_COLORS.MUTED, margin: '0 auto 8px' }} />
-        <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+        <Building2 size={24} style={{ color: colors.textMuted, margin: '0 auto 8px' }} />
+        <div className="text-xs" style={{ color: colors.textMuted }}>
           Configure Databento API key to access reference data
         </div>
       </div>
@@ -219,9 +222,9 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         overflow: 'hidden',
       }}
     >
@@ -229,8 +232,8 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
       <div
         className="flex items-center justify-between p-2"
         style={{
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
         }}
       >
         <div className="flex items-center gap-1">
@@ -245,9 +248,9 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
               className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold"
               style={{
                 backgroundColor: activeTab === id ? accentColor : 'transparent',
-                color: activeTab === id ? FINCEPT_COLORS.BLACK : FINCEPT_COLORS.MUTED,
-                border: `1px solid ${activeTab === id ? accentColor : FINCEPT_COLORS.BORDER}`,
-                borderRadius: '2px',
+                color: activeTab === id ? colors.background : colors.textMuted,
+                border: `1px solid ${activeTab === id ? accentColor : colors.textMuted}`,
+                borderRadius: 'var(--ft-border-radius)',
               }}
             >
               <Icon size={10} />
@@ -258,30 +261,30 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
         <button
           onClick={handleRefresh}
           disabled={loading || symbols.length === 0}
-          style={{ color: loading ? FINCEPT_COLORS.MUTED : accentColor }}
+          style={{ color: loading ? colors.textMuted : accentColor }}
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       {/* Symbols Badge */}
-      <div className="flex flex-wrap gap-1 p-2" style={{ borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}` }}>
-        <span className="text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>SYMBOLS:</span>
+      <div className="flex flex-wrap gap-1 p-2" style={{ borderBottom: `1px solid ${colors.textMuted}` }}>
+        <span className="text-[9px]" style={{ color: colors.textMuted }}>SYMBOLS:</span>
         {symbols.slice(0, 5).map(sym => (
           <span
             key={sym}
             className="px-1 py-0.5 text-[9px]"
             style={{
-              backgroundColor: FINCEPT_COLORS.BORDER,
+              backgroundColor: colors.textMuted,
               color: textColor,
-              borderRadius: '2px',
+              borderRadius: 'var(--ft-border-radius)',
             }}
           >
             {sym}
           </span>
         ))}
         {symbols.length > 5 && (
-          <span className="text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+          <span className="text-[9px]" style={{ color: colors.textMuted }}>
             +{symbols.length - 5} more
           </span>
         )}
@@ -292,10 +295,10 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
         <div
           className="flex items-center gap-2 m-2 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.RED}15`,
-            border: `1px solid ${FINCEPT_COLORS.RED}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.RED,
+            backgroundColor: `${colors.alert}15`,
+            border: `1px solid ${colors.alert}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.alert,
           }}
         >
           <AlertCircle size={12} />
@@ -311,7 +314,7 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
           </div>
         ) : activeTab === 'security' ? (
           securityData.length === 0 ? (
-            <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+            <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
               Click refresh to load security master data
             </div>
           ) : (
@@ -320,9 +323,9 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
                 key={`${sec.raw_symbol}-${idx}`}
                 className="mb-2"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.BLACK,
-                  border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-                  borderRadius: '2px',
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
                 <div
@@ -333,40 +336,40 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
                     <span className="text-xs font-bold" style={{ color: accentColor }}>
                       {sec.raw_symbol}
                     </span>
-                    <span className="text-[9px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+                    <span className="text-[9px]" style={{ color: colors.textMuted }}>
                       {sec.name || sec.description}
                     </span>
                   </div>
                   {expandedRow === sec.raw_symbol ? (
-                    <ChevronUp size={12} style={{ color: FINCEPT_COLORS.MUTED }} />
+                    <ChevronUp size={12} style={{ color: colors.textMuted }} />
                   ) : (
-                    <ChevronDown size={12} style={{ color: FINCEPT_COLORS.MUTED }} />
+                    <ChevronDown size={12} style={{ color: colors.textMuted }} />
                   )}
                 </div>
                 {expandedRow === sec.raw_symbol && (
-                  <div className="grid grid-cols-2 gap-2 p-2 text-[9px]" style={{ borderTop: `1px solid ${FINCEPT_COLORS.BORDER}` }}>
+                  <div className="grid grid-cols-2 gap-2 p-2 text-[9px]" style={{ borderTop: `1px solid ${colors.textMuted}` }}>
                     <div>
-                      <span style={{ color: FINCEPT_COLORS.MUTED }}>Exchange: </span>
+                      <span style={{ color: colors.textMuted }}>Exchange: </span>
                       <span style={{ color: textColor }}>{sec.exchange || 'N/A'}</span>
                     </div>
                     <div>
-                      <span style={{ color: FINCEPT_COLORS.MUTED }}>Currency: </span>
+                      <span style={{ color: colors.textMuted }}>Currency: </span>
                       <span style={{ color: textColor }}>{sec.currency || 'USD'}</span>
                     </div>
                     <div>
-                      <span style={{ color: FINCEPT_COLORS.MUTED }}>Sector: </span>
+                      <span style={{ color: colors.textMuted }}>Sector: </span>
                       <span style={{ color: textColor }}>{sec.sector || 'N/A'}</span>
                     </div>
                     <div>
-                      <span style={{ color: FINCEPT_COLORS.MUTED }}>Industry: </span>
+                      <span style={{ color: colors.textMuted }}>Industry: </span>
                       <span style={{ color: textColor }}>{sec.industry || 'N/A'}</span>
                     </div>
                     <div>
-                      <span style={{ color: FINCEPT_COLORS.MUTED }}>Market Cap: </span>
-                      <span style={{ color: FINCEPT_COLORS.GREEN }}>{formatMarketCap(sec.market_cap)}</span>
+                      <span style={{ color: colors.textMuted }}>Market Cap: </span>
+                      <span style={{ color: colors.success }}>{formatMarketCap(sec.market_cap)}</span>
                     </div>
                     <div>
-                      <span style={{ color: FINCEPT_COLORS.MUTED }}>Type: </span>
+                      <span style={{ color: colors.textMuted }}>Type: </span>
                       <span style={{ color: textColor }}>{sec.security_type || 'Equity'}</span>
                     </div>
                   </div>
@@ -376,7 +379,7 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
           )
         ) : activeTab === 'corporate' ? (
           corporateActions.length === 0 ? (
-            <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+            <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
               Click refresh to load corporate actions
             </div>
           ) : (
@@ -387,9 +390,9 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
                   key={`${action.raw_symbol}-${action.ex_date}-${idx}`}
                   className="flex items-center justify-between p-2 mb-1"
                   style={{
-                    backgroundColor: FINCEPT_COLORS.BLACK,
-                    border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-                    borderRadius: '2px',
+                    backgroundColor: colors.background,
+                    border: `1px solid ${colors.textMuted}`,
+                    borderRadius: 'var(--ft-border-radius)',
                   }}
                 >
                   <div className="flex items-center gap-2">
@@ -401,7 +404,7 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
                       style={{
                         backgroundColor: `${color}20`,
                         color: color,
-                        borderRadius: '2px',
+                        borderRadius: 'var(--ft-border-radius)',
                       }}
                     >
                       {label}
@@ -409,18 +412,18 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
                   </div>
                   <div className="flex items-center gap-3 text-[9px]">
                     {action.amount && (
-                      <div className="flex items-center gap-1" style={{ color: FINCEPT_COLORS.GREEN }}>
+                      <div className="flex items-center gap-1" style={{ color: colors.success }}>
                         <DollarSign size={10} />
                         <span>{action.amount.toFixed(4)} {action.currency}</span>
                       </div>
                     )}
                     {action.ratio && (
-                      <div className="flex items-center gap-1" style={{ color: FINCEPT_COLORS.CYAN }}>
+                      <div className="flex items-center gap-1" style={{ color: colors.info }}>
                         <Percent size={10} />
                         <span>{action.ratio}</span>
                       </div>
                     )}
-                    <span style={{ color: FINCEPT_COLORS.MUTED }}>{action.ex_date}</span>
+                    <span style={{ color: colors.textMuted }}>{action.ex_date}</span>
                   </div>
                 </div>
               );
@@ -428,21 +431,21 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
           )
         ) : (
           adjustmentFactors.length === 0 ? (
-            <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+            <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
               Click refresh to load adjustment factors
             </div>
           ) : (
             <div
               className="overflow-x-auto"
               style={{
-                backgroundColor: FINCEPT_COLORS.BLACK,
-                border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-                borderRadius: '2px',
+                backgroundColor: colors.background,
+                border: `1px solid ${colors.textMuted}`,
+                borderRadius: 'var(--ft-border-radius)',
               }}
             >
               <table className="w-full text-[9px]">
                 <thead>
-                  <tr style={{ backgroundColor: FINCEPT_COLORS.HEADER_BG }}>
+                  <tr style={{ backgroundColor: colors.panel }}>
                     <th className="p-1 text-left" style={{ color: accentColor }}>SYMBOL</th>
                     <th className="p-1 text-left" style={{ color: accentColor }}>DATE</th>
                     <th className="p-1 text-right" style={{ color: accentColor }}>SPLIT</th>
@@ -454,17 +457,17 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
                   {adjustmentFactors.slice(0, 20).map((factor, idx) => (
                     <tr
                       key={`${factor.raw_symbol}-${factor.date}-${idx}`}
-                      style={{ borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}` }}
+                      style={{ borderBottom: `1px solid ${colors.textMuted}` }}
                     >
                       <td className="p-1" style={{ color: textColor }}>{factor.raw_symbol}</td>
-                      <td className="p-1" style={{ color: FINCEPT_COLORS.MUTED }}>{factor.date}</td>
-                      <td className="p-1 text-right" style={{ color: factor.split_factor !== 1 ? FINCEPT_COLORS.CYAN : textColor }}>
+                      <td className="p-1" style={{ color: colors.textMuted }}>{factor.date}</td>
+                      <td className="p-1 text-right" style={{ color: factor.split_factor !== 1 ? colors.info : textColor }}>
                         {factor.split_factor.toFixed(6)}
                       </td>
-                      <td className="p-1 text-right" style={{ color: factor.dividend_factor !== 1 ? FINCEPT_COLORS.GREEN : textColor }}>
+                      <td className="p-1 text-right" style={{ color: factor.dividend_factor !== 1 ? colors.success : textColor }}>
                         {factor.dividend_factor.toFixed(6)}
                       </td>
-                      <td className="p-1 text-right" style={{ color: FINCEPT_COLORS.YELLOW }}>
+                      <td className="p-1 text-right" style={{ color: colors.warning }}>
                         {factor.cumulative_factor.toFixed(6)}
                       </td>
                     </tr>
@@ -472,7 +475,7 @@ export const ReferenceDataPanel: React.FC<ReferenceDataPanelProps> = ({
                 </tbody>
               </table>
               {adjustmentFactors.length > 20 && (
-                <div className="p-1 text-[9px] text-center" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <div className="p-1 text-[9px] text-center" style={{ color: colors.textMuted }}>
                   Showing 20 of {adjustmentFactors.length} records
                 </div>
               )}

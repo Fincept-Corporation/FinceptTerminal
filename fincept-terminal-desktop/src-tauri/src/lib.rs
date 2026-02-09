@@ -48,6 +48,7 @@ struct WebSocketServices {
     arbitrage: websocket::services::ArbitrageService,
     portfolio: websocket::services::PortfolioService,
     monitoring: websocket::services::MonitoringService,
+    candle_aggregator: websocket::services::CandleAggregatorService,
 }
 
 #[derive(Debug, Serialize)]
@@ -648,6 +649,7 @@ pub fn run() {
         arbitrage: websocket::services::ArbitrageService::new(),
         portfolio: websocket::services::PortfolioService::new(),
         monitoring: websocket::services::MonitoringService::default(),
+        candle_aggregator: websocket::services::CandleAggregatorService::new(),
     }));
 
     let ws_state = WebSocketState {
@@ -706,6 +708,12 @@ pub fn run() {
 
                 // Load existing conditions from database
                 let _ = services_guard.monitoring.load_conditions().await;
+
+                // Initialize candle aggregator service
+                services_guard.candle_aggregator = websocket::services::CandleAggregatorService::new();
+                services_guard.candle_aggregator.set_app_handle(app_handle.clone());
+                let candle_ticker_rx = router_clone.read().await.subscribe_ticker();
+                services_guard.candle_aggregator.start_aggregation(candle_ticker_rx);
 
                 drop(services_guard); // Release the lock before listening
 
@@ -1406,7 +1414,7 @@ pub fn run() {
             commands::agents::get_trade_decisions,
             // Agent Streaming & Performance Commands
             commands::agent_streaming::execute_agent_streaming,
-            commands::agent_streaming::cancel_agent_stream,
+            commands::agents::cancel_agent_stream,
             commands::agent_streaming::execute_agents_parallel,
             commands::agent_streaming::execute_agent_priority,
             commands::agent_streaming::get_active_agent_streams,
@@ -1653,8 +1661,6 @@ pub fn run() {
             commands::alpha_arena::get_alpha_snapshots,
             commands::alpha_arena::list_alpha_agents,
             commands::alpha_arena::get_alpha_evaluation,
-            commands::alpha_arena::get_alpha_api_keys,
-            commands::alpha_arena::save_alpha_api_keys,
             commands::alpha_arena::list_alpha_competitions,
             commands::alpha_arena::get_alpha_competition,
             commands::alpha_arena::delete_alpha_competition,
@@ -1909,21 +1915,31 @@ pub fn run() {
             commands::broker_credentials::get_broker_credentials,
             commands::broker_credentials::delete_broker_credentials,
             commands::broker_credentials::list_broker_credentials,
-            // Master Contract Commands
-            commands::master_contract::save_master_contract_cache,
-            commands::master_contract::get_master_contract_cache,
-            commands::master_contract::delete_master_contract_cache,
-            commands::master_contract::is_master_contract_cache_valid,
-            commands::master_contract::get_master_contract_cache_info,
-            commands::master_contract::download_master_contract,
-            commands::master_contract::download_angelone_master_contract,
-            commands::master_contract::download_fyers_master_contract,
-            commands::master_contract::search_symbols,
-            commands::master_contract::get_symbol,
-            commands::master_contract::get_symbol_by_token,
-            commands::master_contract::get_symbol_count,
-            commands::master_contract::get_exchanges,
-            commands::master_contract::get_expiries,
+            // Master Contract Commands (Legacy - removed, use symbol_master instead)
+            // Unified Symbol Master Commands
+            commands::symbol_master::symbol_master_search,
+            commands::symbol_master::symbol_master_get_symbol,
+            commands::symbol_master::symbol_master_get_by_token,
+            commands::symbol_master::symbol_master_get_token,
+            commands::symbol_master::symbol_master_get_status,
+            commands::symbol_master::symbol_master_is_ready,
+            commands::symbol_master::symbol_master_init_broker,
+            commands::symbol_master::symbol_master_update_status,
+            commands::symbol_master::symbol_master_get_count,
+            commands::symbol_master::symbol_master_get_exchanges,
+            commands::symbol_master::symbol_master_get_expiries,
+            commands::symbol_master::symbol_master_get_underlyings,
+            commands::symbol_master::symbol_master_normalize_index,
+            commands::symbol_master::symbol_master_format_expiry,
+            commands::symbol_master::symbol_master_build_futures_symbol,
+            commands::symbol_master::symbol_master_build_options_symbol,
+            // Broker Master Contract Downloads (unified)
+            commands::broker_downloads::fyers::fyers_download_symbols,
+            commands::broker_downloads::zerodha::zerodha_download_symbols,
+            commands::broker_downloads::angelone::angelone_download_symbols,
+            commands::broker_downloads::upstox::upstox_download_symbols,
+            commands::broker_downloads::dhan::dhan_download_symbols,
+            commands::broker_downloads::shoonya::shoonya_download_symbols,
             // Indian Broker Commands (Zerodha, Angel, Dhan, etc.)
             commands::brokers::zerodha_exchange_token,
             commands::brokers::zerodha_validate_token,
@@ -2462,7 +2478,25 @@ pub fn run() {
             commands::strategies::stop_strategy,
             commands::strategies::stop_all_strategies,
             commands::strategies::list_deployed_strategies,
-            commands::strategies::update_strategy
+            commands::strategies::update_strategy,
+            // Algo Trading
+            commands::algo_trading::save_algo_strategy,
+            commands::algo_trading::list_algo_strategies,
+            commands::algo_trading::get_algo_strategy,
+            commands::algo_trading::delete_algo_strategy,
+            commands::algo_trading::deploy_algo_strategy,
+            commands::algo_trading::stop_algo_deployment,
+            commands::algo_trading::stop_all_algo_deployments,
+            commands::algo_trading::list_algo_deployments,
+            commands::algo_trading::get_algo_trades,
+            commands::algo_trading::run_algo_scan,
+            commands::algo_trading::get_candle_cache,
+            commands::algo_trading::evaluate_conditions_once,
+            commands::algo_trading::start_candle_aggregation,
+            commands::algo_trading::stop_candle_aggregation,
+            commands::algo_trading::run_algo_backtest,
+            commands::algo_trading::start_order_signal_bridge,
+            commands::algo_trading::stop_order_signal_bridge
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

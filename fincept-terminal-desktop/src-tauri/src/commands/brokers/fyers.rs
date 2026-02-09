@@ -20,6 +20,7 @@ use tauri::Emitter;
 use crate::websocket::types::MarketMessage;
 use crate::websocket::types::ProviderConfig;
 use crate::websocket::adapters::WebSocketAdapter;
+use crate::WebSocketState;
 use super::common::{ApiResponse, TokenExchangeResponse, OrderPlaceResponse};
 
 // Fyers API Configuration
@@ -866,55 +867,29 @@ pub async fn fyers_calculate_margin(
 // Fyers Master Contract Commands
 // ============================================================================
 
-use crate::database::fyers_symbols::{self, FyersSymbol};
+use crate::database::symbol_master;
+// Legacy: use crate::database::fyers_symbols::{self, FyersSymbol};
 
 /// Download and cache Fyers master contract (symbol master)
 /// This provides symbol-to-token mapping required for WebSocket subscriptions
 #[tauri::command]
 pub async fn fyers_download_master_contract(
-    api_key: String,
-    access_token: String,
+    _api_key: String,
+    _access_token: String,
 ) -> Result<ApiResponse<Value>, String> {
-    eprintln!("[fyers_download_master_contract] Downloading master contract");
+    eprintln!("[fyers_download_master_contract] Downloading master contract via unified system");
 
     let timestamp = chrono::Utc::now().timestamp();
-    let headers = create_fyers_headers(&api_key, &access_token);
-    let client = reqwest::Client::new();
 
-    // Fyers provides symbol master as CSV download
-    // Note: Fyers symbol master endpoint is /data/symbol-master (NOT /data-rest/v3/symbol-master)
-    let url = format!("{}/data/symbol-master", FYERS_API_BASE);
+    // Use the new unified broker downloads system
+    let result = crate::commands::broker_downloads::fyers::fyers_download_symbols().await;
 
-    let response = client
-        .get(&url)
-        .headers(headers)
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
-
-    let status = response.status();
-
-    if status.is_success() {
-        // Get response body as text (CSV format)
-        let csv_data = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
-
-        eprintln!("[fyers_download_master_contract] Downloaded CSV with {} lines", csv_data.lines().count());
-
-        // Parse CSV and populate database
-        let symbols = parse_fyers_csv(&csv_data).map_err(|e| format!("Failed to parse CSV: {}", e))?;
-
-        eprintln!("[fyers_download_master_contract] Parsed {} symbols", symbols.len());
-
-        // Save to database in bulk
-        fyers_symbols::save_symbols_bulk(&symbols).map_err(|e| format!("Failed to save symbols: {}", e))?;
-
-        eprintln!("[fyers_download_master_contract] Saved {} symbols to database", symbols.len());
-
+    if result.success {
         Ok(ApiResponse {
             success: true,
             data: Some(json!({
-                "symbol_count": symbols.len(),
-                "message": "Master contract downloaded and cached successfully"
+                "symbol_count": result.total_symbols,
+                "message": result.message
             })),
             error: None,
             timestamp,
@@ -923,75 +898,13 @@ pub async fn fyers_download_master_contract(
         Ok(ApiResponse {
             success: false,
             data: None,
-            error: Some("Failed to download master contract".to_string()),
+            error: Some(result.message),
             timestamp,
         })
     }
 }
 
-/// Parse Fyers CSV format into symbol structures
-fn parse_fyers_csv(csv_data: &str) -> Result<Vec<FyersSymbol>, String> {
-    let mut symbols = Vec::new();
-    let mut lines = csv_data.lines();
-
-    // Skip header line
-    lines.next();
-
-    for line in lines {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let fields: Vec<&str> = line.split(',').collect();
-
-        // Fyers CSV format (typical):
-        // Token,Symbol,Name,Exchange,Segment,InstrumentType,ISIN,TickSize,LotSize
-        // Example: 11536,RELIANCE-EQ,Reliance Industries Ltd,NSE,CM,EQ,INE002A01018,0.05,1
-
-        if fields.len() >= 6 {
-            // Parse token safely
-            let token = fields[0].trim().parse::<i32>().unwrap_or(0);
-
-            if token == 0 {
-                continue; // Skip invalid tokens
-            }
-
-            let symbol = fields.get(1).unwrap_or(&"").trim().to_string();
-            let name = fields.get(2).unwrap_or(&"").trim().to_string();
-            let exchange = fields.get(3).unwrap_or(&"NSE").trim().to_string();
-            let segment = fields.get(4).unwrap_or(&"").trim().to_string();
-            let instrument_type = fields.get(5).unwrap_or(&"").trim().to_string();
-            let isin = fields.get(6).and_then(|s| {
-                let trimmed = s.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(trimmed.to_string())
-                }
-            });
-            let tick_size = fields.get(7)
-                .and_then(|s| s.trim().parse::<f64>().ok())
-                .unwrap_or(0.05);
-            let lot_size = fields.get(8)
-                .and_then(|s| s.trim().parse::<i32>().ok())
-                .unwrap_or(1);
-
-            symbols.push(FyersSymbol {
-                token,
-                symbol,
-                name,
-                exchange,
-                segment,
-                instrument_type,
-                isin,
-                tick_size,
-                lot_size,
-            });
-        }
-    }
-
-    Ok(symbols)
-}
+// Legacy parse_fyers_csv removed - now using broker_downloads::fyers module
 
 /// Search for symbols in master contract
 #[tauri::command]
@@ -1005,13 +918,25 @@ pub async fn fyers_search_symbol(
     let timestamp = chrono::Utc::now().timestamp();
     let search_limit = limit.unwrap_or(20);
 
-    match fyers_symbols::search_symbols(&keyword, exchange.as_deref(), search_limit) {
+    match symbol_master::search_symbols("fyers", &keyword, exchange.as_deref(), None, search_limit) {
         Ok(results) => {
             eprintln!("[fyers_search_symbol] Found {} results", results.len());
+            let json_results: Vec<Value> = results.iter().map(|r| json!({
+                "symbol": r.symbol,
+                "br_symbol": r.br_symbol,
+                "name": r.name,
+                "exchange": r.exchange,
+                "token": r.token,
+                "instrument_type": r.instrument_type,
+                "lot_size": r.lot_size,
+                "tick_size": r.tick_size,
+                "expiry": r.expiry,
+                "strike": r.strike,
+            })).collect();
             Ok(ApiResponse {
                 success: true,
                 data: Some(json!({
-                    "results": results,
+                    "results": json_results,
                     "count": results.len()
                 })),
                 error: None,
@@ -1040,8 +965,9 @@ pub async fn fyers_get_token_for_symbol(
 
     let timestamp = chrono::Utc::now().timestamp();
 
-    match fyers_symbols::get_token_by_symbol(&symbol, &exchange) {
-        Ok(Some(token)) => {
+    match symbol_master::get_token_by_symbol("fyers", &symbol, &exchange) {
+        Ok(Some(token_str)) => {
+            let token: i32 = token_str.parse().unwrap_or(0);
             eprintln!("[fyers_get_token_for_symbol] Found token: {}", token);
             Ok(ApiResponse {
                 success: true,
@@ -1080,11 +1006,22 @@ pub async fn fyers_get_symbol_by_token(
 
     let timestamp = chrono::Utc::now().timestamp();
 
-    match fyers_symbols::get_symbol_by_token(token) {
-        Ok(Some(symbol_info)) => {
+    match symbol_master::get_symbol_by_token("fyers", &token.to_string()) {
+        Ok(Some(r)) => {
             Ok(ApiResponse {
                 success: true,
-                data: Some(json!(symbol_info)),
+                data: Some(json!({
+                    "symbol": r.symbol,
+                    "br_symbol": r.br_symbol,
+                    "name": r.name,
+                    "exchange": r.exchange,
+                    "token": r.token,
+                    "instrument_type": r.instrument_type,
+                    "lot_size": r.lot_size,
+                    "tick_size": r.tick_size,
+                    "expiry": r.expiry,
+                    "strike": r.strike,
+                })),
                 error: None,
                 timestamp,
             })
@@ -1113,24 +1050,18 @@ pub async fn fyers_get_symbol_by_token(
 pub async fn fyers_get_master_contract_metadata() -> Result<ApiResponse<Value>, String> {
     let timestamp = chrono::Utc::now().timestamp();
 
-    match fyers_symbols::get_metadata() {
-        Ok(Some((last_updated, count))) => {
+    match symbol_master::get_status("fyers") {
+        Ok(info) => {
             Ok(ApiResponse {
                 success: true,
                 data: Some(json!({
-                    "last_updated": last_updated,
-                    "symbol_count": count,
-                    "age_seconds": timestamp - last_updated
+                    "last_updated": info.last_updated,
+                    "symbol_count": info.total_symbols,
+                    "age_seconds": timestamp - info.last_updated,
+                    "status": info.status,
+                    "is_ready": info.is_ready,
                 })),
                 error: None,
-                timestamp,
-            })
-        }
-        Ok(None) => {
-            Ok(ApiResponse {
-                success: false,
-                data: None,
-                error: Some("Master contract not downloaded yet".to_string()),
                 timestamp,
             })
         }
@@ -1157,6 +1088,7 @@ static FYERS_WS: Lazy<Arc<RwLock<Option<crate::websocket::adapters::FyersAdapter
 #[tauri::command]
 pub async fn fyers_ws_connect(
     app: tauri::AppHandle,
+    state: tauri::State<'_, WebSocketState>,
     _api_key: String,
     access_token: String,
 ) -> Result<ApiResponse<bool>, String> {
@@ -1180,9 +1112,13 @@ pub async fn fyers_ws_connect(
 
     let mut adapter = crate::websocket::adapters::FyersAdapter::new(config);
 
-    // Set up message callback to emit Tauri events
+    // Clone the router so backend services (monitoring, candle aggregation, etc.) receive ticks
+    let router = state.router.clone();
+
+    // Set up message callback to emit Tauri events AND route through MessageRouter
     let app_handle = app.clone();
     adapter.set_message_callback(Box::new(move |msg: MarketMessage| {
+        // 1. Emit broker-specific events to frontend
         match &msg {
             MarketMessage::Ticker(data) => {
                 let _ = app_handle.emit("fyers_ticker", data);
@@ -1200,6 +1136,13 @@ pub async fn fyers_ws_connect(
                 let _ = app_handle.emit("fyers_candle", data);
             }
         }
+
+        // 2. Route through MessageRouter for backend services (monitoring, algo trading, etc.)
+        let router = router.clone();
+        let msg = msg.clone();
+        tokio::spawn(async move {
+            router.read().await.route(msg).await;
+        });
     }));
 
     // Connect to WebSocket

@@ -1,7 +1,7 @@
 // CryptoTickerBar.tsx - Ticker/Price Bar for Crypto Trading
 // Uses ref-based DOM updates for high-frequency price changes to prevent flickering
-import React, { useRef, useEffect, memo } from 'react';
-import { TrendingUp as ArrowUp, TrendingDown as ArrowDown, ChevronDown } from 'lucide-react';
+import React, { useRef, useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { FINCEPT } from '../constants';
 import type { TickerData } from '../types';
 

@@ -228,6 +228,12 @@ export interface CreateCompetitionRequest {
   cycle_interval_seconds?: number;
   exchange_id?: string;
   max_cycles?: number;
+  // Global LLM settings from Settings tab
+  llm_settings?: {
+    temperature: number;
+    max_tokens: number;
+    system_prompt: string;
+  };
 }
 
 export interface CreateCompetitionResponse {

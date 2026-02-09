@@ -20,6 +20,7 @@ import type { IExchangeAdapter } from '../brokers/crypto/types';
 import { websocketBridge, type ProviderConfig } from '../services/trading/websocketBridge';
 import { saveSetting, getSetting } from '@/services/core/sqliteService';
 import { initializeMarketDataService, getMarketDataService } from '../services/trading/UnifiedMarketDataService';
+import { brokerMCPBridge } from '@/services/mcp/internal';
 
 // Constants
 const CONNECTION_TIMEOUT = 10000; // 10 seconds
@@ -276,6 +277,9 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
           console.error('[BrokerContext] Real adapter disconnect error:', err);
         }
       }
+      // Disconnect BrokerMCPBridge when cleaning up
+      brokerMCPBridge.disconnect();
+      console.log('[BrokerContext] BrokerMCPBridge disconnected');
     } catch (err) {
       console.error('[BrokerContext] Cleanup error:', err);
     }
@@ -293,6 +297,10 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
     setIsConnecting(true);
 
+    // Declare adapter references outside try-catch so they're accessible for bridge connection
+    let newRealAdapter: IExchangeAdapter | null = null;
+    let newPaperAdapter: PaperTradingAdapter | null = null;
+
     try {
       // Clean up old adapters first
       await cleanupAdapters(realAdapter);
@@ -300,10 +308,10 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       if (signal.aborted) return;
 
       // Create real adapter
-      const newRealAdapter = createBrokerAdapter(activeBroker);
+      newRealAdapter = createBrokerAdapter(activeBroker);
 
       try {
-        await retryConnect(() => newRealAdapter.connect());
+        await retryConnect(() => newRealAdapter!.connect());
       } catch (connectError) {
         console.error(`[BrokerContext] [WARN] Failed to connect ${activeBroker} real adapter after retries:`, connectError);
       }
@@ -327,7 +335,7 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         // Create paper trading adapter with market data service (NO realAdapter dependency)
         // This allows paper trading to work independently of real broker connection
         const marketDataService = getMarketDataService();
-        const newPaperAdapter = createPaperTradingAdapter(
+        newPaperAdapter = createPaperTradingAdapter(
           {
             portfolioId: '',
             portfolioName,
@@ -358,6 +366,7 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         setPaperPortfolio(portfolio);
       } catch (error) {
         console.error('[BrokerContext] Failed to create paper adapter:', error);
+        newPaperAdapter = null;
         setPaperAdapter(null);
         setPaperPortfolio(null);
       }
@@ -368,12 +377,33 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       console.error(`[BrokerContext] [FAIL] Failed to initialize ${activeBroker}:`, error);
 
       setRealAdapter(null);
+      newRealAdapter = null;
+      newPaperAdapter = null;
       setPaperAdapter(null);
       setPaperPortfolio(null);
-    } finally {
-      setIsConnecting(false);
+      brokerMCPBridge.disconnect();
     }
-  }, [activeBroker, paperPortfolioMode, activeBrokerMetadata, cleanupAdapters, realAdapter, getBrokerFees]);
+
+    // Connect BrokerMCPBridge AFTER adapters are created (outside try-catch for proper scoping)
+    if (!signal.aborted) {
+      const adapterForMode = tradingMode === 'paper' ? newPaperAdapter : newRealAdapter;
+      if (adapterForMode && adapterForMode.isConnected()) {
+        brokerMCPBridge.connect({
+          activeAdapter: adapterForMode,
+          // In paper mode, also pass the real adapter for market discovery & price fetching
+          realAdapter: tradingMode === 'paper' ? newRealAdapter : null,
+          tradingMode: tradingMode,
+          activeBroker: activeBroker,
+        });
+        console.log(`[BrokerContext] BrokerMCPBridge connected (${tradingMode} mode, adapter: ${adapterForMode.constructor.name}, realAdapter: ${newRealAdapter ? 'available' : 'none'})`);
+      } else {
+        console.warn(`[BrokerContext] Adapter for ${tradingMode} mode not available or not connected - bridge not connected`);
+        brokerMCPBridge.disconnect();
+      }
+    }
+
+    setIsConnecting(false);
+  }, [activeBroker, tradingMode, paperPortfolioMode, activeBrokerMetadata, cleanupAdapters, realAdapter, getBrokerFees]);
 
   // Set active broker
   const setActiveBroker = useCallback(async (brokerId: string) => {
@@ -399,7 +429,18 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
   const setTradingMode = useCallback(async (mode: 'live' | 'paper') => {
     setTradingModeState(mode);
     await safeStorageSet('trading_mode', mode);
-  }, []);
+
+    // Update BrokerMCPBridge with new trading mode
+    const adapter = mode === 'paper' ? paperAdapter : realAdapter;
+    if (adapter) {
+      brokerMCPBridge.connect({
+        activeAdapter: adapter,
+        tradingMode: mode,
+        activeBroker: activeBroker
+      });
+      console.log(`[BrokerContext] BrokerMCPBridge switched to ${mode} mode`);
+    }
+  }, [paperAdapter, realAdapter, activeBroker]);
 
   // Set paper portfolio mode
   const setPaperPortfolioMode = useCallback(async (mode: 'separate' | 'unified') => {

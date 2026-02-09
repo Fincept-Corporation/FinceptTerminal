@@ -7,6 +7,7 @@ import { BitmapLayer } from '@deck.gl/layers';
 import { useAuth } from '@/contexts/AuthContext';
 import { NewsEventsService, NewsEvent, UniqueCity, UniqueCountry, UniqueCategory } from '@/services/news/newsEventsService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useCache, cacheKey } from '@/hooks/useCache';
 import { withTimeout } from '@/services/core/apiUtils';
@@ -23,20 +24,6 @@ const INITIAL_VIEW_STATE = {
   zoom: 2,
   pitch: 0,
   bearing: 0
-};
-
-const THEME = {
-  ORANGE: '#FF6600',
-  BLACK: '#000000',
-  DARK_BG: '#0F0F0F',
-  BORDER: '#333333',
-  WHITE: '#FFFFFF',
-  GREEN: '#00FF00',
-  RED: '#FF0000',
-  YELLOW: '#FFD700',
-  CYAN: '#00E5FF',
-  GRAY: '#888888',
-  PURPLE: '#9333EA'
 };
 
 const API_TIMEOUT_MS = 30000;
@@ -213,7 +200,8 @@ function getCategoryColor(category?: string): [number, number, number, number] {
 // ============================================================================
 
 const GeopoliticsTabInner: React.FC = () => {
-  const { colors, fontFamily } = useTerminalTheme();
+  const { colors, fontFamily, fontSize } = useTerminalTheme();
+  const { t } = useTranslation('geopolitics');
   const { session } = useAuth();
   const apiKey = session?.api_key || null;
 
@@ -535,11 +523,11 @@ const GeopoliticsTabInner: React.FC = () => {
         top: 0,
         left: 0,
         right: 0,
-        background: THEME.BLACK,
-        borderBottom: `2px solid ${THEME.ORANGE}`,
+        background: colors.background,
+        borderBottom: `2px solid ${colors.primary}`,
         zIndex: 1000,
-        fontFamily: 'Consolas, monospace',
-        fontSize: '12px'
+        fontFamily,
+        fontSize: fontSize.body
       }}>
         {/* Title Bar */}
         <div style={{
@@ -547,24 +535,24 @@ const GeopoliticsTabInner: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          borderBottom: `1px solid ${THEME.BORDER}`,
+          borderBottom: `1px solid ${colors.panel}`,
           flexWrap: 'wrap'
         }}>
-          <div style={{ color: THEME.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
-            GEO&gt;
+          <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: fontSize.subheading }}>
+            {t('header.prefix')}
           </div>
-          <div style={{ color: THEME.WHITE, fontWeight: 'bold', fontSize: '12px' }}>
-            GEOPOLITICAL CONFLICT MONITOR
+          <div style={{ color: colors.text, fontWeight: 'bold', fontSize: fontSize.body }}>
+            {t('header.title')}
           </div>
-          <div style={{ color: events.length > 0 ? THEME.GREEN : THEME.RED, fontWeight: 'bold', fontSize: '11px' }}>
-            {events.length} EVENTS
+          <div style={{ color: events.length > 0 ? colors.success : colors.alert, fontWeight: 'bold', fontSize: fontSize.small }}>
+            {events.length} {t('header.events')}
           </div>
-          <div style={{ color: THEME.CYAN, fontSize: '10px' }}>
+          <div style={{ color: colors.secondary, fontSize: fontSize.tiny }}>
             {currentTime.toISOString().substring(0, 19)} UTC
           </div>
           {eventsStale && (
-            <div style={{ color: THEME.YELLOW, fontSize: '10px' }}>
-              STALE
+            <div style={{ color: colors.warning, fontSize: fontSize.tiny }}>
+              {t('status.stale')}
             </div>
           )}
         </div>
@@ -580,7 +568,7 @@ const GeopoliticsTabInner: React.FC = () => {
           <div style={{ position: 'relative', minWidth: '100px', flex: '0 1 auto' }}>
             <input
               type="text"
-              placeholder="Country..."
+              placeholder={t('filters.country')}
               value={countryFilter}
               onChange={(e) => dispatch({ type: 'SET_COUNTRY_FILTER', payload: e.target.value })}
               onKeyDown={(e) => {
@@ -596,11 +584,11 @@ const GeopoliticsTabInner: React.FC = () => {
               onFocus={() => countrySuggestions.length > 0 && dispatch({ type: 'SET_SHOW_COUNTRY_SUGGESTIONS', payload: true })}
               style={{
                 padding: '5px 8px',
-                background: '#1a1a1a',
-                border: '1px solid #333',
-                color: '#fff',
-                fontFamily: 'Consolas, monospace',
-                fontSize: '11px',
+                background: colors.panel,
+                border: `1px solid ${colors.panel}`,
+                color: colors.text,
+                fontFamily,
+                fontSize: fontSize.small,
                 width: '100%',
                 outline: 'none',
                 borderRadius: '2px'
@@ -651,7 +639,7 @@ const GeopoliticsTabInner: React.FC = () => {
           <div style={{ position: 'relative', minWidth: '100px', flex: '0 1 auto' }}>
             <input
               type="text"
-              placeholder={selectedCities.length > 0 ? `${selectedCities.length} cities` : "Cities..."}
+              placeholder={selectedCities.length > 0 ? `${selectedCities.length} cities` : t('filters.cities')}
               value={citySearchInput}
               onChange={(e) => dispatch({ type: 'SET_CITY_SEARCH_INPUT', payload: e.target.value })}
               onKeyDown={(e) => {
@@ -665,11 +653,11 @@ const GeopoliticsTabInner: React.FC = () => {
               style={{
                 padding: '5px 8px',
                 paddingRight: selectedCities.length > 0 ? '24px' : '8px',
-                background: '#1a1a1a',
-                border: `1px solid ${selectedCities.length > 0 ? THEME.PURPLE : '#333'}`,
-                color: '#fff',
-                fontFamily: 'Consolas, monospace',
-                fontSize: '11px',
+                background: colors.panel,
+                border: `1px solid ${selectedCities.length > 0 ? colors.primary : colors.panel}`,
+                color: colors.text,
+                fontFamily,
+                fontSize: fontSize.small,
                 width: '100%',
                 outline: 'none',
                 borderRadius: '2px'
@@ -684,13 +672,13 @@ const GeopoliticsTabInner: React.FC = () => {
                   top: '50%',
                   transform: 'translateY(-50%)',
                   cursor: 'pointer',
-                  color: THEME.RED,
+                  color: colors.alert,
                   fontWeight: 'bold',
-                  fontSize: '12px',
+                  fontSize: fontSize.body,
                   lineHeight: '1',
                   padding: '2px'
                 }}
-                title="Clear all cities"
+                title={t('filters.clearAllCities')}
               >
                 ×
               </div>
@@ -701,8 +689,8 @@ const GeopoliticsTabInner: React.FC = () => {
                 top: '100%',
                 left: 0,
                 width: '240px',
-                background: '#1a1a1a',
-                border: '1px solid #333',
+                background: colors.panel,
+                border: `1px solid ${colors.panel}`,
                 borderTop: 'none',
                 maxHeight: '200px',
                 overflowY: 'auto',
@@ -718,29 +706,29 @@ const GeopoliticsTabInner: React.FC = () => {
                       style={{
                         padding: '6px 8px',
                         cursor: 'pointer',
-                        fontSize: '10px',
-                        borderBottom: idx < citySuggestions.length - 1 ? '1px solid #333' : 'none',
-                        color: isSelected ? THEME.PURPLE : '#ccc',
-                        background: isSelected ? 'rgba(147, 51, 234, 0.2)' : '#1a1a1a',
+                        fontSize: fontSize.tiny,
+                        borderBottom: idx < citySuggestions.length - 1 ? `1px solid ${colors.panel}` : 'none',
+                        color: isSelected ? colors.primary : colors.textMuted,
+                        background: isSelected ? 'rgba(147, 51, 234, 0.2)' : colors.panel,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center'
                       }}
                       onMouseEnter={(e) => {
                         if (!isSelected) {
-                          e.currentTarget.style.background = '#2a2a2a';
-                          e.currentTarget.style.color = '#fff';
+                          e.currentTarget.style.background = colors.background;
+                          e.currentTarget.style.color = colors.text;
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (!isSelected) {
-                          e.currentTarget.style.background = '#1a1a1a';
-                          e.currentTarget.style.color = '#ccc';
+                          e.currentTarget.style.background = colors.panel;
+                          e.currentTarget.style.color = colors.textMuted;
                         }
                       }}
                     >
                       <span>{suggestion.city}, {suggestion.country}</span>
-                      {isSelected && <span style={{ color: THEME.PURPLE }}>✓</span>}
+                      {isSelected && <span style={{ color: colors.primary }}>✓</span>}
                     </div>
                   );
                 })}
@@ -751,7 +739,7 @@ const GeopoliticsTabInner: React.FC = () => {
           <div style={{ position: 'relative', minWidth: '110px', flex: '0 1 auto' }}>
             <input
               type="text"
-              placeholder="Category..."
+              placeholder={t('filters.category')}
               value={categoryFilter}
               onChange={(e) => dispatch({ type: 'SET_CATEGORY_FILTER', payload: e.target.value })}
               onKeyDown={(e) => {
@@ -767,11 +755,11 @@ const GeopoliticsTabInner: React.FC = () => {
               onFocus={() => categorySuggestions.length > 0 && dispatch({ type: 'SET_SHOW_CATEGORY_SUGGESTIONS', payload: true })}
               style={{
                 padding: '5px 8px',
-                background: '#1a1a1a',
-                border: '1px solid #333',
-                color: '#fff',
-                fontFamily: 'Consolas, monospace',
-                fontSize: '11px',
+                background: colors.panel,
+                border: `1px solid ${colors.panel}`,
+                color: colors.text,
+                fontFamily,
+                fontSize: fontSize.small,
                 width: '100%',
                 outline: 'none',
                 borderRadius: '2px'
@@ -783,8 +771,8 @@ const GeopoliticsTabInner: React.FC = () => {
                 top: '100%',
                 left: 0,
                 width: '200px',
-                background: '#1a1a1a',
-                border: '1px solid #333',
+                background: colors.panel,
+                border: `1px solid ${colors.panel}`,
                 borderTop: 'none',
                 maxHeight: '200px',
                 overflowY: 'auto',
@@ -798,18 +786,18 @@ const GeopoliticsTabInner: React.FC = () => {
                     style={{
                       padding: '6px 8px',
                       cursor: 'pointer',
-                      fontSize: '10px',
-                      borderBottom: idx < categorySuggestions.length - 1 ? '1px solid #333' : 'none',
-                      color: '#ccc',
-                      background: '#1a1a1a'
+                      fontSize: fontSize.tiny,
+                      borderBottom: idx < categorySuggestions.length - 1 ? `1px solid ${colors.panel}` : 'none',
+                      color: colors.textMuted,
+                      background: colors.panel
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#2a2a2a';
-                      e.currentTarget.style.color = '#fff';
+                      e.currentTarget.style.background = colors.background;
+                      e.currentTarget.style.color = colors.text;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#1a1a1a';
-                      e.currentTarget.style.color = '#ccc';
+                      e.currentTarget.style.background = colors.panel;
+                      e.currentTarget.style.color = colors.textMuted;
                     }}
                   >
                     {suggestion.event_category} ({suggestion.event_count} events)
@@ -824,11 +812,11 @@ const GeopoliticsTabInner: React.FC = () => {
             disabled={eventsLoading}
             style={{
               padding: '5px 14px',
-              background: THEME.ORANGE,
+              background: colors.primary,
               border: 'none',
-              color: '#000',
-              fontFamily: 'Consolas, monospace',
-              fontSize: '10px',
+              color: colors.background,
+              fontFamily,
+              fontSize: fontSize.tiny,
               fontWeight: 'bold',
               cursor: eventsLoading ? 'not-allowed' : 'pointer',
               opacity: eventsLoading ? 0.5 : 1,
@@ -836,7 +824,7 @@ const GeopoliticsTabInner: React.FC = () => {
               minWidth: '60px'
             }}
           >
-            {eventsLoading ? 'LOADING...' : 'APPLY'}
+            {eventsLoading ? t('status.loading') : t('filters.apply')}
           </button>
 
           {(countryFilter || cityFilter || selectedCities.length > 0 || categoryFilter) && (
@@ -844,18 +832,18 @@ const GeopoliticsTabInner: React.FC = () => {
               onClick={() => dispatch({ type: 'CLEAR_FILTERS' })}
               style={{
                 padding: '5px 12px',
-                background: '#000',
-                border: '1px solid #666',
-                color: '#fff',
-                fontFamily: 'Consolas, monospace',
-                fontSize: '10px',
+                background: colors.background,
+                border: `1px solid ${colors.textMuted}`,
+                color: colors.text,
+                fontFamily,
+                fontSize: fontSize.tiny,
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 borderRadius: '2px',
                 minWidth: '55px'
               }}
             >
-              CLEAR
+              {t('filters.clear')}
             </button>
           )}
 
@@ -869,15 +857,15 @@ const GeopoliticsTabInner: React.FC = () => {
               flex: '1 1 100%',
               marginTop: '4px'
             }}>
-              <span style={{ fontSize: '9px', color: THEME.GRAY }}>Selected:</span>
+              <span style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>{t('filters.selectedLabel')}</span>
               {selectedCities.map((city, idx) => (
                 <div
                   key={idx}
                   style={{
                     padding: '3px 8px',
-                    background: THEME.PURPLE,
-                    color: THEME.WHITE,
-                    fontSize: '9px',
+                    background: colors.primary,
+                    color: colors.text,
+                    fontSize: fontSize.tiny,
                     borderRadius: '3px',
                     display: 'flex',
                     alignItems: 'center',
@@ -887,7 +875,7 @@ const GeopoliticsTabInner: React.FC = () => {
                   {city}
                   <span
                     onClick={() => dispatch({ type: 'REMOVE_CITY', payload: city })}
-                    style={{ cursor: 'pointer', fontWeight: 'bold', color: THEME.WHITE, fontSize: '11px' }}
+                    style={{ cursor: 'pointer', fontWeight: 'bold', color: colors.text, fontSize: fontSize.small }}
                   >
                     ×
                   </span>
@@ -907,31 +895,31 @@ const GeopoliticsTabInner: React.FC = () => {
           right: '20px',
           padding: '12px 20px',
           background: 'rgba(255, 0, 0, 0.2)',
-          border: '1px solid #ff0000',
+          border: `1px solid ${colors.alert}`,
           borderRadius: '4px',
-          color: '#ff6b6b',
-          fontFamily: 'Consolas, monospace',
-          fontSize: '13px',
+          color: colors.alert,
+          fontFamily,
+          fontSize: fontSize.subheading,
           zIndex: 10,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <span>ERROR: {eventsErrorMessage}</span>
+          <span>{t('status.error')} {eventsErrorMessage}</span>
           <button
             onClick={handleApply}
             style={{
               background: 'transparent',
-              border: '1px solid #ff6b6b',
-              color: '#ff6b6b',
+              border: `1px solid ${colors.alert}`,
+              color: colors.alert,
               padding: '4px 12px',
               cursor: 'pointer',
-              fontFamily: 'Consolas, monospace',
-              fontSize: '11px',
+              fontFamily,
+              fontSize: fontSize.small,
               borderRadius: '2px',
             }}
           >
-            RETRY
+            {t('messages.retry')}
           </button>
         </div>
       )}
@@ -945,27 +933,27 @@ const GeopoliticsTabInner: React.FC = () => {
         width: isPanelCollapsed ? '40px' : 'min(280px, calc(100vw - 20px))',
         maxWidth: isPanelCollapsed ? '40px' : '90vw',
         background: 'rgba(0, 0, 0, 0.95)',
-        border: `1px solid ${THEME.BORDER}`,
+        border: `1px solid ${colors.panel}`,
         borderRadius: '4px',
         zIndex: 999,
         overflowY: isPanelCollapsed ? 'hidden' : 'auto',
         overflowX: 'hidden',
-        fontFamily: 'Consolas, monospace',
-        fontSize: '10px',
+        fontFamily,
+        fontSize: fontSize.tiny,
         backdropFilter: 'blur(10px)',
         transition: 'width 0.3s ease'
       }}>
         {/* Collapse Button */}
         <div style={{
           padding: '8px',
-          borderBottom: `1px solid ${THEME.BORDER}`,
+          borderBottom: `1px solid ${colors.panel}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
           {!isPanelCollapsed && (
-            <div style={{ color: THEME.ORANGE, fontWeight: 'bold', fontSize: '11px' }}>
-              INFO PANEL
+            <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: fontSize.small }}>
+              {t('panel.title')}
             </div>
           )}
           <button
@@ -973,15 +961,15 @@ const GeopoliticsTabInner: React.FC = () => {
             style={{
               background: 'transparent',
               border: 'none',
-              color: THEME.ORANGE,
+              color: colors.primary,
               cursor: 'pointer',
-              fontSize: '14px',
+              fontSize: fontSize.subheading,
               padding: '4px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
-            title={isPanelCollapsed ? 'Expand panel' : 'Collapse panel'}
+            title={isPanelCollapsed ? t('panel.expand') : t('panel.collapse')}
           >
             {isPanelCollapsed ? '◀' : '▶'}
           </button>
@@ -990,29 +978,29 @@ const GeopoliticsTabInner: React.FC = () => {
         {!isPanelCollapsed && (
           <>
             {/* Events Loaded */}
-            <div style={{ padding: '10px', borderBottom: `1px solid ${THEME.BORDER}` }}>
-              <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
-                EVENTS LOADED
+            <div style={{ padding: '10px', borderBottom: `1px solid ${colors.panel}` }}>
+              <div style={{ color: colors.primary, fontWeight: 'bold', marginBottom: '8px', fontSize: fontSize.small }}>
+                {t('panel.eventsLoaded')}
               </div>
-              <div style={{ color: THEME.YELLOW, fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+              <div style={{ color: colors.warning, fontSize: fontSize.subheading, fontWeight: 'bold', marginBottom: '4px' }}>
                 {events.length} events
               </div>
-              <div style={{ color: THEME.GRAY, fontSize: '9px' }}>
-                on map visualization
+              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
+                {t('panel.onMapVisualization')}
               </div>
             </div>
 
             {/* Statistics */}
-            <div style={{ padding: '10px', borderBottom: `1px solid ${THEME.BORDER}` }}>
-              <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
-                TOP CATEGORIES
+            <div style={{ padding: '10px', borderBottom: `1px solid ${colors.panel}` }}>
+              <div style={{ color: colors.primary, fontWeight: 'bold', marginBottom: '8px', fontSize: fontSize.small }}>
+                {t('panel.topCategories')}
               </div>
               {categoryStats.map(([cat, count], idx) => (
                 <div key={idx} style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   marginBottom: '4px',
-                  color: THEME.WHITE,
+                  color: colors.text,
                   gap: '8px'
                 }}>
                   <span style={{
@@ -1021,21 +1009,21 @@ const GeopoliticsTabInner: React.FC = () => {
                     whiteSpace: 'nowrap',
                     flex: 1
                   }}>{cat}</span>
-                  <span style={{ color: THEME.YELLOW, flexShrink: 0 }}>{count}</span>
+                  <span style={{ color: colors.warning, flexShrink: 0 }}>{count}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ padding: '10px', borderBottom: `1px solid ${THEME.BORDER}` }}>
-              <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
-                TOP COUNTRIES
+            <div style={{ padding: '10px', borderBottom: `1px solid ${colors.panel}` }}>
+              <div style={{ color: colors.primary, fontWeight: 'bold', marginBottom: '8px', fontSize: fontSize.small }}>
+                {t('panel.topCountries')}
               </div>
               {countryStats.map(([country, count], idx) => (
                 <div key={idx} style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   marginBottom: '4px',
-                  color: THEME.WHITE,
+                  color: colors.text,
                   gap: '8px'
                 }}>
                   <span style={{
@@ -1044,7 +1032,7 @@ const GeopoliticsTabInner: React.FC = () => {
                     whiteSpace: 'nowrap',
                     flex: 1
                   }}>{country}</span>
-                  <span style={{ color: THEME.YELLOW, flexShrink: 0 }}>{count}</span>
+                  <span style={{ color: colors.warning, flexShrink: 0 }}>{count}</span>
                 </div>
               ))}
             </div>
@@ -1052,55 +1040,55 @@ const GeopoliticsTabInner: React.FC = () => {
             {/* Selected Event Details */}
             {selectedEvent && (
               <div style={{ padding: '10px' }}>
-                <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
-                  EVENT DETAILS
+                <div style={{ color: colors.primary, fontWeight: 'bold', marginBottom: '8px', fontSize: fontSize.small }}>
+                  {t('panel.eventDetails')}
                 </div>
-                <div style={{ color: THEME.WHITE, lineHeight: '1.6', wordBreak: 'break-word' }}>
+                <div style={{ color: colors.text, lineHeight: '1.6', wordBreak: 'break-word' }}>
                   {selectedEvent.event_category && (
-                    <div style={{ marginBottom: '6px', fontWeight: 'bold', color: THEME.YELLOW, fontSize: '10px' }}>
+                    <div style={{ marginBottom: '6px', fontWeight: 'bold', color: colors.warning, fontSize: fontSize.tiny }}>
                       {selectedEvent.event_category.toUpperCase().replace(/_/g, ' ')}
                     </div>
                   )}
                   {selectedEvent.country && (
-                    <div style={{ marginBottom: '4px', fontSize: '9px' }}>
-                      <span style={{ color: THEME.GRAY }}>Country:</span> {selectedEvent.country}
+                    <div style={{ marginBottom: '4px', fontSize: fontSize.tiny }}>
+                      <span style={{ color: colors.textMuted }}>{t('eventDetails.country')}</span> {selectedEvent.country}
                     </div>
                   )}
                   {selectedEvent.city && (
-                    <div style={{ marginBottom: '4px', fontSize: '9px' }}>
-                      <span style={{ color: THEME.GRAY }}>City:</span> {selectedEvent.city}
+                    <div style={{ marginBottom: '4px', fontSize: fontSize.tiny }}>
+                      <span style={{ color: colors.textMuted }}>{t('eventDetails.city')}</span> {selectedEvent.city}
                     </div>
                   )}
                   {selectedEvent.matched_keywords && (
-                    <div style={{ marginBottom: '4px', fontSize: '9px' }}>
-                      <span style={{ color: THEME.GRAY }}>Keywords:</span> {selectedEvent.matched_keywords}
+                    <div style={{ marginBottom: '4px', fontSize: fontSize.tiny }}>
+                      <span style={{ color: colors.textMuted }}>{t('eventDetails.keywords')}</span> {selectedEvent.matched_keywords}
                     </div>
                   )}
                   {selectedEvent.latitude !== undefined && selectedEvent.longitude !== undefined && (
-                    <div style={{ marginBottom: '4px', fontSize: '8px' }}>
-                      <span style={{ color: THEME.GRAY }}>Coords:</span> {selectedEvent.latitude.toFixed(4)}, {selectedEvent.longitude.toFixed(4)}
+                    <div style={{ marginBottom: '4px', fontSize: fontSize.tiny }}>
+                      <span style={{ color: colors.textMuted }}>{t('eventDetails.coords')}</span> {selectedEvent.latitude.toFixed(4)}, {selectedEvent.longitude.toFixed(4)}
                     </div>
                   )}
                   {selectedEvent.extracted_date && (
-                    <div style={{ marginBottom: '4px', fontSize: '8px' }}>
-                      <span style={{ color: THEME.GRAY }}>Date:</span> {new Date(selectedEvent.extracted_date).toLocaleString()}
+                    <div style={{ marginBottom: '4px', fontSize: fontSize.tiny }}>
+                      <span style={{ color: colors.textMuted }}>{t('eventDetails.date')}</span> {new Date(selectedEvent.extracted_date).toLocaleString()}
                     </div>
                   )}
                   {selectedEvent.url && (
-                    <div style={{ marginBottom: '4px', fontSize: '8px' }}>
-                      <span style={{ color: THEME.GRAY }}>Source:</span>{' '}
+                    <div style={{ marginBottom: '4px', fontSize: fontSize.tiny }}>
+                      <span style={{ color: colors.textMuted }}>{t('eventDetails.source')}</span>{' '}
                       <a
                         href={selectedEvent.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
-                          color: THEME.CYAN,
+                          color: colors.secondary,
                           textDecoration: 'underline',
                           cursor: 'pointer',
                           wordBreak: 'break-all'
                         }}
                       >
-                        View Article
+                        {t('eventDetails.viewArticle')}
                       </a>
                     </div>
                   )}
@@ -1109,67 +1097,67 @@ const GeopoliticsTabInner: React.FC = () => {
                     style={{
                       marginTop: '8px',
                       padding: '6px 10px',
-                      background: THEME.BORDER,
+                      background: colors.panel,
                       border: 'none',
-                      color: THEME.WHITE,
-                      fontFamily: 'Consolas, monospace',
-                      fontSize: '9px',
+                      color: colors.text,
+                      fontFamily,
+                      fontSize: fontSize.tiny,
                       cursor: 'pointer',
                       width: '100%',
                       borderRadius: '2px'
                     }}
                   >
-                    CLOSE
+                    {t('panel.close')}
                   </button>
                 </div>
               </div>
             )}
 
             {/* Legend */}
-            <div style={{ padding: '10px', borderTop: `1px solid ${THEME.BORDER}` }}>
-              <div style={{ color: THEME.ORANGE, fontWeight: 'bold', marginBottom: '8px', fontSize: '11px' }}>
-                EVENT CATEGORIES
+            <div style={{ padding: '10px', borderTop: `1px solid ${colors.panel}` }}>
+              <div style={{ color: colors.primary, fontWeight: 'bold', marginBottom: '8px', fontSize: fontSize.small }}>
+                {t('legend.title')}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF0000', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Armed Conflict</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.armedConflict')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF4500', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Terrorism</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.terrorism')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FFD700', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Protests</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.protests')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF6464', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Civilian Violence</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.civilianViolence')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FFA500', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Riots</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.riots')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#9333EA', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Political Violence</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.politicalViolence')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00E5FF', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Crisis</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.crisis')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF1493', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Explosions</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.explosions')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#6495ED', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Strategic</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.strategic')}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#888888', flexShrink: 0 }}></div>
-                  <span style={{ color: THEME.GRAY, fontSize: '8px' }}>Unclassified</span>
+                  <span style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{t('legend.unclassified')}</span>
                 </div>
               </div>
             </div>
@@ -1194,13 +1182,13 @@ const GeopoliticsTabInner: React.FC = () => {
                    Keywords: ${object.event.matched_keywords || 'N/A'}<br/>
                    ${object.event.extracted_date ? new Date(object.event.extracted_date).toLocaleDateString() : ''}</div>`,
             style: {
-              backgroundColor: '#000',
-              color: '#fff',
+              backgroundColor: colors.background,
+              color: colors.text,
               padding: '8px',
               borderRadius: '4px',
-              border: '1px solid #ff6600',
-              fontFamily: 'Consolas, monospace',
-              fontSize: '10px'
+              border: `1px solid ${colors.primary}`,
+              fontFamily,
+              fontSize: fontSize.tiny
             }
           }}
         />
@@ -1209,16 +1197,16 @@ const GeopoliticsTabInner: React.FC = () => {
       {/* Footer */}
       <div style={{ flexShrink: 0 }}>
         <TabFooter
-          tabName="GEOPOLITICAL CONFLICT MONITOR"
+          tabName={t('footer.tabName')}
           leftInfo={[
-            { label: 'EVENTS', value: `${events.length}`, color: events.length > 0 ? '#10b981' : '#ef4444' },
-            { label: 'ENGINE', value: 'DECK.GL v9.2', color: '#06b6d4' },
-            { label: 'SOURCE', value: 'NEWS-EVENTS API', color: '#fbbf24' },
-            ...(selectedEvent ? [{ label: 'SELECTED', value: selectedEvent.country || 'N/A', color: '#ffd700' }] : [])
+            { label: t('footer.labelEvents'), value: `${events.length}`, color: events.length > 0 ? colors.success : colors.alert },
+            { label: t('footer.labelEngine'), value: t('footer.engineValue'), color: colors.secondary },
+            { label: t('footer.labelSource'), value: t('footer.sourceValue'), color: colors.warning },
+            ...(selectedEvent ? [{ label: t('footer.labelSelected'), value: selectedEvent.country || 'N/A', color: colors.warning }] : [])
           ]}
-          statusInfo={`REAL-TIME GLOBAL INTELLIGENCE | AUTO-REFRESH: 5MIN | ${currentTime.toLocaleTimeString()}`}
-          backgroundColor="#000000"
-          borderColor="#ff6600"
+          statusInfo={t('footer.statusInfo', { time: currentTime.toLocaleTimeString() })}
+          backgroundColor={colors.background}
+          borderColor={colors.primary}
         />
       </div>
     </div>

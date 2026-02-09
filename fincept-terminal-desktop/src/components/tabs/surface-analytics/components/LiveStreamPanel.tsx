@@ -17,7 +17,8 @@ import {
   Clock,
   Trash2,
 } from 'lucide-react';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface LiveStreamRecord {
   type: 'data' | 'status' | 'error' | 'info';
@@ -88,6 +89,8 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
   onStopAllStreams,
   activeStreams,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
   const [selectedDataset, setSelectedDataset] = useState('XNAS.ITCH');
   const [selectedSchema, setSelectedSchema] = useState('trades');
   const [selectedSymbol, setSelectedSymbol] = useState(symbols[0] || 'SPY');
@@ -193,13 +196,13 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
       <div
         className="p-4 text-center"
         style={{
-          backgroundColor: FINCEPT_COLORS.DARK_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
-        <Radio size={24} style={{ color: FINCEPT_COLORS.MUTED, margin: '0 auto 8px' }} />
-        <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+        <Radio size={24} style={{ color: colors.textMuted, margin: '0 auto 8px' }} />
+        <div className="text-xs" style={{ color: colors.textMuted }}>
           Configure Databento API key for live streaming
         </div>
       </div>
@@ -209,9 +212,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         overflow: 'hidden',
       }}
     >
@@ -219,38 +222,38 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
       <div
         className="flex items-center justify-between p-2"
         style={{
-          backgroundColor: FINCEPT_COLORS.HEADER_BG,
-          borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          borderBottom: `1px solid ${colors.textMuted}`,
         }}
       >
         <div className="flex items-center gap-2">
           {isConnected ? (
-            <Wifi size={14} style={{ color: FINCEPT_COLORS.GREEN }} />
+            <Wifi size={14} style={{ color: colors.success }} />
           ) : (
-            <WifiOff size={14} style={{ color: FINCEPT_COLORS.MUTED }} />
+            <WifiOff size={14} style={{ color: colors.textMuted }} />
           )}
           <span className="text-xs font-bold" style={{ color: accentColor }}>
             LIVE STREAM
           </span>
           {isConnected && (
-            <span className="text-[9px] px-1" style={{ color: FINCEPT_COLORS.GREEN, backgroundColor: `${FINCEPT_COLORS.GREEN}20`, borderRadius: '2px' }}>
+            <span className="text-[9px] px-1" style={{ color: colors.success, backgroundColor: `${colors.success}20`, borderRadius: 'var(--ft-border-radius)' }}>
               CONNECTED
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Activity size={12} style={{ color: isConnected ? FINCEPT_COLORS.GREEN : FINCEPT_COLORS.MUTED }} />
-          <span className="text-[10px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+          <Activity size={12} style={{ color: isConnected ? colors.success : colors.textMuted }} />
+          <span className="text-[10px]" style={{ color: colors.textMuted }}>
             {recordCount} msgs
           </span>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="p-2 space-y-2" style={{ borderBottom: `1px solid ${FINCEPT_COLORS.BORDER}` }}>
+      <div className="p-2 space-y-2" style={{ borderBottom: `1px solid ${colors.textMuted}` }}>
         {/* Dataset Selection */}
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[9px]" style={{ color: FINCEPT_COLORS.MUTED, width: '45px' }}>Dataset:</span>
+          <span className="text-[9px]" style={{ color: colors.textMuted, width: '45px' }}>Dataset:</span>
           {LIVE_DATASETS.slice(0, 4).map((ds) => (
             <button
               key={ds.id}
@@ -258,9 +261,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
               disabled={isConnected}
               className="px-2 py-0.5 text-[9px]"
               style={{
-                backgroundColor: selectedDataset === ds.id ? accentColor : FINCEPT_COLORS.BORDER,
-                color: selectedDataset === ds.id ? FINCEPT_COLORS.BLACK : textColor,
-                borderRadius: '2px',
+                backgroundColor: selectedDataset === ds.id ? accentColor : colors.textMuted,
+                color: selectedDataset === ds.id ? colors.background : textColor,
+                borderRadius: 'var(--ft-border-radius)',
                 opacity: isConnected ? 0.5 : 1,
               }}
               title={ds.description}
@@ -272,7 +275,7 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
 
         {/* Schema Selection */}
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[9px]" style={{ color: FINCEPT_COLORS.MUTED, width: '45px' }}>Schema:</span>
+          <span className="text-[9px]" style={{ color: colors.textMuted, width: '45px' }}>Schema:</span>
           {LIVE_SCHEMAS.map((schema) => (
             <button
               key={schema.id}
@@ -280,10 +283,10 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
               disabled={isConnected}
               className="px-2 py-0.5 text-[9px]"
               style={{
-                backgroundColor: selectedSchema === schema.id ? FINCEPT_COLORS.BORDER : 'transparent',
-                color: selectedSchema === schema.id ? textColor : FINCEPT_COLORS.MUTED,
-                border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-                borderRadius: '2px',
+                backgroundColor: selectedSchema === schema.id ? colors.textMuted : 'transparent',
+                color: selectedSchema === schema.id ? textColor : colors.textMuted,
+                border: `1px solid ${colors.textMuted}`,
+                borderRadius: 'var(--ft-border-radius)',
                 opacity: isConnected ? 0.5 : 1,
               }}
               title={schema.description}
@@ -295,7 +298,7 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
 
         {/* Symbol Input */}
         <div className="flex items-center gap-2">
-          <span className="text-[9px]" style={{ color: FINCEPT_COLORS.MUTED, width: '45px' }}>Symbol:</span>
+          <span className="text-[9px]" style={{ color: colors.textMuted, width: '45px' }}>Symbol:</span>
           <div className="flex items-center gap-1">
             {symbols.slice(0, 3).map((sym) => (
               <button
@@ -307,9 +310,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
                 disabled={isConnected}
                 className="px-2 py-0.5 text-[9px] font-bold"
                 style={{
-                  backgroundColor: selectedSymbol === sym && !customSymbol ? accentColor : FINCEPT_COLORS.BORDER,
-                  color: selectedSymbol === sym && !customSymbol ? FINCEPT_COLORS.BLACK : textColor,
-                  borderRadius: '2px',
+                  backgroundColor: selectedSymbol === sym && !customSymbol ? accentColor : colors.textMuted,
+                  color: selectedSymbol === sym && !customSymbol ? colors.background : textColor,
+                  borderRadius: 'var(--ft-border-radius)',
                   opacity: isConnected ? 0.5 : 1,
                 }}
               >
@@ -325,9 +328,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
             disabled={isConnected}
             className="px-2 py-0.5 text-[10px] w-20"
             style={{
-              backgroundColor: FINCEPT_COLORS.BLACK,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: textColor,
               opacity: isConnected ? 0.5 : 1,
             }}
@@ -342,9 +345,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
               disabled={isConnecting}
               className="flex items-center gap-1 px-3 py-1 text-xs font-bold"
               style={{
-                backgroundColor: FINCEPT_COLORS.GREEN,
-                color: FINCEPT_COLORS.BLACK,
-                borderRadius: '2px',
+                backgroundColor: colors.success,
+                color: colors.background,
+                borderRadius: 'var(--ft-border-radius)',
                 opacity: isConnecting ? 0.5 : 1,
               }}
             >
@@ -356,9 +359,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
               onClick={stopStream}
               className="flex items-center gap-1 px-3 py-1 text-xs font-bold"
               style={{
-                backgroundColor: FINCEPT_COLORS.RED,
-                color: FINCEPT_COLORS.WHITE,
-                borderRadius: '2px',
+                backgroundColor: colors.alert,
+                color: textColor,
+                borderRadius: 'var(--ft-border-radius)',
               }}
             >
               <Square size={12} />
@@ -370,9 +373,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
             onClick={clearRecords}
             className="flex items-center gap-1 px-2 py-1 text-xs"
             style={{
-              backgroundColor: FINCEPT_COLORS.BORDER,
+              backgroundColor: colors.textMuted,
               color: textColor,
-              borderRadius: '2px',
+              borderRadius: 'var(--ft-border-radius)',
             }}
           >
             <Trash2 size={10} />
@@ -384,9 +387,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
               onClick={onStopAllStreams}
               className="px-2 py-1 text-[9px]"
               style={{
-                backgroundColor: `${FINCEPT_COLORS.RED}30`,
-                color: FINCEPT_COLORS.RED,
-                borderRadius: '2px',
+                backgroundColor: `${colors.alert}30`,
+                color: colors.alert,
+                borderRadius: 'var(--ft-border-radius)',
               }}
             >
               Stop All ({activeStreams.length})
@@ -400,10 +403,10 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
         <div
           className="flex items-center gap-2 m-2 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.RED}15`,
-            border: `1px solid ${FINCEPT_COLORS.RED}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.RED,
+            backgroundColor: `${colors.alert}15`,
+            border: `1px solid ${colors.alert}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.alert,
           }}
         >
           <AlertCircle size={12} />
@@ -421,13 +424,13 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
         }}
       >
         {records.length === 0 ? (
-          <div className="text-xs text-center p-4" style={{ color: FINCEPT_COLORS.MUTED }}>
+          <div className="text-xs text-center p-4" style={{ color: colors.textMuted }}>
             {isConnected ? 'Waiting for data...' : 'Click Start Stream to begin receiving live data'}
           </div>
         ) : (
           <div className="space-y-1">
             {records.map((record, idx) => (
-              <RecordRow key={idx} record={record} formatPrice={formatPrice} formatSize={formatSize} formatTime={formatTime} />
+              <RecordRow key={idx} record={record} formatPrice={formatPrice} formatSize={formatSize} formatTime={formatTime} colors={colors} textColor={textColor} />
             ))}
           </div>
         )}
@@ -438,9 +441,9 @@ export const LiveStreamPanel: React.FC<LiveStreamPanelProps> = ({
         <div
           className="flex items-center justify-between p-2 text-[9px]"
           style={{
-            backgroundColor: FINCEPT_COLORS.BLACK,
-            borderTop: `1px solid ${FINCEPT_COLORS.BORDER}`,
-            color: FINCEPT_COLORS.MUTED,
+            backgroundColor: colors.background,
+            borderTop: `1px solid ${colors.textMuted}`,
+            color: colors.textMuted,
           }}
         >
           <div className="flex items-center gap-2">
@@ -462,7 +465,9 @@ const RecordRow: React.FC<{
   formatPrice: (p: number | undefined) => string;
   formatSize: (s: number | undefined) => string;
   formatTime: (t: string | number) => string;
-}> = ({ record, formatPrice, formatSize, formatTime }) => {
+  colors: ReturnType<typeof useTerminalTheme>['colors'];
+  textColor: string;
+}> = ({ record, formatPrice, formatSize, formatTime, colors, textColor }) => {
   if (record.type !== 'data' || !record.record) return null;
 
   const { record: data } = record;
@@ -475,26 +480,26 @@ const RecordRow: React.FC<{
       <div
         className="flex items-center justify-between py-0.5 px-1 text-[10px]"
         style={{
-          backgroundColor: isBuy ? `${FINCEPT_COLORS.GREEN}10` : isSell ? `${FINCEPT_COLORS.RED}10` : 'transparent',
-          borderRadius: '2px',
+          backgroundColor: isBuy ? `${colors.success}10` : isSell ? `${colors.alert}10` : 'transparent',
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
         <div className="flex items-center gap-2">
           {isBuy ? (
-            <TrendingUp size={10} style={{ color: FINCEPT_COLORS.GREEN }} />
+            <TrendingUp size={10} style={{ color: colors.success }} />
           ) : isSell ? (
-            <TrendingDown size={10} style={{ color: FINCEPT_COLORS.RED }} />
+            <TrendingDown size={10} style={{ color: colors.alert }} />
           ) : (
-            <Activity size={10} style={{ color: FINCEPT_COLORS.MUTED }} />
+            <Activity size={10} style={{ color: colors.textMuted }} />
           )}
-          <span className="font-bold" style={{ color: FINCEPT_COLORS.CYAN }}>{data.symbol}</span>
+          <span className="font-bold" style={{ color: colors.info }}>{data.symbol}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span style={{ color: isBuy ? FINCEPT_COLORS.GREEN : isSell ? FINCEPT_COLORS.RED : FINCEPT_COLORS.WHITE }}>
+          <span style={{ color: isBuy ? colors.success : isSell ? colors.alert : textColor }}>
             {formatPrice(data.price)}
           </span>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>{formatSize(data.size)}</span>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>{formatTime(data.ts_event)}</span>
+          <span style={{ color: colors.textMuted }}>{formatSize(data.size)}</span>
+          <span style={{ color: colors.textMuted }}>{formatTime(data.ts_event)}</span>
         </div>
       </div>
     );
@@ -508,14 +513,14 @@ const RecordRow: React.FC<{
     return (
       <div
         className="flex items-center justify-between py-0.5 px-1 text-[10px]"
-        style={{ backgroundColor: `${FINCEPT_COLORS.BORDER}50`, borderRadius: '2px' }}
+        style={{ backgroundColor: `${colors.textMuted}50`, borderRadius: 'var(--ft-border-radius)' }}
       >
-        <span className="font-bold" style={{ color: FINCEPT_COLORS.CYAN }}>{data.symbol}</span>
+        <span className="font-bold" style={{ color: colors.info }}>{data.symbol}</span>
         <div className="flex items-center gap-2">
-          <span style={{ color: FINCEPT_COLORS.GREEN }}>{formatPrice(level.bid_px)}</span>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>×</span>
-          <span style={{ color: FINCEPT_COLORS.RED }}>{formatPrice(level.ask_px)}</span>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>{formatTime(data.ts_event)}</span>
+          <span style={{ color: colors.success }}>{formatPrice(level.bid_px)}</span>
+          <span style={{ color: colors.textMuted }}>×</span>
+          <span style={{ color: colors.alert }}>{formatPrice(level.ask_px)}</span>
+          <span style={{ color: colors.textMuted }}>{formatTime(data.ts_event)}</span>
         </div>
       </div>
     );
@@ -527,15 +532,15 @@ const RecordRow: React.FC<{
     return (
       <div
         className="flex items-center justify-between py-0.5 px-1 text-[10px]"
-        style={{ backgroundColor: `${FINCEPT_COLORS.BORDER}30`, borderRadius: '2px' }}
+        style={{ backgroundColor: `${colors.textMuted}30`, borderRadius: 'var(--ft-border-radius)' }}
       >
-        <span className="font-bold" style={{ color: FINCEPT_COLORS.CYAN }}>{data.symbol}</span>
+        <span className="font-bold" style={{ color: colors.info }}>{data.symbol}</span>
         <div className="flex items-center gap-2 font-mono">
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>O:{formatPrice(ohlcv.open)}</span>
-          <span style={{ color: FINCEPT_COLORS.GREEN }}>H:{formatPrice(ohlcv.high)}</span>
-          <span style={{ color: FINCEPT_COLORS.RED }}>L:{formatPrice(ohlcv.low)}</span>
-          <span style={{ color: FINCEPT_COLORS.WHITE }}>C:{formatPrice(ohlcv.close)}</span>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>V:{formatSize(ohlcv.volume)}</span>
+          <span style={{ color: colors.textMuted }}>O:{formatPrice(ohlcv.open)}</span>
+          <span style={{ color: colors.success }}>H:{formatPrice(ohlcv.high)}</span>
+          <span style={{ color: colors.alert }}>L:{formatPrice(ohlcv.low)}</span>
+          <span style={{ color: textColor }}>C:{formatPrice(ohlcv.close)}</span>
+          <span style={{ color: colors.textMuted }}>V:{formatSize(ohlcv.volume)}</span>
         </div>
       </div>
     );
@@ -543,7 +548,7 @@ const RecordRow: React.FC<{
 
   // Generic record
   return (
-    <div className="py-0.5 px-1 text-[10px]" style={{ color: FINCEPT_COLORS.MUTED }}>
+    <div className="py-0.5 px-1 text-[10px]" style={{ color: colors.textMuted }}>
       {data.symbol}: {data.record_type}
     </div>
   );

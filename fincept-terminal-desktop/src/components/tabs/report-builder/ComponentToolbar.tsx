@@ -27,9 +27,10 @@ import {
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { SortableComponent } from './SortableComponent';
 import { ComponentToolbarProps } from './types';
-import { FINCEPT_COLORS, PAGE_THEMES, FONT_FAMILIES, PRESET_COLORS } from './constants';
+import { PAGE_THEMES, FONT_FAMILIES, PRESET_COLORS } from './constants';
 
 export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
   onAddComponent,
@@ -55,6 +56,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
   onIsItalicChange,
 }) => {
   const { t } = useTranslation('reportBuilder');
+  const { colors, fontSize } = useTerminalTheme();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -76,88 +78,88 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
   };
 
   return (
-    <div className="w-1/5 border-r overflow-y-auto" style={{ borderColor: FINCEPT_COLORS.BORDER, backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
+    <div className="w-1/5 border-r overflow-y-auto" style={{ borderColor: colors.panel, backgroundColor: colors.panel }}>
       <div className="p-3">
         {/* Add Components */}
         <div className="mb-4">
-          <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('components.title')}</h3>
+          <h3 className="font-bold mb-2" style={{ fontSize: fontSize.small, color: colors.primary }}>{t('components.title')}</h3>
           <div className="space-y-1">
             <button
               onClick={() => onAddComponent('heading')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Type size={14} />
               Heading
             </button>
             <button
               onClick={() => onAddComponent('subheading')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Type size={12} />
               Subheading
             </button>
             <button
               onClick={() => onAddComponent('text')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <AlignLeft size={14} />
               Text
             </button>
             <button
               onClick={() => onAddComponent('chart')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <BarChart3 size={14} />
               Chart
             </button>
             <button
               onClick={() => onAddComponent('table')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Table size={14} />
               Table
             </button>
             <button
               onClick={() => onAddComponent('image')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <ImageIcon size={14} />
               Image
             </button>
             <button
               onClick={() => onAddComponent('code')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Code size={14} />
               Code Block
             </button>
             <button
               onClick={() => onAddComponent('divider')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Minus size={14} />
               Divider
             </button>
             <button
               onClick={() => onAddComponent('quote')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Quote size={14} />
               Quote/Callout
             </button>
             <button
               onClick={() => onAddComponent('list')}
-              className="w-full px-3 py-2 text-xs text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="w-full px-3 py-2 text-left rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-2"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <List size={14} />
               List
@@ -167,36 +169,36 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
         {/* Data Components */}
         <div className="mb-4">
-          <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>DATA</h3>
+          <h3 className="font-bold mb-2" style={{ fontSize: fontSize.small, color: colors.primary }}>DATA</h3>
           <div className="grid grid-cols-2 gap-1">
             <button
               onClick={() => onAddComponent('kpi')}
-              className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="px-2 py-2 rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <TrendingUp size={14} />
-              <span className="text-[9px]">KPI</span>
+              <span style={{ fontSize: fontSize.tiny }}>KPI</span>
             </button>
             <button
               onClick={() => onAddComponent('sparkline')}
-              className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="px-2 py-2 rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Activity size={14} />
-              <span className="text-[9px]">Sparkline</span>
+              <span style={{ fontSize: fontSize.tiny }}>Sparkline</span>
             </button>
             <button
               onClick={() => onAddComponent('liveTable')}
-              className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="px-2 py-2 rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Database size={14} />
-              <span className="text-[9px]">Data Table</span>
+              <span style={{ fontSize: fontSize.tiny }}>Data Table</span>
             </button>
             <button
               onClick={() => onAddComponent('dynamicChart')}
-              className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              className="px-2 py-2 rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <BarChart3 size={14} />
               <span className="text-[9px]">Chart</span>
@@ -206,12 +208,12 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
         {/* Document Components */}
         <div className="mb-4">
-          <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>DOCUMENT</h3>
+          <h3 className="text-xs font-bold mb-2" style={{ fontSize: fontSize.small, color: colors.primary }}>DOCUMENT</h3>
           <div className="grid grid-cols-2 gap-1">
             <button
               onClick={() => onAddComponent('toc')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Hash size={14} />
               <span className="text-[9px]">TOC</span>
@@ -219,7 +221,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             <button
               onClick={() => onAddComponent('signature')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <PenTool size={14} />
               <span className="text-[9px]">Signature</span>
@@ -227,7 +229,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             <button
               onClick={() => onAddComponent('disclaimer')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <AlertTriangle size={14} />
               <span className="text-[9px]">Disclaimer</span>
@@ -235,7 +237,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             <button
               onClick={() => onAddComponent('qrcode')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <QrCode size={14} />
               <span className="text-[9px]">QR Code</span>
@@ -243,7 +245,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             <button
               onClick={() => onAddComponent('watermark')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Stamp size={14} />
               <span className="text-[9px]">Watermark</span>
@@ -253,12 +255,12 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
         {/* Layout Components */}
         <div className="mb-4">
-          <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('layout.title')}</h3>
+          <h3 className="text-xs font-bold mb-2" style={{ fontSize: fontSize.small, color: colors.primary }}>{t('layout.title')}</h3>
           <div className="grid grid-cols-2 gap-1">
             <button
               onClick={() => onAddComponent('section')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <Layout size={14} />
               <span className="text-[9px]">Section</span>
@@ -266,7 +268,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             <button
               onClick={() => onAddComponent('columns')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <ColumnsIcon size={14} />
               <span className="text-[9px]">Columns</span>
@@ -274,7 +276,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             <button
               onClick={() => onAddComponent('coverpage')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <BookOpen size={14} />
               <span className="text-[9px]">Cover</span>
@@ -282,7 +284,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             <button
               onClick={() => onAddComponent('pagebreak')}
               className="px-2 py-2 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex flex-col items-center gap-1"
-              style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{ fontSize: fontSize.small, color: colors.text }}
             >
               <FileX size={14} />
               <span className="text-[9px]">Break</span>
@@ -292,17 +294,17 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
         {/* Settings */}
         <div className="mb-4">
-          <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>{t('settings.title')}</h3>
+          <h3 className="text-xs font-bold mb-2" style={{ fontSize: fontSize.small, color: colors.primary }}>{t('settings.title')}</h3>
           <div className="space-y-2">
             <div>
-              <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-[9px] block mb-1" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                 Page Theme
               </label>
               <select
                 value={pageTheme}
                 onChange={(e) => onPageThemeChange(e.target.value as any)}
                 className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ fontSize: fontSize.small, color: colors.text }}
               >
                 {Object.entries(PAGE_THEMES).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
@@ -314,13 +316,13 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             {pageTheme === 'classic' && (
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[9px]" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+                  <label className="text-[9px]" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                     Background Color
                   </label>
                   <button
                     onClick={() => onShowColorPickerChange(!showColorPicker)}
                     className="text-[9px] px-2 py-1 rounded hover:bg-[#2a2a2a]"
-                    style={{ color: FINCEPT_COLORS.ORANGE }}
+                    style={{ fontSize: fontSize.small, color: colors.primary }}
                   >
                     {showColorPicker ? 'Hide Picker' : 'Show Picker'}
                   </button>
@@ -337,7 +339,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
                     value={customBgColor}
                     onChange={(e) => onCustomBgColorChange(e.target.value)}
                     className="flex-1 px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                    style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                    style={{ fontSize: fontSize.small, color: colors.text }}
                     placeholder="#ffffff"
                   />
                 </div>
@@ -347,7 +349,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
                   <div className="p-3 rounded bg-[#0a0a0a] border border-[#333333] space-y-3">
                     {/* Main Gradient Palette */}
                     <div>
-                      <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+                      <label className="text-[9px] mb-1 block" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                         Color Palette
                       </label>
                       <div
@@ -382,7 +384,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
                     {/* Hue Slider */}
                     <div>
-                      <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+                      <label className="text-[9px] mb-1 block" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                         Hue
                       </label>
                       <div
@@ -402,7 +404,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
                     {/* Lightness Slider */}
                     <div>
-                      <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+                      <label className="text-[9px] mb-1 block" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                         Lightness
                       </label>
                       <div
@@ -422,7 +424,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
                     {/* Preset Colors */}
                     <div>
-                      <label className="text-[9px] mb-1 block" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+                      <label className="text-[9px] mb-1 block" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                         Preset Colors
                       </label>
                       <div className="grid grid-cols-8 gap-1">
@@ -447,7 +449,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             )}
 
             <div>
-              <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-[9px] block mb-1" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                 Report Title
               </label>
               <input
@@ -455,20 +457,20 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
                 value={template.metadata.title}
                 readOnly
                 className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] outline-none opacity-60"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ fontSize: fontSize.small, color: colors.text }}
                 placeholder="Edit in Properties panel..."
               />
             </div>
 
             <div>
-              <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-[9px] block mb-1" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                 Font Family
               </label>
               <select
                 value={fontFamily}
                 onChange={(e) => onFontFamilyChange(e.target.value)}
                 className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+                style={{ fontSize: fontSize.small, color: colors.text }}
               >
                 {FONT_FAMILIES.map(font => (
                   <option key={font.value} value={font.value}>{font.label}</option>
@@ -477,7 +479,7 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
             </div>
 
             <div>
-              <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-[9px] block mb-1" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                 Base Font Size
               </label>
               <div className="flex items-center gap-2">
@@ -488,16 +490,16 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
                   value={defaultFontSize}
                   onChange={(e) => onDefaultFontSizeChange(Number(e.target.value))}
                   className="flex-1"
-                  style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+                  style={{ accentColor: colors.primary }}
                 />
-                <span className="text-xs" style={{ color: FINCEPT_COLORS.TEXT_PRIMARY, minWidth: '30px' }}>
+                <span style={{ fontSize: fontSize.small, color: colors.text, minWidth: '30px' }}>
                   {defaultFontSize}pt
                 </span>
               </div>
             </div>
 
             <div>
-              <label className="text-[9px] block mb-1" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <label className="text-[9px] block mb-1" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                 Text Style
               </label>
               <div className="flex gap-2">
@@ -530,10 +532,10 @@ export const ComponentToolbar: React.FC<ComponentToolbarProps> = ({
 
         {/* Document Structure */}
         <div>
-          <h3 className="text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.ORANGE }}>DOCUMENT STRUCTURE</h3>
+          <h3 className="text-xs font-bold mb-2" style={{ fontSize: fontSize.small, color: colors.primary }}>DOCUMENT STRUCTURE</h3>
           <div className="space-y-0">
             {template.components.length === 0 ? (
-              <p className="text-xs text-center py-4" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+              <p className="text-xs text-center py-4" style={{ fontSize: fontSize.tiny, color: colors.textMuted }}>
                 No components yet
               </p>
             ) : (

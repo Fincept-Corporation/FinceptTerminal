@@ -6,8 +6,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, Key, Eye, EyeOff, AlertCircle, CheckCircle, Search, Loader2, Database, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import type { SurfaceAnalyticsConfig, OHLCVTimeframe } from '../types';
-import { VOL_SURFACE_SYMBOLS, CORRELATION_ASSETS, FINCEPT_COLORS, TYPOGRAPHY } from '../constants';
+import { VOL_SURFACE_SYMBOLS, CORRELATION_ASSETS } from '../constants';
 import { sqliteService } from '@/services/core/sqliteService';
 import { DatasetBrowser } from './DatasetBrowser';
 import { CostEstimator } from './CostEstimator';
@@ -39,6 +41,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   accentColor,
   textColor,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [localConfig, setLocalConfig] = useState<SurfaceAnalyticsConfig>(config);
   const [newAsset, setNewAsset] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -227,12 +231,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '8px 10px',
-    backgroundColor: FINCEPT_COLORS.BLACK,
+    backgroundColor: colors.background,
     color: textColor,
-    border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-    borderRadius: '2px',
-    fontSize: '11px',
-    fontFamily: '"IBM Plex Mono", monospace',
+    border: `1px solid ${colors.textMuted}`,
+    borderRadius: 'var(--ft-border-radius)',
+    fontSize: fontSize.body,
+    fontFamily,
     outline: 'none',
   };
 
@@ -245,17 +249,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <div
         className="w-full max-w-lg p-4 overflow-hidden"
         style={{
-          backgroundColor: FINCEPT_COLORS.PANEL_BG,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
+          backgroundColor: colors.panel,
+          border: `1px solid ${colors.textMuted}`,
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-bold" style={{ color: accentColor }}>
-            SURFACE ANALYTICS SETTINGS
+            {t('settings.title')}
           </h2>
-          <button onClick={onClose} style={{ color: FINCEPT_COLORS.MUTED }}>
+          <button onClick={onClose} style={{ color: colors.textMuted }}>
             <X size={16} />
           </button>
         </div>
@@ -264,44 +268,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div
           className="mb-4 p-3"
           style={{
-            backgroundColor: FINCEPT_COLORS.DARK_BG,
-            border: `1px solid ${apiKeyStatus === 'valid' ? FINCEPT_COLORS.GREEN : apiKeyStatus === 'invalid' ? FINCEPT_COLORS.RED : FINCEPT_COLORS.BORDER}`,
-            borderRadius: '2px',
+            backgroundColor: colors.background,
+            border: `1px solid ${apiKeyStatus === 'valid' ? colors.success : apiKeyStatus === 'invalid' ? colors.alert : colors.textMuted}`,
+            borderRadius: 'var(--ft-border-radius)',
           }}
         >
           <div className="flex items-center gap-2 mb-2">
             <Key size={14} style={{ color: accentColor }} />
             <label className="text-xs font-bold" style={{ color: accentColor, letterSpacing: '0.5px' }}>
-              DATABENTO API KEY
+              {t('settings.databentoApiKey')}
             </label>
             {apiKeyStatus === 'valid' && (
-              <span className="flex items-center gap-1 text-xs" style={{ color: FINCEPT_COLORS.GREEN }}>
-                <CheckCircle size={12} /> CONFIGURED
+              <span className="flex items-center gap-1 text-xs" style={{ color: colors.success }}>
+                <CheckCircle size={12} /> {t('settings.configured')}
               </span>
             )}
             {apiKeyStatus === 'invalid' && (
-              <span className="flex items-center gap-1 text-xs" style={{ color: FINCEPT_COLORS.RED }}>
-                <AlertCircle size={12} /> INVALID FORMAT
+              <span className="flex items-center gap-1 text-xs" style={{ color: colors.alert }}>
+                <AlertCircle size={12} /> {t('settings.invalidFormat')}
               </span>
             )}
           </div>
 
           {hasExistingKey ? (
             <div className="flex items-center justify-between">
-              <span className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
-                API key is configured (db-*****)
+              <span className="text-xs" style={{ color: colors.textMuted }}>
+                {t('settings.apiKeyConfigured')}
               </span>
               <button
                 onClick={handleRemoveApiKey}
                 className="flex items-center gap-1 px-2 py-1 text-xs"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.RED + '20',
-                  color: FINCEPT_COLORS.RED,
-                  border: `1px solid ${FINCEPT_COLORS.RED}`,
-                  borderRadius: '2px',
+                  backgroundColor: colors.alert + '20',
+                  color: colors.alert,
+                  border: `1px solid ${colors.alert}`,
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
-                <Trash2 size={10} /> REMOVE
+                <Trash2 size={10} /> {t('settings.remove')}
               </button>
             </div>
           ) : (
@@ -315,7 +319,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       setApiKey(e.target.value);
                       setApiKeyStatus('none');
                     }}
-                    placeholder="Enter your Databento API key (db-*****)"
+                    placeholder={t('settings.enterApiKey')}
                     style={{
                       ...inputStyle,
                       paddingRight: '36px',
@@ -324,7 +328,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     onClick={() => setShowApiKey(!showApiKey)}
                     className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                    style={{ color: FINCEPT_COLORS.MUTED }}
+                    style={{ color: colors.textMuted }}
                   >
                     {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
@@ -334,27 +338,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   disabled={!apiKey.trim() || apiKeyStatus === 'saving'}
                   className="px-3 text-xs font-bold"
                   style={{
-                    backgroundColor: apiKey.trim() ? accentColor : FINCEPT_COLORS.MUTED,
-                    color: FINCEPT_COLORS.BLACK,
+                    backgroundColor: apiKey.trim() ? accentColor : colors.textMuted,
+                    color: colors.background,
                     border: 'none',
-                    borderRadius: '2px',
+                    borderRadius: 'var(--ft-border-radius)',
                     opacity: apiKey.trim() ? 1 : 0.5,
                   }}
                 >
-                  {apiKeyStatus === 'saving' ? 'SAVING...' : 'SAVE'}
+                  {apiKeyStatus === 'saving' ? t('settings.saving') : t('settings.save')}
                 </button>
               </div>
-              <div className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
-                Get your API key from{' '}
+              <div className="text-xs" style={{ color: colors.textMuted }}>
+                {t('settings.getApiKeyFrom')}{' '}
                 <a
                   href="https://databento.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: FINCEPT_COLORS.CYAN, textDecoration: 'underline' }}
+                  style={{ color: colors.info, textDecoration: 'underline' }}
                 >
                   databento.com
                 </a>
-                {' '}→ Dashboard → API Keys
+                {' '}→ {t('settings.dashboardApiKeys')}
               </div>
             </>
           )}
@@ -362,23 +366,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Volatility Surface Symbol */}
         <div className="mb-4">
-          <label className="block text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.MUTED }}>
-            VOLATILITY SURFACE SYMBOL
+          <label className="block text-xs font-bold mb-2" style={{ color: colors.textMuted }}>
+            {t('settings.volatilitySurfaceSymbol')}
           </label>
 
           {/* Current selected symbol */}
           <div
             className="flex items-center justify-between p-2 mb-2"
             style={{
-              backgroundColor: FINCEPT_COLORS.BLACK,
-              border: `1px solid ${FINCEPT_COLORS.GREEN}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.success}`,
+              borderRadius: 'var(--ft-border-radius)',
             }}
           >
-            <span className="text-sm font-bold" style={{ color: FINCEPT_COLORS.GREEN }}>
+            <span className="text-sm font-bold" style={{ color: colors.success }}>
               {localConfig.selectedSymbol}
             </span>
-            <CheckCircle size={14} style={{ color: FINCEPT_COLORS.GREEN }} />
+            <CheckCircle size={14} style={{ color: colors.success }} />
           </div>
 
           {/* Symbol search input */}
@@ -388,7 +392,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="text"
                 value={symbolSearchQuery}
                 onChange={e => setSymbolSearchQuery(e.target.value.toUpperCase())}
-                placeholder="Search any symbol (e.g., MSFT, GOOGL, META)"
+                placeholder={t('settings.searchSymbol')}
                 style={inputStyle}
                 onKeyPress={e => e.key === 'Enter' && handleSymbolSearch()}
               />
@@ -398,10 +402,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               disabled={!symbolSearchQuery.trim() || symbolSearching}
               className="px-3 flex items-center gap-1"
               style={{
-                backgroundColor: symbolSearchQuery.trim() ? accentColor : FINCEPT_COLORS.MUTED,
-                color: FINCEPT_COLORS.BLACK,
+                backgroundColor: symbolSearchQuery.trim() ? accentColor : colors.textMuted,
+                color: colors.background,
                 border: 'none',
-                borderRadius: '2px',
+                borderRadius: 'var(--ft-border-radius)',
                 opacity: symbolSearchQuery.trim() ? 1 : 0.5,
               }}
             >
@@ -421,10 +425,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => setLocalConfig({ ...localConfig, selectedSymbol: sym.value })}
                 className="px-2 py-0.5 text-xs"
                 style={{
-                  backgroundColor: localConfig.selectedSymbol === sym.value ? accentColor : FINCEPT_COLORS.BORDER,
-                  color: localConfig.selectedSymbol === sym.value ? FINCEPT_COLORS.BLACK : textColor,
+                  backgroundColor: localConfig.selectedSymbol === sym.value ? accentColor : colors.textMuted,
+                  color: localConfig.selectedSymbol === sym.value ? colors.background : textColor,
                   border: 'none',
-                  borderRadius: '2px',
+                  borderRadius: 'var(--ft-border-radius)',
                 }}
               >
                 {sym.value}
@@ -435,15 +439,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Correlation Assets */}
         <div className="mb-4">
-          <label className="block text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.MUTED }}>
-            CORRELATION ASSETS ({localConfig.correlationAssets.length})
+          <label className="block text-xs font-bold mb-2" style={{ color: colors.textMuted }}>
+            {t('settings.correlationAssets')} ({localConfig.correlationAssets.length})
           </label>
           <div className="flex gap-2 mb-2">
             <input
               type="text"
               value={newAsset}
               onChange={e => setNewAsset(e.target.value)}
-              placeholder="Add symbol (e.g., AAPL)"
+              placeholder={t('settings.addSymbol')}
               style={inputStyle}
               onKeyPress={e => e.key === 'Enter' && handleAddAsset()}
             />
@@ -452,7 +456,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="px-3"
               style={{
                 backgroundColor: accentColor,
-                color: FINCEPT_COLORS.BLACK,
+                color: colors.background,
                 border: 'none',
               }}
             >
@@ -465,14 +469,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 key={asset}
                 className="flex items-center gap-1 px-2 py-0.5 text-xs"
                 style={{
-                  backgroundColor: FINCEPT_COLORS.BORDER,
+                  backgroundColor: colors.textMuted,
                   color: textColor,
                 }}
               >
                 {asset}
                 <button
                   onClick={() => handleRemoveAsset(asset)}
-                  style={{ color: FINCEPT_COLORS.RED }}
+                  style={{ color: colors.alert }}
                 >
                   <Trash2 size={10} />
                 </button>
@@ -481,7 +485,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
           <button
             className="mt-2 text-xs underline"
-            style={{ color: FINCEPT_COLORS.MUTED }}
+            style={{ color: colors.textMuted }}
             onClick={() =>
               setLocalConfig({
                 ...localConfig,
@@ -489,19 +493,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               })
             }
           >
-            Reset to defaults
+            {t('settings.resetToDefaults')}
           </button>
         </div>
 
         {/* Date Range */}
         <div className="mb-4">
-          <label className="block text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.MUTED }}>
-            HISTORICAL DATE RANGE
+          <label className="block text-xs font-bold mb-2" style={{ color: colors.textMuted }}>
+            {t('settings.historicalDateRange')}
           </label>
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
-                Start
+              <label className="text-xs" style={{ color: colors.textMuted }}>
+                {t('settings.start')}
               </label>
               <input
                 type="date"
@@ -516,8 +520,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </div>
             <div className="flex-1">
-              <label className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
-                End
+              <label className="text-xs" style={{ color: colors.textMuted }}>
+                {t('settings.end')}
               </label>
               <input
                 type="date"
@@ -536,8 +540,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Auto Refresh */}
         <div className="mb-4">
-          <label className="block text-xs font-bold mb-2" style={{ color: FINCEPT_COLORS.MUTED }}>
-            AUTO REFRESH INTERVAL
+          <label className="block text-xs font-bold mb-2" style={{ color: colors.textMuted }}>
+            {t('settings.autoRefreshInterval')}
           </label>
           <select
             value={localConfig.refreshInterval}
@@ -549,11 +553,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }
             style={inputStyle}
           >
-            <option value={0}>Manual Only</option>
-            <option value={60000}>Every 1 minute</option>
-            <option value={300000}>Every 5 minutes</option>
-            <option value={900000}>Every 15 minutes</option>
-            <option value={3600000}>Every 1 hour</option>
+            <option value={0}>{t('settings.manualOnly')}</option>
+            <option value={60000}>{t('settings.every1min')}</option>
+            <option value={300000}>{t('settings.every5min')}</option>
+            <option value={900000}>{t('settings.every15min')}</option>
+            <option value={3600000}>{t('settings.every1hour')}</option>
           </select>
         </div>
 
@@ -563,18 +567,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowTimeframeSelector(!showTimeframeSelector)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
               <Clock size={14} />
-              DATA TIMEFRAME
+              {t('timeframe.dataTimeframe')}
               <span className="px-1 py-0.5 text-[9px]" style={{
-                backgroundColor: FINCEPT_COLORS.BORDER,
-                borderRadius: '2px',
+                backgroundColor: colors.textMuted,
+                borderRadius: 'var(--ft-border-radius)',
                 color: textColor,
               }}>
                 {localConfig.timeframe?.toUpperCase().replace('OHLCV-', '') || '1D'}
@@ -600,18 +604,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowDatasetBrowser(!showDatasetBrowser)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
               <Database size={14} />
-              BROWSE DATASETS
+              {t('settings.browseDatasets')}
               <span className="px-1 py-0.5 text-[9px]" style={{
-                backgroundColor: FINCEPT_COLORS.BORDER,
-                borderRadius: '2px',
+                backgroundColor: colors.textMuted,
+                borderRadius: 'var(--ft-border-radius)',
                 color: textColor,
               }}>
                 {localConfig.dataset || 'DBEQ.BASIC'}
@@ -638,15 +642,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowCostEstimator(!showCostEstimator)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
-              <span>💰</span>
-              COST ESTIMATOR
+              <span>$</span>
+              {t('settings.costEstimator')}
             </div>
             {showCostEstimator ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -672,15 +676,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowReferenceData(!showReferenceData)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
-              <span>📋</span>
-              REFERENCE DATA
+              <span>#</span>
+              {t('settings.referenceData')}
             </div>
             {showReferenceData ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -702,15 +706,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowOrderBook(!showOrderBook)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
-              <span>📊</span>
-              ORDER BOOK
+              <span>=</span>
+              {t('settings.orderBook')}
             </div>
             {showOrderBook ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -732,25 +736,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowLiveStream(!showLiveStream)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${activeStreams.length > 0 ? FINCEPT_COLORS.GREEN : FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
-              color: activeStreams.length > 0 ? FINCEPT_COLORS.GREEN : accentColor,
+              backgroundColor: colors.background,
+              border: `1px solid ${activeStreams.length > 0 ? colors.success : colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
+              color: activeStreams.length > 0 ? colors.success : accentColor,
             }}
           >
             <div className="flex items-center gap-2">
-              <span>📡</span>
-              LIVE STREAMING
+              <span>~</span>
+              {t('settings.liveStreaming')}
               {activeStreams.length > 0 && (
                 <span
                   className="px-1 text-[9px]"
                   style={{
-                    backgroundColor: FINCEPT_COLORS.GREEN,
-                    color: FINCEPT_COLORS.BLACK,
-                    borderRadius: '2px',
+                    backgroundColor: colors.success,
+                    color: colors.background,
+                    borderRadius: 'var(--ft-border-radius)',
                   }}
                 >
-                  {activeStreams.length} ACTIVE
+                  {activeStreams.length} {t('settings.active')}
                 </span>
               )}
             </div>
@@ -778,15 +782,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowFutures(!showFutures)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
-              <span>📈</span>
-              FUTURES (CME GLOBEX)
+              <span>^</span>
+              {t('settings.futuresCme')}
             </div>
             {showFutures ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -807,15 +811,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowBatchDownload(!showBatchDownload)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
-              <span>📦</span>
-              BATCH DOWNLOADS
+              <span>*</span>
+              {t('settings.batchDownloads')}
             </div>
             {showBatchDownload ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
@@ -836,17 +840,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setShowAdditionalSchemas(!showAdditionalSchemas)}
             className="flex items-center justify-between w-full p-2 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.DARK_BG,
-              border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-              borderRadius: '2px',
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              borderRadius: 'var(--ft-border-radius)',
               color: accentColor,
             }}
           >
             <div className="flex items-center gap-2">
-              <span>📊</span>
-              ADDITIONAL SCHEMAS
-              <span className="px-1 py-0.5 text-[8px]" style={{ backgroundColor: FINCEPT_COLORS.BORDER, borderRadius: '2px', color: FINCEPT_COLORS.MUTED }}>
-                TRADES, IMBALANCE, STATUS
+              <span>+</span>
+              {t('settings.additionalSchemas')}
+              <span className="px-1 py-0.5 text-[8px]" style={{ backgroundColor: colors.textMuted, borderRadius: 'var(--ft-border-radius)', color: colors.textMuted }}>
+                {t('settings.tradesImbalanceStatus')}
               </span>
             </div>
             {showAdditionalSchemas ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -869,23 +873,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={onClose}
             className="px-4 py-1 text-xs font-bold"
             style={{
-              backgroundColor: FINCEPT_COLORS.BORDER,
+              backgroundColor: colors.textMuted,
               color: textColor,
-              border: `1px solid ${FINCEPT_COLORS.MUTED}`,
+              border: `1px solid ${colors.textMuted}`,
             }}
           >
-            CANCEL
+            {t('settings.cancel')}
           </button>
           <button
             onClick={handleSave}
             className="px-4 py-1 text-xs font-bold"
             style={{
               backgroundColor: accentColor,
-              color: FINCEPT_COLORS.BLACK,
+              color: colors.background,
               border: `1px solid ${accentColor}`,
             }}
           >
-            SAVE CHANGES
+            {t('settings.saveChanges')}
           </button>
         </div>
       </div>

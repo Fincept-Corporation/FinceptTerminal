@@ -34,49 +34,6 @@ function extractError(err: unknown): string {
 }
 
 // =============================================================================
-// API Key Management
-// =============================================================================
-
-interface ApiKeysResponse {
-  success: boolean;
-  keys?: Record<string, string>;
-  error?: string;
-}
-
-/**
- * Get API keys (masked for display)
- */
-export async function getApiKeys(): Promise<ApiKeysResponse> {
-  try {
-    const result = await deduplicatedFetch('alpha:getApiKeys', () =>
-      withTimeout(invoke<ApiKeysResponse>('get_alpha_api_keys'), 15000, 'Get API keys timeout')
-    );
-    return result;
-  } catch (error) {
-    console.error('Error getting API keys:', error);
-    return { success: false, error: extractError(error) };
-  }
-}
-
-/**
- * Save API keys
- */
-export async function saveApiKeys(
-  keys: Record<string, string>
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const result = await withTimeout(
-      invoke<{ success: boolean; message?: string }>('save_alpha_api_keys', { keys }),
-      30000, 'Save API keys timeout'
-    );
-    return { success: result.success };
-  } catch (error) {
-    console.error('Error saving API keys:', error);
-    return { success: false, error: extractError(error) };
-  }
-}
-
-// =============================================================================
 // Competition Management
 // =============================================================================
 
@@ -825,10 +782,6 @@ export async function createStyledCompetition(params: {
 // =============================================================================
 
 export const alphaArenaService = {
-  // API Keys
-  getApiKeys,
-  saveApiKeys,
-
   // Competition Management
   createCompetition,
   startCompetition,

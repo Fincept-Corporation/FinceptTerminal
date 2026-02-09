@@ -21,6 +21,7 @@ import {
   ChevronRight, ChevronDown, Search, Copy, Check, Cpu,
   Sparkles, Route, ListTree, Save, Edit3, ToggleLeft, ToggleRight,
   Loader2, Target, FileJson, Sliders, Database, Eye, Workflow,
+  Shield, BookOpen, Activity, Layers, Minimize2, Anchor, ClipboardCheck,
 } from 'lucide-react';
 import {
   getLLMConfigs,
@@ -264,6 +265,34 @@ const AgentConfigTab: React.FC = () => {
     instructions: string;
     enable_memory: boolean;
     enable_reasoning: boolean;
+    enable_knowledge: boolean;
+    enable_guardrails: boolean;
+    enable_agentic_memory: boolean;
+    enable_storage: boolean;
+    enable_tracing: boolean;
+    enable_compression: boolean;
+    enable_hooks: boolean;
+    enable_evaluation: boolean;
+    // Detailed Knowledge config
+    knowledge_type: 'url' | 'pdf' | 'text' | 'combined';
+    knowledge_urls: string;
+    knowledge_vector_db: string;
+    knowledge_embedder: string;
+    // Detailed Guardrails config
+    guardrails_pii: boolean;
+    guardrails_injection: boolean;
+    guardrails_compliance: boolean;
+    // Detailed Storage config
+    storage_type: 'sqlite' | 'postgres';
+    storage_db_path: string;
+    storage_table: string;
+    // Agentic Memory config
+    agentic_memory_user_id: string;
+    // Memory detailed config
+    memory_db_path: string;
+    memory_table: string;
+    memory_create_user_memories: boolean;
+    memory_create_session_summary: boolean;
   }>({
     provider: 'openai',
     model_id: 'gpt-4-turbo',
@@ -273,6 +302,29 @@ const AgentConfigTab: React.FC = () => {
     instructions: '',
     enable_memory: false,
     enable_reasoning: false,
+    enable_knowledge: false,
+    enable_guardrails: false,
+    enable_agentic_memory: false,
+    enable_storage: false,
+    enable_tracing: false,
+    enable_compression: false,
+    enable_hooks: false,
+    enable_evaluation: false,
+    knowledge_type: 'url',
+    knowledge_urls: '',
+    knowledge_vector_db: 'lancedb',
+    knowledge_embedder: 'openai',
+    guardrails_pii: true,
+    guardrails_injection: true,
+    guardrails_compliance: false,
+    storage_type: 'sqlite',
+    storage_db_path: '',
+    storage_table: 'agent_sessions',
+    agentic_memory_user_id: '',
+    memory_db_path: '',
+    memory_table: 'agent_memory',
+    memory_create_user_memories: true,
+    memory_create_session_summary: true,
   });
 
   // System state (cached via service)
@@ -311,6 +363,8 @@ const AgentConfigTab: React.FC = () => {
     setTeamModeInternal(m);
     updateTabSession({ teamMode: m });
   }, [updateTabSession]);
+  const [showMembersResponses, setShowMembersResponses] = useState(false);
+  const [teamLeaderIndex, setTeamLeaderIndex] = useState<number>(-1); // -1 = no leader
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -322,6 +376,11 @@ const AgentConfigTab: React.FC = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['finance']));
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [copiedTool, setCopiedTool] = useState<string | null>(null);
+
+  // Streaming state
+  const [streamingContent, setStreamingContent] = useState<string>('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [activeStreamHandle, setActiveStreamHandle] = useState<any>(null);
 
   // Workflow/Planner state - synced with tab session
   const [workflowSymbol, setWorkflowSymbolInternal] = useState(tabSession.workflowSymbol);
@@ -545,6 +604,11 @@ const AgentConfigTab: React.FC = () => {
   const updateEditedConfigFromAgent = (agent: AgentCard) => {
     const config = agent.config || {};
     const model = config.model || {};
+    const knowledgeCfg = typeof config.knowledge === 'object' ? config.knowledge : {};
+    const guardrailsCfg = typeof config.guardrails === 'object' ? config.guardrails : {};
+    const storageCfg = typeof config.storage === 'object' ? config.storage : {};
+    const memoryCfg = typeof config.memory === 'object' ? config.memory : {};
+    const agenticMemCfg = typeof config.agentic_memory === 'object' ? config.agentic_memory : {};
     setEditedConfig({
       provider: model.provider || 'openai',
       model_id: model.model_id || 'gpt-4-turbo',
@@ -552,8 +616,32 @@ const AgentConfigTab: React.FC = () => {
       max_tokens: model.max_tokens ?? 4096,
       tools: config.tools || [],
       instructions: config.instructions || '',
-      enable_memory: config.memory?.enabled || false,
-      enable_reasoning: config.reasoning || false,
+      enable_memory: !!(config.memory?.enabled ?? config.memory),
+      enable_reasoning: !!(config.reasoning?.enabled ?? config.reasoning),
+      enable_knowledge: !!(config.knowledge?.enabled ?? config.knowledge),
+      enable_guardrails: !!(config.guardrails?.enabled ?? config.guardrails),
+      enable_agentic_memory: !!(config.agentic_memory?.enabled ?? config.agentic_memory),
+      enable_storage: !!(config.storage?.enabled ?? config.storage),
+      enable_tracing: !!config.tracing,
+      enable_compression: !!config.compression,
+      enable_hooks: !!config.hooks,
+      enable_evaluation: !!config.evaluation,
+      // Detailed configs from loaded agent
+      knowledge_type: knowledgeCfg?.type || 'url',
+      knowledge_urls: (knowledgeCfg?.urls || []).join('\n'),
+      knowledge_vector_db: knowledgeCfg?.vector_db || 'lancedb',
+      knowledge_embedder: knowledgeCfg?.embedder || 'openai',
+      guardrails_pii: guardrailsCfg?.pii_detection ?? true,
+      guardrails_injection: guardrailsCfg?.injection_check ?? true,
+      guardrails_compliance: guardrailsCfg?.financial_compliance ?? false,
+      storage_type: storageCfg?.type || 'sqlite',
+      storage_db_path: storageCfg?.db_path || '',
+      storage_table: storageCfg?.table_name || 'agent_sessions',
+      agentic_memory_user_id: agenticMemCfg?.user_id || '',
+      memory_db_path: memoryCfg?.db_path || '',
+      memory_table: memoryCfg?.table_name || 'agent_memory',
+      memory_create_user_memories: memoryCfg?.create_user_memories ?? true,
+      memory_create_session_summary: memoryCfg?.create_session_summary ?? true,
     });
     setJsonText(JSON.stringify(agent, null, 2));
   };
@@ -582,6 +670,64 @@ const AgentConfigTab: React.FC = () => {
     } catch {
       return {};
     }
+  };
+
+  // =============================================================================
+  // Helper: Build detailed config options from editedConfig state
+  // =============================================================================
+
+  const buildDetailedConfigOptions = () => {
+    const opts: Parameters<typeof agentService.buildAgentConfig>[3] = {
+      tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
+      temperature: editedConfig.temperature,
+      maxTokens: editedConfig.max_tokens,
+      memory: editedConfig.enable_memory
+        ? {
+            enabled: true,
+            db_path: editedConfig.memory_db_path || undefined,
+            table_name: editedConfig.memory_table || undefined,
+            create_user_memories: editedConfig.memory_create_user_memories,
+            create_session_summary: editedConfig.memory_create_session_summary,
+          }
+        : false,
+      reasoning: editedConfig.enable_reasoning,
+      knowledge: editedConfig.enable_knowledge
+        ? {
+            enabled: true,
+            type: editedConfig.knowledge_type,
+            urls: editedConfig.knowledge_urls ? editedConfig.knowledge_urls.split('\n').filter(u => u.trim()) : undefined,
+            vector_db: editedConfig.knowledge_vector_db || undefined,
+            embedder: editedConfig.knowledge_embedder || undefined,
+          }
+        : undefined,
+      guardrails: editedConfig.enable_guardrails
+        ? {
+            enabled: true,
+            pii_detection: editedConfig.guardrails_pii,
+            injection_check: editedConfig.guardrails_injection,
+            financial_compliance: editedConfig.guardrails_compliance,
+          }
+        : false,
+      agentic_memory: editedConfig.enable_agentic_memory
+        ? {
+            enabled: true,
+            user_id: editedConfig.agentic_memory_user_id || undefined,
+          }
+        : false,
+      storage: editedConfig.enable_storage
+        ? {
+            enabled: true,
+            type: editedConfig.storage_type,
+            db_path: editedConfig.storage_db_path || undefined,
+            table_name: editedConfig.storage_table || undefined,
+          }
+        : undefined,
+      tracing: editedConfig.enable_tracing,
+      compression: editedConfig.enable_compression,
+      hooks: editedConfig.enable_hooks,
+      evaluation: editedConfig.enable_evaluation,
+    };
+    return opts;
   };
 
   // =============================================================================
@@ -620,13 +766,7 @@ const AgentConfigTab: React.FC = () => {
           editedConfig.provider,
           editedConfig.model_id,
           editedConfig.instructions,
-          {
-            tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
-            temperature: editedConfig.temperature,
-            maxTokens: editedConfig.max_tokens,
-            memory: editedConfig.enable_memory,
-            reasoning: editedConfig.enable_reasoning,
-          }
+          buildDetailedConfigOptions()
         );
         const result = await agentService.executeRoutedQuery(testQuery, apiKeys, undefined, userConfig);
         setTestResult(result);
@@ -647,13 +787,7 @@ const AgentConfigTab: React.FC = () => {
           editedConfig.provider,
           editedConfig.model_id,
           editedConfig.instructions,
-          {
-            tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
-            temperature: editedConfig.temperature,
-            maxTokens: editedConfig.max_tokens,
-            memory: editedConfig.enable_memory,
-            reasoning: editedConfig.enable_reasoning,
-          }
+          buildDetailedConfigOptions()
         );
 
         let result;
@@ -690,7 +824,15 @@ const AgentConfigTab: React.FC = () => {
     if (teamMembers.length === 0 || !testQuery.trim()) return;
 
     setExecuting(true);
+    setIsStreaming(true);
+    setStreamingContent('');
     setError(null);
+
+    // Add user message immediately
+    setChatMessages(prev => [
+      ...prev,
+      { role: 'user', content: testQuery, timestamp: new Date() },
+    ]);
 
     try {
       const apiKeys = await getApiKeys();
@@ -705,35 +847,84 @@ const AgentConfigTab: React.FC = () => {
           modelId: agent.config?.model?.model_id || 'gpt-4-turbo',
           tools: agent.config?.tools || [],
           instructions: agent.config?.instructions || '',
-        }))
+        })),
+        {
+          show_members_responses: showMembersResponses,
+          leader_index: teamLeaderIndex >= 0 ? teamLeaderIndex : undefined,
+        }
       );
 
-      const result = await agentService.runTeam(testQuery, teamConfig, apiKeys);
-      setTestResult(result);
+      let accumulatedContent = '';
 
-      setChatMessages(prev => [
-        ...prev,
-        { role: 'user', content: testQuery, timestamp: new Date() },
-        {
-          role: 'assistant',
-          content: extractAgentResponseText(result.response || result.error || JSON.stringify(result, null, 2)),
-          timestamp: new Date(),
-          agentName: `Team (${teamMembers.length} agents)`,
-        },
-      ]);
+      // Use streaming API
+      const streamHandle = await agentService.runTeamStreaming(
+        testQuery,
+        teamConfig,
+        apiKeys,
+        (chunk) => {
+          // Handle each streaming chunk
+          if (chunk.chunk_type === 'token') {
+            accumulatedContent += chunk.content + ' ';
+            setStreamingContent(accumulatedContent);
+          } else if (chunk.chunk_type === 'thinking') {
+            setStreamingContent(prev => prev + `\n_${chunk.content}_\n`);
+          } else if (chunk.chunk_type === 'tool_call') {
+            setStreamingContent(prev => prev + `\n**Tool:** ${chunk.content}\n`);
+          } else if (chunk.chunk_type === 'done') {
+            // Streaming complete
+            setIsStreaming(false);
+          } else if (chunk.chunk_type === 'error') {
+            setError(chunk.content);
+            setIsStreaming(false);
+          }
+        }
+      );
 
-      if (result.success) {
-        setSuccess('Team executed successfully');
-        setTimeout(() => setSuccess(null), 3000);
-      }
+      setActiveStreamHandle(streamHandle);
+
+      // Wait for stream to complete (the callback handles updates)
+      // The stream handle will clean up when done
+
+      // Add final assistant message after streaming completes
+      setTimeout(() => {
+        if (accumulatedContent.trim()) {
+          setChatMessages(prev => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: accumulatedContent.trim(),
+              timestamp: new Date(),
+              agentName: `Team (${teamMembers.length} agents)`,
+            },
+          ]);
+          setTestResult({ success: true, response: accumulatedContent.trim() });
+          setSuccess('Team executed successfully');
+          setTimeout(() => setSuccess(null), 3000);
+        }
+        setExecuting(false);
+        setIsStreaming(false);
+        setStreamingContent('');
+      }, 500);
+
     } catch (err: any) {
       setError(err.toString());
-    } finally {
       setExecuting(false);
+      setIsStreaming(false);
     }
   };
 
-  const runWorkflow = async (workflowType: string) => {
+  // Cancel streaming
+  const cancelStream = async () => {
+    if (activeStreamHandle) {
+      await activeStreamHandle.cancel();
+      setActiveStreamHandle(null);
+      setIsStreaming(false);
+      setExecuting(false);
+      setStreamingContent('');
+    }
+  };
+
+  const runWorkflow = async (workflowType: string, extraParams?: Record<string, any>) => {
     setExecuting(true);
     setError(null);
 
@@ -750,6 +941,57 @@ const AgentConfigTab: React.FC = () => {
           break;
         case 'risk_assessment':
           result = await agentService.runRiskAssessment({ holdings: [] }, apiKeys);
+          break;
+        case 'portfolio_plan':
+          result = await agentService.createPortfolioPlan(
+            extraParams?.portfolio_id || 'default'
+          );
+          break;
+        case 'paper_trade': {
+          const symbol = extraParams?.symbol || workflowSymbol || 'AAPL';
+          result = await agentService.paperExecuteTrade(
+            extraParams?.portfolio_id || 'paper-default',
+            symbol,
+            extraParams?.action || 'buy',
+            extraParams?.quantity || 10,
+            extraParams?.price || 150
+          );
+          break;
+        }
+        case 'paper_portfolio':
+          result = await agentService.paperGetPortfolio(
+            extraParams?.portfolio_id || 'paper-default'
+          );
+          break;
+        case 'paper_positions':
+          result = await agentService.paperGetPositions(
+            extraParams?.portfolio_id || 'paper-default'
+          );
+          break;
+        case 'save_session':
+          result = await agentService.saveSession({
+            agent_id: selectedAgent?.id || 'default',
+            messages: chatMessages.map(m => ({ role: m.role, content: m.content })),
+          });
+          break;
+        case 'save_memory':
+          result = await agentService.saveMemoryRepo(
+            extraParams?.content || testQuery,
+            { type: extraParams?.category || 'general' }
+          );
+          break;
+        case 'search_memories':
+          result = await agentService.searchMemoriesRepo(
+            extraParams?.query || testQuery,
+            undefined,
+            extraParams?.limit || 10
+          );
+          break;
+        case 'multi_query':
+          result = await agentService.executeMultiQuery(
+            extraParams?.query || testQuery,
+            apiKeys
+          );
           break;
         default:
           throw new Error(`Unknown workflow: ${workflowType}`);
@@ -1083,48 +1325,252 @@ const AgentConfigTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Toggle Options */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => editMode && setEditedConfig(prev => ({ ...prev, enable_memory: !prev.enable_memory }))}
-            style={{
-              padding: '8px 12px',
-              backgroundColor: editedConfig.enable_memory ? `${FINCEPT.ORANGE}20` : FINCEPT.DARK_BG,
-              border: `1px solid ${editedConfig.enable_memory ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
-              color: editedConfig.enable_memory ? FINCEPT.ORANGE : FINCEPT.GRAY,
-              fontSize: '9px',
-              fontWeight: 700,
-              cursor: editMode ? 'pointer' : 'default',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '2px',
-            }}
-          >
-            {editedConfig.enable_memory ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-            MEMORY
-          </button>
-
-          <button
-            onClick={() => editMode && setEditedConfig(prev => ({ ...prev, enable_reasoning: !prev.enable_reasoning }))}
-            style={{
-              padding: '8px 12px',
-              backgroundColor: editedConfig.enable_reasoning ? `${FINCEPT.PURPLE}20` : FINCEPT.DARK_BG,
-              border: `1px solid ${editedConfig.enable_reasoning ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
-              color: editedConfig.enable_reasoning ? FINCEPT.PURPLE : FINCEPT.GRAY,
-              fontSize: '9px',
-              fontWeight: 700,
-              cursor: editMode ? 'pointer' : 'default',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '2px',
-            }}
-          >
-            {editedConfig.enable_reasoning ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-            REASONING
-          </button>
+        {/* Toggle Options — All CoreAgent Features */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {([
+            { key: 'enable_memory' as const, label: 'MEMORY', icon: Database, color: FINCEPT.ORANGE },
+            { key: 'enable_reasoning' as const, label: 'REASONING', icon: Brain, color: FINCEPT.PURPLE || '#a855f7' },
+            { key: 'enable_knowledge' as const, label: 'KNOWLEDGE', icon: BookOpen, color: '#3b82f6' },
+            { key: 'enable_guardrails' as const, label: 'GUARDRAILS', icon: Shield, color: '#ef4444' },
+            { key: 'enable_agentic_memory' as const, label: 'AGENT MEMORY', icon: Layers, color: '#f59e0b' },
+            { key: 'enable_storage' as const, label: 'STORAGE', icon: Save, color: '#10b981' },
+            { key: 'enable_tracing' as const, label: 'TRACING', icon: Activity, color: '#6366f1' },
+            { key: 'enable_compression' as const, label: 'COMPRESS', icon: Minimize2, color: '#8b5cf6' },
+            { key: 'enable_hooks' as const, label: 'HOOKS', icon: Anchor, color: '#ec4899' },
+            { key: 'enable_evaluation' as const, label: 'EVAL', icon: ClipboardCheck, color: '#14b8a6' },
+          ] as const).map(({ key, label, icon: Icon, color }) => (
+            <button
+              key={key}
+              onClick={() => editMode && setEditedConfig(prev => ({ ...prev, [key]: !prev[key] }))}
+              style={{
+                padding: '6px 10px',
+                backgroundColor: editedConfig[key] ? `${color}20` : FINCEPT.DARK_BG,
+                border: `1px solid ${editedConfig[key] ? color : FINCEPT.BORDER}`,
+                color: editedConfig[key] ? color : FINCEPT.GRAY,
+                fontSize: '8px',
+                fontWeight: 700,
+                cursor: editMode ? 'pointer' : 'default',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '2px',
+                letterSpacing: '0.3px',
+              }}
+            >
+              <Icon size={11} />
+              {label}
+            </button>
+          ))}
         </div>
+
+        {/* ─── Expandable Config Panels ─── */}
+        {editMode && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+            {/* Knowledge Config Panel */}
+            {editedConfig.enable_knowledge && (
+              <div style={{ padding: '10px', backgroundColor: FINCEPT.DARK_BG, border: `1px solid #3b82f640`, borderRadius: '2px' }}>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 700, color: '#3b82f6', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                  <BookOpen size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  KNOWLEDGE BASE CONFIG
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>TYPE</label>
+                    <select
+                      value={editedConfig.knowledge_type}
+                      onChange={e => setEditedConfig(prev => ({ ...prev, knowledge_type: e.target.value as any }))}
+                      style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                    >
+                      <option value="url">URL</option>
+                      <option value="pdf">PDF</option>
+                      <option value="text">Text</option>
+                      <option value="combined">Combined</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>VECTOR DB</label>
+                    <select
+                      value={editedConfig.knowledge_vector_db}
+                      onChange={e => setEditedConfig(prev => ({ ...prev, knowledge_vector_db: e.target.value }))}
+                      style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                    >
+                      <option value="lancedb">LanceDB</option>
+                      <option value="pgvector">PgVector</option>
+                      <option value="qdrant">Qdrant</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>
+                    {editedConfig.knowledge_type === 'url' ? 'URLS (one per line)' : editedConfig.knowledge_type === 'pdf' ? 'PDF PATHS (one per line)' : 'KNOWLEDGE TEXT / PATHS'}
+                  </label>
+                  <textarea
+                    value={editedConfig.knowledge_urls}
+                    onChange={e => setEditedConfig(prev => ({ ...prev, knowledge_urls: e.target.value }))}
+                    rows={3}
+                    placeholder={editedConfig.knowledge_type === 'url' ? 'https://example.com/docs\nhttps://example.com/api' : 'Enter paths or text...'}
+                    style={{ width: '100%', padding: '8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace', resize: 'none' }}
+                  />
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>EMBEDDER</label>
+                  <select
+                    value={editedConfig.knowledge_embedder}
+                    onChange={e => setEditedConfig(prev => ({ ...prev, knowledge_embedder: e.target.value }))}
+                    style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="huggingface">HuggingFace</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Guardrails Config Panel */}
+            {editedConfig.enable_guardrails && (
+              <div style={{ padding: '10px', backgroundColor: FINCEPT.DARK_BG, border: `1px solid #ef444440`, borderRadius: '2px' }}>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 700, color: '#ef4444', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                  <Shield size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  GUARDRAILS CONFIG
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {([
+                    { key: 'guardrails_pii' as const, label: 'PII Detection', desc: 'Detect and redact personal information' },
+                    { key: 'guardrails_injection' as const, label: 'Injection Check', desc: 'Block prompt injection attempts' },
+                    { key: 'guardrails_compliance' as const, label: 'Financial Compliance', desc: 'Enforce financial regulation rules' },
+                  ] as const).map(({ key, label, desc }) => (
+                    <div
+                      key={key}
+                      onClick={() => setEditedConfig(prev => ({ ...prev, [key]: !prev[key] }))}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '6px 8px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`,
+                        borderRadius: '2px', cursor: 'pointer',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: '9px', fontWeight: 700, color: editedConfig[key] ? '#ef4444' : FINCEPT.GRAY }}>{label}</div>
+                        <div style={{ fontSize: '8px', color: FINCEPT.MUTED }}>{desc}</div>
+                      </div>
+                      <div style={{ width: '28px', height: '14px', borderRadius: '7px', backgroundColor: editedConfig[key] ? '#ef4444' : FINCEPT.BORDER, position: 'relative', transition: 'background 0.2s' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: FINCEPT.WHITE, position: 'absolute', top: '2px', left: editedConfig[key] ? '16px' : '2px', transition: 'left 0.2s' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Storage Config Panel */}
+            {editedConfig.enable_storage && (
+              <div style={{ padding: '10px', backgroundColor: FINCEPT.DARK_BG, border: `1px solid #10b98140`, borderRadius: '2px' }}>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 700, color: '#10b981', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                  <Save size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  STORAGE CONFIG
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>TYPE</label>
+                    <select
+                      value={editedConfig.storage_type}
+                      onChange={e => setEditedConfig(prev => ({ ...prev, storage_type: e.target.value as any }))}
+                      style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                    >
+                      <option value="sqlite">SQLite</option>
+                      <option value="postgres">PostgreSQL</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>TABLE NAME</label>
+                    <input
+                      value={editedConfig.storage_table}
+                      onChange={e => setEditedConfig(prev => ({ ...prev, storage_table: e.target.value }))}
+                      placeholder="agent_sessions"
+                      style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>DB PATH (leave empty for default)</label>
+                  <input
+                    value={editedConfig.storage_db_path}
+                    onChange={e => setEditedConfig(prev => ({ ...prev, storage_db_path: e.target.value }))}
+                    placeholder="tmp/agent_storage.db"
+                    style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Memory Config Panel */}
+            {editedConfig.enable_memory && (
+              <div style={{ padding: '10px', backgroundColor: FINCEPT.DARK_BG, border: `1px solid ${FINCEPT.ORANGE}40`, borderRadius: '2px' }}>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 700, color: FINCEPT.ORANGE, marginBottom: '8px', letterSpacing: '0.5px' }}>
+                  <Database size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  MEMORY CONFIG
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>DB PATH</label>
+                    <input
+                      value={editedConfig.memory_db_path}
+                      onChange={e => setEditedConfig(prev => ({ ...prev, memory_db_path: e.target.value }))}
+                      placeholder="tmp/agent_memory.db"
+                      style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>TABLE</label>
+                    <input
+                      value={editedConfig.memory_table}
+                      onChange={e => setEditedConfig(prev => ({ ...prev, memory_table: e.target.value }))}
+                      placeholder="agent_memory"
+                      style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                  {([
+                    { key: 'memory_create_user_memories' as const, label: 'User Memories' },
+                    { key: 'memory_create_session_summary' as const, label: 'Session Summary' },
+                  ] as const).map(({ key, label }) => (
+                    <div
+                      key={key}
+                      onClick={() => setEditedConfig(prev => ({ ...prev, [key]: !prev[key] }))}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: '24px', height: '12px', borderRadius: '6px', backgroundColor: editedConfig[key] ? FINCEPT.ORANGE : FINCEPT.BORDER, position: 'relative', transition: 'background 0.2s' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: FINCEPT.WHITE, position: 'absolute', top: '2px', left: editedConfig[key] ? '14px' : '2px', transition: 'left 0.2s' }} />
+                      </div>
+                      <span style={{ fontSize: '8px', fontWeight: 700, color: editedConfig[key] ? FINCEPT.ORANGE : FINCEPT.GRAY }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Agentic Memory Config Panel */}
+            {editedConfig.enable_agentic_memory && (
+              <div style={{ padding: '10px', backgroundColor: FINCEPT.DARK_BG, border: `1px solid #f59e0b40`, borderRadius: '2px' }}>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 700, color: '#f59e0b', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                  <Layers size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  AGENTIC MEMORY CONFIG
+                </label>
+                <div>
+                  <label style={{ display: 'block', fontSize: '8px', color: FINCEPT.GRAY, marginBottom: '4px' }}>USER ID (for persistent cross-session memory)</label>
+                  <input
+                    value={editedConfig.agentic_memory_user_id}
+                    onChange={e => setEditedConfig(prev => ({ ...prev, agentic_memory_user_id: e.target.value }))}
+                    placeholder="user-001"
+                    style={{ width: '100%', padding: '5px 8px', backgroundColor: FINCEPT.PANEL_BG, color: FINCEPT.WHITE, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '9px', fontFamily: '"IBM Plex Mono", monospace' }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Instructions */}
         {editMode && (
@@ -1843,29 +2289,78 @@ const AgentConfigTab: React.FC = () => {
           padding: '12px',
           backgroundColor: FINCEPT.HEADER_BG,
           borderBottom: `1px solid ${FINCEPT.BORDER}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
         }}>
-          <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
-            TEAM ({teamMembers.length})
-          </span>
-          <select
-            value={teamMode}
-            onChange={e => setTeamMode(e.target.value as any)}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: FINCEPT.DARK_BG,
-              color: FINCEPT.WHITE,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              borderRadius: '2px',
-              fontSize: '9px',
-            }}
-          >
-            <option value="coordinate">SEQUENTIAL</option>
-            <option value="route">ROUTE</option>
-            <option value="collaborate">PARALLEL</option>
-          </select>
+          {/* Row 1: Team count + mode selector */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '9px', fontWeight: 700, color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
+              TEAM ({teamMembers.length})
+            </span>
+            <select
+              value={teamMode}
+              onChange={e => setTeamMode(e.target.value as any)}
+              style={{
+                padding: '4px 8px',
+                backgroundColor: FINCEPT.DARK_BG,
+                color: FINCEPT.WHITE,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '9px',
+              }}
+            >
+              <option value="coordinate">DELEGATE</option>
+              <option value="route">ROUTE</option>
+              <option value="collaborate">COLLABORATE</option>
+            </select>
+          </div>
+          {/* Row 2: Leader selector + show responses toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {/* Leader selector */}
+            <select
+              value={teamLeaderIndex}
+              onChange={e => setTeamLeaderIndex(parseInt(e.target.value))}
+              style={{
+                flex: 1,
+                padding: '4px 6px',
+                backgroundColor: FINCEPT.DARK_BG,
+                color: teamLeaderIndex >= 0 ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                border: `1px solid ${teamLeaderIndex >= 0 ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                borderRadius: '2px',
+                fontSize: '8px',
+              }}
+            >
+              <option value={-1}>NO LEADER</option>
+              {teamMembers.map((m, i) => (
+                <option key={i} value={i}>{m.name.toUpperCase()}</option>
+              ))}
+            </select>
+            {/* Show members responses toggle */}
+            <button
+              onClick={() => setShowMembersResponses(prev => !prev)}
+              title="Show individual member responses"
+              style={{
+                padding: '4px 8px',
+                backgroundColor: showMembersResponses ? `${FINCEPT.ORANGE}20` : FINCEPT.DARK_BG,
+                border: `1px solid ${showMembersResponses ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+                color: showMembersResponses ? FINCEPT.ORANGE : FINCEPT.GRAY,
+                fontSize: '8px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '2px',
+              }}
+            >
+              <Eye size={10} />
+              SHOW ALL
+            </button>
+          </div>
+          {/* Mode description */}
+          <div style={{ marginTop: '6px', fontSize: '8px', color: FINCEPT.GRAY, fontStyle: 'italic' }}>
+            {teamMode === 'coordinate' && 'Leader delegates tasks to chosen members'}
+            {teamMode === 'route' && 'Routes query to the most appropriate member'}
+            {teamMode === 'collaborate' && 'All members receive the task and discuss consensus'}
+          </div>
         </div>
 
         {/* Team Members List */}
@@ -2078,7 +2573,42 @@ const AgentConfigTab: React.FC = () => {
             </span>
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-            {testResult ? (
+            {isStreaming && streamingContent ? (
+              // Show streaming content in real-time
+              <div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                  padding: '8px',
+                  backgroundColor: FINCEPT.ORANGE + '15',
+                  borderRadius: '4px',
+                  borderLeft: `3px solid ${FINCEPT.ORANGE}`,
+                }}>
+                  <Loader2 size={14} className="animate-spin" style={{ color: FINCEPT.ORANGE }} />
+                  <span style={{ fontSize: '10px', color: FINCEPT.ORANGE, fontWeight: 600 }}>
+                    Streaming response...
+                  </span>
+                  <button
+                    onClick={cancelStream}
+                    style={{
+                      marginLeft: 'auto',
+                      padding: '4px 8px',
+                      fontSize: '9px',
+                      backgroundColor: FINCEPT.RED + '20',
+                      color: FINCEPT.RED,
+                      border: `1px solid ${FINCEPT.RED}40`,
+                      borderRadius: '3px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <MarkdownRenderer content={streamingContent} />
+              </div>
+            ) : testResult ? (
               <MarkdownRenderer
                 content={extractAgentResponseText(
                   typeof testResult === 'string' ? testResult : (testResult.response || JSON.stringify(testResult, null, 2))
@@ -2274,6 +2804,113 @@ const AgentConfigTab: React.FC = () => {
               }}
             >
               ASSESS RISK
+            </button>
+          </div>
+
+          {/* Portfolio Plan */}
+          <div style={{ padding: '16px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Target size={16} style={{ color: FINCEPT.GREEN }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>PORTFOLIO PLAN</span>
+            </div>
+            <p style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '12px', lineHeight: 1.4 }}>
+              Generate an AI-powered investment plan based on goals and risk profile.
+            </p>
+            <button
+              onClick={() => runWorkflow('portfolio_plan', { goals: 'Balanced growth', budget: 100000, risk_tolerance: 'moderate' })}
+              disabled={executing}
+              style={{ width: '100%', padding: '8px', backgroundColor: FINCEPT.GREEN, color: FINCEPT.DARK_BG, border: 'none', borderRadius: '2px', fontSize: '9px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer', opacity: executing ? 0.7 : 1 }}
+            >
+              CREATE PLAN
+            </button>
+          </div>
+
+          {/* Paper Trading */}
+          <div style={{ padding: '16px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <FileJson size={16} style={{ color: FINCEPT.CYAN }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>PAPER TRADING</span>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+              <button
+                onClick={() => runWorkflow('paper_trade', { symbol: workflowSymbol, action: 'buy', quantity: 10, price: 150 })}
+                disabled={executing}
+                style={{ flex: 1, padding: '6px', backgroundColor: `${FINCEPT.GREEN}30`, color: FINCEPT.GREEN, border: `1px solid ${FINCEPT.GREEN}60`, borderRadius: '2px', fontSize: '8px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer' }}
+              >
+                BUY {workflowSymbol || 'AAPL'}
+              </button>
+              <button
+                onClick={() => runWorkflow('paper_trade', { symbol: workflowSymbol, action: 'sell', quantity: 10, price: 150 })}
+                disabled={executing}
+                style={{ flex: 1, padding: '6px', backgroundColor: `${FINCEPT.RED}30`, color: FINCEPT.RED, border: `1px solid ${FINCEPT.RED}60`, borderRadius: '2px', fontSize: '8px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer' }}
+              >
+                SELL {workflowSymbol || 'AAPL'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={() => runWorkflow('paper_portfolio')}
+                disabled={executing}
+                style={{ flex: 1, padding: '6px', backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.CYAN, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '8px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer' }}
+              >
+                PORTFOLIO
+              </button>
+              <button
+                onClick={() => runWorkflow('paper_positions')}
+                disabled={executing}
+                style={{ flex: 1, padding: '6px', backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.CYAN, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '8px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer' }}
+              >
+                POSITIONS
+              </button>
+            </div>
+          </div>
+
+          {/* Session & Memory */}
+          <div style={{ padding: '16px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Database size={16} style={{ color: FINCEPT.YELLOW }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>SESSION & MEMORY</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <button
+                onClick={() => runWorkflow('save_session', { session_id: `session-${Date.now()}` })}
+                disabled={executing}
+                style={{ width: '100%', padding: '6px', backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.YELLOW, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '8px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer' }}
+              >
+                SAVE CURRENT SESSION
+              </button>
+              <button
+                onClick={() => runWorkflow('save_memory', { content: testQuery || 'Important note', category: 'general' })}
+                disabled={executing}
+                style={{ width: '100%', padding: '6px', backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.YELLOW, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '8px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer' }}
+              >
+                SAVE TO MEMORY
+              </button>
+              <button
+                onClick={() => runWorkflow('search_memories', { query: testQuery || 'recent analysis' })}
+                disabled={executing}
+                style={{ width: '100%', padding: '6px', backgroundColor: FINCEPT.DARK_BG, color: FINCEPT.YELLOW, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px', fontSize: '8px', fontWeight: 700, cursor: executing ? 'not-allowed' : 'pointer' }}
+              >
+                SEARCH MEMORIES
+              </button>
+            </div>
+          </div>
+
+          {/* Multi-Query */}
+          <div style={{ padding: '16px', backgroundColor: FINCEPT.PANEL_BG, border: `1px solid ${FINCEPT.BORDER}`, borderRadius: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Route size={16} style={{ color: FINCEPT.BLUE }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>MULTI-QUERY</span>
+            </div>
+            <p style={{ fontSize: '9px', color: FINCEPT.GRAY, marginBottom: '12px', lineHeight: 1.4 }}>
+              Route your query to multiple agents simultaneously for parallel analysis.
+            </p>
+            <button
+              onClick={() => runWorkflow('multi_query', { query: testQuery })}
+              disabled={executing || !testQuery.trim()}
+              style={{ width: '100%', padding: '8px', backgroundColor: FINCEPT.BLUE, color: FINCEPT.WHITE, border: 'none', borderRadius: '2px', fontSize: '9px', fontWeight: 700, cursor: (executing || !testQuery.trim()) ? 'not-allowed' : 'pointer', opacity: (executing || !testQuery.trim()) ? 0.7 : 1 }}
+            >
+              EXECUTE MULTI-QUERY
             </button>
           </div>
         </div>
@@ -2880,13 +3517,7 @@ const AgentConfigTab: React.FC = () => {
         editedConfig.provider,
         editedConfig.model_id,
         editedConfig.instructions,
-        {
-          tools: selectedTools.length > 0 ? selectedTools : editedConfig.tools,
-          temperature: editedConfig.temperature,
-          maxTokens: editedConfig.max_tokens,
-          memory: editedConfig.enable_memory,
-          reasoning: editedConfig.enable_reasoning,
-        }
+        buildDetailedConfigOptions()
       );
 
       if (useAutoRouting) {

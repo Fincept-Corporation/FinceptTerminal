@@ -6,7 +6,8 @@
 import React, { useState, useCallback } from 'react';
 import { DollarSign, Calculator, AlertTriangle, CheckCircle, RefreshCw, FileText } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { FINCEPT_COLORS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface CostEstimate {
   dataset: string;
@@ -53,6 +54,8 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
   textColor,
   onEstimate,
 }) => {
+  const { t } = useTranslation('surfaceAnalytics');
+  const { colors } = useTerminalTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<CostEstimate | null>(null);
@@ -102,9 +105,9 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
 
   const getCostLevelColor = (level: 'low' | 'medium' | 'high') => {
     switch (level) {
-      case 'low': return FINCEPT_COLORS.GREEN;
-      case 'medium': return FINCEPT_COLORS.YELLOW;
-      case 'high': return FINCEPT_COLORS.RED;
+      case 'low': return colors.success;
+      case 'medium': return colors.warning;
+      case 'high': return colors.alert;
     }
   };
 
@@ -127,9 +130,9 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
   return (
     <div
       style={{
-        backgroundColor: FINCEPT_COLORS.DARK_BG,
-        border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-        borderRadius: '2px',
+        backgroundColor: colors.background,
+        border: `1px solid ${colors.textMuted}`,
+        borderRadius: 'var(--ft-border-radius)',
         padding: '12px',
       }}
     >
@@ -147,9 +150,9 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
           className="flex items-center gap-1 px-2 py-1 text-xs"
           style={{
             backgroundColor: accentColor,
-            color: FINCEPT_COLORS.BLACK,
+            color: colors.background,
             border: 'none',
-            borderRadius: '2px',
+            borderRadius: 'var(--ft-border-radius)',
             opacity: loading || !dataset || symbols.length === 0 ? 0.5 : 1,
           }}
         >
@@ -166,25 +169,25 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
       <div
         className="grid grid-cols-2 gap-2 mb-3 p-2 text-xs"
         style={{
-          backgroundColor: FINCEPT_COLORS.BLACK,
-          border: `1px solid ${FINCEPT_COLORS.BORDER}`,
-          borderRadius: '2px',
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.textMuted}`,
+          borderRadius: 'var(--ft-border-radius)',
         }}
       >
         <div>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Dataset: </span>
+          <span style={{ color: colors.textMuted }}>Dataset: </span>
           <span style={{ color: textColor }}>{dataset || 'Not selected'}</span>
         </div>
         <div>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Schema: </span>
+          <span style={{ color: colors.textMuted }}>Schema: </span>
           <span style={{ color: getCostLevelColor(schemaInfo.costLevel) }}>{schemaInfo.name}</span>
         </div>
         <div>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Symbols: </span>
+          <span style={{ color: colors.textMuted }}>Symbols: </span>
           <span style={{ color: textColor }}>{symbols.length > 0 ? symbols.join(', ') : 'None'}</span>
         </div>
         <div>
-          <span style={{ color: FINCEPT_COLORS.MUTED }}>Range: </span>
+          <span style={{ color: colors.textMuted }}>Range: </span>
           <span style={{ color: textColor }}>{startDate} → {endDate}</span>
         </div>
       </div>
@@ -194,10 +197,10 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
         <div
           className="flex items-center gap-2 mb-3 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.YELLOW}15`,
-            border: `1px solid ${FINCEPT_COLORS.YELLOW}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.YELLOW,
+            backgroundColor: `${colors.warning}15`,
+            border: `1px solid ${colors.warning}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.warning,
           }}
         >
           <AlertTriangle size={12} />
@@ -210,10 +213,10 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
         <div
           className="flex items-center gap-2 mb-3 p-2 text-xs"
           style={{
-            backgroundColor: `${FINCEPT_COLORS.RED}15`,
-            border: `1px solid ${FINCEPT_COLORS.RED}50`,
-            borderRadius: '2px',
-            color: FINCEPT_COLORS.RED,
+            backgroundColor: `${colors.alert}15`,
+            border: `1px solid ${colors.alert}50`,
+            borderRadius: 'var(--ft-border-radius)',
+            color: colors.alert,
           }}
         >
           <AlertTriangle size={12} />
@@ -226,15 +229,15 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
         <div
           className="p-3"
           style={{
-            backgroundColor: FINCEPT_COLORS.BLACK,
-            border: `1px solid ${FINCEPT_COLORS.GREEN}`,
-            borderRadius: '2px',
+            backgroundColor: colors.background,
+            border: `1px solid ${colors.success}`,
+            borderRadius: 'var(--ft-border-radius)',
           }}
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <CheckCircle size={14} style={{ color: FINCEPT_COLORS.GREEN }} />
-              <span className="text-xs font-bold" style={{ color: FINCEPT_COLORS.GREEN }}>
+              <CheckCircle size={14} style={{ color: colors.success }} />
+              <span className="text-xs font-bold" style={{ color: colors.success }}>
                 ESTIMATE READY
               </span>
             </div>
@@ -244,12 +247,12 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
             {/* Record Count */}
             <div className="text-center">
               <div className="flex items-center justify-center gap-1 mb-1">
-                <FileText size={12} style={{ color: FINCEPT_COLORS.CYAN }} />
-                <span className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <FileText size={12} style={{ color: colors.info }} />
+                <span className="text-xs" style={{ color: colors.textMuted }}>
                   RECORDS
                 </span>
               </div>
-              <div className="text-lg font-bold" style={{ color: FINCEPT_COLORS.CYAN }}>
+              <div className="text-lg font-bold" style={{ color: colors.info }}>
                 {formatRecordCount(estimate.record_count)}
               </div>
             </div>
@@ -257,14 +260,14 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({
             {/* Cost */}
             <div className="text-center">
               <div className="flex items-center justify-center gap-1 mb-1">
-                <DollarSign size={12} style={{ color: FINCEPT_COLORS.GREEN }} />
-                <span className="text-xs" style={{ color: FINCEPT_COLORS.MUTED }}>
+                <DollarSign size={12} style={{ color: colors.success }} />
+                <span className="text-xs" style={{ color: colors.textMuted }}>
                   ESTIMATED COST
                 </span>
               </div>
               <div
                 className="text-lg font-bold"
-                style={{ color: estimate.cost_usd === 0 ? FINCEPT_COLORS.GREEN : FINCEPT_COLORS.YELLOW }}
+                style={{ color: estimate.cost_usd === 0 ? colors.success : colors.warning }}
               >
                 {formatCost(estimate.cost_usd)}
               </div>

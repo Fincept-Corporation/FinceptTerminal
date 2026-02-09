@@ -6,6 +6,7 @@ import { contextRecorderService } from '@/services/data-sources/contextRecorderS
 import RecordingControlPanel from '@/components/common/RecordingControlPanel';
 import { TimezoneSelector } from '@/components/common/TimezoneSelector';
 import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '@/services/news/newsAnalysisService';
 import { createNewsTabTour } from '@/components/tabs/tours/newsTabTour';
 import RSSFeedSettingsModal from './RSSFeedSettingsModal';
@@ -14,19 +15,7 @@ declare global {
   interface Window { __TAURI__?: any; }
 }
 
-// ── FINCEPT Design System ──
-const F = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', RED: '#FF3B3B', GREEN: '#00D66F',
-  GRAY: '#787878', DARK_BG: '#000000', PANEL_BG: '#0F0F0F', HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A', HOVER: '#1F1F1F', MUTED: '#4A4A4A', CYAN: '#00E5FF',
-  YELLOW: '#FFD700', BLUE: '#0088FF', PURPLE: '#9D4EDD',
-};
-const FONT = '"IBM Plex Mono", "Consolas", monospace';
-
-// ── Helpers ──
-const priColor = (p: string) => ({ FLASH: F.RED, URGENT: F.ORANGE, BREAKING: F.YELLOW, ROUTINE: F.GRAY }[p] || F.MUTED);
-const sentColor = (s: string) => ({ BULLISH: F.GREEN, BEARISH: F.RED, NEUTRAL: F.YELLOW }[s] || F.MUTED);
-const impColor = (i: string) => ({ HIGH: F.RED, MEDIUM: F.YELLOW, LOW: F.GREEN }[i] || F.MUTED);
+// Theme colors provided by useTerminalTheme() hook
 const SentIcon: React.FC<{ s: string; size?: number }> = ({ s, size = 10 }) =>
   s === 'BULLISH' ? <TrendingUp size={size} /> : s === 'BEARISH' ? <TrendingDown size={size} /> : <Minus size={size} />;
 
@@ -39,7 +28,12 @@ const NewsGridCard: React.FC<{
   analyzing: boolean;
   currentAnalyzingId: string | null;
   openExternal: (url: string) => void;
-}> = ({ article, onAnalyze, analyzing, currentAnalyzingId, openExternal }) => {
+  colors: any;
+  priColor: (p: string) => string;
+  sentColor: (s: string) => string;
+  impColor: (i: string) => string;
+  fontFamily: string;
+}> = ({ article, onAnalyze, analyzing, currentAnalyzingId, openExternal, colors, priColor, sentColor, impColor, fontFamily }) => {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const isHighPri = article.priority === 'FLASH' || article.priority === 'URGENT';
@@ -51,8 +45,8 @@ const NewsGridCard: React.FC<{
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: '10px 12px',
-        backgroundColor: hovered ? F.HOVER : F.PANEL_BG,
-        border: `1px solid ${isHighPri ? `${priColor(article.priority)}40` : F.BORDER}`,
+        backgroundColor: hovered ? '#1F1F1F' : colors.panel,
+        border: `1px solid ${isHighPri ? `${priColor(article.priority)}40` : colors.panel}`,
         borderLeft: `3px solid ${priColor(article.priority)}`,
         borderRadius: '2px',
         transition: 'background 0.15s',
@@ -63,11 +57,11 @@ const NewsGridCard: React.FC<{
     >
       {/* Top: Source + Time */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-        <span style={{ fontSize: '9px', fontWeight: 700, color: F.CYAN, letterSpacing: '0.3px' }}>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--ft-color-accent, #00E5FF)', letterSpacing: '0.3px' }}>
           {article.source}
         </span>
         {article.time && article.time.trim() !== '' && (
-          <span style={{ fontSize: '9px', color: F.MUTED }}>{article.time}</span>
+          <span style={{ fontSize: '9px', color: colors.textMuted }}>{article.time}</span>
         )}
       </div>
 
@@ -75,7 +69,7 @@ const NewsGridCard: React.FC<{
       <div
         onClick={() => setExpanded(!expanded)}
         style={{
-          color: F.WHITE,
+          color: colors.text,
           fontSize: '11px',
           fontWeight: 600,
           lineHeight: '1.4',
@@ -92,12 +86,12 @@ const NewsGridCard: React.FC<{
       {/* Summary (when expanded) */}
       {expanded && (
         <div style={{
-          color: F.GRAY,
+          color: colors.textMuted,
           fontSize: '10px',
           lineHeight: '1.5',
           marginBottom: '8px',
           paddingLeft: '8px',
-          borderLeft: `2px solid ${F.BORDER}`,
+          borderLeft: `2px solid ${colors.panel}`,
         }}>{article.summary}</div>
       )}
 
@@ -106,8 +100,8 @@ const NewsGridCard: React.FC<{
         <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
           {article.tickers.map((ticker, i) => (
             <span key={i} style={{
-              padding: '1px 6px', backgroundColor: `${F.GREEN}15`, color: F.GREEN,
-              fontSize: '8px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${F.GREEN}30`,
+              padding: '1px 6px', backgroundColor: `${colors.success}15`, color: colors.success,
+              fontSize: '8px', fontWeight: 700, borderRadius: '2px', border: `1px solid ${colors.success}30`,
             }}>{ticker}</span>
           ))}
         </div>
@@ -125,7 +119,7 @@ const NewsGridCard: React.FC<{
           <button
             onClick={(e) => { e.stopPropagation(); openExternal(article.link!); }}
             style={{
-              flex: 1, padding: '5px 8px', backgroundColor: F.BLUE, color: F.WHITE,
+              flex: 1, padding: '5px 8px', backgroundColor: 'var(--ft-color-blue, #0088FF)', color: colors.text,
               border: 'none', fontSize: '8px', fontWeight: 700, cursor: 'pointer',
               borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
             }}
@@ -133,8 +127,8 @@ const NewsGridCard: React.FC<{
           <button
             onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(article.link!); }}
             style={{
-              padding: '5px 8px', background: 'none', border: `1px solid ${F.BORDER}`,
-              color: F.GRAY, fontSize: '8px', fontWeight: 700, cursor: 'pointer',
+              padding: '5px 8px', background: 'none', border: `1px solid ${colors.panel}`,
+              color: colors.textMuted, fontSize: '8px', fontWeight: 700, cursor: 'pointer',
               borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '3px',
             }}
           ><Copy size={9} /></button>
@@ -143,8 +137,8 @@ const NewsGridCard: React.FC<{
             disabled={isAnalyzing}
             style={{
               flex: 1, padding: '5px 8px',
-              backgroundColor: isAnalyzing ? F.MUTED : F.PURPLE,
-              color: F.WHITE, border: 'none', fontSize: '8px', fontWeight: 700,
+              backgroundColor: isAnalyzing ? colors.textMuted : 'var(--ft-color-purple, #9D4EDD)',
+              color: colors.text, border: 'none', fontSize: '8px', fontWeight: 700,
               cursor: isAnalyzing ? 'not-allowed' : 'pointer',
               borderRadius: '2px', opacity: isAnalyzing ? 0.5 : 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
@@ -172,7 +166,7 @@ const NewsGridCard: React.FC<{
         </span>
         <span style={{
           padding: '1px 6px', fontSize: '8px', fontWeight: 700, borderRadius: '2px',
-          color: F.GRAY, backgroundColor: `${F.MUTED}20`,
+          color: colors.textMuted, backgroundColor: `${colors.textMuted}20`,
         }}>{article.category}</span>
         <span style={{
           marginLeft: 'auto', fontSize: '8px', fontWeight: 700,
@@ -188,6 +182,28 @@ const NewsGridCard: React.FC<{
 // ══════════════════════════════════════════════════════════════
 const NewsTab: React.FC = () => {
   const { t } = useTranslation('news');
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
+
+  // Helper functions for priority/sentiment colors
+  const priColor = (p: string) => ({
+    FLASH: colors.alert,
+    URGENT: colors.primary,
+    BREAKING: colors.warning,
+    ROUTINE: colors.textMuted
+  }[p] || colors.textMuted);
+
+  const sentColor = (s: string) => ({
+    BULLISH: colors.success,
+    BEARISH: colors.alert,
+    NEUTRAL: colors.warning
+  }[s] || colors.textMuted);
+
+  const impColor = (i: string) => ({
+    HIGH: colors.alert,
+    MEDIUM: colors.warning,
+    LOW: colors.success
+  }[i] || colors.textMuted);
+
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [newsUpdateCount, setNewsUpdateCount] = useState(0);
@@ -382,12 +398,24 @@ const NewsTab: React.FC = () => {
   // ══════════════════════════════════════════════════════════════
   // RENDER
   // ══════════════════════════════════════════════════════════════
+  const scrollbarCSS = [
+    '@keyframes ntBlink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.3; } }',
+    '.nt-grid::-webkit-scrollbar { width: 6px; height: 6px; }',
+    `.nt-grid::-webkit-scrollbar-track { background: ${colors.background}; }`,
+    `.nt-grid::-webkit-scrollbar-thumb { background: ${colors.panel}; border-radius: 3px; }`,
+    `.nt-grid::-webkit-scrollbar-thumb:hover { background: ${colors.textMuted}; }`,
+    '*::-webkit-scrollbar { width: 6px; height: 6px; }',
+    `*::-webkit-scrollbar-track { background: ${colors.background}; }`,
+    `*::-webkit-scrollbar-thumb { background: ${colors.panel}; border-radius: 3px; }`,
+    `*::-webkit-scrollbar-thumb:hover { background: ${colors.textMuted}; }`,
+  ].join('\n');
+
   return (
     <div style={{
       height: '100%',
-      backgroundColor: F.DARK_BG,
-      color: F.WHITE,
-      fontFamily: FONT,
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
@@ -396,56 +424,56 @@ const NewsTab: React.FC = () => {
 
       {/* ── TOP BAR: Title + Filters + Actions (single merged bar) ── */}
       <div style={{
-        backgroundColor: F.HEADER_BG,
-        borderBottom: `2px solid ${F.ORANGE}`,
+        backgroundColor: colors.panel,
+        borderBottom: `2px solid ${colors.primary}`,
         padding: '0 16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        boxShadow: `0 2px 8px ${F.ORANGE}20`,
+        boxShadow: `0 2px 8px ${colors.primary}20`,
         flexShrink: 0,
         height: '38px',
         position: 'relative',
       }}>
         {/* Left: branding + live indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Newspaper size={13} style={{ color: F.ORANGE }} />
-          <span style={{ color: F.ORANGE, fontWeight: 700, fontSize: '11px', letterSpacing: '0.5px' }}>
+          <Newspaper size={13} style={{ color: colors.primary }} />
+          <span style={{ color: colors.primary, fontWeight: 700, fontSize: '11px', letterSpacing: '0.5px' }}>
             {t('title')}
           </span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span style={{ color: F.RED, fontWeight: 700, fontSize: '9px', animation: 'ntBlink 1s infinite' }}>LIVE</span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span style={{ color: F.YELLOW, fontSize: '9px', fontWeight: 700 }}>
+          <span style={{ color: colors.panel }}>|</span>
+          <span style={{ color: colors.alert, fontWeight: 700, fontSize: '9px', animation: 'ntBlink 1s infinite' }}>LIVE</span>
+          <span style={{ color: colors.panel }}>|</span>
+          <span style={{ color: colors.warning, fontSize: '9px', fontWeight: 700 }}>
             <AlertTriangle size={9} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '3px' }} />
             {alertCount}
           </span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span style={{ color: F.GREEN, fontSize: '9px', fontWeight: 700 }}>{feedCount} SRC</span>
-          <span style={{ color: F.BORDER }}>|</span>
+          <span style={{ color: colors.panel }}>|</span>
+          <span style={{ color: colors.success, fontSize: '9px', fontWeight: 700 }}>{feedCount} SRC</span>
+          <span style={{ color: colors.panel }}>|</span>
           <TimezoneSelector compact />
         </div>
 
         {/* Right: actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button onClick={() => createNewsTabTour().drive()} style={{
-            padding: '4px 8px', background: 'none', border: `1px solid ${F.BORDER}`,
-            color: F.GRAY, fontSize: '9px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px',
+            padding: '4px 8px', background: 'none', border: `1px solid ${colors.panel}`,
+            color: colors.textMuted, fontSize: '9px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px',
           }}><Info size={10} /></button>
           <button id="news-refresh" onClick={() => handleRefresh(true)} disabled={loading} style={{
-            padding: '4px 10px', backgroundColor: loading ? F.MUTED : F.ORANGE,
-            color: loading ? F.GRAY : F.DARK_BG, border: 'none', fontSize: '9px', fontWeight: 700,
+            padding: '4px 10px', backgroundColor: loading ? colors.textMuted : colors.primary,
+            color: loading ? colors.textMuted : colors.background, border: 'none', fontSize: '9px', fontWeight: 700,
             cursor: loading ? 'not-allowed' : 'pointer', borderRadius: '2px',
             display: 'flex', alignItems: 'center', gap: '4px',
           }}><RefreshCw size={10} />{loading ? 'LOADING' : 'REFRESH'}</button>
           <button id="news-interval-settings" onClick={() => setShowIntervalSettings(!showIntervalSettings)} style={{
-            padding: '4px 8px', background: 'none', border: `1px solid ${F.BORDER}`,
-            color: F.GRAY, fontSize: '9px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px',
+            padding: '4px 8px', background: 'none', border: `1px solid ${colors.panel}`,
+            color: colors.textMuted, fontSize: '9px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px',
             display: 'flex', alignItems: 'center', gap: '3px',
           }}><Clock size={10} />{refreshInterval}M</button>
           <button onClick={() => setShowFeedSettings(true)} style={{
-            padding: '4px 8px', background: 'none', border: `1px solid ${F.BORDER}`,
-            color: F.GRAY, fontSize: '9px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px',
+            padding: '4px 8px', background: 'none', border: `1px solid ${colors.panel}`,
+            color: colors.textMuted, fontSize: '9px', fontWeight: 700, cursor: 'pointer', borderRadius: '2px',
           }}><Settings size={10} /></button>
           <RecordingControlPanel tabName="News" onRecordingChange={setIsRecording} onRecordingStart={recordCurrentData} />
         </div>
@@ -454,19 +482,19 @@ const NewsTab: React.FC = () => {
         {showIntervalSettings && (
           <div style={{
             position: 'absolute', top: '100%', right: 16,
-            backgroundColor: F.PANEL_BG, border: `1px solid ${F.ORANGE}`,
+            backgroundColor: colors.panel, border: `1px solid ${colors.primary}`,
             borderRadius: '2px', padding: '6px', zIndex: 1000, marginTop: '2px',
           }}>
-            <div style={{ fontSize: '9px', color: F.GRAY, fontWeight: 700, marginBottom: '4px', letterSpacing: '0.5px' }}>
+            <div style={{ fontSize: '9px', color: colors.textMuted, fontWeight: 700, marginBottom: '4px', letterSpacing: '0.5px' }}>
               AUTO-REFRESH
             </div>
             {[1, 2, 5, 10, 15, 30].map(min => (
               <button key={min}
                 onClick={() => { setRefreshInterval(min); setShowIntervalSettings(false); }}
                 style={{
-                  width: '100%', backgroundColor: refreshInterval === min ? F.ORANGE : 'transparent',
-                  color: refreshInterval === min ? F.DARK_BG : F.WHITE,
-                  border: `1px solid ${refreshInterval === min ? F.ORANGE : F.BORDER}`,
+                  width: '100%', backgroundColor: refreshInterval === min ? colors.primary : 'transparent',
+                  color: refreshInterval === min ? colors.background : colors.text,
+                  border: `1px solid ${refreshInterval === min ? colors.primary : colors.panel}`,
                   padding: '3px 8px', fontSize: '9px', fontWeight: 700, cursor: 'pointer',
                   marginBottom: '2px', textAlign: 'left', borderRadius: '2px',
                 }}
@@ -478,7 +506,7 @@ const NewsTab: React.FC = () => {
 
       {/* ── FILTER BAR ── */}
       <div id="news-filters" style={{
-        backgroundColor: F.PANEL_BG, borderBottom: `1px solid ${F.BORDER}`,
+        backgroundColor: colors.panel, borderBottom: `1px solid ${colors.panel}`,
         padding: '3px 10px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '2px',
       }}>
         {filters.map(item => (
@@ -486,12 +514,12 @@ const NewsTab: React.FC = () => {
             onClick={() => setActiveFilter(item.f)}
             style={{
               padding: '3px 10px',
-              backgroundColor: activeFilter === item.f ? F.ORANGE : 'transparent',
-              color: activeFilter === item.f ? F.DARK_BG : F.GRAY,
+              backgroundColor: activeFilter === item.f ? colors.primary : 'transparent',
+              color: activeFilter === item.f ? colors.background : colors.textMuted,
               border: 'none', fontSize: '9px', fontWeight: 700,
               letterSpacing: '0.3px', cursor: 'pointer', borderRadius: '2px',
             }}>
-            <span style={{ color: activeFilter === item.f ? F.DARK_BG : F.MUTED, marginRight: '3px', fontSize: '8px' }}>{item.key}</span>
+            <span style={{ color: activeFilter === item.f ? colors.background : colors.textMuted, marginRight: '3px', fontSize: '8px' }}>{item.key}</span>
             {item.label}
           </button>
         ))}
@@ -501,14 +529,14 @@ const NewsTab: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
-          backgroundColor: F.DARK_BG,
-          border: `1px solid ${F.BORDER}`,
+          backgroundColor: colors.background,
+          border: `1px solid ${colors.panel}`,
           borderRadius: '2px',
           padding: '2px 8px',
           flex: '0 1 220px',
           minWidth: '120px',
         }}>
-          <Search size={10} style={{ color: F.MUTED, flexShrink: 0 }} />
+          <Search size={10} style={{ color: colors.textMuted, flexShrink: 0 }} />
           <input
             type="text"
             value={searchQuery}
@@ -519,9 +547,9 @@ const NewsTab: React.FC = () => {
               backgroundColor: 'transparent',
               border: 'none',
               outline: 'none',
-              color: F.WHITE,
+              color: colors.text,
               fontSize: '9px',
-              fontFamily: FONT,
+              fontFamily: fontFamily,
               padding: '2px 0',
             }}
           />
@@ -529,7 +557,7 @@ const NewsTab: React.FC = () => {
             <button
               onClick={() => setSearchQuery('')}
               style={{
-                background: 'none', border: 'none', color: F.MUTED,
+                background: 'none', border: 'none', color: colors.textMuted,
                 cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center',
               }}
             >
@@ -538,9 +566,9 @@ const NewsTab: React.FC = () => {
           )}
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', fontSize: '9px' }}>
-          <span style={{ color: F.GRAY }}>TOTAL: <span style={{ color: F.CYAN, fontWeight: 700 }}>{newsArticles.length}</span></span>
-          <span style={{ color: F.GRAY }}>SHOWING: <span style={{ color: F.CYAN, fontWeight: 700 }}>{filteredNews.length}</span></span>
-          <span style={{ color: loading ? F.YELLOW : F.GREEN, fontWeight: 700 }}>
+          <span style={{ color: colors.textMuted }}>TOTAL: <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontWeight: 700 }}>{newsArticles.length}</span></span>
+          <span style={{ color: colors.textMuted }}>SHOWING: <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontWeight: 700 }}>{filteredNews.length}</span></span>
+          <span style={{ color: loading ? colors.warning : colors.success, fontWeight: 700 }}>
             {loading ? 'UPDATING' : (isUsingMockData() ? 'DEMO' : 'LIVE')}
           </span>
         </div>
@@ -551,8 +579,8 @@ const NewsTab: React.FC = () => {
 
         {/* ── LEFT SIDEBAR: Sentiment + Stats (fixed, no scroll needed) ── */}
         <div style={{
-          width: '200px', flexShrink: 0, backgroundColor: F.PANEL_BG,
-          borderRight: `1px solid ${F.BORDER}`,
+          width: '200px', flexShrink: 0, backgroundColor: colors.panel,
+          borderRight: `1px solid ${colors.panel}`,
           display: 'flex', flexDirection: 'column',
           padding: '12px',
           gap: '12px',
@@ -560,37 +588,37 @@ const NewsTab: React.FC = () => {
         }}>
           {/* Sentiment */}
           <div>
-            <div style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px', marginBottom: '8px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px', marginBottom: '8px' }}>
               MARKET SENTIMENT
             </div>
-            <div style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', padding: '10px' }}>
+            <div style={{ backgroundColor: colors.background, border: `1px solid ${colors.panel}`, borderRadius: '2px', padding: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '10px' }}>
-                <span style={{ color: F.GREEN }}>BULL</span>
-                <span style={{ color: F.GREEN, fontWeight: 700 }}>{bullish} ({Math.round((bullish / total) * 100)}%)</span>
+                <span style={{ color: colors.success }}>BULL</span>
+                <span style={{ color: colors.success, fontWeight: 700 }}>{bullish} ({Math.round((bullish / total) * 100)}%)</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '10px' }}>
-                <span style={{ color: F.RED }}>BEAR</span>
-                <span style={{ color: F.RED, fontWeight: 700 }}>{bearish} ({Math.round((bearish / total) * 100)}%)</span>
+                <span style={{ color: colors.alert }}>BEAR</span>
+                <span style={{ color: colors.alert, fontWeight: 700 }}>{bearish} ({Math.round((bearish / total) * 100)}%)</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '10px' }}>
-                <span style={{ color: F.YELLOW }}>NEUT</span>
-                <span style={{ color: F.YELLOW, fontWeight: 700 }}>{neutral} ({Math.round((neutral / total) * 100)}%)</span>
+                <span style={{ color: colors.warning }}>NEUT</span>
+                <span style={{ color: colors.warning, fontWeight: 700 }}>{neutral} ({Math.round((neutral / total) * 100)}%)</span>
               </div>
               {/* Bar */}
-              <div style={{ height: '4px', backgroundColor: F.BORDER, borderRadius: '2px', display: 'flex', overflow: 'hidden', marginBottom: '8px' }}>
-                <div style={{ width: `${Math.round((bullish / total) * 100)}%`, backgroundColor: F.GREEN }} />
-                <div style={{ width: `${Math.round((neutral / total) * 100)}%`, backgroundColor: F.YELLOW }} />
-                <div style={{ width: `${Math.round((bearish / total) * 100)}%`, backgroundColor: F.RED }} />
+              <div style={{ height: '4px', backgroundColor: colors.panel, borderRadius: '2px', display: 'flex', overflow: 'hidden', marginBottom: '8px' }}>
+                <div style={{ width: `${Math.round((bullish / total) * 100)}%`, backgroundColor: colors.success }} />
+                <div style={{ width: `${Math.round((neutral / total) * 100)}%`, backgroundColor: colors.warning }} />
+                <div style={{ width: `${Math.round((bearish / total) * 100)}%`, backgroundColor: colors.alert }} />
               </div>
               {/* Net Score */}
               <div style={{
-                textAlign: 'center', padding: '6px', backgroundColor: `${parseFloat(score) > 0 ? F.GREEN : parseFloat(score) < 0 ? F.RED : F.YELLOW}10`,
-                borderRadius: '2px', border: `1px solid ${parseFloat(score) > 0 ? F.GREEN : parseFloat(score) < 0 ? F.RED : F.YELLOW}30`,
+                textAlign: 'center', padding: '6px', backgroundColor: `${parseFloat(score) > 0 ? colors.success : parseFloat(score) < 0 ? colors.alert : colors.warning}10`,
+                borderRadius: '2px', border: `1px solid ${parseFloat(score) > 0 ? colors.success : parseFloat(score) < 0 ? colors.alert : colors.warning}30`,
               }}>
-                <div style={{ fontSize: '9px', color: F.GRAY, marginBottom: '2px' }}>NET SCORE</div>
+                <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '2px' }}>NET SCORE</div>
                 <div style={{
                   fontSize: '16px', fontWeight: 700,
-                  color: parseFloat(score) > 0 ? F.GREEN : parseFloat(score) < 0 ? F.RED : F.YELLOW,
+                  color: parseFloat(score) > 0 ? colors.success : parseFloat(score) < 0 ? colors.alert : colors.warning,
                 }}>{score}</div>
               </div>
             </div>
@@ -598,18 +626,18 @@ const NewsTab: React.FC = () => {
 
           {/* Feed Stats */}
           <div>
-            <div style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px', marginBottom: '8px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px', marginBottom: '8px' }}>
               FEED STATISTICS
             </div>
-            <div style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', padding: '10px' }}>
+            <div style={{ backgroundColor: colors.background, border: `1px solid ${colors.panel}`, borderRadius: '2px', padding: '10px' }}>
               {[
-                { label: 'ARTICLES', value: newsArticles.length, color: F.CYAN },
-                { label: 'FEEDS', value: feedCount, color: F.CYAN },
-                { label: 'ALERTS', value: alertCount, color: F.ORANGE },
-                { label: 'UPDATES', value: newsUpdateCount, color: F.CYAN },
+                { label: 'ARTICLES', value: newsArticles.length, color: 'var(--ft-color-accent, #00E5FF)' },
+                { label: 'FEEDS', value: feedCount, color: 'var(--ft-color-accent, #00E5FF)' },
+                { label: 'ALERTS', value: alertCount, color: colors.primary },
+                { label: 'UPDATES', value: newsUpdateCount, color: 'var(--ft-color-accent, #00E5FF)' },
               ].map((s, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: i < 3 ? '4px' : 0 }}>
-                  <span style={{ color: F.GRAY }}>{s.label}</span>
+                  <span style={{ color: colors.textMuted }}>{s.label}</span>
                   <span style={{ color: s.color, fontWeight: 700 }}>{s.value}</span>
                 </div>
               ))}
@@ -618,39 +646,39 @@ const NewsTab: React.FC = () => {
 
           {/* Top Categories */}
           <div>
-            <div style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px', marginBottom: '8px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px', marginBottom: '8px' }}>
               CATEGORIES
             </div>
-            <div style={{ backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px', padding: '10px' }}>
+            <div style={{ backgroundColor: colors.background, border: `1px solid ${colors.panel}`, borderRadius: '2px', padding: '10px' }}>
               {topCategories.length > 0 ? topCategories.map(([cat, count], i) => (
                 <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: i < topCategories.length - 1 ? '4px' : 0 }}>
-                  <span style={{ color: F.GRAY }}>{cat}</span>
-                  <span style={{ color: F.PURPLE, fontWeight: 700 }}>{count}</span>
+                  <span style={{ color: colors.textMuted }}>{cat}</span>
+                  <span style={{ color: 'var(--ft-color-purple, #9D4EDD)', fontWeight: 700 }}>{count}</span>
                 </div>
               )) : (
-                <div style={{ fontSize: '10px', color: F.MUTED }}>No data</div>
+                <div style={{ fontSize: '10px', color: colors.textMuted }}>No data</div>
               )}
             </div>
           </div>
 
           {/* Active Sources (compact) */}
           <div style={{ flex: 1, minHeight: 0 }}>
-            <div style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px', marginBottom: '8px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.5px', marginBottom: '8px' }}>
               ACTIVE SOURCES
             </div>
             <div style={{
-              backgroundColor: F.DARK_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px',
+              backgroundColor: colors.background, border: `1px solid ${colors.panel}`, borderRadius: '2px',
               padding: '8px 10px', display: 'flex', flexWrap: 'wrap', gap: '4px',
             }}>
               {activeSources.slice(0, 8).map((src, i) => (
                 <span key={i} style={{
                   padding: '1px 6px', fontSize: '8px', fontWeight: 700,
-                  color: F.CYAN, backgroundColor: `${F.CYAN}10`,
-                  borderRadius: '2px', border: `1px solid ${F.CYAN}20`,
+                  color: 'var(--ft-color-accent, #00E5FF)', backgroundColor: 'rgba(0, 229, 255, 0.1)',
+                  borderRadius: '2px', border: '1px solid rgba(0, 229, 255, 0.2)',
                 }}>{src}</span>
               ))}
               {activeSources.length > 8 && (
-                <span style={{ fontSize: '8px', color: F.MUTED }}>+{activeSources.length - 8}</span>
+                <span style={{ fontSize: '8px', color: colors.textMuted }}>+{activeSources.length - 8}</span>
               )}
             </div>
           </div>
@@ -659,12 +687,12 @@ const NewsTab: React.FC = () => {
         {/* ── CENTER: News Grid ── */}
         <div id="news-primary-feed" style={{
           flex: 1, overflow: 'auto', padding: '12px',
-          backgroundColor: F.DARK_BG,
+          backgroundColor: colors.background,
         }}>
           {loading && newsArticles.length === 0 ? (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', height: '100%', color: F.MUTED,
+              justifyContent: 'center', height: '100%', color: colors.textMuted,
             }}>
               <RefreshCw size={20} className="animate-spin" style={{ marginBottom: '10px', opacity: 0.5 }} />
               <span style={{ fontSize: '11px' }}>Loading news from {feedCount} RSS feeds...</span>
@@ -672,7 +700,7 @@ const NewsTab: React.FC = () => {
           ) : filteredNews.length === 0 ? (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', height: '100%', color: F.MUTED,
+              justifyContent: 'center', height: '100%', color: colors.textMuted,
             }}>
               <Newspaper size={20} style={{ marginBottom: '10px', opacity: 0.5 }} />
               <span style={{ fontSize: '11px' }}>No articles found for filter: {activeFilter}</span>
@@ -692,6 +720,11 @@ const NewsTab: React.FC = () => {
                   analyzing={analyzingArticle}
                   currentAnalyzingId={currentAnalyzingId}
                   openExternal={openExternal}
+                  colors={colors}
+                  priColor={priColor}
+                  sentColor={sentColor}
+                  impColor={impColor}
+                  fontFamily={fontFamily}
                 />
               ))}
             </div>
@@ -703,8 +736,8 @@ const NewsTab: React.FC = () => {
           <div style={{
             width: '400px',
             flexShrink: 0,
-            backgroundColor: F.PANEL_BG,
-            borderLeft: `2px solid ${F.ORANGE}`,
+            backgroundColor: colors.panel,
+            borderLeft: `2px solid ${colors.primary}`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -714,16 +747,16 @@ const NewsTab: React.FC = () => {
             {/* Panel Header */}
             <div style={{
               padding: '10px 14px',
-              backgroundColor: F.HEADER_BG,
-              borderBottom: `2px solid ${F.ORANGE}`,
+              backgroundColor: colors.panel,
+              borderBottom: `2px solid ${colors.primary}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               flexShrink: 0,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Zap size={13} style={{ color: F.PURPLE }} />
-                <span style={{ fontSize: '10px', fontWeight: 700, color: F.PURPLE, letterSpacing: '0.5px' }}>
+                <Zap size={13} style={{ color: 'var(--ft-color-purple, #9D4EDD)' }} />
+                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ft-color-purple, #9D4EDD)', letterSpacing: '0.5px' }}>
                   AI ANALYSIS
                 </span>
               </div>
@@ -731,8 +764,8 @@ const NewsTab: React.FC = () => {
                 onClick={() => setAnalysisPanelOpen(false)}
                 style={{
                   background: 'none',
-                  border: `1px solid ${F.BORDER}`,
-                  color: F.GRAY,
+                  border: `1px solid ${colors.panel}`,
+                  color: colors.textMuted,
                   cursor: 'pointer',
                   borderRadius: '2px',
                   padding: '3px 8px',
@@ -758,7 +791,7 @@ const NewsTab: React.FC = () => {
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{
                     fontSize: '9px',
-                    color: F.GRAY,
+                    color: colors.textMuted,
                     fontWeight: 700,
                     marginBottom: '6px',
                     letterSpacing: '0.5px',
@@ -767,14 +800,14 @@ const NewsTab: React.FC = () => {
                   </div>
                   <div style={{
                     padding: '10px 12px',
-                    backgroundColor: F.DARK_BG,
-                    border: `1px solid ${F.BORDER}`,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${colors.panel}`,
                     borderLeft: `3px solid ${priColor(currentAnalyzedArticle.priority)}`,
                     borderRadius: '2px',
                   }}>
                     <div style={{
                       fontSize: '11px',
-                      color: F.WHITE,
+                      color: colors.text,
                       fontWeight: 600,
                       lineHeight: '1.4',
                       marginBottom: '8px',
@@ -784,13 +817,13 @@ const NewsTab: React.FC = () => {
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
                       <span style={{
                         fontSize: '8px',
-                        color: F.CYAN,
+                        color: 'var(--ft-color-accent, #00E5FF)',
                         fontWeight: 700,
                       }}>
                         {currentAnalyzedArticle.source}
                       </span>
                       {currentAnalyzedArticle.time && (
-                        <span style={{ fontSize: '8px', color: F.MUTED }}>
+                        <span style={{ fontSize: '8px', color: colors.textMuted }}>
                           {currentAnalyzedArticle.time}
                         </span>
                       )}
@@ -822,8 +855,8 @@ const NewsTab: React.FC = () => {
                         fontSize: '8px',
                         fontWeight: 700,
                         borderRadius: '2px',
-                        color: F.GRAY,
-                        backgroundColor: `${F.MUTED}20`,
+                        color: colors.textMuted,
+                        backgroundColor: `${colors.textMuted}20`,
                       }}>
                         {currentAnalyzedArticle.category}
                       </span>
@@ -845,13 +878,13 @@ const NewsTab: React.FC = () => {
                   <div style={{
                     width: '40px',
                     height: '40px',
-                    border: `3px solid ${F.BORDER}`,
-                    borderTop: `3px solid ${F.PURPLE}`,
+                    border: `3px solid ${colors.panel}`,
+                    borderTop: '3px solid var(--ft-color-purple, #9D4EDD)',
                     borderRadius: '50%',
                     animation: 'spin 1s linear infinite',
                   }} />
                   <div style={{
-                    color: F.PURPLE,
+                    color: 'var(--ft-color-purple, #9D4EDD)',
                     fontSize: '10px',
                     fontWeight: 700,
                     letterSpacing: '0.5px',
@@ -859,7 +892,7 @@ const NewsTab: React.FC = () => {
                     ANALYZING WITH AI...
                   </div>
                   <div style={{
-                    color: F.GRAY,
+                    color: colors.textMuted,
                     fontSize: '9px',
                     textAlign: 'center',
                     lineHeight: '1.5',
@@ -875,8 +908,8 @@ const NewsTab: React.FC = () => {
                   {/* Credits Info */}
                   <div style={{
                     padding: '8px 12px',
-                    backgroundColor: `${F.PURPLE}15`,
-                    border: `1px solid ${F.PURPLE}`,
+                    backgroundColor: 'rgba(157, 78, 221, 0.1)',
+                    border: '1px solid var(--ft-color-purple, #9D4EDD)',
                     borderRadius: '2px',
                     marginBottom: '14px',
                     display: 'flex',
@@ -884,10 +917,10 @@ const NewsTab: React.FC = () => {
                     alignItems: 'center',
                     fontSize: '9px',
                   }}>
-                    <span style={{ color: F.PURPLE, fontWeight: 700, letterSpacing: '0.5px' }}>
+                    <span style={{ color: 'var(--ft-color-purple, #9D4EDD)', fontWeight: 700, letterSpacing: '0.5px' }}>
                       ANALYSIS COMPLETE
                     </span>
-                    <span style={{ color: F.GRAY }}>
+                    <span style={{ color: colors.textMuted }}>
                       {analysisData.credits_used} CR | {analysisData.credits_remaining.toLocaleString()} REM
                     </span>
                   </div>
@@ -897,7 +930,7 @@ const NewsTab: React.FC = () => {
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{
                       fontSize: '9px',
-                      color: F.GRAY,
+                      color: colors.textMuted,
                       fontWeight: 700,
                       marginBottom: '6px',
                       letterSpacing: '0.5px',
@@ -906,11 +939,11 @@ const NewsTab: React.FC = () => {
                     </div>
                     <div style={{
                       fontSize: '10px',
-                      color: F.WHITE,
+                      color: colors.text,
                       lineHeight: '1.6',
                       padding: '10px 12px',
-                      backgroundColor: F.DARK_BG,
-                      border: `1px solid ${F.BORDER}`,
+                      backgroundColor: colors.background,
+                      border: `1px solid ${colors.panel}`,
                       borderRadius: '2px',
                     }}>
                       {analysisData.analysis.summary}
@@ -923,7 +956,7 @@ const NewsTab: React.FC = () => {
                     <div style={{ marginBottom: '14px' }}>
                       <div style={{
                         fontSize: '9px',
-                        color: F.GRAY,
+                        color: colors.textMuted,
                         fontWeight: 700,
                         marginBottom: '6px',
                         letterSpacing: '0.5px',
@@ -932,8 +965,8 @@ const NewsTab: React.FC = () => {
                       </div>
                       <div style={{
                         padding: '10px 12px',
-                        backgroundColor: F.DARK_BG,
-                        border: `1px solid ${F.BORDER}`,
+                        backgroundColor: colors.background,
+                        border: `1px solid ${colors.panel}`,
                         borderRadius: '2px',
                       }}>
                         {analysisData.analysis.key_points.filter(pt => typeof pt === 'string').map((pt, i) => (
@@ -941,9 +974,9 @@ const NewsTab: React.FC = () => {
                             key={i}
                             style={{
                               fontSize: '9px',
-                              color: F.WHITE,
+                              color: colors.text,
                               paddingLeft: '10px',
-                              borderLeft: `2px solid ${F.ORANGE}`,
+                              borderLeft: `2px solid ${colors.primary}`,
                               marginBottom: i < analysisData.analysis.key_points.length - 1 ? '8px' : 0,
                               lineHeight: '1.5',
                             }}
@@ -964,13 +997,13 @@ const NewsTab: React.FC = () => {
                   }}>
                     <div style={{
                       padding: '10px',
-                      backgroundColor: F.DARK_BG,
-                      border: `1px solid ${F.BORDER}`,
+                      backgroundColor: colors.background,
+                      border: `1px solid ${colors.panel}`,
                       borderRadius: '2px',
                     }}>
                       <div style={{
                         fontSize: '9px',
-                        color: F.GRAY,
+                        color: colors.textMuted,
                         fontWeight: 700,
                         marginBottom: '6px',
                       }}>
@@ -982,7 +1015,7 @@ const NewsTab: React.FC = () => {
                         fontSize: '9px',
                         marginBottom: '3px',
                       }}>
-                        <span style={{ color: F.GRAY }}>Score</span>
+                        <span style={{ color: colors.textMuted }}>Score</span>
                         <span style={{
                           color: getSentimentColor(analysisData.analysis.sentiment.score),
                           fontWeight: 700,
@@ -996,8 +1029,8 @@ const NewsTab: React.FC = () => {
                         fontSize: '9px',
                         marginBottom: '3px',
                       }}>
-                        <span style={{ color: F.GRAY }}>Intensity</span>
-                        <span style={{ color: F.CYAN, fontWeight: 700 }}>
+                        <span style={{ color: colors.textMuted }}>Intensity</span>
+                        <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontWeight: 700 }}>
                           {analysisData.analysis.sentiment.intensity.toFixed(2)}
                         </span>
                       </div>
@@ -1006,21 +1039,21 @@ const NewsTab: React.FC = () => {
                         justifyContent: 'space-between',
                         fontSize: '9px',
                       }}>
-                        <span style={{ color: F.GRAY }}>Confidence</span>
-                        <span style={{ color: F.GREEN, fontWeight: 700 }}>
+                        <span style={{ color: colors.textMuted }}>Confidence</span>
+                        <span style={{ color: colors.success, fontWeight: 700 }}>
                           {(analysisData.analysis.sentiment.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
                     </div>
                     <div style={{
                       padding: '10px',
-                      backgroundColor: F.DARK_BG,
-                      border: `1px solid ${F.BORDER}`,
+                      backgroundColor: colors.background,
+                      border: `1px solid ${colors.panel}`,
                       borderRadius: '2px',
                     }}>
                       <div style={{
                         fontSize: '9px',
-                        color: F.GRAY,
+                        color: colors.textMuted,
                         fontWeight: 700,
                         marginBottom: '6px',
                       }}>
@@ -1032,7 +1065,7 @@ const NewsTab: React.FC = () => {
                         fontSize: '9px',
                         marginBottom: '3px',
                       }}>
-                        <span style={{ color: F.GRAY }}>Urgency</span>
+                        <span style={{ color: colors.textMuted }}>Urgency</span>
                         <span style={{
                           color: getUrgencyColor(analysisData.analysis.market_impact.urgency),
                           fontWeight: 700,
@@ -1045,8 +1078,8 @@ const NewsTab: React.FC = () => {
                         justifyContent: 'space-between',
                         fontSize: '9px',
                       }}>
-                        <span style={{ color: F.GRAY }}>Prediction</span>
-                        <span style={{ color: F.CYAN, fontWeight: 700 }}>
+                        <span style={{ color: colors.textMuted }}>Prediction</span>
+                        <span style={{ color: 'var(--ft-color-accent, #00E5FF)', fontWeight: 700 }}>
                           {analysisData.analysis.market_impact.prediction.replace('_', ' ').toUpperCase()}
                         </span>
                       </div>
@@ -1058,7 +1091,7 @@ const NewsTab: React.FC = () => {
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{
                       fontSize: '9px',
-                      color: F.GRAY,
+                      color: colors.textMuted,
                       fontWeight: 700,
                       marginBottom: '6px',
                       letterSpacing: '0.5px',
@@ -1077,8 +1110,8 @@ const NewsTab: React.FC = () => {
                           key={type}
                           style={{
                             padding: '8px',
-                            backgroundColor: F.DARK_BG,
-                            border: `1px solid ${F.BORDER}`,
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.panel}`,
                             borderRadius: '2px',
                           }}
                         >
@@ -1092,7 +1125,7 @@ const NewsTab: React.FC = () => {
                           </div>
                           {riskSignal.details && typeof riskSignal.details === 'string' && (
                             <div style={{
-                              color: F.MUTED,
+                              color: colors.textMuted,
                               fontSize: '8px',
                               lineHeight: '1.3',
                             }}>
@@ -1111,7 +1144,7 @@ const NewsTab: React.FC = () => {
                     <div style={{ marginBottom: '14px' }}>
                       <div style={{
                         fontSize: '9px',
-                        color: F.GRAY,
+                        color: colors.textMuted,
                         fontWeight: 700,
                         marginBottom: '6px',
                       }}>
@@ -1123,12 +1156,12 @@ const NewsTab: React.FC = () => {
                             key={idx}
                             style={{
                               padding: '2px 8px',
-                              backgroundColor: `${F.PURPLE}20`,
-                              color: F.WHITE,
+                              backgroundColor: 'rgba(157, 78, 221, 0.15)',
+                              color: colors.text,
                               fontSize: '8px',
                               fontWeight: 700,
                               borderRadius: '2px',
-                              border: `1px solid ${F.PURPLE}`,
+                              border: '1px solid var(--ft-color-purple, #9D4EDD)',
                             }}
                           >
                             {topic}
@@ -1143,7 +1176,7 @@ const NewsTab: React.FC = () => {
                     <div style={{ marginBottom: '14px' }}>
                       <div style={{
                         fontSize: '9px',
-                        color: F.GRAY,
+                        color: colors.textMuted,
                         fontWeight: 700,
                         marginBottom: '6px',
                       }}>
@@ -1155,11 +1188,11 @@ const NewsTab: React.FC = () => {
                             key={idx}
                             style={{
                               padding: '2px 8px',
-                              backgroundColor: `${F.MUTED}20`,
-                              color: F.GRAY,
+                              backgroundColor: `${colors.textMuted}20`,
+                              color: colors.textMuted,
                               fontSize: '8px',
                               borderRadius: '2px',
-                              border: `1px solid ${F.MUTED}`,
+                              border: `1px solid ${colors.textMuted}`,
                             }}
                           >
                             {kw}
@@ -1174,7 +1207,7 @@ const NewsTab: React.FC = () => {
                     <div>
                       <div style={{
                         fontSize: '9px',
-                        color: F.GRAY,
+                        color: colors.textMuted,
                         fontWeight: 700,
                         marginBottom: '6px',
                       }}>
@@ -1185,21 +1218,21 @@ const NewsTab: React.FC = () => {
                           key={idx}
                           style={{
                             padding: '6px 10px',
-                            backgroundColor: F.DARK_BG,
-                            border: `1px solid ${F.BORDER}`,
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.panel}`,
                             borderRadius: '2px',
                             marginBottom: '4px',
                           }}
                         >
                           <span style={{
-                            color: F.WHITE,
+                            color: colors.text,
                             fontWeight: 700,
                             fontSize: '9px',
                           }}>
                             {typeof org.name === 'string' ? org.name : ''}
                           </span>
                           <span style={{
-                            color: F.GRAY,
+                            color: colors.textMuted,
                             fontSize: '9px',
                             marginLeft: '6px',
                           }}>
@@ -1221,7 +1254,7 @@ const NewsTab: React.FC = () => {
                   justifyContent: 'center',
                   padding: '40px 20px',
                   gap: '12px',
-                  color: F.MUTED,
+                  color: colors.textMuted,
                 }}>
                   <Zap size={32} style={{ opacity: 0.3 }} />
                   <div style={{
@@ -1247,40 +1280,30 @@ const NewsTab: React.FC = () => {
 
       {/* ── STATUS BAR ── */}
       <div style={{
-        backgroundColor: F.HEADER_BG, borderTop: `1px solid ${F.BORDER}`,
-        padding: '3px 16px', fontSize: '9px', color: F.GRAY, flexShrink: 0,
+        backgroundColor: colors.panel, borderTop: `1px solid ${colors.panel}`,
+        padding: '3px 16px', fontSize: '9px', color: colors.textMuted, flexShrink: 0,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <div style={{ display: 'flex', gap: '12px' }}>
           <span>FINCEPT NEWS v1.0</span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span>FEEDS: <span style={{ color: F.CYAN }}>{feedCount}</span></span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span>ARTICLES: <span style={{ color: F.CYAN }}>{newsArticles.length}</span></span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span>FILTER: <span style={{ color: F.ORANGE }}>{activeFilter}</span></span>
+          <span style={{ color: colors.panel }}>|</span>
+          <span>FEEDS: <span style={{ color: 'var(--ft-color-accent, #00E5FF)' }}>{feedCount}</span></span>
+          <span style={{ color: colors.panel }}>|</span>
+          <span>ARTICLES: <span style={{ color: 'var(--ft-color-accent, #00E5FF)' }}>{newsArticles.length}</span></span>
+          <span style={{ color: colors.panel }}>|</span>
+          <span>FILTER: <span style={{ color: colors.primary }}>{activeFilter}</span></span>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <span>SENTIMENT: <span style={{ color: parseFloat(score) > 0 ? F.GREEN : parseFloat(score) < 0 ? F.RED : F.YELLOW }}>{score}</span></span>
-          <span style={{ color: F.BORDER }}>|</span>
+          <span>SENTIMENT: <span style={{ color: parseFloat(score) > 0 ? colors.success : parseFloat(score) < 0 ? colors.alert : colors.warning }}>{score}</span></span>
+          <span style={{ color: colors.panel }}>|</span>
           <span>{currentTime.toTimeString().substring(0, 8)}</span>
-          <span style={{ color: F.BORDER }}>|</span>
-          <span style={{ color: loading ? F.YELLOW : F.GREEN, fontWeight: 700 }}>{loading ? 'UPDATING' : 'LIVE'}</span>
+          <span style={{ color: colors.panel }}>|</span>
+          <span style={{ color: loading ? colors.warning : colors.success, fontWeight: 700 }}>{loading ? 'UPDATING' : 'LIVE'}</span>
         </div>
       </div>
 
       {/* ── CSS ── */}
-      <style>{`
-        @keyframes ntBlink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.3; } }
-        .nt-grid::-webkit-scrollbar { width: 6px; height: 6px; }
-        .nt-grid::-webkit-scrollbar-track { background: ${F.DARK_BG}; }
-        .nt-grid::-webkit-scrollbar-thumb { background: ${F.BORDER}; border-radius: 3px; }
-        .nt-grid::-webkit-scrollbar-thumb:hover { background: ${F.MUTED}; }
-        *::-webkit-scrollbar { width: 6px; height: 6px; }
-        *::-webkit-scrollbar-track { background: ${F.DARK_BG}; }
-        *::-webkit-scrollbar-thumb { background: ${F.BORDER}; border-radius: 3px; }
-        *::-webkit-scrollbar-thumb:hover { background: ${F.MUTED}; }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: scrollbarCSS }} />
 
       <RSSFeedSettingsModal isOpen={showFeedSettings} onClose={() => setShowFeedSettings(false)} onFeedsUpdated={() => handleRefresh(true)} />
     </div>

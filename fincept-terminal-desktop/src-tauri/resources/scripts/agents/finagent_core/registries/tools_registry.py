@@ -220,14 +220,51 @@ class ToolsRegistry:
                 for tool_name, tool_path in tools.items():
                     cls._tool_map[tool_name] = tool_path
 
+    # Tools that require specific API keys
+    TOOL_API_KEY_MAP = {
+        "tavily": "TAVILY_API_KEY",
+        "exa": "EXA_API_KEY",
+        "serpapi": "SERPAPI_API_KEY",
+        "serper": "SERPER_API_KEY",
+        "bravesearch": "BRAVE_API_KEY",
+        "firecrawl": "FIRECRAWL_API_KEY",
+        "openweather": "OPENWEATHER_API_KEY",
+        "financial_datasets": "FINANCIAL_DATASETS_API_KEY",
+        "openbb": "OPENBB_API_KEY",
+        "github": "GITHUB_TOKEN",
+        "gitlab": "GITLAB_TOKEN",
+        "slack": "SLACK_BOT_TOKEN",
+        "discord": "DISCORD_BOT_TOKEN",
+        "telegram": "TELEGRAM_BOT_TOKEN",
+        "twilio": "TWILIO_API_KEY",
+        "resend": "RESEND_API_KEY",
+        "jira": "JIRA_API_TOKEN",
+        "linear": "LINEAR_API_KEY",
+        "notion": "NOTION_API_KEY",
+        "confluence": "CONFLUENCE_API_KEY",
+        "shopify": "SHOPIFY_API_KEY",
+        "zendesk": "ZENDESK_API_KEY",
+        "x": "X_API_KEY",
+        "apify": "APIFY_API_TOKEN",
+        "brightdata": "BRIGHTDATA_API_KEY",
+        "mem0": "MEM0_API_KEY",
+        "zep": "ZEP_API_KEY",
+        "replicate": "REPLICATE_API_TOKEN",
+        "fal": "FAL_API_KEY",
+        "eleven_labs": "ELEVEN_LABS_API_KEY",
+        "spotify": "SPOTIFY_API_KEY",
+        "google_maps": "GOOGLE_MAPS_API_KEY",
+    }
+
     @classmethod
-    def get_tool(cls, tool_name: str, **kwargs) -> Optional[Any]:
+    def get_tool(cls, tool_name: str, api_keys: Optional[Dict[str, str]] = None, **kwargs) -> Optional[Any]:
         """
-        Get a tool instance by name.
+        Get a tool instance by name with proper API key injection.
 
         Args:
             tool_name: Name of the tool (e.g., 'yfinance', 'duckduckgo')
-            **kwargs: Arguments to pass to tool constructor
+            api_keys: Dict of API keys to inject
+            **kwargs: Additional arguments to pass to tool constructor
 
         Returns:
             Tool instance or None if not available
@@ -238,9 +275,16 @@ class ToolsRegistry:
             logger.warning(f"Tool '{tool_name}' not found in registry")
             return None
 
-        # Check cache first
-        cache_key = f"{tool_name}_{hash(str(kwargs))}"
-        if cache_key in cls._loaded_tools:
+        # Build tool kwargs with API keys
+        tool_kwargs = dict(kwargs)
+        if api_keys and tool_name in cls.TOOL_API_KEY_MAP:
+            api_key_name = cls.TOOL_API_KEY_MAP[tool_name]
+            if api_key_name in api_keys:
+                tool_kwargs["api_key"] = api_keys[api_key_name]
+
+        # Check cache (without API keys in cache key for security)
+        cache_key = tool_name
+        if cache_key in cls._loaded_tools and not tool_kwargs:
             return cls._loaded_tools[cache_key]
 
         try:
@@ -252,37 +296,56 @@ class ToolsRegistry:
             module = importlib.import_module(module_path)
             tool_class = getattr(module, class_name)
 
-            # Instantiate tool
-            tool_instance = tool_class(**kwargs) if kwargs else tool_class()
-            cls._loaded_tools[cache_key] = tool_instance
+            # Instantiate tool with kwargs
+            tool_instance = tool_class(**tool_kwargs) if tool_kwargs else tool_class()
+
+            # Only cache tools without API keys
+            if not tool_kwargs:
+                cls._loaded_tools[cache_key] = tool_instance
 
             logger.debug(f"Loaded tool: {tool_name}")
             return tool_instance
 
         except ImportError as e:
-            logger.warning(f"Tool '{tool_name}' import failed: {e}")
+            logger.debug(f"Tool '{tool_name}' import failed (may not be installed): {e}")
             return None
+        except TypeError as e:
+            # Try without kwargs if constructor doesn't accept them
+            try:
+                tool_instance = tool_class()
+                cls._loaded_tools[cache_key] = tool_instance
+                logger.debug(f"Loaded tool (no args): {tool_name}")
+                return tool_instance
+            except Exception:
+                logger.warning(f"Tool '{tool_name}' initialization failed: {e}")
+                return None
         except Exception as e:
             logger.error(f"Tool '{tool_name}' initialization failed: {e}")
             return None
 
     @classmethod
-    def get_tools(cls, tool_names: List[str], **kwargs) -> List[Any]:
+    def get_tools(cls, tool_names: List[str], api_keys: Optional[Dict[str, str]] = None, **kwargs) -> List[Any]:
         """
-        Get multiple tool instances.
+        Get multiple tool instances with API key injection.
 
         Args:
             tool_names: List of tool names
-            **kwargs: Arguments to pass to tool constructors
+            api_keys: Dict of API keys for tools that need them
+            **kwargs: Additional arguments to pass to tool constructors
 
         Returns:
             List of tool instances (excludes None values)
         """
         tools = []
         for name in tool_names:
-            tool = cls.get_tool(name, **kwargs)
+            tool = cls.get_tool(name, api_keys=api_keys, **kwargs)
             if tool is not None:
                 tools.append(tool)
+
+        if len(tools) < len(tool_names):
+            loaded = [t.__class__.__name__ for t in tools]
+            logger.info(f"Loaded {len(tools)}/{len(tool_names)} tools: {loaded}")
+
         return tools
 
     @classmethod

@@ -326,6 +326,12 @@ export class PaperTradingAdapter {
     const trades = await getTrades(this.portfolioId, limit || 100);
     return trades.map(t => ({
       ...t,
+      // Normalize fields to match CCXT-style format expected by UI components
+      amount: t.quantity,
+      cost: t.price * t.quantity,
+      fee: { cost: t.fee, currency: this.config.currency || 'USD' },
+      datetime: t.timestamp,
+      takerOrMaker: 'taker' as const,
       isMaker: false,
     }));
   }

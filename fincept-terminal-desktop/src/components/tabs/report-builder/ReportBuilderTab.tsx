@@ -11,6 +11,7 @@ import {
 import { toast } from '@/components/ui/terminal-toast';
 import { useTranslation } from 'react-i18next';
 import { showPrompt } from '@/utils/notifications';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { ReportComponent } from '@/services/core/reportService';
 import { ComponentTemplate, brandKitService, BrandKit, HeaderFooterTemplate, ParagraphStyles } from '@/services/core/brandKitService';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -51,10 +52,10 @@ import {
 
 // Import types and constants
 import { PageTheme, RightPanelView } from './types';
-import { FINCEPT_COLORS } from './constants';
 
 const ReportBuilderTab: React.FC = () => {
   const { t } = useTranslation('reportBuilder');
+  const { colors, fontSize } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Template management hook
@@ -320,7 +321,7 @@ const ReportBuilderTab: React.FC = () => {
   }, [addComponent, template, setTemplateWithHistory]);
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: FINCEPT_COLORS.DARK_BG, color: FINCEPT_COLORS.TEXT_PRIMARY }}>
+    <div className="h-full flex flex-col" style={{ backgroundColor: colors.background, color: colors.text }}>
       {/* Header */}
       <ReportHeader
         canUndo={canUndo}
@@ -383,15 +384,19 @@ const ReportBuilderTab: React.FC = () => {
         />
 
         {/* Right Panel - Properties, AI Chat, and Advanced Styling */}
-        <div className="w-1/5 border-l flex flex-col min-h-0" style={{ borderColor: FINCEPT_COLORS.BORDER, backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
+        <div className="w-1/5 border-l flex flex-col min-h-0" style={{ borderColor: colors.panel, backgroundColor: colors.panel }}>
           {/* Toggle Buttons */}
-          <div className="flex flex-wrap border-b" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
+          <div className="flex flex-wrap border-b" style={{ borderColor: colors.panel }}>
             <button
               onClick={() => setRightPanelView('properties')}
-              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${
-                rightPanelView === 'properties' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              className={`flex-1 px-2 py-2 font-semibold transition-colors flex items-center justify-center gap-1 ${
+                rightPanelView === 'properties' ? 'hover:opacity-90' : 'bg-transparent hover:bg-[#2a2a2a]'
               }`}
-              style={{ color: rightPanelView === 'properties' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{
+                fontSize: fontSize.tiny,
+                backgroundColor: rightPanelView === 'properties' ? colors.primary : 'transparent',
+                color: rightPanelView === 'properties' ? '#000' : colors.text
+              }}
               title="Component Properties"
             >
               <SettingsIcon size={12} />
@@ -399,10 +404,14 @@ const ReportBuilderTab: React.FC = () => {
             </button>
             <button
               onClick={() => setRightPanelView('styling')}
-              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${
-                rightPanelView === 'styling' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              className={`flex-1 px-2 py-2 font-semibold transition-colors flex items-center justify-center gap-1 ${
+                rightPanelView === 'styling' ? 'hover:opacity-90' : 'bg-transparent hover:bg-[#2a2a2a]'
               }`}
-              style={{ color: rightPanelView === 'styling' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{
+                fontSize: fontSize.tiny,
+                backgroundColor: rightPanelView === 'styling' ? colors.primary : 'transparent',
+                color: rightPanelView === 'styling' ? '#000' : colors.text
+              }}
               title="Advanced Styling"
             >
               <Palette size={12} />
@@ -410,10 +419,14 @@ const ReportBuilderTab: React.FC = () => {
             </button>
             <button
               onClick={() => setRightPanelView('chat')}
-              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${
-                rightPanelView === 'chat' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              className={`flex-1 px-2 py-2 font-semibold transition-colors flex items-center justify-center gap-1 ${
+                rightPanelView === 'chat' ? 'hover:opacity-90' : 'bg-transparent hover:bg-[#2a2a2a]'
               }`}
-              style={{ color: rightPanelView === 'chat' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{
+                fontSize: fontSize.tiny,
+                backgroundColor: rightPanelView === 'chat' ? colors.primary : 'transparent',
+                color: rightPanelView === 'chat' ? '#000' : colors.text
+              }}
               title="AI Writing Assistant"
             >
               <Bot size={12} />
@@ -421,20 +434,28 @@ const ReportBuilderTab: React.FC = () => {
             </button>
             <button
               onClick={() => setRightPanelView('comments')}
-              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${
-                rightPanelView === 'comments' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              className={`flex-1 px-2 py-2 font-semibold transition-colors flex items-center justify-center gap-1 ${
+                rightPanelView === 'comments' ? 'hover:opacity-90' : 'bg-transparent hover:bg-[#2a2a2a]'
               }`}
-              style={{ color: rightPanelView === 'comments' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{
+                fontSize: fontSize.tiny,
+                backgroundColor: rightPanelView === 'comments' ? colors.primary : 'transparent',
+                color: rightPanelView === 'comments' ? '#000' : colors.text
+              }}
               title="Comments"
             >
               <MessageCircle size={12} />
             </button>
             <button
               onClick={() => setRightPanelView('history')}
-              className={`flex-1 px-2 py-2 text-[10px] font-semibold transition-colors flex items-center justify-center gap-1 ${
-                rightPanelView === 'history' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              className={`flex-1 px-2 py-2 font-semibold transition-colors flex items-center justify-center gap-1 ${
+                rightPanelView === 'history' ? 'hover:opacity-90' : 'bg-transparent hover:bg-[#2a2a2a]'
               }`}
-              style={{ color: rightPanelView === 'history' ? '#000' : FINCEPT_COLORS.TEXT_PRIMARY }}
+              style={{
+                fontSize: fontSize.tiny,
+                backgroundColor: rightPanelView === 'history' ? colors.primary : 'transparent',
+                color: rightPanelView === 'history' ? '#000' : colors.text
+              }}
               title="Version History"
             >
               <History size={12} />
@@ -443,7 +464,7 @@ const ReportBuilderTab: React.FC = () => {
 
           {/* Properties Section */}
           {(rightPanelView === 'properties' || rightPanelView === 'split') && (
-            <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: FINCEPT_COLORS.BORDER }}>
+            <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: colors.panel }}>
               <PropertiesPanel
                 selectedComponent={selectedComp}
                 onUpdateComponent={updateComponent}
@@ -595,13 +616,13 @@ const ReportBuilderTab: React.FC = () => {
       <TabFooter
         tabName="REPORT BUILDER"
         leftInfo={[
-          { label: `Components: ${template.components.length}`, color: FINCEPT_COLORS.TEXT_PRIMARY },
-          { label: `Theme: ${pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}`, color: FINCEPT_COLORS.TEXT_PRIMARY },
-          ...(activeBrandKit ? [{ label: `Brand: ${activeBrandKit.name}`, color: FINCEPT_COLORS.ORANGE }] : []),
+          { label: `Components: ${template.components.length}`, color: colors.text },
+          { label: `Theme: ${pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}`, color: colors.text },
+          ...(activeBrandKit ? [{ label: `Brand: ${activeBrandKit.name}`, color: colors.primary }] : []),
         ]}
         statusInfo={`${currentTime.toLocaleTimeString()} | Multi-format Export`}
-        backgroundColor={FINCEPT_COLORS.PANEL_BG}
-        borderColor={FINCEPT_COLORS.ORANGE}
+        backgroundColor={colors.panel}
+        borderColor={colors.primary}
       />
     </div>
   );

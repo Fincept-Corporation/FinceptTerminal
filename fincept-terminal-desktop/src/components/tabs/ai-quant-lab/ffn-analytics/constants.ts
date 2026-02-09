@@ -5,22 +5,23 @@
  */
 
 // Fincept Terminal Color Palette - GREEN THEME for FFN Analytics
+// Components should prefer useTerminalTheme() hook for runtime values
 export const FINCEPT = {
-  GREEN: '#00D66F',    // Primary theme color for FFN Analytics
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  ORANGE: '#FF8800',
-  DARK_BG: '#0F0F0F',
-  PANEL_BG: '#0F0F0F',
-  CYAN: '#00E5FF',
-  BLUE: '#0088FF',
-  BORDER: '#2A2A2A',
+  GREEN: 'var(--ft-color-success, #00D66F)',    // Primary theme color for FFN Analytics
+  WHITE: 'var(--ft-color-text, #FFFFFF)',
+  RED: 'var(--ft-color-alert, #FF3B3B)',
+  ORANGE: 'var(--ft-color-primary, #FF8800)',
+  DARK_BG: 'var(--ft-color-background, #0F0F0F)',
+  PANEL_BG: 'var(--ft-color-panel, #0F0F0F)',
+  CYAN: 'var(--ft-color-accent, #00E5FF)',
+  BLUE: 'var(--ft-color-info, #0088FF)',
+  BORDER: 'var(--ft-border-color, #2A2A2A)',
   HOVER: '#1F1F1F',
-  GRAY: '#888888',
-  MUTED: '#666666',
-  PURPLE: '#BB86FC',
-  YELLOW: '#FFD700',
-  HEADER_BG: '#1A1A1A'
+  GRAY: 'var(--ft-color-text-muted, #888888)',
+  MUTED: 'var(--ft-color-text-muted, #666666)',
+  PURPLE: 'var(--ft-color-purple, #BB86FC)',
+  YELLOW: 'var(--ft-color-warning, #FFD700)',
+  HEADER_BG: 'var(--ft-color-panel, #1A1A1A)'
 };
 
 // Sample price data for demonstration (kept for backward compatibility)

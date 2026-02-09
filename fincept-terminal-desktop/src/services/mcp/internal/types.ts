@@ -24,6 +24,8 @@ export interface InternalToolResult {
   data?: any;
   message?: string;
   error?: string;
+  suggestion?: string;
+  count?: number;
   // Additional metadata for financial tools
   chart_data?: any;
   ticker?: string;
@@ -127,6 +129,7 @@ export interface TerminalContexts {
   addToWatchlist?: (symbol: string) => Promise<void>;
   removeFromWatchlist?: (symbol: string) => Promise<void>;
   searchSymbol?: (query: string) => Promise<any[]>;
+  resolveSymbol?: (query: string) => Promise<{ symbol: string; price?: number; matches: string[] }>;
 
   // Workflow
   createWorkflow?: (params: any) => Promise<any>;

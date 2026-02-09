@@ -11,8 +11,8 @@ import {
   LayoutTemplate,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { ReportHeaderProps } from './types';
-import { FINCEPT_COLORS } from './constants';
 
 export const ReportHeader: React.FC<ReportHeaderProps> = ({
   canUndo,
@@ -31,16 +31,17 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
   hasComponents,
 }) => {
   const { t } = useTranslation('reportBuilder');
+  const { colors, fontSize } = useTerminalTheme();
 
   return (
     <div
       className="flex items-center justify-between px-4 py-2 border-b"
-      style={{ borderColor: FINCEPT_COLORS.BORDER, backgroundColor: FINCEPT_COLORS.PANEL_BG }}
+      style={{ borderColor: colors.panel, backgroundColor: colors.panel }}
     >
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <FileText className="w-5 h-5" style={{ color: FINCEPT_COLORS.ORANGE }} />
-          <span className="font-bold text-sm" style={{ color: FINCEPT_COLORS.ORANGE }}>
+          <FileText className="w-5 h-5" style={{ color: colors.primary }} />
+          <span className="font-bold text-sm" style={{ color: colors.primary }}>
             {t('title')}
           </span>
         </div>
@@ -81,7 +82,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
 
         {/* Auto-save status */}
         {lastSaved && (
-          <span className="text-[10px]" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+          <span className="text-[10px]" style={{ color: colors.textMuted }}>
             {isAutoSaving ? 'Saving...' : `Saved ${lastSaved.toLocaleTimeString()}`}
           </span>
         )}
@@ -91,7 +92,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         <button
           onClick={onTemplateGallery}
           className="px-3 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-1"
-          style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+          style={{ color: colors.text }}
         >
           <LayoutTemplate size={14} />
           Templates
@@ -99,7 +100,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         <button
           onClick={onLoad}
           className="px-3 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-1"
-          style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+          style={{ color: colors.text }}
         >
           <FolderOpen size={14} />
           {t('header.load')}
@@ -108,7 +109,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
           onClick={onSave}
           disabled={isSaving}
           className="px-3 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors flex items-center gap-1 disabled:opacity-50"
-          style={{ color: FINCEPT_COLORS.TEXT_PRIMARY }}
+          style={{ color: colors.text }}
         >
           <Save size={14} />
           {isSaving ? t('header.saving') : t('header.save')}
@@ -118,8 +119,8 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
           disabled={!hasComponents}
           className="px-3 py-1 text-xs rounded transition-colors flex items-center gap-1 disabled:opacity-50"
           style={{
-            backgroundColor: FINCEPT_COLORS.ORANGE,
-            color: FINCEPT_COLORS.BLACK,
+            backgroundColor: colors.primary,
+            color: '#000',
             fontWeight: 'bold'
           }}
         >

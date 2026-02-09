@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface DataPoint {
   period: string;
@@ -87,6 +88,7 @@ const MetricRow: React.FC<{
   growth?: number;
   color: string;
 }> = ({ label, values, growth, color }) => {
+  const { colors, fontSize } = useTerminalTheme();
   const sortedValues = [...values].sort((a, b) => a.period.localeCompare(b.period));
   const numericValues = sortedValues.map(v => v.value);
   const latest = sortedValues[sortedValues.length - 1];
@@ -103,25 +105,25 @@ const MetricRow: React.FC<{
       borderLeft: `3px solid ${color}`,
     }}>
       <div style={{ minWidth: '80px' }}>
-        <div style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <div style={{ fontSize: fontSize.small, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {label}
         </div>
-        <div style={{ fontSize: '13px', color: '#fff', fontWeight: 600 }}>
+        <div style={{ fontSize: fontSize.subheading, color: colors.text, fontWeight: 600 }}>
           {formatValue(latest.value)}
         </div>
       </div>
 
       <Sparkline values={numericValues} color={color} />
 
-      <div style={{ fontSize: '10px', color: '#666', minWidth: '70px' }}>
+      <div style={{ fontSize: fontSize.small, color: colors.textMuted, minWidth: '70px' }}>
         {formatValue(oldest.value)} → {formatValue(latest.value)}
       </div>
 
       {growth !== undefined && (
         <div style={{
-          fontSize: '11px',
+          fontSize: fontSize.body,
           fontWeight: 600,
-          color: growth >= 0 ? '#00D66F' : '#FF3B3B',
+          color: growth >= 0 ? colors.success : colors.alert,
           minWidth: '50px',
           textAlign: 'right'
         }}>
@@ -138,48 +140,50 @@ const FinancialSparklines: React.FC<FinancialSparklinesProps> = ({
   company,
   responseText = ''
 }) => {
+  const { colors, fontSize } = useTerminalTheme();
+
   // Determine which metrics to show based on response text
   const metricsToShow = useMemo(() => {
     const text = responseText.toLowerCase();
     const metrics: Array<{ key: keyof ChartData; label: string; color: string }> = [];
 
-    // Check each metric type
+    // Check each metric type - use theme colors
     if (data.revenue?.length) {
       const hasKeyword = METRIC_KEYWORDS.revenue.some(kw => text.includes(kw));
       if (hasKeyword || !responseText) {
-        metrics.push({ key: 'revenue', label: 'Revenue', color: '#3b82f6' });
+        metrics.push({ key: 'revenue', label: 'Revenue', color: colors.secondary });
       }
     }
 
     if (data.net_income?.length) {
       const hasKeyword = METRIC_KEYWORDS.net_income.some(kw => text.includes(kw));
       if (hasKeyword || !responseText) {
-        metrics.push({ key: 'net_income', label: 'Net Income', color: '#10b981' });
+        metrics.push({ key: 'net_income', label: 'Net Income', color: colors.success });
       }
     }
 
     if (data.total_assets?.length) {
       const hasKeyword = METRIC_KEYWORDS.total_assets.some(kw => text.includes(kw));
       if (hasKeyword) {
-        metrics.push({ key: 'total_assets', label: 'Assets', color: '#f59e0b' });
+        metrics.push({ key: 'total_assets', label: 'Assets', color: colors.warning });
       }
     }
 
     if (data.total_equity?.length) {
       const hasKeyword = METRIC_KEYWORDS.total_equity.some(kw => text.includes(kw));
       if (hasKeyword) {
-        metrics.push({ key: 'total_equity', label: 'Equity', color: '#8b5cf6' });
+        metrics.push({ key: 'total_equity', label: 'Equity', color: colors.primary });
       }
     }
 
     // If no keywords matched but we have data, show revenue and net_income by default
     if (metrics.length === 0) {
-      if (data.revenue?.length) metrics.push({ key: 'revenue', label: 'Revenue', color: '#3b82f6' });
-      if (data.net_income?.length) metrics.push({ key: 'net_income', label: 'Net Income', color: '#10b981' });
+      if (data.revenue?.length) metrics.push({ key: 'revenue', label: 'Revenue', color: colors.secondary });
+      if (data.net_income?.length) metrics.push({ key: 'net_income', label: 'Net Income', color: colors.success });
     }
 
     return metrics;
-  }, [data, responseText]);
+  }, [data, responseText, colors]);
 
   if (metricsToShow.length === 0) return null;
 
@@ -193,8 +197,8 @@ const FinancialSparklines: React.FC<FinancialSparklinesProps> = ({
     }}>
       {(ticker || company) && (
         <div style={{
-          fontSize: '10px',
-          color: '#666',
+          fontSize: fontSize.small,
+          color: colors.textMuted,
           marginBottom: '8px',
           textTransform: 'uppercase',
           letterSpacing: '0.5px'

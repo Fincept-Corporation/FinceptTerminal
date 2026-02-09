@@ -3,7 +3,15 @@ use crate::python;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::collections::HashMap;
 use tokio::time::timeout;
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
+
+// Global registry for active streams (for cancellation)
+static ACTIVE_STREAMS: Lazy<Mutex<HashMap<String, Arc<AtomicBool>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// Default timeout for agent operations (120 seconds - LLM calls can take 30-60s+)
 const AGENT_TIMEOUT_SECS: u64 = 120;
@@ -100,6 +108,59 @@ async fn execute_core_agent_with_timeout(
         Ok(Ok(inner_result)) => inner_result,
         Ok(Err(e)) => Err(format!("Task execution error: {}", e)),
         Err(_) => Err(format!("Operation timed out after {} seconds", timeout_secs)),
+    }
+}
+
+/// Execute CoreAgent with streaming output via Tauri events
+/// Returns stream_id for the frontend to listen to events: `agent-stream-{stream_id}`
+#[tauri::command]
+pub async fn execute_core_agent_streaming(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+    stream_id: String,
+) -> Result<String, String> {
+    let payload_str = serde_json::to_string(&payload)
+        .map_err(|e| format!("Failed to serialize payload: {}", e))?;
+
+    // Create cancellation flag
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+
+    // Register stream for potential cancellation
+    {
+        let mut streams = ACTIVE_STREAMS.lock().await;
+        streams.insert(stream_id.clone(), cancel_flag.clone());
+    }
+
+    let args: Vec<String> = vec![payload_str];
+    let stream_id_clone = stream_id.clone();
+
+    // Execute with streaming
+    let result = python::execute_streaming(
+        app,
+        "agents/finagent_core/main.py",
+        args,
+        stream_id_clone,
+        cancel_flag,
+    ).await;
+
+    // Cleanup stream registration
+    {
+        let mut streams = ACTIVE_STREAMS.lock().await;
+        streams.remove(&stream_id);
+    }
+
+    result
+}
+
+/// Cancel an active streaming operation
+#[tauri::command]
+pub async fn cancel_agent_stream(stream_id: String) -> Result<bool, String> {
+    let streams = ACTIVE_STREAMS.lock().await;
+    if let Some(cancel_flag) = streams.get(&stream_id) {
+        cancel_flag.store(true, Ordering::Relaxed);
+        Ok(true)
+    } else {
+        Ok(false) // Stream not found or already completed
     }
 }
 

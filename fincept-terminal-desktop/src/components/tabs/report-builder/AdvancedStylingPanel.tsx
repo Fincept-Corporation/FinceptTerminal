@@ -36,19 +36,9 @@ import {
 } from '@/services/core/brandKitService';
 import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from '@/components/ui/terminal-toast';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
-// Fincept color palette
-const FINCEPT_COLORS = {
-  ORANGE: '#FFA500',
-  WHITE: '#FFFFFF',
-  BLACK: '#000000',
-  DARK_BG: '#0a0a0a',
-  PANEL_BG: '#1a1a1a',
-  BORDER: '#333333',
-  HOVER: '#2a2a2a',
-  TEXT_PRIMARY: '#FFFFFF',
-  TEXT_SECONDARY: '#999999',
-};
+// Theme colors provided by useTerminalTheme() hook
 
 interface AdvancedStylingPanelProps {
   onBrandKitChange?: (brandKit: BrandKit) => void;
@@ -68,6 +58,7 @@ export const AdvancedStylingPanel: React.FC<AdvancedStylingPanelProps> = ({
   onComponentTemplateSelect,
   onStylesChange,
 }) => {
+  const { colors, fontSize } = useTerminalTheme();
   const [activeTab, setActiveTab] = useState<TabType>('brandKit');
   const [brandKits, setBrandKits] = useState<BrandKit[]>([]);
   const [activeBrandKit, setActiveBrandKit] = useState<BrandKit | null>(null);
@@ -217,9 +208,9 @@ export const AdvancedStylingPanel: React.FC<AdvancedStylingPanelProps> = ({
   );
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: FINCEPT_COLORS.PANEL_BG }}>
+    <div className="h-full flex flex-col" style={{ backgroundColor: colors.panel }}>
       {/* Tab Navigation */}
-      <div className="flex flex-wrap gap-1 p-2 border-b" style={{ borderColor: FINCEPT_COLORS.BORDER }}>
+      <div className="flex flex-wrap gap-1 p-2 border-b" style={{ borderColor: colors.panel }}>
         {renderTabButton('brandKit', <Palette size={14} />, 'Brand Kit')}
         {renderTabButton('templates', <LayoutTemplate size={14} />, 'Templates')}
         {renderTabButton('headerFooter', <Layers size={14} />, 'Header/Footer')}
@@ -352,6 +343,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
   handleCreateNewBrandKit,
   handleDeleteBrandKit,
 }) => {
+  const { colors } = useTerminalTheme();
   const availableFonts = brandKitService.getAvailableFonts();
   const presetKits = brandKitService.getPresetBrandKits();
 
@@ -360,7 +352,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
       {/* Brand Kit Selector */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold" style={{ color: FINCEPT_COLORS.ORANGE }}>
+          <label className="text-xs font-semibold" style={{ color: colors.primary }}>
             SELECT BRAND KIT
           </label>
           <button
@@ -368,7 +360,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
             className="p-1 rounded hover:bg-[#2a2a2a] transition-colors"
             title="Create New"
           >
-            <Plus size={14} style={{ color: FINCEPT_COLORS.ORANGE }} />
+            <Plus size={14} style={{ color: colors.primary }} />
           </button>
         </div>
         <select
@@ -387,7 +379,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
 
       {/* Preset Brand Kits */}
       <div className="space-y-2">
-        <label className="text-xs font-semibold" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+        <label className="text-xs font-semibold" style={{ color: colors.textMuted }}>
           QUICK PRESETS
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -424,7 +416,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
         <>
           {/* Brand Kit Name */}
           <div className="space-y-1">
-            <label className="text-xs" style={{ color: FINCEPT_COLORS.TEXT_SECONDARY }}>
+            <label className="text-xs" style={{ color: colors.textMuted }}>
               Brand Kit Name
             </label>
             <input
@@ -442,7 +434,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
               className="w-full flex items-center justify-between p-3 hover:bg-[#2a2a2a] transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Palette size={14} style={{ color: FINCEPT_COLORS.ORANGE }} />
+                <Palette size={14} style={{ color: colors.primary }} />
                 <span className="text-xs font-semibold text-white">Colors</span>
               </div>
               {expandedSections.colors ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -500,7 +492,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
               className="w-full flex items-center justify-between p-3 hover:bg-[#2a2a2a] transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Type size={14} style={{ color: FINCEPT_COLORS.ORANGE }} />
+                <Type size={14} style={{ color: colors.primary }} />
                 <span className="text-xs font-semibold text-white">Fonts</span>
               </div>
               {expandedSections.fonts ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -552,7 +544,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
               className="w-full flex items-center justify-between p-3 hover:bg-[#2a2a2a] transition-colors"
             >
               <div className="flex items-center gap-2">
-                <ImageIcon size={14} style={{ color: FINCEPT_COLORS.ORANGE }} />
+                <ImageIcon size={14} style={{ color: colors.primary }} />
                 <span className="text-xs font-semibold text-white">Logos</span>
               </div>
               {expandedSections.logos ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -584,7 +576,7 @@ const BrandKitTab: React.FC<BrandKitTabProps> = ({
           <button
             onClick={handleSaveBrandKit}
             className="w-full py-2 text-xs font-semibold rounded transition-colors flex items-center justify-center gap-2"
-            style={{ backgroundColor: FINCEPT_COLORS.ORANGE, color: FINCEPT_COLORS.BLACK }}
+            style={{ backgroundColor: colors.primary, color: '#000' }}
           >
             <Save size={14} />
             Save Brand Kit
@@ -607,6 +599,7 @@ const ComponentTemplatesTab: React.FC<ComponentTemplatesTabProps> = ({
   onSelect,
   onRefresh,
 }) => {
+  const { colors } = useTerminalTheme();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const categories = ['all', 'text', 'layout', 'data', 'media', 'custom'];
@@ -637,7 +630,7 @@ const ComponentTemplatesTab: React.FC<ComponentTemplatesTabProps> = ({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold" style={{ color: FINCEPT_COLORS.ORANGE }}>
+        <label className="text-xs font-semibold" style={{ color: colors.primary }}>
           COMPONENT TEMPLATES
         </label>
         <button
@@ -691,7 +684,7 @@ const ComponentTemplatesTab: React.FC<ComponentTemplatesTabProps> = ({
                     className="p-1 rounded hover:bg-[#2a2a2a]"
                     title="Use Template"
                   >
-                    <Plus size={12} style={{ color: FINCEPT_COLORS.ORANGE }} />
+                    <Plus size={12} style={{ color: colors.primary }} />
                   </button>
                   <button
                     onClick={(e) => {
@@ -736,6 +729,7 @@ interface HeaderFooterTabProps {
 }
 
 const HeaderFooterTab: React.FC<HeaderFooterTabProps> = ({ brandKit, onUpdate }) => {
+  const { colors } = useTerminalTheme();
   const [editingSection, setEditingSection] = useState<'header' | 'footer'>('header');
 
   if (!brandKit) {
@@ -760,7 +754,7 @@ const HeaderFooterTab: React.FC<HeaderFooterTabProps> = ({ brandKit, onUpdate })
 
   return (
     <div className="space-y-4">
-      <label className="text-xs font-semibold" style={{ color: FINCEPT_COLORS.ORANGE }}>
+      <label className="text-xs font-semibold" style={{ color: colors.primary }}>
         HEADER & FOOTER
       </label>
 
@@ -1081,6 +1075,7 @@ interface TypographyTabProps {
 }
 
 const TypographyTab: React.FC<TypographyTabProps> = ({ brandKit, onUpdate }) => {
+  const { colors } = useTerminalTheme();
   if (!brandKit) {
     return (
       <div className="text-center py-8 text-gray-500 text-xs">
@@ -1097,7 +1092,7 @@ const TypographyTab: React.FC<TypographyTabProps> = ({ brandKit, onUpdate }) => 
 
   return (
     <div className="space-y-4">
-      <label className="text-xs font-semibold" style={{ color: FINCEPT_COLORS.ORANGE }}>
+      <label className="text-xs font-semibold" style={{ color: colors.primary }}>
         PARAGRAPH & LINE SPACING
       </label>
 
@@ -1115,7 +1110,7 @@ const TypographyTab: React.FC<TypographyTabProps> = ({ brandKit, onUpdate }) => 
           value={styles.lineHeight}
           onChange={(e) => updateStyles({ lineHeight: Number(e.target.value) })}
           className="w-full"
-          style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+          style={{ accentColor: colors.primary }}
         />
         <div className="flex justify-between text-[10px] text-gray-500">
           <span>Tight (1.0)</span>
@@ -1138,7 +1133,7 @@ const TypographyTab: React.FC<TypographyTabProps> = ({ brandKit, onUpdate }) => 
           value={styles.paragraphSpacing}
           onChange={(e) => updateStyles({ paragraphSpacing: Number(e.target.value) })}
           className="w-full"
-          style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+          style={{ accentColor: colors.primary }}
         />
       </div>
 
@@ -1156,7 +1151,7 @@ const TypographyTab: React.FC<TypographyTabProps> = ({ brandKit, onUpdate }) => 
           value={styles.textIndent}
           onChange={(e) => updateStyles({ textIndent: Number(e.target.value) })}
           className="w-full"
-          style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+          style={{ accentColor: colors.primary }}
         />
       </div>
 
@@ -1174,7 +1169,7 @@ const TypographyTab: React.FC<TypographyTabProps> = ({ brandKit, onUpdate }) => 
           value={styles.letterSpacing}
           onChange={(e) => updateStyles({ letterSpacing: Number(e.target.value) })}
           className="w-full"
-          style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+          style={{ accentColor: colors.primary }}
         />
       </div>
 
@@ -1192,7 +1187,7 @@ const TypographyTab: React.FC<TypographyTabProps> = ({ brandKit, onUpdate }) => 
           value={styles.wordSpacing}
           onChange={(e) => updateStyles({ wordSpacing: Number(e.target.value) })}
           className="w-full"
-          style={{ accentColor: FINCEPT_COLORS.ORANGE }}
+          style={{ accentColor: colors.primary }}
         />
       </div>
 
@@ -1320,6 +1315,7 @@ interface CustomCSSTabProps {
 }
 
 const CustomCSSTab: React.FC<CustomCSSTabProps> = ({ brandKit, onUpdate }) => {
+  const { colors } = useTerminalTheme();
   const [localCSS, setLocalCSS] = useState(brandKit?.customCSS || '');
   const [showGenerated, setShowGenerated] = useState(false);
 
@@ -1345,7 +1341,7 @@ const CustomCSSTab: React.FC<CustomCSSTabProps> = ({ brandKit, onUpdate }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold" style={{ color: FINCEPT_COLORS.ORANGE }}>
+        <label className="text-xs font-semibold" style={{ color: colors.primary }}>
           CUSTOM CSS
         </label>
         <button
@@ -1422,7 +1418,7 @@ const CustomCSSTab: React.FC<CustomCSSTabProps> = ({ brandKit, onUpdate }) => {
       <button
         onClick={handleApply}
         className="w-full py-2 text-xs font-semibold rounded transition-colors flex items-center justify-center gap-2"
-        style={{ backgroundColor: FINCEPT_COLORS.ORANGE, color: FINCEPT_COLORS.BLACK }}
+        style={{ backgroundColor: colors.primary, color: '#000' }}
       >
         <Check size={14} />
         Apply Custom CSS

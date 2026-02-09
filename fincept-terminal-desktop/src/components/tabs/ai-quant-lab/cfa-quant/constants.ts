@@ -16,41 +16,42 @@ import {
 import type { AnalysisConfig } from './types';
 
 // Fincept-style color palette - AMBER THEME for CFA Quant
+// Components should prefer useTerminalTheme() hook for runtime values
 export const BB = {
   // Core Fincept colors
-  black: '#000000',
-  darkBg: '#0F0F0F',
-  panelBg: '#0F0F0F',
+  black: 'var(--ft-color-background, #000000)',
+  darkBg: 'var(--ft-color-background, #0F0F0F)',
+  panelBg: 'var(--ft-color-panel, #0F0F0F)',
   cardBg: '#1F1F1F',
-  borderDark: '#2A2A2A',
+  borderDark: 'var(--ft-border-color, #2A2A2A)',
   borderLight: '#3a3a3a',
   hover: '#1F1F1F',
 
   // Accent colors - AMBER THEME
-  amber: '#FF8800',      // Primary theme color (matching FINCEPT.ORANGE)
-  amberLight: '#FFA500',
+  amber: 'var(--ft-color-primary, #FF8800)',      // Primary theme color (matching FINCEPT.ORANGE)
+  amberLight: 'var(--ft-color-primary, #FFA500)',
   amberDim: '#CC7000',
 
   // Status colors
-  green: '#00D66F',
+  green: 'var(--ft-color-success, #00D66F)',
   greenDim: '#00A040',
-  red: '#FF3B3B',
+  red: 'var(--ft-color-alert, #FF3B3B)',
   redDim: '#CC3000',
 
   // Text colors
-  textPrimary: '#FFFFFF',
+  textPrimary: 'var(--ft-color-text, #FFFFFF)',
   textSecondary: '#B0B0B0',
-  textMuted: '#787878',
-  textAmber: '#FF8800',
+  textMuted: 'var(--ft-color-text-muted, #787878)',
+  textAmber: 'var(--ft-color-primary, #FF8800)',
 
   // Chart colors
-  chartLine: '#00D4FF',
+  chartLine: 'var(--ft-color-accent, #00D4FF)',
   chartArea: 'rgba(0, 212, 255, 0.1)',
   chartGrid: '#1f1f1f',
 
   // Fincept blue
-  blue: '#0088FF',
-  blueLight: '#0088FF',
+  blue: 'var(--ft-color-info, #0088FF)',
+  blueLight: 'var(--ft-color-info, #0088FF)',
 };
 
 export const analysisConfigs: AnalysisConfig[] = [

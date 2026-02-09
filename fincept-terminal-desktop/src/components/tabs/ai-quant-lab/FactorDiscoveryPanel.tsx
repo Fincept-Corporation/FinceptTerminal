@@ -26,22 +26,10 @@ import {
 } from 'lucide-react';
 import { rdAgentService, type DiscoveredFactor } from '@/services/aiQuantLab/rdAgentService';
 import { showError, showWarning, showSuccess } from '@/utils/notifications';
-
-// Fincept Terminal Color Palette - PURPLE THEME
-const FINCEPT = {
-  PURPLE: '#9D4EDD',   // Primary theme color for Factor Discovery
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  ORANGE: '#FF8800',
-  DARK_BG: '#0F0F0F',
-  PANEL_BG: '#0F0F0F',
-  CYAN: '#00E5FF',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 export function FactorDiscoveryPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [taskDescription, setTaskDescription] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [targetMarket, setTargetMarket] = useState('US');
@@ -186,19 +174,19 @@ export function FactorDiscoveryPanel() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: FINCEPT.DARK_BG }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: colors.background }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Sparkles size={16} color={FINCEPT.PURPLE} />
+        <Sparkles size={16} color={colors.purple} />
         <span style={{
-          color: FINCEPT.PURPLE,
+          color: colors.purple,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -212,9 +200,9 @@ export function FactorDiscoveryPanel() {
             fontSize: '10px',
             fontFamily: 'monospace',
             padding: '3px 8px',
-            backgroundColor: FINCEPT.PURPLE + '20',
-            border: `1px solid ${FINCEPT.PURPLE}`,
-            color: FINCEPT.PURPLE,
+            backgroundColor: colors.purple + '20',
+            border: `1px solid ${colors.purple}`,
+            color: colors.purple,
             display: 'flex',
             alignItems: 'center',
             gap: '6px'
@@ -223,7 +211,7 @@ export function FactorDiscoveryPanel() {
               width: '6px',
               height: '6px',
               borderRadius: '50%',
-              backgroundColor: FINCEPT.PURPLE,
+              backgroundColor: colors.purple,
               animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
             }} />
             MINING IN PROGRESS
@@ -234,9 +222,9 @@ export function FactorDiscoveryPanel() {
             fontSize: '10px',
             fontFamily: 'monospace',
             padding: '3px 8px',
-            backgroundColor: FINCEPT.GREEN + '20',
-            border: `1px solid ${FINCEPT.GREEN}`,
-            color: FINCEPT.GREEN
+            backgroundColor: colors.success + '20',
+            border: `1px solid ${colors.success}`,
+            color: colors.success
           }}>
             {discoveredFactors.length} FACTORS DISCOVERED
           </div>
@@ -247,18 +235,18 @@ export function FactorDiscoveryPanel() {
         {/* Left Panel - Configuration */}
         <div style={{
           width: '360px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'auto'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.PURPLE,
+            color: colors.purple,
             fontFamily: 'monospace',
             letterSpacing: '0.5px'
           }}>
@@ -273,7 +261,7 @@ export function FactorDiscoveryPanel() {
                 display: 'block',
                 fontSize: '9px',
                 fontFamily: 'monospace',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 marginBottom: '8px',
                 letterSpacing: '0.5px'
@@ -288,9 +276,9 @@ export function FactorDiscoveryPanel() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                   fontSize: '10px',
                   fontFamily: 'monospace',
                   outline: 'none',
@@ -301,7 +289,7 @@ export function FactorDiscoveryPanel() {
                 <div style={{
                   fontSize: '9px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   opacity: 0.5,
                   letterSpacing: '0.5px'
                 }}>
@@ -315,7 +303,7 @@ export function FactorDiscoveryPanel() {
                       textAlign: 'left',
                       fontSize: '9px',
                       fontFamily: 'monospace',
-                      color: FINCEPT.PURPLE,
+                      color: colors.purple,
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
@@ -341,7 +329,7 @@ export function FactorDiscoveryPanel() {
                 display: 'block',
                 fontSize: '9px',
                 fontFamily: 'monospace',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 marginBottom: '8px',
                 letterSpacing: '0.5px'
@@ -356,9 +344,9 @@ export function FactorDiscoveryPanel() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  color: FINCEPT.WHITE,
-                  border: `1px solid ${FINCEPT.BORDER}`,
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                   fontSize: '10px',
                   fontFamily: 'monospace',
                   fontWeight: 700,
@@ -368,7 +356,7 @@ export function FactorDiscoveryPanel() {
               <div style={{
                 fontSize: '9px',
                 fontFamily: 'monospace',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 marginTop: '6px'
               }}>
@@ -383,7 +371,7 @@ export function FactorDiscoveryPanel() {
                   display: 'block',
                   fontSize: '9px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   opacity: 0.5,
                   marginBottom: '8px',
                   letterSpacing: '0.5px'
@@ -396,9 +384,9 @@ export function FactorDiscoveryPanel() {
                   style={{
                     width: '100%',
                     padding: '10px 12px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`,
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                     fontSize: '10px',
                     fontFamily: 'monospace',
                     fontWeight: 700,
@@ -416,7 +404,7 @@ export function FactorDiscoveryPanel() {
                   display: 'block',
                   fontSize: '9px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   opacity: 0.5,
                   marginBottom: '8px',
                   letterSpacing: '0.5px'
@@ -436,9 +424,9 @@ export function FactorDiscoveryPanel() {
                   style={{
                     width: '100%',
                     padding: '10px 12px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    color: FINCEPT.WHITE,
-                    border: `1px solid ${FINCEPT.BORDER}`,
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                     fontSize: '10px',
                     fontFamily: 'monospace',
                     fontWeight: 700,
@@ -456,9 +444,9 @@ export function FactorDiscoveryPanel() {
                 style={{
                   flex: 1,
                   padding: '12px 16px',
-                  backgroundColor: (!taskDescription || !apiKey) ? FINCEPT.DARK_BG : FINCEPT.PURPLE,
+                  backgroundColor: (!taskDescription || !apiKey) ? colors.background : colors.purple,
                   border: 'none',
-                  color: (!taskDescription || !apiKey) ? FINCEPT.WHITE : '#000000',
+                  color: (!taskDescription || !apiKey) ? colors.text : '#000000',
                   opacity: (!taskDescription || !apiKey) ? 0.5 : 1,
                   fontSize: '11px',
                   fontWeight: 700,
@@ -499,9 +487,9 @@ export function FactorDiscoveryPanel() {
                   onClick={handleStop}
                   style={{
                     padding: '12px 16px',
-                    backgroundColor: FINCEPT.RED,
+                    backgroundColor: colors.alert,
                     border: 'none',
-                    color: FINCEPT.WHITE,
+                    color: colors.text,
                     fontSize: '11px',
                     fontWeight: 700,
                     fontFamily: 'monospace',
@@ -524,9 +512,9 @@ export function FactorDiscoveryPanel() {
             {taskStatus && (
               <div style={{
                 padding: '14px',
-                backgroundColor: FINCEPT.DARK_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                borderLeft: `3px solid ${FINCEPT.PURPLE}`
+                backgroundColor: colors.background,
+                border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                borderLeft: `3px solid ${colors.purple}`
               }}>
                 <div style={{
                   display: 'flex',
@@ -538,7 +526,7 @@ export function FactorDiscoveryPanel() {
                     fontSize: '10px',
                     fontWeight: 700,
                     fontFamily: 'monospace',
-                    color: FINCEPT.WHITE,
+                    color: colors.text,
                     letterSpacing: '0.5px'
                   }}>
                     TASK STATUS
@@ -548,8 +536,8 @@ export function FactorDiscoveryPanel() {
                     fontWeight: 700,
                     fontFamily: 'monospace',
                     padding: '3px 8px',
-                    backgroundColor: taskStatus.status === 'completed' ? FINCEPT.GREEN :
-                                   taskStatus.status === 'running' ? FINCEPT.PURPLE : FINCEPT.RED,
+                    backgroundColor: taskStatus.status === 'completed' ? colors.success :
+                                   taskStatus.status === 'running' ? colors.purple : colors.alert,
                     color: '#000000',
                     letterSpacing: '0.5px'
                   }}>
@@ -560,20 +548,20 @@ export function FactorDiscoveryPanel() {
                   {taskStatus.progress !== undefined && (
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>PROGRESS</span>
-                        <span style={{ color: FINCEPT.WHITE, fontWeight: 700 }}>{taskStatus.progress}%</span>
+                        <span style={{ color: colors.text, opacity: 0.5 }}>PROGRESS</span>
+                        <span style={{ color: colors.text, fontWeight: 700 }}>{taskStatus.progress}%</span>
                       </div>
                       <div style={{
                         width: '100%',
                         height: '3px',
-                        backgroundColor: FINCEPT.PANEL_BG,
+                        backgroundColor: colors.panel,
                         overflow: 'hidden',
-                        border: `1px solid ${FINCEPT.BORDER}`
+                        border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`
                       }}>
                         <div style={{
                           height: '100%',
                           width: `${taskStatus.progress}%`,
-                          backgroundColor: FINCEPT.PURPLE,
+                          backgroundColor: colors.purple,
                           transition: 'width 0.3s ease'
                         }} />
                       </div>
@@ -581,26 +569,26 @@ export function FactorDiscoveryPanel() {
                   )}
                   {taskStatus.factors_generated !== undefined && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>FACTORS GENERATED</span>
-                      <span style={{ color: FINCEPT.GREEN, fontWeight: 700 }}>{taskStatus.factors_generated}</span>
+                      <span style={{ color: colors.text, opacity: 0.5 }}>FACTORS GENERATED</span>
+                      <span style={{ color: colors.success, fontWeight: 700 }}>{taskStatus.factors_generated}</span>
                     </div>
                   )}
                   {taskStatus.factors_tested !== undefined && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>FACTORS TESTED</span>
-                      <span style={{ color: FINCEPT.WHITE, fontWeight: 700 }}>{taskStatus.factors_tested}</span>
+                      <span style={{ color: colors.text, opacity: 0.5 }}>FACTORS TESTED</span>
+                      <span style={{ color: colors.text, fontWeight: 700 }}>{taskStatus.factors_tested}</span>
                     </div>
                   )}
                   {taskStatus.best_ic !== undefined && taskStatus.best_ic !== null && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>BEST IC</span>
-                      <span style={{ color: FINCEPT.GREEN, fontWeight: 700 }}>{taskStatus.best_ic.toFixed(4)}</span>
+                      <span style={{ color: colors.text, opacity: 0.5 }}>BEST IC</span>
+                      <span style={{ color: colors.success, fontWeight: 700 }}>{taskStatus.best_ic.toFixed(4)}</span>
                     </div>
                   )}
                   {taskStatus.elapsed_time && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>ELAPSED TIME</span>
-                      <span style={{ color: FINCEPT.WHITE, fontWeight: 700 }}>{taskStatus.elapsed_time}</span>
+                      <span style={{ color: colors.text, opacity: 0.5 }}>ELAPSED TIME</span>
+                      <span style={{ color: colors.text, fontWeight: 700 }}>{taskStatus.elapsed_time}</span>
                     </div>
                   )}
                 </div>
@@ -616,14 +604,14 @@ export function FactorDiscoveryPanel() {
               {/* Factor List */}
               <div style={{
                 width: '340px',
-                borderRight: `1px solid ${FINCEPT.BORDER}`,
-                backgroundColor: FINCEPT.PANEL_BG,
+                borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                backgroundColor: colors.panel,
                 display: 'flex',
                 flexDirection: 'column'
               }}>
                 <div style={{
                   padding: '10px 12px',
-                  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                  borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between'
@@ -632,7 +620,7 @@ export function FactorDiscoveryPanel() {
                     fontSize: '10px',
                     fontWeight: 700,
                     fontFamily: 'monospace',
-                    color: FINCEPT.PURPLE,
+                    color: colors.purple,
                     letterSpacing: '0.5px'
                   }}>
                     DISCOVERED FACTORS
@@ -642,9 +630,9 @@ export function FactorDiscoveryPanel() {
                     fontWeight: 700,
                     fontFamily: 'monospace',
                     padding: '3px 8px',
-                    backgroundColor: FINCEPT.PURPLE + '20',
-                    border: `1px solid ${FINCEPT.PURPLE}`,
-                    color: FINCEPT.PURPLE
+                    backgroundColor: colors.purple + '20',
+                    border: `1px solid ${colors.purple}`,
+                    color: colors.purple
                   }}>
                     {discoveredFactors.length}
                   </div>
@@ -658,9 +646,9 @@ export function FactorDiscoveryPanel() {
                         onClick={() => setSelectedFactor(factor)}
                         style={{
                           padding: '12px',
-                          backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
-                          border: `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}`,
-                          borderTop: idx === 0 ? `1px solid ${isSelected ? FINCEPT.PURPLE : FINCEPT.BORDER}` : '0',
+                          backgroundColor: isSelected ? '#1F1F1F' : 'transparent',
+                          border: `1px solid ${isSelected ? colors.purple : 'var(--ft-border-color, #2A2A2A)'}`,
+                          borderTop: idx === 0 ? `1px solid ${isSelected ? colors.purple : 'var(--ft-border-color, #2A2A2A)'}` : '0',
                           cursor: 'pointer',
                           transition: 'all 0.15s',
                           marginTop: idx === 0 ? '0' : '-1px',
@@ -668,14 +656,14 @@ export function FactorDiscoveryPanel() {
                         }}
                         onMouseEnter={(e) => {
                           if (!isSelected) {
-                            e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                            e.currentTarget.style.borderColor = FINCEPT.PURPLE;
+                            e.currentTarget.style.backgroundColor = colors.background;
+                            e.currentTarget.style.borderColor = colors.purple;
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (!isSelected) {
                             e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                            e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                           }
                         }}
                       >
@@ -684,7 +672,7 @@ export function FactorDiscoveryPanel() {
                             fontSize: '11px',
                             fontWeight: 700,
                             fontFamily: 'monospace',
-                            color: FINCEPT.WHITE
+                            color: colors.text
                           }}>
                             {factor.name}
                           </span>
@@ -693,9 +681,9 @@ export function FactorDiscoveryPanel() {
                             fontWeight: 700,
                             fontFamily: 'monospace',
                             padding: '2px 6px',
-                            backgroundColor: FINCEPT.GREEN + '20',
-                            border: `1px solid ${FINCEPT.GREEN}`,
-                            color: FINCEPT.GREEN
+                            backgroundColor: colors.success + '20',
+                            border: `1px solid ${colors.success}`,
+                            color: colors.success
                           }}>
                             IC: {factor.ic.toFixed(4)}
                           </div>
@@ -703,7 +691,7 @@ export function FactorDiscoveryPanel() {
                         <div style={{
                           fontSize: '9px',
                           fontFamily: 'monospace',
-                          color: FINCEPT.WHITE,
+                          color: colors.text,
                           opacity: 0.6,
                           marginBottom: '8px',
                           lineHeight: '1.4'
@@ -711,11 +699,11 @@ export function FactorDiscoveryPanel() {
                           {factor.description}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '9px', fontFamily: 'monospace' }}>
-                          <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>
-                            SHARPE: <span style={{ color: FINCEPT.WHITE, opacity: 1, fontWeight: 700 }}>{factor.sharpe.toFixed(2)}</span>
+                          <span style={{ color: colors.text, opacity: 0.5 }}>
+                            SHARPE: <span style={{ color: colors.text, opacity: 1, fontWeight: 700 }}>{factor.sharpe.toFixed(2)}</span>
                           </span>
-                          <span style={{ color: FINCEPT.WHITE, opacity: 0.5 }}>
-                            RET: <span style={{ color: FINCEPT.GREEN, opacity: 1, fontWeight: 700 }}>{factor.performance_metrics.annual_return.toFixed(1)}%</span>
+                          <span style={{ color: colors.text, opacity: 0.5 }}>
+                            RET: <span style={{ color: colors.success, opacity: 1, fontWeight: 700 }}>{factor.performance_metrics.annual_return.toFixed(1)}%</span>
                           </span>
                         </div>
                       </button>
@@ -726,7 +714,7 @@ export function FactorDiscoveryPanel() {
 
               {/* Factor Details */}
               {selectedFactor && (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', backgroundColor: FINCEPT.DARK_BG }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', backgroundColor: colors.background }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1200px' }}>
                     {/* Header */}
                     <div>
@@ -740,7 +728,7 @@ export function FactorDiscoveryPanel() {
                           fontSize: '18px',
                           fontWeight: 700,
                           fontFamily: 'monospace',
-                          color: FINCEPT.WHITE,
+                          color: colors.text,
                           letterSpacing: '0.5px'
                         }}>
                           {selectedFactor.name}
@@ -750,9 +738,9 @@ export function FactorDiscoveryPanel() {
                           fontWeight: 700,
                           fontFamily: 'monospace',
                           padding: '4px 10px',
-                          backgroundColor: FINCEPT.PURPLE + '20',
-                          border: `1px solid ${FINCEPT.PURPLE}`,
-                          color: FINCEPT.PURPLE
+                          backgroundColor: colors.purple + '20',
+                          border: `1px solid ${colors.purple}`,
+                          color: colors.purple
                         }}>
                           FACTOR ID: {selectedFactor.factor_id}
                         </div>
@@ -760,7 +748,7 @@ export function FactorDiscoveryPanel() {
                       <div style={{
                         fontSize: '11px',
                         fontFamily: 'monospace',
-                        color: FINCEPT.WHITE,
+                        color: colors.text,
                         opacity: 0.6,
                         lineHeight: '1.5'
                       }}>
@@ -774,7 +762,7 @@ export function FactorDiscoveryPanel() {
                         fontSize: '10px',
                         fontWeight: 700,
                         fontFamily: 'monospace',
-                        color: FINCEPT.PURPLE,
+                        color: colors.purple,
                         letterSpacing: '0.5px',
                         marginBottom: '12px'
                       }}>
@@ -790,31 +778,31 @@ export function FactorDiscoveryPanel() {
                         value={selectedFactor.ic.toFixed(4)}
                         subtext={`± ${selectedFactor.ic_std.toFixed(4)}`}
                         icon={<TrendingUp size={16} />}
-                        color={FINCEPT.GREEN}
+                        color={colors.success}
                       />
                       <MetricCard
                         label="Sharpe Ratio"
                         value={selectedFactor.sharpe.toFixed(2)}
                         icon={<BarChart2 size={16} />}
-                        color={FINCEPT.ORANGE}
+                        color={colors.primary}
                       />
                       <MetricCard
                         label="Annual Return"
                         value={`${selectedFactor.performance_metrics.annual_return.toFixed(1)}%`}
                         icon={<DollarSign size={16} />}
-                        color={FINCEPT.GREEN}
+                        color={colors.success}
                       />
                       <MetricCard
                         label="Max Drawdown"
                         value={`${selectedFactor.performance_metrics.max_drawdown.toFixed(1)}%`}
                         icon={<AlertCircle size={16} />}
-                        color={FINCEPT.RED}
+                        color={colors.alert}
                       />
                       <MetricCard
                         label="Win Rate"
                         value={`${selectedFactor.performance_metrics.win_rate.toFixed(1)}%`}
                         icon={<Target size={16} />}
-                        color={FINCEPT.CYAN}
+                        color={colors.accent}
                       />
                     </div>
                   </div>
@@ -828,12 +816,12 @@ export function FactorDiscoveryPanel() {
                         marginBottom: '12px'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Code size={16} color={FINCEPT.PURPLE} />
+                          <Code size={16} color={colors.purple} />
                           <span style={{
                             fontSize: '10px',
                             fontWeight: 700,
                             fontFamily: 'monospace',
-                            color: FINCEPT.WHITE,
+                            color: colors.text,
                             letterSpacing: '0.5px'
                           }}>
                             FACTOR IMPLEMENTATION
@@ -847,8 +835,8 @@ export function FactorDiscoveryPanel() {
                             gap: '6px',
                             padding: '8px 12px',
                             backgroundColor: 'transparent',
-                            border: `1px solid ${FINCEPT.PURPLE}`,
-                            color: FINCEPT.PURPLE,
+                            border: `1px solid ${colors.purple}`,
+                            color: colors.purple,
                             fontSize: '10px',
                             fontWeight: 700,
                             fontFamily: 'monospace',
@@ -857,7 +845,7 @@ export function FactorDiscoveryPanel() {
                             transition: 'all 0.15s'
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = FINCEPT.PURPLE + '20';
+                            e.currentTarget.style.backgroundColor = colors.purple + '20';
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.backgroundColor = 'transparent';
@@ -869,9 +857,9 @@ export function FactorDiscoveryPanel() {
                       </div>
                       <pre style={{
                         padding: '14px',
-                        backgroundColor: FINCEPT.PANEL_BG,
-                        color: FINCEPT.WHITE,
-                        border: `1px solid ${FINCEPT.BORDER}`,
+                        backgroundColor: colors.panel,
+                        color: colors.text,
+                        border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
                         fontSize: '10px',
                         fontFamily: 'monospace',
                         overflowX: 'auto',
@@ -882,12 +870,12 @@ export function FactorDiscoveryPanel() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: '12px', paddingTop: '16px', borderTop: `1px solid ${FINCEPT.BORDER}` }}>
+                    <div style={{ display: 'flex', gap: '12px', paddingTop: '16px', borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}` }}>
                       <button
                         style={{
                           flex: 1,
                           padding: '12px 16px',
-                          backgroundColor: FINCEPT.PURPLE,
+                          backgroundColor: colors.purple,
                           border: 'none',
                           color: '#000000',
                           fontSize: '11px',
@@ -915,8 +903,8 @@ export function FactorDiscoveryPanel() {
                         style={{
                           padding: '12px 24px',
                           backgroundColor: 'transparent',
-                          border: `1px solid ${FINCEPT.PURPLE}`,
-                          color: FINCEPT.PURPLE,
+                          border: `1px solid ${colors.purple}`,
+                          color: colors.purple,
                           fontSize: '11px',
                           fontWeight: 700,
                           fontFamily: 'monospace',
@@ -929,7 +917,7 @@ export function FactorDiscoveryPanel() {
                           transition: 'all 0.15s'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = FINCEPT.PURPLE + '20';
+                          e.currentTarget.style.backgroundColor = colors.purple + '20';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = 'transparent';
@@ -952,11 +940,11 @@ export function FactorDiscoveryPanel() {
               flexDirection: 'column',
               gap: '12px'
             }}>
-              <Sparkles size={32} color={FINCEPT.BORDER} />
+              <Sparkles size={32} color={'var(--ft-border-color, #2A2A2A)'} />
               <div style={{
                 fontSize: '11px',
                 fontFamily: 'monospace',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 opacity: 0.5,
                 textAlign: 'center',
                 letterSpacing: '0.5px'
@@ -1006,8 +994,8 @@ function MetricCard({
   return (
     <div style={{
       padding: '12px',
-      backgroundColor: FINCEPT.PANEL_BG,
-      border: `1px solid ${FINCEPT.BORDER}`,
+      backgroundColor: 'var(--ft-color-panel, #0a0a0a)',
+      border: '1px solid var(--ft-border-color, #2A2A2A)',
       borderLeft: `3px solid ${color}`
     }}>
       <div style={{
@@ -1017,9 +1005,9 @@ function MetricCard({
         marginBottom: '8px'
       }}>
         <span style={{
-          fontSize: '9px',
-          fontFamily: 'monospace',
-          color: FINCEPT.WHITE,
+          fontSize: 'var(--ft-font-size-tiny, 9px)',
+          fontFamily: 'var(--ft-font-family, monospace)',
+          color: 'var(--ft-color-text, #FFFFFF)',
           opacity: 0.5,
           letterSpacing: '0.5px'
         }}>
@@ -1030,16 +1018,16 @@ function MetricCard({
       <div style={{
         fontSize: '18px',
         fontWeight: 700,
-        fontFamily: 'monospace',
+        fontFamily: 'var(--ft-font-family, monospace)',
         color
       }}>
         {value}
       </div>
       {subtext && (
         <div style={{
-          fontSize: '9px',
-          fontFamily: 'monospace',
-          color: FINCEPT.WHITE,
+          fontSize: 'var(--ft-font-size-tiny, 9px)',
+          fontFamily: 'var(--ft-font-family, monospace)',
+          color: 'var(--ft-color-text, #FFFFFF)',
           opacity: 0.5,
           marginTop: '4px'
         }}>

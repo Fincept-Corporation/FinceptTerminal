@@ -68,6 +68,7 @@ const NotesTab = React.lazy(() => import('@/components/tabs/notes').then(m => ({
 const AlternativeInvestmentsTab = React.lazy(() => import('@/components/tabs/alternative-investments').then(m => ({ default: m.AlternativeInvestmentsTab })));
 const MarketSimTab = React.lazy(() => import('@/components/tabs/market-sim').then(m => ({ default: m.MarketSimTab })));
 const StrategiesTab = React.lazy(() => import('@/components/tabs/strategies'));
+const AlgoTradingTab = React.lazy(() => import('@/components/tabs/algo-trading'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -580,6 +581,7 @@ function FinxeptTerminalContent() {
     // Tools
     { label: 'Tools', header: true },
     { label: 'Strategy Engine', action: () => setActiveTab('strategies') },
+    { label: 'Algo Trading', action: () => setActiveTab('algo-trading') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp') },
     { label: 'Data Sources', action: () => setActiveTab('datasources') },
@@ -885,6 +887,13 @@ function FinxeptTerminalContent() {
                   {t('navigation.backtesting')}
                 </TabsTrigger>
                 <TabsTrigger
+                  value="algo-trading"
+                  style={activeTab === 'algo-trading' ? tabStyles.active : tabStyles.default}
+                  title="Algo Trading"
+                >
+                  Algo Trading
+                </TabsTrigger>
+                <TabsTrigger
                   value="nodes"
                   style={activeTab === 'nodes' ? tabStyles.active : tabStyles.default}
                   title="Node Editor"
@@ -993,6 +1002,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="strategies" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <StrategiesTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="algo-trading" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <AlgoTradingTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="backtesting" className="h-full m-0 p-0">

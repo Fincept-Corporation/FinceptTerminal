@@ -7,7 +7,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use super::common::ApiResponse;
 use totp_rs::{Algorithm, TOTP, Secret};
-use crate::database::master_contract;
+use crate::database::symbol_master;
 use std::time::Duration;
 use std::sync::OnceLock;
 
@@ -418,7 +418,7 @@ pub async fn angelone_search_symbols(
 ) -> ApiResponse<Value> {
     let timestamp = chrono::Utc::now().timestamp_millis();
 
-    match master_contract::search_symbols(
+    match symbol_master::search_symbols(
         "angelone",
         &query,
         exchange.as_deref(),
@@ -467,7 +467,7 @@ pub async fn angelone_get_instrument(
 ) -> ApiResponse<Value> {
     let timestamp = chrono::Utc::now().timestamp_millis();
 
-    match master_contract::get_symbol("angelone", &symbol, &exchange) {
+    match symbol_master::get_symbol("angelone", &symbol, &exchange) {
         Ok(Some(result)) => {
             ApiResponse {
                 success: true,
@@ -490,7 +490,7 @@ pub async fn angelone_get_instrument(
         }
         Ok(None) => {
             // Try fuzzy search as fallback
-            match master_contract::search_symbols("angelone", &symbol, Some(&exchange), None, 1) {
+            match symbol_master::search_symbols("angelone", &symbol, Some(&exchange), None, 1) {
                 Ok(results) if !results.is_empty() => {
                     let r = &results[0];
                     ApiResponse {
@@ -536,23 +536,25 @@ pub async fn angelone_download_master_contract(
 ) -> ApiResponse<Value> {
     let timestamp = chrono::Utc::now().timestamp_millis();
 
-    // Delegate to the existing master contract download
-    match crate::commands::master_contract::download_angelone_master_contract().await {
-        Ok(result) => ApiResponse {
-            success: result.success,
+    // Delegate to the new symbol master download
+    let result = crate::commands::broker_downloads::angelone::angelone_download_symbols().await;
+    if result.success {
+        ApiResponse {
+            success: true,
             data: Some(json!({
-                "symbol_count": result.symbol_count,
+                "symbol_count": result.total_symbols,
                 "message": result.message,
             })),
             error: None,
             timestamp,
-        },
-        Err(e) => ApiResponse {
+        }
+    } else {
+        ApiResponse {
             success: false,
             data: None,
-            error: Some(e),
+            error: Some(result.message),
             timestamp,
-        },
+        }
     }
 }
 
@@ -561,27 +563,23 @@ pub async fn angelone_download_master_contract(
 pub async fn angelone_master_contract_info() -> ApiResponse<Value> {
     let timestamp = chrono::Utc::now().timestamp_millis();
 
-    match master_contract::get_master_contract("angelone") {
-        Ok(Some(info)) => {
+    match symbol_master::get_status("angelone") {
+        Ok(info) => {
             let now = chrono::Utc::now().timestamp();
             let cache_age = now - info.last_updated;
             ApiResponse {
                 success: true,
                 data: Some(json!({
                     "timestamp": info.last_updated,
-                    "symbol_count": info.symbol_count,
+                    "symbol_count": info.total_symbols,
                     "cache_age_seconds": cache_age,
+                    "status": info.status,
+                    "is_ready": info.is_ready,
                 })),
                 error: None,
                 timestamp,
             }
         }
-        Ok(None) => ApiResponse {
-            success: false,
-            data: None,
-            error: Some("No master contract data found".to_string()),
-            timestamp,
-        },
         Err(e) => ApiResponse {
             success: false,
             data: None,

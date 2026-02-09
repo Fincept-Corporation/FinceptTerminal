@@ -34,8 +34,6 @@ import type {
   TradeData,
   WatchlistPrice,
   CenterViewType,
-  RightPanelViewType,
-  LeftSidebarViewType,
   BottomPanelTabType,
 } from './types';
 
@@ -265,21 +263,17 @@ export function CryptoTradingTab() {
   const [showSymbolDropdown, setShowSymbolDropdown] = useState(false);
   const [showBrokerDropdown, setShowBrokerDropdown] = useState(false);
   const [selectedView, setSelectedView] = useState<CenterViewType>('chart');
-  const [rightPanelView, setRightPanelView] = useState<RightPanelViewType>('orderbook');
-  const [leftSidebarView, setLeftSidebarView] = useState<LeftSidebarViewType>('watchlist');
   const [activeBottomTab, setActiveBottomTab] = useState<BottomPanelTabType>('positions');
   const [isBottomPanelMinimized, setIsBottomPanelMinimized] = useState(false);
 
   // Workspace tab state
   const getWorkspaceState = useCallback(() => ({
-    selectedSymbol, selectedView, rightPanelView, leftSidebarView, activeBottomTab, isBottomPanelMinimized,
-  }), [selectedSymbol, selectedView, rightPanelView, leftSidebarView, activeBottomTab, isBottomPanelMinimized]);
+    selectedSymbol, selectedView, activeBottomTab, isBottomPanelMinimized,
+  }), [selectedSymbol, selectedView, activeBottomTab, isBottomPanelMinimized]);
 
   const setWorkspaceState = useCallback((state: Record<string, unknown>) => {
     if (typeof state.selectedSymbol === "string") setSelectedSymbol(state.selectedSymbol);
     if (typeof state.selectedView === "string") setSelectedView(state.selectedView as any);
-    if (typeof state.rightPanelView === "string") setRightPanelView(state.rightPanelView as any);
-    if (typeof state.leftSidebarView === "string") setLeftSidebarView(state.leftSidebarView as any);
     if (typeof state.activeBottomTab === "string") setActiveBottomTab(state.activeBottomTab as any);
     if (typeof state.isBottomPanelMinimized === "boolean") setIsBottomPanelMinimized(state.isBottomPanelMinimized);
   }, []);
@@ -901,11 +895,7 @@ export function CryptoTradingTab() {
             watchlist={watchlist}
             watchlistPrices={state.watchlistPrices}
             selectedSymbol={selectedSymbol}
-            leftSidebarView={leftSidebarView}
-            positions={state.positions}
-            equity={state.equity}
             onSymbolSelect={handleSymbolSelect}
-            onViewChange={setLeftSidebarView}
           />
         </ErrorBoundary>
 
@@ -965,6 +955,7 @@ export function CryptoTradingTab() {
               paperAdapter={paperAdapter}
               realAdapter={realAdapter}
               onTradingModeChange={setTradingMode}
+              onOrderPlaced={loadPaperTradingData}
             />
           </ErrorBoundary>
 
@@ -974,8 +965,6 @@ export function CryptoTradingTab() {
               currentPrice={currentPrice}
               selectedSymbol={selectedSymbol}
               activeBroker={activeBroker}
-              rightPanelView={rightPanelView}
-              onViewChange={setRightPanelView}
             />
           </ErrorBoundary>
         </div>

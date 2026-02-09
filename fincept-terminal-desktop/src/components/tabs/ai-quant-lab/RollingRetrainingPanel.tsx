@@ -4,14 +4,10 @@
  */
 import React, { useState } from 'react';
 import { RefreshCw, Calendar, Clock, CheckCircle2, Play, Pause, Trash2, Settings, Zap } from 'lucide-react';
-
-const FINCEPT = {
-  ORANGE: '#FF8800', WHITE: '#FFFFFF', GREEN: '#00D66F', GRAY: '#787878',
-  DARK_BG: '#000000', PANEL_BG: '#0F0F0F', BORDER: '#2A2A2A', CYAN: '#00E5FF',
-  MUTED: '#4A4A4A', HOVER: '#1F1F1F', PURPLE: '#9D4EDD', RED: '#FF3B3B'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 export function RollingRetrainingPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [frequency, setFrequency] = useState('daily');
   const [modelName, setModelName] = useState('');
   const [windowSize, setWindowSize] = useState('252');
@@ -26,20 +22,20 @@ export function RollingRetrainingPanel() {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: FINCEPT.DARK_BG
+      backgroundColor: colors.background
     }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <RefreshCw size={16} color={FINCEPT.CYAN} />
+        <RefreshCw size={16} color={colors.accent} />
         <span style={{
-          color: FINCEPT.CYAN,
+          color: colors.accent,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -52,9 +48,9 @@ export function RollingRetrainingPanel() {
           fontSize: '10px',
           fontFamily: 'monospace',
           padding: '3px 8px',
-          backgroundColor: FINCEPT.GREEN + '20',
-          border: `1px solid ${FINCEPT.GREEN}`,
-          color: FINCEPT.GREEN
+          backgroundColor: colors.success + '20',
+          border: `1px solid ${colors.success}`,
+          color: colors.success
         }}>
           {schedules.filter(s => s.status === 'active').length} ACTIVE
         </div>
@@ -64,19 +60,19 @@ export function RollingRetrainingPanel() {
         {/* Left Panel - Create Schedule */}
         <div style={{
           width: '320px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
           display: 'flex',
           flexDirection: 'column'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.ORANGE,
+            color: colors.primary,
             fontFamily: 'monospace',
             letterSpacing: '0.5px',
-            backgroundColor: FINCEPT.PANEL_BG
+            backgroundColor: colors.panel
           }}>
             CREATE NEW SCHEDULE
           </div>
@@ -88,7 +84,7 @@ export function RollingRetrainingPanel() {
                 display: 'block',
                 fontSize: '10px',
                 marginBottom: '6px',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 fontFamily: 'monospace',
                 letterSpacing: '0.5px',
                 opacity: 0.7
@@ -103,9 +99,9 @@ export function RollingRetrainingPanel() {
                 style={{
                   width: '100%',
                   padding: '8px 10px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  color: colors.text,
                   fontSize: '11px',
                   fontFamily: 'monospace',
                   outline: 'none'
@@ -119,7 +115,7 @@ export function RollingRetrainingPanel() {
                 display: 'block',
                 fontSize: '10px',
                 marginBottom: '6px',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 fontFamily: 'monospace',
                 letterSpacing: '0.5px',
                 opacity: 0.7
@@ -138,9 +134,9 @@ export function RollingRetrainingPanel() {
                 style={{
                   width: '100%',
                   padding: '8px 10px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                  color: colors.text,
                   fontSize: '11px',
                   fontFamily: 'monospace',
                   outline: 'none'
@@ -154,7 +150,7 @@ export function RollingRetrainingPanel() {
                 display: 'block',
                 fontSize: '10px',
                 marginBottom: '6px',
-                color: FINCEPT.WHITE,
+                color: colors.text,
                 fontFamily: 'monospace',
                 letterSpacing: '0.5px',
                 opacity: 0.7
@@ -168,9 +164,9 @@ export function RollingRetrainingPanel() {
                     onClick={() => setFrequency(freq)}
                     style={{
                       padding: '10px',
-                      backgroundColor: frequency === freq ? FINCEPT.CYAN + '30' : FINCEPT.PANEL_BG,
-                      border: `1px solid ${frequency === freq ? FINCEPT.CYAN : FINCEPT.BORDER}`,
-                      color: frequency === freq ? FINCEPT.CYAN : FINCEPT.WHITE,
+                      backgroundColor: frequency === freq ? colors.accent + '30' : colors.panel,
+                      border: `1px solid ${frequency === freq ? colors.accent : 'var(--ft-border-color, #2A2A2A)'}`,
+                      color: frequency === freq ? colors.accent : colors.text,
                       fontSize: '11px',
                       fontWeight: 600,
                       fontFamily: 'monospace',
@@ -185,14 +181,14 @@ export function RollingRetrainingPanel() {
                     }}
                     onMouseEnter={(e) => {
                       if (frequency !== freq) {
-                        e.currentTarget.style.backgroundColor = FINCEPT.HOVER;
-                        e.currentTarget.style.borderColor = FINCEPT.CYAN;
+                        e.currentTarget.style.backgroundColor = '#1F1F1F';
+                        e.currentTarget.style.borderColor = colors.accent;
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (frequency !== freq) {
-                        e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
-                        e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                        e.currentTarget.style.backgroundColor = colors.panel;
+                        e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                       }
                     }}
                   >
@@ -208,7 +204,7 @@ export function RollingRetrainingPanel() {
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                backgroundColor: FINCEPT.CYAN,
+                backgroundColor: colors.accent,
                 border: 'none',
                 color: '#000000',
                 fontSize: '11px',
@@ -234,13 +230,13 @@ export function RollingRetrainingPanel() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{
             padding: '10px 16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.GREEN,
+            color: colors.success,
             fontFamily: 'monospace',
             letterSpacing: '0.5px',
-            backgroundColor: FINCEPT.PANEL_BG
+            backgroundColor: colors.panel
           }}>
             ACTIVE SCHEDULES ({schedules.length})
           </div>
@@ -252,9 +248,9 @@ export function RollingRetrainingPanel() {
                   key={sched.id}
                   style={{
                     padding: '14px',
-                    backgroundColor: FINCEPT.PANEL_BG,
-                    border: `1px solid ${sched.status === 'active' ? FINCEPT.GREEN : FINCEPT.BORDER}`,
-                    borderLeft: `3px solid ${sched.status === 'active' ? FINCEPT.GREEN : FINCEPT.PURPLE}`,
+                    backgroundColor: colors.panel,
+                    border: `1px solid ${sched.status === 'active' ? colors.success : 'var(--ft-border-color, #2A2A2A)'}`,
+                    borderLeft: `3px solid ${sched.status === 'active' ? colors.success : colors.purple}`,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '10px'
@@ -263,9 +259,9 @@ export function RollingRetrainingPanel() {
                   {/* Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Zap size={14} color={sched.status === 'active' ? FINCEPT.GREEN : FINCEPT.PURPLE} />
+                      <Zap size={14} color={sched.status === 'active' ? colors.success : colors.purple} />
                       <span style={{
-                        color: FINCEPT.WHITE,
+                        color: colors.text,
                         fontSize: '12px',
                         fontWeight: 700,
                         fontFamily: 'monospace'
@@ -277,9 +273,9 @@ export function RollingRetrainingPanel() {
                       fontSize: '9px',
                       fontFamily: 'monospace',
                       padding: '3px 8px',
-                      backgroundColor: sched.status === 'active' ? FINCEPT.GREEN + '20' : FINCEPT.PURPLE + '20',
-                      border: `1px solid ${sched.status === 'active' ? FINCEPT.GREEN : FINCEPT.PURPLE}`,
-                      color: sched.status === 'active' ? FINCEPT.GREEN : FINCEPT.PURPLE,
+                      backgroundColor: sched.status === 'active' ? colors.success + '20' : colors.purple + '20',
+                      border: `1px solid ${sched.status === 'active' ? colors.success : colors.purple}`,
+                      color: sched.status === 'active' ? colors.success : colors.purple,
                       textTransform: 'uppercase'
                     }}>
                       {sched.status}
@@ -289,34 +285,34 @@ export function RollingRetrainingPanel() {
                   {/* Details Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div>
-                      <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
+                      <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
                         FREQUENCY
                       </div>
-                      <div style={{ fontSize: '11px', color: FINCEPT.CYAN, fontFamily: 'monospace', fontWeight: 600 }}>
+                      <div style={{ fontSize: '11px', color: colors.accent, fontFamily: 'monospace', fontWeight: 600 }}>
                         {sched.frequency.toUpperCase()}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
+                      <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
                         WINDOW
                       </div>
-                      <div style={{ fontSize: '11px', color: FINCEPT.CYAN, fontFamily: 'monospace', fontWeight: 600 }}>
+                      <div style={{ fontSize: '11px', color: colors.accent, fontFamily: 'monospace', fontWeight: 600 }}>
                         {sched.windowSize} days
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
+                      <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
                         LAST RUN
                       </div>
-                      <div style={{ fontSize: '10px', color: FINCEPT.WHITE, fontFamily: 'monospace', opacity: 0.7 }}>
+                      <div style={{ fontSize: '10px', color: colors.text, fontFamily: 'monospace', opacity: 0.7 }}>
                         {sched.lastRun}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '9px', color: FINCEPT.WHITE, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
+                      <div style={{ fontSize: '9px', color: colors.text, opacity: 0.5, fontFamily: 'monospace', marginBottom: '3px' }}>
                         NEXT RUN
                       </div>
-                      <div style={{ fontSize: '10px', color: FINCEPT.ORANGE, fontFamily: 'monospace', fontWeight: 600 }}>
+                      <div style={{ fontSize: '10px', color: colors.primary, fontFamily: 'monospace', fontWeight: 600 }}>
                         {sched.nextRun}
                       </div>
                     </div>
@@ -329,8 +325,8 @@ export function RollingRetrainingPanel() {
                         flex: 1,
                         padding: '6px 10px',
                         backgroundColor: 'transparent',
-                        border: `1px solid ${FINCEPT.ORANGE}`,
-                        color: FINCEPT.ORANGE,
+                        border: `1px solid ${colors.primary}`,
+                        color: colors.primary,
                         fontSize: '9px',
                         fontWeight: 700,
                         fontFamily: 'monospace',
@@ -343,7 +339,7 @@ export function RollingRetrainingPanel() {
                         transition: 'all 0.15s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = FINCEPT.ORANGE + '20';
+                        e.currentTarget.style.backgroundColor = colors.primary + '20';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = 'transparent';
@@ -357,8 +353,8 @@ export function RollingRetrainingPanel() {
                         flex: 1,
                         padding: '6px 10px',
                         backgroundColor: 'transparent',
-                        border: `1px solid ${FINCEPT.CYAN}`,
-                        color: FINCEPT.CYAN,
+                        border: `1px solid ${colors.accent}`,
+                        color: colors.accent,
                         fontSize: '9px',
                         fontWeight: 700,
                         fontFamily: 'monospace',
@@ -371,7 +367,7 @@ export function RollingRetrainingPanel() {
                         transition: 'all 0.15s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = FINCEPT.CYAN + '20';
+                        e.currentTarget.style.backgroundColor = colors.accent + '20';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = 'transparent';
@@ -384,8 +380,8 @@ export function RollingRetrainingPanel() {
                       style={{
                         padding: '6px 10px',
                         backgroundColor: 'transparent',
-                        border: `1px solid ${FINCEPT.RED}`,
-                        color: FINCEPT.RED,
+                        border: `1px solid ${colors.alert}`,
+                        color: colors.alert,
                         fontSize: '9px',
                         fontWeight: 700,
                         fontFamily: 'monospace',
@@ -398,7 +394,7 @@ export function RollingRetrainingPanel() {
                         transition: 'all 0.15s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = FINCEPT.RED + '20';
+                        e.currentTarget.style.backgroundColor = colors.alert + '20';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = 'transparent';
@@ -421,11 +417,11 @@ export function RollingRetrainingPanel() {
                 height: '300px',
                 textAlign: 'center'
               }}>
-                <Calendar size={48} color={FINCEPT.MUTED} style={{ opacity: 0.3, marginBottom: '16px' }} />
-                <div style={{ color: FINCEPT.WHITE, fontSize: '12px', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px', fontFamily: 'monospace' }}>
+                <Calendar size={48} color={colors.textMuted} style={{ opacity: 0.3, marginBottom: '16px' }} />
+                <div style={{ color: colors.text, fontSize: '12px', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px', fontFamily: 'monospace' }}>
                   NO SCHEDULES CONFIGURED
                 </div>
-                <div style={{ color: FINCEPT.MUTED, fontSize: '11px', maxWidth: '400px', lineHeight: '1.6' }}>
+                <div style={{ color: colors.textMuted, fontSize: '11px', maxWidth: '400px', lineHeight: '1.6' }}>
                   Create a new retraining schedule to automate model updates
                 </div>
               </div>

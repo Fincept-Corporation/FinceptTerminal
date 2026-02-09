@@ -4,16 +4,7 @@
  */
 import React, { useState } from 'react';
 import { Brain, Award, BarChart3, Layers, Play, Zap, TrendingUp, CheckCircle2 } from 'lucide-react';
-
-const FINCEPT = {
-  MAGENTA: '#E91E8C',  // Primary theme color for Meta Learning
-  WHITE: '#FFFFFF',
-  GREEN: '#00D66F',
-  DARK_BG: '#0F0F0F',
-  PANEL_BG: '#0F0F0F',
-  BORDER: '#2A2A2A',
-  HOVER: '#1F1F1F'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface ModelConfig {
   id: string;
@@ -24,6 +15,7 @@ interface ModelConfig {
 }
 
 export function MetaLearningPanel() {
+  const { colors, fontSize, fontFamily } = useTerminalTheme();
   const models: ModelConfig[] = [
     { id: 'lightgbm', name: 'LightGBM', type: 'gradient_boosting', description: 'Gradient boosting framework', icon: Zap },
     { id: 'xgboost', name: 'XGBoost', type: 'gradient_boosting', description: 'Extreme gradient boosting', icon: TrendingUp },
@@ -55,19 +47,19 @@ export function MetaLearningPanel() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: FINCEPT.DARK_BG }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: colors.background }}>
       {/* Terminal-style Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${FINCEPT.BORDER}`,
-        backgroundColor: FINCEPT.PANEL_BG,
+        borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+        backgroundColor: colors.panel,
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <Brain size={16} color={FINCEPT.MAGENTA} />
+        <Brain size={16} color={colors.primary} />
         <span style={{
-          color: FINCEPT.MAGENTA,
+          color: colors.primary,
           fontSize: '12px',
           fontWeight: 700,
           letterSpacing: '0.5px',
@@ -81,9 +73,9 @@ export function MetaLearningPanel() {
             fontSize: '10px',
             fontFamily: 'monospace',
             padding: '3px 8px',
-            backgroundColor: FINCEPT.MAGENTA + '20',
-            border: `1px solid ${FINCEPT.MAGENTA}`,
-            color: FINCEPT.MAGENTA
+            backgroundColor: colors.primary + '20',
+            border: `1px solid ${colors.primary}`,
+            color: colors.primary
           }}>
             {selectedModels.length} MODELS SELECTED
           </div>
@@ -93,9 +85,9 @@ export function MetaLearningPanel() {
             fontSize: '10px',
             fontFamily: 'monospace',
             padding: '3px 8px',
-            backgroundColor: FINCEPT.GREEN + '20',
-            border: `1px solid ${FINCEPT.GREEN}`,
-            color: FINCEPT.GREEN
+            backgroundColor: colors.success + '20',
+            border: `1px solid ${colors.success}`,
+            color: colors.success
           }}>
             BEST MODEL FOUND
           </div>
@@ -107,17 +99,17 @@ export function MetaLearningPanel() {
         {/* Left Panel - Model Selection */}
         <div style={{
           width: '400px',
-          borderRight: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.PANEL_BG,
+          borderRight: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column'
         }}>
           <div style={{
             padding: '10px 12px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.MAGENTA,
+            color: colors.primary,
             fontFamily: 'monospace',
             letterSpacing: '0.5px'
           }}>
@@ -136,9 +128,9 @@ export function MetaLearningPanel() {
                   onClick={() => toggleModel(model.id)}
                   style={{
                     padding: '12px',
-                    backgroundColor: isSelected ? FINCEPT.HOVER : 'transparent',
-                    border: `1px solid ${isSelected ? FINCEPT.MAGENTA : FINCEPT.BORDER}`,
-                    borderTop: idx === 0 ? `1px solid ${isSelected ? FINCEPT.MAGENTA : FINCEPT.BORDER}` : '0',
+                    backgroundColor: isSelected ? '#1F1F1F' : 'transparent',
+                    border: `1px solid ${isSelected ? colors.primary : 'var(--ft-border-color, #2A2A2A)'}`,
+                    borderTop: idx === 0 ? `1px solid ${isSelected ? colors.primary : 'var(--ft-border-color, #2A2A2A)'}` : '0',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     marginTop: idx === 0 ? '0' : '-1px',
@@ -148,14 +140,14 @@ export function MetaLearningPanel() {
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = FINCEPT.DARK_BG;
-                      e.currentTarget.style.borderColor = FINCEPT.MAGENTA;
+                      e.currentTarget.style.backgroundColor = colors.background;
+                      e.currentTarget.style.borderColor = colors.primary;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected) {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.borderColor = 'var(--ft-border-color, #2A2A2A)';
                     }
                   }}
                 >
@@ -163,8 +155,8 @@ export function MetaLearningPanel() {
                   <div style={{
                     width: '16px',
                     height: '16px',
-                    border: `1px solid ${isSelected ? FINCEPT.MAGENTA : FINCEPT.BORDER}`,
-                    backgroundColor: isSelected ? FINCEPT.MAGENTA : 'transparent',
+                    border: `1px solid ${isSelected ? colors.primary : 'var(--ft-border-color, #2A2A2A)'}`,
+                    backgroundColor: isSelected ? colors.primary : 'transparent',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -173,14 +165,14 @@ export function MetaLearningPanel() {
                     {isSelected && <CheckCircle2 size={12} color="#000000" />}
                   </div>
 
-                  <Icon size={16} color={FINCEPT.MAGENTA} />
+                  <Icon size={16} color={colors.primary} />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       fontSize: '11px',
                       fontWeight: 700,
                       fontFamily: 'monospace',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       marginBottom: '2px'
                     }}>
                       {model.name}
@@ -188,7 +180,7 @@ export function MetaLearningPanel() {
                     <div style={{
                       fontSize: '10px',
                       fontFamily: 'monospace',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.6
                     }}>
                       {model.description}
@@ -199,9 +191,9 @@ export function MetaLearningPanel() {
                     fontSize: '9px',
                     fontFamily: 'monospace',
                     padding: '2px 6px',
-                    backgroundColor: FINCEPT.MAGENTA + '20',
-                    border: `1px solid ${FINCEPT.MAGENTA}`,
-                    color: FINCEPT.MAGENTA
+                    backgroundColor: colors.primary + '20',
+                    border: `1px solid ${colors.primary}`,
+                    color: colors.primary
                   }}>
                     {model.type.replace('_', ' ').toUpperCase()}
                   </div>
@@ -211,16 +203,16 @@ export function MetaLearningPanel() {
           </div>
 
           {/* Action Button */}
-          <div style={{ borderTop: `1px solid ${FINCEPT.BORDER}`, padding: '12px' }}>
+          <div style={{ borderTop: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`, padding: '12px' }}>
             <button
               onClick={runModelSelection}
               disabled={selectedModels.length === 0 || isRunning}
               style={{
                 width: '100%',
                 padding: '12px 16px',
-                backgroundColor: selectedModels.length > 0 ? FINCEPT.MAGENTA : FINCEPT.DARK_BG,
+                backgroundColor: selectedModels.length > 0 ? colors.primary : colors.background,
                 border: 'none',
-                color: selectedModels.length > 0 ? '#000000' : FINCEPT.WHITE,
+                color: selectedModels.length > 0 ? '#000000' : colors.text,
                 opacity: selectedModels.length > 0 ? 1 : 0.5,
                 fontSize: '11px',
                 fontWeight: 700,
@@ -251,16 +243,16 @@ export function MetaLearningPanel() {
         </div>
 
         {/* Right Panel - Results */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.DARK_BG }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: colors.background }}>
           <div style={{
             padding: '10px 16px',
-            borderBottom: `1px solid ${FINCEPT.BORDER}`,
+            borderBottom: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
             fontSize: '10px',
             fontWeight: 700,
-            color: FINCEPT.MAGENTA,
+            color: colors.primary,
             fontFamily: 'monospace',
             letterSpacing: '0.5px',
-            backgroundColor: FINCEPT.PANEL_BG
+            backgroundColor: colors.panel
           }}>
             AUTOML RESULTS
           </div>
@@ -269,23 +261,23 @@ export function MetaLearningPanel() {
             {bestModel ? (
               <div style={{
                 padding: '16px',
-                backgroundColor: FINCEPT.PANEL_BG,
-                border: `1px solid ${FINCEPT.GREEN}`,
-                borderLeft: `3px solid ${FINCEPT.GREEN}`
+                backgroundColor: colors.panel,
+                border: `1px solid ${colors.success}`,
+                borderLeft: `3px solid ${colors.success}`
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                   <div style={{
                     padding: '8px',
-                    backgroundColor: FINCEPT.GREEN + '20',
-                    border: `1px solid ${FINCEPT.GREEN}`
+                    backgroundColor: colors.success + '20',
+                    border: `1px solid ${colors.success}`
                   }}>
-                    <Award size={20} color={FINCEPT.GREEN} />
+                    <Award size={20} color={colors.success} />
                   </div>
                   <div>
                     <div style={{
                       fontSize: '10px',
                       fontFamily: 'monospace',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.6,
                       marginBottom: '2px',
                       letterSpacing: '0.5px'
@@ -296,7 +288,7 @@ export function MetaLearningPanel() {
                       fontSize: '16px',
                       fontWeight: 700,
                       fontFamily: 'monospace',
-                      color: FINCEPT.GREEN
+                      color: colors.success
                     }}>
                       {models.find(m => m.id === bestModel)?.name}
                     </div>
@@ -312,13 +304,13 @@ export function MetaLearningPanel() {
                 }}>
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    borderLeft: `3px solid ${FINCEPT.MAGENTA}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    borderLeft: `3px solid ${colors.primary}`
                   }}>
                     <div style={{
                       fontSize: '9px',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.5,
                       marginBottom: '4px',
                       fontFamily: 'monospace',
@@ -329,7 +321,7 @@ export function MetaLearningPanel() {
                     <div style={{
                       fontSize: '16px',
                       fontWeight: 700,
-                      color: FINCEPT.MAGENTA,
+                      color: colors.primary,
                       fontFamily: 'monospace'
                     }}>
                       85.42%
@@ -338,13 +330,13 @@ export function MetaLearningPanel() {
 
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    borderLeft: `3px solid ${FINCEPT.MAGENTA}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    borderLeft: `3px solid ${colors.primary}`
                   }}>
                     <div style={{
                       fontSize: '9px',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.5,
                       marginBottom: '4px',
                       fontFamily: 'monospace',
@@ -355,7 +347,7 @@ export function MetaLearningPanel() {
                     <div style={{
                       fontSize: '16px',
                       fontWeight: 700,
-                      color: FINCEPT.MAGENTA,
+                      color: colors.primary,
                       fontFamily: 'monospace'
                     }}>
                       0.8312
@@ -364,13 +356,13 @@ export function MetaLearningPanel() {
 
                   <div style={{
                     padding: '10px',
-                    backgroundColor: FINCEPT.DARK_BG,
-                    border: `1px solid ${FINCEPT.BORDER}`,
-                    borderLeft: `3px solid ${FINCEPT.MAGENTA}`
+                    backgroundColor: colors.background,
+                    border: `1px solid ${'var(--ft-border-color, #2A2A2A)'}`,
+                    borderLeft: `3px solid ${colors.primary}`
                   }}>
                     <div style={{
                       fontSize: '9px',
-                      color: FINCEPT.WHITE,
+                      color: colors.text,
                       opacity: 0.5,
                       marginBottom: '4px',
                       fontFamily: 'monospace',
@@ -381,7 +373,7 @@ export function MetaLearningPanel() {
                     <div style={{
                       fontSize: '16px',
                       fontWeight: 700,
-                      color: FINCEPT.MAGENTA,
+                      color: colors.primary,
                       fontFamily: 'monospace'
                     }}>
                       0.9124
@@ -394,7 +386,7 @@ export function MetaLearningPanel() {
                   <div style={{
                     fontSize: '10px',
                     fontWeight: 700,
-                    color: FINCEPT.MAGENTA,
+                    color: colors.primary,
                     fontFamily: 'monospace',
                     letterSpacing: '0.5px',
                     marginBottom: '10px'
@@ -413,9 +405,9 @@ export function MetaLearningPanel() {
                           key={modelId}
                           style={{
                             padding: '8px 10px',
-                            backgroundColor: isBest ? FINCEPT.GREEN + '15' : FINCEPT.DARK_BG,
-                            border: `1px solid ${isBest ? FINCEPT.GREEN : FINCEPT.BORDER}`,
-                            borderTop: idx === 0 ? `1px solid ${isBest ? FINCEPT.GREEN : FINCEPT.BORDER}` : '0',
+                            backgroundColor: isBest ? colors.success + '15' : colors.background,
+                            border: `1px solid ${isBest ? colors.success : 'var(--ft-border-color, #2A2A2A)'}`,
+                            borderTop: idx === 0 ? `1px solid ${isBest ? colors.success : 'var(--ft-border-color, #2A2A2A)'}` : '0',
                             marginTop: idx === 0 ? '0' : '-1px',
                             display: 'flex',
                             alignItems: 'center',
@@ -426,7 +418,7 @@ export function MetaLearningPanel() {
                             fontSize: '11px',
                             fontWeight: 700,
                             fontFamily: 'monospace',
-                            color: FINCEPT.WHITE,
+                            color: colors.text,
                             opacity: 0.5,
                             width: '24px'
                           }}>
@@ -437,7 +429,7 @@ export function MetaLearningPanel() {
                               fontSize: '10px',
                               fontWeight: 700,
                               fontFamily: 'monospace',
-                              color: isBest ? FINCEPT.GREEN : FINCEPT.WHITE
+                              color: isBest ? colors.success : colors.text
                             }}>
                               {model.name}
                             </span>
@@ -446,7 +438,7 @@ export function MetaLearningPanel() {
                             fontSize: '10px',
                             fontFamily: 'monospace',
                             fontWeight: 700,
-                            color: isBest ? FINCEPT.GREEN : FINCEPT.MAGENTA
+                            color: isBest ? colors.success : colors.primary
                           }}>
                             {score}
                           </div>
@@ -465,11 +457,11 @@ export function MetaLearningPanel() {
                 flexDirection: 'column',
                 gap: '12px'
               }}>
-                <Brain size={32} color={FINCEPT.BORDER} />
+                <Brain size={32} color={'var(--ft-border-color, #2A2A2A)'} />
                 <div style={{
                   fontSize: '11px',
                   fontFamily: 'monospace',
-                  color: FINCEPT.WHITE,
+                  color: colors.text,
                   opacity: 0.5,
                   textAlign: 'center',
                   letterSpacing: '0.5px'

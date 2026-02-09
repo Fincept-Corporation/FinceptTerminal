@@ -76,10 +76,20 @@ export default function TradeVisualizationTab() {
     return () => clearInterval(timer);
   }, []);
 
-  // Load initial data
+  // Check API health and load initial data
   useEffect(() => {
-    loadCountries();
-    loadProducts();
+    const initializeTab = async () => {
+      // First check API health
+      const healthStatus = await tradeService.isApiHealthy();
+      if (!healthStatus.healthy) {
+        setError(`Trade API is currently unavailable: ${healthStatus.error || 'Service temporarily down'}. Please try again later.`);
+        return;
+      }
+      // If healthy, load data
+      loadCountries();
+      loadProducts();
+    };
+    initializeTab();
   }, []);
 
   // Load chord data when parameters change
@@ -499,16 +509,46 @@ export default function TradeVisualizationTab() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {error && (
             <div style={{
-              padding: '12px 16px',
-              backgroundColor: `${FINCEPT.RED}20`,
+              padding: '16px 20px',
+              backgroundColor: `${FINCEPT.RED}15`,
               border: `1px solid ${FINCEPT.RED}`,
+              borderLeft: `4px solid ${FINCEPT.RED}`,
               margin: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
+              borderRadius: '4px'
             }}>
-              <AlertCircle size={16} color={FINCEPT.RED} />
-              <span style={{ fontSize: '11px', color: FINCEPT.RED }}>{error}</span>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <AlertCircle size={20} color={FINCEPT.RED} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: FINCEPT.RED, marginBottom: '6px' }}>
+                    Trade Data Unavailable
+                  </div>
+                  <div style={{ fontSize: '11px', color: FINCEPT.GRAY, lineHeight: '1.5' }}>
+                    {error}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      loadChordData();
+                    }}
+                    style={{
+                      marginTop: '12px',
+                      padding: '6px 12px',
+                      backgroundColor: FINCEPT.HEADER_BG,
+                      color: FINCEPT.CYAN,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <RefreshCw size={10} />
+                    RETRY
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

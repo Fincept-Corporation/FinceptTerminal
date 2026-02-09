@@ -215,6 +215,26 @@ async def create_competition_handler(params: Dict, api_keys: Dict) -> Dict[str, 
         if not models_data:
             return {"success": False, "error": "No models provided in configuration"}
 
+        if len(models_data) < 2:
+            return {"success": False, "error": "At least 2 models are required for a competition"}
+
+        # Validate API keys before creating agents
+        missing_keys = []
+        for model_data in models_data:
+            provider = (model_data.get("provider") or "").lower()
+            has_key = bool(model_data.get("api_key"))
+            has_provider_key = bool(api_keys.get(provider) or api_keys.get(model_data.get("provider", "")))
+            no_key_required = provider in ("ollama", "fincept")
+
+            if not has_key and not has_provider_key and not no_key_required:
+                missing_keys.append(f"{model_data.get('name', 'Unknown')} ({provider})")
+
+        if missing_keys:
+            return {
+                "success": False,
+                "error": f"Missing API keys for: {', '.join(missing_keys)}. Configure API keys in Settings > LLM Config.",
+            }
+
         models = []
 
         for model_data in models_data:
@@ -234,6 +254,14 @@ async def create_competition_handler(params: Dict, api_keys: Dict) -> Dict[str, 
             style_info = f" [style: {model.trading_style}]" if model.trading_style else ""
             logger.info(f"Configured model: {model.name} ({model.provider}/{model.model_id}){style_info}")
 
+        # Extract global LLM settings from Settings tab (if provided)
+        llm_settings = params.get("llm_settings", {})
+        llm_temperature = llm_settings.get("temperature", 0.7) if llm_settings else 0.7
+        llm_max_tokens = llm_settings.get("max_tokens", 2000) if llm_settings else 2000
+        llm_system_prompt = llm_settings.get("system_prompt", "") if llm_settings else ""
+
+        logger.info(f"LLM global settings: temperature={llm_temperature}, max_tokens={llm_max_tokens}, system_prompt={'(set)' if llm_system_prompt else '(default)'}")
+
         # Create config
         config = CompetitionConfig(
             competition_id=competition_id,
@@ -245,6 +273,9 @@ async def create_competition_handler(params: Dict, api_keys: Dict) -> Dict[str, 
             cycle_interval_seconds=params.get("cycle_interval_seconds", 150),
             exchange_id=params.get("exchange_id", "kraken"),
             max_cycles=params.get("max_cycles"),
+            custom_prompt=llm_system_prompt if llm_system_prompt else None,
+            temperature=llm_temperature,
+            max_tokens=llm_max_tokens,
         )
 
         logger.info(f"Competition config created: {competition_id}")
@@ -274,13 +305,26 @@ async def create_competition_handler(params: Dict, api_keys: Dict) -> Dict[str, 
                 logger.warning(f"Failed to save competition to database: {db_error}")
                 # Continue anyway - competition is functional
 
-            return {
+            # Check for agents in mock mode and warn the user
+            mock_warnings = []
+            for agent_name, agent in competition._agents.items():
+                if hasattr(agent, 'is_mock_mode') and agent.is_mock_mode:
+                    reason = agent.mock_mode_reason or 'unknown'
+                    mock_warnings.append(f"{agent_name}: {reason}")
+
+            result = {
                 "success": True,
                 "competition_id": competition_id,
                 "config": config.model_dump(),
                 "status": "created",
                 "models_count": len(models),
             }
+            if mock_warnings:
+                result["warnings"] = mock_warnings
+                result["mock_mode_agents"] = len(mock_warnings)
+                logger.warning(f"{len(mock_warnings)} agent(s) in mock mode: {mock_warnings}")
+
+            return result
         else:
             return {
                 "success": False,
