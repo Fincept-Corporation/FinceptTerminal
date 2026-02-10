@@ -22,7 +22,7 @@ import {
 
 export class CodeNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Code',
+    displayName: 'Run Code',
     name: 'code',
     icon: 'fa:code',
     iconColor: '#8b5cf6',
@@ -31,7 +31,7 @@ export class CodeNode implements INodeType {
     description: 'Execute custom JavaScript code to transform data',
     subtitle: 'Run JavaScript Code',
     defaults: {
-      name: 'Code',
+      name: 'Run Code',
       color: '#8b5cf6',
     },
     inputs: [NodeConnectionType.Main],

@@ -155,7 +155,7 @@ function profileReducer(state: ProfileState, action: ProfileAction): ProfileStat
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ProfileTab: React.FC = () => {
-  const { session, logout, refreshUserData, updateApiKey } = useAuth();
+  const { session, logout, refreshUserData, updateApiKey, isLoggingOut } = useAuth();
   const [state, dispatch] = useReducer(profileReducer, initialState);
   const mountedRef = useRef(true);
   const fetchIdRef = useRef(0);
@@ -228,6 +228,8 @@ const ProfileTab: React.FC = () => {
 
   const confirmLogout = useCallback(async () => {
     dispatch({ type: 'TOGGLE_LOGOUT_CONFIRM', show: false });
+    // The logout function in AuthContext handles everything including state transitions
+    // No need to do anything else - React will re-render when session becomes null
     await logout();
   }, [logout]);
 
@@ -348,7 +350,7 @@ const ProfileTab: React.FC = () => {
       <div style={{ flex: 1, overflow: 'auto', padding: '16px', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <ErrorBoundary name="ProfileOverview" variant="minimal">
           {activeSection === 'overview' && (
-            <OverviewSection session={session} onLogout={() => dispatch({ type: 'TOGGLE_LOGOUT_CONFIRM', show: true })} />
+            <OverviewSection session={session} onLogout={() => dispatch({ type: 'TOGGLE_LOGOUT_CONFIRM', show: true })} isLoggingOut={isLoggingOut} />
           )}
         </ErrorBoundary>
         <ErrorBoundary name="ProfileUsage" variant="minimal">
@@ -421,7 +423,7 @@ const ProfileTab: React.FC = () => {
 };
 
 // ─── Overview Section ─────────────────────────────────────────────────────────
-const OverviewSection: React.FC<{ session: any; onLogout: () => void }> = ({ session, onLogout }) => {
+const OverviewSection: React.FC<{ session: any; onLogout: () => void; isLoggingOut?: boolean }> = ({ session, onLogout, isLoggingOut }) => {
   const accountType = session?.user_info?.account_type || 'free';
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -463,7 +465,7 @@ const OverviewSection: React.FC<{ session: any; onLogout: () => void }> = ({ ses
       <div style={{ gridColumn: '1 / -1' }}>
         <Panel title="QUICK ACTIONS" icon={<Activity size={14} />}>
           <div style={{ display: 'flex', gap: '12px', padding: '8px 0' }}>
-            <ActionBtn label="LOGOUT" onClick={onLogout} danger />
+            <ActionBtn label={isLoggingOut ? "LOGGING OUT..." : "LOGOUT"} onClick={onLogout} danger disabled={isLoggingOut} />
           </div>
         </Panel>
       </div>
@@ -1209,20 +1211,22 @@ const SecondaryBtn: React.FC<{ label: string; onClick: () => void; icon?: React.
   </button>
 );
 
-const ActionBtn: React.FC<{ label: string; onClick: () => void; danger?: boolean }> = ({ label, onClick, danger }) => (
+const ActionBtn: React.FC<{ label: string; onClick: () => void; danger?: boolean; disabled?: boolean }> = ({ label, onClick, danger, disabled }) => (
   <button
     onClick={onClick}
+    disabled={disabled}
     style={{
       padding: '8px 16px',
-      backgroundColor: danger ? F.RED : F.ORANGE,
-      color: F.DARK_BG,
+      backgroundColor: disabled ? F.MUTED : (danger ? F.RED : F.ORANGE),
+      color: disabled ? F.GRAY : F.DARK_BG,
       border: 'none',
       borderRadius: '2px',
       fontSize: '9px',
       fontWeight: 700,
       fontFamily: FONT,
-      cursor: 'pointer',
+      cursor: disabled ? 'not-allowed' : 'pointer',
       transition: 'all 0.2s',
+      opacity: disabled ? 0.7 : 1,
     }}
   >
     {label}

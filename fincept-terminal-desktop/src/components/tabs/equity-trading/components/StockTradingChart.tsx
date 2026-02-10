@@ -134,8 +134,22 @@ export function StockTradingChart({
     const FETCH_MAX_RETRIES = 2;  // retries for actual API call failures
     const FETCH_TIMEOUT = 45000;  // 45s per attempt (Rust timeout is 15s, plus overhead)
 
+    // Comprehensive state logging at start of each attempt
+    console.log(`[StockTradingChart] ========== fetchHistoricalData attempt ${retryCount + 1}/${INIT_MAX_RETRIES + 1} ==========`);
+    console.log(`[StockTradingChart] State:`, {
+      symbol,
+      exchange,
+      selectedInterval,
+      hasAdapter: !!adapter,
+      brokerId: adapter?.brokerId || 'N/A',
+      isAuthenticated,
+      adapterIsConnected: adapter?.isConnected ?? 'N/A',
+      masterContractReady,
+      retryCount,
+    });
+
     if (!symbol || !exchange) {
-      console.log('[StockTradingChart] No symbol or exchange selected');
+      console.log('[StockTradingChart] ❌ No symbol or exchange selected');
       setError('Please select a symbol');
       setIsLoading(false);
       return;
@@ -144,7 +158,7 @@ export function StockTradingChart({
     if (!adapter || !isAuthenticated) {
       // Don't retry with setTimeout — the stale closure captures the same null adapter.
       // Instead, just return. The useEffect will re-call us when adapter/isAuthenticated change.
-      console.log(`[StockTradingChart] DEBUG: Waiting for auth — adapter=${!!adapter}, isAuthenticated=${isAuthenticated}`);
+      console.log(`[StockTradingChart] ⏳ Waiting for auth — adapter=${!!adapter}, isAuthenticated=${isAuthenticated}`);
       // Keep isLoading true so the spinner shows while we wait
       return;
     }
@@ -176,24 +190,37 @@ export function StockTradingChart({
     }
 
     // Check if master contract/instrument lookup is ready (for brokers that need it)
-    if (typeof adapter.getInstrument === 'function') {
+    // Note: Some brokers (like YFinance) don't use tokens - they use direct symbol lookup
+    // So we only require token for brokers that use master contract (Indian brokers mostly)
+    // YFinance and similar paper trading brokers can skip this check entirely
+    const isDirectSymbolBroker = adapter.brokerId === 'yfinance';
+
+    // Note: We no longer block on instrument/token lookup for chart data
+    // Token is only required for WebSocket subscriptions, not for HTTP API historical data
+    // The actual data fetch will fail if the symbol is invalid, which is a better UX
+    if (!isDirectSymbolBroker && typeof adapter.getInstrument === 'function') {
+      console.log(`[StockTradingChart] 🔍 Looking up instrument for ${symbol} on ${exchange} (non-blocking)...`);
       try {
         const instrument = await adapter.getInstrument(symbol, exchange);
-        if (!instrument || !instrument.token || instrument.token === '0') {
-          if (retryCount < INIT_MAX_RETRIES) {
-            console.log(`[StockTradingChart] Instrument token not ready for ${symbol}, retry ${retryCount + 1}/${INIT_MAX_RETRIES} in ${INIT_RETRY_DELAY}ms...`);
-            setTimeout(() => fetchHistoricalData(retryCount + 1), INIT_RETRY_DELAY);
-            return;
-          }
-          console.warn('[StockTradingChart] Instrument token still not available after retries');
-          setError('Symbol not found. Try searching for a different symbol.');
-          setIsLoading(false);
-          return;
+        console.log(`[StockTradingChart] 📋 getInstrument result:`, instrument ? {
+          symbol: instrument.symbol,
+          name: instrument.name,
+          token: instrument.token,
+          exchange: instrument.exchange,
+          instrumentType: instrument.instrumentType,
+        } : 'null');
+
+        if (instrument) {
+          console.log(`[StockTradingChart] ✓ Instrument found: ${symbol}${instrument.token && instrument.token !== '0' ? ` -> token=${instrument.token}` : ' (no token, will use symbol directly)'}`);
+        } else {
+          console.log(`[StockTradingChart] ⚠️ Instrument not found in master contract, will try fetching data with symbol directly`);
         }
-        console.log(`[StockTradingChart] Instrument token ready: ${symbol} -> ${instrument.token}`);
       } catch (err) {
-        console.warn('[StockTradingChart] getInstrument check failed:', err);
+        console.warn('[StockTradingChart] ⚠️ getInstrument check failed:', err);
+        // Don't block - proceed with data fetch anyway
       }
+    } else if (isDirectSymbolBroker) {
+      console.log(`[StockTradingChart] ✓ Direct symbol broker (${adapter.brokerId}): skipping instrument lookup`);
     }
 
     try {
@@ -325,8 +352,22 @@ export function StockTradingChart({
 
   // Auto-fetch on mount and when dependencies change
   useEffect(() => {
+    console.log(`[StockTradingChart] 🔄 useEffect triggered - calling fetchHistoricalData`);
     fetchHistoricalData();
   }, [fetchHistoricalData]);
+
+  // Log when key props/context values change
+  useEffect(() => {
+    console.log(`[StockTradingChart] 📊 Props/Context changed:`, {
+      symbol,
+      exchange,
+      brokerId: adapter?.brokerId,
+      isAuthenticated,
+      masterContractReady,
+      contextLoading,
+      isConnecting,
+    });
+  }, [symbol, exchange, adapter?.brokerId, isAuthenticated, masterContractReady, contextLoading, isConnecting]);
 
   // Handle manual refresh
   const handleRefresh = () => {

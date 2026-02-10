@@ -1006,7 +1006,28 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_algo_order_signals_status ON algo_order_signals(status);
-        CREATE INDEX IF NOT EXISTS idx_algo_order_signals_deployment ON algo_order_signals(deployment_id)
+        CREATE INDEX IF NOT EXISTS idx_algo_order_signals_deployment ON algo_order_signals(deployment_id);
+
+        -- ============================================================================
+        -- PYTHON STRATEGY LIBRARY TABLES
+        -- ============================================================================
+
+        -- Custom Python strategies (user-modified copies of library strategies)
+        CREATE TABLE IF NOT EXISTS custom_python_strategies (
+            id TEXT PRIMARY KEY NOT NULL,
+            base_strategy_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            code TEXT NOT NULL,
+            parameters TEXT NOT NULL DEFAULT '{}',
+            category TEXT DEFAULT 'Custom',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_custom_python_strategies_base ON custom_python_strategies(base_strategy_id);
+        CREATE INDEX IF NOT EXISTS idx_custom_python_strategies_category ON custom_python_strategies(category)
         ",
     )?;
 
@@ -1062,6 +1083,61 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
                 [],
             )?;
             println!("[Migration] Added historical_start_date column to custom_indices");
+        }
+    }
+
+    // ============================================================================
+    // PYTHON STRATEGY LIBRARY MIGRATIONS
+    // ============================================================================
+
+    // Add strategy_type column to algo_deployments (json | python)
+    let column_check: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('algo_deployments') WHERE name='strategy_type'",
+        [],
+        |row| row.get(0)
+    );
+
+    if let Ok(count) = column_check {
+        if count == 0 {
+            conn.execute(
+                "ALTER TABLE algo_deployments ADD COLUMN strategy_type TEXT DEFAULT 'json'",
+                [],
+            )?;
+            println!("[Migration] Added strategy_type column to algo_deployments");
+        }
+    }
+
+    // Add python_strategy_id column to algo_deployments
+    let column_check: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('algo_deployments') WHERE name='python_strategy_id'",
+        [],
+        |row| row.get(0)
+    );
+
+    if let Ok(count) = column_check {
+        if count == 0 {
+            conn.execute(
+                "ALTER TABLE algo_deployments ADD COLUMN python_strategy_id TEXT",
+                [],
+            )?;
+            println!("[Migration] Added python_strategy_id column to algo_deployments");
+        }
+    }
+
+    // Add parameter_overrides column to algo_deployments
+    let column_check: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('algo_deployments') WHERE name='parameter_overrides'",
+        [],
+        |row| row.get(0)
+    );
+
+    if let Ok(count) = column_check {
+        if count == 0 {
+            conn.execute(
+                "ALTER TABLE algo_deployments ADD COLUMN parameter_overrides TEXT DEFAULT '{}'",
+                [],
+            )?;
+            println!("[Migration] Added parameter_overrides column to algo_deployments");
         }
     }
 

@@ -600,9 +600,21 @@ class LLMApiService {
       const globalSettings = await invoke<any>('db_get_llm_global_settings');
 
       // Build complete config
+      let apiKey = activeConfig.api_key;
+
+      // For fincept provider, fetch session API key from settings if not in config
+      if (activeConfig.provider === 'fincept' && !apiKey) {
+        try {
+          const { getSetting } = await import('../core/sqliteService');
+          apiKey = await getSetting('fincept_api_key') || '';
+        } catch (e) {
+          llmLogger.warn('Failed to fetch fincept_api_key from settings:', e);
+        }
+      }
+
       const config: LLMConfig = {
         provider: activeConfig.provider,
-        apiKey: activeConfig.api_key,
+        apiKey,
         baseUrl: activeConfig.base_url,
         model: activeConfig.model,
         temperature: globalSettings.temperature,
@@ -698,10 +710,21 @@ class LLMApiService {
       // Get global settings
       const globalSettings = await invoke<any>('db_get_llm_global_settings');
 
+      // For fincept provider, fetch session API key from settings if not in config
+      let toolsApiKey = activeConfig.api_key;
+      if (activeConfig.provider === 'fincept' && !toolsApiKey) {
+        try {
+          const { getSetting } = await import('../core/sqliteService');
+          toolsApiKey = await getSetting('fincept_api_key') || '';
+        } catch (e) {
+          llmLogger.warn('Failed to fetch fincept_api_key from settings:', e);
+        }
+      }
+
       // Build config
       const config: LLMConfig = {
         provider: activeConfig.provider,
-        apiKey: activeConfig.api_key,
+        apiKey: toolsApiKey,
         baseUrl: activeConfig.base_url,
         model: activeConfig.model,
         temperature: globalSettings.temperature,

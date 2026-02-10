@@ -34,7 +34,6 @@ from datetime_utils import DateTimeUtils, DateTimeConfig
 from timeseries_analytics import TimeseriesAnalytics, TimeseriesConfig
 from instrument_wrapper import InstrumentFactory, InstrumentConfig
 from risk_analytics import RiskAnalytics, RiskConfig
-from markets_wrapper import MarketsManager, PricingScenario
 from backtest_analytics import BacktestEngine, BacktestConfig
 
 
@@ -215,44 +214,9 @@ def test_full_workflow():
     print(f"  Trades: {mom_result['num_trades']}")
 
     # ========================================================================
-    # STEP 7: Market Data (Mock)
+    # STEP 7: Export Results
     # ========================================================================
-    print("\n--- Step 7: Market Data ---")
-    markets = MarketsManager()
-
-    # Get current (mock) data
-    aapl_spot = markets.get_spot_price('AAPL')
-    spy_iv = markets.get_implied_volatility('SPY')
-    rate_10y = markets.get_interest_rate('10Y')
-
-    print(f"\nCurrent Market Data (Mock):")
-    print(f"  AAPL Spot: ${aapl_spot['value']:.2f}")
-    print(f"  SPY IV: {spy_iv['value']:.1f}%")
-    print(f"  10Y Rate: {rate_10y['value']:.2f}%")
-
-    # Scenario analysis
-    scenarios = [
-        PricingScenario('Bull Market', spot_shift=20, vol_shift=-2),
-        PricingScenario('Bear Market', spot_shift=-20, vol_shift=5),
-        PricingScenario('High Vol', spot_shift=0, vol_shift=10)
-    ]
-
-    base_value = portfolio_value
-    scenario_data = {
-        'AAPL': prices['AAPL'].iloc[-1],
-        'SPY': prices['SPY'].iloc[-1]
-    }
-
-    comparison = markets.compare_scenarios(base_value, scenarios, scenario_data)
-
-    print(f"\nScenario Analysis:")
-    for scenario in comparison['scenarios']:
-        print(f"  {scenario['name']}: ${scenario['value']:,.0f} (P&L: ${scenario['pnl']:,.0f})")
-
-    # ========================================================================
-    # STEP 8: Export Results
-    # ========================================================================
-    print("\n--- Step 8: Export Results ---")
+    print("\n--- Step 7: Export Results ---")
 
     # Compile all results
     full_results = {
@@ -291,12 +255,7 @@ def test_full_workflow():
                 'num_trades': mom_result['num_trades']
             }
         },
-        'market_data': {
-            'aapl_spot': aapl_spot,
-            'spy_iv': spy_iv,
-            'rate_10y': rate_10y
-        },
-        'scenarios': comparison
+        'market_data': {}
     }
 
     # Export to JSON
@@ -321,7 +280,6 @@ def test_full_workflow():
         'Time Series Analysis': '✅ PASSED',
         'Risk Analytics': '✅ PASSED',
         'Backtesting': '✅ PASSED',
-        'Market Data Access': '✅ PASSED',
         'JSON Export': '✅ PASSED'
     }
 
@@ -332,8 +290,8 @@ def test_full_workflow():
     print("✅ ALL INTEGRATION TESTS PASSED!")
     print("=" * 80)
     print("\nWrapper Status:")
-    print("  - All 6 modules working correctly")
-    print("  - 867+ functions and classes available")
+    print("  - All 5 modules working correctly (free, no GS API)")
+    print("  - 815+ functions and classes available")
     print("  - Complete workflow tested end-to-end")
     print("  - JSON export functioning")
     print("  - Ready for production integration")

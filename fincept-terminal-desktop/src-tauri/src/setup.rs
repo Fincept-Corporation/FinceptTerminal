@@ -1,5 +1,6 @@
 // setup.rs - Simplified Python and Bun setup
 use serde::{Deserialize, Serialize};
+use sha2::{Sha256, Digest};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
@@ -27,6 +28,8 @@ pub struct SetupStatus {
     pub bun_installed: bool,
     pub packages_installed: bool,
     pub needs_setup: bool,
+    pub needs_sync: bool,
+    pub sync_message: Option<String>,
 }
 
 const PYTHON_VERSION: &str = "3.12.7";
@@ -711,6 +714,81 @@ async fn install_packages_in_venv(
     Ok(())
 }
 
+// ============================================================================
+// Requirements Hash Tracking (for detecting changes on app update)
+// ============================================================================
+
+/// Compute SHA-256 hash of a bundled requirements file
+fn compute_requirements_hash(app: &AppHandle, requirements_file: &str) -> Result<String, String> {
+    let requirements_path = app.path()
+        .resolve(
+            &format!("resources/{}", requirements_file),
+            tauri::path::BaseDirectory::Resource,
+        )
+        .map_err(|e| format!("Failed to resolve {}: {}", requirements_file, e))?;
+
+    let content = std::fs::read_to_string(&requirements_path)
+        .map_err(|e| format!("Failed to read {}: {}", requirements_file, e))?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    let result = hasher.finalize();
+    Ok(format!("{:x}", result))
+}
+
+/// Check if bundled requirements files have changed since last install.
+/// Returns (needs_sync, description of what changed)
+fn check_requirements_sync(app: &AppHandle) -> (bool, Option<String>) {
+    let files = [
+        ("requirements-numpy1.txt", "requirements_numpy1_hash"),
+        ("requirements-numpy2.txt", "requirements_numpy2_hash"),
+    ];
+
+    let mut changed: Vec<&str> = Vec::new();
+
+    for (file, setting_key) in &files {
+        match compute_requirements_hash(app, file) {
+            Ok(current_hash) => {
+                let stored_hash = crate::database::operations::get_setting(setting_key)
+                    .ok()
+                    .flatten();
+
+                match stored_hash {
+                    Some(stored) if stored == current_hash => {
+                        eprintln!("[SETUP] {} hash matches stored value", file);
+                    }
+                    _ => {
+                        eprintln!(
+                            "[SETUP] {} hash mismatch or missing (stored: {:?}, current: {}...)",
+                            file,
+                            stored_hash.as_deref().map(|s| &s[..s.len().min(16)]),
+                            &current_hash[..current_hash.len().min(16)]
+                        );
+                        changed.push(file);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("[SETUP] Could not compute hash for {}: {}", file, e);
+            }
+        }
+    }
+
+    if changed.is_empty() {
+        (false, None)
+    } else {
+        let msg = format!("Package updates available: {}", changed.join(", "));
+        (true, Some(msg))
+    }
+}
+
+/// Save the current hash of a requirements file to the database
+fn save_requirements_hash(app: &AppHandle, requirements_file: &str, setting_key: &str) -> Result<(), String> {
+    let hash = compute_requirements_hash(app, requirements_file)?;
+    crate::database::operations::save_setting(setting_key, &hash, Some("setup"))
+        .map_err(|e| format!("Failed to save hash for {}: {}", requirements_file, e))
+}
+
 /// Check setup status
 #[tauri::command]
 pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
@@ -722,8 +800,15 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
 
     let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
-    // Initialize Python runtime in background if setup is already complete
-    if !needs_setup && python_installed {
+    // Check if requirements files have changed (only relevant if base setup is complete)
+    let (needs_sync, sync_message) = if !needs_setup {
+        check_requirements_sync(&app)
+    } else {
+        (false, None)
+    };
+
+    // Initialize Python runtime in background if setup is complete and no sync needed
+    if !needs_setup && !needs_sync && python_installed {
         let app_clone = app.clone();
         tauri::async_runtime::spawn(async move {
             if let Err(e) = crate::python::initialize(&app_clone).await {
@@ -737,6 +822,8 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
         bun_installed,
         packages_installed,
         needs_setup,
+        needs_sync,
+        sync_message,
     })
 }
 
@@ -813,6 +900,14 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
             emit_progress(&app, "packages", 100, "Packages already installed", false);
         }
 
+        // Save requirements hashes so future updates can detect changes
+        if let Err(e) = save_requirements_hash(&app, "requirements-numpy1.txt", "requirements_numpy1_hash") {
+            eprintln!("[SETUP] Warning: failed to save numpy1 requirements hash: {}", e);
+        }
+        if let Err(e) = save_requirements_hash(&app, "requirements-numpy2.txt", "requirements_numpy2_hash") {
+            eprintln!("[SETUP] Warning: failed to save numpy2 requirements hash: {}", e);
+        }
+
         emit_progress(&app, "complete", 100, "Setup complete!", false);
 
         // Initialize Python runtime
@@ -827,4 +922,78 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
     *lock = false;
 
     result
+}
+
+/// Sync requirements: run UV install for any venv whose requirements changed.
+/// Called automatically on app update when requirements files differ from stored hashes.
+/// This is lightweight — UV only installs what's missing/changed.
+#[tauri::command]
+pub async fn sync_requirements(app: AppHandle) -> Result<String, String> {
+    let install_dir = get_install_dir(&app)?;
+
+    let files_and_venvs = [
+        ("requirements-numpy1.txt", "requirements_numpy1_hash", "venv-numpy1", "NumPy 1.x"),
+        ("requirements-numpy2.txt", "requirements_numpy2_hash", "venv-numpy2", "NumPy 2.x"),
+    ];
+
+    let mut synced_count = 0;
+
+    for (req_file, setting_key, venv_name, label) in &files_and_venvs {
+        let current_hash = match compute_requirements_hash(&app, req_file) {
+            Ok(h) => h,
+            Err(e) => {
+                eprintln!("[SYNC] Could not compute hash for {}: {}", req_file, e);
+                continue;
+            }
+        };
+
+        let stored_hash = crate::database::operations::get_setting(setting_key)
+            .ok()
+            .flatten();
+
+        let needs_update = match &stored_hash {
+            Some(stored) => *stored != current_hash,
+            None => true,
+        };
+
+        if needs_update {
+            eprintln!("[SYNC] Syncing {} packages...", label);
+            emit_progress(&app, "sync", synced_count * 50, &format!("Syncing {} packages...", label), false);
+
+            // Ensure UV is available
+            if let Err(e) = install_uv(&app, &install_dir).await {
+                eprintln!("[SYNC] UV install warning: {}", e);
+            }
+
+            // Ensure venv exists; if not, create it
+            let venv_python = if cfg!(target_os = "windows") {
+                install_dir.join(format!("{}/Scripts/python.exe", venv_name))
+            } else {
+                install_dir.join(format!("{}/bin/python3", venv_name))
+            };
+
+            if !venv_python.exists() {
+                eprintln!("[SYNC] Venv {} missing, creating...", venv_name);
+                create_venv(&app, &install_dir, venv_name).await?;
+            }
+
+            // Run UV pip install (incremental — only installs what's missing/changed)
+            install_packages_in_venv(&app, &install_dir, venv_name, req_file, label).await?;
+
+            // Save the new hash on success
+            save_requirements_hash(&app, req_file, setting_key)?;
+            synced_count += 1;
+
+            eprintln!("[SYNC] Successfully synced {} packages", label);
+        }
+    }
+
+    emit_progress(&app, "sync", 100, "Package sync complete", false);
+
+    // Initialize Python runtime after sync
+    if let Err(e) = crate::python::initialize(&app).await {
+        eprintln!("[SYNC] Python initialization warning after sync: {}", e);
+    }
+
+    Ok(format!("Synced {} requirement files", synced_count))
 }

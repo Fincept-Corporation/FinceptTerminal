@@ -9,14 +9,14 @@ import {
 
 export class PositionSizeLimitNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Position Size Limit',
+    displayName: 'Position Limit',
     name: 'positionSizeLimit',
     icon: 'fa:balance-scale',
     group: ['Safety'],
     version: 1,
     description: 'Enforce position size limits',
     defaults: {
-      name: 'Position Size Limit',
+      name: 'Position Limit',
       color: '#f59e0b',
     },
     inputs: [NodeConnectionType.Main],

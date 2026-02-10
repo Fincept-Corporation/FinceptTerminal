@@ -3,12 +3,39 @@ import { Node, Edge } from 'reactflow';
 import { Workflow, workflowService } from '@/services/core/workflowService';
 import { Play, Trash2, Edit3, Eye, FileText, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { showConfirm, showError } from '@/utils/notifications';
+import {
+  FINCEPT,
+  SPACING,
+  BORDER_RADIUS,
+  FONT_FAMILY,
+  FONT_SIZE,
+} from './shared';
 
 interface WorkflowManagerProps {
-  onLoadWorkflow: (nodes: Node[], edges: Edge[], workflowId: string, workflow: Workflow) => void;
+  onLoadWorkflow: (nodes: Node[], edges: Edge[], workflowId: string, workflow: Workflow, shouldExecute?: boolean) => void;
   onViewResults: (workflow: Workflow) => void;
   onEditDraft: (workflow: Workflow) => void;
 }
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'completed': return <CheckCircle size={14} color={FINCEPT.GREEN} />;
+    case 'draft': return <FileText size={14} color={FINCEPT.ORANGE} />;
+    case 'error': return <AlertCircle size={14} color={FINCEPT.RED} />;
+    case 'running': return <Clock size={14} color={FINCEPT.BLUE} />;
+    default: return <FileText size={14} color={FINCEPT.GRAY} />;
+  }
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'completed': return FINCEPT.GREEN;
+    case 'draft': return FINCEPT.ORANGE;
+    case 'error': return FINCEPT.RED;
+    case 'running': return FINCEPT.BLUE;
+    default: return FINCEPT.GRAY;
+  }
+};
 
 const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onViewResults, onEditDraft }) => {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -52,15 +79,11 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
   };
 
   const handlePlay = (workflow: Workflow) => {
-    onLoadWorkflow(workflow.nodes, workflow.edges, workflow.id, workflow);
+    onLoadWorkflow(workflow.nodes, workflow.edges, workflow.id, workflow, true);
   };
 
   const handleEdit = (workflow: Workflow) => {
-    if (workflow.status === 'draft') {
-      onEditDraft(workflow);
-    } else {
-      onLoadWorkflow(workflow.nodes, workflow.edges, workflow.id, workflow);
-    }
+    onEditDraft(workflow);
   };
 
   const handleViewResults = (workflow: Workflow) => {
@@ -75,89 +98,74 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
     return true;
   });
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle size={14} color="#10b981" />;
-      case 'draft': return <FileText size={14} color="#f59e0b" />;
-      case 'error': return <AlertCircle size={14} color="#ef4444" />;
-      case 'running': return <Clock size={14} color="#3b82f6" />;
-      default: return <FileText size={14} color="#6b7280" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return '#10b981';
-      case 'draft': return '#f59e0b';
-      case 'error': return '#ef4444';
-      case 'running': return '#3b82f6';
-      default: return '#6b7280';
-    }
-  };
-
   return (
     <div style={{
-      padding: '20px',
-      color: '#a3a3a3',
+      padding: SPACING.XXL,
+      color: FINCEPT.GRAY,
       height: '100%',
-      overflow: 'auto'
+      overflow: 'auto',
+      fontFamily: FONT_FAMILY,
+      backgroundColor: FINCEPT.DARK_BG,
     }}>
       {/* Header */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '20px',
-        paddingBottom: '12px',
-        borderBottom: '2px solid #404040'
+        marginBottom: SPACING.XXL,
+        paddingBottom: SPACING.LG,
+        borderBottom: `2px solid ${FINCEPT.BORDER}`,
       }}>
         <h2 style={{
           margin: 0,
-          fontSize: '20px',
-          color: '#fff',
-          fontWeight: 'bold'
+          fontSize: FONT_SIZE.XXL,
+          color: FINCEPT.WHITE,
+          fontWeight: 700,
+          fontFamily: FONT_FAMILY,
         }}>
-          📋 Workflow Manager
+          WORKFLOW MANAGER
         </h2>
         <button
           onClick={loadWorkflows}
           style={{
-            backgroundColor: '#3b82f6',
-            color: '#fff',
+            backgroundColor: FINCEPT.BLUE,
+            color: FINCEPT.WHITE,
             border: 'none',
-            padding: '6px 12px',
-            fontSize: '12px',
-            fontWeight: 'bold',
+            padding: `${SPACING.SM} ${SPACING.LG}`,
+            fontSize: FONT_SIZE.XL,
+            fontWeight: 700,
             cursor: 'pointer',
-            borderRadius: '4px'
+            borderRadius: BORDER_RADIUS.SM,
+            fontFamily: FONT_FAMILY,
           }}
         >
-          🔄 REFRESH
+          REFRESH
         </button>
       </div>
 
       {/* Filter Tabs */}
       <div style={{
         display: 'flex',
-        gap: '8px',
-        marginBottom: '16px',
-        borderBottom: '1px solid #404040',
-        paddingBottom: '8px'
+        gap: SPACING.MD,
+        marginBottom: SPACING.XL,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+        paddingBottom: SPACING.MD,
       }}>
         {['all', 'draft', 'completed'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f as any)}
             style={{
-              backgroundColor: filter === f ? '#3b82f6' : 'transparent',
-              color: filter === f ? '#fff' : '#a3a3a3',
-              border: `1px solid ${filter === f ? '#3b82f6' : '#404040'}`,
-              padding: '6px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
+              backgroundColor: filter === f ? FINCEPT.BLUE : 'transparent',
+              color: filter === f ? FINCEPT.WHITE : FINCEPT.GRAY,
+              border: `1px solid ${filter === f ? FINCEPT.BLUE : FINCEPT.BORDER}`,
+              padding: `${SPACING.SM} ${SPACING.XL}`,
+              fontSize: FONT_SIZE.LG,
+              fontWeight: 700,
               cursor: 'pointer',
-              borderRadius: '4px',
-              textTransform: 'uppercase'
+              borderRadius: BORDER_RADIUS.SM,
+              textTransform: 'uppercase',
+              fontFamily: FONT_FAMILY,
             }}
           >
             {f} ({workflows.filter(wf => f === 'all' || wf.status === f).length})
@@ -170,7 +178,7 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
         <div style={{
           textAlign: 'center',
           padding: '40px',
-          color: '#6b7280'
+          color: FINCEPT.GRAY,
         }}>
           Loading workflows...
         </div>
@@ -181,13 +189,13 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
         <div style={{
           textAlign: 'center',
           padding: '40px',
-          color: '#6b7280'
+          color: FINCEPT.GRAY,
         }}>
-          <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-          <p style={{ fontSize: '14px', marginBottom: '8px' }}>
+          <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+          <p style={{ fontSize: FONT_SIZE.XXL, marginBottom: SPACING.MD }}>
             No {filter !== 'all' ? filter : ''} workflows found
           </p>
-          <p style={{ fontSize: '12px', opacity: 0.7 }}>
+          <p style={{ fontSize: FONT_SIZE.XL, opacity: 0.7 }}>
             Create a new workflow in the Editor tab
           </p>
         </div>
@@ -197,26 +205,26 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
       {!loading && filteredWorkflows.length > 0 && (
         <div style={{
           display: 'grid',
-          gap: '12px'
+          gap: SPACING.LG,
         }}>
           {filteredWorkflows.map(workflow => (
             <div
               key={workflow.id}
               style={{
-                backgroundColor: '#1a1a1a',
-                border: '1px solid #404040',
-                borderRadius: '6px',
-                padding: '16px',
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: BORDER_RADIUS.SM,
+                padding: SPACING.XL,
                 transition: 'all 0.2s',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#3b82f6';
-                e.currentTarget.style.backgroundColor = '#252525';
+                e.currentTarget.style.borderColor = FINCEPT.BLUE;
+                e.currentTarget.style.backgroundColor = FINCEPT.HEADER_BG;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#404040';
-                e.currentTarget.style.backgroundColor = '#1a1a1a';
+                e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                e.currentTarget.style.backgroundColor = FINCEPT.PANEL_BG;
               }}
             >
               {/* Workflow Header */}
@@ -224,42 +232,43 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'flex-start',
-                marginBottom: '12px'
+                marginBottom: SPACING.LG,
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '4px'
+                    gap: SPACING.MD,
+                    marginBottom: SPACING.XS,
                   }}>
                     {getStatusIcon(workflow.status)}
                     <h3 style={{
                       margin: 0,
-                      fontSize: '14px',
-                      color: '#fff',
-                      fontWeight: 'bold'
+                      fontSize: FONT_SIZE.XXL,
+                      color: FINCEPT.WHITE,
+                      fontWeight: 700,
+                      fontFamily: FONT_FAMILY,
                     }}>
                       {workflow.name}
                     </h3>
                     <span style={{
                       backgroundColor: getStatusColor(workflow.status),
-                      color: '#000',
-                      padding: '2px 8px',
-                      fontSize: '9px',
-                      fontWeight: 'bold',
-                      borderRadius: '3px',
-                      textTransform: 'uppercase'
+                      color: FINCEPT.DARK_BG,
+                      padding: `2px ${SPACING.MD}`,
+                      fontSize: FONT_SIZE.SM,
+                      fontWeight: 700,
+                      borderRadius: BORDER_RADIUS.SM,
+                      textTransform: 'uppercase',
                     }}>
                       {workflow.status}
                     </span>
                   </div>
                   {workflow.description && (
                     <p style={{
-                      margin: '4px 0 0 0',
-                      fontSize: '11px',
-                      color: '#6b7280',
-                      lineHeight: '1.4'
+                      margin: `${SPACING.XS} 0 0 0`,
+                      fontSize: FONT_SIZE.LG,
+                      color: FINCEPT.GRAY,
+                      lineHeight: '1.4',
                     }}>
                       {workflow.description}
                     </p>
@@ -270,14 +279,14 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
               {/* Workflow Info */}
               <div style={{
                 display: 'flex',
-                gap: '16px',
-                marginBottom: '12px',
-                fontSize: '11px',
-                color: '#6b7280'
+                gap: SPACING.XL,
+                marginBottom: SPACING.LG,
+                fontSize: FONT_SIZE.LG,
+                color: FINCEPT.GRAY,
               }}>
-                <span>📦 {workflow.nodes?.length || 0} nodes</span>
-                <span>🔗 {workflow.edges?.length || 0} connections</span>
-                <span style={{ marginLeft: 'auto', fontSize: '10px' }}>
+                <span>{workflow.nodes?.length || 0} nodes</span>
+                <span>{workflow.edges?.length || 0} connections</span>
+                <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE.MD }}>
                   ID: {workflow.id.substring(0, 12)}...
                 </span>
               </div>
@@ -285,9 +294,9 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
               {/* Action Buttons */}
               <div style={{
                 display: 'flex',
-                gap: '8px',
-                paddingTop: '12px',
-                borderTop: '1px solid #404040'
+                gap: SPACING.MD,
+                paddingTop: SPACING.LG,
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
               }}>
                 <button
                   onClick={(e) => {
@@ -296,18 +305,19 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
                   }}
                   style={{
                     flex: 1,
-                    backgroundColor: '#10b981',
-                    color: '#fff',
+                    backgroundColor: FINCEPT.GREEN,
+                    color: FINCEPT.DARK_BG,
                     border: 'none',
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
+                    padding: `${SPACING.SM} ${SPACING.LG}`,
+                    fontSize: FONT_SIZE.LG,
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    borderRadius: '4px',
+                    borderRadius: BORDER_RADIUS.SM,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '4px'
+                    gap: SPACING.XS,
+                    fontFamily: FONT_FAMILY,
                   }}
                 >
                   <Play size={12} />
@@ -321,18 +331,19 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
                   }}
                   style={{
                     flex: 1,
-                    backgroundColor: '#3b82f6',
-                    color: '#fff',
+                    backgroundColor: FINCEPT.BLUE,
+                    color: FINCEPT.WHITE,
                     border: 'none',
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
+                    padding: `${SPACING.SM} ${SPACING.LG}`,
+                    fontSize: FONT_SIZE.LG,
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    borderRadius: '4px',
+                    borderRadius: BORDER_RADIUS.SM,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '4px'
+                    gap: SPACING.XS,
+                    fontFamily: FONT_FAMILY,
                   }}
                 >
                   <Edit3 size={12} />
@@ -346,18 +357,19 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
                       handleViewResults(workflow);
                     }}
                     style={{
-                      backgroundColor: '#f59e0b',
-                      color: '#000',
+                      backgroundColor: FINCEPT.ORANGE,
+                      color: FINCEPT.DARK_BG,
                       border: 'none',
-                      padding: '6px 12px',
-                      fontSize: '11px',
-                      fontWeight: 'bold',
+                      padding: `${SPACING.SM} ${SPACING.LG}`,
+                      fontSize: FONT_SIZE.LG,
+                      fontWeight: 700,
                       cursor: 'pointer',
-                      borderRadius: '4px',
+                      borderRadius: BORDER_RADIUS.SM,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '4px'
+                      gap: SPACING.XS,
+                      fontFamily: FONT_FAMILY,
                     }}
                   >
                     <Eye size={12} />
@@ -371,17 +383,18 @@ const WorkflowManager: React.FC<WorkflowManagerProps> = ({ onLoadWorkflow, onVie
                     handleDelete(workflow.id);
                   }}
                   style={{
-                    backgroundColor: '#ef4444',
-                    color: '#fff',
+                    backgroundColor: FINCEPT.RED,
+                    color: FINCEPT.WHITE,
                     border: 'none',
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
+                    padding: `${SPACING.SM} ${SPACING.LG}`,
+                    fontSize: FONT_SIZE.LG,
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    borderRadius: '4px',
+                    borderRadius: BORDER_RADIUS.SM,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    fontFamily: FONT_FAMILY,
                   }}
                 >
                   <Trash2 size={12} />

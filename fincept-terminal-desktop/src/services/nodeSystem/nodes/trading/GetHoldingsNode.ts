@@ -15,7 +15,7 @@ import { TradingBridge } from '../../adapters/TradingBridge';
 
 export class GetHoldingsNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Holdings',
+    displayName: 'My Holdings',
     name: 'getHoldings',
     icon: 'file:holdings.svg',
     group: ['trading'],
@@ -23,7 +23,7 @@ export class GetHoldingsNode implements INodeType {
     subtitle: '={{$parameter["broker"]}} holdings',
     description: 'Fetches portfolio holdings from broker',
     defaults: {
-      name: 'Get Holdings',
+      name: 'My Holdings',
       color: '#3b82f6',
     },
     inputs: [NodeConnectionType.Main],

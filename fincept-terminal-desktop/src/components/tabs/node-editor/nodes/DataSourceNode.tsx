@@ -1,23 +1,27 @@
 import React, { useState } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Position } from 'reactflow';
 import { Database, Play, Settings, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { useDataSources } from '../../../../contexts/DataSourceContext';
 import { createAdapter } from '../../data-sources/adapters';
-
-// Design system colors
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  CYAN: '#00E5FF',
-  BLUE: '#0088FF',
-};
+import {
+  FINCEPT,
+  SPACING,
+  FONT_FAMILY,
+  BORDER_RADIUS,
+  BaseNode,
+  NodeHeader,
+  IconButton,
+  Button,
+  SelectField,
+  TextareaField,
+  InfoPanel,
+  StatusPanel,
+  EmptyState,
+  KeyValue,
+  SettingsPanel,
+  Tag,
+  getStatusColor,
+} from './shared';
 
 interface DataSourceNodeProps {
   data: {
@@ -82,18 +86,7 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
     }
   };
 
-  const getStatusColor = () => {
-    switch (data.status) {
-      case 'running':
-        return FINCEPT.BLUE;
-      case 'completed':
-        return FINCEPT.GREEN;
-      case 'error':
-        return FINCEPT.RED;
-      default:
-        return FINCEPT.GRAY;
-    }
-  };
+  const statusColor = getStatusColor(data.status);
 
   const getStatusIcon = () => {
     switch (data.status) {
@@ -113,306 +106,172 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
   const availableSources = connections.filter((c) => c.status === 'connected' || c.status === 'disconnected');
 
   return (
-    <div
-      style={{
-        background: selected ? FINCEPT.HEADER_BG : FINCEPT.PANEL_BG,
-        border: `2px solid ${selected ? FINCEPT.ORANGE : getStatusColor()}`,
-        borderRadius: '2px',
-        minWidth: '280px',
-        maxWidth: '400px',
-        fontFamily: '"IBM Plex Mono", Consolas, monospace',
-        boxShadow: selected ? `0 0 12px ${FINCEPT.ORANGE}40` : '0 2px 8px rgba(0,0,0,0.3)',
-        position: 'relative',
-      }}
+    <BaseNode
+      selected={selected}
+      minWidth="280px"
+      maxWidth="400px"
+      borderColor={statusColor}
+      handles={[
+        { type: 'source', position: Position.Right, color: FINCEPT.ORANGE },
+      ]}
     >
-      {/* Output Handle */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          background: FINCEPT.ORANGE,
-          width: '10px',
-          height: '10px',
-          border: `2px solid ${FINCEPT.DARK_BG}`,
-          right: '-6px',
-        }}
+      {/* Header */}
+      <NodeHeader
+        icon={<Database size={14} />}
+        title={data.label}
+        color={FINCEPT.ORANGE}
+        rightActions={
+          <>
+            {getStatusIcon()}
+            <IconButton
+              icon={<Settings size={10} />}
+              onClick={() => setShowSettings(!showSettings)}
+              active={showSettings}
+              title="Configure data source"
+            />
+          </>
+        }
       />
 
-      {/* Header */}
-      <div
-        style={{
-          backgroundColor: FINCEPT.DARK_BG,
-          padding: '8px 12px',
-          borderBottom: `1px solid ${FINCEPT.BORDER}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Database size={14} color={FINCEPT.ORANGE} />
-          <span style={{ color: FINCEPT.WHITE, fontSize: '11px', fontWeight: 700 }}>{data.label}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {getStatusIcon()}
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            style={{
-              backgroundColor: showSettings ? FINCEPT.ORANGE : 'transparent',
-              border: `1px solid ${showSettings ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
-              color: showSettings ? FINCEPT.DARK_BG : FINCEPT.GRAY,
-              padding: '4px',
-              cursor: 'pointer',
-              borderRadius: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              transition: 'all 0.2s',
-            }}
-            title="Configure data source"
-          >
-            <Settings size={10} />
-          </button>
-        </div>
-      </div>
-
       {/* Configuration Panel */}
-      {showSettings ? (
-        <div style={{ padding: '12px', backgroundColor: FINCEPT.DARK_BG }}>
-          {/* Connection Selector */}
-          <div style={{ marginBottom: '12px' }}>
-            <label
+      <SettingsPanel isOpen={showSettings}>
+        {/* Connection Selector */}
+        <div style={{ marginBottom: SPACING.LG }}>
+          <label
+            style={{
+              display: 'block',
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              fontWeight: 700,
+              marginBottom: SPACING.SM,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            DATA SOURCE CONNECTION
+          </label>
+
+          {loadState === 'loading' ? (
+            <div
               style={{
-                display: 'block',
+                padding: SPACING.MD,
+                backgroundColor: FINCEPT.PANEL_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
+                borderRadius: BORDER_RADIUS.SM,
                 color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
+                fontSize: '10px',
+                textAlign: 'center',
               }}
             >
-              DATA SOURCE CONNECTION
-            </label>
-
-            {loadState === 'loading' ? (
-              <div
-                style={{
-                  padding: '8px',
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  borderRadius: '2px',
-                  color: FINCEPT.GRAY,
-                  fontSize: '10px',
-                  textAlign: 'center',
-                }}
-              >
-                Loading connections...
-              </div>
-            ) : availableSources.length === 0 ? (
-              <div
-                style={{
-                  padding: '12px',
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  borderRadius: '2px',
-                  textAlign: 'center',
-                }}
-              >
-                <AlertCircle size={16} color={FINCEPT.ORANGE} style={{ marginBottom: '8px' }} />
-                <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '8px' }}>
-                  No data sources configured
-                </div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>
-                  Go to <span style={{ color: FINCEPT.ORANGE }}>Data Sources</span> tab to add connections
-                </div>
-              </div>
-            ) : (
-              <select
-                value={localConnection}
-                onChange={(e) => setLocalConnection(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  borderRadius: '2px',
-                  cursor: 'pointer',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
-              >
-                <option value="">-- Select Connection --</option>
-                {availableSources.map((conn) => (
-                  <option key={conn.id} value={conn.id}>
-                    {conn.name} ({conn.type}) {conn.status === 'connected' ? '[OK]' : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {/* Selected connection details */}
-            {localConnection && selectedConnection && (
-              <div
-                style={{
-                  marginTop: '8px',
-                  padding: '8px',
-                  backgroundColor: FINCEPT.PANEL_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  borderRadius: '2px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: FINCEPT.CYAN, fontSize: '9px', textTransform: 'uppercase' }}>
-                    {selectedConnection.type}
-                  </span>
-                  <span
-                    style={{
-                      padding: '2px 6px',
-                      backgroundColor:
-                        selectedConnection.status === 'connected' ? `${FINCEPT.GREEN}20` : `${FINCEPT.GRAY}20`,
-                      color: selectedConnection.status === 'connected' ? FINCEPT.GREEN : FINCEPT.GRAY,
-                      fontSize: '8px',
-                      fontWeight: 700,
-                      borderRadius: '2px',
-                    }}
-                  >
-                    {selectedConnection.status.toUpperCase()}
-                  </span>
-                </div>
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '4px' }}>
-                  {selectedConnection.category}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Query Editor */}
-          <div style={{ marginBottom: '12px' }}>
-            <label
-              style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              QUERY
-            </label>
-            <textarea
-              value={localQuery}
-              onChange={(e) => setLocalQuery(e.target.value)}
-              placeholder="SELECT * FROM table WHERE condition"
+              Loading connections...
+            </div>
+          ) : availableSources.length === 0 ? (
+            <EmptyState
+              icon={<AlertCircle size={16} />}
+              title="No data sources configured"
+              subtitle='Go to Data Sources tab to add connections'
+            />
+          ) : (
+            <select
+              value={localConnection}
+              onChange={(e) => setLocalConnection(e.target.value)}
               style={{
                 width: '100%',
-                height: '100px',
                 backgroundColor: FINCEPT.PANEL_BG,
                 border: `1px solid ${FINCEPT.BORDER}`,
                 color: FINCEPT.WHITE,
-                padding: '8px',
+                padding: SPACING.MD,
                 fontSize: '10px',
-                borderRadius: '2px',
-                resize: 'vertical',
-                fontFamily: '"IBM Plex Mono", monospace',
-                lineHeight: '1.5',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={handleSaveSettings}
-              disabled={!localConnection || !localQuery.trim()}
-              style={{
-                flex: 1,
-                backgroundColor: !localConnection || !localQuery.trim() ? FINCEPT.BORDER : FINCEPT.GREEN,
-                color: FINCEPT.DARK_BG,
-                border: 'none',
-                padding: '8px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: !localConnection || !localQuery.trim() ? 'not-allowed' : 'pointer',
-                borderRadius: '2px',
-                opacity: !localConnection || !localQuery.trim() ? 0.5 : 1,
-              }}
-            >
-              SAVE CONFIG
-            </button>
-            <button
-              onClick={() => setShowSettings(false)}
-              style={{
-                backgroundColor: 'transparent',
-                color: FINCEPT.GRAY,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                padding: '8px 12px',
-                fontSize: '9px',
-                fontWeight: 700,
+                borderRadius: BORDER_RADIUS.SM,
                 cursor: 'pointer',
-                borderRadius: '2px',
+                fontFamily: FONT_FAMILY,
               }}
             >
-              CANCEL
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Summary View */
-        <div style={{ padding: '12px' }}>
-          {/* Connection Info */}
-          {selectedConnection ? (
+              <option value="">-- Select Connection --</option>
+              {availableSources.map((conn) => (
+                <option key={conn.id} value={conn.id}>
+                  {conn.name} ({conn.type}) {conn.status === 'connected' ? '[OK]' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Selected connection details */}
+          {localConnection && selectedConnection && (
             <div
               style={{
-                backgroundColor: FINCEPT.DARK_BG,
+                marginTop: SPACING.MD,
+                padding: SPACING.MD,
+                backgroundColor: FINCEPT.PANEL_BG,
                 border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                padding: '8px',
-                marginBottom: '8px',
+                borderRadius: BORDER_RADIUS.SM,
               }}
             >
-              <div
-                style={{
-                  color: FINCEPT.ORANGE,
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  marginBottom: '4px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                CONNECTION
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Tag label={selectedConnection.type} color={FINCEPT.CYAN} />
+                <Tag
+                  label={selectedConnection.status}
+                  color={selectedConnection.status === 'connected' ? FINCEPT.GREEN : FINCEPT.GRAY}
+                />
               </div>
+              <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: SPACING.XS }}>
+                {selectedConnection.category}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Query Editor */}
+        <TextareaField
+          label="QUERY"
+          value={localQuery}
+          onChange={setLocalQuery}
+          placeholder="SELECT * FROM table WHERE condition"
+          minHeight="100px"
+        />
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: SPACING.MD }}>
+          <Button
+            label="SAVE CONFIG"
+            onClick={handleSaveSettings}
+            variant="primary"
+            disabled={!localConnection || !localQuery.trim()}
+            fullWidth
+          />
+          <Button
+            label="CANCEL"
+            onClick={() => setShowSettings(false)}
+            variant="secondary"
+          />
+        </div>
+      </SettingsPanel>
+
+      {/* Summary View */}
+      {!showSettings && (
+        <div style={{ padding: SPACING.LG }}>
+          {/* Connection Info */}
+          {selectedConnection ? (
+            <InfoPanel title="CONNECTION">
               <div style={{ color: FINCEPT.WHITE, fontSize: '10px', marginBottom: '2px' }}>
                 {selectedConnection.name}
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ color: FINCEPT.CYAN, fontSize: '9px' }}>{selectedConnection.type}</span>
-                <span
-                  style={{
-                    padding: '1px 4px',
-                    backgroundColor:
-                      selectedConnection.status === 'connected' ? `${FINCEPT.GREEN}20` : `${FINCEPT.GRAY}20`,
-                    color: selectedConnection.status === 'connected' ? FINCEPT.GREEN : FINCEPT.GRAY,
-                    fontSize: '8px',
-                    borderRadius: '2px',
-                  }}
-                >
-                  {selectedConnection.status.toUpperCase()}
-                </span>
+              <div style={{ display: 'flex', gap: SPACING.MD, alignItems: 'center' }}>
+                <Tag label={selectedConnection.type} color={FINCEPT.CYAN} />
+                <Tag
+                  label={selectedConnection.status}
+                  color={selectedConnection.status === 'connected' ? FINCEPT.GREEN : FINCEPT.GRAY}
+                />
               </div>
-            </div>
+            </InfoPanel>
           ) : (
             <div
               style={{
                 backgroundColor: FINCEPT.PANEL_BG,
                 border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                padding: '8px',
-                marginBottom: '8px',
+                borderRadius: BORDER_RADIUS.SM,
+                padding: SPACING.MD,
+                marginBottom: SPACING.MD,
                 textAlign: 'center',
                 color: FINCEPT.GRAY,
                 fontSize: '10px',
@@ -424,32 +283,12 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
 
           {/* Query Preview */}
           {data.query ? (
-            <div
-              style={{
-                backgroundColor: FINCEPT.DARK_BG,
-                border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                padding: '8px',
-                marginBottom: '8px',
-              }}
-            >
-              <div
-                style={{
-                  color: FINCEPT.ORANGE,
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  marginBottom: '4px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                QUERY
-              </div>
+            <InfoPanel title="QUERY">
               <div
                 style={{
                   color: FINCEPT.WHITE,
                   fontSize: '9px',
-                  fontFamily: '"IBM Plex Mono", monospace',
+                  fontFamily: FONT_FAMILY,
                   lineHeight: '1.4',
                   maxHeight: '60px',
                   overflow: 'auto',
@@ -459,15 +298,15 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
               >
                 {data.query}
               </div>
-            </div>
+            </InfoPanel>
           ) : (
             <div
               style={{
                 backgroundColor: FINCEPT.PANEL_BG,
                 border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '2px',
-                padding: '8px',
-                marginBottom: '8px',
+                borderRadius: BORDER_RADIUS.SM,
+                padding: SPACING.MD,
+                marginBottom: SPACING.MD,
                 textAlign: 'center',
                 color: FINCEPT.GRAY,
                 fontSize: '10px',
@@ -478,75 +317,31 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
           )}
 
           {/* Execute Button */}
-          <button
+          <Button
+            label={data.status === 'running' || isExecuting ? 'EXECUTING...' : 'EXECUTE QUERY'}
+            icon={data.status === 'running' || isExecuting ? <RefreshCw size={10} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={10} />}
             onClick={data.onExecute || handleExecuteQuery}
+            variant="primary"
             disabled={!isConfigured || data.status === 'running' || isExecuting}
-            style={{
-              width: '100%',
-              backgroundColor: !isConfigured || data.status === 'running' || isExecuting ? FINCEPT.BORDER : FINCEPT.ORANGE,
-              color: FINCEPT.DARK_BG,
-              border: 'none',
-              padding: '8px',
-              fontSize: '9px',
-              fontWeight: 700,
-              cursor: !isConfigured || data.status === 'running' || isExecuting ? 'not-allowed' : 'pointer',
-              borderRadius: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              opacity: !isConfigured || data.status === 'running' || isExecuting ? 0.5 : 1,
-            }}
-          >
-            {data.status === 'running' || isExecuting ? (
-              <>
-                <RefreshCw size={10} style={{ animation: 'spin 1s linear infinite' }} />
-                EXECUTING...
-              </>
-            ) : (
-              <>
-                <Play size={10} />
-                EXECUTE QUERY
-              </>
-            )}
-          </button>
+            fullWidth
+          />
 
           {/* Result Display */}
           {data.status === 'completed' && data.result && (
-            <div
-              style={{
-                marginTop: '8px',
-                backgroundColor: FINCEPT.DARK_BG,
-                border: `1px solid ${FINCEPT.GREEN}`,
-                borderRadius: '2px',
-                padding: '8px',
-              }}
-            >
-              <div style={{ color: FINCEPT.GREEN, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
-                QUERY SUCCESSFUL
-              </div>
-              <div style={{ color: FINCEPT.GRAY, fontSize: '9px' }}>
-                {Array.isArray(data.result) ? `${data.result.length} rows` : data.result.rowCount || 0} returned
-              </div>
-            </div>
+            <StatusPanel
+              type="success"
+              icon={<Check size={12} />}
+              message={`Query successful - ${Array.isArray(data.result) ? `${data.result.length} rows` : data.result.rowCount || 0} returned`}
+            />
           )}
 
           {/* Error Display */}
           {data.status === 'error' && data.error && (
-            <div
-              style={{
-                marginTop: '8px',
-                backgroundColor: `${FINCEPT.RED}10`,
-                border: `1px solid ${FINCEPT.RED}`,
-                borderRadius: '2px',
-                padding: '8px',
-              }}
-            >
-              <div style={{ color: FINCEPT.RED, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>ERROR</div>
-              <div style={{ color: FINCEPT.WHITE, fontSize: '9px', lineHeight: '1.4', wordBreak: 'break-word' }}>
-                {data.error}
-              </div>
-            </div>
+            <StatusPanel
+              type="error"
+              icon={<AlertCircle size={12} />}
+              message={data.error}
+            />
           )}
         </div>
       )}
@@ -557,7 +352,7 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
           to { transform: rotate(360deg); }
         }
       `}</style>
-    </div>
+    </BaseNode>
   );
 };
 

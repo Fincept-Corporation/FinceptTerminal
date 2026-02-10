@@ -16,7 +16,7 @@ import { AuditLogger } from '../../safety/AuditLogger';
 
 export class ModifyOrderNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Modify Order',
+    displayName: 'Edit Order',
     name: 'modifyOrder',
     icon: 'file:modify-order.svg',
     group: ['trading'],
@@ -24,7 +24,7 @@ export class ModifyOrderNode implements INodeType {
     subtitle: 'Modify {{$parameter["orderId"]}}',
     description: 'Modifies existing open orders',
     defaults: {
-      name: 'Modify Order',
+      name: 'Edit Order',
       color: '#f59e0b',
     },
     inputs: [NodeConnectionType.Main],

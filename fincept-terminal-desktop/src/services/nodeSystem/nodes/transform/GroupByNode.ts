@@ -9,14 +9,14 @@ import {
 
 export class GroupByNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Group By',
+    displayName: 'Group Rows',
     name: 'groupBy',
     icon: 'fa:object-group',
     group: ['Transform'],
     version: 1,
     description: 'Group items by field value',
     defaults: {
-      name: 'Group By',
+      name: 'Group Rows',
       color: '#8b5cf6',
     },
     inputs: [NodeConnectionType.Main],

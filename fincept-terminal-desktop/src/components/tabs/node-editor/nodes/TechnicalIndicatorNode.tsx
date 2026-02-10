@@ -1,7 +1,25 @@
 // TechnicalIndicatorNode.tsx - Node for calculating technical indicators
 import React, { useState } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Position } from 'reactflow';
 import { Play, Settings, CheckCircle, AlertCircle, Loader, TrendingUp } from 'lucide-react';
+import {
+  FINCEPT,
+  SPACING,
+  FONT_FAMILY,
+  BORDER_RADIUS,
+  BaseNode,
+  NodeHeader,
+  IconButton,
+  Button,
+  SelectField,
+  InputField,
+  InfoPanel,
+  StatusPanel,
+  SettingsPanel,
+  Tag,
+  KeyValue,
+  getStatusColor,
+} from './shared';
 
 interface TechnicalIndicatorNodeProps {
   id: string;
@@ -33,31 +51,14 @@ const TechnicalIndicatorNode: React.FC<TechnicalIndicatorNodeProps> = ({ id, dat
     categories: data.categories || ['momentum', 'volume', 'volatility', 'trend', 'others']
   });
 
-  // Fincept colors
-  const ORANGE = '#FFA500';
-  const WHITE = '#FFFFFF';
-  const GRAY = '#787878';
-  const DARK_BG = '#0a0a0a';
-  const PANEL_BG = '#1a1a1a';
-  const BORDER = '#2d2d2d';
-  const GREEN = '#10b981';
-  const RED = '#ef4444';
-
-  const getStatusColor = () => {
-    switch (data.status) {
-      case 'running': return ORANGE;
-      case 'completed': return GREEN;
-      case 'error': return RED;
-      default: return GRAY;
-    }
-  };
+  const statusColor = getStatusColor(data.status);
 
   const getStatusIcon = () => {
     switch (data.status) {
-      case 'running': return <Loader size={14} className="animate-spin" color={ORANGE} />;
-      case 'completed': return <CheckCircle size={14} color={GREEN} />;
-      case 'error': return <AlertCircle size={14} color={RED} />;
-      default: return <TrendingUp size={14} color={GRAY} />;
+      case 'running': return <Loader size={14} className="animate-spin" color={FINCEPT.ORANGE} />;
+      case 'completed': return <CheckCircle size={14} color={FINCEPT.GREEN} />;
+      case 'error': return <AlertCircle size={14} color={FINCEPT.RED} />;
+      default: return <TrendingUp size={14} color={FINCEPT.GRAY} />;
     }
   };
 
@@ -76,497 +77,208 @@ const TechnicalIndicatorNode: React.FC<TechnicalIndicatorNodeProps> = ({ id, dat
 
   const availableCategories = ['momentum', 'volume', 'volatility', 'trend', 'others'];
 
+  const periodOptions = [
+    { value: '1d', label: '1 Day' },
+    { value: '5d', label: '5 Days' },
+    { value: '1mo', label: '1 Month' },
+    { value: '3mo', label: '3 Months' },
+    { value: '6mo', label: '6 Months' },
+    { value: '1y', label: '1 Year' },
+    { value: '2y', label: '2 Years' },
+    { value: '5y', label: '5 Years' },
+    { value: 'max', label: 'Max' },
+  ];
+
+  const dataSourceOptions = [
+    { value: 'yfinance', label: 'Yahoo Finance' },
+    { value: 'csv', label: 'CSV File' },
+    { value: 'json', label: 'JSON Data' },
+    { value: 'input', label: 'Upstream Input' },
+  ];
+
   return (
-    <div style={{
-      backgroundColor: PANEL_BG,
-      border: `2px solid ${selected ? ORANGE : getStatusColor()}`,
-      borderRadius: '8px',
-      padding: '12px',
-      minWidth: '280px',
-      maxWidth: '350px',
-      fontFamily: 'Consolas, monospace',
-      boxShadow: selected ? `0 0 16px ${ORANGE}60` : `0 2px 8px rgba(0,0,0,0.3)`
-    }}>
-      {/* Input Handle - Can receive data from upstream nodes */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{
-          background: ORANGE,
-          width: '12px',
-          height: '12px',
-          border: `2px solid ${DARK_BG}`,
-          left: '-6px'
-        }}
-      />
-
+    <BaseNode
+      selected={selected}
+      minWidth="280px"
+      maxWidth="350px"
+      borderColor={statusColor}
+      handles={[
+        { type: 'target', position: Position.Left, color: FINCEPT.ORANGE },
+        { type: 'source', position: Position.Right, color: data.status === 'completed' ? FINCEPT.GREEN : FINCEPT.ORANGE },
+      ]}
+    >
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        marginBottom: '10px',
-        paddingBottom: '8px',
-        borderBottom: `1px solid ${BORDER}`
-      }}>
-        <span style={{ fontSize: '20px' }}>📊</span>
-        <div style={{ flex: 1 }}>
-          <div style={{
-            color: WHITE,
-            fontSize: '12px',
-            fontWeight: 'bold',
-            marginBottom: '2px'
-          }}>
-            {data.label}
-          </div>
-          <div style={{
-            color: GRAY,
-            fontSize: '9px',
-            textTransform: 'uppercase'
-          }}>
-            TECHNICAL ANALYSIS
-          </div>
-        </div>
-        {getStatusIcon()}
-      </div>
-
-      {/* Data Source Summary */}
-      <div style={{
-        backgroundColor: DARK_BG,
-        border: `1px solid ${BORDER}`,
-        borderRadius: '4px',
-        padding: '6px',
-        marginBottom: '8px'
-      }}>
-        <div style={{
-          color: ORANGE,
-          fontSize: '9px',
-          fontWeight: 'bold',
-          marginBottom: '4px'
-        }}>
-          DATA SOURCE
-        </div>
-        <div style={{
-          color: GRAY,
-          fontSize: '8px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: '2px'
-        }}>
-          <span>Type:</span>
-          <span style={{ color: WHITE }}>{localParams.dataSource.toUpperCase()}</span>
-        </div>
-        {localParams.dataSource === 'yfinance' && (
+      <NodeHeader
+        icon={<span style={{ fontSize: '20px' }}>📊</span>}
+        title={data.label}
+        subtitle="TECHNICAL ANALYSIS"
+        color={FINCEPT.WHITE}
+        rightActions={
           <>
-            <div style={{
-              color: GRAY,
-              fontSize: '8px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '2px'
-            }}>
-              <span>Symbol:</span>
-              <span style={{ color: WHITE }}>{localParams.symbol}</span>
-            </div>
-            <div style={{
-              color: GRAY,
-              fontSize: '8px',
-              display: 'flex',
-              justifyContent: 'space-between'
-            }}>
-              <span>Period:</span>
-              <span style={{ color: WHITE }}>{localParams.period}</span>
-            </div>
+            {getStatusIcon()}
+            <IconButton
+              icon={<Settings size={14} />}
+              onClick={() => setShowSettings(!showSettings)}
+              active={showSettings}
+            />
           </>
-        )}
-        {localParams.dataSource === 'csv' && (
-          <div style={{
-            color: GRAY,
-            fontSize: '8px',
-            display: 'flex',
-            justifyContent: 'space-between'
-          }}>
-            <span>File:</span>
-            <span style={{ color: WHITE, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {localParams.csvPath || 'Not set'}
-            </span>
-          </div>
-        )}
-        {localParams.dataSource === 'input' && (
-          <div style={{
-            color: GRAY,
-            fontSize: '8px'
-          }}>
-            Waiting for upstream data...
-          </div>
-        )}
-      </div>
-
-      {/* Categories Summary */}
-      <div style={{
-        backgroundColor: DARK_BG,
-        border: `1px solid ${BORDER}`,
-        borderRadius: '4px',
-        padding: '6px',
-        marginBottom: '8px'
-      }}>
-        <div style={{
-          color: ORANGE,
-          fontSize: '9px',
-          fontWeight: 'bold',
-          marginBottom: '4px'
-        }}>
-          INDICATORS ({localParams.categories.length}/5)
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-          {localParams.categories.map(cat => (
-            <span key={cat} style={{
-              backgroundColor: `${ORANGE}30`,
-              border: `1px solid ${ORANGE}`,
-              color: ORANGE,
-              fontSize: '7px',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              textTransform: 'uppercase'
-            }}>
-              {cat}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Result Preview */}
-      {data.status === 'completed' && data.result && (
-        <div style={{
-          backgroundColor: `${GREEN}15`,
-          border: `1px solid ${GREEN}`,
-          borderRadius: '4px',
-          padding: '6px',
-          marginBottom: '8px'
-        }}>
-          <div style={{
-            color: GREEN,
-            fontSize: '9px',
-            fontWeight: 'bold',
-            marginBottom: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <CheckCircle size={10} />
-            RESULT
-          </div>
-          <div style={{
-            color: WHITE,
-            fontSize: '8px',
-            fontFamily: 'monospace'
-          }}>
-            {Array.isArray(data.result)
-              ? `${data.result.length} data points calculated`
-              : 'Analysis complete'}
-          </div>
-        </div>
-      )}
-
-      {/* Error Display */}
-      {data.status === 'error' && data.error && (
-        <div style={{
-          backgroundColor: `${RED}15`,
-          border: `1px solid ${RED}`,
-          borderRadius: '4px',
-          padding: '6px',
-          marginBottom: '8px'
-        }}>
-          <div style={{
-            color: RED,
-            fontSize: '9px',
-            fontWeight: 'bold',
-            marginBottom: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <AlertCircle size={10} />
-            ERROR
-          </div>
-          <div style={{
-            color: RED,
-            fontSize: '8px',
-            wordBreak: 'break-word'
-          }}>
-            {data.error}
-          </div>
-        </div>
-      )}
+        }
+      />
 
       {/* Settings Panel */}
-      {showSettings && (
-        <div style={{
-          backgroundColor: DARK_BG,
-          border: `1px solid ${ORANGE}`,
-          borderRadius: '4px',
-          padding: '8px',
-          marginBottom: '8px',
-          maxHeight: '300px',
-          overflowY: 'auto'
-        }}>
-          <div style={{
-            color: ORANGE,
-            fontSize: '10px',
-            fontWeight: 'bold',
-            marginBottom: '8px'
+      <SettingsPanel isOpen={showSettings}>
+        {/* Data Source Selection */}
+        <SelectField
+          label="Data Source"
+          value={localParams.dataSource}
+          options={dataSourceOptions}
+          onChange={(val) => handleParamChange('dataSource', val)}
+        />
+
+        {/* YFinance Params */}
+        {localParams.dataSource === 'yfinance' && (
+          <>
+            <InputField
+              label="Symbol"
+              value={localParams.symbol}
+              onChange={(val) => handleParamChange('symbol', val)}
+              placeholder="AAPL"
+            />
+            <SelectField
+              label="Period"
+              value={localParams.period}
+              options={periodOptions}
+              onChange={(val) => handleParamChange('period', val)}
+            />
+          </>
+        )}
+
+        {/* CSV Path */}
+        {localParams.dataSource === 'csv' && (
+          <InputField
+            label="CSV File Path"
+            value={localParams.csvPath}
+            onChange={(val) => handleParamChange('csvPath', val)}
+            placeholder="/path/to/data.csv"
+          />
+        )}
+
+        {/* Categories Selection */}
+        <div style={{ marginBottom: SPACING.MD }}>
+          <label style={{
+            color: FINCEPT.GRAY,
+            fontSize: SPACING.MD,
+            display: 'block',
+            marginBottom: SPACING.SM
           }}>
-            CONFIGURATION
-          </div>
-
-          {/* Data Source Selection */}
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{
-              color: GRAY,
-              fontSize: '8px',
-              display: 'block',
-              marginBottom: '4px'
+            Indicator Categories
+          </label>
+          {availableCategories.map(category => (
+            <label key={category} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.SM,
+              marginBottom: SPACING.SM,
+              cursor: 'pointer'
             }}>
-              Data Source
-            </label>
-            <select
-              value={localParams.dataSource}
-              onChange={(e) => handleParamChange('dataSource', e.target.value)}
-              style={{
-                width: '100%',
-                backgroundColor: PANEL_BG,
-                border: `1px solid ${BORDER}`,
-                color: WHITE,
-                padding: '4px',
-                fontSize: '8px',
-                borderRadius: '3px'
-              }}
-            >
-              <option value="yfinance">Yahoo Finance</option>
-              <option value="csv">CSV File</option>
-              <option value="json">JSON Data</option>
-              <option value="input">Upstream Input</option>
-            </select>
-          </div>
-
-          {/* YFinance Params */}
-          {localParams.dataSource === 'yfinance' && (
-            <>
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{
-                  color: GRAY,
-                  fontSize: '8px',
-                  display: 'block',
-                  marginBottom: '4px'
-                }}>
-                  Symbol
-                </label>
-                <input
-                  type="text"
-                  value={localParams.symbol}
-                  onChange={(e) => handleParamChange('symbol', e.target.value)}
-                  placeholder="AAPL"
-                  style={{
-                    width: '100%',
-                    backgroundColor: PANEL_BG,
-                    border: `1px solid ${BORDER}`,
-                    color: WHITE,
-                    padding: '4px',
-                    fontSize: '8px',
-                    borderRadius: '3px'
-                  }}
-                />
-              </div>
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{
-                  color: GRAY,
-                  fontSize: '8px',
-                  display: 'block',
-                  marginBottom: '4px'
-                }}>
-                  Period
-                </label>
-                <select
-                  value={localParams.period}
-                  onChange={(e) => handleParamChange('period', e.target.value)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: PANEL_BG,
-                    border: `1px solid ${BORDER}`,
-                    color: WHITE,
-                    padding: '4px',
-                    fontSize: '8px',
-                    borderRadius: '3px'
-                  }}
-                >
-                  <option value="1d">1 Day</option>
-                  <option value="5d">5 Days</option>
-                  <option value="1mo">1 Month</option>
-                  <option value="3mo">3 Months</option>
-                  <option value="6mo">6 Months</option>
-                  <option value="1y">1 Year</option>
-                  <option value="2y">2 Years</option>
-                  <option value="5y">5 Years</option>
-                  <option value="max">Max</option>
-                </select>
-              </div>
-            </>
-          )}
-
-          {/* CSV Path */}
-          {localParams.dataSource === 'csv' && (
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{
-                color: GRAY,
-                fontSize: '8px',
-                display: 'block',
-                marginBottom: '4px'
-              }}>
-                CSV File Path
-              </label>
               <input
-                type="text"
-                value={localParams.csvPath}
-                onChange={(e) => handleParamChange('csvPath', e.target.value)}
-                placeholder="/path/to/data.csv"
+                type="checkbox"
+                checked={localParams.categories.includes(category)}
+                onChange={() => handleCategoryToggle(category)}
                 style={{
-                  width: '100%',
-                  backgroundColor: PANEL_BG,
-                  border: `1px solid ${BORDER}`,
-                  color: WHITE,
-                  padding: '4px',
-                  fontSize: '8px',
-                  borderRadius: '3px'
+                  accentColor: FINCEPT.ORANGE
                 }}
               />
+              <span style={{
+                color: FINCEPT.WHITE,
+                fontSize: '8px',
+                textTransform: 'capitalize'
+              }}>
+                {category}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <Button
+          label="CLOSE"
+          onClick={() => setShowSettings(false)}
+          variant="primary"
+          fullWidth
+        />
+      </SettingsPanel>
+
+      {/* Summary View */}
+      {!showSettings && (
+        <div style={{ padding: SPACING.LG }}>
+          {/* Data Source Summary */}
+          <InfoPanel title="DATA SOURCE">
+            <KeyValue label="Type" value={localParams.dataSource.toUpperCase()} />
+            {localParams.dataSource === 'yfinance' && (
+              <>
+                <KeyValue label="Symbol" value={localParams.symbol} />
+                <KeyValue label="Period" value={localParams.period} />
+              </>
+            )}
+            {localParams.dataSource === 'csv' && (
+              <div style={{
+                color: FINCEPT.WHITE,
+                fontSize: '8px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {localParams.csvPath || 'Not set'}
+              </div>
+            )}
+            {localParams.dataSource === 'input' && (
+              <div style={{ color: FINCEPT.GRAY, fontSize: '8px' }}>
+                Waiting for upstream data...
+              </div>
+            )}
+          </InfoPanel>
+
+          {/* Categories Summary */}
+          <InfoPanel title={`INDICATORS (${localParams.categories.length}/5)`}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.XS }}>
+              {localParams.categories.map(cat => (
+                <Tag key={cat} label={cat} color={FINCEPT.ORANGE} />
+              ))}
             </div>
+          </InfoPanel>
+
+          {/* Result Preview */}
+          {data.status === 'completed' && data.result && (
+            <StatusPanel
+              type="success"
+              icon={<CheckCircle size={10} />}
+              message={Array.isArray(data.result)
+                ? `${data.result.length} data points calculated`
+                : 'Analysis complete'}
+            />
           )}
 
-          {/* Categories Selection */}
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{
-              color: GRAY,
-              fontSize: '8px',
-              display: 'block',
-              marginBottom: '6px'
-            }}>
-              Indicator Categories
-            </label>
-            {availableCategories.map(category => (
-              <label key={category} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                marginBottom: '6px',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={localParams.categories.includes(category)}
-                  onChange={() => handleCategoryToggle(category)}
-                  style={{
-                    accentColor: ORANGE
-                  }}
-                />
-                <span style={{
-                  color: WHITE,
-                  fontSize: '8px',
-                  textTransform: 'capitalize'
-                }}>
-                  {category}
-                </span>
-              </label>
-            ))}
-          </div>
+          {/* Error Display */}
+          {data.status === 'error' && data.error && (
+            <StatusPanel
+              type="error"
+              icon={<AlertCircle size={10} />}
+              message={data.error}
+            />
+          )}
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowSettings(false);
-            }}
-            style={{
-              width: '100%',
-              backgroundColor: ORANGE,
-              color: 'black',
-              border: 'none',
-              padding: '6px',
-              fontSize: '9px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              borderRadius: '3px'
-            }}
-          >
-            CLOSE
-          </button>
+          {/* Action Buttons */}
+          <Button
+            label={data.status === 'running' ? 'RUNNING...' : 'CALCULATE'}
+            icon={data.status === 'running' ? <Loader size={12} className="animate-spin" /> : <Play size={12} />}
+            onClick={() => data.onExecute?.(id)}
+            variant="primary"
+            disabled={data.status === 'running'}
+            fullWidth
+          />
         </div>
       )}
-
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '6px' }}>
-        <button
-          onClick={() => data.onExecute?.(id)}
-          disabled={data.status === 'running'}
-          style={{
-            flex: 1,
-            backgroundColor: data.status === 'running' ? GRAY : ORANGE,
-            color: 'black',
-            border: 'none',
-            padding: '8px',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            cursor: data.status === 'running' ? 'not-allowed' : 'pointer',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            opacity: data.status === 'running' ? 0.6 : 1
-          }}
-        >
-          {data.status === 'running' ? (
-            <>
-              <Loader size={12} className="animate-spin" />
-              RUNNING...
-            </>
-          ) : (
-            <>
-              <Play size={12} />
-              CALCULATE
-            </>
-          )}
-        </button>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          style={{
-            backgroundColor: showSettings ? ORANGE : DARK_BG,
-            border: `1px solid ${BORDER}`,
-            color: showSettings ? 'black' : GRAY,
-            padding: '8px',
-            fontSize: '10px',
-            cursor: 'pointer',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <Settings size={14} />
-        </button>
-      </div>
-
-      {/* Output Handle */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          background: data.status === 'completed' ? GREEN : ORANGE,
-          width: '12px',
-          height: '12px',
-          border: `2px solid ${DARK_BG}`,
-          right: '-6px'
-        }}
-      />
-    </div>
+    </BaseNode>
   );
 };
 

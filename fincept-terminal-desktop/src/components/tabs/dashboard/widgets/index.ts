@@ -39,7 +39,8 @@ export type WidgetType =
   | 'calendar'
   | 'quicktrade'
   | 'geopolitics'
-  | 'performance';
+  | 'performance'
+  | 'heatmap';
 
 export interface WidgetConfig {
   id: string;
@@ -172,6 +173,11 @@ export const DEFAULT_WIDGET_CONFIGS: Record<WidgetType, Partial<WidgetConfig>> =
   performance: {
     type: 'performance',
     title: 'Performance Tracker',
+    config: {}
+  },
+  heatmap: {
+    type: 'heatmap',
+    title: 'Sector Heatmap',
     config: {}
   }
 };

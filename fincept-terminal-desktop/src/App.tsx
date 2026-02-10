@@ -11,6 +11,7 @@ import { workflowService } from './services/core/workflowService';
 import { initializeNodeSystem } from './services/nodeSystem';
 import { initializeStockBrokers } from './brokers/stocks';
 import { notificationService } from './services/notifications';
+import { fileStorageService } from './services/fileStorageService';
 
 // Import screens
 import LoginScreen from './components/auth/LoginScreen';
@@ -47,13 +48,15 @@ export type Screen =
   | 'dashboard';
 
 const App: React.FC = () => {
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, isLoggingOut } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [hasChosenFreePlan, setHasChosenFreePlan] = useState(false);
   const [cameFromLogin, setCameFromLogin] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [setupComplete, setSetupComplete] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [syncingPackages, setSyncingPackages] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Check setup status on app initialization and initialize node system
   useEffect(() => {
@@ -61,7 +64,28 @@ const App: React.FC = () => {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const status: any = await invoke('check_setup_status');
-        setSetupComplete(!status.needs_setup);
+
+        if (!status.needs_setup && status.needs_sync) {
+          // Base setup is complete but requirements changed — let user in, sync in background
+          setSetupComplete(true);
+          setSyncingPackages(true);
+          setSyncMessage(status.sync_message || 'Updating packages...');
+
+          invoke('sync_requirements')
+            .then(() => {
+              console.log('[App] Requirements sync completed successfully');
+              setSyncingPackages(false);
+              setSyncMessage(null);
+            })
+            .catch((err: any) => {
+              console.error('[App] Requirements sync failed:', err);
+              setSyncingPackages(false);
+              setSyncMessage(null);
+              // Don't block the app — user can still use it, retry happens on next launch
+            });
+        } else {
+          setSetupComplete(!status.needs_setup);
+        }
       } catch (err) {
         console.error('Failed to check setup status:', err);
         // If check fails, assume setup is needed
@@ -79,6 +103,11 @@ const App: React.FC = () => {
     // Initialize notification service
     notificationService.initialize().catch((err) => {
       console.error('Failed to initialize notification service:', err);
+    });
+
+    // Initialize file storage service
+    fileStorageService.initialize().catch((err) => {
+      console.error('Failed to initialize file storage service:', err);
     });
 
     // Initialize stock broker adapters
@@ -204,14 +233,16 @@ const App: React.FC = () => {
     return <SetupScreen onSetupComplete={() => setSetupComplete(true)} />;
   }
 
-  // Show loading screen while checking authentication
-  if (isLoading) {
+  // Show loading screen while checking authentication or logging out
+  if (isLoading || isLoggingOut) {
     return (
       <div className="min-h-screen bg-black relative overflow-hidden flex items-center justify-center" style={{ minHeight: '100vh', height: '100%' }}>
         <BackgroundPattern />
         <div className="relative z-10 text-center">
           <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-zinc-400 text-sm">Initializing Fincept Terminal...</p>
+          <p className="text-zinc-400 text-sm">
+            {isLoggingOut ? 'Signing out...' : 'Initializing Fincept Terminal...'}
+          </p>
         </div>
       </div>
     );
@@ -226,6 +257,35 @@ const App: React.FC = () => {
             <ThemeProvider>
               <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab} activeTab={activeTab}>
                 <DashboardScreen />
+                {/* Background package sync indicator */}
+                {syncingPackages && (
+                  <div style={{
+                    position: 'fixed',
+                    bottom: 16,
+                    right: 16,
+                    zIndex: 9999,
+                    background: '#0f0f0f',
+                    border: '1px solid #2a2a2a',
+                    borderRadius: 8,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                  }}>
+                    <div style={{
+                      width: 16, height: 16,
+                      border: '2px solid rgba(255,136,0,0.3)',
+                      borderTop: '2px solid #FF8800',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                    }} />
+                    <div>
+                      <p style={{ color: '#e4e4e7', fontSize: 12, fontWeight: 500, margin: 0 }}>Updating packages...</p>
+                      {syncMessage && <p style={{ color: '#71717a', fontSize: 11, margin: '2px 0 0 0' }}>{syncMessage}</p>}
+                    </div>
+                  </div>
+                )}
               </NavigationProvider>
             </ThemeProvider>
           </DataSourceProvider>

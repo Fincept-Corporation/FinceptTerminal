@@ -23,14 +23,14 @@ import {
 
 export class PortfolioOptimizationNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Portfolio Optimization',
+    displayName: 'Portfolio Optimizer',
     name: 'portfolioOptimization',
     icon: 'fa:chart-pie',
     group: ['Analytics', 'Portfolio Management'],
     version: 1,
     description: 'Optimize portfolio allocation using Modern Portfolio Theory',
     defaults: {
-      name: 'Portfolio Optimization',
+      name: 'Portfolio Optimizer',
       color: '#6366f1',
     },
     inputs: [NodeConnectionType.Main],

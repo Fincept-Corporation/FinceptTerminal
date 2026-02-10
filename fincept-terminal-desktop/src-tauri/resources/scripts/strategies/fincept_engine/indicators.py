@@ -32,10 +32,15 @@ class IndicatorBase:
         self._samples = 0
         self._window = deque(maxlen=period)
         self.warm_up_period = period
+        self._is_ready_override = False
 
     @property
     def is_ready(self) -> bool:
-        return self._samples >= self.period
+        return self._is_ready_override or self._samples >= self.period
+
+    @is_ready.setter
+    def is_ready(self, value: bool):
+        self._is_ready_override = value
 
     @property
     def samples(self) -> int:

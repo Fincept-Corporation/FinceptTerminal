@@ -15,7 +15,7 @@ import { AgentBridge } from '../../adapters/AgentBridge';
 
 export class HedgeFundAgentNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Hedge Fund Agent',
+    displayName: 'Hedge Fund AI',
     name: 'hedgeFundAgent',
     icon: 'file:hedge-fund.svg',
     group: ['agents'],
@@ -23,7 +23,7 @@ export class HedgeFundAgentNode implements INodeType {
     subtitle: '={{$parameter["strategy"]}}',
     description: 'Get analysis from hedge fund strategy agents',
     defaults: {
-      name: 'Hedge Fund Agent',
+      name: 'Hedge Fund AI',
       color: '#6366f1',
     },
     inputs: [NodeConnectionType.Main],

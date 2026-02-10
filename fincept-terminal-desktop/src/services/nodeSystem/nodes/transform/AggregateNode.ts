@@ -9,14 +9,14 @@ import {
 
 export class AggregateNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Aggregate',
+    displayName: 'Summarize Data',
     name: 'aggregate',
     icon: 'fa:calculator',
     group: ['Transform'],
     version: 1,
     description: 'Aggregate data (sum, average, count)',
     defaults: {
-      name: 'Aggregate',
+      name: 'Summarize Data',
       color: '#10b981',
     },
     inputs: [NodeConnectionType.Main],

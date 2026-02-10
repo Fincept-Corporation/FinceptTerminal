@@ -9,14 +9,14 @@ import {
 
 export class SMSNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'SMS',
+    displayName: 'Send SMS',
     name: 'sms',
     icon: 'fa:comment',
-    group: ['Notification'],
+    group: ['notifications'],
     version: 1,
     description: 'Send SMS via Twilio',
     defaults: {
-      name: 'SMS',
+      name: 'Send SMS',
       color: '#f22f46',
     },
     inputs: [NodeConnectionType.Main],
@@ -28,7 +28,11 @@ export class SMSNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Twilio Account SID',
+        placeholder: 'AC...',
+        description: 'Twilio Account SID from console',
+        typeOptions: {
+          password: true,
+        },
       },
       {
         displayName: 'Auth Token',
@@ -36,7 +40,11 @@ export class SMSNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Twilio Auth Token',
+        placeholder: 'Your auth token',
+        description: 'Twilio Auth Token from console',
+        typeOptions: {
+          password: true,
+        },
       },
       {
         displayName: 'From Number',
@@ -44,7 +52,8 @@ export class SMSNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Twilio phone number (e.g., +1234567890)',
+        placeholder: '+1234567890',
+        description: 'Twilio phone number (E.164 format)',
       },
       {
         displayName: 'To Number',
@@ -52,7 +61,8 @@ export class SMSNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Recipient phone number (e.g., +1234567890)',
+        placeholder: '+1234567890',
+        description: 'Recipient phone number (E.164 format)',
       },
       {
         displayName: 'Message',
@@ -60,23 +70,38 @@ export class SMSNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'SMS message text',
+        placeholder: 'Your message here...',
+        description: 'SMS message text (max 160 chars recommended)',
+      },
+      {
+        displayName: 'Include Input Data',
+        name: 'includeInputData',
+        type: NodePropertyType.Boolean,
+        default: false,
+        description: 'Whether to include workflow input data (may exceed SMS limit)',
       },
     ],
   };
 
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const items = this.getInputData();
-    const accountSid = this.getNodeParameter('accountSid', 0) as string;
-    const authToken = this.getNodeParameter('authToken', 0) as string;
-    const fromNumber = this.getNodeParameter('fromNumber', 0) as string;
-    const toNumber = this.getNodeParameter('toNumber', 0) as string;
-    const message = this.getNodeParameter('message', 0) as string;
-
     const outputItems: any[] = [];
 
     for (let i = 0; i < items.length; i++) {
       try {
+        const accountSid = this.getNodeParameter('accountSid', i) as string;
+        const authToken = this.getNodeParameter('authToken', i) as string;
+        const fromNumber = this.getNodeParameter('fromNumber', i) as string;
+        const toNumber = this.getNodeParameter('toNumber', i) as string;
+        let message = this.getNodeParameter('message', i) as string;
+        const includeInputData = this.getNodeParameter('includeInputData', i, false) as boolean;
+
+        // Include input data if requested (warn about SMS limits)
+        if (includeInputData && items[i].json) {
+          const dataPreview = JSON.stringify(items[i].json);
+          message += `\n\nData: ${dataPreview.substring(0, 100)}...`;
+        }
+
         const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
 
         const credentials = btoa(`${accountSid}:${authToken}`);
@@ -84,7 +109,7 @@ export class SMSNode implements INodeType {
         const formData = new URLSearchParams({
           From: fromNumber,
           To: toNumber,
-          Body: message,
+          Body: message.substring(0, 1600), // Twilio limit
         });
 
         const response = await fetch(url, {
@@ -98,21 +123,33 @@ export class SMSNode implements INodeType {
 
         const result = await response.json();
 
+        console.log(`[SMSNode] SMS ${response.ok ? 'sent' : 'failed'} to ${toNumber}`);
+
         outputItems.push({
           json: {
             ...items[i].json,
-            smsResponse: result,
-            success: response.ok,
+            notification: {
+              platform: 'sms',
+              to: toNumber,
+              from: fromNumber,
+              success: response.ok,
+              messageSid: result.sid,
+              sentAt: new Date().toISOString(),
+            },
           },
           pairedItem: i,
         });
       } catch (error: any) {
+        console.error('[SMSNode] Error:', error);
         if (this.continueOnFail()) {
           outputItems.push({
             json: {
               ...items[i].json,
-              error: error.message,
-              success: false,
+              notification: {
+                platform: 'sms',
+                success: false,
+                error: error.message,
+              },
             },
             pairedItem: i,
           });

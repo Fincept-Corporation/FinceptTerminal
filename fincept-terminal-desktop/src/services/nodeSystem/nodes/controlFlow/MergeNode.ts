@@ -9,14 +9,14 @@ import {
 
 export class MergeNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Merge',
+    displayName: 'Combine Data',
     name: 'merge',
     icon: 'fa:object-group',
     group: ['Control Flow'],
     version: 1,
     description: 'Combine multiple inputs into one output',
     defaults: {
-      name: 'Merge',
+      name: 'Combine Data',
       color: '#10b981',
     },
     inputs: [

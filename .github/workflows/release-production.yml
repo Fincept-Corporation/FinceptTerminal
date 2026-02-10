@@ -113,6 +113,12 @@ jobs:
           args: ${{ matrix.args }}
           includeUpdaterJson: true
 
+      - name: Debug - List all bundle artifacts
+        run: |
+          echo "=== All files in bundle directory ==="
+          find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -type f 2>/dev/null | sort || echo "Bundle directory not found"
+        shell: bash
+
       - name: Validate and prepare artifacts
         id: prepare
         run: |

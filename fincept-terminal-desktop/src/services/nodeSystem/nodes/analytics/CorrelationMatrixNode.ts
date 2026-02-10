@@ -21,14 +21,14 @@ import {
 
 export class CorrelationMatrixNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Correlation Matrix',
+    displayName: 'Asset Correlation',
     name: 'correlationMatrix',
     icon: 'fa:th',
     group: ['Analytics', 'Statistical'],
     version: 1,
     description: 'Calculate correlation matrices for asset analysis',
     defaults: {
-      name: 'Correlation Matrix',
+      name: 'Asset Correlation',
       color: '#06b6d4',
     },
     inputs: [NodeConnectionType.Main],

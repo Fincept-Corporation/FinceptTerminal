@@ -15,7 +15,7 @@ import { MarketDataBridge } from '../../adapters/MarketDataBridge';
 
 export class GetMarketDepthNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Market Depth',
+    displayName: 'Market Depth',
     name: 'getMarketDepth',
     icon: 'file:orderbook.svg',
     group: ['marketData'],

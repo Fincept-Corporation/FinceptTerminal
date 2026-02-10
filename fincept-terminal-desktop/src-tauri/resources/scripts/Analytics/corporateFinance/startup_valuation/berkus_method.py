@@ -135,6 +135,7 @@ class BerkusMethod:
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import json
+    import sys
 
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}

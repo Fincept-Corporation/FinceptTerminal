@@ -15,7 +15,7 @@ import { TradingBridge } from '../../adapters/TradingBridge';
 
 export class GetPositionsNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Positions',
+    displayName: 'My Positions',
     name: 'getPositions',
     icon: 'file:positions.svg',
     group: ['trading'],
@@ -23,7 +23,7 @@ export class GetPositionsNode implements INodeType {
     subtitle: '={{$parameter["broker"]}} positions',
     description: 'Fetches current open positions from broker',
     defaults: {
-      name: 'Get Positions',
+      name: 'My Positions',
       color: '#3b82f6',
     },
     inputs: [NodeConnectionType.Main],

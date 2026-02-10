@@ -9,14 +9,14 @@ import {
 
 export class ErrorHandlerNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Error Handler',
+    displayName: 'Handle Errors',
     name: 'errorHandler',
     icon: 'fa:exclamation-triangle',
     group: ['Control Flow'],
     version: 1,
     description: 'Handle and transform errors',
     defaults: {
-      name: 'Error Handler',
+      name: 'Handle Errors',
       color: '#f59e0b',
     },
     inputs: [NodeConnectionType.Main],

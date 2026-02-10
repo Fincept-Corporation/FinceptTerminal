@@ -576,6 +576,28 @@ export interface IExecuteFunctions extends IExecuteFunctionsBase {
 
   // Send chunks (for streaming)
   sendChunk?(type: string, itemIndex: number, content?: IDataObject | string): Promise<void>;
+
+  // File helpers (used by file-related nodes)
+  readFile(filePath: string): Promise<string>;
+  writeFile(filePath: string, content: string): Promise<void>;
+  parseCSV(content: string, delimiter: string, hasHeaders: boolean): IDataObject[];
+  generateCSV(data: IDataObject[], delimiter: string, includeHeaders: boolean): string;
+
+  // Crypto helpers (used by CryptoNode)
+  hash(value: string, algorithm: string, encoding: string): Promise<string>;
+
+  // Date/time helpers (used by DateTimeNode)
+  formatDate(date: Date, format: string): string;
+  addTime(date: Date, amount: number, unit: string): Date;
+
+  // JSON path helpers (used by JSONNode)
+  extractPath(obj: any, path: string): any;
+  setPath(obj: any, path: string, value: any): any;
+  deletePath(obj: any, path: string): any;
+
+  // XML helpers (used by XMLNode)
+  xmlToJson(element: Element): IDataObject;
+  jsonToXml(obj: any, rootName: string): string;
 }
 
 /**

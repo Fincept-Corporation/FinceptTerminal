@@ -76,11 +76,10 @@ import {
   MergeNode,
   SplitNode,
   ErrorHandlerNode,
-  // CodeNode, // Deleted
-  // StopAndErrorNode, // Deleted
-  // CompareDatasetsNode, // Deleted
-  // NoOpNode, // Deleted
 } from './nodes/controlFlow';
+
+// Import ExecuteWorkflow node
+import { ExecuteWorkflowNode } from './nodes/controlFlow/ExecuteWorkflowNode';
 
 // Import safety nodes
 import {
@@ -111,6 +110,39 @@ import {
   DeduplicateNode,
   ReshapeNode,
 } from './nodes/transform';
+
+// Import utility nodes
+import {
+  HttpRequestNode,
+  DateTimeNode,
+  CryptoNode,
+  LimitNode,
+  ItemListsNode,
+  RSSReadNode,
+} from './nodes/utilities';
+
+// Import file nodes
+import {
+  SpreadsheetFileNode,
+  BinaryFileNode,
+  FileOperationsNode,
+  CompressNode,
+  ConvertToFileNode,
+} from './nodes/files';
+
+// Import data nodes
+import {
+  JSONNode,
+  XMLNode,
+  HTMLExtractNode,
+  CompareDatasetsNode,
+} from './nodes/data';
+
+// Import database nodes
+import { SQLNode, RedisNode, MongoDBNode } from './nodes/database';
+
+// Import integration nodes
+import { GoogleSheetsNode, FTPNode } from './nodes/integrations';
 
 // TODO: Import agent node generator when ready
 // import { generateAllAgentNodes, getAgentNodeStatistics } from './utils/AgentNodeGenerator';
@@ -162,6 +194,21 @@ class NodeLoaderClass {
 
     // Load AI agent nodes
     await this.loadAgentNodes();
+
+    // Load utility nodes
+    await this.loadUtilityNodes();
+
+    // Load file nodes
+    await this.loadFileNodes();
+
+    // Load data nodes
+    await this.loadDataNodes();
+
+    // Load database nodes
+    await this.loadDatabaseNodes();
+
+    // Load integration nodes
+    await this.loadIntegrationNodes();
 
     this.loaded = true;
   }
@@ -286,10 +333,7 @@ class NodeLoaderClass {
         { instance: new MergeNode(), name: 'MergeNode' },
         { instance: new SplitNode(), name: 'SplitNode' },
         { instance: new ErrorHandlerNode(), name: 'ErrorHandlerNode' },
-        // { instance: new CodeNode(), name: 'CodeNode' }, // Deleted
-        // { instance: new StopAndErrorNode(), name: 'StopAndErrorNode' }, // Deleted
-        // { instance: new CompareDatasetsNode(), name: 'CompareDatasetsNode' }, // Deleted
-        // { instance: new NoOpNode(), name: 'NoOpNode' }, // Deleted
+        { instance: new ExecuteWorkflowNode(), name: 'ExecuteWorkflowNode' },
       ];
 
       for (const { instance, name} of nodes) {
@@ -502,6 +546,111 @@ class NodeLoaderClass {
     this.loadedNodes.clear();
     NodeRegistry.clear();
     await this.loadAll();
+  }
+
+  /**
+   * Load utility nodes
+   */
+  private async loadUtilityNodes(): Promise<void> {
+    try {
+      const nodes = [
+        { instance: new HttpRequestNode(), name: 'HttpRequestNode' },
+        { instance: new DateTimeNode(), name: 'DateTimeNode' },
+        { instance: new CryptoNode(), name: 'CryptoNode' },
+        { instance: new LimitNode(), name: 'LimitNode' },
+        { instance: new ItemListsNode(), name: 'ItemListsNode' },
+        { instance: new RSSReadNode(), name: 'RSSReadNode' },
+      ];
+
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading utility nodes:', error);
+    }
+  }
+
+  /**
+   * Load file nodes
+   */
+  private async loadFileNodes(): Promise<void> {
+    try {
+      const nodes = [
+        { instance: new SpreadsheetFileNode(), name: 'SpreadsheetFileNode' },
+        { instance: new BinaryFileNode(), name: 'BinaryFileNode' },
+        { instance: new FileOperationsNode(), name: 'FileOperationsNode' },
+        { instance: new CompressNode(), name: 'CompressNode' },
+        { instance: new ConvertToFileNode(), name: 'ConvertToFileNode' },
+      ];
+
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading file nodes:', error);
+    }
+  }
+
+  /**
+   * Load data nodes
+   */
+  private async loadDataNodes(): Promise<void> {
+    try {
+      const nodes = [
+        { instance: new JSONNode(), name: 'JSONNode' },
+        { instance: new XMLNode(), name: 'XMLNode' },
+        { instance: new HTMLExtractNode(), name: 'HTMLExtractNode' },
+        { instance: new CompareDatasetsNode(), name: 'CompareDatasetsNode' },
+      ];
+
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading data nodes:', error);
+    }
+  }
+
+  /**
+   * Load database nodes
+   */
+  private async loadDatabaseNodes(): Promise<void> {
+    try {
+      const nodes = [
+        { instance: new SQLNode(), name: 'SQLNode' },
+        { instance: new RedisNode(), name: 'RedisNode' },
+        { instance: new MongoDBNode(), name: 'MongoDBNode' },
+      ];
+
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading database nodes:', error);
+    }
+  }
+
+  /**
+   * Load integration nodes
+   */
+  private async loadIntegrationNodes(): Promise<void> {
+    try {
+      const nodes = [
+        { instance: new GoogleSheetsNode(), name: 'GoogleSheetsNode' },
+        { instance: new FTPNode(), name: 'FTPNode' },
+      ];
+
+      for (const { instance, name } of nodes) {
+        NodeRegistry.registerNodeType(instance, name);
+        this.loadedNodes.set(instance.description.name, instance);
+      }
+    } catch (error) {
+      console.error('[NodeLoader] Error loading integration nodes:', error);
+    }
   }
 
   /**

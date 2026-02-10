@@ -9,14 +9,14 @@ import {
 
 export class RiskCheckNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Risk Check',
+    displayName: 'Risk Validation',
     name: 'riskCheck',
     icon: 'fa:shield-alt',
     group: ['Safety', 'Risk Management'],
     version: 1,
     description: 'Validate trades against risk limits',
     defaults: {
-      name: 'Risk Check',
+      name: 'Risk Validation',
       color: '#ef4444',
     },
     inputs: [NodeConnectionType.Main],

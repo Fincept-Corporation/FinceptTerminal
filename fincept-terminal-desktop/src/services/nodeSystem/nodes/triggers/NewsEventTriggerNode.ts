@@ -14,7 +14,7 @@ import {
 
 export class NewsEventTriggerNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'News Event Trigger',
+    displayName: 'News Alert',
     name: 'newsEventTrigger',
     icon: 'file:news.svg',
     group: ['trigger'],

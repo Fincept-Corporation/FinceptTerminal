@@ -14,7 +14,7 @@ import {
 
 export class ManualTriggerNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Manual Trigger',
+    displayName: 'Start Workflow',
     name: 'manualTrigger',
     icon: 'file:trigger.svg',
     group: ['trigger'],
@@ -22,7 +22,7 @@ export class ManualTriggerNode implements INodeType {
     subtitle: 'Start workflow manually',
     description: 'Triggers workflow execution when you click the Run button',
     defaults: {
-      name: 'Manual Trigger',
+      name: 'Start Workflow',
       color: '#f59e0b',
     },
     inputs: [],

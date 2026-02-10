@@ -2,19 +2,19 @@
 GS-Quant Timeseries Analytics Wrapper
 =====================================
 
-Comprehensive wrapper for gs_quant.timeseries module providing 338 time series
-analysis functions for financial data.
+Comprehensive wrapper for gs_quant.timeseries module providing 157 FREE offline
+time series analysis functions for financial data.
 
-Features:
-- Statistical analysis (returns, volatility, correlation)
-- Technical indicators (MA, MACD, RSI, Bollinger Bands)
-- Data transformations (filtering, smoothing, normalization)
-- Financial calculations (Sharpe ratio, drawdowns, beta)
-- Backtesting utilities
-- Risk metrics
+Split into 6 specialized modules:
+- ts_math_statistics: Math operations, logical ops & statistics (40 functions)
+- ts_returns_performance: Returns & performance (11 functions)
+- ts_risk_measures: Risk, volatility, VaR & swap measures (19 functions)
+- ts_technical_indicators: Technical indicators (10 functions)
+- ts_data_transforms: Data transforms & utilities (39 functions)
+- ts_portfolio_analytics: Portfolio analytics, baskets & simulation (38 functions)
 
-Coverage: 338 functions
-Authentication: Most functions work offline with data input
+This file provides the TimeseriesAnalytics class as a unified interface.
+All functions work offline. No GS API required.
 """
 
 import pandas as pd
@@ -25,13 +25,13 @@ from datetime import datetime, date
 import json
 import warnings
 
-# Import gs_quant timeseries module
-try:
-    from gs_quant import timeseries as ts
-    GS_AVAILABLE = True
-except ImportError:
-    GS_AVAILABLE = False
-    warnings.warn("gs_quant not available, using fallback implementations")
+# Import sub-modules
+from . import ts_math_statistics as math_stats
+from . import ts_returns_performance as ret_perf
+from . import ts_risk_measures as risk_meas
+from . import ts_technical_indicators as tech_ind
+from . import ts_data_transforms as data_tx
+from . import ts_portfolio_analytics as port_ana
 
 warnings.filterwarnings('ignore')
 
@@ -1028,56 +1028,6 @@ def main():
     print("  - Correlation & Beta: 10+ functions")
     print("  - Data Transformations: 10+ functions")
     print("  - Most functions work offline without GS API")
-
-
-# ============================================================================
-# RE-EXPORT ALL GS-QUANT TIMESERIES CLASSES
-# ============================================================================
-
-if GS_AVAILABLE:
-    # Re-export all timeseries classes for direct access
-    # These are enums, data classes, and helper types used by the functions
-    try:
-        from gs_quant.timeseries import (
-            # Core data types
-            Asset, Basket, Bond, Dataset, DataQuery, DataContext, DataMeasure,
-            ExtendedSeries, FactorRiskModel, FactorRiskReport,
-
-            # Enumerations
-            AggregateFunction, AggregatePeriod, AnnualizationFactor,
-            AssetClass, AssetIdentifier, AssetType,
-            BenchmarkType, BenchmarkTypeCB,
-            Currency, CurrencyEnum, CurveType,
-            DayCountConvention, Direction,
-            EntityType, EventType,
-            Fields, FilterOperator, Frequency, FiscalPeriod,
-
-            # Market data references
-            CdsVolReference, CrossCurrencyRateOptionType,
-            EUNatGasDataReference, EUPowerDataReference, EdrDataReference,
-            FXForwardType, FXSpotCarry,
-
-            # Metrics and items
-            EpidemicModel, EquilibriumExchangeRateMetric, EsgMetric,
-            EstimateBasis, EstimateItem, EstimateStatistic,
-            FundamentalAdvancedDerivedItem, FundamentalAdvancedItem,
-            FundamentalBasicDerivedItem, FundamentalBasicItem,
-            FundamentalBasis, FundamentalFormat, FundamentalMetric,
-
-            # Additional enums and types
-            Entitlement, GIRDomain, HedgeFundType, IndexNotTradingReasons,
-            LiquidityMeasure, MeasureBacktest, MeasureEntityType,
-            MeetingType, OptionStyle, OptionType, PayReceive, Period,
-            PnlType, PositionSourceType, PricingLocation, Region,
-            ReturnFormat, RiskMeasureType, RiskMeasureUnit, SortField,
-            StatsType, SwapClearingHouse, SwapSettlement, TradeType,
-            WeatherIndexType,
-
-            # And many more classes that gs_quant.timeseries provides
-        )
-    except ImportError:
-        # Some classes may not be available in all gs-quant versions
-        pass
 
 
 if __name__ == "__main__":

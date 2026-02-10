@@ -39,6 +39,7 @@ import { WorkspaceProvider } from '@/contexts/WorkspaceContext';
 import WorkspaceDialog from './WorkspaceDialog';
 import { terminalMCPProvider } from '@/services/mcp/internal';
 import ChatBubble from '@/components/common/ChatBubble';
+import FileManagerTab from '@/components/tabs/file-manager/FileManagerTab';
 
 // Lazy loaded tabs (heavy/Python-dependent)
 const EquityResearchTab = React.lazy(() => import('@/components/tabs/equity-research'));
@@ -237,14 +238,14 @@ const HeaderTimeDisplay = () => {
 // Internal component that uses the InterfaceMode context
 function FinxeptTerminalContent() {
   const { t } = useTranslation('tabs');
-  const { session, logout } = useAuth();
+  const { session, logout, isLoggingOut } = useAuth();
   const navigation = useNavigation();
   const { mode, toggleMode } = useInterfaceMode();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [workspaceDialogMode, setWorkspaceDialogMode] = useState<'save' | 'open' | 'new' | 'export' | 'import' | null>(null);
   const [chatBubbleEnabled, setChatBubbleEnabled] = useState(true);
-  const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
+  const { updateAvailable, updateInfo, isInstalling, installProgress, error, checkForUpdate, installUpdate, dismissUpdate } = useAutoUpdater();
 
   // Load chat bubble setting
   React.useEffect(() => {
@@ -461,10 +462,12 @@ function FinxeptTerminalContent() {
       case 'show_about':
         break;
       case 'check_updates':
+        checkForUpdate();
         break;
       case 'logout':
+        // Don't use window.location.href - let React handle the navigation
+        // The App.tsx useEffect will detect session=null and navigate to login
         await logout();
-        window.location.href = '/';
         break;
       case 'exit':
         break;
@@ -549,6 +552,7 @@ function FinxeptTerminalContent() {
     { label: 'Save Workspace', shortcut: 'Ctrl+S', icon: null, action: 'save_workspace' },
     { label: 'Export Workspace', icon: null, action: 'export_workspace' },
     { label: 'Import Workspace', icon: null, action: 'import_workspace', separator: true },
+    { label: 'File Manager', icon: null, action: () => setActiveTab('file-manager'), separator: true },
     { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit', separator: true }
   ];
 
@@ -761,35 +765,43 @@ function FinxeptTerminalContent() {
           <HeaderSupportButtons />
           <button
             onClick={async () => {
+              // Don't use window.location.href - let React handle the navigation
+              // The App.tsx useEffect will detect session=null and navigate to login
               await logout();
-              window.location.href = '/';
             }}
+            disabled={isLoggingOut}
             style={{
-              backgroundColor: 'transparent',
-              color: '#ff6b6b',
-              border: '1px solid #ff6b6b',
+              backgroundColor: isLoggingOut ? '#333' : 'transparent',
+              color: isLoggingOut ? '#888' : '#ff6b6b',
+              border: `1px solid ${isLoggingOut ? '#555' : '#ff6b6b'}`,
               padding: '3px 8px',
               fontSize: '10px',
-              cursor: 'pointer',
+              cursor: isLoggingOut ? 'not-allowed' : 'pointer',
               borderRadius: '3px',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
               fontWeight: 'bold',
-              whiteSpace: 'nowrap' as const
+              whiteSpace: 'nowrap' as const,
+              opacity: isLoggingOut ? 0.6 : 1,
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#ff6b6b';
-              e.currentTarget.style.color = '#fff';
+              if (!isLoggingOut) {
+                e.currentTarget.style.backgroundColor = '#ff6b6b';
+                e.currentTarget.style.color = '#fff';
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#ff6b6b';
+              if (!isLoggingOut) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#ff6b6b';
+              }
             }}
-            title="Logout"
+            title={isLoggingOut ? "Logging out..." : "Logout"}
           >
-            <LogOut size={12} />
-            LOGOUT
+            <LogOut size={12} className={isLoggingOut ? 'animate-pulse' : ''} />
+            {isLoggingOut ? 'LOGGING OUT...' : 'LOGOUT'}
           </button>
         </div>
       </div>
@@ -1079,6 +1091,9 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="settings" className="h-full m-0 p-0">
               <SettingsTab />
+            </TabsContent>
+            <TabsContent value="file-manager" className="h-full m-0 p-0">
+              <FileManagerTab />
             </TabsContent>
             <TabsContent value="nodes" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>

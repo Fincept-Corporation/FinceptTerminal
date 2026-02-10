@@ -1,5 +1,12 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import {
+  FINCEPT,
+  SPACING,
+  BORDER_RADIUS,
+  FONT_FAMILY,
+  FONT_SIZE,
+} from './shared';
 
 interface ResultsModalProps {
   data: any;
@@ -19,39 +26,55 @@ const ResultsModal: React.FC<ResultsModalProps> = ({ data, workflowName, onClose
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 9999
+      zIndex: 9999,
     }} onClick={onClose}>
       <div style={{
-        background: '#1a1a1a',
-        border: '1px solid #2d2d2d',
-        borderRadius: '8px',
-        padding: '20px',
+        background: FINCEPT.HEADER_BG,
+        border: `1px solid ${FINCEPT.BORDER}`,
+        borderRadius: BORDER_RADIUS.LG,
+        padding: SPACING.XXL,
         maxWidth: '600px',
-        width: '90%'
+        width: '90%',
+        fontFamily: FONT_FAMILY,
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '16px'
+          marginBottom: SPACING.XL,
         }}>
-          <h3 style={{ color: '#ea580c' }}>{workflowName} - Results</h3>
+          <h3 style={{
+            color: FINCEPT.ORANGE,
+            fontSize: FONT_SIZE.XXL,
+            fontWeight: 700,
+            margin: 0,
+            fontFamily: FONT_FAMILY,
+          }}>
+            {workflowName} - Results
+          </h3>
           <button onClick={onClose} style={{
             background: 'transparent',
             border: 'none',
-            color: '#a3a3a3',
-            cursor: 'pointer'
+            color: FINCEPT.GRAY,
+            cursor: 'pointer',
+            padding: SPACING.XS,
+            display: 'flex',
+            alignItems: 'center',
           }}>
             <X size={20} />
           </button>
         </div>
         <pre style={{
-          background: '#0a0a0a',
-          padding: '12px',
-          borderRadius: '4px',
+          background: FINCEPT.DARK_BG,
+          padding: SPACING.LG,
+          borderRadius: BORDER_RADIUS.SM,
           overflow: 'auto',
           maxHeight: '400px',
-          color: '#a3a3a3'
+          color: FINCEPT.GRAY,
+          fontSize: FONT_SIZE.LG,
+          fontFamily: FONT_FAMILY,
+          margin: 0,
+          border: `1px solid ${FINCEPT.BORDER}`,
         }}>
           {JSON.stringify(data, null, 2)}
         </pre>

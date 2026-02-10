@@ -15,7 +15,7 @@ import { MarketDataBridge, DataProvider } from '../../adapters/MarketDataBridge'
 
 export class GetTickerStatsNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Ticker Stats',
+    displayName: 'Ticker Statistics',
     name: 'getTickerStats',
     icon: 'file:stats.svg',
     group: ['marketData'],

@@ -16,14 +16,14 @@ import {
 
 export class SwitchNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Switch',
+    displayName: 'Multi-Way Branch',
     name: 'switch',
     icon: 'fa:random',
     group: ['Control Flow'],
     version: 1,
     description: 'Route items based on field value matching',
     defaults: {
-      name: 'Switch',
+      name: 'Multi-Way Branch',
       color: '#6366f1',
     },
     inputs: [NodeConnectionType.Main],

@@ -6,10 +6,25 @@
  */
 
 import React, { useState } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Position } from 'reactflow';
 import { Activity, Play, Settings, Check, AlertCircle, TrendingUp, Loader } from 'lucide-react';
 import { backtestingService } from '@/services/backtesting/BacktestingService';
 import { BacktestRequest, BacktestResult } from '@/services/backtesting/interfaces/types';
+import {
+  FINCEPT,
+  SPACING,
+  BORDER_RADIUS,
+  BaseNode,
+  NodeHeader,
+  IconButton,
+  Button,
+  InputField,
+  InfoPanel,
+  StatusPanel,
+  SettingsPanel,
+  KeyValue,
+  getStatusColor,
+} from './shared';
 
 interface BacktestNodeProps {
   data: {
@@ -49,21 +64,14 @@ const BacktestNode: React.FC<BacktestNodeProps> = ({ data, selected }) => {
     }
   };
 
-  const getStatusColor = () => {
-    switch (data.status) {
-      case 'running': return '#3b82f6';
-      case 'completed': return '#10b981';
-      case 'error': return '#ef4444';
-      default: return '#6b7280';
-    }
-  };
+  const statusColor = getStatusColor(data.status);
 
   const getStatusIcon = () => {
     switch (data.status) {
-      case 'running': return <Loader size={14} className="animate-spin" color="#3b82f6" />;
-      case 'completed': return <Check size={14} color="#10b981" />;
-      case 'error': return <AlertCircle size={14} color="#ef4444" />;
-      default: return <Activity size={14} color="#6b7280" />;
+      case 'running': return <Loader size={14} className="animate-spin" color={FINCEPT.BLUE} />;
+      case 'completed': return <Check size={14} color={FINCEPT.GREEN} />;
+      case 'error': return <AlertCircle size={14} color={FINCEPT.RED} />;
+      default: return <Activity size={14} color={FINCEPT.GRAY} />;
     }
   };
 
@@ -81,294 +89,120 @@ const BacktestNode: React.FC<BacktestNodeProps> = ({ data, selected }) => {
   const performance = formatPerformance();
 
   return (
-    <div style={{
-      background: selected ? '#252525' : '#1a1a1a',
-      border: `2px solid ${selected ? '#3b82f6' : getStatusColor()}`,
-      borderRadius: '8px',
-      minWidth: '300px',
-      maxWidth: '400px',
-      fontFamily: 'Consolas, monospace',
-      boxShadow: selected ? `0 0 16px #3b82f660` : '0 2px 8px rgba(0,0,0,0.3)',
-      position: 'relative'
-    }}>
-      {/* Input Handle - Strategy */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="strategy"
-        style={{
-          background: '#8b5cf6',
-          width: '12px',
-          height: '12px',
-          border: '2px solid #1a1a1a',
-          top: '30%'
-        }}
-      />
-
-      {/* Output Handle - Results */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="results"
-        style={{
-          background: '#10b981',
-          width: '12px',
-          height: '12px',
-          border: '2px solid #1a1a1a',
-        }}
-      />
-
+    <BaseNode
+      selected={selected}
+      minWidth="300px"
+      maxWidth="400px"
+      borderColor={statusColor}
+      handles={[
+        { type: 'target', position: Position.Left, id: 'strategy', color: FINCEPT.BLUE, top: '30%', label: 'Strategy' },
+        { type: 'source', position: Position.Right, id: 'results', color: FINCEPT.GREEN, label: 'Results' },
+      ]}
+    >
       {/* Header */}
-      <div style={{
-        padding: '12px',
-        borderBottom: '1px solid #2a2a2a',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: '#1f1f1f'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Activity size={16} color={getStatusColor()} />
-          <span style={{ color: '#e5e7eb', fontSize: '12px', fontWeight: 'bold' }}>
-            {data.label}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          {getStatusIcon()}
-          <Settings
-            size={14}
-            color="#9ca3af"
-            style={{ cursor: 'pointer' }}
-            onClick={() => setShowSettings(!showSettings)}
-          />
-        </div>
-      </div>
+      <NodeHeader
+        icon={<Activity size={16} />}
+        title={data.label}
+        color={statusColor}
+        rightActions={
+          <>
+            {getStatusIcon()}
+            <IconButton
+              icon={<Settings size={14} />}
+              onClick={() => setShowSettings(!showSettings)}
+              active={showSettings}
+            />
+          </>
+        }
+      />
 
       {/* Settings Panel */}
-      {showSettings && (
-        <div style={{
-          padding: '12px',
-          borderBottom: '1px solid #2a2a2a',
-          background: '#1a1a1a'
-        }}>
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ color: '#9ca3af', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-              Start Date
-            </label>
-            <input
-              type="date"
-              value={localConfig.startDate}
-              onChange={(e) => setLocalConfig({ ...localConfig, startDate: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '6px',
-                background: '#252525',
-                border: '1px solid #3a3a3a',
-                borderRadius: '4px',
-                color: '#e5e7eb',
-                fontSize: '10px'
-              }}
-            />
-          </div>
+      <SettingsPanel isOpen={showSettings}>
+        <InputField
+          label="Start Date"
+          type="date"
+          value={localConfig.startDate}
+          onChange={(val) => setLocalConfig({ ...localConfig, startDate: val })}
+        />
 
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ color: '#9ca3af', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-              End Date
-            </label>
-            <input
-              type="date"
-              value={localConfig.endDate}
-              onChange={(e) => setLocalConfig({ ...localConfig, endDate: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '6px',
-                background: '#252525',
-                border: '1px solid #3a3a3a',
-                borderRadius: '4px',
-                color: '#e5e7eb',
-                fontSize: '10px'
-              }}
-            />
-          </div>
+        <InputField
+          label="End Date"
+          type="date"
+          value={localConfig.endDate}
+          onChange={(val) => setLocalConfig({ ...localConfig, endDate: val })}
+        />
 
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{ color: '#9ca3af', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-              Initial Capital ($)
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={String(localConfig.initialCapital)}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === '' || /^\d*\.?\d*$/.test(v)) {
-                  setLocalConfig({ ...localConfig, initialCapital: v === '' ? 0 : Number(v) });
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '6px',
-                background: '#252525',
-                border: '1px solid #3a3a3a',
-                borderRadius: '4px',
-                color: '#e5e7eb',
-                fontSize: '10px'
-              }}
-            />
-          </div>
+        <InputField
+          label="Initial Capital ($)"
+          type="number"
+          value={String(localConfig.initialCapital)}
+          onChange={(val) => {
+            const numVal = val === '' ? 0 : Number(val);
+            setLocalConfig({ ...localConfig, initialCapital: numVal });
+          }}
+        />
 
-          <button
-            onClick={handleSaveSettings}
-            style={{
-              width: '100%',
-              padding: '6px',
-              background: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '10px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            Save Configuration
-          </button>
-        </div>
-      )}
+        <Button
+          label="SAVE CONFIGURATION"
+          onClick={handleSaveSettings}
+          variant="primary"
+          fullWidth
+        />
+      </SettingsPanel>
 
       {/* Content */}
-      <div style={{ padding: '12px' }}>
+      <div style={{ padding: SPACING.LG }}>
         {/* Configuration Display */}
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '10px', color: '#9ca3af', marginBottom: '6px' }}>
-            Configuration:
-          </div>
-          <div style={{ fontSize: '9px', color: '#d1d5db', fontFamily: 'monospace' }}>
-            {localConfig.startDate} → {localConfig.endDate}
-          </div>
-          <div style={{ fontSize: '9px', color: '#d1d5db', fontFamily: 'monospace' }}>
-            Capital: ${localConfig.initialCapital.toLocaleString()}
-          </div>
-        </div>
+        <InfoPanel title="Configuration">
+          <KeyValue label="Period" value={`${localConfig.startDate} → ${localConfig.endDate}`} />
+          <KeyValue label="Capital" value={`$${localConfig.initialCapital.toLocaleString()}`} />
+        </InfoPanel>
 
         {/* Results Display */}
         {performance && data.status === 'completed' && (
           <div style={{
-            padding: '8px',
-            background: '#1f1f1f',
-            borderRadius: '4px',
-            marginBottom: '8px'
+            padding: SPACING.MD,
+            background: FINCEPT.HEADER_BG,
+            borderRadius: BORDER_RADIUS.LG,
+            marginBottom: SPACING.MD
           }}>
-            <div style={{ fontSize: '10px', color: '#9ca3af', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ fontSize: '10px', color: FINCEPT.GRAY, marginBottom: SPACING.SM, display: 'flex', alignItems: 'center', gap: SPACING.XS }}>
               <TrendingUp size={12} />
               Results:
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '9px' }}>
-              <div>
-                <div style={{ color: '#6b7280' }}>Total Return</div>
-                <div style={{ color: performance.totalReturn.startsWith('-') ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>
-                  {performance.totalReturn}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#6b7280' }}>Sharpe Ratio</div>
-                <div style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                  {performance.sharpe}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#6b7280' }}>Max DD</div>
-                <div style={{ color: '#ef4444', fontWeight: 'bold' }}>
-                  {performance.maxDD}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#6b7280' }}>Trades</div>
-                <div style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                  {performance.trades}
-                </div>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SM, fontSize: '9px' }}>
+              <KeyValue
+                label="Total Return"
+                value={performance.totalReturn}
+                valueColor={performance.totalReturn.startsWith('-') ? FINCEPT.RED : FINCEPT.GREEN}
+              />
+              <KeyValue label="Sharpe Ratio" value={performance.sharpe} />
+              <KeyValue label="Max DD" value={performance.maxDD} valueColor={FINCEPT.RED} />
+              <KeyValue label="Trades" value={String(performance.trades)} />
             </div>
           </div>
         )}
 
         {/* Error Display */}
         {data.error && data.status === 'error' && (
-          <div style={{
-            padding: '8px',
-            background: '#3a0a0a',
-            border: '1px solid #ef4444',
-            borderRadius: '4px',
-            marginBottom: '8px'
-          }}>
-            <div style={{ fontSize: '10px', color: '#ef4444', marginBottom: '4px' }}>
-              Error:
-            </div>
-            <div style={{ fontSize: '9px', color: '#fca5a5' }}>
-              {data.error}
-            </div>
-          </div>
+          <StatusPanel
+            type="error"
+            icon={<AlertCircle size={12} />}
+            message={data.error}
+          />
         )}
 
         {/* Run Button */}
-        <button
+        <Button
+          label={data.status === 'running' ? 'Running Backtest...' : 'Run Backtest'}
+          icon={data.status === 'running' ? <Loader size={14} className="animate-spin" /> : <Play size={14} />}
           onClick={handleRunBacktest}
+          variant="primary"
           disabled={data.status === 'running' || !data.strategyCode}
-          style={{
-            width: '100%',
-            padding: '8px',
-            background: data.status === 'running' ? '#6b7280' : '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '11px',
-            fontWeight: 'bold',
-            cursor: data.status === 'running' || !data.strategyCode ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            opacity: data.status === 'running' || !data.strategyCode ? 0.6 : 1
-          }}
-        >
-          {data.status === 'running' ? (
-            <>
-              <Loader size={14} className="animate-spin" />
-              Running Backtest...
-            </>
-          ) : (
-            <>
-              <Play size={14} />
-              Run Backtest
-            </>
-          )}
-        </button>
+          fullWidth
+        />
       </div>
-
-      {/* Handle Labels */}
-      <div style={{
-        position: 'absolute',
-        left: '-60px',
-        top: '30%',
-        transform: 'translateY(-50%)',
-        fontSize: '9px',
-        color: '#6b7280',
-        whiteSpace: 'nowrap'
-      }}>
-        Strategy
-      </div>
-      <div style={{
-        position: 'absolute',
-        right: '-50px',
-        top: '50%',
-        transform: 'translateY(-50%)',
-        fontSize: '9px',
-        color: '#6b7280',
-        whiteSpace: 'nowrap'
-      }}>
-        Results
-      </div>
-    </div>
+    </BaseNode>
   );
 };
 

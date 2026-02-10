@@ -21,14 +21,14 @@ import {
 
 export class PerformanceMetricsNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Performance Metrics',
+    displayName: 'Performance Stats',
     name: 'performanceMetrics',
     icon: 'fa:trophy',
     group: ['Analytics', 'Performance'],
     version: 1,
     description: 'Calculate comprehensive performance and attribution metrics',
     defaults: {
-      name: 'Performance Metrics',
+      name: 'Performance Stats',
       color: '#8b5cf6',
     },
     inputs: [NodeConnectionType.Main],

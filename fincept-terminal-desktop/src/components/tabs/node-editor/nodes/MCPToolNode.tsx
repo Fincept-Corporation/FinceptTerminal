@@ -2,9 +2,24 @@
 // Dynamically renders based on tool schema
 
 import React, { useState, useEffect } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Position } from 'reactflow';
 import { Zap, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { mcpToolService, MCPTool } from '@/services/mcp/mcpToolService';
+import {
+  FINCEPT,
+  SPACING,
+  FONT_FAMILY,
+  BORDER_RADIUS,
+  DynamicHandleBaseNode,
+  NodeHeader,
+  Button,
+  InputField,
+  TextareaField,
+  StatusPanel,
+  getLabelStyle,
+  getInputStyle,
+  getTextareaStyle,
+} from './shared';
 
 interface MCPToolNodeProps {
   data: {
@@ -25,17 +40,6 @@ const MCPToolNode: React.FC<MCPToolNodeProps> = ({ data, selected }) => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [lastResult, setLastResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Fincept colors
-  const ORANGE = '#FFA500';
-  const WHITE = '#FFFFFF';
-  const GRAY = '#787878';
-  const DARK_BG = '#0a0a0a';
-  const PANEL_BG = '#1a1a1a';
-  const BORDER = '#2d2d2d';
-  const GREEN = '#10b981';
-  const RED = '#ef4444';
-  const YELLOW = '#FFFF00';
 
   // Load tool schema on mount
   useEffect(() => {
@@ -110,17 +114,11 @@ const MCPToolNode: React.FC<MCPToolNodeProps> = ({ data, selected }) => {
     const isProvidedByConnection = data.inputs && key in data.inputs;
 
     return (
-      <div key={key} style={{ marginBottom: '8px' }}>
-        <label style={{
-          color: isRequired ? YELLOW : GRAY,
-          fontSize: '9px',
-          display: 'block',
-          marginBottom: '2px',
-          fontWeight: isRequired ? 'bold' : 'normal'
-        }}>
+      <div key={key} style={{ marginBottom: SPACING.MD }}>
+        <label style={getLabelStyle(isRequired)}>
           {key}{isRequired ? ' *' : ''}
           {isProvidedByConnection && (
-            <span style={{ color: GREEN, marginLeft: '4px' }}>
+            <span style={{ color: FINCEPT.GREEN, marginLeft: SPACING.XS }}>
               [Connected]
             </span>
           )}
@@ -148,17 +146,7 @@ const MCPToolNode: React.FC<MCPToolNodeProps> = ({ data, selected }) => {
               }
             }}
             disabled={isProvidedByConnection}
-            style={{
-              width: '100%',
-              backgroundColor: DARK_BG,
-              border: `1px solid ${BORDER}`,
-              color: WHITE,
-              padding: '4px',
-              fontSize: '9px',
-              fontFamily: 'monospace',
-              opacity: isProvidedByConnection ? 0.5 : 1,
-              cursor: isProvidedByConnection ? 'not-allowed' : 'text'
-            }}
+            style={getInputStyle(isProvidedByConnection)}
           />
         ) : (
           <textarea
@@ -166,19 +154,7 @@ const MCPToolNode: React.FC<MCPToolNodeProps> = ({ data, selected }) => {
             onChange={(e) => handleParameterChange(key, e.target.value)}
             disabled={isProvidedByConnection}
             placeholder={propSchema.description || ''}
-            style={{
-              width: '100%',
-              backgroundColor: DARK_BG,
-              border: `1px solid ${BORDER}`,
-              color: WHITE,
-              padding: '4px',
-              fontSize: '9px',
-              fontFamily: 'monospace',
-              resize: 'vertical',
-              minHeight: '40px',
-              opacity: isProvidedByConnection ? 0.5 : 1,
-              cursor: isProvidedByConnection ? 'not-allowed' : 'text'
-            }}
+            style={getTextareaStyle(isProvidedByConnection)}
           />
         )}
       </div>
@@ -193,174 +169,91 @@ const MCPToolNode: React.FC<MCPToolNodeProps> = ({ data, selected }) => {
     return validation.valid;
   };
 
+  // Generate dynamic input handles from tool schema
+  const inputHandles = tool?.inputSchema?.properties
+    ? Object.keys(tool.inputSchema.properties).map((key, index) => ({
+        id: key,
+        label: key,
+        top: `${30 + index * 20}px`,
+      }))
+    : [];
+
   return (
-    <div style={{
-      backgroundColor: PANEL_BG,
-      border: `2px solid ${selected ? ORANGE : BORDER}`,
-      borderRadius: '6px',
-      padding: '12px',
-      minWidth: '280px',
-      maxWidth: '350px',
-      fontFamily: 'Consolas, monospace',
-      boxShadow: selected ? `0 0 12px ${ORANGE}80` : 'none'
-    }}>
-      {/* Input handles - dynamically generated from schema */}
-      {tool?.inputSchema?.properties && Object.keys(tool.inputSchema.properties).map((key, index) => (
-        <Handle
-          key={`input-${key}`}
-          type="target"
-          position={Position.Left}
-          id={key}
-          style={{
-            top: `${30 + (index * 20)}px`,
-            background: ORANGE,
-            width: '10px',
-            height: '10px',
-            border: `2px solid ${DARK_BG}`
-          }}
-        />
-      ))}
-
+    <DynamicHandleBaseNode
+      selected={selected}
+      minWidth="280px"
+      maxWidth="350px"
+      inputHandles={inputHandles}
+      outputHandles={[{ id: 'output' }]}
+      inputColor={FINCEPT.ORANGE}
+      outputColor={FINCEPT.GREEN}
+    >
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        marginBottom: '12px',
-        paddingBottom: '8px',
-        borderBottom: `1px solid ${BORDER}`
-      }}>
-        <Zap size={16} color={ORANGE} />
-        <div style={{ flex: 1 }}>
-          <div style={{
-            color: WHITE,
-            fontSize: '11px',
-            fontWeight: 'bold',
-            marginBottom: '2px'
-          }}>
-            {data.label}
-          </div>
-          <div style={{
-            color: GRAY,
-            fontSize: '8px'
-          }}>
-            {data.serverId} • {data.toolName}
-          </div>
-        </div>
-      </div>
-
-      {/* Tool Description */}
-      {tool?.description && (
-        <div style={{
-          color: GRAY,
-          fontSize: '9px',
-          marginBottom: '12px',
-          lineHeight: '1.4'
-        }}>
-          {tool.description}
-        </div>
-      )}
-
-      {/* Parameters */}
-      {tool?.inputSchema?.properties && (
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{
-            color: YELLOW,
-            fontSize: '10px',
-            fontWeight: 'bold',
-            marginBottom: '8px'
-          }}>
-            PARAMETERS
-          </div>
-          {Object.entries(tool.inputSchema.properties).map(([key, propSchema]: [string, any]) =>
-            renderParameterInput(key, propSchema)
-          )}
-        </div>
-      )}
-
-      {/* Execute Button */}
-      <button
-        onClick={executeTool}
-        disabled={!isReadyToExecute() || isExecuting}
-        style={{
-          width: '100%',
-          backgroundColor: isReadyToExecute() && !isExecuting ? GREEN : GRAY,
-          color: 'black',
-          border: 'none',
-          padding: '8px',
-          fontSize: '10px',
-          fontWeight: 'bold',
-          cursor: isReadyToExecute() && !isExecuting ? 'pointer' : 'not-allowed',
-          borderRadius: '4px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '6px',
-          marginBottom: '8px'
-        }}
-      >
-        {isExecuting ? (
-          <>
-            <Loader size={12} className="animate-spin" />
-            EXECUTING...
-          </>
-        ) : (
-          <>
-            <Zap size={12} />
-            EXECUTE TOOL
-          </>
-        )}
-      </button>
-
-      {/* Status */}
-      {error && (
-        <div style={{
-          backgroundColor: `${RED}20`,
-          border: `1px solid ${RED}`,
-          borderRadius: '4px',
-          padding: '6px',
-          marginBottom: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px'
-        }}>
-          <AlertCircle size={12} color={RED} />
-          <div style={{ color: RED, fontSize: '9px', flex: 1 }}>
-            {error}
-          </div>
-        </div>
-      )}
-
-      {lastResult && !error && (
-        <div style={{
-          backgroundColor: `${GREEN}20`,
-          border: `1px solid ${GREEN}`,
-          borderRadius: '4px',
-          padding: '6px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px'
-        }}>
-          <CheckCircle size={12} color={GREEN} />
-          <div style={{ color: GREEN, fontSize: '9px', flex: 1 }}>
-            Executed successfully
-          </div>
-        </div>
-      )}
-
-      {/* Output handle */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="output"
-        style={{
-          background: GREEN,
-          width: '10px',
-          height: '10px',
-          border: `2px solid ${DARK_BG}`
-        }}
+      <NodeHeader
+        icon={<Zap size={16} />}
+        title={data.label}
+        subtitle={`${data.serverId} • ${data.toolName}`}
+        color={FINCEPT.ORANGE}
       />
-    </div>
+
+      <div style={{ padding: SPACING.LG }}>
+        {/* Tool Description */}
+        {tool?.description && (
+          <div style={{
+            color: FINCEPT.GRAY,
+            fontSize: '9px',
+            marginBottom: SPACING.LG,
+            lineHeight: '1.4'
+          }}>
+            {tool.description}
+          </div>
+        )}
+
+        {/* Parameters */}
+        {tool?.inputSchema?.properties && (
+          <div style={{ marginBottom: SPACING.LG }}>
+            <div style={{
+              color: FINCEPT.YELLOW,
+              fontSize: '10px',
+              fontWeight: 700,
+              marginBottom: SPACING.MD
+            }}>
+              PARAMETERS
+            </div>
+            {Object.entries(tool.inputSchema.properties).map(([key, propSchema]: [string, any]) =>
+              renderParameterInput(key, propSchema)
+            )}
+          </div>
+        )}
+
+        {/* Execute Button */}
+        <Button
+          label={isExecuting ? 'EXECUTING...' : 'EXECUTE TOOL'}
+          icon={isExecuting ? <Loader size={12} className="animate-spin" /> : <Zap size={12} />}
+          onClick={executeTool}
+          variant="primary"
+          disabled={!isReadyToExecute() || isExecuting}
+          fullWidth
+        />
+
+        {/* Status */}
+        {error && (
+          <StatusPanel
+            type="error"
+            icon={<AlertCircle size={12} />}
+            message={error}
+          />
+        )}
+
+        {lastResult && !error && (
+          <StatusPanel
+            type="success"
+            icon={<CheckCircle size={12} />}
+            message="Executed successfully"
+          />
+        )}
+      </div>
+    </DynamicHandleBaseNode>
   );
 };
 

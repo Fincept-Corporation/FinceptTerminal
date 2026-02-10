@@ -24,14 +24,14 @@ import {
 
 export class TechnicalIndicatorsNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Technical Indicators',
+    displayName: 'Technical Analysis',
     name: 'technicalIndicators',
     icon: 'fa:chart-line',
     group: ['Analytics', 'Technical Analysis'],
     version: 1,
     description: 'Calculate 100+ technical indicators on price data',
     defaults: {
-      name: 'Technical Indicators',
+      name: 'Technical Analysis',
       color: '#10b981',
     },
     inputs: [NodeConnectionType.Main],

@@ -119,4 +119,101 @@ export interface IndicatorParam {
   max?: number;
 }
 
-export type AlgoSubView = 'builder' | 'strategies' | 'scanner' | 'dashboard';
+export type AlgoSubView = 'builder' | 'strategies' | 'library' | 'scanner' | 'dashboard';
+
+// ============================================================================
+// PYTHON STRATEGY LIBRARY TYPES
+// ============================================================================
+
+/** Python strategy from the library registry */
+export interface PythonStrategy {
+  id: string;                    // FCT-XXXXXXXX
+  name: string;                  // Algorithm class name
+  category: string;              // Category from registry
+  path: string;                  // Relative file path
+  description?: string;          // From docstring
+  code?: string;                 // Source code (loaded on demand)
+  compatibility: ('backtest' | 'paper' | 'live')[];
+}
+
+/** Custom Python strategy (user-modified copy) */
+export interface CustomPythonStrategy extends PythonStrategy {
+  base_strategy_id: string;      // Original library strategy ID
+  parameters: string;            // JSON parameter overrides
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+  strategy_type: 'python';
+}
+
+/** Strategy parameter definition */
+export interface StrategyParameter {
+  name: string;
+  type: 'int' | 'float' | 'string' | 'bool';
+  default_value: string;
+  description?: string;
+  min?: number;
+  max?: number;
+}
+
+/** Python backtest request */
+export interface PythonBacktestRequest {
+  strategy_id: string;
+  custom_code?: string;          // Optional override
+  symbols: string[];
+  start_date: string;
+  end_date: string;
+  initial_cash: number;
+  parameters?: Record<string, string>;
+  data_provider: 'yfinance' | 'fyers';
+}
+
+/** Python backtest result */
+export interface PythonBacktestResult {
+  success: boolean;
+  trades: BacktestTrade[];
+  equity_curve: EquityPoint[];
+  metrics: BacktestMetrics;
+  debug?: string[];
+  error?: string;
+}
+
+export interface BacktestTrade {
+  id: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  quantity: number;
+  entry_price: number;
+  exit_price?: number;
+  pnl: number;
+  entry_time: string;
+  exit_time?: string;
+  bars_held: number;
+}
+
+export interface EquityPoint {
+  time: string;
+  value: number;
+}
+
+export interface BacktestMetrics {
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;
+  total_return: number;
+  total_return_pct: number;
+  max_drawdown: number;
+  max_drawdown_pct: number;
+  sharpe_ratio: number;
+  profit_factor: number;
+  avg_pnl: number;
+  avg_bars_held: number;
+}
+
+/** Python deployment (extends AlgoDeployment) */
+export interface PythonDeployment extends AlgoDeployment {
+  strategy_type: 'python';
+  python_strategy_id: string;    // FCT-XXXXXXXX or custom-XXXXXXXX
+  parameter_overrides?: string;  // JSON object
+}

@@ -16,14 +16,14 @@ import {
 
 export class LoopNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Loop',
+    displayName: 'Repeat Items',
     name: 'loop',
     icon: 'fa:sync',
     group: ['Control Flow'],
     version: 1,
     description: 'Iterate over arrays and execute for each item',
     defaults: {
-      name: 'Loop',
+      name: 'Repeat Items',
       color: '#8b5cf6',
     },
     inputs: [NodeConnectionType.Main],

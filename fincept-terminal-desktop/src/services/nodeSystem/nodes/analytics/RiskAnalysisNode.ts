@@ -22,14 +22,14 @@ import {
 
 export class RiskAnalysisNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Risk Analysis',
+    displayName: 'Risk Calculator',
     name: 'riskAnalysis',
     icon: 'fa:shield-alt',
     group: ['Analytics', 'Risk Management'],
     version: 1,
     description: 'Calculate comprehensive risk metrics for portfolios',
     defaults: {
-      name: 'Risk Analysis',
+      name: 'Risk Calculator',
       color: '#ef4444',
     },
     inputs: [NodeConnectionType.Main],

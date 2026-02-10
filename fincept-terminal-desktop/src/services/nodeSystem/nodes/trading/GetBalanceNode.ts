@@ -15,7 +15,7 @@ import { TradingBridge } from '../../adapters/TradingBridge';
 
 export class GetBalanceNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Balance',
+    displayName: 'Account Balance',
     name: 'getBalance',
     icon: 'file:balance.svg',
     group: ['trading'],
@@ -23,7 +23,7 @@ export class GetBalanceNode implements INodeType {
     subtitle: '={{$parameter["broker"]}} balance',
     description: 'Fetches account balance and buying power',
     defaults: {
-      name: 'Get Balance',
+      name: 'Account Balance',
       color: '#3b82f6',
     },
     inputs: [NodeConnectionType.Main],

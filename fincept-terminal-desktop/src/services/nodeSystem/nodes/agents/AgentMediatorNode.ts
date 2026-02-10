@@ -15,7 +15,7 @@ import { AgentBridge } from '../../adapters/AgentBridge';
 
 export class AgentMediatorNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Agent Mediator',
+    displayName: 'AI Coordinator',
     name: 'agentMediator',
     icon: 'file:mediator.svg',
     group: ['agents'],
@@ -23,7 +23,7 @@ export class AgentMediatorNode implements INodeType {
     subtitle: 'Synthesize agent responses',
     description: 'Synthesizes and mediates between multiple agent responses',
     defaults: {
-      name: 'Agent Mediator',
+      name: 'AI Coordinator',
       color: '#8b5cf6',
     },
     inputs: [NodeConnectionType.Main],

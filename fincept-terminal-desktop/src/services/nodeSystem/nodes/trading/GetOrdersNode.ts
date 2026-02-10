@@ -15,7 +15,7 @@ import { TradingBridge } from '../../adapters/TradingBridge';
 
 export class GetOrdersNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Orders',
+    displayName: 'Order History',
     name: 'getOrders',
     icon: 'file:orders.svg',
     group: ['trading'],
@@ -23,7 +23,7 @@ export class GetOrdersNode implements INodeType {
     subtitle: '={{$parameter["orderStatus"]}} orders',
     description: 'Fetches order history from broker',
     defaults: {
-      name: 'Get Orders',
+      name: 'Order History',
       color: '#3b82f6',
     },
     inputs: [NodeConnectionType.Main],

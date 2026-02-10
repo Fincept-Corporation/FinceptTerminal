@@ -44,7 +44,7 @@ export class AgentNode implements INodeType {
         description: 'Category of agent to use',
       },
       {
-        displayName: 'Agent',
+        displayName: 'AI Assistant',
         name: 'agentId',
         type: NodePropertyType.Options,
         default: '',

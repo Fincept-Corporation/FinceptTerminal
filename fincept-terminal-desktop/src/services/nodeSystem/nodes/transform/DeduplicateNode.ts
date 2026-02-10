@@ -9,14 +9,14 @@ import {
 
 export class DeduplicateNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Deduplicate',
+    displayName: 'Remove Duplicates',
     name: 'deduplicate',
     icon: 'fa:filter',
     group: ['Transform'],
     version: 1,
     description: 'Remove duplicate items',
     defaults: {
-      name: 'Deduplicate',
+      name: 'Remove Duplicates',
       color: '#ec4899',
     },
     inputs: [NodeConnectionType.Main],

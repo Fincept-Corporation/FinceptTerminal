@@ -402,6 +402,156 @@ export class ExecutionContext extends BaseExecuteContext implements IExecuteFunc
   async sendChunk?(type: string, itemIndex: number, content?: IDataObject | string): Promise<void> {
     console.log('[ExecutionContext] Chunk sent:', { type, itemIndex, content });
   }
+
+  // File helpers
+  async readFile(filePath: string): Promise<string> {
+    const { readFile: tauriReadFile } = await import('@tauri-apps/plugin-fs');
+    const data = await tauriReadFile(filePath);
+    return new TextDecoder().decode(data);
+  }
+
+  async writeFile(filePath: string, content: string): Promise<void> {
+    const { writeFile: tauriWriteFile } = await import('@tauri-apps/plugin-fs');
+    await tauriWriteFile(filePath, new TextEncoder().encode(content));
+  }
+
+  parseCSV(content: string, delimiter: string, hasHeaders: boolean): IDataObject[] {
+    const lines = content.split('\n').filter(l => l.trim());
+    if (lines.length === 0) return [];
+    const headers = hasHeaders
+      ? lines[0].split(delimiter).map(h => h.trim())
+      : lines[0].split(delimiter).map((_, i) => `col${i}`);
+    const dataLines = hasHeaders ? lines.slice(1) : lines;
+    return dataLines.map(line => {
+      const values = line.split(delimiter);
+      const obj: IDataObject = {};
+      headers.forEach((h, i) => { obj[h] = values[i]?.trim() ?? ''; });
+      return obj;
+    });
+  }
+
+  generateCSV(data: IDataObject[], delimiter: string, includeHeaders: boolean): string {
+    if (data.length === 0) return '';
+    const headers = Object.keys(data[0]);
+    const lines: string[] = [];
+    if (includeHeaders) lines.push(headers.join(delimiter));
+    for (const row of data) {
+      lines.push(headers.map(h => String(row[h] ?? '')).join(delimiter));
+    }
+    return lines.join('\n');
+  }
+
+  // Crypto helpers
+  async hash(value: string, algorithm: string, encoding: string): Promise<string> {
+    const algoMap: Record<string, string> = { md5: 'SHA-1', sha256: 'SHA-256', sha512: 'SHA-512' };
+    const algo = algoMap[algorithm] || 'SHA-256';
+    const data = new TextEncoder().encode(value);
+    const hashBuffer = await crypto.subtle.digest(algo, data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    if (encoding === 'base64') {
+      return btoa(String.fromCharCode(...hashArray));
+    }
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Date/time helpers
+  formatDate(date: Date, format: string): string {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return format
+      .replace('YYYY', date.getFullYear().toString())
+      .replace('MM', pad(date.getMonth() + 1))
+      .replace('DD', pad(date.getDate()))
+      .replace('HH', pad(date.getHours()))
+      .replace('mm', pad(date.getMinutes()))
+      .replace('ss', pad(date.getSeconds()));
+  }
+
+  addTime(date: Date, amount: number, unit: string): Date {
+    const result = new Date(date);
+    switch (unit) {
+      case 'seconds': result.setSeconds(result.getSeconds() + amount); break;
+      case 'minutes': result.setMinutes(result.getMinutes() + amount); break;
+      case 'hours': result.setHours(result.getHours() + amount); break;
+      case 'days': result.setDate(result.getDate() + amount); break;
+      case 'weeks': result.setDate(result.getDate() + amount * 7); break;
+      case 'months': result.setMonth(result.getMonth() + amount); break;
+      case 'years': result.setFullYear(result.getFullYear() + amount); break;
+    }
+    return result;
+  }
+
+  // JSON path helpers
+  extractPath(obj: any, path: string): any {
+    return path.split('.').reduce((acc, key) => acc?.[key], obj);
+  }
+
+  setPath(obj: any, path: string, value: any): any {
+    const result = JSON.parse(JSON.stringify(obj));
+    const keys = path.split('.');
+    let current = result;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (current[keys[i]] === undefined) current[keys[i]] = {};
+      current = current[keys[i]];
+    }
+    current[keys[keys.length - 1]] = value;
+    return result;
+  }
+
+  deletePath(obj: any, path: string): any {
+    const result = JSON.parse(JSON.stringify(obj));
+    const keys = path.split('.');
+    let current = result;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (current[keys[i]] === undefined) return result;
+      current = current[keys[i]];
+    }
+    delete current[keys[keys.length - 1]];
+    return result;
+  }
+
+  // XML helpers
+  xmlToJson(element: Element): IDataObject {
+    const obj: IDataObject = {};
+    if (element.attributes.length > 0) {
+      const attrs: IDataObject = {};
+      for (let i = 0; i < element.attributes.length; i++) {
+        attrs[element.attributes[i].name] = element.attributes[i].value;
+      }
+      obj['@attributes'] = attrs;
+    }
+    if (element.children.length === 0) {
+      obj['#text'] = element.textContent || '';
+    } else {
+      for (let i = 0; i < element.children.length; i++) {
+        const child = element.children[i];
+        const childObj = this.xmlToJson(child);
+        if (obj[child.tagName] !== undefined) {
+          if (!Array.isArray(obj[child.tagName])) {
+            obj[child.tagName] = [obj[child.tagName]];
+          }
+          (obj[child.tagName] as any[]).push(childObj);
+        } else {
+          obj[child.tagName] = childObj;
+        }
+      }
+    }
+    return obj;
+  }
+
+  jsonToXml(obj: any, rootName: string): string {
+    const toXml = (data: any, name: string): string => {
+      if (data === null || data === undefined) return `<${name}/>`;
+      if (typeof data !== 'object') return `<${name}>${String(data)}</${name}>`;
+      if (Array.isArray(data)) return data.map(item => toXml(item, name)).join('');
+      let xml = `<${name}>`;
+      for (const [key, value] of Object.entries(data)) {
+        xml += toXml(value, key);
+      }
+      xml += `</${name}>`;
+      return xml;
+    };
+    return `<?xml version="1.0" encoding="UTF-8"?>${toXml(obj, rootName)}`;
+  }
 }
 
 // ================================

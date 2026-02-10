@@ -22,14 +22,14 @@ import {
 
 export class IfElseNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'If/Else',
+    displayName: 'Conditional Branch',
     name: 'ifElse',
     icon: 'fa:code-branch',
     group: ['Control Flow'],
     version: 1,
     description: 'Route items based on conditional logic',
     defaults: {
-      name: 'If/Else',
+      name: 'Conditional Branch',
       color: '#3b82f6',
     },
     inputs: [NodeConnectionType.Main],

@@ -16,6 +16,8 @@ interface SetupStatus {
   bun_installed: boolean;
   packages_installed: boolean;
   needs_setup: boolean;
+  needs_sync: boolean;
+  sync_message: string | null;
 }
 
 interface SetupScreenProps {

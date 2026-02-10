@@ -9,14 +9,14 @@ import {
 
 export class DiscordNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Discord',
+    displayName: 'Send Discord',
     name: 'discord',
     icon: 'fa:discord',
-    group: ['Notification'],
+    group: ['notifications'],
     version: 1,
     description: 'Send Discord message via webhook',
     defaults: {
-      name: 'Discord',
+      name: 'Send Discord',
       color: '#5865f2',
     },
     inputs: [NodeConnectionType.Main],
@@ -28,7 +28,8 @@ export class DiscordNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Discord webhook URL',
+        placeholder: 'https://discord.com/api/webhooks/...',
+        description: 'Discord webhook URL from channel settings',
       },
       {
         displayName: 'Message',
@@ -36,35 +37,48 @@ export class DiscordNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Message content',
+        placeholder: 'Your message here...',
+        description: 'Message content (supports Markdown)',
       },
       {
         displayName: 'Username',
         name: 'username',
         type: NodePropertyType.String,
-        default: '',
+        default: 'Fincept Terminal',
+        placeholder: 'Bot Name',
         description: 'Override webhook username',
+      },
+      {
+        displayName: 'Include Input Data',
+        name: 'includeInputData',
+        type: NodePropertyType.Boolean,
+        default: true,
+        description: 'Whether to include workflow input data',
       },
     ],
   };
 
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const items = this.getInputData();
-    const webhookUrl = this.getNodeParameter('webhookUrl', 0) as string;
-    const message = this.getNodeParameter('message', 0) as string;
-    const username = this.getNodeParameter('username', 0) as string;
-
     const outputItems: any[] = [];
 
     for (let i = 0; i < items.length; i++) {
       try {
+        const webhookUrl = this.getNodeParameter('webhookUrl', i) as string;
+        let message = this.getNodeParameter('message', i) as string;
+        const username = this.getNodeParameter('username', i, 'Fincept Terminal') as string;
+        const includeInputData = this.getNodeParameter('includeInputData', i, true) as boolean;
+
+        // Include input data if requested
+        if (includeInputData && items[i].json) {
+          const dataPreview = JSON.stringify(items[i].json, null, 2);
+          message += `\n\`\`\`json\n${dataPreview}\n\`\`\``;
+        }
+
         const payload: any = {
           content: message,
+          username: username,
         };
-
-        if (username) {
-          payload.username = username;
-        }
 
         const response = await fetch(webhookUrl, {
           method: 'POST',
@@ -74,21 +88,31 @@ export class DiscordNode implements INodeType {
           body: JSON.stringify(payload),
         });
 
+        console.log(`[DiscordNode] Message ${response.ok ? 'sent' : 'failed'}, status: ${response.status}`);
+
         outputItems.push({
           json: {
             ...items[i].json,
-            success: response.ok,
-            status: response.status,
+            notification: {
+              platform: 'discord',
+              success: response.ok,
+              status: response.status,
+              sentAt: new Date().toISOString(),
+            },
           },
           pairedItem: i,
         });
       } catch (error: any) {
+        console.error('[DiscordNode] Error:', error);
         if (this.continueOnFail()) {
           outputItems.push({
             json: {
               ...items[i].json,
-              error: error.message,
-              success: false,
+              notification: {
+                platform: 'discord',
+                success: false,
+                error: error.message,
+              },
             },
             pairedItem: i,
           });

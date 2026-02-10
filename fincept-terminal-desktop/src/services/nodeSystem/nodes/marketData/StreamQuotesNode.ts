@@ -14,7 +14,7 @@ import {
 
 export class StreamQuotesNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Stream Quotes',
+    displayName: 'Live Price Stream',
     name: 'streamQuotes',
     icon: 'file:stream.svg',
     group: ['marketData'],
@@ -22,7 +22,7 @@ export class StreamQuotesNode implements INodeType {
     subtitle: 'Real-time {{$parameter["symbols"]}}',
     description: 'Streams real-time quotes via WebSocket',
     defaults: {
-      name: 'Stream Quotes',
+      name: 'Live Price Stream',
       color: '#10b981',
     },
     inputs: [NodeConnectionType.Main],

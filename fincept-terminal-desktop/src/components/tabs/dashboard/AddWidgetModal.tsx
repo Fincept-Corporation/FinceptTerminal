@@ -1,16 +1,33 @@
+// AddWidgetModal - Terminal-style widget configuration modal
+// Follows Fincept Design System with inline styles, uppercase labels, monospace
+
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Plus, Newspaper, BarChart3, Eye, MessageSquare, Bitcoin,
+  Package, Globe, DollarSign, Ship, Database, TrendingUp,
+  Activity, Briefcase, Bell, Calendar, Zap, Shield, LineChart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { WidgetType, DEFAULT_WIDGET_CONFIGS } from './widgets';
 import { watchlistService } from '../../../services/core/watchlistService';
 import { getAllDataSources } from '../../../services/data-sources/dataSourceRegistry';
 import { DataSource } from '../../../services/core/sqliteService';
 
-const FINCEPT_ORANGE = '#FFA500';
-const FINCEPT_WHITE = '#FFFFFF';
-const FINCEPT_GRAY = '#787878';
-const FINCEPT_DARK_BG = '#000000';
-const FINCEPT_PANEL_BG = '#0a0a0a';
+const FC = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+};
 
 interface AddWidgetModalProps {
   isOpen: boolean;
@@ -18,16 +35,53 @@ interface AddWidgetModalProps {
   onAdd: (widgetType: WidgetType, config?: any) => void;
 }
 
+interface WidgetOption {
+  type: WidgetType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  category: 'markets' | 'data' | 'analysis' | 'tools';
+}
+
+const WIDGET_OPTIONS: WidgetOption[] = [
+  { type: 'indices', label: 'GLOBAL INDICES', description: 'Major world indices with real-time prices', icon: <Globe size={14} />, color: FC.CYAN, category: 'markets' },
+  { type: 'forex', label: 'FOREX', description: 'Major currency pairs and exchange rates', icon: <DollarSign size={14} />, color: FC.GREEN, category: 'markets' },
+  { type: 'commodities', label: 'COMMODITIES', description: 'Gold, oil, silver and raw materials', icon: <Package size={14} />, color: FC.YELLOW, category: 'markets' },
+  { type: 'crypto', label: 'CRYPTO', description: 'Cryptocurrency prices and market cap', icon: <Bitcoin size={14} />, color: FC.ORANGE, category: 'markets' },
+  { type: 'market', label: 'MARKET DATA', description: 'Custom stock/index quotes', icon: <BarChart3 size={14} />, color: FC.BLUE, category: 'markets' },
+  { type: 'news', label: 'NEWS FEED', description: 'Real-time financial news and alerts', icon: <Newspaper size={14} />, color: FC.WHITE, category: 'data' },
+  { type: 'watchlist', label: 'WATCHLIST', description: 'Your saved watchlist instruments', icon: <Eye size={14} />, color: FC.CYAN, category: 'data' },
+  { type: 'forum', label: 'FORUM', description: 'Community trending discussions', icon: <MessageSquare size={14} />, color: FC.PURPLE, category: 'data' },
+  { type: 'maritime', label: 'MARITIME', description: 'Shipping and maritime intelligence', icon: <Ship size={14} />, color: FC.BLUE, category: 'data' },
+  { type: 'datasource', label: 'DATA SOURCE', description: 'Custom data source integration', icon: <Database size={14} />, color: FC.GRAY, category: 'data' },
+  { type: 'polymarket', label: 'POLYMARKET', description: 'Prediction market probabilities', icon: <TrendingUp size={14} />, color: FC.PURPLE, category: 'analysis' },
+  { type: 'economic', label: 'ECONOMICS', description: 'GDP, CPI, unemployment indicators', icon: <Activity size={14} />, color: FC.CYAN, category: 'analysis' },
+  { type: 'portfolio', label: 'PORTFOLIO', description: 'Portfolio summary and P&L', icon: <Briefcase size={14} />, color: FC.BLUE, category: 'analysis' },
+  { type: 'performance', label: 'PERFORMANCE', description: 'Trading P&L and win rate tracker', icon: <LineChart size={14} />, color: FC.GREEN, category: 'analysis' },
+  { type: 'geopolitics', label: 'GEOPOLITICS', description: 'Geopolitical risk monitor', icon: <Shield size={14} />, color: FC.RED, category: 'analysis' },
+  { type: 'alerts', label: 'ALERTS', description: 'Price alerts and triggered events', icon: <Bell size={14} />, color: FC.YELLOW, category: 'tools' },
+  { type: 'calendar', label: 'CALENDAR', description: 'Economic events and releases', icon: <Calendar size={14} />, color: FC.ORANGE, category: 'tools' },
+  { type: 'quicktrade', label: 'QUICK TRADE', description: 'One-click trading panel', icon: <Zap size={14} />, color: FC.GREEN, category: 'tools' },
+];
+
+const CATEGORIES = [
+  { key: 'all', label: 'ALL' },
+  { key: 'markets', label: 'MARKETS' },
+  { key: 'data', label: 'DATA' },
+  { key: 'analysis', label: 'ANALYSIS' },
+  { key: 'tools', label: 'TOOLS' },
+];
+
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
   isOpen,
   onClose,
   onAdd
 }) => {
-  const [selectedType, setSelectedType] = useState<WidgetType>('news');
+  const [selectedType, setSelectedType] = useState<WidgetType>('indices');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [watchlists, setWatchlists] = useState<any[]>([]);
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
-
-  // Widget-specific configs
   const [newsCategory, setNewsCategory] = useState('ALL');
   const [marketCategory, setMarketCategory] = useState('Indices');
   const [selectedWatchlist, setSelectedWatchlist] = useState('');
@@ -36,12 +90,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
   const { t } = useTranslation('dashboard');
 
   useEffect(() => {
-    if (isOpen && selectedType === 'watchlist') {
-      loadWatchlists();
-    }
-    if (isOpen && selectedType === 'datasource') {
-      loadDataSources();
-    }
+    if (isOpen && selectedType === 'watchlist') loadWatchlists();
+    if (isOpen && selectedType === 'datasource') loadDataSources();
   }, [isOpen, selectedType]);
 
   const loadWatchlists = async () => {
@@ -49,9 +99,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
       await watchlistService.initialize();
       const wls = await watchlistService.getWatchlistsWithCounts();
       setWatchlists(wls);
-      if (wls.length > 0) {
-        setSelectedWatchlist(wls[0].id);
-      }
+      if (wls.length > 0) setSelectedWatchlist(wls[0].id);
     } catch (error) {
       console.error('Failed to load watchlists:', error);
     }
@@ -62,9 +110,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
       const sources = await getAllDataSources();
       const enabled = sources.filter(s => s.enabled);
       setDataSources(enabled);
-      if (enabled.length > 0) {
-        setSelectedDataSource(enabled[0].alias);
-      }
+      if (enabled.length > 0) setSelectedDataSource(enabled[0].alias);
     } catch (error) {
       console.error('Failed to load data sources:', error);
     }
@@ -72,318 +118,294 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
 
   const handleAdd = () => {
     let config = {};
-
     switch (selectedType) {
       case 'news':
         config = { newsCategory, newsLimit: 5 };
         break;
       case 'market':
-        const tickers = marketCategory === 'Indices'
-          ? ['^GSPC', '^IXIC', '^DJI', '^RUT']
-          : marketCategory === 'Tech'
-            ? ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']
-            : ['GC=F', 'CL=F', 'SI=F'];
+        const tickers = marketCategory === 'Indices' ? ['^GSPC', '^IXIC', '^DJI', '^RUT']
+          : marketCategory === 'Tech' ? ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']
+          : ['GC=F', 'CL=F', 'SI=F'];
         config = { marketCategory, marketTickers: tickers };
         break;
       case 'watchlist':
         const wl = watchlists.find(w => w.id === selectedWatchlist);
-        config = {
-          watchlistId: selectedWatchlist,
-          watchlistName: wl?.name || 'Watchlist'
-        };
+        config = { watchlistId: selectedWatchlist, watchlistName: wl?.name || 'Watchlist' };
         break;
       case 'forum':
         config = { forumCategoryName: forumCategory, forumLimit: 5 };
         break;
       case 'datasource':
         const ds = dataSources.find(d => d.alias === selectedDataSource);
-        config = {
-          dataSourceAlias: selectedDataSource,
-          dataSourceDisplayName: ds?.display_name
-        };
+        config = { dataSourceAlias: selectedDataSource, dataSourceDisplayName: ds?.display_name };
         break;
     }
-
     onAdd(selectedType, config);
     onClose();
   };
 
   if (!isOpen) return null;
 
+  const filteredOptions = activeCategory === 'all'
+    ? WIDGET_OPTIONS
+    : WIDGET_OPTIONS.filter(w => w.category === activeCategory);
+
+  const selectedOption = WIDGET_OPTIONS.find(w => w.type === selectedType);
+
   return (
     <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.85)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000,
+      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+    }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div style={{
-        backgroundColor: FINCEPT_PANEL_BG,
-        border: `2px solid ${FINCEPT_ORANGE}`,
-        borderRadius: '4px',
-        width: '500px',
+        backgroundColor: FC.PANEL_BG,
+        border: `1px solid ${FC.BORDER}`,
+        borderRadius: '2px',
+        width: '640px',
         maxHeight: '80vh',
-        overflow: 'auto',
-        boxShadow: `0 0 20px ${FINCEPT_ORANGE}`
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: `0 0 30px ${FC.ORANGE}15, 0 4px 20px rgba(0,0,0,0.5)`,
       }}>
         {/* Header */}
         <div style={{
-          backgroundColor: FINCEPT_DARK_BG,
-          borderBottom: `2px solid ${FINCEPT_ORANGE}`,
-          padding: '12px 16px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
+          backgroundColor: FC.HEADER_BG,
+          borderBottom: `2px solid ${FC.ORANGE}`,
+          padding: '10px 16px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexShrink: 0,
         }}>
-          <div style={{
-            color: FINCEPT_ORANGE,
-            fontSize: '14px',
-            fontWeight: 'bold'
-          }}>
-            {t('buttons.addWidget')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Plus size={14} color={FC.ORANGE} />
+            <span style={{ color: FC.ORANGE, fontSize: '11px', fontWeight: 700, letterSpacing: '1px' }}>
+              ADD WIDGET
+            </span>
           </div>
           <button
             onClick={onClose}
             style={{
-              background: 'none',
-              border: 'none',
-              color: FINCEPT_GRAY,
-              cursor: 'pointer',
-              padding: '0',
-              display: 'flex'
+              background: 'none', border: 'none', color: FC.GRAY,
+              cursor: 'pointer', padding: '4px', display: 'flex',
+              borderRadius: '2px',
             }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = FC.WHITE; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = FC.GRAY; }}
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Content */}
-        <div style={{ padding: '16px' }}>
-          {/* Widget Type Selection */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '8px', fontWeight: 'bold' }}>
-              WIDGET TYPE
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-              {(['news', 'market', 'watchlist', 'forum', 'crypto', 'commodities', 'indices', 'forex', 'maritime', 'datasource', 'polymarket', 'economic', 'portfolio', 'alerts', 'calendar', 'quicktrade', 'geopolitics', 'performance'] as WidgetType[]).map(type => (
+        {/* Category Tabs */}
+        <div style={{
+          display: 'flex', gap: '0',
+          borderBottom: `1px solid ${FC.BORDER}`,
+          backgroundColor: FC.DARK_BG,
+          flexShrink: 0,
+        }}>
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => setActiveCategory(cat.key)}
+              style={{
+                flex: 1,
+                padding: '8px 0',
+                backgroundColor: activeCategory === cat.key ? FC.ORANGE : 'transparent',
+                color: activeCategory === cat.key ? FC.DARK_BG : FC.GRAY,
+                border: 'none',
+                borderRight: `1px solid ${FC.BORDER}`,
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                fontFamily: '"IBM Plex Mono", monospace',
+                transition: 'all 0.15s',
+              }}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Widget Grid */}
+        <div style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: '12px',
+        }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '6px',
+          }}>
+            {filteredOptions.map(option => {
+              const isSelected = selectedType === option.type;
+              return (
                 <button
-                  key={type}
-                  onClick={() => setSelectedType(type)}
+                  key={option.type}
+                  onClick={() => setSelectedType(option.type)}
                   style={{
-                    backgroundColor: selectedType === type ? FINCEPT_ORANGE : FINCEPT_DARK_BG,
-                    color: selectedType === type ? FINCEPT_DARK_BG : FINCEPT_WHITE,
-                    border: `1px solid ${selectedType === type ? FINCEPT_ORANGE : FINCEPT_GRAY}`,
-                    padding: '8px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
+                    backgroundColor: isSelected ? `${option.color}15` : FC.DARK_BG,
+                    border: `1px solid ${isSelected ? option.color : FC.BORDER}`,
+                    borderRadius: '2px',
+                    padding: '10px 8px',
                     cursor: 'pointer',
-                    textTransform: 'uppercase'
+                    textAlign: 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    transition: 'all 0.15s',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      (e.currentTarget as HTMLElement).style.borderColor = `${option.color}60`;
+                      (e.currentTarget as HTMLElement).style.backgroundColor = FC.HOVER;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      (e.currentTarget as HTMLElement).style.borderColor = FC.BORDER;
+                      (e.currentTarget as HTMLElement).style.backgroundColor = FC.DARK_BG;
+                    }
                   }}
                 >
-                  {type}
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0,
+                      height: '2px', backgroundColor: option.color,
+                    }} />
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ color: option.color }}>{option.icon}</div>
+                    <span style={{
+                      color: isSelected ? FC.WHITE : FC.GRAY,
+                      fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                    }}>
+                      {option.label}
+                    </span>
+                  </div>
+                  <span style={{
+                    color: FC.MUTED, fontSize: '8px', lineHeight: '1.3',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                  }}>
+                    {option.description}
+                  </span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Configuration Section */}
+        <div style={{
+          borderTop: `1px solid ${FC.BORDER}`,
+          padding: '12px 16px',
+          backgroundColor: FC.HEADER_BG,
+          flexShrink: 0,
+        }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, color: FC.GRAY, letterSpacing: '0.5px', marginBottom: '8px' }}>
+            CONFIGURATION — {selectedOption?.label || selectedType.toUpperCase()}
           </div>
 
-          {/* Widget Configuration */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: FINCEPT_WHITE, fontSize: '11px', marginBottom: '8px', fontWeight: 'bold' }}>
-              CONFIGURATION
-            </div>
+          {/* Config options based on type */}
+          {selectedType === 'news' && (
+            <SelectInput
+              value={newsCategory}
+              onChange={setNewsCategory}
+              options={[
+                { value: 'ALL', label: 'ALL NEWS' },
+                { value: 'MARKETS', label: 'MARKETS' },
+                { value: 'TECH', label: 'TECHNOLOGY' },
+                { value: 'EARNINGS', label: 'EARNINGS' },
+                { value: 'ECONOMIC', label: 'ECONOMIC' },
+                { value: 'REGULATORY', label: 'REGULATORY' },
+                { value: 'CRYPTO', label: 'CRYPTO' },
+              ]}
+            />
+          )}
 
-            {/* News Config */}
-            {selectedType === 'news' && (
-              <select
-                value={newsCategory}
-                onChange={(e) => setNewsCategory(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT_DARK_BG,
-                  border: `1px solid ${FINCEPT_GRAY}`,
-                  color: FINCEPT_WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-              >
-                <option value="ALL">All News</option>
-                <option value="MARKETS">Markets</option>
-                <option value="TECH">Technology</option>
-                <option value="EARNINGS">Earnings</option>
-                <option value="ECONOMIC">Economic</option>
-              </select>
-            )}
+          {selectedType === 'market' && (
+            <SelectInput
+              value={marketCategory}
+              onChange={setMarketCategory}
+              options={[
+                { value: 'Indices', label: 'MARKET INDICES' },
+                { value: 'Tech', label: 'TECH STOCKS' },
+                { value: 'Commodities', label: 'COMMODITIES' },
+              ]}
+            />
+          )}
 
-            {/* Market Config */}
-            {selectedType === 'market' && (
-              <select
-                value={marketCategory}
-                onChange={(e) => setMarketCategory(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT_DARK_BG,
-                  border: `1px solid ${FINCEPT_GRAY}`,
-                  color: FINCEPT_WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-              >
-                <option value="Indices">Market Indices</option>
-                <option value="Tech">Tech Stocks</option>
-                <option value="Commodities">Commodities</option>
-              </select>
-            )}
+          {selectedType === 'watchlist' && (
+            watchlists.length > 0 ? (
+              <SelectInput
+                value={selectedWatchlist}
+                onChange={setSelectedWatchlist}
+                options={watchlists.map(wl => ({ value: wl.id, label: wl.name.toUpperCase() }))}
+              />
+            ) : (
+              <InfoText text="No watchlists available. Create one in the Watchlist tab first." />
+            )
+          )}
 
-            {/* Watchlist Config */}
-            {selectedType === 'watchlist' && (
-              watchlists.length > 0 ? (
-                <select
-                  value={selectedWatchlist}
-                  onChange={(e) => setSelectedWatchlist(e.target.value)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: FINCEPT_DARK_BG,
-                    border: `1px solid ${FINCEPT_GRAY}`,
-                    color: FINCEPT_WHITE,
-                    padding: '8px',
-                    fontSize: '11px'
-                  }}
-                >
-                  {watchlists.map(wl => (
-                    <option key={wl.id} value={wl.id}>{wl.name}</option>
-                  ))}
-                </select>
-              ) : (
-                <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px' }}>
-                  No watchlists available. Create one in the Watchlist tab first.
-                </div>
-              )
-            )}
+          {selectedType === 'forum' && (
+            <SelectInput
+              value={forumCategory}
+              onChange={setForumCategory}
+              options={[
+                { value: 'Trending', label: 'TRENDING POSTS' },
+                { value: 'Recent', label: 'RECENT POSTS' },
+              ]}
+            />
+          )}
 
-            {/* Forum Config */}
-            {selectedType === 'forum' && (
-              <select
-                value={forumCategory}
-                onChange={(e) => setForumCategory(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT_DARK_BG,
-                  border: `1px solid ${FINCEPT_GRAY}`,
-                  color: FINCEPT_WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-              >
-                <option value="Trending">Trending Posts</option>
-                <option value="Recent">Recent Posts</option>
-              </select>
-            )}
+          {selectedType === 'datasource' && (
+            dataSources.length > 0 ? (
+              <SelectInput
+                value={selectedDataSource}
+                onChange={setSelectedDataSource}
+                options={dataSources.map(ds => ({
+                  value: ds.alias,
+                  label: `${ds.display_name} (${ds.alias})`
+                }))}
+              />
+            ) : (
+              <InfoText text="No data sources configured. Add one in Settings first." />
+            )
+          )}
 
-            {/* Data Source Config */}
-            {selectedType === 'datasource' && (
-              dataSources.length > 0 ? (
-                <select
-                  value={selectedDataSource}
-                  onChange={(e) => setSelectedDataSource(e.target.value)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: FINCEPT_DARK_BG,
-                    border: `1px solid ${FINCEPT_GRAY}`,
-                    color: FINCEPT_WHITE,
-                    padding: '8px',
-                    fontSize: '11px'
-                  }}
-                >
-                  {dataSources.map(ds => (
-                    <option key={ds.alias} value={ds.alias}>
-                      {ds.display_name} ({ds.alias}) - {ds.type === 'websocket' ? 'WebSocket' : 'REST API'}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px' }}>
-                  No data sources available. Create one in Settings → Data Sources first.
-                </div>
-              )
-            )}
+          {!['news', 'market', 'watchlist', 'forum', 'datasource'].includes(selectedType) && (
+            <InfoText text={selectedOption?.description || 'No additional configuration needed.'} />
+          )}
 
-            {/* Crypto, Commodities, Indices, Forex, Maritime - No Config */}
-            {['crypto', 'commodities', 'indices', 'forex', 'maritime'].includes(selectedType) && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                This widget shows live {selectedType === 'maritime' ? 'maritime intelligence' : selectedType} data with automatic updates. No configuration required.
-              </div>
-            )}
-
-            {/* New widgets - No Config */}
-            {selectedType === 'polymarket' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                Shows top prediction markets from Polymarket with YES/NO probabilities and trading volume.
-              </div>
-            )}
-
-            {selectedType === 'economic' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                Displays key economic indicators: GDP, Unemployment, CPI, Fed Funds Rate, and Treasury yields.
-              </div>
-            )}
-
-            {selectedType === 'portfolio' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                Shows portfolio summary with total value, P&L, and top positions. Requires a portfolio in the Portfolio tab.
-              </div>
-            )}
-
-            {selectedType === 'alerts' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                Displays active price alerts and recently triggered alerts. Configure alerts in the Monitoring tab.
-              </div>
-            )}
-
-            {selectedType === 'calendar' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                Shows upcoming economic events with impact ratings (FOMC, CPI, PMI, employment data, etc.).
-              </div>
-            )}
-
-            {selectedType === 'quicktrade' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                One-click trading panel for quick market orders on popular assets (BTC, ETH, SPY, etc.).
-              </div>
-            )}
-
-            {selectedType === 'geopolitics' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                Geopolitical risk monitor showing trade restrictions, tariff risks, and supply chain threats by country.
-              </div>
-            )}
-
-            {selectedType === 'performance' && (
-              <div style={{ color: FINCEPT_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
-                Tracks trading performance with P&L by period (today, week, month, YTD) and win rate statistics.
-              </div>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px' }}>
             <button
               onClick={onClose}
               style={{
-                backgroundColor: FINCEPT_GRAY,
-                color: FINCEPT_DARK_BG,
-                border: 'none',
-                padding: '8px 16px',
-                fontSize: '11px',
-                fontWeight: 'bold',
+                backgroundColor: 'transparent',
+                border: `1px solid ${FC.BORDER}`,
+                color: FC.GRAY,
+                padding: '6px 16px',
+                fontSize: '9px',
+                fontWeight: 700,
                 cursor: 'pointer',
-                borderRadius: '2px'
+                borderRadius: '2px',
+                letterSpacing: '0.5px',
+                fontFamily: '"IBM Plex Mono", monospace',
+                transition: 'all 0.15s',
               }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FC.ORANGE; (e.currentTarget as HTMLElement).style.color = FC.WHITE; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FC.BORDER; (e.currentTarget as HTMLElement).style.color = FC.GRAY; }}
             >
               CANCEL
             </button>
@@ -391,17 +413,25 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
               onClick={handleAdd}
               disabled={(selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)}
               style={{
-                backgroundColor: ((selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)) ? FINCEPT_GRAY : FINCEPT_ORANGE,
-                color: FINCEPT_DARK_BG,
-                border: 'none',
-                padding: '8px 16px',
-                fontSize: '11px',
-                fontWeight: 'bold',
-                cursor: ((selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)) ? 'not-allowed' : 'pointer',
-                borderRadius: '2px'
+                backgroundColor: FC.ORANGE,
+                border: `1px solid ${FC.ORANGE}`,
+                color: FC.DARK_BG,
+                padding: '6px 16px',
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                borderRadius: '2px',
+                letterSpacing: '0.5px',
+                fontFamily: '"IBM Plex Mono", monospace',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.15s',
+                opacity: ((selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)) ? 0.4 : 1,
               }}
             >
-              {t('buttons.addWidget')}
+              <Plus size={11} />
+              ADD WIDGET
             </button>
           </div>
         </div>
@@ -409,3 +439,47 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
     </div>
   );
 };
+
+// Styled select input
+const SelectInput: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}> = ({ value, onChange, options }) => (
+  <select
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    style={{
+      width: '100%',
+      backgroundColor: FC.DARK_BG,
+      border: `1px solid ${FC.BORDER}`,
+      color: FC.WHITE,
+      padding: '6px 8px',
+      fontSize: '10px',
+      fontFamily: '"IBM Plex Mono", monospace',
+      fontWeight: 700,
+      borderRadius: '2px',
+      cursor: 'pointer',
+      outline: 'none',
+    }}
+    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FC.ORANGE; }}
+    onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = FC.BORDER; }}
+  >
+    {options.map(opt => (
+      <option key={opt.value} value={opt.value}>{opt.label}</option>
+    ))}
+  </select>
+);
+
+// Info text
+const InfoText: React.FC<{ text: string }> = ({ text }) => (
+  <div style={{
+    color: FC.MUTED,
+    fontSize: '9px',
+    padding: '6px 0',
+    lineHeight: '1.4',
+    fontStyle: 'italic',
+  }}>
+    {text}
+  </div>
+);

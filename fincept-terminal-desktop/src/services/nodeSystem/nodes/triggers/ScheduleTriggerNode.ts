@@ -15,7 +15,7 @@ import { MarketEventTriggerNode } from './MarketEventTriggerNode';
 
 export class ScheduleTriggerNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Schedule Trigger',
+    displayName: 'Scheduled Start',
     name: 'scheduleTrigger',
     icon: 'file:schedule.svg',
     group: ['trigger'],
@@ -23,7 +23,7 @@ export class ScheduleTriggerNode implements INodeType {
     subtitle: '={{$parameter["scheduleType"]}}',
     description: 'Triggers workflow on a schedule (cron)',
     defaults: {
-      name: 'Schedule Trigger',
+      name: 'Scheduled Start',
       color: '#f59e0b',
     },
     inputs: [],

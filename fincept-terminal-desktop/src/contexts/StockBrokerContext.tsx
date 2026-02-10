@@ -356,6 +356,24 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
             } catch (sessionErr) {
               console.error('[StockBrokerContext] Failed to init paper trading session:', sessionErr);
             }
+
+            // Auto-download master contract for YFinance (CRITICAL for chart/symbol lookup)
+            setMasterContractReady(false);
+            symbolMaster.ensureMasterContract(activeBroker).then((result) => {
+              if (result.success) {
+                console.log(`[StockBrokerContext] ✓ Master contract ready (paper trading): ${result.total_symbols} symbols`);
+                setMasterContractReady(true);
+              } else {
+                console.warn(`[StockBrokerContext] Master contract download issue: ${result.message}`);
+                // YFinance doesn't have a master contract - set to true to allow charts to work
+                // YFinance uses direct symbol lookup, not token-based lookup
+                setMasterContractReady(true);
+              }
+            }).catch((err) => {
+              console.warn(`[StockBrokerContext] Master contract download failed:`, err);
+              // For YFinance, we can still work without master contract (uses direct symbol)
+              setMasterContractReady(true);
+            });
           } else {
             console.error(`[StockBrokerContext] Paper trading auto-auth failed:`, authResult.message);
             setError(authResult.message || 'Failed to initialize paper trading');
@@ -426,6 +444,22 @@ export function StockBrokerProvider({ children }: StockBrokerProviderProps) {
               }
               refreshAllData(newAdapter).catch(err => {
                 console.warn('[StockBrokerContext] Background data refresh failed:', err);
+              });
+
+              // Auto-download master contract if needed (CRITICAL for chart/symbol lookup)
+              setMasterContractReady(false);
+              symbolMaster.ensureMasterContract(activeBroker).then((result) => {
+                if (result.success) {
+                  console.log(`[StockBrokerContext] ✓ Master contract ready (session restore): ${result.total_symbols} symbols`);
+                  setMasterContractReady(true);
+                } else {
+                  console.warn(`[StockBrokerContext] Master contract download issue: ${result.message}`);
+                  // Still set to true if we have cached data
+                  setMasterContractReady(result.total_symbols > 0);
+                }
+              }).catch((err) => {
+                console.warn(`[StockBrokerContext] Master contract download failed:`, err);
+                setMasterContractReady(false);
               });
 
               console.log(`[StockBrokerContext] Session restored for ${activeBroker}`);

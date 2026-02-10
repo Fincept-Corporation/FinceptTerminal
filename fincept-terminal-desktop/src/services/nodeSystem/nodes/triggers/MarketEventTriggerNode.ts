@@ -14,7 +14,7 @@ import {
 
 export class MarketEventTriggerNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Market Event Trigger',
+    displayName: 'Market Alert',
     name: 'marketEventTrigger',
     icon: 'file:market-event.svg',
     group: ['trigger'],

@@ -14,7 +14,7 @@ import {
 
 export class WebhookTriggerNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Webhook Trigger',
+    displayName: 'API Webhook',
     name: 'webhookTrigger',
     icon: 'file:webhook.svg',
     group: ['trigger'],

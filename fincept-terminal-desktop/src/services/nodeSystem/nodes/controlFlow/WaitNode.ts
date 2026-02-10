@@ -16,14 +16,14 @@ import {
 
 export class WaitNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Wait',
+    displayName: 'Delay Execution',
     name: 'wait',
     icon: 'fa:clock',
     group: ['Control Flow'],
     version: 1,
     description: 'Pause execution for a specified duration',
     defaults: {
-      name: 'Wait',
+      name: 'Delay Execution',
       color: '#f59e0b',
     },
     inputs: [NodeConnectionType.Main],

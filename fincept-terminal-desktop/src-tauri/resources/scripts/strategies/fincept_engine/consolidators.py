@@ -8,11 +8,33 @@ from typing import Callable, Optional
 from .types import TradeBar, QuoteBar, Tick
 
 
+class EventHandler:
+    """Supports += and -= for event registration like C# events."""
+    def __init__(self):
+        self._handlers = []
+
+    def __iadd__(self, handler):
+        self._handlers.append(handler)
+        return self
+
+    def __isub__(self, handler):
+        if handler in self._handlers:
+            self._handlers.remove(handler)
+        return self
+
+    def __call__(self, *args, **kwargs):
+        for h in self._handlers:
+            h(*args, **kwargs)
+
+    def __bool__(self):
+        return len(self._handlers) > 0
+
+
 class ConsolidatorBase:
     """Base class for data consolidators."""
 
     def __init__(self):
-        self.data_consolidated = None  # Callback
+        self.data_consolidated = EventHandler()
         self._working_bar = None
         self.consolidated = None
 

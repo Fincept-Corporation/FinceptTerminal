@@ -51,6 +51,22 @@ from .universe import UniverseSettings, Universe
 logger = logging.getLogger("fincept.strategy")
 
 
+class _AlgorithmSettings:
+    """Algorithm-level settings."""
+    def __init__(self):
+        self.free_portfolio_value = 0
+        self.free_portfolio_value_percentage = 0.0025
+        self.liquidate_enabled = True
+        self.max_absolute_portfolio_target_percentage = 1000
+        self.min_absolute_portfolio_target_percentage = 0
+        self.rebalance_portfolio_on_security_changes = True
+        self.rebalance_portfolio_on_insight_changes = True
+        self.data_subscription_limit = 10000
+        self.staleness_price_time_resolution = None
+        self.warmup_resolution = None
+        self.database_path = ""
+
+
 class Transactions:
     """Order transaction manager."""
 
@@ -243,6 +259,9 @@ class QCAlgorithm:
         # Notification
         self.notify = NotificationManager()
 
+        # Settings
+        self.settings = _AlgorithmSettings()
+
     # ---- Time Properties ----
 
     @property
@@ -420,10 +439,14 @@ class QCAlgorithm:
         symbol = Symbol(ticker.upper(), SecurityType.CRYPTO_FUTURE, market)
         return self.securities.add(symbol, resolution)
 
-    def add_security(self, security_type, ticker, resolution=Resolution.MINUTE,
+    def add_security(self, security_type, ticker=None, resolution=Resolution.MINUTE,
                      market=Market.USA, fill_forward=True, leverage=1.0,
                      extended_market_hours=False):
-        symbol = Symbol(ticker.upper(), security_type, market)
+        if ticker is None:
+            # security_type might actually be a symbol/ticker string
+            ticker = str(security_type)
+            security_type = SecurityType.EQUITY
+        symbol = Symbol(str(ticker).upper(), security_type, market)
         return self.securities.add(symbol, resolution, leverage)
 
     def add_data(self, data_type, ticker, resolution=None, *args, **kwargs):
@@ -836,8 +859,9 @@ class QCAlgorithm:
             self.error(f"Download failed: {e}")
             return ""
 
-    def train(self, func):
-        """Execute a training function."""
+    def train(self, *args):
+        """Execute a training function. Can be train(func) or train(date_rule, time_rule, func)."""
+        func = args[-1] if args else None
         if callable(func):
             func()
 
@@ -847,8 +871,344 @@ class QCAlgorithm:
     def option_chain(self, symbol):
         return []
 
+    @property
     def option_chain_provider(self):
         return OptionChainProvider()
+
+    def is_market_open(self, symbol=None):
+        """Check if market is currently open."""
+        if symbol and str(symbol) in self.securities:
+            return self.securities[str(symbol)].exchange.exchange_open
+        return True
+
+    def plot_indicator(self, chart_name, wait_for_ready=True, *indicators):
+        """Plot indicator values on a chart."""
+        for indicator in indicators:
+            name = getattr(indicator, 'name', str(indicator))
+            value = float(indicator) if hasattr(indicator, '__float__') else 0
+            self.plot(chart_name, name, value)
+
+    # ---- Combo Order Methods ----
+
+    def combo_market_order(self, legs, quantity, asynchronous=False, tag="", order_properties=None):
+        """Submit a combo market order (multi-leg)."""
+        tickets = []
+        for leg in legs:
+            sym = leg.symbol if hasattr(leg, 'symbol') else leg
+            qty = leg.quantity if hasattr(leg, 'quantity') else quantity
+            ticket = self.market_order(sym, qty, tag=tag)
+            tickets.append(ticket)
+        return tickets
+
+    def combo_limit_order(self, legs, quantity, limit_price, tag="", order_properties=None):
+        """Submit a combo limit order."""
+        tickets = []
+        for leg in legs:
+            sym = leg.symbol if hasattr(leg, 'symbol') else leg
+            qty = leg.quantity if hasattr(leg, 'quantity') else quantity
+            ticket = self.limit_order(sym, qty, limit_price, tag=tag)
+            tickets.append(ticket)
+        return tickets
+
+    def combo_leg_limit_order(self, legs, quantity, tag="", order_properties=None):
+        """Submit combo leg limit orders."""
+        tickets = []
+        for leg in legs:
+            sym = leg.symbol if hasattr(leg, 'symbol') else leg
+            qty = leg.quantity if hasattr(leg, 'quantity') else quantity
+            price = leg.limit_price if hasattr(leg, 'limit_price') else 0
+            ticket = self.limit_order(sym, qty, price, tag=tag)
+            tickets.append(ticket)
+        return tickets
+
+    # ---- Additional Indicator Shortcuts ----
+
+    def aroon(self, symbol, period=25, resolution=None, selector=None):
+        """Aroon indicator (stub using SMA as placeholder)."""
+        name = f"AROON_{symbol}_{period}"
+        indicator = SimpleMovingAverage(name, period)
+        self._indicators[name] = indicator
+        return indicator
+
+    def vwap(self, symbol, resolution=None, selector=None):
+        """VWAP indicator (stub)."""
+        name = f"VWAP_{symbol}"
+        indicator = SimpleMovingAverage(name, 1)
+        self._indicators[name] = indicator
+        return indicator
+
+    def momp(self, symbol, period=14, resolution=None, selector=None):
+        """Momentum Percent indicator."""
+        name = f"MOMP_{symbol}_{period}"
+        indicator = RateOfChange(name, period)
+        self._indicators[name] = indicator
+        return indicator
+
+    def trin(self, symbol, resolution=None, selector=None):
+        """TRIN (Arms Index) indicator (stub)."""
+        name = f"TRIN_{symbol}"
+        indicator = SimpleMovingAverage(name, 1)
+        self._indicators[name] = indicator
+        return indicator
+
+    # ---- Additional Utility Methods ----
+
+    def get_last_known_prices(self, symbol=None):
+        """Get the last known prices for a security."""
+        if symbol and str(symbol) in self.securities:
+            sec = self.securities[str(symbol)]
+            return [sec]
+        return []
+
+    def warm_up_indicator(self, symbol, indicator, resolution=None, selector=None):
+        """Warm up an indicator with historical data (stub)."""
+        indicator.is_ready = True
+        return indicator
+
+    def arima(self, symbol, ar_order=1, diff_order=0, ma_order=1, period=50, resolution=None, selector=None):
+        """ARIMA indicator (stub)."""
+        name = f"ARIMA_{symbol}_{ar_order}_{diff_order}_{ma_order}"
+        indicator = SimpleMovingAverage(name, period)
+        self._indicators[name] = indicator
+        return indicator
+
+    @property
+    def universe(self):
+        """Universe manager."""
+        return self.universe_settings
+
+    # ---- PascalCase Aliases for LEAN/C# Compatibility ----
+
+    def SetStartDate(self, *args, **kwargs):
+        return self.set_start_date(*args, **kwargs)
+
+    def SetEndDate(self, *args, **kwargs):
+        return self.set_end_date(*args, **kwargs)
+
+    def SetCash(self, *args, **kwargs):
+        return self.set_cash(*args, **kwargs)
+
+    def SetBenchmark(self, *args, **kwargs):
+        return self.set_benchmark(*args, **kwargs)
+
+    def SetBrokerageModel(self, *args, **kwargs):
+        return self.set_brokerage_model(*args, **kwargs)
+
+    def SetWarmUp(self, *args, **kwargs):
+        return self.set_warmup(*args, **kwargs)
+
+    def SetWarmup(self, *args, **kwargs):
+        return self.set_warmup(*args, **kwargs)
+
+    def AddEquity(self, *args, **kwargs):
+        return self.add_equity(*args, **kwargs)
+
+    def AddForex(self, *args, **kwargs):
+        return self.add_forex(*args, **kwargs)
+
+    def AddCrypto(self, *args, **kwargs):
+        return self.add_crypto(*args, **kwargs)
+
+    def AddFuture(self, *args, **kwargs):
+        return self.add_future(*args, **kwargs)
+
+    def AddOption(self, *args, **kwargs):
+        return self.add_option(*args, **kwargs)
+
+    def AddIndex(self, *args, **kwargs):
+        return self.add_index(*args, **kwargs)
+
+    def AddData(self, *args, **kwargs):
+        return self.add_data(*args, **kwargs)
+
+    def AddSecurity(self, *args, **kwargs):
+        return self.add_security(*args, **kwargs)
+
+    def MarketOrder(self, *args, **kwargs):
+        return self.market_order(*args, **kwargs)
+
+    def LimitOrder(self, *args, **kwargs):
+        return self.limit_order(*args, **kwargs)
+
+    def StopMarketOrder(self, *args, **kwargs):
+        return self.stop_market_order(*args, **kwargs)
+
+    def StopLimitOrder(self, *args, **kwargs):
+        return self.stop_limit_order(*args, **kwargs)
+
+    def SetHoldings(self, *args, **kwargs):
+        return self.set_holdings(*args, **kwargs)
+
+    def Liquidate(self, *args, **kwargs):
+        return self.liquidate(*args, **kwargs)
+
+    def Log(self, *args, **kwargs):
+        return self.log(*args, **kwargs)
+
+    def Debug(self, *args, **kwargs):
+        return self.debug(*args, **kwargs)
+
+    def Error(self, *args, **kwargs):
+        return self.error(*args, **kwargs)
+
+    def Plot(self, *args, **kwargs):
+        return self.plot(*args, **kwargs)
+
+    def History(self, *args, **kwargs):
+        return self.history(*args, **kwargs)
+
+    def Buy(self, *args, **kwargs):
+        return self.buy(*args, **kwargs)
+
+    def Sell(self, *args, **kwargs):
+        return self.sell(*args, **kwargs)
+
+    def Order(self, *args, **kwargs):
+        return self.order(*args, **kwargs)
+
+    def EMA(self, *args, **kwargs):
+        return self.ema(*args, **kwargs)
+
+    def SMA(self, *args, **kwargs):
+        return self.sma(*args, **kwargs)
+
+    def MACD(self, *args, **kwargs):
+        return self.macd(*args, **kwargs)
+
+    def RSI(self, *args, **kwargs):
+        return self.rsi(*args, **kwargs)
+
+    def BB(self, *args, **kwargs):
+        return self.bb(*args, **kwargs)
+
+    def ATR(self, *args, **kwargs):
+        return self.atr(*args, **kwargs)
+
+    def ROC(self, *args, **kwargs):
+        return self.roc(*args, **kwargs)
+
+    def MOM(self, *args, **kwargs):
+        return self.mom(*args, **kwargs)
+
+    def WILR(self, *args, **kwargs):
+        return self.wilr(*args, **kwargs)
+
+    def CCI(self, *args, **kwargs):
+        return self.cci(*args, **kwargs)
+
+    def ADX(self, *args, **kwargs):
+        return self.adx(*args, **kwargs)
+
+    def AROON(self, *args, **kwargs):
+        return self.aroon(*args, **kwargs)
+
+    def VWAP(self, *args, **kwargs):
+        return self.vwap(*args, **kwargs)
+
+    def MOMP(self, *args, **kwargs):
+        return self.momp(*args, **kwargs)
+
+    def GetParameter(self, *args, **kwargs):
+        return self.get_parameter(*args, **kwargs)
+
+    def SetParameters(self, *args, **kwargs):
+        return self.set_parameters(*args, **kwargs)
+
+    def Train(self, *args, **kwargs):
+        return self.train(*args, **kwargs)
+
+    def Download(self, *args, **kwargs):
+        return self.download(*args, **kwargs)
+
+    def Quit(self, *args, **kwargs):
+        return self.quit(*args, **kwargs)
+
+    def SetAlpha(self, *args, **kwargs):
+        return self.set_alpha(*args, **kwargs)
+
+    def AddAlpha(self, *args, **kwargs):
+        return self.add_alpha(*args, **kwargs)
+
+    def SetPortfolioConstruction(self, *args, **kwargs):
+        return self.set_portfolio_construction(*args, **kwargs)
+
+    def SetExecution(self, *args, **kwargs):
+        return self.set_execution(*args, **kwargs)
+
+    def SetRiskManagement(self, *args, **kwargs):
+        return self.set_risk_management(*args, **kwargs)
+
+    def AddRiskManagement(self, *args, **kwargs):
+        return self.add_risk_management(*args, **kwargs)
+
+    def SetUniverseSelection(self, *args, **kwargs):
+        return self.set_universe_selection(*args, **kwargs)
+
+    def AddUniverse(self, *args, **kwargs):
+        return self.add_universe(*args, **kwargs)
+
+    def AddChart(self, *args, **kwargs):
+        return self.add_chart(*args, **kwargs)
+
+    def SetSecurityInitializer(self, *args, **kwargs):
+        return self.set_security_initializer(*args, **kwargs)
+
+    def SetAccountCurrency(self, *args, **kwargs):
+        return self.set_account_currency(*args, **kwargs)
+
+    def SetTimeZone(self, *args, **kwargs):
+        return self.set_time_zone(*args, **kwargs)
+
+    def RegisterIndicator(self, *args, **kwargs):
+        return self.register_indicator(*args, **kwargs)
+
+    def Consolidate(self, *args, **kwargs):
+        return self.consolidate(*args, **kwargs)
+
+    def Initialize(self):
+        return self.initialize()
+
+    # ---- Properties with PascalCase aliases ----
+
+    @property
+    def Time(self):
+        return self._time
+
+    @property
+    def UtcTime(self):
+        return self._utc_time
+
+    @property
+    def StartDate(self):
+        return self._start_date
+
+    @property
+    def EndDate(self):
+        return self._end_date
+
+    @property
+    def IsWarmingUp(self):
+        return self._is_warming_up
+
+    @property
+    def LiveMode(self):
+        return self._live_mode
+
+    @property
+    def Portfolio(self):
+        return self.portfolio
+
+    @property
+    def Securities(self):
+        return self.securities
+
+    @property
+    def Name(self):
+        return self._name
+
+    @Name.setter
+    def Name(self, value):
+        self._name = value
 
     def __repr__(self):
         return f"FinceptStrategy({self._name})"
@@ -951,4 +1311,520 @@ class UniverseSelectionModel:
 
 class NullRiskManagementModel(RiskManagementModel):
     """No-op risk management."""
+    pass
+
+
+class NullAlphaModel(AlphaModel):
+    """No-op alpha model."""
+    pass
+
+
+class ConstantAlphaModel(AlphaModel):
+    """Alpha model that emits constant insights for all securities."""
+
+    def __init__(self, insight_type=None, direction=None, period=None, magnitude=None, weight=None):
+        self._type = insight_type or InsightType.PRICE
+        self._direction = direction or InsightDirection.UP
+        self._period = period or timedelta(days=1)
+        self._magnitude = magnitude
+        self._weight = weight
+        self._securities = []
+
+    def update(self, algorithm, data):
+        insights = []
+        for security in self._securities:
+            if data.contains_key(security.symbol):
+                insights.append(Insight(
+                    security.symbol, self._period, self._type,
+                    self._direction, self._magnitude, weight=self._weight
+                ))
+        return insights
+
+    def on_securities_changed(self, algorithm, changes):
+        for sec in changes.added_securities:
+            if sec not in self._securities:
+                self._securities.append(sec)
+        for sec in changes.removed_securities:
+            if sec in self._securities:
+                self._securities.remove(sec)
+
+
+class EqualWeightingPortfolioConstructionModel(PortfolioConstructionModel):
+    """Portfolio construction model that assigns equal weight to all insights."""
+
+    def __init__(self, rebalance=None, portfolio_bias=None):
+        self._rebalance = rebalance
+        self._portfolio_bias = portfolio_bias
+
+    def create_targets(self, algorithm, insights):
+        if not insights:
+            return []
+        targets = []
+        weight = 1.0 / len(insights) if insights else 0
+        for insight in insights:
+            direction = 1 if insight.direction == InsightDirection.UP else (
+                -1 if insight.direction == InsightDirection.DOWN else 0)
+            targets.append(PortfolioTarget(insight.symbol, weight * direction))
+        return targets
+
+
+class InsightWeightingPortfolioConstructionModel(PortfolioConstructionModel):
+    """Portfolio construction weighted by insight magnitude/confidence."""
+
+    def __init__(self, rebalance=None, portfolio_bias=None):
+        self._rebalance = rebalance
+        self._portfolio_bias = portfolio_bias
+
+    def create_targets(self, algorithm, insights):
+        if not insights:
+            return []
+        total_weight = sum(abs(i.weight or i.confidence or 1.0) for i in insights)
+        if total_weight == 0:
+            total_weight = 1
+        targets = []
+        for insight in insights:
+            w = abs(insight.weight or insight.confidence or 1.0) / total_weight
+            direction = 1 if insight.direction == InsightDirection.UP else (
+                -1 if insight.direction == InsightDirection.DOWN else 0)
+            targets.append(PortfolioTarget(insight.symbol, w * direction))
+        return targets
+
+
+class MeanVarianceOptimizationPortfolioConstructionModel(PortfolioConstructionModel):
+    """Portfolio construction using mean-variance optimization (simplified stub)."""
+
+    def __init__(self, rebalance=None, portfolio_bias=None, lookback=63,
+                 resolution=None, risk_free_rate=0.0, optimizer=None):
+        self._rebalance = rebalance
+        self._lookback = lookback
+
+    def create_targets(self, algorithm, insights):
+        if not insights:
+            return []
+        weight = 1.0 / len(insights)
+        return [PortfolioTarget(i.symbol, weight * (1 if i.direction == InsightDirection.UP else -1))
+                for i in insights]
+
+
+class BlackLittermanOptimizationPortfolioConstructionModel(PortfolioConstructionModel):
+    """Black-Litterman portfolio construction (simplified stub)."""
+
+    def __init__(self, rebalance=None, portfolio_bias=None, lookback=63,
+                 resolution=None, risk_free_rate=0.0, optimizer=None):
+        self._rebalance = rebalance
+        self._lookback = lookback
+
+    def create_targets(self, algorithm, insights):
+        if not insights:
+            return []
+        weight = 1.0 / len(insights)
+        return [PortfolioTarget(i.symbol, weight * (1 if i.direction == InsightDirection.UP else -1))
+                for i in insights]
+
+
+class ImmediateExecutionModel(ExecutionModel):
+    """Execution model that immediately submits market orders."""
+
+    def execute(self, algorithm, targets):
+        for target in targets:
+            existing = algorithm.portfolio[str(target.symbol)].quantity
+            diff = target.quantity - existing
+            if abs(diff) > 0:
+                algorithm.market_order(target.symbol, diff)
+
+
+class VolumeWeightedAveragePriceExecutionModel(ExecutionModel):
+    """VWAP execution model (simplified stub - acts like immediate)."""
+
+    def execute(self, algorithm, targets):
+        for target in targets:
+            existing = algorithm.portfolio[str(target.symbol)].quantity
+            diff = target.quantity - existing
+            if abs(diff) > 0:
+                algorithm.market_order(target.symbol, diff)
+
+
+class StandardDeviationExecutionModel(ExecutionModel):
+    """Std dev execution model (simplified stub)."""
+
+    def __init__(self, period=60, deviations=2, resolution=None):
+        self._period = period
+        self._deviations = deviations
+
+    def execute(self, algorithm, targets):
+        for target in targets:
+            existing = algorithm.portfolio[str(target.symbol)].quantity
+            diff = target.quantity - existing
+            if abs(diff) > 0:
+                algorithm.market_order(target.symbol, diff)
+
+
+class MaximumDrawdownPercentPortfolio(RiskManagementModel):
+    """Risk model: maximum portfolio drawdown percentage."""
+
+    def __init__(self, maximum_drawdown_percent=0.05, is_not_a_ccount_currency_for=False):
+        self._max_dd = maximum_drawdown_percent
+        self._trailing_high = 0
+
+    def manage_risk(self, algorithm, targets):
+        portfolio_value = algorithm.portfolio.total_portfolio_value
+        self._trailing_high = max(self._trailing_high, portfolio_value)
+        if self._trailing_high > 0:
+            dd = (self._trailing_high - portfolio_value) / self._trailing_high
+            if dd > self._max_dd:
+                return [PortfolioTarget(str(s.symbol), 0) for s in algorithm.securities]
+        return targets
+
+
+class MaximumDrawdownPercentPerSecurity(RiskManagementModel):
+    """Risk model: maximum drawdown per security."""
+
+    def __init__(self, maximum_drawdown_percent=0.05):
+        self._max_dd = maximum_drawdown_percent
+
+    def manage_risk(self, algorithm, targets):
+        risk_targets = list(targets) if targets else []
+        for ticker, holding in algorithm.portfolio.items():
+            if holding.invested and holding.unrealized_profit_percent < -self._max_dd:
+                risk_targets.append(PortfolioTarget(ticker, 0))
+        return risk_targets
+
+
+class MaximumUnrealizedProfitPercentPerSecurity(RiskManagementModel):
+    """Risk model: take profit at maximum unrealized profit."""
+
+    def __init__(self, maximum_unrealized_profit_percent=0.05):
+        self._max_profit = maximum_unrealized_profit_percent
+
+    def manage_risk(self, algorithm, targets):
+        risk_targets = list(targets) if targets else []
+        for ticker, holding in algorithm.portfolio.items():
+            if holding.invested and holding.unrealized_profit_percent > self._max_profit:
+                risk_targets.append(PortfolioTarget(ticker, 0))
+        return risk_targets
+
+
+class TrailingStopRiskManagementModel(RiskManagementModel):
+    """Risk model: trailing stop for each security."""
+
+    def __init__(self, maximum_drawdown_percent=0.05):
+        self._max_dd = maximum_drawdown_percent
+        self._trailing_highs = {}
+
+    def manage_risk(self, algorithm, targets):
+        risk_targets = list(targets) if targets else []
+        for ticker, holding in algorithm.portfolio.items():
+            if holding.invested:
+                price = holding.market_price
+                if ticker not in self._trailing_highs:
+                    self._trailing_highs[ticker] = price
+                self._trailing_highs[ticker] = max(self._trailing_highs[ticker], price)
+                trail = self._trailing_highs[ticker]
+                if trail > 0 and (trail - price) / trail > self._max_dd:
+                    risk_targets.append(PortfolioTarget(ticker, 0))
+            else:
+                self._trailing_highs.pop(ticker, None)
+        return risk_targets
+
+
+class MaximumSectorExposureRiskManagementModel(RiskManagementModel):
+    """Risk model: maximum sector exposure (stub)."""
+
+    def __init__(self, maximum_sector_exposure=0.3):
+        self._max_exposure = maximum_sector_exposure
+
+    def manage_risk(self, algorithm, targets):
+        return targets
+
+
+class CompositeRiskManagementModel(RiskManagementModel):
+    """Combines multiple risk management models."""
+
+    def __init__(self, *models):
+        self._models = list(models)
+
+    def add_risk_management(self, model):
+        self._models.append(model)
+
+    def manage_risk(self, algorithm, targets):
+        for model in self._models:
+            targets = model.manage_risk(algorithm, targets)
+        return targets
+
+
+class ManualUniverseSelectionModel(UniverseSelectionModel):
+    """Universe selection from a manually specified list of symbols."""
+
+    def __init__(self, symbols=None, *args):
+        self._symbols = symbols or []
+        if args:
+            self._symbols = list(args) if not symbols else self._symbols
+
+    def create_universes(self, algorithm):
+        return self._symbols
+
+
+class FundamentalUniverseSelectionModel(UniverseSelectionModel):
+    """Universe selection based on fundamental data."""
+
+    def __init__(self, filter_fine_universe=True, universe_settings=None):
+        self._filter_fine = filter_fine_universe
+
+    def create_universes(self, algorithm):
+        return []
+
+    def select_coarse(self, algorithm, coarse):
+        return [c.symbol for c in coarse]
+
+    def select_fine(self, algorithm, fine):
+        return [f.symbol for f in fine]
+
+
+class ScheduledUniverseSelectionModel(UniverseSelectionModel):
+    """Universe selection on a schedule."""
+
+    def __init__(self, date_rule, time_rule, selector, settings=None):
+        self._date_rule = date_rule
+        self._time_rule = time_rule
+        self._selector = selector
+
+    def create_universes(self, algorithm):
+        if callable(self._selector):
+            return self._selector(algorithm.time)
+        return []
+
+
+class CustomUniverseSelectionModel(UniverseSelectionModel):
+    """Custom universe selection from a function."""
+
+    def __init__(self, name, selector, settings=None):
+        self._name = name
+        self._selector = selector
+
+    def create_universes(self, algorithm):
+        if callable(self._selector):
+            return self._selector(algorithm.time)
+        return []
+
+
+class CompositeAlphaModel(AlphaModel):
+    """Combines multiple alpha models."""
+
+    def __init__(self, *models):
+        self._models = list(models)
+
+    def update(self, algorithm, data):
+        all_insights = []
+        for model in self._models:
+            insights = model.update(algorithm, data)
+            if insights:
+                all_insights.extend(insights)
+        return all_insights
+
+    def on_securities_changed(self, algorithm, changes):
+        for model in self._models:
+            model.on_securities_changed(algorithm, changes)
+
+
+class PythonData:
+    """Base class for custom Python data types."""
+
+    def __init__(self):
+        self.symbol = None
+        self.time = None
+        self.end_time = None
+        self.value = 0.0
+        self._data = {}
+
+    def get_source(self, config, date, is_live_mode):
+        return None
+
+    def reader(self, config, line, date, is_live_mode):
+        return None
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return self._data.get(name, 0)
+
+    def __setattr__(self, name, value):
+        if name in ('symbol', 'time', 'end_time', 'value', '_data'):
+            super().__setattr__(name, value)
+        else:
+            if not hasattr(self, '_data'):
+                super().__setattr__('_data', {})
+            self._data[name] = value
+
+    def __repr__(self):
+        return f"PythonData({self.symbol}, {self.value})"
+
+
+class PythonQuandl(PythonData):
+    """Quandl data loader (stub)."""
+
+    def __init__(self):
+        super().__init__()
+
+    def get_source(self, config, date, is_live_mode):
+        return None
+
+
+class InsightCollection:
+    """Collection of insights with filtering capabilities."""
+
+    def __init__(self):
+        self._insights = []
+
+    def add(self, insight):
+        self._insights.append(insight)
+
+    def add_range(self, insights):
+        self._insights.extend(insights)
+
+    def clear(self):
+        self._insights.clear()
+
+    def get_active_insights(self, utc_time):
+        return [i for i in self._insights if i.close_time_utc > utc_time]
+
+    def has_active_insights(self, symbol, utc_time):
+        return any(i for i in self._insights
+                   if str(i.symbol) == str(symbol) and i.close_time_utc > utc_time)
+
+    def remove_expired_insights(self, utc_time):
+        self._insights = [i for i in self._insights if i.close_time_utc > utc_time]
+
+    def __iter__(self):
+        return iter(self._insights)
+
+    def __len__(self):
+        return len(self._insights)
+
+
+class Field:
+    """Universe selection field for sorting/filtering."""
+
+    @staticmethod
+    def dollar_volume(x):
+        return getattr(x, 'dollar_volume', 0)
+
+    @staticmethod
+    def price(x):
+        return getattr(x, 'price', 0)
+
+    @staticmethod
+    def volume(x):
+        return getattr(x, 'volume', 0)
+
+    DollarVolume = staticmethod(lambda x: getattr(x, 'dollar_volume', 0))
+    Price = staticmethod(lambda x: getattr(x, 'price', 0))
+    Volume = staticmethod(lambda x: getattr(x, 'volume', 0))
+
+
+class Futures:
+    """Futures contract specifications."""
+
+    class Indices:
+        SP_500_E_MINI = "ES"
+        NASDAQ_100_E_MINI = "NQ"
+        DOW_30_E_MINI = "YM"
+        RUSSELL_2000_E_MINI = "RTY"
+        VIX = "VX"
+        SP500 = "ES"
+        MICRO_SP_500_E_MINI = "MES"
+        EURO_STOXX_50 = "FESX"
+        NIKKEI_225 = "NK"
+        FTSE_100 = "Z"
+        DAX = "FDAX"
+        HANG_SENG = "HSI"
+        MSCI_EMERGING_MARKETS = "MXEF"
+
+    class Metals:
+        GOLD = "GC"
+        SILVER = "SI"
+        PLATINUM = "PL"
+        PALLADIUM = "PA"
+        COPPER = "HG"
+        MICRO_GOLD = "MGC"
+        MICRO_SILVER = "SIL"
+
+    class Energies:
+        CRUDE_OIL_WTI = "CL"
+        NATURAL_GAS = "NG"
+        HEATING_OIL = "HO"
+        GASOLINE = "RB"
+        BRENT_CRUDE = "BZ"
+        MICRO_CRUDE_OIL_WTI = "MCL"
+
+    class Grains:
+        CORN = "ZC"
+        WHEAT = "ZW"
+        SOYBEANS = "ZS"
+        SOYBEAN_MEAL = "ZM"
+        SOYBEAN_OIL = "ZL"
+        OATS = "ZO"
+
+    class Currencies:
+        EUR = "6E"
+        GBP = "6B"
+        JPY = "6J"
+        AUD = "6A"
+        CAD = "6C"
+        CHF = "6S"
+
+    class Financials:
+        Y_2_TREASURY_NOTE = "ZT"
+        Y_5_TREASURY_NOTE = "ZF"
+        Y_10_TREASURY_NOTE = "ZN"
+        Y_30_TREASURY_BOND = "ZB"
+        EURODOLLAR = "GE"
+
+    class Meats:
+        LIVE_CATTLE = "LE"
+        FEEDER_CATTLE = "GF"
+        LEAN_HOGS = "HE"
+
+    class Softs:
+        SUGAR = "SB"
+        COTTON = "CT"
+        COFFEE = "KC"
+        COCOA = "CC"
+
+
+class Globals:
+    """Global settings."""
+    DataFolder = ""
+    Cache = ""
+
+
+class SecurityIdentifier:
+    """Security identifier generator."""
+
+    @staticmethod
+    def generate_equity(ticker, market="usa", map_first_date=True):
+        return Symbol(ticker, SecurityType.EQUITY, market)
+
+    @staticmethod
+    def generate_option(underlying, market="usa", option_style=0, option_right=0,
+                        strike_price=0, expiry_date=None):
+        return Symbol(underlying, SecurityType.OPTION, market)
+
+    @staticmethod
+    def generate_future(ticker, market="cme", expiry_date=None):
+        return Symbol(ticker, SecurityType.FUTURE, market)
+
+
+class PortfolioBias:
+    """Portfolio bias setting."""
+    LONG = 0
+    SHORT = 1
+    LONG_SHORT = 2
+
+    Long = 0
+    Short = 1
+    LongShort = 2
+
+
+class Resolution_:
+    """Namespace aliases for Resolution to support both Resolution.Daily and Resolution.DAILY"""
     pass

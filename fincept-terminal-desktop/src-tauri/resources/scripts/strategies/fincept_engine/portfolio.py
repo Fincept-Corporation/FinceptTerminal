@@ -148,6 +148,30 @@ class SecurityPortfolioManager:
             if h.quantity != 0
         }
 
+    def set_margin_call_model(self, *args, **kwargs):
+        """Set margin call model (stub)."""
+        pass
+
+    def set_positions(self, positions):
+        """Set positions (stub)."""
+        pass
+
+    # PascalCase aliases
+    def SetMarginCallModel(self, *args, **kwargs):
+        return self.set_margin_call_model(*args, **kwargs)
+
+    def SetPositions(self, positions):
+        return self.set_positions(positions)
+
+    Cash = property(lambda self: self.cash)
+    Invested = property(lambda self: self.invested)
+    TotalHoldingsValue = property(lambda self: self.total_holdings_value)
+    TotalPortfolioValue = property(lambda self: self.total_portfolio_value)
+    TotalUnrealizedProfit = property(lambda self: self.total_unrealized_profit)
+    TotalProfit = property(lambda self: self.total_profit)
+    TotalFees = property(lambda self: self.total_fees)
+    MarginRemaining = property(lambda self: self.margin_remaining)
+
     def __repr__(self):
         return (f"Portfolio(cash={self._cash:.2f}, "
                 f"holdings_value={self.total_holdings_value:.2f}, "

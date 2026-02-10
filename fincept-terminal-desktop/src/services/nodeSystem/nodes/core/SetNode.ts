@@ -22,7 +22,7 @@ import {
 
 export class SetNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Set',
+    displayName: 'Set Values',
     name: 'set',
     icon: 'fa:pen',
     iconColor: '#3b82f6',
@@ -31,7 +31,7 @@ export class SetNode implements INodeType {
     description: 'Add, edit, or remove fields from items',
     subtitle: 'Edit Fields',
     defaults: {
-      name: 'Set',
+      name: 'Set Values',
       color: '#3b82f6',
     },
     inputs: [NodeConnectionType.Main],

@@ -9,14 +9,14 @@ import {
 
 export class TelegramNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Telegram',
+    displayName: 'Send Telegram',
     name: 'telegram',
     icon: 'fa:telegram',
-    group: ['Notification'],
+    group: ['notifications'],
     version: 1,
-    description: 'Send Telegram message',
+    description: 'Send Telegram message via Bot API',
     defaults: {
-      name: 'Telegram',
+      name: 'Send Telegram',
       color: '#0088cc',
     },
     inputs: [NodeConnectionType.Main],
@@ -28,7 +28,11 @@ export class TelegramNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Telegram bot token',
+        placeholder: '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11',
+        description: 'Telegram Bot API token from @BotFather',
+        typeOptions: {
+          password: true,
+        },
       },
       {
         displayName: 'Chat ID',
@@ -36,7 +40,8 @@ export class TelegramNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Telegram chat ID',
+        placeholder: '123456789 or @channel_name',
+        description: 'Chat ID or channel username',
       },
       {
         displayName: 'Message',
@@ -44,7 +49,8 @@ export class TelegramNode implements INodeType {
         type: NodePropertyType.String,
         default: '',
         required: true,
-        description: 'Message to send',
+        placeholder: 'Your message here...',
+        description: 'Message text to send',
       },
       {
         displayName: 'Parse Mode',
@@ -55,22 +61,43 @@ export class TelegramNode implements INodeType {
           { name: 'Markdown', value: 'Markdown' },
           { name: 'HTML', value: 'HTML' },
         ],
-        default: '',
+        default: 'Markdown',
+        description: 'Message formatting mode',
+      },
+      {
+        displayName: 'Include Input Data',
+        name: 'includeInputData',
+        type: NodePropertyType.Boolean,
+        default: true,
+        description: 'Whether to include workflow input data in message',
       },
     ],
   };
 
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const items = this.getInputData();
-    const botToken = this.getNodeParameter('botToken', 0) as string;
-    const chatId = this.getNodeParameter('chatId', 0) as string;
-    const message = this.getNodeParameter('message', 0) as string;
-    const parseMode = this.getNodeParameter('parseMode', 0) as string;
-
     const outputItems: any[] = [];
 
     for (let i = 0; i < items.length; i++) {
       try {
+        const botToken = this.getNodeParameter('botToken', i) as string;
+        const chatId = this.getNodeParameter('chatId', i) as string;
+        let message = this.getNodeParameter('message', i) as string;
+        const parseMode = this.getNodeParameter('parseMode', i) as string;
+        const includeInputData = this.getNodeParameter('includeInputData', i, true) as boolean;
+
+        // Include input data if requested
+        if (includeInputData && items[i].json) {
+          const dataPreview = JSON.stringify(items[i].json, null, 2);
+          if (parseMode === 'Markdown') {
+            message += `\n\n\`\`\`json\n${dataPreview}\n\`\`\``;
+          } else if (parseMode === 'HTML') {
+            message += `\n\n<pre>${dataPreview}</pre>`;
+          } else {
+            message += `\n\nData: ${dataPreview}`;
+          }
+        }
+
         const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
         const payload: any = {
@@ -92,21 +119,32 @@ export class TelegramNode implements INodeType {
 
         const result = await response.json();
 
+        console.log(`[TelegramNode] Message ${response.ok ? 'sent' : 'failed'} to chat ${chatId}`);
+
         outputItems.push({
           json: {
             ...items[i].json,
-            telegramResponse: result,
-            success: response.ok,
+            notification: {
+              platform: 'telegram',
+              chatId,
+              success: response.ok,
+              messageId: result.result?.message_id,
+              sentAt: new Date().toISOString(),
+            },
           },
           pairedItem: i,
         });
       } catch (error: any) {
+        console.error('[TelegramNode] Error:', error);
         if (this.continueOnFail()) {
           outputItems.push({
             json: {
               ...items[i].json,
-              error: error.message,
-              success: false,
+              notification: {
+                platform: 'telegram',
+                success: false,
+                error: error.message,
+              },
             },
             pairedItem: i,
           });

@@ -56,13 +56,17 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
   const [stopLoss, setStopLoss] = useState<string>('');
   const [takeProfit, setTakeProfit] = useState<string>('');
   const [trailingStop, setTrailingStop] = useState<string>('');
+  const [useExitConditions, setUseExitConditions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [btSymbol, setBtSymbol] = useState('');
   const [btPeriod, setBtPeriod] = useState('1y');
+  const [btProvider, setBtProvider] = useState<'yfinance' | 'fyers'>('fyers');
   const [backtesting, setBacktesting] = useState(false);
   const [btResult, setBtResult] = useState<BacktestResult | null>(null);
   const [btError, setBtError] = useState('');
+  const [btDebug, setBtDebug] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     if (editStrategyId) loadStrategy(editStrategyId);
@@ -112,21 +116,37 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
   };
 
   const handleBacktest = async () => {
-    if (!btSymbol.trim()) { setBtError('Enter a symbol (e.g. RELIANCE.NS, AAPL)'); return; }
+    const symbolHint = btProvider === 'fyers'
+      ? 'Enter symbol (e.g. RELIANCE, TCS). Run a scan first to fetch data.'
+      : 'Enter symbol (e.g. RELIANCE.NS for NSE, AAPL for US)';
+    if (!btSymbol.trim()) { setBtError(symbolHint); return; }
     if (entryConditions.length === 0) { setBtError('Add at least one entry condition'); return; }
-    setBacktesting(true); setBtError(''); setBtResult(null);
+    setBacktesting(true); setBtError(''); setBtResult(null); setBtDebug([]);
     const res = await runAlgoBacktest({
       symbol: btSymbol.trim(),
       entryConditions: buildConditionsJson(entryConditions, entryLogic),
-      exitConditions: buildConditionsJson(exitConditions, exitLogic),
+      exitConditions: useExitConditions ? buildConditionsJson(exitConditions, exitLogic) : '[]',
       timeframe: ['1m','3m','5m'].includes(timeframe) ? '1d' : timeframe,
       period: btPeriod,
       stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
       takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
+      provider: btProvider,
     });
     setBacktesting(false);
-    if (res.success && res.data) setBtResult(res.data);
-    else setBtError(res.error || 'Backtest failed');
+
+    // Capture debug info from response
+    if (res.debug) {
+      setBtDebug(res.debug);
+    } else if (res.data?.debug) {
+      setBtDebug(res.data.debug);
+    }
+
+    if (res.success && res.data) {
+      setBtResult(res.data);
+      if (res.data.debug) setBtDebug(res.data.debug);
+    } else {
+      setBtError(res.error || 'Backtest failed');
+    }
   };
 
   return (
@@ -188,28 +208,90 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
       {/* Entry & Exit Conditions */}
       <ConditionBuilder label="Entry Conditions (BUY when)" conditions={entryConditions} logic={entryLogic}
         onConditionsChange={setEntryConditions} onLogicChange={setEntryLogic} />
-      <ConditionBuilder label="Exit Conditions (SELL when)" conditions={exitConditions} logic={exitLogic}
-        onConditionsChange={setExitConditions} onLogicChange={setExitLogic} />
+
+      {/* Exit Conditions with Toggle */}
+      <div style={{ backgroundColor: F.PANEL_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
+        <div style={{
+          padding: '8px 12px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>
+              EXIT CONDITIONS (SELL WHEN)
+            </span>
+            {!useExitConditions && (
+              <span style={{ fontSize: '8px', color: F.YELLOW, fontWeight: 700 }}>DISABLED</span>
+            )}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+            <span style={{ fontSize: '8px', color: useExitConditions ? F.GREEN : F.MUTED }}>
+              {useExitConditions ? 'ENABLED' : 'USE SL/TP ONLY'}
+            </span>
+            <input
+              type="checkbox"
+              checked={useExitConditions}
+              onChange={e => setUseExitConditions(e.target.checked)}
+              style={{ accentColor: F.ORANGE, cursor: 'pointer' }}
+            />
+          </label>
+        </div>
+        {useExitConditions ? (
+          <div style={{ padding: '4px 0' }}>
+            <ConditionBuilder label="" conditions={exitConditions} logic={exitLogic}
+              onConditionsChange={setExitConditions} onLogicChange={setExitLogic} />
+          </div>
+        ) : (
+          <div style={{ padding: '16px', textAlign: 'center' }}>
+            <div style={{ fontSize: '9px', color: F.MUTED }}>
+              Exit conditions disabled. Trades will exit only via Stop Loss or Take Profit.
+            </div>
+            <div style={{ fontSize: '8px', color: F.YELLOW, marginTop: '4px' }}>
+              ⚠ Make sure Stop Loss and/or Take Profit are set below.
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Risk Management */}
       <div style={{ backgroundColor: F.PANEL_BG, border: `1px solid ${F.BORDER}`, borderRadius: '2px' }}>
         <div style={{ padding: '8px 12px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}>
           <span style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>RISK MANAGEMENT</span>
+          <span style={{ fontSize: '8px', color: F.MUTED, marginLeft: '8px' }}>
+            (Priority: Stop Loss → Take Profit → Exit Condition)
+          </span>
         </div>
         <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
           <div>
             <label style={labelStyle}>STOP LOSS (%)</label>
-            <input type="number" value={stopLoss} onChange={e => setStopLoss(e.target.value)} placeholder="e.g. 2" step="0.1" style={inputStyle} />
+            <input type="number" value={stopLoss} onChange={e => setStopLoss(e.target.value)} placeholder="e.g. 2" step="0.1" min="0" style={inputStyle} />
+            <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Exit if loss ≥ this %</div>
           </div>
           <div>
             <label style={labelStyle}>TAKE PROFIT (%)</label>
-            <input type="number" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} placeholder="e.g. 5" step="0.1" style={inputStyle} />
+            <input type="number" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} placeholder="e.g. 5" step="0.1" min="0" style={inputStyle} />
+            <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Exit if profit ≥ this %</div>
           </div>
           <div>
             <label style={labelStyle}>TRAILING STOP (%)</label>
-            <input type="number" value={trailingStop} onChange={e => setTrailingStop(e.target.value)} placeholder="e.g. 1.5" step="0.1" style={inputStyle} />
+            <input type="number" value={trailingStop} onChange={e => setTrailingStop(e.target.value)} placeholder="e.g. 1.5" step="0.1" min="0" style={inputStyle} />
+            <div style={{ fontSize: '8px', color: F.MUTED, marginTop: '2px' }}>Not yet implemented</div>
           </div>
         </div>
+        {/* Validation Warning */}
+        {stopLoss && takeProfit && parseFloat(stopLoss) >= parseFloat(takeProfit) && (
+          <div style={{ margin: '0 12px 12px', padding: '6px 10px', backgroundColor: `${F.YELLOW}15`, border: `1px solid ${F.YELLOW}40`, borderRadius: '2px' }}>
+            <span style={{ fontSize: '9px', color: F.YELLOW }}>
+              ⚠ Stop Loss ({stopLoss}%) ≥ Take Profit ({takeProfit}%). Consider adjusting for better risk/reward ratio.
+            </span>
+          </div>
+        )}
+        {exitConditions.length > 0 && takeProfit && (
+          <div style={{ margin: '0 12px 12px', padding: '6px 10px', backgroundColor: `${F.CYAN}10`, border: `1px solid ${F.CYAN}30`, borderRadius: '2px' }}>
+            <span style={{ fontSize: '9px', color: F.CYAN }}>
+              ℹ Exit conditions will trigger AFTER stop loss/take profit checks. If your exit condition triggers before {takeProfit}% profit, it will exit early.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Quick Backtest */}
@@ -217,10 +299,22 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
         <div style={{ padding: '8px 12px', backgroundColor: F.HEADER_BG, borderBottom: `1px solid ${F.BORDER}` }}>
           <span style={{ fontSize: '9px', fontWeight: 700, color: F.GRAY, letterSpacing: '0.5px' }}>QUICK BACKTEST</span>
         </div>
-        <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+        <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
           <div>
-            <label style={labelStyle}>SYMBOL (YFINANCE)</label>
-            <input value={btSymbol} onChange={e => setBtSymbol(e.target.value)} placeholder="RELIANCE.NS, AAPL" style={inputStyle} />
+            <label style={labelStyle}>DATA SOURCE</label>
+            <select value={btProvider} onChange={e => setBtProvider(e.target.value as 'yfinance' | 'fyers')} style={inputStyle}>
+              <option value="fyers">Fyers (Local Cache)</option>
+              <option value="yfinance">Yahoo Finance</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>SYMBOL</label>
+            <input
+              value={btSymbol}
+              onChange={e => setBtSymbol(e.target.value)}
+              placeholder={btProvider === 'fyers' ? 'RELIANCE, TCS' : 'RELIANCE.NS, AAPL'}
+              style={inputStyle}
+            />
           </div>
           <div>
             <label style={labelStyle}>PERIOD</label>
@@ -245,6 +339,43 @@ const StrategyEditor: React.FC<StrategyEditorProps> = ({ editStrategyId, onSaved
         {btError && (
           <div style={{ margin: '0 12px 12px', padding: '6px 10px', backgroundColor: `${F.RED}20`, color: F.RED, fontSize: '9px', borderRadius: '2px' }}>
             {btError}
+          </div>
+        )}
+
+        {/* Debug Output Section */}
+        {btDebug.length > 0 && (
+          <div style={{ margin: '0 12px 12px' }}>
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              style={{
+                padding: '4px 8px', backgroundColor: F.HEADER_BG, border: `1px solid ${F.BORDER}`,
+                color: F.MUTED, fontSize: '8px', fontWeight: 700, borderRadius: '2px', cursor: 'pointer',
+                width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}
+            >
+              <span>🔧 DEBUG LOG ({btDebug.length} entries)</span>
+              <span>{showDebug ? '▼' : '▶'}</span>
+            </button>
+            {showDebug && (
+              <div style={{
+                marginTop: '4px', padding: '8px', backgroundColor: '#0a0a0a', border: `1px solid ${F.BORDER}`,
+                borderRadius: '2px', maxHeight: '200px', overflow: 'auto',
+                fontFamily: '"IBM Plex Mono", monospace', fontSize: '8px', lineHeight: '1.4',
+              }}>
+                {btDebug.map((line, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      color: line.includes('ERROR') ? F.RED : line.includes('WARNING') ? F.YELLOW : F.MUTED,
+                      marginBottom: '2px',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

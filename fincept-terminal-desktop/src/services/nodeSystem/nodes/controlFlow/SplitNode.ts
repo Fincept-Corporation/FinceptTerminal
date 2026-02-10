@@ -9,14 +9,14 @@ import {
 
 export class SplitNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Split',
+    displayName: 'Split Data',
     name: 'split',
     icon: 'fa:code-branch',
     group: ['Control Flow'],
     version: 1,
     description: 'Split items to multiple outputs',
     defaults: {
-      name: 'Split',
+      name: 'Split Data',
       color: '#ef4444',
     },
     inputs: [NodeConnectionType.Main],

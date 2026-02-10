@@ -41,6 +41,12 @@ class Security:
         self.price_variation_model = None
         self.margin_interest_rate_model = None
         self._custom_properties = {}
+        self._option_chain_provider = None
+        self.holdings = SecurityHolding_(symbol)
+        self.symbol_properties = SymbolProperties()
+        self.quote_currency = QuoteCurrency()
+        self.base_currency = QuoteCurrency()
+        self.fundamentals = None
 
     def set_leverage(self, leverage: float):
         self.leverage = leverage
@@ -69,6 +75,37 @@ class Security:
     def set_margin_interest_rate_model(self, model):
         self.margin_interest_rate_model = model
 
+    def set_filter(self, *args, **kwargs):
+        """Set option/future chain filter. Accepts filter function or min/max params."""
+        if args and callable(args[0]):
+            self._filter_func = args[0]
+        else:
+            self._filter_func = None
+        return self
+
+    def set_data_normalization_mode(self, mode):
+        """Set data normalization mode."""
+        self._data_normalization_mode = mode
+
+    @property
+    def mapped(self):
+        """Get mapped symbol (for continuous futures)."""
+        return self.symbol
+
+    @property
+    def mappable(self):
+        """Whether this security is mappable."""
+        return True
+
+    @property
+    def settled_bar_count(self):
+        return 0
+
+    @property
+    def local_time(self):
+        from datetime import datetime
+        return datetime.now()
+
     def update_price(self, price: float, open_: float = 0, high: float = 0,
                      low: float = 0, volume: float = 0):
         self.price = price
@@ -95,6 +132,25 @@ class Security:
 
 class Exchange:
     """Security exchange information."""
+
+    # Exchange constants
+    NSE = "NSE"
+    BSE = "BSE"
+    NYSE = "NYSE"
+    NASDAQ = "NASDAQ"
+    AMEX = "AMEX"
+    CME = "CME"
+    COMEX = "COMEX"
+    NYMEX = "NYMEX"
+    CBOT = "CBOT"
+    ICE = "ICE"
+    EUREX = "EUREX"
+    LSE = "LSE"
+    TSE = "TSE"
+    HKEX = "HKEX"
+    SGX = "SGX"
+    ASX = "ASX"
+
     def __init__(self):
         self.exchange_open = True
         self.hours = ExchangeHours()
@@ -172,3 +228,41 @@ class SecurityManager:
 
     def get(self, key, default=None):
         return self._securities.get(str(key).upper(), default)
+
+
+class SecurityHolding_:
+    """Lightweight holdings tracker on Security object."""
+    def __init__(self, symbol):
+        self.symbol = symbol
+        self.quantity = 0
+        self.average_price = 0.0
+        self.invested = False
+        self.is_long = False
+        self.is_short = False
+        self.unrealized_profit = 0.0
+        self.unrealized_profit_percent = 0.0
+
+
+class SymbolProperties:
+    """Symbol properties like lot size, minimum price variation."""
+    def __init__(self):
+        self.lot_size = 1
+        self.minimum_price_variation = 0.01
+        self.minimum_order_size = 1
+        self.contract_multiplier = 1.0
+        self.priceMagnifier = 1
+        self.description = ""
+
+
+class QuoteCurrency:
+    """Quote currency info for a security."""
+    def __init__(self):
+        self.symbol = "USD"
+        self.conversion_rate = 1.0
+        self.amount = 0.0
+
+    def set_amount(self, amount):
+        self.amount = amount
+
+    def SetAmount(self, amount):
+        self.amount = amount

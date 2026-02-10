@@ -1,8 +1,24 @@
 // PythonAgentNode.tsx - Visual node for Python agents in Node Editor
 import React, { useState, useEffect } from 'react';
-import { Handle, Position } from 'reactflow';
-import { Play, Settings, CheckCircle, AlertCircle, Loader, TrendingUp, Brain } from 'lucide-react';
+import { Position } from 'reactflow';
+import { Play, Settings, CheckCircle, AlertCircle, Loader, Brain } from 'lucide-react';
 import { sqliteService, LLMConfig, LLMModelConfig } from '@/services/core/sqliteService';
+import {
+  FINCEPT,
+  SPACING,
+  BORDER_RADIUS,
+  FONT_FAMILY,
+  BaseNode,
+  NodeHeader,
+  IconButton,
+  Button,
+  SelectField,
+  InfoPanel,
+  StatusPanel,
+  SettingsPanel,
+  KeyValue,
+  getStatusColor,
+} from './shared';
 
 // Combined LLM option for display
 interface LLMOption {
@@ -114,373 +130,165 @@ const PythonAgentNode: React.FC<PythonAgentNodeProps> = ({ id, data, selected })
     loadLLMs();
   }, []);
 
-  // Fincept colors
-  const ORANGE = '#FFA500';
-  const WHITE = '#FFFFFF';
-  const GRAY = '#787878';
-  const DARK_BG = '#0a0a0a';
-  const PANEL_BG = '#1a1a1a';
-  const BORDER = '#2d2d2d';
-  const GREEN = '#10b981';
-  const RED = '#ef4444';
-
-  const getStatusColor = () => {
-    switch (data.status) {
-      case 'running': return ORANGE;
-      case 'completed': return GREEN;
-      case 'error': return RED;
-      default: return GRAY;
-    }
-  };
+  const statusColor = getStatusColor(data.status);
 
   const getStatusIcon = () => {
     switch (data.status) {
-      case 'running': return <Loader size={14} className="animate-spin" color={ORANGE} />;
-      case 'completed': return <CheckCircle size={14} color={GREEN} />;
-      case 'error': return <AlertCircle size={14} color={RED} />;
-      default: return <TrendingUp size={14} color={GRAY} />;
+      case 'running': return <Loader size={14} className="animate-spin" color={FINCEPT.ORANGE} />;
+      case 'completed': return <CheckCircle size={14} color={FINCEPT.GREEN} />;
+      case 'error': return <AlertCircle size={14} color={FINCEPT.RED} />;
+      default: return null;
     }
   };
 
+  const llmOptions = [
+    { value: 'active', label: 'Use Active Provider (from Settings)' },
+    ...availableLLMs.map(llm => ({
+      value: llm.id,
+      label: `${llm.displayName}${llm.isActive ? ' ✓' : ''}`
+    }))
+  ];
+
   return (
-    <div style={{
-      backgroundColor: PANEL_BG,
-      border: `2px solid ${selected ? ORANGE : getStatusColor()}`,
-      borderRadius: '8px',
-      padding: '12px',
-      minWidth: '250px',
-      maxWidth: '320px',
-      fontFamily: 'Consolas, monospace',
-      boxShadow: selected ? `0 0 16px ${ORANGE}60` : `0 2px 8px rgba(0,0,0,0.3)`
-    }}>
-      {/* Input Handle */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{
-          background: data.color,
-          width: '12px',
-          height: '12px',
-          border: `2px solid ${DARK_BG}`,
-          left: '-6px'
-        }}
+    <BaseNode
+      selected={selected}
+      minWidth="250px"
+      maxWidth="320px"
+      borderColor={statusColor}
+      handles={[
+        { type: 'target', position: Position.Left, color: data.color },
+        { type: 'source', position: Position.Right, color: data.status === 'completed' ? FINCEPT.GREEN : data.color },
+      ]}
+    >
+      {/* Header */}
+      <NodeHeader
+        icon={<span style={{ fontSize: '20px' }}>{data.icon}</span>}
+        title={data.label}
+        subtitle={data.agentCategory}
+        color={FINCEPT.WHITE}
+        rightActions={
+          <>
+            {getStatusIcon()}
+            <IconButton
+              icon={<Settings size={14} />}
+              onClick={() => setShowSettings(!showSettings)}
+              active={showSettings}
+            />
+          </>
+        }
       />
 
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        marginBottom: '10px',
-        paddingBottom: '8px',
-        borderBottom: `1px solid ${BORDER}`
-      }}>
-        <span style={{ fontSize: '20px' }}>{data.icon}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{
-            color: WHITE,
-            fontSize: '12px',
-            fontWeight: 'bold',
-            marginBottom: '2px'
-          }}>
-            {data.label}
-          </div>
-          <div style={{
-            color: GRAY,
-            fontSize: '9px',
-            textTransform: 'uppercase'
-          }}>
-            {data.agentCategory}
-          </div>
-        </div>
-        {getStatusIcon()}
-      </div>
+      {/* Settings Panel */}
+      <SettingsPanel isOpen={showSettings}>
+        <SelectField
+          label="LLM Provider for Analysis"
+          value={selectedLLM}
+          options={llmOptions}
+          onChange={(value) => {
+            setSelectedLLM(value);
+            data.onLLMChange?.(value);
+          }}
+        />
 
-      {/* Parameters Summary */}
-      {Object.keys(data.parameters).length > 0 && (
-        <div style={{
-          backgroundColor: DARK_BG,
-          border: `1px solid ${BORDER}`,
-          borderRadius: '4px',
-          padding: '6px',
-          marginBottom: '8px'
-        }}>
-          <div style={{
-            color: ORANGE,
-            fontSize: '9px',
-            fontWeight: 'bold',
-            marginBottom: '4px'
-          }}>
-            PARAMETERS
-          </div>
-          {Object.entries(data.parameters).slice(0, 2).map(([key, value]) => (
-            <div key={key} style={{
-              color: GRAY,
-              fontSize: '8px',
-              marginBottom: '2px',
-              display: 'flex',
-              justifyContent: 'space-between'
-            }}>
-              <span>{key}:</span>
-              <span style={{ color: WHITE }}>
-                {Array.isArray(value) ? value.join(', ') : String(value).substring(0, 20)}
-              </span>
-            </div>
-          ))}
-          {Object.keys(data.parameters).length > 2 && (
-            <div style={{ color: GRAY, fontSize: '8px', fontStyle: 'italic' }}>
-              +{Object.keys(data.parameters).length - 2} more...
-            </div>
-          )}
-        </div>
-      )}
+        <Button
+          label="CLOSE"
+          onClick={() => setShowSettings(false)}
+          variant="primary"
+          fullWidth
+        />
+      </SettingsPanel>
 
-      {/* Result Preview */}
-      {data.status === 'completed' && data.result && (
-        <div style={{
-          backgroundColor: `${GREEN}15`,
-          border: `1px solid ${GREEN}`,
-          borderRadius: '4px',
-          padding: '6px',
-          marginBottom: '8px'
-        }}>
-          <div style={{
-            color: GREEN,
-            fontSize: '9px',
-            fontWeight: 'bold',
-            marginBottom: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <CheckCircle size={10} />
-            RESULT
-          </div>
-          <div style={{
-            color: WHITE,
-            fontSize: '8px',
-            fontFamily: 'monospace',
-            maxHeight: '60px',
-            overflow: 'auto'
-          }}>
-            {JSON.stringify(data.result, null, 2).substring(0, 100)}...
-          </div>
-        </div>
-      )}
-
-      {/* Error Display */}
-      {data.status === 'error' && data.error && (
-        <div style={{
-          backgroundColor: `${RED}15`,
-          border: `1px solid ${RED}`,
-          borderRadius: '4px',
-          padding: '6px',
-          marginBottom: '8px'
-        }}>
-          <div style={{
-            color: RED,
-            fontSize: '9px',
-            fontWeight: 'bold',
-            marginBottom: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <AlertCircle size={10} />
-            ERROR
-          </div>
-          <div style={{
-            color: RED,
-            fontSize: '8px',
-            wordBreak: 'break-word'
-          }}>
-            {data.error}
-          </div>
-        </div>
-      )}
-
-      {/* LLM Display - Always visible, clickable to configure */}
-      <div
-        onClick={() => setShowSettings(!showSettings)}
-        style={{
-          backgroundColor: DARK_BG,
-          border: `1px solid ${showSettings ? ORANGE : BORDER}`,
-          borderRadius: '4px',
-          padding: '6px',
-          marginBottom: '8px',
-          cursor: 'pointer',
-          transition: 'border-color 0.2s'
-        }}
-      >
-        <div style={{
-          color: GRAY,
-          fontSize: '9px',
-          fontWeight: 'bold',
-          marginBottom: '4px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '4px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Brain size={10} />
-            LLM
-          </div>
-          <Settings size={10} color={showSettings ? ORANGE : GRAY} />
-        </div>
-        <div style={{
-          color: WHITE,
-          fontSize: '8px'
-        }}>
-          {selectedLLM === 'active'
-            ? 'Active Provider'
-            : (availableLLMs.find(l => l.id === selectedLLM)?.displayName || selectedLLM.toUpperCase())
-          }
-        </div>
-      </div>
-
-      {/* LLM Selection Panel */}
-      {showSettings && (
-        <div style={{
-          backgroundColor: DARK_BG,
-          border: `1px solid ${ORANGE}`,
-          borderRadius: '4px',
-          padding: '8px',
-          marginBottom: '8px'
-        }}>
-          <div style={{
-            color: ORANGE,
-            fontSize: '10px',
-            fontWeight: 'bold',
-            marginBottom: '8px'
-          }}>
-            LLM CONFIGURATION
-          </div>
-
-          <div style={{ marginBottom: '8px' }}>
-            <label style={{
-              color: GRAY,
-              fontSize: '8px',
-              display: 'block',
-              marginBottom: '4px'
-            }}>
-              LLM Provider for Analysis
-            </label>
-            <select
-              value={selectedLLM}
-              onChange={(e) => {
-                setSelectedLLM(e.target.value);
-                data.onLLMChange?.(e.target.value);
-              }}
-              style={{
-                width: '100%',
-                backgroundColor: PANEL_BG,
-                border: `1px solid ${BORDER}`,
-                color: WHITE,
-                padding: '6px',
-                fontSize: '10px',
-                borderRadius: '3px'
-              }}
-            >
-              <option value="active">Use Active Provider (from Settings)</option>
-              {availableLLMs.map(llm => (
-                <option key={llm.id} value={llm.id} style={{
-                  backgroundColor: llm.type === 'fincept' ? '#1a3a1a' : undefined
-                }}>
-                  {llm.displayName}{llm.isActive ? ' ✓' : ''}
-                </option>
+      {/* Main Content */}
+      {!showSettings && (
+        <div style={{ padding: SPACING.LG }}>
+          {/* Parameters Summary */}
+          {Object.keys(data.parameters).length > 0 && (
+            <InfoPanel title="PARAMETERS">
+              {Object.entries(data.parameters).slice(0, 2).map(([key, value]) => (
+                <KeyValue
+                  key={key}
+                  label={key}
+                  value={Array.isArray(value) ? value.join(', ') : String(value).substring(0, 20)}
+                />
               ))}
-            </select>
-          </div>
+              {Object.keys(data.parameters).length > 2 && (
+                <div style={{ color: FINCEPT.GRAY, fontSize: '8px', fontStyle: 'italic' }}>
+                  +{Object.keys(data.parameters).length - 2} more...
+                </div>
+              )}
+            </InfoPanel>
+          )}
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowSettings(false);
-            }}
+          {/* LLM Display - Clickable to configure */}
+          <div
+            onClick={() => setShowSettings(!showSettings)}
             style={{
-              width: '100%',
-              backgroundColor: ORANGE,
-              color: 'black',
-              border: 'none',
-              padding: '6px',
-              fontSize: '9px',
-              fontWeight: 'bold',
+              backgroundColor: FINCEPT.DARK_BG,
+              border: `1px solid ${showSettings ? FINCEPT.ORANGE : FINCEPT.BORDER}`,
+              borderRadius: BORDER_RADIUS.LG,
+              padding: SPACING.SM,
+              marginBottom: SPACING.MD,
               cursor: 'pointer',
-              borderRadius: '3px'
+              transition: 'border-color 0.2s'
             }}
           >
-            CLOSE
-          </button>
+            <div style={{
+              color: FINCEPT.GRAY,
+              fontSize: '9px',
+              fontWeight: 700,
+              marginBottom: SPACING.XS,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: SPACING.XS
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.XS }}>
+                <Brain size={10} />
+                LLM
+              </div>
+              <Settings size={10} color={showSettings ? FINCEPT.ORANGE : FINCEPT.GRAY} />
+            </div>
+            <div style={{
+              color: FINCEPT.WHITE,
+              fontSize: '8px'
+            }}>
+              {selectedLLM === 'active'
+                ? 'Active Provider'
+                : (availableLLMs.find(l => l.id === selectedLLM)?.displayName || selectedLLM.toUpperCase())
+              }
+            </div>
+          </div>
+
+          {/* Result Preview */}
+          {data.status === 'completed' && data.result && (
+            <StatusPanel
+              type="success"
+              icon={<CheckCircle size={10} />}
+              message={JSON.stringify(data.result, null, 2).substring(0, 100) + '...'}
+            />
+          )}
+
+          {/* Error Display */}
+          {data.status === 'error' && data.error && (
+            <StatusPanel
+              type="error"
+              icon={<AlertCircle size={10} />}
+              message={data.error}
+            />
+          )}
+
+          {/* Action Button */}
+          <Button
+            label={data.status === 'running' ? 'RUNNING...' : 'EXECUTE'}
+            icon={data.status === 'running' ? <Loader size={12} className="animate-spin" /> : <Play size={12} />}
+            onClick={() => data.onExecute?.(id)}
+            disabled={data.status === 'running'}
+            fullWidth
+            variant="primary"
+          />
         </div>
       )}
-
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '6px' }}>
-        <button
-          onClick={() => data.onExecute?.(id)}
-          disabled={data.status === 'running'}
-          style={{
-            flex: 1,
-            backgroundColor: data.status === 'running' ? GRAY : data.color,
-            color: 'black',
-            border: 'none',
-            padding: '8px',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            cursor: data.status === 'running' ? 'not-allowed' : 'pointer',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            opacity: data.status === 'running' ? 0.6 : 1
-          }}
-        >
-          {data.status === 'running' ? (
-            <>
-              <Loader size={12} className="animate-spin" />
-              RUNNING...
-            </>
-          ) : (
-            <>
-              <Play size={12} />
-              EXECUTE
-            </>
-          )}
-        </button>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          style={{
-            backgroundColor: showSettings ? ORANGE : DARK_BG,
-            border: `1px solid ${BORDER}`,
-            color: showSettings ? 'black' : GRAY,
-            padding: '8px',
-            fontSize: '10px',
-            cursor: 'pointer',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <Settings size={14} />
-        </button>
-      </div>
-
-      {/* Output Handle */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          background: data.status === 'completed' ? GREEN : data.color,
-          width: '12px',
-          height: '12px',
-          border: `2px solid ${DARK_BG}`,
-          right: '-6px'
-        }}
-      />
-    </div>
+    </BaseNode>
   );
 };
 

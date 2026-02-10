@@ -15,7 +15,7 @@ import { AgentBridge } from '../../adapters/AgentBridge';
 
 export class GeopoliticsAgentNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Geopolitics Agent',
+    displayName: 'Geopolitics AI',
     name: 'geopoliticsAgent',
     icon: 'file:geopolitics.svg',
     group: ['agents'],
@@ -23,7 +23,7 @@ export class GeopoliticsAgentNode implements INodeType {
     subtitle: '={{$parameter["framework"]}}',
     description: 'Get geopolitical analysis using various frameworks and perspectives',
     defaults: {
-      name: 'Geopolitics Agent',
+      name: 'Geopolitics AI',
       color: '#dc2626',
     },
     inputs: [NodeConnectionType.Main],

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       description:
-        description: 'Build macOS artifacts for testing (unsigned builds require xattr command)'
+        description: 'Build all platform artifacts for testing (replicates release pipeline)'
         required: false
-        default: 'See artifact download instructions below'
+        default: 'Test build for all platforms'
 
 jobs:
   build:
@@ -24,6 +24,16 @@ jobs:
             os_name: 'macOS'
             arch: 'x64'
             target: 'x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: '--target x86_64-unknown-linux-gnu'
+            os_name: 'Linux'
+            arch: 'x64'
+            target: 'x86_64-unknown-linux-gnu'
+          - platform: 'windows-2022'
+            args: '--target x86_64-pc-windows-msvc'
+            os_name: 'Windows'
+            arch: 'x64'
+            target: 'x86_64-pc-windows-msvc'
 
     runs-on: ${{ matrix.platform }}
 
@@ -31,6 +41,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev || sudo apt-get install -y libwebkit2gtk-4.0-dev
+          sudo apt-get install -y libjavascriptcoregtk-4.1-dev || sudo apt-get install -y libjavascriptcoregtk-4.0-dev
+          sudo apt-get install -y libsoup-3.0-dev || sudo apt-get install -y libsoup2.4-dev
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libnss3-dev \
+            libxss1 \
+            libasound2-dev
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -41,6 +71,11 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './fincept-terminal-desktop/src-tauri -> target'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -69,51 +104,110 @@ jobs:
         run: bun install
         working-directory: ./fincept-terminal-desktop
 
-      # NOTE: Python and Bun are NOT bundled in the app
-      # They are downloaded and installed on first run via setup.rs
-      # Only requirements.txt and scripts are bundled as resources
-      # See: fincept-terminal-desktop/src-tauri/src/setup.rs for installation logic
-      # See: fincept-terminal-desktop/src-tauri/src/utils/python.rs for runtime path resolution
-
-      - name: Build the app with signing
+      - name: Build the app with updater
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          NODE_OPTIONS: --max-old-space-size=6144
         with:
           projectPath: fincept-terminal-desktop
           args: ${{ matrix.args }}
           includeUpdaterJson: true
 
-      - name: Prepare artifacts with proper naming
+      - name: Debug - List all bundle artifacts
+        run: |
+          echo "=== All files in bundle directory ==="
+          find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -type f 2>/dev/null | sort || echo "Bundle directory not found"
+        shell: bash
+
+      - name: Validate and prepare artifacts
         id: prepare
         run: |
           mkdir -p release-artifacts
 
-          # Get version for consistent naming
-          if [ -f "fincept-terminal-desktop/src-tauri/Cargo.toml" ]; then
-            VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
-          else
-            VERSION="1.0.0"
-          fi
-
+          VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          # macOS builds only
-          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            SUFFIX="macOS-arm64"
-          else
-            SUFFIX="macOS-x64"
+          if [[ "${{ matrix.platform }}" == "macos-14" ]] || [[ "${{ matrix.platform }}" == "macos-15-intel" ]]; then
+            SUFFIX="macOS-${{ matrix.arch }}"
+            ARTIFACT=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -type f 2>/dev/null | head -1)
+            if [ -f "$ARTIFACT" ]; then
+              cp "$ARTIFACT" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg"
+              echo "Found DMG: $ARTIFACT"
+            else
+              echo "Warning: DMG not found, checking for .app bundle"
+              APP_BUNDLE=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app" -type d 2>/dev/null | head -1)
+              if [ -d "$APP_BUNDLE" ]; then
+                tar -czf "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.app.tar.gz" -C "$(dirname "$APP_BUNDLE")" "$(basename "$APP_BUNDLE")"
+              else
+                echo "Error: No macOS artifacts found"; exit 1;
+              fi
+            fi
+
+            TAR_GZ=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app.tar.gz" -type f 2>/dev/null | head -1)
+            TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app.tar.gz.sig" -type f 2>/dev/null | head -1)
+            if [ -f "$TAR_GZ" ]; then
+              cp "$TAR_GZ" "release-artifacts/FinceptTerminal-${{ matrix.arch }}-darwin.app.tar.gz"
+              echo "Found macOS tar.gz: $TAR_GZ"
+            fi
+            if [ -f "$TAR_GZ_SIG" ]; then
+              cp "$TAR_GZ_SIG" "release-artifacts/FinceptTerminal-${{ matrix.arch }}-darwin.app.tar.gz.sig"
+              echo "Found macOS signature: $TAR_GZ_SIG"
+            fi
+
+          elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
+            SUFFIX="Linux-x64"
+            APPIMAGE=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -type f 2>/dev/null | head -1)
+            DEB=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -type f 2>/dev/null | head -1)
+            [ -f "$APPIMAGE" ] && cp "$APPIMAGE" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage" || { echo "Error: AppImage not found"; exit 1; }
+            [ -f "$DEB" ] && cp "$DEB" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb"
+
+            APPIMAGE_TAR_GZ=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage.tar.gz" -type f 2>/dev/null | head -1)
+            APPIMAGE_TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.AppImage.tar.gz.sig" -type f 2>/dev/null | head -1)
+            if [ -f "$APPIMAGE_TAR_GZ" ]; then
+              cp "$APPIMAGE_TAR_GZ" "release-artifacts/FinceptTerminal-x86_64-linux.AppImage.tar.gz"
+              echo "Found Linux tar.gz: $APPIMAGE_TAR_GZ"
+            fi
+            if [ -f "$APPIMAGE_TAR_GZ_SIG" ]; then
+              cp "$APPIMAGE_TAR_GZ_SIG" "release-artifacts/FinceptTerminal-x86_64-linux.AppImage.tar.gz.sig"
+              echo "Found Linux signature: $APPIMAGE_TAR_GZ_SIG"
+            fi
+
+          elif [[ "${{ matrix.platform }}" == "windows-2022" ]]; then
+            SUFFIX="Windows-x64"
+            MSI=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.msi" -type f 2>/dev/null | head -1)
+            [ -f "$MSI" ] && cp "$MSI" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.msi" || { echo "Error: MSI not found"; exit 1; }
+
+            NSIS_ZIP=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip" -type f 2>/dev/null | head -1)
+            NSIS_ZIP_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip.sig" -type f 2>/dev/null | head -1)
+            if [ -f "$NSIS_ZIP" ]; then
+              cp "$NSIS_ZIP" "release-artifacts/FinceptTerminal-x86_64-windows.nsis.zip"
+              echo "Found NSIS zip: $NSIS_ZIP"
+            else
+              echo "WARNING: NSIS zip not found! Updater will not work for Windows."
+            fi
+            if [ -f "$NSIS_ZIP_SIG" ]; then
+              cp "$NSIS_ZIP_SIG" "release-artifacts/FinceptTerminal-x86_64-windows.nsis.zip.sig"
+              echo "Found Windows signature: $NSIS_ZIP_SIG"
+            else
+              echo "WARNING: NSIS zip signature not found! Check TAURI_SIGNING_PRIVATE_KEY secret."
+            fi
           fi
 
-          find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg \; 2>/dev/null && echo "[OK] Found .dmg" || echo "[WARN] No .dmg found"
+          LATEST_JSON=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "latest.json" -type f 2>/dev/null | head -1)
+          if [ -f "$LATEST_JSON" ]; then
+            cp "$LATEST_JSON" "release-artifacts/latest-${{ matrix.platform }}.json"
+            echo "Found latest.json: $LATEST_JSON"
+            cat "$LATEST_JSON"
+          else
+            echo "WARNING: latest.json not found for ${{ matrix.platform }}"
+          fi
 
-          # List what we found
           echo "=== Release Artifacts ==="
-          ls -la release-artifacts/ || echo "No artifacts prepared"
+          ls -lh release-artifacts/
 
-          # Set output for later steps
           artifact_count=$(find release-artifacts -type f | wc -l)
           echo "artifact_count=$artifact_count" >> $GITHUB_OUTPUT
         shell: bash
@@ -125,34 +219,3 @@ jobs:
           name: build-${{ matrix.os_name }}-${{ matrix.arch }}
           path: release-artifacts/
           retention-days: 30
-
-      - name: Installation Instructions
-        if: steps.prepare.outputs.artifact_count > 0
-        run: |
-          cat << 'EOF'
-
-          ========================================
-          macOS Installation Instructions
-          ========================================
-
-          IMPORTANT: This is an UNSIGNED build
-
-          After downloading the artifact:
-
-          1. Extract the ZIP file
-          2. Remove quarantine flag from DMG:
-
-             xattr -cr ~/Downloads/FinceptTerminal-*.dmg
-
-          3. Open DMG and drag app to Applications
-          4. Remove quarantine flag from app:
-
-             xattr -cr /Applications/FinceptTerminal.app
-
-          5. Launch the app normally
-
-          Alternative: Right-click app -> Open -> Open
-
-          ========================================
-          EOF
-        shell: bash

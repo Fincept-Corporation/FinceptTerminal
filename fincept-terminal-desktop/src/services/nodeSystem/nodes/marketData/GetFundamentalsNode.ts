@@ -15,7 +15,7 @@ import { MarketDataBridge } from '../../adapters/MarketDataBridge';
 
 export class GetFundamentalsNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Fundamentals',
+    displayName: 'Company Data',
     name: 'getFundamentals',
     icon: 'file:fundamentals.svg',
     group: ['marketData'],
@@ -23,7 +23,7 @@ export class GetFundamentalsNode implements INodeType {
     subtitle: '={{$parameter["symbol"]}} {{$parameter["dataType"]}}',
     description: 'Fetches company fundamental data and financial metrics',
     defaults: {
-      name: 'Fundamentals',
+      name: 'Company Data',
       color: '#10b981',
     },
     inputs: [NodeConnectionType.Main],

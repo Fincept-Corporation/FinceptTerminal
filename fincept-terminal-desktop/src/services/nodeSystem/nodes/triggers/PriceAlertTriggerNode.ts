@@ -14,7 +14,7 @@ import {
 
 export class PriceAlertTriggerNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Price Alert Trigger',
+    displayName: 'Price Alert',
     name: 'priceAlertTrigger',
     icon: 'file:price-alert.svg',
     group: ['trigger'],

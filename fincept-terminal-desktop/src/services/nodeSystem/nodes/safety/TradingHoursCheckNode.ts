@@ -9,14 +9,14 @@ import {
 
 export class TradingHoursCheckNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Trading Hours Check',
+    displayName: 'Trading Hours',
     name: 'tradingHoursCheck',
     icon: 'fa:clock',
     group: ['Safety'],
     version: 1,
     description: 'Validate market trading hours',
     defaults: {
-      name: 'Trading Hours Check',
+      name: 'Trading Hours',
       color: '#3b82f6',
     },
     inputs: [NodeConnectionType.Main],

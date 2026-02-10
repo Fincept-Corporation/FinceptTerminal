@@ -24,14 +24,14 @@ import {
 
 export class BacktestEngineNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Backtest Engine',
+    displayName: 'Strategy Backtest',
     name: 'backtestEngine',
     icon: 'fa:chart-area',
     group: ['Analytics', 'Trading'],
     version: 1,
-    description: 'Backtest trading strategies with comprehensive performance metrics',
+    description: 'Test trading strategies on historical data and get performance metrics',
     defaults: {
-      name: 'Backtest Engine',
+      name: 'Strategy Backtest',
       color: '#f59e0b',
     },
     inputs: [NodeConnectionType.Main],

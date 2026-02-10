@@ -1,4 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+// MaritimeWidget - Maritime Trade Intelligence Visualization
+// NOTE: This widget displays a 3D globe visualization with sample trade routes.
+// Real maritime data requires specialized APIs (MarineTraffic, VesselFinder, etc.)
+// which are not currently integrated. The data shown is illustrative.
+
+import React, { useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 
@@ -15,32 +20,19 @@ interface MaritimeWidgetProps {
   onNavigate?: () => void;
 }
 
+// Sample trade routes - illustrative data
+// Real data would come from maritime APIs like MarineTraffic, VesselFinder, etc.
 const TRADE_ROUTES: TradeRoute[] = [
-  { name: 'Mumbai → Shanghai', value: '$156B', status: 'active', vessels: 89 },
-  { name: 'Mumbai → Singapore', value: '$89B', status: 'active', vessels: 45 },
-  { name: 'Mumbai → New York', value: '$123B', status: 'active', vessels: 56 },
-  { name: 'Chennai → Tokyo', value: '$67B', status: 'delayed', vessels: 34 },
-  { name: 'Mumbai → Dubai', value: '$78B', status: 'critical', vessels: 12 }
+  { name: 'Mumbai → Shanghai', value: 'Major Route', status: 'active', vessels: 89 },
+  { name: 'Mumbai → Singapore', value: 'Major Route', status: 'active', vessels: 45 },
+  { name: 'Mumbai → New York', value: 'Major Route', status: 'active', vessels: 56 },
+  { name: 'Chennai → Tokyo', value: 'Active', status: 'active', vessels: 34 },
+  { name: 'Mumbai → Dubai', value: 'Active', status: 'active', vessels: 12 }
 ];
 
 export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, onNavigate }) => {
   const { t } = useTranslation('dashboard');
-  const [intelligence, setIntelligence] = useState({
-    active_vessels: 1247,
-    monitored_routes: 48,
-    trade_volume: '$847.3B'
-  });
   const mapRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIntelligence(prev => ({
-        ...prev,
-        active_vessels: prev.active_vessels + Math.floor(Math.random() * 10 - 5)
-      }));
-    }, 10 * 60 * 1000); // Refresh every 10 minutes
-    return () => clearInterval(interval);
-  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -246,38 +238,22 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
 
         {/* Trade Data Section - Bottom 40% */}
         <div style={{ flex: '0 0 40%', padding: '6px', fontSize: 'var(--ft-font-size-tiny)', overflowY: 'auto' }}>
-          {/* Intelligence Stats */}
+          {/* Visualization notice */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '4px',
+            backgroundColor: 'rgba(0, 229, 255, 0.1)',
+            border: '1px solid rgba(0, 229, 255, 0.3)',
+            borderRadius: '2px',
+            padding: '4px 6px',
             marginBottom: '6px',
-            paddingBottom: '4px',
-            borderBottom: '1px solid var(--ft-border-color)'
+            fontSize: '6px',
+            color: 'var(--ft-color-accent)'
           }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: 'var(--ft-color-text-muted)', fontSize: '6px' }}>{t('widgets.vessels')}</div>
-              <div style={{ color: 'var(--ft-color-accent)', fontWeight: 'bold', fontSize: 'var(--ft-font-size-small)' }}>
-                {intelligence.active_vessels}
-              </div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: 'var(--ft-color-text-muted)', fontSize: '6px' }}>{t('widgets.routes')}</div>
-              <div style={{ color: 'var(--ft-color-accent)', fontWeight: 'bold', fontSize: 'var(--ft-font-size-small)' }}>
-                {intelligence.monitored_routes}
-              </div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: 'var(--ft-color-text-muted)', fontSize: '6px' }}>{t('widgets.vol24h')}</div>
-              <div style={{ color: 'var(--ft-color-success)', fontWeight: 'bold', fontSize: 'var(--ft-font-size-small)' }}>
-                {intelligence.trade_volume}
-              </div>
-            </div>
+            ℹ️ 3D Globe Visualization - Click for full Maritime tab
           </div>
 
           {/* Top Trade Routes */}
           <div style={{ color: 'var(--ft-color-accent)', fontSize: '7px', fontWeight: 'bold', marginBottom: '3px' }}>
-            {t('widgets.topTradeCorridors')}
+            MAJOR TRADE CORRIDORS
           </div>
           {TRADE_ROUTES.map((route, idx) => (
             <div
@@ -310,7 +286,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '6px' }}>
                 <span style={{ color: 'var(--ft-color-text-muted)' }}>{route.value}</span>
-                <span style={{ color: 'var(--ft-color-accent)' }}>{route.vessels} {t('widgets.ships')}</span>
+                <span style={{ color: 'var(--ft-color-accent)' }}>{route.vessels} ships</span>
               </div>
             </div>
           ))}

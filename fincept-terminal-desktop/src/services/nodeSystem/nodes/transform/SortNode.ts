@@ -9,14 +9,14 @@ import {
 
 export class SortNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Sort',
+    displayName: 'Sort Rows',
     name: 'sort',
     icon: 'fa:sort',
     group: ['Transform'],
     version: 1,
     description: 'Sort items by field',
     defaults: {
-      name: 'Sort',
+      name: 'Sort Rows',
       color: '#f59e0b',
     },
     inputs: [NodeConnectionType.Main],

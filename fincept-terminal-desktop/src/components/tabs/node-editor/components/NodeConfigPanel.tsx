@@ -20,11 +20,17 @@ import {
   Play,
   BarChart3,
   Zap,
-  Info,
 } from 'lucide-react';
 import { NodeParameterInput } from '../nodes/NodeParameterInput';
 import type { INodeProperties, NodeParameterValue } from '@/services/nodeSystem';
 import { useDataSources } from '@/contexts/DataSourceContext';
+import {
+  FINCEPT,
+  SPACING,
+  BORDER_RADIUS,
+  FONT_FAMILY,
+  FONT_SIZE,
+} from '../nodes/shared';
 
 interface NodeConfigPanelProps {
   selectedNode: Node;
@@ -35,19 +41,84 @@ interface NodeConfigPanelProps {
   onDuplicate: () => void;
 }
 
-// Design system colors
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0F0F0F',
-  HEADER_BG: '#1A1A1A',
-  BORDER: '#2A2A2A',
-  CYAN: '#00E5FF',
-  BLUE: '#0088FF',
+// Section header style helper
+const sectionHeaderStyle = (color: string): React.CSSProperties => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: SPACING.MD,
+  marginBottom: SPACING.LG,
+  paddingBottom: SPACING.MD,
+  borderBottom: `1px solid ${FINCEPT.BORDER}`,
+});
+
+const sectionHeaderTextStyle = (color: string): React.CSSProperties => ({
+  color,
+  fontSize: FONT_SIZE.LG,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+});
+
+const labelBlockStyle: React.CSSProperties = {
+  display: 'block',
+  color: FINCEPT.GRAY,
+  fontSize: FONT_SIZE.SM,
+  fontWeight: 700,
+  marginBottom: SPACING.SM,
+  textTransform: 'uppercase',
+};
+
+const selectInputStyle: React.CSSProperties = {
+  width: '100%',
+  backgroundColor: FINCEPT.DARK_BG,
+  border: `1px solid ${FINCEPT.BORDER}`,
+  color: FINCEPT.WHITE,
+  padding: SPACING.MD,
+  fontSize: FONT_SIZE.MD,
+  fontFamily: FONT_FAMILY,
+};
+
+const textInputStyle: React.CSSProperties = {
+  width: '100%',
+  backgroundColor: FINCEPT.DARK_BG,
+  border: `1px solid ${FINCEPT.BORDER}`,
+  color: FINCEPT.WHITE,
+  padding: SPACING.MD,
+  fontSize: FONT_SIZE.MD,
+  fontFamily: FONT_FAMILY,
+  boxSizing: 'border-box',
+};
+
+const textareaInputStyle: React.CSSProperties = {
+  ...textInputStyle,
+  height: '100px',
+  resize: 'vertical',
+};
+
+const executeButtonStyle = (color: string, disabled: boolean): React.CSSProperties => ({
+  width: '100%',
+  backgroundColor: disabled ? FINCEPT.BORDER : color,
+  color: FINCEPT.DARK_BG,
+  border: 'none',
+  padding: SPACING.MD,
+  fontSize: FONT_SIZE.SM,
+  fontWeight: 700,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  opacity: disabled ? 0.5 : 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: SPACING.SM,
+  fontFamily: FONT_FAMILY,
+});
+
+const infoPanelStyle: React.CSSProperties = {
+  padding: SPACING.LG,
+  backgroundColor: FINCEPT.DARK_BG,
+  border: `1px solid ${FINCEPT.BORDER}`,
+  color: FINCEPT.GRAY,
+  fontSize: FONT_SIZE.MD,
+  textAlign: 'center',
 };
 
 const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
@@ -60,7 +131,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 }) => {
   const registryData = selectedNode.data.registryData;
   const nodeProperties: INodeProperties[] = registryData?.properties || [];
-  const nodeColor = selectedNode.data.color || '#FF8800';
+  const nodeColor = selectedNode.data.color || FINCEPT.ORANGE;
 
   // Data source context for data-source nodes
   const { connections } = useDataSources();
@@ -101,41 +172,47 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const isOptimizationNode = selectedNode.type === 'optimization';
   const isResultsDisplayNode = selectedNode.type === 'results-display';
 
-  const hasCustomConfig = isDataSourceNode || isTechnicalIndicatorNode || isAgentMediatorNode ||
-                          isPythonAgentNode || isMCPToolNode || isBacktestNode || isOptimizationNode;
+  const getNodeStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return FINCEPT.GREEN;
+      case 'error': return FINCEPT.RED;
+      case 'running': return FINCEPT.BLUE;
+      default: return FINCEPT.GRAY;
+    }
+  };
 
   return (
     <div
       style={{
         width: '300px',
-        backgroundColor: '#000000',
-        borderLeft: '2px solid #FF8800',
+        backgroundColor: FINCEPT.DARK_BG,
+        borderLeft: `2px solid ${FINCEPT.ORANGE}`,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+        fontFamily: FONT_FAMILY,
       }}
     >
       {/* Panel Header */}
       <div
         style={{
-          backgroundColor: '#1A1A1A',
-          borderBottom: '1px solid #2A2A2A',
-          padding: '8px 12px',
+          backgroundColor: FINCEPT.HEADER_BG,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          padding: `${SPACING.MD} ${SPACING.LG}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MD }}>
           <Settings2
             size={14}
-            style={{ color: '#FF8800', filter: 'drop-shadow(0 0 4px #FF8800)' }}
+            style={{ color: FINCEPT.ORANGE, filter: `drop-shadow(0 0 4px ${FINCEPT.ORANGE})` }}
           />
           <span
             style={{
-              color: '#FF8800',
-              fontSize: '11px',
+              color: FINCEPT.ORANGE,
+              fontSize: FONT_SIZE.LG,
               fontWeight: 700,
               letterSpacing: '0.5px',
               textTransform: 'uppercase',
@@ -149,7 +226,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           style={{
             backgroundColor: 'transparent',
             border: 'none',
-            color: '#787878',
+            color: FINCEPT.GRAY,
             cursor: 'pointer',
             padding: '2px',
             display: 'flex',
@@ -164,9 +241,9 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       {/* Node Type Badge */}
       <div
         style={{
-          backgroundColor: '#0F0F0F',
-          padding: '10px 12px',
-          borderBottom: '1px solid #2A2A2A',
+          backgroundColor: FINCEPT.PANEL_BG,
+          padding: `10px ${SPACING.LG}`,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -181,7 +258,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '12px',
+            fontSize: FONT_SIZE.XL,
             fontWeight: 700,
             color: nodeColor,
           }}
@@ -189,34 +266,34 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           {(selectedNode.data.label || selectedNode.type || 'N')[0].toUpperCase()}
         </div>
         <div>
-          <div style={{ color: '#FFFFFF', fontSize: '11px', fontWeight: 600 }}>
+          <div style={{ color: FINCEPT.WHITE, fontSize: FONT_SIZE.LG, fontWeight: 600 }}>
             {selectedNode.data.label || selectedNode.type}
           </div>
-          <div style={{ color: '#787878', fontSize: '9px', textTransform: 'uppercase' }}>
+          <div style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.SM, textTransform: 'uppercase' }}>
             {selectedNode.type}
           </div>
         </div>
       </div>
 
       {/* Scrollable Content */}
-      <div style={{ flex: 1, overflow: 'auto', backgroundColor: '#000000' }}>
+      <div style={{ flex: 1, overflow: 'auto', backgroundColor: FINCEPT.DARK_BG }}>
         {/* Label Section */}
-        <div style={{ padding: '12px', borderBottom: '1px solid #2A2A2A' }}>
+        <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
           <label
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              color: '#FF8800',
-              fontSize: '9px',
+              color: FINCEPT.ORANGE,
+              fontSize: FONT_SIZE.SM,
               fontWeight: 700,
-              marginBottom: '6px',
+              marginBottom: SPACING.SM,
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
             }}
           >
             <span>LABEL</span>
-            <span style={{ color: '#4A4A4A', fontSize: '8px', fontWeight: 400 }}>REQUIRED</span>
+            <span style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.XS, fontWeight: 400, opacity: 0.6 }}>REQUIRED</span>
           </label>
           <div
             style={{
@@ -227,16 +304,16 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           >
             <div
               style={{
-                backgroundColor: '#1A1A1A',
-                borderTop: '1px solid #2A2A2A',
-                borderLeft: '1px solid #2A2A2A',
-                borderBottom: '1px solid #2A2A2A',
-                padding: '0 8px',
+                backgroundColor: FINCEPT.HEADER_BG,
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
+                borderLeft: `1px solid ${FINCEPT.BORDER}`,
+                borderBottom: `1px solid ${FINCEPT.BORDER}`,
+                padding: `0 ${SPACING.MD}`,
                 display: 'flex',
                 alignItems: 'center',
-                color: '#FF8800',
-                fontSize: '10px',
-                fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                color: FINCEPT.ORANGE,
+                fontSize: FONT_SIZE.MD,
+                fontFamily: FONT_FAMILY,
               }}
             >
               <Edit3 size={10} />
@@ -248,13 +325,13 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               placeholder="Enter node label..."
               style={{
                 flex: 1,
-                backgroundColor: '#0A0A0A',
-                border: '1px solid #2A2A2A',
+                backgroundColor: FINCEPT.DARK_BG,
+                border: `1px solid ${FINCEPT.BORDER}`,
                 borderLeft: 'none',
                 padding: '10px 12px',
-                color: '#FFFFFF',
-                fontSize: '11px',
-                fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                color: FINCEPT.WHITE,
+                fontSize: FONT_SIZE.LG,
+                fontFamily: FONT_FAMILY,
                 outline: 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -262,10 +339,11 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           </div>
           <div
             style={{
-              marginTop: '4px',
-              fontSize: '8px',
-              color: '#4A4A4A',
-              fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+              marginTop: SPACING.XS,
+              fontSize: FONT_SIZE.XS,
+              color: FINCEPT.GRAY,
+              fontFamily: FONT_FAMILY,
+              opacity: 0.6,
             }}
           >
             Display name for this node in the workflow
@@ -274,54 +352,24 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== DATA SOURCE NODE CONFIG ==================== */}
         {isDataSourceNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.ORANGE)}>
               <Database size={14} color={FINCEPT.ORANGE} />
-              <span style={{
-                color: FINCEPT.ORANGE,
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+              <span style={sectionHeaderTextStyle(FINCEPT.ORANGE)}>
                 DATA SOURCE CONFIG
               </span>
             </div>
 
             {/* Connection Selector */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                CONNECTION
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>CONNECTION</label>
               <select
                 value={localConnection}
                 onChange={(e) => {
                   setLocalConnection(e.target.value);
                   selectedNode.data.onConnectionChange?.(e.target.value);
                 }}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
+                style={selectInputStyle}
               >
                 <option value="">-- Select Connection --</option>
                 {connections.filter(c => c.status === 'connected' || c.status === 'disconnected').map((conn) => (
@@ -331,24 +379,15 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                 ))}
               </select>
               {connections.length === 0 && (
-                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginTop: '4px' }}>
+                <div style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.SM, marginTop: SPACING.XS }}>
                   No connections. Add them in Data Sources tab.
                 </div>
               )}
             </div>
 
             {/* Query Editor */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                QUERY
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>QUERY</label>
               <textarea
                 value={localQuery}
                 onChange={(e) => {
@@ -356,18 +395,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   selectedNode.data.onQueryChange?.(e.target.value);
                 }}
                 placeholder="SELECT * FROM table..."
-                style={{
-                  width: '100%',
-                  height: '100px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                }}
+                style={textareaInputStyle}
               />
             </div>
 
@@ -375,21 +403,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             <button
               onClick={() => selectedNode.data.onExecute?.()}
               disabled={!localConnection || !localQuery}
-              style={{
-                width: '100%',
-                backgroundColor: (!localConnection || !localQuery) ? FINCEPT.BORDER : FINCEPT.ORANGE,
-                color: FINCEPT.DARK_BG,
-                border: 'none',
-                padding: '8px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: (!localConnection || !localQuery) ? 'not-allowed' : 'pointer',
-                opacity: (!localConnection || !localQuery) ? 0.5 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
+              style={executeButtonStyle(FINCEPT.ORANGE, !localConnection || !localQuery)}
             >
               <Play size={10} />
               EXECUTE QUERY
@@ -399,54 +413,24 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== TECHNICAL INDICATOR NODE CONFIG ==================== */}
         {isTechnicalIndicatorNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.CYAN)}>
               <TrendingUp size={14} color={FINCEPT.CYAN} />
-              <span style={{
-                color: FINCEPT.CYAN,
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+              <span style={sectionHeaderTextStyle(FINCEPT.CYAN)}>
                 TECHNICAL INDICATOR CONFIG
               </span>
             </div>
 
             {/* Data Source */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                DATA SOURCE
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>DATA SOURCE</label>
               <select
                 value={tiDataSource}
                 onChange={(e) => {
                   setTiDataSource(e.target.value);
                   selectedNode.data.onParameterChange?.({ dataSource: e.target.value });
                 }}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
+                style={selectInputStyle}
               >
                 <option value="yfinance">Yahoo Finance</option>
                 <option value="csv">CSV File</option>
@@ -455,17 +439,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             </div>
 
             {/* Symbol */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                SYMBOL
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>SYMBOL</label>
               <input
                 type="text"
                 value={tiSymbol}
@@ -474,46 +449,20 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   selectedNode.data.onParameterChange?.({ symbol: e.target.value });
                 }}
                 placeholder="AAPL, MSFT, BTC-USD..."
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                  boxSizing: 'border-box',
-                }}
+                style={textInputStyle}
               />
             </div>
 
             {/* Period */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                PERIOD
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>PERIOD</label>
               <select
                 value={tiPeriod}
                 onChange={(e) => {
                   setTiPeriod(e.target.value);
                   selectedNode.data.onParameterChange?.({ period: e.target.value });
                 }}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
+                style={selectInputStyle}
               >
                 <option value="1d">1 Day</option>
                 <option value="5d">5 Days</option>
@@ -527,18 +476,9 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             </div>
 
             {/* Indicator Categories */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                INDICATOR CATEGORIES
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>INDICATOR CATEGORIES</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.SM }}>
                 {['momentum', 'volume', 'volatility', 'trend', 'others'].map((cat) => (
                   <button
                     key={cat}
@@ -550,14 +490,15 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                       selectedNode.data.onParameterChange?.({ categories: newCats });
                     }}
                     style={{
-                      padding: '4px 8px',
-                      fontSize: '9px',
+                      padding: `${SPACING.XS} ${SPACING.MD}`,
+                      fontSize: FONT_SIZE.SM,
                       fontWeight: 600,
-                      backgroundColor: tiCategories.includes(cat) ? FINCEPT.CYAN + '30' : FINCEPT.DARK_BG,
+                      backgroundColor: tiCategories.includes(cat) ? `${FINCEPT.CYAN}30` : FINCEPT.DARK_BG,
                       border: `1px solid ${tiCategories.includes(cat) ? FINCEPT.CYAN : FINCEPT.BORDER}`,
                       color: tiCategories.includes(cat) ? FINCEPT.CYAN : FINCEPT.GRAY,
                       cursor: 'pointer',
                       textTransform: 'uppercase',
+                      fontFamily: FONT_FAMILY,
                     }}
                   >
                     {cat}
@@ -569,20 +510,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             {/* Execute Button */}
             <button
               onClick={() => selectedNode.data.onExecute?.()}
-              style={{
-                width: '100%',
-                backgroundColor: FINCEPT.CYAN,
-                color: FINCEPT.DARK_BG,
-                border: 'none',
-                padding: '8px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
+              style={executeButtonStyle(FINCEPT.CYAN, false)}
             >
               <Play size={10} />
               CALCULATE INDICATORS
@@ -592,54 +520,24 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== AGENT MEDIATOR NODE CONFIG ==================== */}
         {isAgentMediatorNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
-              <Brain size={14} color="#a855f7" />
-              <span style={{
-                color: '#a855f7',
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.CYAN)}>
+              <Brain size={14} color={FINCEPT.CYAN} />
+              <span style={sectionHeaderTextStyle(FINCEPT.CYAN)}>
                 AI MEDIATOR CONFIG
               </span>
             </div>
 
             {/* LLM Provider */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                LLM PROVIDER
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>LLM PROVIDER</label>
               <select
                 value={amProvider}
                 onChange={(e) => {
                   setAmProvider(e.target.value);
                   selectedNode.data.onConfigChange?.({ selectedProvider: e.target.value, customPrompt: amPrompt });
                 }}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
+                style={selectInputStyle}
               >
                 <option value="">-- Select Provider --</option>
                 <option value="ollama">Ollama (Local)</option>
@@ -650,17 +548,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             </div>
 
             {/* Custom Prompt */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                CUSTOM PROMPT
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>CUSTOM PROMPT</label>
               <textarea
                 value={amPrompt}
                 onChange={(e) => {
@@ -668,18 +557,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   selectedNode.data.onConfigChange?.({ selectedProvider: amProvider, customPrompt: e.target.value });
                 }}
                 placeholder="Enter instructions for the AI agent..."
-                style={{
-                  width: '100%',
-                  height: '100px',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                }}
+                style={textareaInputStyle}
               />
             </div>
 
@@ -687,21 +565,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             <button
               onClick={() => selectedNode.data.onExecute?.()}
               disabled={!amProvider}
-              style={{
-                width: '100%',
-                backgroundColor: !amProvider ? FINCEPT.BORDER : '#a855f7',
-                color: FINCEPT.DARK_BG,
-                border: 'none',
-                padding: '8px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: !amProvider ? 'not-allowed' : 'pointer',
-                opacity: !amProvider ? 0.5 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
+              style={executeButtonStyle(FINCEPT.CYAN, !amProvider)}
             >
               <Play size={10} />
               RUN AI MEDIATOR
@@ -711,58 +575,28 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== PYTHON AGENT NODE CONFIG ==================== */}
         {isPythonAgentNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.ORANGE)}>
               <span style={{ fontSize: '14px' }}>🐍</span>
-              <span style={{
-                color: '#fbbf24',
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+              <span style={sectionHeaderTextStyle(FINCEPT.ORANGE)}>
                 PYTHON AGENT CONFIG
               </span>
             </div>
 
-            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '12px' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.MD, marginBottom: SPACING.LG }}>
               <strong style={{ color: FINCEPT.WHITE }}>Agent:</strong> {selectedNode.data.agentType || 'Unknown'}
             </div>
-            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '12px' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.MD, marginBottom: SPACING.LG }}>
               <strong style={{ color: FINCEPT.WHITE }}>Category:</strong> {selectedNode.data.agentCategory || 'Unknown'}
             </div>
 
             {/* LLM Selection */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                color: FINCEPT.GRAY,
-                fontSize: '9px',
-                fontWeight: 700,
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-              }}>
-                LLM PROVIDER
-              </label>
+            <div style={{ marginBottom: SPACING.LG }}>
+              <label style={labelBlockStyle}>LLM PROVIDER</label>
               <select
                 value={selectedNode.data.selectedLLM || 'active'}
                 onChange={(e) => selectedNode.data.onLLMChange?.(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: FINCEPT.DARK_BG,
-                  border: `1px solid ${FINCEPT.BORDER}`,
-                  color: FINCEPT.WHITE,
-                  padding: '8px',
-                  fontSize: '10px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
+                style={selectInputStyle}
               >
                 <option value="active">Active LLM</option>
                 <option value="ollama">Ollama</option>
@@ -775,20 +609,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             <button
               onClick={() => selectedNode.data.onExecute?.(selectedNode.id)}
               disabled={selectedNode.data.status === 'running'}
-              style={{
-                width: '100%',
-                backgroundColor: selectedNode.data.status === 'running' ? FINCEPT.BORDER : '#fbbf24',
-                color: FINCEPT.DARK_BG,
-                border: 'none',
-                padding: '8px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: selectedNode.data.status === 'running' ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
+              style={executeButtonStyle(FINCEPT.ORANGE, selectedNode.data.status === 'running')}
             >
               <Play size={10} />
               {selectedNode.data.status === 'running' ? 'RUNNING...' : 'RUN AGENT'}
@@ -798,42 +619,24 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== MCP TOOL NODE CONFIG ==================== */}
         {isMCPToolNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.ORANGE)}>
               <Wrench size={14} color={FINCEPT.ORANGE} />
-              <span style={{
-                color: FINCEPT.ORANGE,
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+              <span style={sectionHeaderTextStyle(FINCEPT.ORANGE)}>
                 MCP TOOL CONFIG
               </span>
             </div>
 
-            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '8px' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.MD, marginBottom: SPACING.MD }}>
               <strong style={{ color: FINCEPT.WHITE }}>Server:</strong> {selectedNode.data.serverId || 'Unknown'}
             </div>
-            <div style={{ color: FINCEPT.GRAY, fontSize: '10px', marginBottom: '12px' }}>
+            <div style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.MD, marginBottom: SPACING.LG }}>
               <strong style={{ color: FINCEPT.WHITE }}>Tool:</strong> {selectedNode.data.toolName || 'Unknown'}
             </div>
 
-            {/* Dynamic parameters would go here based on tool schema */}
             <div style={{
-              padding: '8px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.GRAY,
-              fontSize: '9px',
-              marginBottom: '12px',
+              ...infoPanelStyle,
+              marginBottom: SPACING.LG,
             }}>
               Configure tool parameters in the node directly
             </div>
@@ -841,20 +644,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             {/* Execute Button */}
             <button
               onClick={() => selectedNode.data.onExecute?.()}
-              style={{
-                width: '100%',
-                backgroundColor: FINCEPT.ORANGE,
-                color: FINCEPT.DARK_BG,
-                border: 'none',
-                padding: '8px',
-                fontSize: '9px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
+              style={executeButtonStyle(FINCEPT.ORANGE, false)}
             >
               <Play size={10} />
               EXECUTE TOOL
@@ -864,35 +654,15 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== BACKTEST NODE CONFIG ==================== */}
         {isBacktestNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.GREEN)}>
               <BarChart3 size={14} color={FINCEPT.GREEN} />
-              <span style={{
-                color: FINCEPT.GREEN,
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+              <span style={sectionHeaderTextStyle(FINCEPT.GREEN)}>
                 BACKTEST CONFIG
               </span>
             </div>
 
-            <div style={{
-              padding: '12px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.GRAY,
-              fontSize: '10px',
-              textAlign: 'center',
-            }}>
+            <div style={infoPanelStyle}>
               Backtest configuration coming soon.<br/>
               Connect data source and strategy nodes.
             </div>
@@ -901,35 +671,15 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== OPTIMIZATION NODE CONFIG ==================== */}
         {isOptimizationNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
-              <Zap size={14} color="#f97316" />
-              <span style={{
-                color: '#f97316',
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.ORANGE)}>
+              <Zap size={14} color={FINCEPT.ORANGE} />
+              <span style={sectionHeaderTextStyle(FINCEPT.ORANGE)}>
                 OPTIMIZATION CONFIG
               </span>
             </div>
 
-            <div style={{
-              padding: '12px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.GRAY,
-              fontSize: '10px',
-              textAlign: 'center',
-            }}>
+            <div style={infoPanelStyle}>
               Optimization configuration coming soon.<br/>
               Connect backtest node for parameter optimization.
             </div>
@@ -938,41 +688,21 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== CUSTOM/REGISTRY NODE (no registryData) ==================== */}
         {selectedNode.type === 'custom' && !registryData && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.ORANGE)}>
               <Settings2 size={14} color={FINCEPT.ORANGE} />
-              <span style={{
-                color: FINCEPT.ORANGE,
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+              <span style={sectionHeaderTextStyle(FINCEPT.ORANGE)}>
                 NODE CONFIG
               </span>
             </div>
 
-            <div style={{
-              padding: '12px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.GRAY,
-              fontSize: '10px',
-              textAlign: 'center',
-            }}>
+            <div style={infoPanelStyle}>
               {selectedNode.data.nodeTypeName ? (
                 <>
-                  <div style={{ marginBottom: '8px', color: FINCEPT.WHITE }}>
+                  <div style={{ marginBottom: SPACING.MD, color: FINCEPT.WHITE }}>
                     <strong>Type:</strong> {selectedNode.data.nodeTypeName}
                   </div>
-                  <div style={{ fontSize: '9px' }}>
+                  <div style={{ fontSize: FONT_SIZE.SM }}>
                     This node's configuration will be available when executed in a workflow.
                   </div>
                 </>
@@ -985,33 +715,17 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* ==================== RESULTS DISPLAY NODE ==================== */}
         {isResultsDisplayNode && (
-          <div style={{ padding: '12px', borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '12px',
-              paddingBottom: '8px',
-              borderBottom: `1px solid ${FINCEPT.BORDER}`,
-            }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={sectionHeaderStyle(FINCEPT.GREEN)}>
               <span style={{ fontSize: '14px' }}>📊</span>
-              <span style={{
-                color: FINCEPT.GREEN,
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
+              <span style={sectionHeaderTextStyle(FINCEPT.GREEN)}>
                 RESULTS DISPLAY
               </span>
             </div>
 
             <div style={{
-              padding: '12px',
-              backgroundColor: FINCEPT.DARK_BG,
-              border: `1px solid ${FINCEPT.BORDER}`,
-              color: FINCEPT.GRAY,
-              fontSize: '10px',
+              ...infoPanelStyle,
+              textAlign: 'left',
             }}>
               This node displays output from connected nodes.<br/>
               Connect input from any data-producing node.
@@ -1024,8 +738,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           <div
             style={{
               padding: '14px',
-              borderBottom: '1px solid #3A3A3A',
-              backgroundColor: '#111111',
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              backgroundColor: FINCEPT.PANEL_BG,
             }}
           >
             {/* Parameters Header */}
@@ -1034,9 +748,9 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '16px',
+                marginBottom: SPACING.XL,
                 paddingBottom: '10px',
-                borderBottom: '1px solid #2A2A2A',
+                borderBottom: `1px solid ${FINCEPT.BORDER}`,
               }}
             >
               <div
@@ -1050,17 +764,17 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   style={{
                     width: '4px',
                     height: '18px',
-                    backgroundColor: '#FF8800',
+                    backgroundColor: FINCEPT.ORANGE,
                   }}
                 />
                 <span
                   style={{
-                    color: '#FF8800',
+                    color: FINCEPT.ORANGE,
                     fontSize: '13px',
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: '1.5px',
-                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    fontFamily: FONT_FAMILY,
                   }}
                 >
                   PARAMETERS
@@ -1068,13 +782,13 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               </div>
               <div
                 style={{
-                  backgroundColor: '#FF880030',
-                  border: '1px solid #FF8800',
-                  padding: '4px 10px',
-                  fontSize: '12px',
+                  backgroundColor: `${FINCEPT.ORANGE}30`,
+                  border: `1px solid ${FINCEPT.ORANGE}`,
+                  padding: `${SPACING.XS} 10px`,
+                  fontSize: FONT_SIZE.XL,
                   fontWeight: 700,
-                  color: '#FF8800',
-                  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                  color: FINCEPT.ORANGE,
+                  fontFamily: FONT_FAMILY,
                 }}
               >
                 {nodeProperties.length}
@@ -1094,8 +808,8 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   key={param.name}
                   style={{
                     padding: '14px',
-                    backgroundColor: '#1A1A1A',
-                    border: '1px solid #333333',
+                    backgroundColor: FINCEPT.HEADER_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
                     position: 'relative',
                   }}
                 >
@@ -1105,14 +819,14 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                       position: 'absolute',
                       top: '-1px',
                       left: '-1px',
-                      backgroundColor: '#2A2A2A',
-                      color: '#AAAAAA',
-                      fontSize: '11px',
+                      backgroundColor: FINCEPT.BORDER,
+                      color: FINCEPT.GRAY,
+                      fontSize: FONT_SIZE.LG,
                       fontWeight: 700,
-                      padding: '4px 8px',
-                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-                      borderRight: '1px solid #444444',
-                      borderBottom: '1px solid #444444',
+                      padding: `${SPACING.XS} ${SPACING.MD}`,
+                      fontFamily: FONT_FAMILY,
+                      borderRight: `1px solid ${FINCEPT.GRAY}50`,
+                      borderBottom: `1px solid ${FINCEPT.GRAY}50`,
                     }}
                   >
                     {String(index + 1).padStart(2, '0')}
@@ -1129,12 +843,12 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         height: '0',
                         borderStyle: 'solid',
                         borderWidth: '0 16px 16px 0',
-                        borderColor: 'transparent #FF3B3B transparent transparent',
+                        borderColor: `transparent ${FINCEPT.RED} transparent transparent`,
                       }}
                     />
                   )}
 
-                  <div style={{ paddingTop: '12px' }}>
+                  <div style={{ paddingTop: SPACING.LG }}>
                     <NodeParameterInput
                       parameter={param}
                       value={selectedNode.data.parameters?.[param.name] ?? param.default}
@@ -1150,27 +864,27 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               style={{
                 marginTop: '14px',
                 paddingTop: '10px',
-                borderTop: '1px solid #2A2A2A',
+                borderTop: `1px solid ${FINCEPT.BORDER}`,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
+                gap: SPACING.MD,
               }}
             >
               <div
                 style={{
                   width: '8px',
                   height: '8px',
-                  backgroundColor: '#00D66F',
+                  backgroundColor: FINCEPT.GREEN,
                   borderRadius: '50%',
-                  boxShadow: '0 0 6px #00D66F80',
+                  boxShadow: `0 0 6px ${FINCEPT.GREEN}80`,
                 }}
               />
               <span
                 style={{
-                  color: '#AAAAAA',
-                  fontSize: '11px',
+                  color: FINCEPT.GRAY,
+                  fontSize: FONT_SIZE.LG,
                   fontWeight: 600,
-                  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                  fontFamily: FONT_FAMILY,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                 }}
@@ -1184,11 +898,11 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         )}
 
         {/* Node Info Section */}
-        <div style={{ padding: '12px', borderBottom: '1px solid #2A2A2A' }}>
+        <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
           <div
             style={{
-              color: '#FF8800',
-              fontSize: '9px',
+              color: FINCEPT.ORANGE,
+              fontSize: FONT_SIZE.SM,
               fontWeight: 700,
               marginBottom: '10px',
               textTransform: 'uppercase',
@@ -1198,21 +912,21 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             NODE INFO
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SM }}>
             {/* Node ID */}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#787878', fontSize: '9px', textTransform: 'uppercase' }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.SM, textTransform: 'uppercase' }}>
                 ID
               </span>
-              <code style={{ color: '#FFFFFF', fontSize: '9px' }}>{selectedNode.id}</code>
+              <code style={{ color: FINCEPT.WHITE, fontSize: FONT_SIZE.SM }}>{selectedNode.id}</code>
             </div>
 
             {/* Position */}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#787878', fontSize: '9px', textTransform: 'uppercase' }}>
+              <span style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.SM, textTransform: 'uppercase' }}>
                 POS
               </span>
-              <span style={{ color: '#FFFFFF', fontSize: '9px' }}>
+              <span style={{ color: FINCEPT.WHITE, fontSize: FONT_SIZE.SM }}>
                 {Math.round(selectedNode.position.x)}, {Math.round(selectedNode.position.y)}
               </span>
             </div>
@@ -1220,10 +934,10 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             {/* Registry Type */}
             {selectedNode.data.nodeTypeName && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#787878', fontSize: '9px', textTransform: 'uppercase' }}>
+                <span style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.SM, textTransform: 'uppercase' }}>
                   TYPE
                 </span>
-                <span style={{ color: '#FFFFFF', fontSize: '9px' }}>
+                <span style={{ color: FINCEPT.WHITE, fontSize: FONT_SIZE.SM }}>
                   {selectedNode.data.nodeTypeName}
                 </span>
               </div>
@@ -1234,30 +948,16 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               <div
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <span style={{ color: '#787878', fontSize: '9px', textTransform: 'uppercase' }}>
+                <span style={{ color: FINCEPT.GRAY, fontSize: FONT_SIZE.SM, textTransform: 'uppercase' }}>
                   STATUS
                 </span>
                 <span
                   style={{
-                    fontSize: '9px',
+                    fontSize: FONT_SIZE.SM,
                     fontWeight: 700,
-                    padding: '2px 6px',
-                    backgroundColor:
-                      selectedNode.data.status === 'completed'
-                        ? '#00D66F20'
-                        : selectedNode.data.status === 'error'
-                          ? '#FF3B3B20'
-                          : selectedNode.data.status === 'running'
-                            ? '#0088FF20'
-                            : '#78787820',
-                    color:
-                      selectedNode.data.status === 'completed'
-                        ? '#00D66F'
-                        : selectedNode.data.status === 'error'
-                          ? '#FF3B3B'
-                          : selectedNode.data.status === 'running'
-                            ? '#0088FF'
-                            : '#787878',
+                    padding: `2px ${SPACING.SM}`,
+                    backgroundColor: `${getNodeStatusColor(selectedNode.data.status)}20`,
+                    color: getNodeStatusColor(selectedNode.data.status),
                     textTransform: 'uppercase',
                   }}
                 >
@@ -1270,20 +970,20 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
         {/* Description (for registry nodes) */}
         {registryData?.description && (
-          <div style={{ padding: '12px', borderBottom: '1px solid #2A2A2A' }}>
+          <div style={{ padding: SPACING.LG, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
             <div
               style={{
-                color: '#00E5FF',
-                fontSize: '9px',
+                color: FINCEPT.CYAN,
+                fontSize: FONT_SIZE.SM,
                 fontWeight: 700,
-                marginBottom: '6px',
+                marginBottom: SPACING.SM,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
               }}
             >
               DESCRIPTION
             </div>
-            <div style={{ color: '#FFFFFF', fontSize: '10px', lineHeight: '1.5' }}>
+            <div style={{ color: FINCEPT.WHITE, fontSize: FONT_SIZE.MD, lineHeight: '1.5' }}>
               {registryData.description}
             </div>
           </div>
@@ -1293,28 +993,28 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         {selectedNode.data.error && (
           <div
             style={{
-              margin: '12px',
-              backgroundColor: '#FF3B3B15',
-              border: '1px solid #FF3B3B',
+              margin: SPACING.LG,
+              backgroundColor: `${FINCEPT.RED}15`,
+              border: `1px solid ${FINCEPT.RED}`,
               padding: '10px',
             }}
           >
             <div
               style={{
-                color: '#FF3B3B',
-                fontSize: '9px',
+                color: FINCEPT.RED,
+                fontSize: FONT_SIZE.SM,
                 fontWeight: 700,
-                marginBottom: '4px',
+                marginBottom: SPACING.XS,
                 textTransform: 'uppercase',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: SPACING.XS,
               }}
             >
               <AlertCircle size={10} />
               ERROR
             </div>
-            <div style={{ color: '#FFFFFF', fontSize: '10px', lineHeight: '1.4' }}>
+            <div style={{ color: FINCEPT.WHITE, fontSize: FONT_SIZE.MD, lineHeight: '1.4' }}>
               {selectedNode.data.error}
             </div>
           </div>
@@ -1324,18 +1024,18 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         {selectedNode.data.result && selectedNode.data.status === 'completed' && (
           <div
             style={{
-              margin: '12px',
-              backgroundColor: '#00D66F15',
-              border: '1px solid #00D66F',
+              margin: SPACING.LG,
+              backgroundColor: `${FINCEPT.GREEN}15`,
+              border: `1px solid ${FINCEPT.GREEN}`,
               padding: '10px',
             }}
           >
             <div
               style={{
-                color: '#00D66F',
-                fontSize: '9px',
+                color: FINCEPT.GREEN,
+                fontSize: FONT_SIZE.SM,
                 fontWeight: 700,
-                marginBottom: '6px',
+                marginBottom: SPACING.SM,
                 textTransform: 'uppercase',
               }}
             >
@@ -1343,13 +1043,13 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             </div>
             <pre
               style={{
-                color: '#FFFFFF',
-                fontSize: '9px',
+                color: FINCEPT.WHITE,
+                fontSize: FONT_SIZE.SM,
                 lineHeight: '1.4',
                 overflow: 'auto',
                 maxHeight: '80px',
                 margin: 0,
-                fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                fontFamily: FONT_FAMILY,
               }}
             >
               {typeof selectedNode.data.result === 'string'
@@ -1366,11 +1066,11 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       {/* Panel Footer with Actions */}
       <div
         style={{
-          padding: '10px 12px',
-          backgroundColor: '#0F0F0F',
-          borderTop: '1px solid #2A2A2A',
+          padding: `10px ${SPACING.LG}`,
+          backgroundColor: FINCEPT.PANEL_BG,
+          borderTop: `1px solid ${FINCEPT.BORDER}`,
           display: 'flex',
-          gap: '8px',
+          gap: SPACING.MD,
         }}
       >
         <button
@@ -1378,28 +1078,28 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           style={{
             flex: 1,
             backgroundColor: 'transparent',
-            color: '#FF3B3B',
-            border: '1px solid #FF3B3B',
-            padding: '6px 8px',
-            fontSize: '9px',
+            color: FINCEPT.RED,
+            border: `1px solid ${FINCEPT.RED}`,
+            padding: `${SPACING.SM} ${SPACING.MD}`,
+            fontSize: FONT_SIZE.SM,
             fontWeight: 700,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px',
+            gap: SPACING.XS,
             textTransform: 'uppercase',
             letterSpacing: '0.3px',
-            fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+            fontFamily: FONT_FAMILY,
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#FF3B3B';
-            e.currentTarget.style.color = '#000000';
+            e.currentTarget.style.backgroundColor = FINCEPT.RED;
+            e.currentTarget.style.color = FINCEPT.DARK_BG;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#FF3B3B';
+            e.currentTarget.style.color = FINCEPT.RED;
           }}
         >
           <Trash2 size={10} />
@@ -1409,27 +1109,27 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           onClick={onDuplicate}
           style={{
             flex: 1,
-            backgroundColor: '#FF8800',
-            color: '#000000',
-            border: '1px solid #FF8800',
-            padding: '6px 8px',
-            fontSize: '9px',
+            backgroundColor: FINCEPT.ORANGE,
+            color: FINCEPT.DARK_BG,
+            border: `1px solid ${FINCEPT.ORANGE}`,
+            padding: `${SPACING.SM} ${SPACING.MD}`,
+            fontSize: FONT_SIZE.SM,
             fontWeight: 700,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px',
+            gap: SPACING.XS,
             textTransform: 'uppercase',
             letterSpacing: '0.3px',
-            fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+            fontFamily: FONT_FAMILY,
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#FFA033';
+            e.currentTarget.style.backgroundColor = `${FINCEPT.ORANGE}CC`;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#FF8800';
+            e.currentTarget.style.backgroundColor = FINCEPT.ORANGE;
           }}
         >
           <Plus size={10} />

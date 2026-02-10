@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Loader, ChevronDown, ChevronRight, AlertTriangle, Zap, List, RotateCcw } from 'lucide-react';
+import { Search, Loader, ChevronDown, ChevronRight, AlertTriangle, Zap, List, RotateCcw, Download } from 'lucide-react';
 import type { ConditionItem, ScanResult, ConditionDetail } from '../types';
 import { TIMEFRAMES, getIndicatorDef } from '../constants/indicators';
 import { runAlgoScan } from '../services/algoTradingService';
@@ -153,7 +153,7 @@ const SYMBOL_WATCHLISTS: Record<string, string[]> = {
     'BHARTIARTL', 'KOTAKBANK', 'LT', 'AXISBANK', 'WIPRO', 'ASIANPAINT', 'MARUTI',
     'BAJFINANCE', 'HCLTECH', 'SUNPHARMA', 'TITAN', 'TATASTEEL', 'ULTRACEMCO',
     'ONGC', 'NTPC', 'POWERGRID', 'M&M', 'NESTLEIND', 'ADANIENT', 'JSWSTEEL',
-    'BAJAJFINSV', 'TECHM', 'INDUSINDBK', 'HINDALCO', 'TATAMOTORS', 'COALINDIA',
+    'BAJAJFINSV', 'TECHM', 'INDUSINDBK', 'HINDALCO', 'TATAMTRDVR', 'COALINDIA',
     'GRASIM', 'SBILIFE', 'CIPLA', 'DIVISLAB', 'DRREDDY', 'BPCL',
     'APOLLOHOSP', 'EICHERMOT', 'TATACONSUM', 'BRITANNIA', 'HDFCLIFE',
     'HEROMOTOCO', 'BAJAJ-AUTO', 'LTIM', 'ADANIPORTS', 'UPL',
@@ -223,6 +223,7 @@ const ScannerPanel: React.FC = () => {
   const [logic, setLogic] = useState<'AND' | 'OR'>('AND');
   const [symbolsInput, setSymbolsInput] = useState('');
   const [timeframe, setTimeframe] = useState('1d');
+  const [lookbackDays, setLookbackDays] = useState<number>(365);
   const [scanning, setScanning] = useState(false);
   const [results, setResults] = useState<ScanResult[] | null>(null);
   const [scanned, setScanned] = useState(0);
@@ -255,7 +256,7 @@ const ScannerPanel: React.FC = () => {
     setExpandedResult(null);
 
     try {
-      const result = await runAlgoScan(buildConditionsJson(), JSON.stringify(symbols), timeframe, provider);
+      const result = await runAlgoScan(buildConditionsJson(), JSON.stringify(symbols), timeframe, provider, lookbackDays);
       setScanning(false);
 
       if (result.debug) setDebugLog(result.debug);
@@ -292,6 +293,80 @@ const ScannerPanel: React.FC = () => {
     const newSymbols = symbols.filter(s => !existing.includes(s));
     const merged = [...existing, ...newSymbols];
     setSymbolsInput(merged.join(', '));
+  };
+
+  // Export scan results to CSV
+  const exportToCSV = () => {
+    if (!results || results.length === 0) return;
+
+    // Build CSV header
+    const headers = ['#', 'Symbol', 'Price', 'Match'];
+
+    // Get all unique indicator names from results for dynamic columns
+    const indicatorColumns = new Set<string>();
+    results.forEach(r => {
+      r.details.forEach(d => {
+        const colName = d.field !== 'value' ? `${d.indicator}.${d.field}` : d.indicator;
+        indicatorColumns.add(colName);
+      });
+    });
+
+    const indicatorHeaders = Array.from(indicatorColumns);
+    headers.push(...indicatorHeaders.map(h => `${h}_Value`));
+    headers.push(...indicatorHeaders.map(h => `${h}_Met`));
+
+    // Build CSV rows
+    const rows: string[][] = [];
+    results.forEach((r, i) => {
+      const row: string[] = [
+        String(i + 1),
+        r.symbol,
+        r.price.toFixed(2),
+        'YES',
+      ];
+
+      // Add indicator values
+      indicatorHeaders.forEach(header => {
+        const detail = r.details.find(d => {
+          const colName = d.field !== 'value' ? `${d.indicator}.${d.field}` : d.indicator;
+          return colName === header;
+        });
+        row.push(detail?.computed_value != null ? detail.computed_value.toFixed(4) : '');
+      });
+
+      // Add indicator met status
+      indicatorHeaders.forEach(header => {
+        const detail = r.details.find(d => {
+          const colName = d.field !== 'value' ? `${d.indicator}.${d.field}` : d.indicator;
+          return colName === header;
+        });
+        row.push(detail ? (detail.met ? 'TRUE' : 'FALSE') : '');
+      });
+
+      rows.push(row);
+    });
+
+    // Generate CSV content
+    const csvContent = [
+      `# Scan Results - ${new Date().toISOString()}`,
+      `# Conditions: ${conditionSummary}`,
+      `# Timeframe: ${timeframe}`,
+      `# Scanned: ${scanned} symbols, Matches: ${results.length}`,
+      '',
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
+    ].join('\n');
+
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `scan_results_${timeframe}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Build a summary of the current scan conditions
@@ -439,10 +514,26 @@ const ScannerPanel: React.FC = () => {
           </div>
         </div>
         <div>
-          <label style={labelStyle}>TIMEFRAME</label>
-          <select value={timeframe} onChange={e => setTimeframe(e.target.value)} style={inputStyle}>
-            {TIMEFRAMES.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
-          </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={labelStyle}>TIMEFRAME</label>
+              <select value={timeframe} onChange={e => setTimeframe(e.target.value)} style={inputStyle}>
+                {TIMEFRAMES.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>LOOKBACK (DAYS)</label>
+              <input
+                type="number"
+                value={lookbackDays}
+                onChange={e => setLookbackDays(Math.max(1, parseInt(e.target.value) || 30))}
+                min={1}
+                max={1000}
+                style={inputStyle}
+                title="Number of days of historical data to fetch"
+              />
+            </div>
+          </div>
           <button onClick={handleScan} disabled={scanning} style={{
             width: '100%', marginTop: '8px', padding: '8px 16px',
             backgroundColor: F.ORANGE, color: F.DARK_BG, border: 'none', borderRadius: '2px',
@@ -535,10 +626,34 @@ const ScannerPanel: React.FC = () => {
               RESULTS: <span style={{ color: F.CYAN }}>{results.length}</span> MATCH{results.length !== 1 ? 'ES' : ''} / {scanned} SCANNED
             </span>
             {results.length > 0 && (
-              <span style={{ fontSize: '8px', color: F.MUTED }}>
-                <List size={8} style={{ marginRight: '3px', display: 'inline' }} />
-                CLICK ROW FOR DETAILS
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '8px', color: F.MUTED }}>
+                  <List size={8} style={{ marginRight: '3px', display: 'inline' }} />
+                  CLICK ROW FOR DETAILS
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); exportToCSV(); }}
+                  style={{
+                    ...chipStyle,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '3px 8px',
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = F.CYAN;
+                    (e.currentTarget as HTMLElement).style.color = F.CYAN;
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = F.BORDER;
+                    (e.currentTarget as HTMLElement).style.color = F.GRAY;
+                  }}
+                  title="Export results to CSV"
+                >
+                  <Download size={8} />
+                  EXPORT CSV
+                </button>
+              </div>
             )}
           </div>
           {results.length === 0 ? (

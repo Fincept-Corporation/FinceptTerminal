@@ -9,14 +9,14 @@ import {
 
 export class MapNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Map',
+    displayName: 'Transform Data',
     name: 'map',
     icon: 'fa:exchange-alt',
     group: ['Transform'],
     version: 1,
     description: 'Transform and map fields',
     defaults: {
-      name: 'Map',
+      name: 'Transform Data',
       color: '#6366f1',
     },
     inputs: [NodeConnectionType.Main],

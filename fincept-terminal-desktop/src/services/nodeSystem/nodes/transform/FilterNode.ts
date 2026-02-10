@@ -9,14 +9,14 @@ import {
 
 export class FilterTransformNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Filter',
+    displayName: 'Filter Rows',
     name: 'filterTransform',
     icon: 'fa:filter',
     group: ['Transform'],
     version: 1,
     description: 'Filter items based on conditions',
     defaults: {
-      name: 'Filter',
+      name: 'Filter Rows',
       color: '#8b5cf6',
     },
     inputs: [NodeConnectionType.Main],

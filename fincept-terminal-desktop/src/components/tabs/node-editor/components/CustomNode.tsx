@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Position } from 'reactflow';
 import {
   Database,
   Zap,
@@ -15,7 +15,16 @@ import {
   Brain,
   FileText,
   Edit3,
+  AlertCircle,
 } from 'lucide-react';
+import {
+  FINCEPT,
+  SPACING,
+  BORDER_RADIUS,
+  FONT_FAMILY,
+  FONT_SIZE,
+  BaseNode,
+} from '../nodes/shared';
 import type { CustomNodeData } from '../types';
 
 interface CustomNodeProps {
@@ -39,16 +48,27 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data, id, selected }) => {
   if (!data) {
     return (
       <div style={{
-        background: '#1a1a1a',
-        border: '2px solid #f59e0b',
-        borderRadius: '6px',
-        padding: '12px',
+        background: FINCEPT.PANEL_BG,
+        border: `2px solid ${FINCEPT.ORANGE}`,
+        borderRadius: BORDER_RADIUS.SM,
+        padding: SPACING.LG,
         minWidth: '180px',
+        fontFamily: FONT_FAMILY,
       }}>
-        <div style={{ color: '#f59e0b', fontSize: '12px' }}>Invalid Node Data</div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.MD,
+          color: FINCEPT.ORANGE,
+        }}>
+          <AlertCircle size={14} />
+          <span style={{ fontSize: FONT_SIZE.XL, fontWeight: 600 }}>Invalid Node Data</span>
+        </div>
       </div>
     );
   }
+
+  const nodeColor = data.color || FINCEPT.ORANGE;
 
   const getIcon = () => {
     switch (data.nodeType) {
@@ -69,50 +89,33 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data, id, selected }) => {
     }
   };
 
-  return (
-    <div
-      style={{
-        background: selected ? '#2d2d2d' : '#1a1a1a',
-        border: `2px solid ${selected ? data.color : `${data.color}80`}`,
-        borderRadius: '6px',
-        minWidth: '180px',
-        boxShadow: selected
-          ? `0 0 20px ${data.color}60, 0 4px 12px rgba(0,0,0,0.5)`
-          : `0 2px 8px rgba(0,0,0,0.3)`,
-        transition: 'all 0.2s',
-      }}
-    >
-      {/* Input Handle */}
-      {data.hasInput && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          style={{
-            background: data.color,
-            width: 12,
-            height: 12,
-            border: '2px solid #1a1a1a',
-            boxShadow: `0 0 8px ${data.color}`,
-          }}
-        />
-      )}
+  const handles = [
+    ...(data.hasInput ? [{ type: 'target' as const, position: Position.Left, color: nodeColor }] : []),
+    ...(data.hasOutput ? [{ type: 'source' as const, position: Position.Right, color: nodeColor }] : []),
+  ];
 
+  return (
+    <BaseNode
+      selected={selected}
+      minWidth="180px"
+      maxWidth="300px"
+      borderColor={nodeColor}
+      handles={handles}
+    >
       {/* Node Header */}
       <div
         style={{
-          background: `${data.color}20`,
-          borderBottom: `1px solid ${data.color}40`,
-          padding: '8px 12px',
+          background: `${nodeColor}20`,
+          borderBottom: `1px solid ${FINCEPT.BORDER}`,
+          padding: `${SPACING.MD} ${SPACING.LG}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '8px',
-          color: data.color,
-          borderTopLeftRadius: '4px',
-          borderTopRightRadius: '4px',
+          gap: SPACING.MD,
+          color: nodeColor,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MD }}>
           {getIcon()}
           {isEditing ? (
             <input
@@ -129,22 +132,23 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data, id, selected }) => {
               }}
               autoFocus
               style={{
-                background: '#1a1a1a',
-                border: `1px solid ${data.color}`,
-                color: data.color,
-                fontSize: '11px',
+                background: FINCEPT.DARK_BG,
+                border: `1px solid ${nodeColor}`,
+                color: nodeColor,
+                fontSize: FONT_SIZE.LG,
                 padding: '2px 6px',
-                borderRadius: '3px',
+                borderRadius: BORDER_RADIUS.SM,
                 outline: 'none',
-                fontWeight: 'bold',
+                fontWeight: 700,
+                fontFamily: FONT_FAMILY,
                 width: '120px',
               }}
             />
           ) : (
             <span
               style={{
-                fontSize: '11px',
-                fontWeight: 'bold',
+                fontSize: FONT_SIZE.LG,
+                fontWeight: 700,
                 letterSpacing: '0.3px',
               }}
             >
@@ -158,7 +162,7 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data, id, selected }) => {
             style={{
               background: 'transparent',
               border: 'none',
-              color: data.color,
+              color: nodeColor,
               cursor: 'pointer',
               padding: '2px',
               display: 'flex',
@@ -174,34 +178,19 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data, id, selected }) => {
       {/* Node Body */}
       <div
         style={{
-          padding: '12px',
+          padding: SPACING.LG,
           display: 'flex',
           flexDirection: 'column',
-          gap: '4px',
-          color: '#a3a3a3',
-          fontSize: '10px',
+          gap: SPACING.XS,
+          color: FINCEPT.GRAY,
+          fontSize: FONT_SIZE.MD,
         }}
       >
         <div>Type: {data.nodeType}</div>
         <div>Status: {data.status || 'Ready'}</div>
-        <div style={{ color: '#737373' }}>ID: {id.substring(0, 8)}</div>
+        <div style={{ color: FINCEPT.GRAY, opacity: 0.6 }}>ID: {id.substring(0, 8)}</div>
       </div>
-
-      {/* Output Handle */}
-      {data.hasOutput && (
-        <Handle
-          type="source"
-          position={Position.Right}
-          style={{
-            background: data.color,
-            width: 12,
-            height: 12,
-            border: '2px solid #1a1a1a',
-            boxShadow: `0 0 8px ${data.color}`,
-          }}
-        />
-      )}
-    </div>
+    </BaseNode>
   );
 };
 

@@ -574,3 +574,156 @@ pub async fn analyze_investment_risk(
     }
     python::execute(&app, "Analytics/alternateInvestment/cli.py", args).await
 }
+
+// Fixed Income Analytics Commands
+#[tauri::command]
+pub async fn execute_fixed_income_analytics(
+    app: tauri::AppHandle,
+    command: String,
+    params: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec![command];
+    if let Some(p) = params {
+        args.push(p);
+    }
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn calculate_bond_price(
+    app: tauri::AppHandle,
+    ytm: f64,
+    face_value: Option<f64>,
+    coupon_rate: Option<f64>,
+    years_to_maturity: Option<f64>,
+    frequency: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "analysis_type": "price",
+        "ytm": ytm,
+        "face_value": face_value.unwrap_or(1000.0),
+        "coupon_rate": coupon_rate.unwrap_or(0.05),
+        "years_to_maturity": years_to_maturity.unwrap_or(10.0),
+        "frequency": frequency.unwrap_or(2)
+    });
+    let args = vec!["price".to_string(), params.to_string()];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn calculate_bond_ytm(
+    app: tauri::AppHandle,
+    price: f64,
+    face_value: Option<f64>,
+    coupon_rate: Option<f64>,
+    years_to_maturity: Option<f64>,
+    frequency: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "analysis_type": "ytm",
+        "price": price,
+        "face_value": face_value.unwrap_or(1000.0),
+        "coupon_rate": coupon_rate.unwrap_or(0.05),
+        "years_to_maturity": years_to_maturity.unwrap_or(10.0),
+        "frequency": frequency.unwrap_or(2)
+    });
+    let args = vec!["ytm".to_string(), params.to_string()];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn calculate_bond_duration(
+    app: tauri::AppHandle,
+    face_value: Option<f64>,
+    coupon_rate: Option<f64>,
+    years_to_maturity: Option<f64>,
+    ytm: Option<f64>,
+    frequency: Option<i32>,
+    duration_type: Option<String>,
+) -> Result<String, String> {
+    let analysis_type = duration_type.unwrap_or_else(|| "modified_duration".to_string());
+    let params = serde_json::json!({
+        "analysis_type": analysis_type,
+        "face_value": face_value.unwrap_or(1000.0),
+        "coupon_rate": coupon_rate.unwrap_or(0.05),
+        "years_to_maturity": years_to_maturity.unwrap_or(10.0),
+        "ytm": ytm.unwrap_or(0.05),
+        "frequency": frequency.unwrap_or(2)
+    });
+    let args = vec![analysis_type, params.to_string()];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn calculate_bond_convexity(
+    app: tauri::AppHandle,
+    face_value: Option<f64>,
+    coupon_rate: Option<f64>,
+    years_to_maturity: Option<f64>,
+    ytm: Option<f64>,
+    frequency: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "analysis_type": "convexity",
+        "face_value": face_value.unwrap_or(1000.0),
+        "coupon_rate": coupon_rate.unwrap_or(0.05),
+        "years_to_maturity": years_to_maturity.unwrap_or(10.0),
+        "ytm": ytm.unwrap_or(0.05),
+        "frequency": frequency.unwrap_or(2)
+    });
+    let args = vec!["convexity".to_string(), params.to_string()];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_yield_curve(
+    app: tauri::AppHandle,
+    analysis_type: String,
+    params: String,
+) -> Result<String, String> {
+    let args = vec![analysis_type, params];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_credit_risk(
+    app: tauri::AppHandle,
+    analysis_type: String,
+    params: String,
+) -> Result<String, String> {
+    let args = vec![analysis_type, params];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_mbs(
+    app: tauri::AppHandle,
+    principal_balance: Option<f64>,
+    wac: Option<f64>,
+    wam: Option<i32>,
+    psa_speed: Option<f64>,
+    wala: Option<i32>,
+    analysis_type: Option<String>,
+) -> Result<String, String> {
+    let at = analysis_type.unwrap_or_else(|| "wal".to_string());
+    let params = serde_json::json!({
+        "analysis_type": at,
+        "principal_balance": principal_balance.unwrap_or(1000000.0),
+        "wac": wac.unwrap_or(0.06),
+        "wam": wam.unwrap_or(360),
+        "psa_speed": psa_speed.unwrap_or(100.0),
+        "wala": wala.unwrap_or(0)
+    });
+    let args = vec![at, params.to_string()];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}
+
+#[tauri::command]
+pub async fn analyze_bond_portfolio(
+    app: tauri::AppHandle,
+    analysis_type: String,
+    params: String,
+) -> Result<String, String> {
+    let args = vec![analysis_type, params];
+    python::execute(&app, "Analytics/fixedIncome/cli.py", args).await
+}

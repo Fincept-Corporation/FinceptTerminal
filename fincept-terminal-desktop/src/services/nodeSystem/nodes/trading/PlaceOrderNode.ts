@@ -18,7 +18,7 @@ import { ConfirmationService } from '../../safety/ConfirmationService';
 
 export class PlaceOrderNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Place Order',
+    displayName: 'Buy/Sell Order',
     name: 'placeOrder',
     icon: 'file:order.svg',
     group: ['trading'],
@@ -26,7 +26,7 @@ export class PlaceOrderNode implements INodeType {
     subtitle: '={{$parameter["side"]}} {{$parameter["symbol"]}}',
     description: 'Executes buy/sell orders through connected brokers',
     defaults: {
-      name: 'Place Order',
+      name: 'Buy/Sell Order',
       color: '#ef4444',
     },
     inputs: [NodeConnectionType.Main],

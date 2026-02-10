@@ -136,6 +136,7 @@ export interface SessionData {
 interface AuthContextType {
   session: SessionData | null;
   isLoading: boolean;
+  isLoggingOut: boolean;
   isFirstTimeUser: boolean;
   availablePlans: SubscriptionPlan[];
   isLoadingPlans: boolean;
@@ -257,6 +258,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<SessionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
   const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
@@ -863,19 +865,49 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     await saveSetting('fincept_api_key', newApiKey, 'auth');
   };
 
-  // Logout function
+  // Logout function - handles cleanup gracefully to prevent white screen/crash
   const logout = async (): Promise<void> => {
-    setSession(null);
-    await clearSession();
-    // Clear legacy key storage as well
-    await saveSetting('fincept_api_key', '', 'auth');
-    const isFirstTime = await checkIsFirstTimeUser();
-    setIsFirstTimeUser(isFirstTime);
+    // Prevent multiple logout attempts
+    if (isLoggingOut) {
+      console.log('[AuthContext] Logout already in progress, skipping duplicate call');
+      return;
+    }
+
+    try {
+      setIsLoggingOut(true);
+      console.log('[AuthContext] Starting logout process...');
+
+      // Clear session data first (async operations)
+      await clearSession();
+
+      // Clear legacy key storage as well
+      await saveSetting('fincept_api_key', '', 'auth');
+      await saveSetting('fincept_device_id', '', 'auth');
+
+      // Check first time user status
+      const isFirstTime = await checkIsFirstTimeUser();
+      setIsFirstTimeUser(isFirstTime);
+
+      // Finally, set session to null after all cleanup is done
+      // This triggers the UI transition
+      setSession(null);
+
+      console.log('[AuthContext] Logout completed successfully');
+    } catch (error) {
+      console.error('[AuthContext] Error during logout:', error);
+      // Even if cleanup fails, we should still log out the user
+      setSession(null);
+    } finally {
+      // Small delay to allow React to process state changes before any navigation
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setIsLoggingOut(false);
+    }
   };
 
   const value: AuthContextType = {
     session,
     isLoading,
+    isLoggingOut,
     isFirstTimeUser,
     availablePlans,
     isLoadingPlans,
@@ -891,7 +923,6 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     fetchPlans,
     createPaymentSession,
     getUserSubscription,
-    
     refreshUserData,
     updateApiKey
   };

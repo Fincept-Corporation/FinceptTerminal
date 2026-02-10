@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Bot, Wrench, Search, BarChart3, Layout, Activity } from 'lucide-react';
-import type { AlgoSubView } from './types';
+import { Bot, Wrench, Search, BarChart3, Layout, Activity, Library } from 'lucide-react';
+import type { AlgoSubView, PythonStrategy } from './types';
 import StrategyEditor from './components/StrategyEditor';
 import StrategyManager from './components/StrategyManager';
 import ScannerPanel from './components/ScannerPanel';
 import MonitorDashboard from './components/MonitorDashboard';
+import StrategyLibraryTab from './components/StrategyLibraryTab';
+import PythonBacktestPanel from './components/PythonBacktestPanel';
+import PythonStrategyEditor from './components/PythonStrategyEditor';
+import PythonDeployPanel from './components/PythonDeployPanel';
 
 const F = {
   ORANGE: '#FF8800',
@@ -27,6 +31,7 @@ const F = {
 const SUB_VIEWS: { key: AlgoSubView; label: string; icon: React.ElementType }[] = [
   { key: 'builder', label: 'BUILDER', icon: Wrench },
   { key: 'strategies', label: 'STRATEGIES', icon: Layout },
+  { key: 'library', label: 'LIBRARY', icon: Library },
   { key: 'scanner', label: 'SCANNER', icon: Search },
   { key: 'dashboard', label: 'DASHBOARD', icon: BarChart3 },
 ];
@@ -34,6 +39,9 @@ const SUB_VIEWS: { key: AlgoSubView; label: string; icon: React.ElementType }[] 
 const AlgoTradingTab: React.FC = () => {
   const [activeView, setActiveView] = useState<AlgoSubView>('builder');
   const [editStrategyId, setEditStrategyId] = useState<string | null>(null);
+  const [clonePythonStrategy, setClonePythonStrategy] = useState<PythonStrategy | null>(null);
+  const [backtestPythonStrategy, setBacktestPythonStrategy] = useState<PythonStrategy | null>(null);
+  const [deployPythonStrategy, setDeployPythonStrategy] = useState<PythonStrategy | null>(null);
 
   const handleEditStrategy = (id: string) => {
     setEditStrategyId(id);
@@ -43,6 +51,31 @@ const AlgoTradingTab: React.FC = () => {
   const handleNewStrategy = () => {
     setEditStrategyId(null);
     setActiveView('builder');
+  };
+
+  // Handle Python strategy actions from library
+  const handlePythonClone = (strategy: PythonStrategy) => {
+    setClonePythonStrategy(strategy);
+  };
+
+  const handlePythonBacktest = (strategy: PythonStrategy) => {
+    setBacktestPythonStrategy(strategy);
+  };
+
+  const handlePythonDeploy = (strategy: PythonStrategy) => {
+    setDeployPythonStrategy(strategy);
+  };
+
+  // Handle Python strategy editor close/save
+  const handlePythonEditorClose = () => {
+    setClonePythonStrategy(null);
+  };
+
+  const handlePythonEditorSave = (customId: string) => {
+    console.log('Python strategy saved with ID:', customId);
+    setClonePythonStrategy(null);
+    // Navigate to strategies tab to show the saved custom strategy
+    setActiveView('strategies');
   };
 
   return (
@@ -128,6 +161,15 @@ const AlgoTradingTab: React.FC = () => {
           <StrategyManager
             onEdit={handleEditStrategy}
             onNew={handleNewStrategy}
+            onBacktestPython={handlePythonBacktest}
+            onDeployPython={handlePythonDeploy}
+          />
+        )}
+        {activeView === 'library' && (
+          <StrategyLibraryTab
+            onClone={handlePythonClone}
+            onBacktest={handlePythonBacktest}
+            onDeploy={handlePythonDeploy}
           />
         )}
         {activeView === 'scanner' && <ScannerPanel />}
@@ -150,6 +192,38 @@ const AlgoTradingTab: React.FC = () => {
           VIEW: {activeView.toUpperCase()}
         </span>
       </div>
+
+      {/* Python Backtest Modal */}
+      {backtestPythonStrategy && (
+        <PythonBacktestPanel
+          strategy={backtestPythonStrategy}
+          onClose={() => setBacktestPythonStrategy(null)}
+        />
+      )}
+
+      {/* Python Strategy Editor (Clone from Library) */}
+      {clonePythonStrategy && (
+        <PythonStrategyEditor
+          strategy={clonePythonStrategy}
+          isCustom={false}
+          onClose={handlePythonEditorClose}
+          onSave={handlePythonEditorSave}
+          onBacktest={handlePythonBacktest}
+        />
+      )}
+
+      {/* Python Deploy Panel */}
+      {deployPythonStrategy && (
+        <PythonDeployPanel
+          strategy={deployPythonStrategy}
+          onClose={() => setDeployPythonStrategy(null)}
+          onDeployed={(deployId) => {
+            console.log('Strategy deployed:', deployId);
+            setDeployPythonStrategy(null);
+            setActiveView('dashboard');
+          }}
+        />
+      )}
     </div>
   );
 };

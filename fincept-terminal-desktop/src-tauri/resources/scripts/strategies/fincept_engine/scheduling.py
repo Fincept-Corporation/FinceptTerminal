@@ -37,6 +37,15 @@ class DateRules:
     def today(self):
         return DateRule("today")
 
+    def tomorrow(self):
+        return DateRule("tomorrow")
+
+    def year_start(self, days_offset: int = 0):
+        return DateRule("year_start", days_offset=days_offset)
+
+    def year_end(self, days_offset: int = 0):
+        return DateRule("year_end", days_offset=days_offset)
+
 
 class DateRule:
     """A specific date rule."""

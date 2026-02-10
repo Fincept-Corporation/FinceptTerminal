@@ -672,10 +672,52 @@ export default function NodeEditorTab() {
   const handleEditDraftWrapper = useCallback(
     (workflow: any) => {
       handleEditDraft(workflow);
-      setShowDeployDialog(true);
+      // Don't show deploy dialog - user should edit first
       setActiveView('editor');
     },
     [handleEditDraft]
+  );
+
+  // Handle load workflow wrapper with execution support
+  const handleLoadWorkflowWrapper = useCallback(
+    async (loadedNodes: Node[], loadedEdges: Edge[], workflowId: string, workflow: any, shouldExecute: boolean = false) => {
+      // Navigate to editor view
+      setActiveView('editor');
+
+      // Create status callback for node updates
+      const statusCallback = (nodeId: string, status: string, result?: any) => {
+        setNodes((nds) =>
+          nds.map((node) => {
+            if (node.id === nodeId) {
+              if (node.type === 'results-display') {
+                return {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    inputData: status === 'completed' ? result : undefined,
+                    status,
+                  },
+                };
+              }
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  status,
+                  result: status === 'completed' ? result : undefined,
+                  error: status === 'error' ? result : undefined,
+                },
+              };
+            }
+            return node;
+          })
+        );
+      };
+
+      // Call the original handleLoadWorkflow with execution support
+      await handleLoadWorkflow(loadedNodes, loadedEdges, workflowId, workflow, shouldExecute, statusCallback);
+    },
+    [handleLoadWorkflow, setNodes]
   );
 
   // Handle parameter change for config panel
@@ -1077,7 +1119,7 @@ export default function NodeEditorTab() {
         /* Workflow Manager View */
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <WorkflowManager
-            onLoadWorkflow={handleLoadWorkflow}
+            onLoadWorkflow={handleLoadWorkflowWrapper}
             onViewResults={handleViewResultsWrapper}
             onEditDraft={handleEditDraftWrapper}
           />

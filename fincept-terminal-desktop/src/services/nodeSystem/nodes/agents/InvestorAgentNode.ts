@@ -15,7 +15,7 @@ import { AgentBridge } from '../../adapters/AgentBridge';
 
 export class InvestorAgentNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Investor Agent',
+    displayName: 'Investor AI',
     name: 'investorAgent',
     icon: 'file:investor.svg',
     group: ['agents'],
@@ -23,7 +23,7 @@ export class InvestorAgentNode implements INodeType {
     subtitle: '={{$parameter["investor"]}}',
     description: 'Get investment analysis from famous investor personas',
     defaults: {
-      name: 'Investor Agent',
+      name: 'Investor AI',
       color: '#10b981',
     },
     inputs: [NodeConnectionType.Main],

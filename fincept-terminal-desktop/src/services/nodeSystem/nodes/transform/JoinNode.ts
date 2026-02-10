@@ -9,14 +9,14 @@ import {
 
 export class JoinNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Join',
+    displayName: 'Merge Tables',
     name: 'join',
     icon: 'fa:link',
     group: ['Transform'],
     version: 1,
     description: 'Join two data sets',
     defaults: {
-      name: 'Join',
+      name: 'Merge Tables',
       color: '#06b6d4',
     },
     inputs: [

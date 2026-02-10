@@ -47,7 +47,7 @@ export interface UseWorkflowManagementReturn {
   clearWorkflow: () => Promise<void>;
   deployWorkflow: (statusCallback: (nodeId: string, status: string, result?: any) => void) => Promise<void>;
   saveDraft: () => Promise<void>;
-  handleLoadWorkflow: (loadedNodes: Node[], loadedEdges: Edge[], workflowId: string, workflow: WorkflowType) => void;
+  handleLoadWorkflow: (loadedNodes: Node[], loadedEdges: Edge[], workflowId: string, workflow: WorkflowType, shouldExecute?: boolean, statusCallback?: (nodeId: string, status: string, result?: any) => void) => Promise<void>;
   handleViewResults: (workflow: WorkflowType) => Promise<{ showModal: boolean; data: any; name: string } | { navigate: boolean }>;
   handleEditDraft: (workflow: WorkflowType) => void;
   deleteSelectedNodes: () => void;
@@ -266,13 +266,35 @@ export function useWorkflowManagement(): UseWorkflowManagementReturn {
 
   // Load workflow from manager
   const handleLoadWorkflow = useCallback(
-    (loadedNodes: Node[], loadedEdges: Edge[], workflowId: string, workflow: WorkflowType) => {
+    async (loadedNodes: Node[], loadedEdges: Edge[], workflowId: string, workflow: WorkflowType, shouldExecute: boolean = false, statusCallback?: (nodeId: string, status: string, result?: any) => void) => {
       setNodes(loadedNodes);
       setEdges(loadedEdges);
       setCurrentWorkflowId(workflowId);
       setWorkflowMode(workflow.status === 'draft' ? 'draft' : 'deployed');
+
+      // If shouldExecute is true, run the workflow
+      if (shouldExecute && statusCallback) {
+        if (isExecuting) {
+          showWarning('A workflow is already executing. Please wait for it to complete.');
+          return;
+        }
+
+        setIsExecuting(true);
+
+        try {
+          const { nodeExecutionManager } = await import('@/services/core/nodeExecutionManager');
+          await nodeExecutionManager.executeWorkflow(loadedNodes, loadedEdges, statusCallback);
+        } catch (error: any) {
+          console.error('[useWorkflowManagement] Workflow execution failed:', error);
+          showError('Execution failed', [
+            { label: 'ERROR', value: error.message }
+          ]);
+        } finally {
+          setIsExecuting(false);
+        }
+      }
     },
-    [setNodes, setEdges]
+    [setNodes, setEdges, isExecuting]
   );
 
   // View workflow results

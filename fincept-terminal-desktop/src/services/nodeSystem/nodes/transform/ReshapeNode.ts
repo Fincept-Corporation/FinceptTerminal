@@ -9,14 +9,14 @@ import {
 
 export class ReshapeNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Reshape',
+    displayName: 'Reshape Table',
     name: 'reshape',
     icon: 'fa:th',
     group: ['Transform'],
     version: 1,
     description: 'Reshape data structure (flatten, nest, pivot)',
     defaults: {
-      name: 'Reshape',
+      name: 'Reshape Table',
       color: '#f59e0b',
     },
     inputs: [NodeConnectionType.Main],

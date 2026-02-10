@@ -23,32 +23,19 @@ import type {
 } from '@/services/nodeSystem';
 import { isExpression } from '@/services/nodeSystem';
 import { Check, Code2, Calendar, Hash, Type, List, Settings2, Palette, ChevronDown } from 'lucide-react';
-
-// Fincept Terminal Style Constants
-const FINCEPT = {
-  ORANGE: '#FF8800',
-  WHITE: '#FFFFFF',
-  RED: '#FF3B3B',
-  GREEN: '#00D66F',
-  YELLOW: '#FFD700',
-  CYAN: '#00E5FF',
-  GRAY: '#BBBBBB',
-  MUTED: '#888888',
-  DARK_BG: '#000000',
-  PANEL_BG: '#141414',
-  INPUT_BG: '#1A1A1A',
-  BORDER: '#3A3A3A',
-  FONT: '"IBM Plex Mono", "Consolas", monospace',
-};
+import {
+  FINCEPT,
+  FONT_FAMILY,
+} from './shared';
 
 const inputBaseStyle: React.CSSProperties = {
   width: '100%',
-  backgroundColor: FINCEPT.INPUT_BG,
+  backgroundColor: FINCEPT.HEADER_BG,
   border: `1px solid ${FINCEPT.BORDER}`,
   padding: '10px 12px',
   color: FINCEPT.WHITE,
   fontSize: '13px',
-  fontFamily: FINCEPT.FONT,
+  fontFamily: FONT_FAMILY,
   outline: 'none',
   transition: 'all 0.15s ease',
 };
@@ -105,7 +92,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
   const getFocusStyle = (): React.CSSProperties => ({
     borderColor: isFocused ? FINCEPT.ORANGE : FINCEPT.BORDER,
     boxShadow: isFocused ? `0 0 8px ${FINCEPT.ORANGE}30` : 'none',
-    backgroundColor: isFocused ? FINCEPT.PANEL_BG : FINCEPT.INPUT_BG,
+    backgroundColor: isFocused ? FINCEPT.PANEL_BG : FINCEPT.HEADER_BG,
   });
 
   const renderInput = () => {
@@ -221,7 +208,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
         alignItems: 'center',
         gap: '10px',
         padding: '8px 10px',
-        backgroundColor: FINCEPT.INPUT_BG,
+        backgroundColor: FINCEPT.HEADER_BG,
         border: `1px solid ${FINCEPT.BORDER}`,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'all 0.15s ease',
@@ -236,7 +223,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       <div style={{
         width: '32px',
         height: '16px',
-        backgroundColor: Boolean(value) ? FINCEPT.GREEN : FINCEPT.MUTED,
+        backgroundColor: Boolean(value) ? FINCEPT.GREEN : FINCEPT.GRAY,
         borderRadius: '8px',
         position: 'relative',
         transition: 'all 0.15s ease',
@@ -255,7 +242,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       <span style={{
         color: Boolean(value) ? FINCEPT.GREEN : FINCEPT.GRAY,
         fontSize: '13px',
-        fontFamily: FINCEPT.FONT,
+        fontFamily: FONT_FAMILY,
         fontWeight: 600,
         textTransform: 'uppercase',
       }}>
@@ -317,7 +304,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
     return (
       <div style={{
-        backgroundColor: FINCEPT.INPUT_BG,
+        backgroundColor: FINCEPT.HEADER_BG,
         border: `1px solid ${FINCEPT.BORDER}`,
         padding: '8px',
       }}>
@@ -358,7 +345,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
             <span style={{
               color: selectedValues.includes(option.value) ? FINCEPT.WHITE : FINCEPT.GRAY,
               fontSize: '13px',
-              fontFamily: FINCEPT.FONT,
+              fontFamily: FONT_FAMILY,
             }}>
               {option.name}
             </span>
@@ -379,7 +366,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
           width: '40px',
           height: '32px',
           border: `1px solid ${FINCEPT.BORDER}`,
-          backgroundColor: FINCEPT.INPUT_BG,
+          backgroundColor: FINCEPT.HEADER_BG,
           cursor: 'pointer',
           padding: '2px',
         }}
@@ -454,7 +441,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
   const renderCollectionInput = () => (
     <div style={{
-      backgroundColor: FINCEPT.INPUT_BG,
+      backgroundColor: FINCEPT.HEADER_BG,
       border: `1px solid ${FINCEPT.BORDER}`,
       padding: '12px',
     }}>
@@ -492,12 +479,12 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
 
   const renderFixedCollectionInput = () => (
     <div style={{
-      backgroundColor: FINCEPT.INPUT_BG,
+      backgroundColor: FINCEPT.HEADER_BG,
       border: `1px solid ${FINCEPT.BORDER}`,
       padding: '14px',
       textAlign: 'center',
     }}>
-      <Settings2 size={20} style={{ color: FINCEPT.MUTED, margin: '0 auto 10px' }} />
+      <Settings2 size={20} style={{ color: FINCEPT.GRAY, margin: '0 auto 10px' }} />
       <div style={{
         color: FINCEPT.GRAY,
         fontSize: '12px',
@@ -505,7 +492,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       }}>
         ADVANCED CONFIGURATION
       </div>
-      <div style={{ color: FINCEPT.MUTED, fontSize: '11px', marginTop: '6px' }}>
+      <div style={{ color: FINCEPT.GRAY, fontSize: '11px', marginTop: '6px', opacity: 0.7 }}>
         Configure in advanced editor
       </div>
     </div>
@@ -613,7 +600,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
             style={{
               padding: '4px 8px',
               fontSize: '10px',
-              fontFamily: FINCEPT.FONT,
+              fontFamily: FONT_FAMILY,
               fontWeight: 600,
               border: `1px solid ${isExpressionMode ? FINCEPT.YELLOW : FINCEPT.BORDER}`,
               backgroundColor: isExpressionMode ? `${FINCEPT.YELLOW}20` : 'transparent',
@@ -636,9 +623,10 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
       {parameter.description && (
         <div style={{
           fontSize: '11px',
-          color: FINCEPT.MUTED,
+          color: FINCEPT.GRAY,
           marginBottom: '8px',
           lineHeight: '1.5',
+          opacity: 0.7,
         }}>
           {parameter.description}
         </div>
@@ -653,7 +641,7 @@ export const NodeParameterInput: React.FC<NodeParameterInputProps> = ({
           fontSize: '8px',
           color: `${FINCEPT.YELLOW}90`,
           marginTop: '4px',
-          fontFamily: FINCEPT.FONT,
+          fontFamily: FONT_FAMILY,
         }}>
           SYNTAX: <code style={{ backgroundColor: FINCEPT.PANEL_BG, padding: '1px 4px' }}>{'{{$json.field}}'}</code>
         </div>

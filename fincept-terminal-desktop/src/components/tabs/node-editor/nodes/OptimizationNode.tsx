@@ -6,11 +6,26 @@
  */
 
 import React, { useState } from 'react';
-import { Handle, Position } from 'reactflow';
-import { Zap, Play, Settings, Check, AlertCircle, Loader, TrendingUp } from 'lucide-react';
+import { Position } from 'reactflow';
+import { Zap, Play, Settings, Check, AlertCircle, Loader, TrendingUp, Plus } from 'lucide-react';
 import { showPrompt } from '@/utils/notifications';
 import { backtestingService } from '@/services/backtesting/BacktestingService';
 import { OptimizationRequest, OptimizationResult } from '@/services/backtesting/interfaces/types';
+import {
+  FINCEPT,
+  SPACING,
+  BORDER_RADIUS,
+  BaseNode,
+  NodeHeader,
+  IconButton,
+  Button,
+  SelectField,
+  InputField,
+  InfoPanel,
+  SettingsPanel,
+  KeyValue,
+  getStatusColor,
+} from './shared';
 
 interface OptimizationNodeProps {
   data: {
@@ -56,21 +71,14 @@ const OptimizationNode: React.FC<OptimizationNodeProps> = ({ data, selected }) =
     }
   };
 
-  const getStatusColor = () => {
-    switch (data.status) {
-      case 'running': return '#f59e0b';
-      case 'completed': return '#10b981';
-      case 'error': return '#ef4444';
-      default: return '#6b7280';
-    }
-  };
+  const statusColor = getStatusColor(data.status);
 
   const getStatusIcon = () => {
     switch (data.status) {
-      case 'running': return <Loader size={14} className="animate-spin" color="#f59e0b" />;
-      case 'completed': return <Check size={14} color="#10b981" />;
-      case 'error': return <AlertCircle size={14} color="#ef4444" />;
-      default: return <Zap size={14} color="#6b7280" />;
+      case 'running': return <Loader size={14} className="animate-spin" color={FINCEPT.ORANGE} />;
+      case 'completed': return <Check size={14} color={FINCEPT.GREEN} />;
+      case 'error': return <AlertCircle size={14} color={FINCEPT.RED} />;
+      default: return <Zap size={14} color={FINCEPT.GRAY} />;
     }
   };
 
@@ -94,435 +102,304 @@ const OptimizationNode: React.FC<OptimizationNodeProps> = ({ data, selected }) =
     }
   };
 
+  const targetOptions = [
+    { value: 'sharpe_ratio', label: 'Sharpe Ratio' },
+    { value: 'total_return', label: 'Total Return' },
+    { value: 'sortino_ratio', label: 'Sortino Ratio' },
+    { value: 'calmar_ratio', label: 'Calmar Ratio' },
+    { value: 'profit_factor', label: 'Profit Factor' },
+  ];
+
+  const methodOptions = [
+    { value: 'grid', label: 'Grid Search' },
+    { value: 'genetic', label: 'Genetic Algorithm' },
+    { value: 'bayesian', label: 'Bayesian Optimization' },
+  ];
+
   return (
-    <div style={{
-      background: selected ? '#252525' : '#1a1a1a',
-      border: `2px solid ${selected ? '#f59e0b' : getStatusColor()}`,
-      borderRadius: '8px',
-      minWidth: '320px',
-      maxWidth: '450px',
-      fontFamily: 'Consolas, monospace',
-      boxShadow: selected ? `0 0 16px #f59e0b60` : '0 2px 8px rgba(0,0,0,0.3)',
-      position: 'relative'
-    }}>
-      {/* Input Handle - Strategy */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="strategy"
-        style={{
-          background: '#8b5cf6',
-          width: '12px',
-          height: '12px',
-          border: '2px solid #1a1a1a',
-          top: '30%'
-        }}
-      />
-
-      {/* Output Handle - Best Parameters */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="best_params"
-        style={{
-          background: '#f59e0b',
-          width: '12px',
-          height: '12px',
-          border: '2px solid #1a1a1a',
-          top: '30%'
-        }}
-      />
-
-      {/* Output Handle - All Results */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="all_results"
-        style={{
-          background: '#10b981',
-          width: '12px',
-          height: '12px',
-          border: '2px solid #1a1a1a',
-          top: '60%'
-        }}
-      />
-
+    <BaseNode
+      selected={selected}
+      minWidth="320px"
+      maxWidth="450px"
+      borderColor={statusColor}
+      handles={[
+        { type: 'target', position: Position.Left, id: 'strategy', color: FINCEPT.BLUE, top: '30%', label: 'Strategy' },
+        { type: 'source', position: Position.Right, id: 'best_params', color: FINCEPT.ORANGE, top: '30%', label: 'Best Params' },
+        { type: 'source', position: Position.Right, id: 'all_results', color: FINCEPT.GREEN, top: '60%', label: 'All Results' },
+      ]}
+    >
       {/* Header */}
-      <div style={{
-        padding: '12px',
-        borderBottom: '1px solid #2a2a2a',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'linear-gradient(135deg, #1f1f1f 0%, #2a1f0f 100%)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Zap size={16} color={getStatusColor()} />
-          <span style={{ color: '#e5e7eb', fontSize: '12px', fontWeight: 'bold' }}>
-            {data.label}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          {getStatusIcon()}
-          <Settings
-            size={14}
-            color="#9ca3af"
-            style={{ cursor: 'pointer' }}
-            onClick={() => setShowSettings(!showSettings)}
-          />
-        </div>
-      </div>
+      <NodeHeader
+        icon={<Zap size={16} />}
+        title={data.label}
+        color={statusColor}
+        rightActions={
+          <>
+            {getStatusIcon()}
+            <IconButton
+              icon={<Settings size={14} />}
+              onClick={() => setShowSettings(!showSettings)}
+              active={showSettings}
+            />
+          </>
+        }
+      />
 
       {/* Settings Panel */}
-      {showSettings && (
-        <div style={{
-          padding: '12px',
-          borderBottom: '1px solid #2a2a2a',
-          background: '#1a1a1a',
-          maxHeight: '400px',
-          overflowY: 'auto'
-        }}>
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ color: '#9ca3af', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-              Optimization Target
+      <SettingsPanel isOpen={showSettings}>
+        <SelectField
+          label="Optimization Target"
+          value={localConfig.target}
+          options={targetOptions}
+          onChange={(val) => setLocalConfig({ ...localConfig, target: val as any })}
+        />
+
+        <SelectField
+          label="Method"
+          value={localConfig.method}
+          options={methodOptions}
+          onChange={(val) => setLocalConfig({ ...localConfig, method: val as any })}
+        />
+
+        <InputField
+          label="Max Iterations"
+          type="number"
+          value={String(localConfig.maxIterations)}
+          onChange={(val) => setLocalConfig({ ...localConfig, maxIterations: Number(val) || 0 })}
+        />
+
+        {/* Parameter Ranges */}
+        <div style={{ marginBottom: SPACING.MD }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: SPACING.SM
+          }}>
+            <label style={{
+              color: FINCEPT.GRAY,
+              fontSize: '10px'
+            }}>
+              Parameter Ranges
             </label>
-            <select
-              value={localConfig.target}
-              onChange={(e) => setLocalConfig({ ...localConfig, target: e.target.value as any })}
+            <button
+              onClick={addParameterRange}
               style={{
-                width: '100%',
-                padding: '6px',
-                background: '#252525',
-                border: '1px solid #3a3a3a',
-                borderRadius: '4px',
-                color: '#e5e7eb',
-                fontSize: '10px'
+                padding: '2px 6px',
+                background: FINCEPT.BLUE,
+                color: FINCEPT.WHITE,
+                border: 'none',
+                borderRadius: BORDER_RADIUS.SM,
+                fontSize: '9px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '2px'
               }}
             >
-              <option value="sharpe_ratio">Sharpe Ratio</option>
-              <option value="total_return">Total Return</option>
-              <option value="sortino_ratio">Sortino Ratio</option>
-              <option value="calmar_ratio">Calmar Ratio</option>
-              <option value="profit_factor">Profit Factor</option>
-            </select>
+              <Plus size={10} /> Add
+            </button>
           </div>
 
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ color: '#9ca3af', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-              Method
-            </label>
-            <select
-              value={localConfig.method}
-              onChange={(e) => setLocalConfig({ ...localConfig, method: e.target.value as any })}
+          {Object.entries(paramRanges).map(([param, range]) => (
+            <div
+              key={param}
               style={{
-                width: '100%',
-                padding: '6px',
-                background: '#252525',
-                border: '1px solid #3a3a3a',
-                borderRadius: '4px',
-                color: '#e5e7eb',
-                fontSize: '10px'
+                marginBottom: SPACING.MD,
+                padding: SPACING.MD,
+                background: FINCEPT.PANEL_BG,
+                borderRadius: BORDER_RADIUS.LG
               }}
             >
-              <option value="grid">Grid Search</option>
-              <option value="genetic">Genetic Algorithm</option>
-              <option value="bayesian">Bayesian Optimization</option>
-            </select>
-          </div>
-
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ color: '#9ca3af', fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-              Max Iterations
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={localConfig.maxIterations.toString()}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === '' || /^\d*$/.test(v)) {
-                  setLocalConfig({ ...localConfig, maxIterations: Number(v) || 0 });
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '6px',
-                background: '#252525',
-                border: '1px solid #3a3a3a',
-                borderRadius: '4px',
-                color: '#e5e7eb',
-                fontSize: '10px'
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ color: '#9ca3af', fontSize: '10px' }}>
-                Parameter Ranges
-              </label>
-              <button
-                onClick={addParameterRange}
-                style={{
-                  padding: '2px 6px',
-                  background: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '3px',
-                  fontSize: '9px',
-                  cursor: 'pointer'
-                }}
-              >
-                + Add
-              </button>
-            </div>
-
-            {Object.entries(paramRanges).map(([param, range]) => (
-              <div key={param} style={{ marginBottom: '8px', padding: '8px', background: '#252525', borderRadius: '4px' }}>
-                <div style={{ fontSize: '10px', color: '#e5e7eb', marginBottom: '4px', fontWeight: 'bold' }}>
-                  {param}
+              <div style={{
+                fontSize: '10px',
+                color: FINCEPT.WHITE,
+                marginBottom: SPACING.XS,
+                fontWeight: 700
+              }}>
+                {param}
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                gap: SPACING.XS
+              }}>
+                <div>
+                  <label style={{ fontSize: '8px', color: FINCEPT.GRAY }}>Min</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={range.min.toString()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                        setParamRanges({
+                          ...paramRanges,
+                          [param]: { ...range, min: parseFloat(v) || 0 }
+                        });
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: SPACING.XS,
+                      background: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: BORDER_RADIUS.SM,
+                      color: FINCEPT.WHITE,
+                      fontSize: '9px'
+                    }}
+                  />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
-                  <div>
-                    <label style={{ fontSize: '8px', color: '#6b7280' }}>Min</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={range.min.toString()}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
-                          setParamRanges({
-                            ...paramRanges,
-                            [param]: { ...range, min: parseFloat(v) || 0 }
-                          });
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '4px',
-                        background: '#1a1a1a',
-                        border: '1px solid #3a3a3a',
-                        borderRadius: '3px',
-                        color: '#e5e7eb',
-                        fontSize: '9px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '8px', color: '#6b7280' }}>Max</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={range.max.toString()}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
-                          setParamRanges({
-                            ...paramRanges,
-                            [param]: { ...range, max: parseFloat(v) || 0 }
-                          });
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '4px',
-                        background: '#1a1a1a',
-                        border: '1px solid #3a3a3a',
-                        borderRadius: '3px',
-                        color: '#e5e7eb',
-                        fontSize: '9px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '8px', color: '#6b7280' }}>Step</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={range.step.toString()}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === '' || /^\d*\.?\d*$/.test(v)) {
-                          setParamRanges({
-                            ...paramRanges,
-                            [param]: { ...range, step: parseFloat(v) || 0 }
-                          });
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '4px',
-                        background: '#1a1a1a',
-                        border: '1px solid #3a3a3a',
-                        borderRadius: '3px',
-                        color: '#e5e7eb',
-                        fontSize: '9px'
-                      }}
-                    />
-                  </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: FINCEPT.GRAY }}>Max</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={range.max.toString()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                        setParamRanges({
+                          ...paramRanges,
+                          [param]: { ...range, max: parseFloat(v) || 0 }
+                        });
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: SPACING.XS,
+                      background: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: BORDER_RADIUS.SM,
+                      color: FINCEPT.WHITE,
+                      fontSize: '9px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: FINCEPT.GRAY }}>Step</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={range.step.toString()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                        setParamRanges({
+                          ...paramRanges,
+                          [param]: { ...range, step: parseFloat(v) || 0 }
+                        });
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: SPACING.XS,
+                      background: FINCEPT.DARK_BG,
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: BORDER_RADIUS.SM,
+                      color: FINCEPT.WHITE,
+                      fontSize: '9px'
+                    }}
+                  />
                 </div>
               </div>
-            ))}
-          </div>
-
-          <button
-            onClick={handleSaveSettings}
-            style={{
-              width: '100%',
-              padding: '6px',
-              background: '#f59e0b',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '10px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            Save Configuration
-          </button>
+            </div>
+          ))}
         </div>
-      )}
+
+        <Button
+          label="Save Configuration"
+          onClick={handleSaveSettings}
+          variant="primary"
+          fullWidth
+        />
+      </SettingsPanel>
 
       {/* Content */}
-      <div style={{ padding: '12px' }}>
-        {/* Configuration Display */}
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ fontSize: '10px', color: '#9ca3af', marginBottom: '6px' }}>
-            Configuration:
-          </div>
-          <div style={{ fontSize: '9px', color: '#d1d5db', fontFamily: 'monospace' }}>
-            Target: {localConfig.target.replace('_', ' ')}
-          </div>
-          <div style={{ fontSize: '9px', color: '#d1d5db', fontFamily: 'monospace' }}>
-            Method: {localConfig.method}
-          </div>
-          <div style={{ fontSize: '9px', color: '#d1d5db', fontFamily: 'monospace' }}>
-            Parameters: {Object.keys(paramRanges).length}
-          </div>
-        </div>
+      {!showSettings && (
+        <div style={{ padding: SPACING.LG }}>
+          {/* Configuration Display */}
+          <InfoPanel title="Configuration">
+            <KeyValue label="Target" value={localConfig.target.replace('_', ' ')} />
+            <KeyValue label="Method" value={localConfig.method} />
+            <KeyValue label="Parameters" value={String(Object.keys(paramRanges).length)} />
+          </InfoPanel>
 
-        {/* Results Display */}
-        {data.result && data.status === 'completed' && (
-          <div style={{
-            padding: '8px',
-            background: '#1f1f1f',
-            borderRadius: '4px',
-            marginBottom: '8px'
-          }}>
-            <div style={{ fontSize: '10px', color: '#9ca3af', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <TrendingUp size={12} />
-              Best Parameters:
-            </div>
-            <div style={{ fontSize: '9px', color: '#10b981', fontFamily: 'monospace', marginBottom: '6px' }}>
-              {formatBestParams()}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '9px' }}>
-              <div>
-                <div style={{ color: '#6b7280' }}>Iterations</div>
-                <div style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                  {data.result.iterations}
-                </div>
+          {/* Results Display */}
+          {data.result && data.status === 'completed' && (
+            <div style={{
+              padding: SPACING.MD,
+              background: FINCEPT.HEADER_BG,
+              borderRadius: BORDER_RADIUS.LG,
+              marginBottom: SPACING.MD
+            }}>
+              <div style={{
+                fontSize: '10px',
+                color: FINCEPT.GRAY,
+                marginBottom: SPACING.SM,
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.XS
+              }}>
+                <TrendingUp size={12} />
+                Best Parameters:
               </div>
-              <div>
-                <div style={{ color: '#6b7280' }}>Duration</div>
-                <div style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                  {Math.round(data.result.duration / 1000)}s
-                </div>
+              <div style={{
+                fontSize: '9px',
+                color: FINCEPT.GREEN,
+                fontFamily: 'monospace',
+                marginBottom: SPACING.SM
+              }}>
+                {formatBestParams()}
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: SPACING.SM,
+                fontSize: '9px'
+              }}>
+                <KeyValue label="Iterations" value={String(data.result.iterations)} />
+                <KeyValue label="Duration" value={`${Math.round(data.result.duration / 1000)}s`} />
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Error Display */}
-        {data.error && data.status === 'error' && (
-          <div style={{
-            padding: '8px',
-            background: '#3a0a0a',
-            border: '1px solid #ef4444',
-            borderRadius: '4px',
-            marginBottom: '8px'
-          }}>
-            <div style={{ fontSize: '10px', color: '#ef4444', marginBottom: '4px' }}>
-              Error:
-            </div>
-            <div style={{ fontSize: '9px', color: '#fca5a5' }}>
-              {data.error}
-            </div>
-          </div>
-        )}
-
-        {/* Run Button */}
-        <button
-          onClick={handleRunOptimization}
-          disabled={data.status === 'running' || !data.strategyCode}
-          style={{
-            width: '100%',
-            padding: '8px',
-            background: data.status === 'running' ? '#6b7280' : '#f59e0b',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '11px',
-            fontWeight: 'bold',
-            cursor: data.status === 'running' || !data.strategyCode ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            opacity: data.status === 'running' || !data.strategyCode ? 0.6 : 1
-          }}
-        >
-          {data.status === 'running' ? (
-            <>
-              <Loader size={14} className="animate-spin" />
-              Optimizing... ({data.result?.iterations || 0}/{localConfig.maxIterations})
-            </>
-          ) : (
-            <>
-              <Play size={14} />
-              Run Optimization
-            </>
           )}
-        </button>
-      </div>
 
-      {/* Handle Labels */}
-      <div style={{
-        position: 'absolute',
-        left: '-60px',
-        top: '30%',
-        transform: 'translateY(-50%)',
-        fontSize: '9px',
-        color: '#6b7280',
-        whiteSpace: 'nowrap'
-      }}>
-        Strategy
-      </div>
-      <div style={{
-        position: 'absolute',
-        right: '-80px',
-        top: '30%',
-        transform: 'translateY(-50%)',
-        fontSize: '9px',
-        color: '#6b7280',
-        whiteSpace: 'nowrap'
-      }}>
-        Best Params
-      </div>
-      <div style={{
-        position: 'absolute',
-        right: '-70px',
-        top: '60%',
-        transform: 'translateY(-50%)',
-        fontSize: '9px',
-        color: '#6b7280',
-        whiteSpace: 'nowrap'
-      }}>
-        All Results
-      </div>
-    </div>
+          {/* Error Display */}
+          {data.error && data.status === 'error' && (
+            <div style={{
+              padding: SPACING.MD,
+              background: `${FINCEPT.RED}20`,
+              border: `1px solid ${FINCEPT.RED}`,
+              borderRadius: BORDER_RADIUS.LG,
+              marginBottom: SPACING.MD
+            }}>
+              <div style={{
+                fontSize: '10px',
+                color: FINCEPT.RED,
+                marginBottom: SPACING.XS
+              }}>
+                Error:
+              </div>
+              <div style={{ fontSize: '9px', color: FINCEPT.RED }}>
+                {data.error}
+              </div>
+            </div>
+          )}
+
+          {/* Run Button */}
+          <Button
+            label={data.status === 'running'
+              ? `Optimizing... (${data.result?.iterations || 0}/${localConfig.maxIterations})`
+              : 'Run Optimization'}
+            icon={data.status === 'running' ? <Loader size={14} className="animate-spin" /> : <Play size={14} />}
+            onClick={handleRunOptimization}
+            variant="primary"
+            disabled={data.status === 'running' || !data.strategyCode}
+            fullWidth
+          />
+        </div>
+      )}
+    </BaseNode>
   );
 };
 

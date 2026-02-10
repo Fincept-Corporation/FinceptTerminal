@@ -758,6 +758,7 @@ pub fn run() {
             cleanup_running_workflows,
             setup::check_setup_status,
             setup::run_setup,
+            setup::sync_requirements,
             spawn_mcp_server,
             send_mcp_request,
             send_mcp_notification,
@@ -1566,6 +1567,16 @@ pub fn run() {
             commands::analytics::execute_economics_analytics,
             commands::analytics::execute_statsmodels_analytics,
             commands::analytics::execute_quant_analytics,
+            // Fixed Income Analytics Commands
+            commands::analytics::execute_fixed_income_analytics,
+            commands::analytics::calculate_bond_price,
+            commands::analytics::calculate_bond_ytm,
+            commands::analytics::calculate_bond_duration,
+            commands::analytics::calculate_bond_convexity,
+            commands::analytics::analyze_yield_curve,
+            commands::analytics::analyze_credit_risk,
+            commands::analytics::analyze_mbs,
+            commands::analytics::analyze_bond_portfolio,
             // FinancePy - Derivatives Pricing Commands
             commands::financepy::financepy_create_date,
             commands::financepy::financepy_date_range,
@@ -2496,7 +2507,21 @@ pub fn run() {
             commands::algo_trading::stop_candle_aggregation,
             commands::algo_trading::run_algo_backtest,
             commands::algo_trading::start_order_signal_bridge,
-            commands::algo_trading::stop_order_signal_bridge
+            commands::algo_trading::stop_order_signal_bridge,
+            // Python Strategy Library
+            commands::algo_trading::list_python_strategies,
+            commands::algo_trading::get_strategy_categories,
+            commands::algo_trading::get_python_strategy,
+            commands::algo_trading::get_python_strategy_code,
+            commands::algo_trading::save_custom_python_strategy,
+            commands::algo_trading::list_custom_python_strategies,
+            commands::algo_trading::get_custom_python_strategy,
+            commands::algo_trading::update_custom_python_strategy,
+            commands::algo_trading::delete_custom_python_strategy,
+            commands::algo_trading::validate_python_syntax,
+            // Python Strategy Backtest
+            commands::algo_trading::run_python_backtest,
+            commands::algo_trading::extract_strategy_parameters
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

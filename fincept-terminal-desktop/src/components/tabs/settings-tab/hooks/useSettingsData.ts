@@ -74,6 +74,14 @@ export function useSettingsData() {
         };
         await sqliteService.saveLLMConfig(finceptConfig);
         configs = await sqliteService.getLLMConfigs();
+      } else if (sessionApiKey) {
+        // Ensure the fincept config has the session API key populated
+        const finceptConfig = configs.find(c => c.provider === 'fincept');
+        if (finceptConfig && !finceptConfig.api_key) {
+          finceptConfig.api_key = sessionApiKey;
+          await sqliteService.saveLLMConfig(finceptConfig);
+          configs = await sqliteService.getLLMConfigs();
+        }
       }
 
       setLlmConfigs(configs);

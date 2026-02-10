@@ -46,10 +46,41 @@ class Symbol:
     def __hash__(self):
         return hash(self.value)
 
+    def upper(self):
+        """Allow Symbol to be used where string.upper() is called."""
+        return self.value
+
     @staticmethod
     def create(ticker: str, security_type: SecurityType = SecurityType.EQUITY,
-               market: str = Market.USA):
+               market: str = Market.USA, *args, **kwargs):
         return Symbol(ticker, security_type, market)
+
+    @staticmethod
+    def create_future(ticker: str, market: str = "cme", *args, **kwargs):
+        return Symbol(ticker.upper(), SecurityType.FUTURE, market)
+
+    @staticmethod
+    def create_option(ticker: str, market: str = "usa", *args, **kwargs):
+        return Symbol(ticker.upper(), SecurityType.OPTION, market)
+
+    @staticmethod
+    def create_canonical_option(underlying, market: str = "usa", alias=None):
+        ticker = str(underlying).upper()
+        return Symbol(ticker, SecurityType.OPTION, market)
+
+    @property
+    def underlying(self):
+        """Get underlying symbol (for options/futures)."""
+        return self
+
+    @property
+    def has_underlying(self):
+        return self.security_type in (SecurityType.OPTION, SecurityType.FUTURE_OPTION,
+                                       SecurityType.INDEX_OPTION)
+
+    @property
+    def is_canonical(self):
+        return True
 
 
 class TradeBar:

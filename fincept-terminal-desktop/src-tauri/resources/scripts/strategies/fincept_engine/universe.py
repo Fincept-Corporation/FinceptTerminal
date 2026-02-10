@@ -8,6 +8,12 @@ from .enums import Resolution, SecurityType, Market
 from .types import Symbol
 
 
+class _ScheduleSettings:
+    """Schedule settings for universe."""
+    def __init__(self):
+        self.on = None
+        self.at = None
+
 class UniverseSettings:
     """Settings for universe subscriptions."""
 
@@ -19,6 +25,7 @@ class UniverseSettings:
         self.minimum_time_in_universe = None
         self.data_normalization_mode = 0
         self.asynchronous = False
+        self.schedule = _ScheduleSettings()
 
 
 class CoarseFundamental:

@@ -15,7 +15,7 @@ import { MarketDataBridge, DataProvider } from '../../adapters/MarketDataBridge'
 
 export class GetQuoteNode implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Get Quote',
+    displayName: 'Stock Quote',
     name: 'getQuote',
     icon: 'file:quote.svg',
     group: ['marketData'],
@@ -23,7 +23,7 @@ export class GetQuoteNode implements INodeType {
     subtitle: '={{$parameter["symbols"]}}',
     description: 'Fetches real-time or delayed quotes for symbols',
     defaults: {
-      name: 'Get Quote',
+      name: 'Stock Quote',
       color: '#10b981',
     },
     inputs: [NodeConnectionType.Main],

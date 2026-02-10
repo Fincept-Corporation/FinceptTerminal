@@ -582,6 +582,7 @@ pub async fn run_algo_scan(
     symbols: String,
     timeframe: Option<String>,
     provider: Option<String>,
+    lookback_days: Option<i64>,
 ) -> Result<String, String> {
     use std::process::Command;
 
@@ -590,6 +591,7 @@ pub async fn run_algo_scan(
     let db_path = get_main_db_path_str()?;
     let tf = timeframe.unwrap_or_else(|| "5m".to_string());
     let broker = provider.as_deref().unwrap_or("fyers").to_string();
+    let lookback = lookback_days;
 
     // Collect debug info throughout the scan process
     let mut debug_log: Vec<String> = Vec::new();
@@ -613,7 +615,7 @@ pub async fn run_algo_scan(
     let mut prefetch_warning: Option<String> = None;
     if !symbol_list.is_empty() {
         debug_log.push(format!("[prefetch] starting for broker={}", broker));
-        match prefetch_historical_candles(&db_path, &symbol_list, &tf, &broker).await {
+        match prefetch_historical_candles(&db_path, &symbol_list, &tf, &broker, lookback).await {
             Ok(prefetch_debug) => {
                 debug_log.extend(prefetch_debug);
                 debug_log.push("[prefetch] completed successfully".to_string());
@@ -726,14 +728,15 @@ fn check_candle_cache_count(db_path: &str, symbols: &[String], timeframe: &str) 
 }
 
 /// Pre-fetch historical candles from broker API and insert into candle_cache table.
-/// Maps timeframe strings to Fyers resolution values and fetches ~1 year of daily data
-/// or appropriate ranges for other timeframes.
+/// Maps timeframe strings to Fyers resolution values and fetches data based on lookback.
+/// If lookback_days is None, uses default lookback based on timeframe.
 /// Returns a Vec of debug log lines for the caller to include in the response.
 async fn prefetch_historical_candles(
     db_path: &str,
     symbols: &[String],
     timeframe: &str,
     broker: &str,
+    lookback_override: Option<i64>,
 ) -> Result<Vec<String>, String> {
     use crate::commands::brokers;
 
@@ -774,8 +777,8 @@ async fn prefetch_historical_candles(
 
     debug_log.push(format!("[prefetch] credentials OK (api_key len={}, token len={})", api_key.len(), access_token.len()));
 
-    // Map timeframe to Fyers resolution and lookback days
-    let (resolution, lookback_days) = match timeframe {
+    // Map timeframe to Fyers resolution and default lookback days
+    let (resolution, default_lookback) = match timeframe {
         "1m" => ("1", 5),
         "3m" => ("3", 10),
         "5m" => ("5", 15),
@@ -787,6 +790,9 @@ async fn prefetch_historical_candles(
         "1d" | "1D" | "D" => ("1D", 365),
         _ => ("1D", 365),
     };
+
+    // Use override if provided, otherwise use default for the timeframe
+    let lookback_days = lookback_override.unwrap_or(default_lookback);
 
     let now = chrono::Utc::now();
     let from_date = (now - chrono::Duration::days(lookback_days)).format("%Y-%m-%d").to_string();
@@ -1076,7 +1082,7 @@ pub async fn stop_candle_aggregation(
 // BACKTEST
 // ============================================================================
 
-/// Run a walk-forward backtest using historical data (via yfinance)
+/// Run a walk-forward backtest using historical data (via yfinance or candle_cache)
 #[tauri::command]
 pub async fn run_algo_backtest(
     app: tauri::AppHandle,
@@ -1088,16 +1094,37 @@ pub async fn run_algo_backtest(
     stop_loss: Option<f64>,
     take_profit: Option<f64>,
     initial_capital: Option<f64>,
+    provider: Option<String>,
 ) -> Result<String, String> {
     use std::process::Command;
 
-    let scripts_dir = get_algo_scripts_dir(&app)?;
+    let mut debug_log: Vec<String> = Vec::new();
+    debug_log.push("[backtest] Starting backtest...".to_string());
+
+    // Get scripts directory
+    let scripts_dir = match get_algo_scripts_dir(&app) {
+        Ok(dir) => {
+            debug_log.push(format!("[backtest] scripts_dir={:?}", dir));
+            dir
+        }
+        Err(e) => {
+            debug_log.push(format!("[backtest] ERROR getting scripts_dir: {}", e));
+            return Ok(json!({
+                "success": false,
+                "error": format!("Failed to get scripts directory: {}", e),
+                "debug": debug_log
+            }).to_string());
+        }
+    };
+
     let backtest_path = scripts_dir.join("backtest_engine.py");
+    debug_log.push(format!("[backtest] backtest_path={:?}, exists={}", backtest_path, backtest_path.exists()));
 
     if !backtest_path.exists() {
         return Ok(json!({
             "success": false,
-            "error": "backtest_engine.py not found"
+            "error": "backtest_engine.py not found",
+            "debug": debug_log
         }).to_string());
     }
 
@@ -1106,6 +1133,52 @@ pub async fn run_algo_backtest(
     let sl = stop_loss.unwrap_or(0.0);
     let tp = take_profit.unwrap_or(0.0);
     let capital = initial_capital.unwrap_or(100000.0);
+    let data_provider = provider.unwrap_or_else(|| "yfinance".to_string());
+
+    let db_path = match get_main_db_path_str() {
+        Ok(path) => {
+            debug_log.push(format!("[backtest] db_path={}", path));
+            path
+        }
+        Err(e) => {
+            debug_log.push(format!("[backtest] ERROR getting db_path: {}", e));
+            return Ok(json!({
+                "success": false,
+                "error": format!("Failed to get database path: {}", e),
+                "debug": debug_log
+            }).to_string());
+        }
+    };
+
+    debug_log.push(format!(
+        "[backtest] params: symbol={}, tf={}, period={}, sl={}, tp={}, capital={}, provider={}",
+        symbol, tf, pd, sl, tp, capital, data_provider
+    ));
+    debug_log.push(format!("[backtest] entry_conditions={}", entry_conditions));
+    debug_log.push(format!("[backtest] exit_conditions={}", exit_conditions));
+
+    // Check if Python is available
+    let python_check = Command::new("python")
+        .arg("--version")
+        .output();
+
+    match &python_check {
+        Ok(output) => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug_log.push(format!("[backtest] Python version: {} {}", version.trim(), stderr.trim()));
+        }
+        Err(e) => {
+            debug_log.push(format!("[backtest] ERROR: Python not found: {}", e));
+            return Ok(json!({
+                "success": false,
+                "error": format!("Python not found: {}. Make sure Python is installed and in PATH.", e),
+                "debug": debug_log
+            }).to_string());
+        }
+    }
+
+    debug_log.push("[backtest] Launching Python backtest_engine.py...".to_string());
 
     let output = Command::new("python")
         .arg(&backtest_path)
@@ -1125,28 +1198,80 @@ pub async fn run_algo_backtest(
         .arg(tp.to_string())
         .arg("--initial-capital")
         .arg(capital.to_string())
-        .output()
-        .map_err(|e| format!("Failed to run backtest: {}", e))?;
+        .arg("--provider")
+        .arg(&data_provider)
+        .arg("--db")
+        .arg(&db_path)
+        .output();
+
+    let output = match output {
+        Ok(out) => out,
+        Err(e) => {
+            debug_log.push(format!("[backtest] ERROR: Failed to spawn Python process: {}", e));
+            return Ok(json!({
+                "success": false,
+                "error": format!("Failed to run backtest: {}", e),
+                "debug": debug_log
+            }).to_string());
+        }
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
+    debug_log.push(format!("[backtest] exit_code={:?}", output.status.code()));
+    debug_log.push(format!("[backtest] stdout_len={}, stderr_len={}", stdout.len(), stderr.len()));
+
+    if !stderr.trim().is_empty() {
+        debug_log.push(format!("[backtest] stderr: {}", stderr.trim()));
+    }
+
     if !output.status.success() {
+        debug_log.push("[backtest] Process exited with error".to_string());
         return Ok(json!({
             "success": false,
-            "error": format!("Backtest process failed: {}", stderr.trim())
+            "error": format!("Backtest process failed: {}", if stderr.trim().is_empty() { "Unknown error" } else { stderr.trim() }),
+            "debug": debug_log
         }).to_string());
     }
 
     // Return the raw JSON from Python
     if stdout.trim().is_empty() {
+        debug_log.push("[backtest] ERROR: Empty output from Python".to_string());
         return Ok(json!({
             "success": false,
-            "error": "Backtest returned no output"
+            "error": "Backtest returned no output",
+            "debug": debug_log
         }).to_string());
     }
 
-    Ok(stdout.trim().to_string())
+    debug_log.push(format!("[backtest] Raw output (first 500 chars): {}", &stdout[..stdout.len().min(500)]));
+
+    // Try to parse and inject debug log
+    if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(&stdout) {
+        if let Some(obj) = parsed.as_object_mut() {
+            // Merge Python debug if present
+            if let Some(py_debug) = obj.get("debug").and_then(|v| v.as_array()) {
+                for entry in py_debug {
+                    if let Some(s) = entry.as_str() {
+                        debug_log.push(s.to_string());
+                    }
+                }
+            }
+            obj.insert("debug".to_string(), json!(debug_log));
+        }
+        debug_log.push("[backtest] Successfully parsed JSON output".to_string());
+        Ok(parsed.to_string())
+    } else {
+        debug_log.push(format!("[backtest] WARNING: Failed to parse output as JSON"));
+        debug_log.push(format!("[backtest] Raw stdout: {}", stdout));
+        Ok(json!({
+            "success": false,
+            "error": "Failed to parse backtest output as JSON",
+            "raw_output": stdout,
+            "debug": debug_log
+        }).to_string())
+    }
 }
 
 // ============================================================================
@@ -1359,4 +1484,720 @@ async fn poll_and_execute_signals(
     }
 
     Ok(executed)
+}
+
+// ============================================================================
+// PYTHON STRATEGY LIBRARY COMMANDS
+// ============================================================================
+
+/// Get the strategies directory (for Python library strategies)
+fn get_strategies_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    let strategies_dir = resource_dir
+        .join("resources")
+        .join("scripts")
+        .join("strategies");
+
+    if strategies_dir.exists() {
+        return Ok(strategies_dir);
+    }
+
+    // Fallback for development mode
+    let dev_dir = std::env::current_dir()
+        .map_err(|e| format!("Failed to get current dir: {}", e))?
+        .join("src-tauri")
+        .join("resources")
+        .join("scripts")
+        .join("strategies");
+
+    if dev_dir.exists() {
+        return Ok(dev_dir);
+    }
+
+    Err("Strategies directory not found".to_string())
+}
+
+/// Parse the _registry.py file and extract strategy metadata
+fn parse_strategy_registry(registry_path: &PathBuf) -> Result<Vec<serde_json::Value>, String> {
+    let content = std::fs::read_to_string(registry_path)
+        .map_err(|e| format!("Failed to read registry: {}", e))?;
+
+    let mut strategies = Vec::new();
+
+    // Find the STRATEGY_REGISTRY dict content
+    let start_marker = "STRATEGY_REGISTRY = {";
+    let end_marker = "}";
+
+    if let Some(start_idx) = content.find(start_marker) {
+        let dict_content = &content[start_idx + start_marker.len()..];
+
+        // Parse each entry: "FCT-XXXXX": {"name": "...", "category": "...", "path": "..."}
+        // Use regex-like manual parsing
+        let mut current_pos = 0;
+        let chars: Vec<char> = dict_content.chars().collect();
+
+        while current_pos < chars.len() {
+            // Find the start of an ID (quoted string starting with FCT-)
+            if let Some(id_start) = dict_content[current_pos..].find("\"FCT-") {
+                let id_start = current_pos + id_start + 1; // Skip opening quote
+
+                // Find the end of the ID
+                if let Some(id_end_offset) = dict_content[id_start..].find("\"") {
+                    let id_end = id_start + id_end_offset;
+                    let strategy_id = &dict_content[id_start..id_end];
+
+                    // Find the opening brace for this entry's data
+                    if let Some(brace_start) = dict_content[id_end..].find("{") {
+                        let data_start = id_end + brace_start;
+
+                        // Find the matching closing brace
+                        if let Some(brace_end) = dict_content[data_start..].find("}") {
+                            let data_end = data_start + brace_end + 1;
+                            let data_str = &dict_content[data_start..data_end];
+
+                            // Parse the inner dict manually
+                            let name = extract_field(data_str, "name");
+                            let category = extract_field(data_str, "category");
+                            let path = extract_field(data_str, "path");
+
+                            if let (Some(name), Some(category), Some(path)) = (name, category, path) {
+                                strategies.push(json!({
+                                    "id": strategy_id,
+                                    "name": name,
+                                    "category": category,
+                                    "path": path,
+                                    "description": "",
+                                    "compatibility": ["backtest", "paper", "live"]
+                                }));
+                            }
+
+                            current_pos = data_end;
+                            continue;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    Ok(strategies)
+}
+
+/// Helper to extract a field value from a Python dict string
+fn extract_field(dict_str: &str, field: &str) -> Option<String> {
+    let pattern = format!("\"{}\":", field);
+    if let Some(start) = dict_str.find(&pattern) {
+        let after_key = &dict_str[start + pattern.len()..];
+        // Find the opening quote
+        if let Some(quote_start) = after_key.find("\"") {
+            let after_quote = &after_key[quote_start + 1..];
+            // Find the closing quote
+            if let Some(quote_end) = after_quote.find("\"") {
+                return Some(after_quote[..quote_end].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// List all Python strategies from the library
+#[tauri::command]
+pub async fn list_python_strategies(
+    app: tauri::AppHandle,
+    category: Option<String>,
+) -> Result<String, String> {
+    let strategies_dir = get_strategies_dir(&app)?;
+    let registry_path = strategies_dir.join("_registry.py");
+
+    if !registry_path.exists() {
+        return Err("Strategy registry not found".to_string());
+    }
+
+    let mut strategies = parse_strategy_registry(&registry_path)?;
+
+    // Filter by category if specified
+    if let Some(cat) = category {
+        strategies.retain(|s| {
+            s.get("category")
+                .and_then(|c| c.as_str())
+                .map(|c| c.to_lowercase() == cat.to_lowercase())
+                .unwrap_or(false)
+        });
+    }
+
+    Ok(json!({
+        "success": true,
+        "data": strategies,
+        "count": strategies.len()
+    })
+    .to_string())
+}
+
+/// Get all unique strategy categories
+#[tauri::command]
+pub async fn get_strategy_categories(app: tauri::AppHandle) -> Result<String, String> {
+    let strategies_dir = get_strategies_dir(&app)?;
+    let registry_path = strategies_dir.join("_registry.py");
+
+    if !registry_path.exists() {
+        return Err("Strategy registry not found".to_string());
+    }
+
+    let strategies = parse_strategy_registry(&registry_path)?;
+
+    let mut categories: Vec<String> = strategies
+        .iter()
+        .filter_map(|s| s.get("category").and_then(|c| c.as_str()).map(|s| s.to_string()))
+        .collect();
+
+    categories.sort();
+    categories.dedup();
+
+    Ok(json!({
+        "success": true,
+        "data": categories,
+        "count": categories.len()
+    })
+    .to_string())
+}
+
+/// Get a single Python strategy metadata by ID
+#[tauri::command]
+pub async fn get_python_strategy(
+    app: tauri::AppHandle,
+    strategy_id: String,
+) -> Result<String, String> {
+    let strategies_dir = get_strategies_dir(&app)?;
+    let registry_path = strategies_dir.join("_registry.py");
+
+    if !registry_path.exists() {
+        return Err("Strategy registry not found".to_string());
+    }
+
+    let strategies = parse_strategy_registry(&registry_path)?;
+
+    let strategy = strategies
+        .into_iter()
+        .find(|s| s.get("id").and_then(|id| id.as_str()) == Some(&strategy_id));
+
+    match strategy {
+        Some(s) => Ok(json!({
+            "success": true,
+            "data": s
+        })
+        .to_string()),
+        None => Err(format!("Strategy {} not found", strategy_id)),
+    }
+}
+
+/// Get the Python source code for a strategy
+#[tauri::command]
+pub async fn get_python_strategy_code(
+    app: tauri::AppHandle,
+    strategy_id: String,
+) -> Result<String, String> {
+    let strategies_dir = get_strategies_dir(&app)?;
+    let registry_path = strategies_dir.join("_registry.py");
+
+    if !registry_path.exists() {
+        return Err("Strategy registry not found".to_string());
+    }
+
+    let strategies = parse_strategy_registry(&registry_path)?;
+
+    let strategy = strategies
+        .iter()
+        .find(|s| s.get("id").and_then(|id| id.as_str()) == Some(&strategy_id));
+
+    match strategy {
+        Some(s) => {
+            let path = s
+                .get("path")
+                .and_then(|p| p.as_str())
+                .ok_or("Strategy path not found")?;
+
+            let strategy_path = strategies_dir.join(path);
+
+            if !strategy_path.exists() {
+                return Err(format!("Strategy file not found: {}", path));
+            }
+
+            let code = std::fs::read_to_string(&strategy_path)
+                .map_err(|e| format!("Failed to read strategy file: {}", e))?;
+
+            // Extract description from docstring
+            let description = extract_docstring(&code).unwrap_or_default();
+
+            Ok(json!({
+                "success": true,
+                "data": {
+                    "id": strategy_id,
+                    "path": path,
+                    "code": code,
+                    "description": description
+                }
+            })
+            .to_string())
+        }
+        None => Err(format!("Strategy {} not found", strategy_id)),
+    }
+}
+
+/// Extract docstring from Python code
+fn extract_docstring(code: &str) -> Option<String> {
+    // Look for triple-quoted docstring at class level
+    let patterns = ["'''", "\"\"\""];
+
+    for pattern in patterns {
+        // Find docstring after class definition
+        if let Some(class_idx) = code.find("class ") {
+            let after_class = &code[class_idx..];
+            if let Some(doc_start) = after_class.find(pattern) {
+                let doc_content = &after_class[doc_start + pattern.len()..];
+                if let Some(doc_end) = doc_content.find(pattern) {
+                    let docstring = doc_content[..doc_end].trim().to_string();
+                    if !docstring.is_empty() {
+                        return Some(docstring);
+                    }
+                }
+            }
+        }
+    }
+
+    // Also check header comment
+    if let Some(desc_line) = code.lines().find(|l| l.contains("# Description:")) {
+        return Some(desc_line.replace("# Description:", "").trim().to_string());
+    }
+
+    None
+}
+
+// ============================================================================
+// CUSTOM PYTHON STRATEGY CRUD
+// ============================================================================
+
+/// Save a custom Python strategy (user-modified copy)
+#[tauri::command]
+pub async fn save_custom_python_strategy(
+    base_strategy_id: String,
+    name: String,
+    description: Option<String>,
+    code: String,
+    parameters: Option<String>,
+    category: Option<String>,
+) -> Result<String, String> {
+    let conn = get_db().map_err(|e| e.to_string())?;
+
+    let id = format!("custom-{}", uuid::Uuid::new_v4().to_string().replace("-", "")[..12].to_uppercase());
+
+    conn.execute(
+        "INSERT INTO custom_python_strategies (id, base_strategy_id, name, description, code, parameters, category, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, CURRENT_TIMESTAMP)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            description = excluded.description,
+            code = excluded.code,
+            parameters = excluded.parameters,
+            category = excluded.category,
+            updated_at = CURRENT_TIMESTAMP",
+        rusqlite::params![
+            id,
+            base_strategy_id,
+            name,
+            description.unwrap_or_default(),
+            code,
+            parameters.unwrap_or_else(|| "{}".to_string()),
+            category.unwrap_or_else(|| "Custom".to_string()),
+        ],
+    )
+    .map_err(|e| format!("Failed to save custom strategy: {}", e))?;
+
+    Ok(json!({
+        "success": true,
+        "id": id
+    })
+    .to_string())
+}
+
+/// List all custom Python strategies
+#[tauri::command]
+pub async fn list_custom_python_strategies() -> Result<String, String> {
+    let conn = get_db().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, base_strategy_id, name, description, code, parameters, category, is_active, created_at, updated_at
+             FROM custom_python_strategies ORDER BY updated_at DESC",
+        )
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(json!({
+                "id": row.get::<_, String>(0)?,
+                "base_strategy_id": row.get::<_, String>(1)?,
+                "name": row.get::<_, String>(2)?,
+                "description": row.get::<_, String>(3)?,
+                "code": row.get::<_, String>(4)?,
+                "parameters": row.get::<_, String>(5)?,
+                "category": row.get::<_, String>(6)?,
+                "is_active": row.get::<_, i32>(7)?,
+                "created_at": row.get::<_, String>(8)?,
+                "updated_at": row.get::<_, String>(9)?,
+                "strategy_type": "python"
+            }))
+        })
+        .map_err(|e| format!("Failed to query custom strategies: {}", e))?;
+
+    let strategies: Vec<serde_json::Value> = rows.filter_map(|r| r.ok()).collect();
+
+    Ok(json!({
+        "success": true,
+        "data": strategies,
+        "count": strategies.len()
+    })
+    .to_string())
+}
+
+/// Get a custom Python strategy by ID
+#[tauri::command]
+pub async fn get_custom_python_strategy(id: String) -> Result<String, String> {
+    let conn = get_db().map_err(|e| e.to_string())?;
+
+    let result = conn.query_row(
+        "SELECT id, base_strategy_id, name, description, code, parameters, category, is_active, created_at, updated_at
+         FROM custom_python_strategies WHERE id = ?1",
+        rusqlite::params![id],
+        |row| {
+            Ok(json!({
+                "id": row.get::<_, String>(0)?,
+                "base_strategy_id": row.get::<_, String>(1)?,
+                "name": row.get::<_, String>(2)?,
+                "description": row.get::<_, String>(3)?,
+                "code": row.get::<_, String>(4)?,
+                "parameters": row.get::<_, String>(5)?,
+                "category": row.get::<_, String>(6)?,
+                "is_active": row.get::<_, i32>(7)?,
+                "created_at": row.get::<_, String>(8)?,
+                "updated_at": row.get::<_, String>(9)?,
+                "strategy_type": "python"
+            }))
+        },
+    );
+
+    match result {
+        Ok(strategy) => Ok(json!({
+            "success": true,
+            "data": strategy
+        })
+        .to_string()),
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            Err(format!("Custom strategy {} not found", id))
+        }
+        Err(e) => Err(format!("Failed to get custom strategy: {}", e)),
+    }
+}
+
+/// Update a custom Python strategy
+#[tauri::command]
+pub async fn update_custom_python_strategy(
+    id: String,
+    name: Option<String>,
+    description: Option<String>,
+    code: Option<String>,
+    parameters: Option<String>,
+    category: Option<String>,
+) -> Result<String, String> {
+    let conn = get_db().map_err(|e| e.to_string())?;
+
+    // Build dynamic update query
+    let mut updates = vec!["updated_at = CURRENT_TIMESTAMP".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+    if let Some(ref n) = name {
+        updates.push(format!("name = ?{}", params.len() + 1));
+        params.push(Box::new(n.clone()));
+    }
+    if let Some(ref d) = description {
+        updates.push(format!("description = ?{}", params.len() + 1));
+        params.push(Box::new(d.clone()));
+    }
+    if let Some(ref c) = code {
+        updates.push(format!("code = ?{}", params.len() + 1));
+        params.push(Box::new(c.clone()));
+    }
+    if let Some(ref p) = parameters {
+        updates.push(format!("parameters = ?{}", params.len() + 1));
+        params.push(Box::new(p.clone()));
+    }
+    if let Some(ref cat) = category {
+        updates.push(format!("category = ?{}", params.len() + 1));
+        params.push(Box::new(cat.clone()));
+    }
+
+    let query = format!(
+        "UPDATE custom_python_strategies SET {} WHERE id = ?{}",
+        updates.join(", "),
+        params.len() + 1
+    );
+
+    // Use a simpler approach with direct parameters
+    let affected = if name.is_some() || description.is_some() || code.is_some() || parameters.is_some() || category.is_some() {
+        conn.execute(
+            "UPDATE custom_python_strategies SET
+             name = COALESCE(?1, name),
+             description = COALESCE(?2, description),
+             code = COALESCE(?3, code),
+             parameters = COALESCE(?4, parameters),
+             category = COALESCE(?5, category),
+             updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?6",
+            rusqlite::params![name, description, code, parameters, category, id],
+        )
+        .map_err(|e| format!("Failed to update custom strategy: {}", e))?
+    } else {
+        0
+    };
+
+    if affected == 0 {
+        return Err(format!("Custom strategy {} not found or no changes made", id));
+    }
+
+    Ok(json!({
+        "success": true,
+        "id": id
+    })
+    .to_string())
+}
+
+/// Delete a custom Python strategy
+#[tauri::command]
+pub async fn delete_custom_python_strategy(id: String) -> Result<String, String> {
+    let conn = get_db().map_err(|e| e.to_string())?;
+
+    let affected = conn
+        .execute(
+            "DELETE FROM custom_python_strategies WHERE id = ?1",
+            rusqlite::params![id],
+        )
+        .map_err(|e| format!("Failed to delete custom strategy: {}", e))?;
+
+    if affected == 0 {
+        return Err(format!("Custom strategy {} not found", id));
+    }
+
+    Ok(json!({
+        "success": true,
+        "id": id
+    })
+    .to_string())
+}
+
+/// Validate Python syntax
+#[tauri::command]
+pub async fn validate_python_syntax(
+    app: tauri::AppHandle,
+    code: String,
+) -> Result<String, String> {
+    // Get Python executable
+    let python_path = crate::python::get_python_path(&app, None)?;
+
+    // Create a temp file with the code
+    let temp_dir = std::env::temp_dir();
+    let temp_file = temp_dir.join(format!("validate_{}.py", uuid::Uuid::new_v4()));
+
+    std::fs::write(&temp_file, &code)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // Run Python to check syntax
+    let output = std::process::Command::new(&python_path)
+        .args(["-m", "py_compile", temp_file.to_str().unwrap()])
+        .output()
+        .map_err(|e| format!("Failed to run Python: {}", e))?;
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&temp_file);
+
+    let is_valid = output.status.success();
+    let error_msg = if !is_valid {
+        String::from_utf8_lossy(&output.stderr).to_string()
+    } else {
+        String::new()
+    };
+
+    Ok(json!({
+        "success": true,
+        "is_valid": is_valid,
+        "error": error_msg
+    })
+    .to_string())
+}
+
+// ============================================================================
+// PYTHON STRATEGY BACKTEST
+// ============================================================================
+
+/// Run backtest on a Python strategy
+#[tauri::command]
+pub async fn run_python_backtest(
+    app: tauri::AppHandle,
+    strategy_id: String,
+    custom_code: Option<String>,
+    symbols: Vec<String>,
+    start_date: String,
+    end_date: String,
+    initial_cash: f64,
+    parameters: std::collections::HashMap<String, String>,
+    data_provider: String,
+) -> Result<String, String> {
+    use std::io::Write;
+    use tauri::Manager;
+
+    // Get Python executable
+    let python_path = crate::python::get_python_path(&app, None)?;
+
+    // Get backtest script path
+    let resource_path = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    let script_path = resource_path
+        .join("resources")
+        .join("scripts")
+        .join("algo_trading")
+        .join("python_backtest_engine.py");
+
+    if !script_path.exists() {
+        return Err(format!(
+            "Backtest engine not found: {}",
+            script_path.display()
+        ));
+    }
+
+    // Build command arguments
+    let mut args = vec![
+        script_path.to_str().unwrap().to_string(),
+        "--strategy-id".to_string(),
+        strategy_id,
+        "--symbols".to_string(),
+        symbols.join(","),
+        "--start-date".to_string(),
+        start_date,
+        "--end-date".to_string(),
+        end_date,
+        "--initial-cash".to_string(),
+        initial_cash.to_string(),
+        "--data-provider".to_string(),
+        data_provider,
+    ];
+
+    // Add parameters as JSON
+    if !parameters.is_empty() {
+        let params_json = serde_json::to_string(&parameters).unwrap_or_else(|_| "{}".to_string());
+        args.push("--parameters".to_string());
+        args.push(params_json);
+    }
+
+    // Handle custom code - write to temp file
+    let mut temp_code_file: Option<std::path::PathBuf> = None;
+    if let Some(code) = custom_code {
+        let temp_dir = std::env::temp_dir();
+        let temp_path = temp_dir.join(format!("custom_strategy_{}.py", uuid::Uuid::new_v4()));
+
+        std::fs::write(&temp_path, &code)
+            .map_err(|e| format!("Failed to write custom code: {}", e))?;
+
+        args.push("--custom-code".to_string());
+        args.push(temp_path.to_str().unwrap().to_string());
+        temp_code_file = Some(temp_path);
+    }
+
+    // Run Python backtest
+    let output = std::process::Command::new(&python_path)
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Failed to run backtest: {}", e))?;
+
+    // Clean up temp file
+    if let Some(temp_path) = temp_code_file {
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if !output.status.success() {
+        return Ok(json!({
+            "success": false,
+            "error": format!("Backtest failed: {}", stderr),
+            "debug": [stderr.to_string()]
+        })
+        .to_string());
+    }
+
+    // Try to parse as JSON
+    if let Ok(result) = serde_json::from_str::<serde_json::Value>(&stdout) {
+        Ok(result.to_string())
+    } else {
+        Ok(json!({
+            "success": false,
+            "error": format!("Failed to parse backtest output"),
+            "stdout": stdout.to_string(),
+            "stderr": stderr.to_string()
+        })
+        .to_string())
+    }
+}
+
+/// Extract strategy parameters from Python code
+#[tauri::command]
+pub async fn extract_strategy_parameters(
+    app: tauri::AppHandle,
+    code: String,
+) -> Result<String, String> {
+    // Simple regex-based extraction of get_parameter calls
+    // Pattern: self.get_parameter("name", default_value)
+    use regex::Regex;
+
+    let mut parameters = Vec::new();
+
+    // Match patterns like: self.get_parameter("name", default) or self.get_parameter('name', default)
+    let re = Regex::new(
+        r#"self\.get_parameter\s*\(\s*["']([^"']+)["']\s*,\s*([^)]+)\)"#
+    ).map_err(|e| format!("Regex error: {}", e))?;
+
+    for cap in re.captures_iter(&code) {
+        let name = cap.get(1).map_or("", |m| m.as_str()).to_string();
+        let default_str = cap.get(2).map_or("", |m| m.as_str()).trim().to_string();
+
+        // Infer type from default value
+        let (param_type, default_value) = if default_str.parse::<i64>().is_ok() {
+            ("int", default_str.clone())
+        } else if default_str.parse::<f64>().is_ok() {
+            ("float", default_str.clone())
+        } else if default_str == "True" || default_str == "False" {
+            ("bool", default_str.to_lowercase())
+        } else {
+            ("string", default_str.trim_matches(|c| c == '"' || c == '\'').to_string())
+        };
+
+        parameters.push(json!({
+            "name": name,
+            "type": param_type,
+            "default_value": default_value,
+            "description": ""
+        }));
+    }
+
+    Ok(json!({
+        "success": true,
+        "data": parameters
+    })
+    .to_string())
 }
