@@ -250,17 +250,31 @@ class BtProvider(BacktestingProviderBase):
                 'consecutiveLosses': 0,
             }
 
+            from bt_data import was_last_fetch_synthetic
+            using_synthetic = was_last_fetch_synthetic()
+
+            result_data = {
+                'id': self._generate_id(),
+                'status': 'completed',
+                'performance': performance,
+                'trades': [],
+                'equity': equity_points,
+                'statistics': statistics,
+                'logs': [f'bt backtest completed: {strategy_type}'],
+                'using_synthetic_data': using_synthetic,
+            }
+
+            if using_synthetic:
+                result_data['synthetic_data_warning'] = (
+                    'WARNING: This backtest used SYNTHETIC (fake) data because real market data '
+                    'could not be loaded. Install yfinance (pip install yfinance) and ensure '
+                    'internet connectivity for real results. These results have NO financial meaning.'
+                )
+                result_data['logs'].append('*** SYNTHETIC DATA WARNING: Results are based on fake data ***')
+
             return {
                 'success': True,
-                'data': {
-                    'id': self._generate_id(),
-                    'status': 'completed',
-                    'performance': performance,
-                    'trades': [],
-                    'equity': equity_points,
-                    'statistics': statistics,
-                    'logs': [f'bt backtest completed: {strategy_type}'],
-                },
+                'data': result_data,
             }
 
         except ImportError:
@@ -391,17 +405,31 @@ class BtProvider(BacktestingProviderBase):
             'consecutiveLosses': 0,
         }
 
+        from bt_data import was_last_fetch_synthetic
+        using_synthetic = was_last_fetch_synthetic()
+
+        result_data = {
+            'id': self._generate_id(),
+            'status': 'completed',
+            'performance': performance,
+            'trades': [],
+            'equity': equity_points,
+            'statistics': statistics,
+            'logs': [f'numpy fallback simulation: {strategy_type}'],
+            'using_synthetic_data': using_synthetic,
+        }
+
+        if using_synthetic:
+            result_data['synthetic_data_warning'] = (
+                'WARNING: This backtest used SYNTHETIC (fake) data because real market data '
+                'could not be loaded. Install yfinance (pip install yfinance) and ensure '
+                'internet connectivity for real results. These results have NO financial meaning.'
+            )
+            result_data['logs'].append('*** SYNTHETIC DATA WARNING: Results are based on fake data ***')
+
         return {
             'success': True,
-            'data': {
-                'id': self._generate_id(),
-                'status': 'completed',
-                'performance': performance,
-                'trades': [],
-                'equity': equity_points,
-                'statistics': statistics,
-                'logs': [f'numpy fallback simulation: {strategy_type}'],
-            },
+            'data': result_data,
         }
 
     def _generate_numpy_signals(self, close, strategy_type, params):

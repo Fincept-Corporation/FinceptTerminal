@@ -29,6 +29,13 @@ class Symbol:
         self.id = ticker.upper()
         self.security_type = security_type
         self.market = market
+        # Stub industry-standard identifiers (non-empty for compatibility)
+        self.cusip = f"{ticker.upper()[:6]:0<9}"[:9]
+        self.sedol = f"{ticker.upper()[:5]:0<7}"[:7]
+        self.isin = f"US{ticker.upper()[:6]:0<10}"[:12]
+        self.figi = f"BBG{ticker.upper()[:6]:0<9}"[:12]
+        self.composite_figi = f"BBG{ticker.upper()[:6]:0<9}"[:12]
+        self.cik = abs(hash(ticker.upper())) % 9999999 + 1000000
 
     def __str__(self):
         return self.value
@@ -57,11 +64,54 @@ class Symbol:
 
     @staticmethod
     def create_future(ticker: str, market: str = "cme", *args, **kwargs):
-        return Symbol(ticker.upper(), SecurityType.FUTURE, market)
+        """Create a future symbol. Args: ticker, market, [expiry datetime]."""
+        sym = Symbol(ticker.upper(), SecurityType.FUTURE, market)
+        # Optional expiry datetime
+        for a in args:
+            if isinstance(a, datetime):
+                sym.expiry = a
+                break
+        return sym
 
     @staticmethod
-    def create_option(ticker: str, market: str = "usa", *args, **kwargs):
-        return Symbol(ticker.upper(), SecurityType.OPTION, market)
+    def create_option(underlying, market: str = "usa", *args, **kwargs):
+        """Create option symbol. Signature: (underlying, market, style, right, strike, expiry).
+        underlying can be a string or Symbol."""
+        from .enums import OptionRight as _OR
+        underlying_sym = underlying if isinstance(underlying, Symbol) else Symbol(str(underlying).upper())
+        underlying_ticker = str(underlying_sym).upper()
+        # Parse positional args: style, right, strike, expiry
+        style = args[0] if len(args) > 0 else 0  # AMERICAN=0
+        right = args[1] if len(args) > 1 else _OR.CALL
+        strike = args[2] if len(args) > 2 else 0
+        expiry = args[3] if len(args) > 3 else None
+
+        # Determine security type based on underlying
+        sec_type = SecurityType.OPTION
+        if underlying_sym.security_type == SecurityType.FUTURE:
+            sec_type = SecurityType.FUTURE_OPTION
+        elif underlying_sym.security_type == SecurityType.INDEX:
+            sec_type = SecurityType.INDEX_OPTION
+
+        # Generate a consistent ticker for the option
+        right_char = 'C' if (hasattr(right, 'value') and right.value == 0) or right == 0 else 'P'
+        if expiry:
+            ticker_val = f"{underlying_ticker}{expiry.strftime('%y%m%d')}{right_char}{int(strike)}"
+        else:
+            ticker_val = f"{underlying_ticker}{right_char}{int(strike)}"
+
+        sym = Symbol(ticker_val, sec_type, market)
+        sym._underlying = underlying_sym
+        sym.strike_price = float(strike)
+        sym.right = right
+        sym.expiry = expiry
+        sym.option_style = style
+        sym.id = type('SymbolId', (), {
+            'strike_price': float(strike), 'option_right': right,
+            'date': expiry, 'expiration': expiry,
+            'underlying': underlying_sym
+        })()
+        return sym
 
     @staticmethod
     def create_canonical_option(underlying, market: str = "usa", alias=None):
@@ -71,16 +121,23 @@ class Symbol:
     @property
     def underlying(self):
         """Get underlying symbol (for options/futures)."""
-        return self
+        return getattr(self, '_underlying', self)
+
+    @underlying.setter
+    def underlying(self, value):
+        self._underlying = value
 
     @property
     def has_underlying(self):
+        """Check if this symbol has an underlying. True for options/derivatives or if explicitly set."""
+        if hasattr(self, '_underlying') and self._underlying is not self:
+            return True
         return self.security_type in (SecurityType.OPTION, SecurityType.FUTURE_OPTION,
                                        SecurityType.INDEX_OPTION)
 
     @property
     def is_canonical(self):
-        return True
+        return not hasattr(self, 'strike_price') or not hasattr(self, 'expiry')
 
 
 class TradeBar:

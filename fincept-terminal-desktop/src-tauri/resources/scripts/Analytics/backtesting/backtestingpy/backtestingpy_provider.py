@@ -244,6 +244,13 @@ class BacktestingPyProvider(BacktestingProviderBase):
             result_dict = asdict(result)
             result_dict['using_synthetic_data'] = using_synthetic
 
+            if using_synthetic:
+                result_dict['synthetic_data_warning'] = (
+                    'WARNING: This backtest used SYNTHETIC (fake) data because real market data '
+                    'could not be loaded. Install yfinance (pip install yfinance) and ensure '
+                    'internet connectivity for real results. These results have NO financial meaning.'
+                )
+
             # Add backtesting.py-specific extended stats
             result_dict['extended_stats'] = {
                 'sqn': self._safe_stat(stats, 'SQN', 0),
@@ -546,17 +553,19 @@ class BacktestingPyProvider(BacktestingProviderBase):
         return None
 
     def _has_real_data(self, symbol: str) -> bool:
-        """Check if real data is available for a symbol (yfinance installed)"""
-        if symbol in ('GOOG', 'GOOGL'):
-            return True  # Built-in test data counts as "real enough"
-        try:
-            import yfinance
-            return True
-        except ImportError:
-            return False
+        """Check if real data was actually used (not synthetic fallback).
+
+        This tracks whether _load_data ended up using real data or fell back
+        to synthetic generation. The flag is set during _load_data execution.
+        """
+        return getattr(self, '_last_load_was_real', False)
 
     def _load_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
-        """Load or generate OHLCV data for backtesting"""
+        """Load or generate OHLCV data for backtesting.
+
+        Sets self._last_load_was_real to track whether real or synthetic data was used.
+        """
+        self._last_load_was_real = False  # Assume synthetic until proven otherwise
         try:
             # Try to use test data if available
             if symbol == 'GOOG' or symbol == 'GOOGL':
@@ -580,10 +589,13 @@ class BacktestingPyProvider(BacktestingProviderBase):
                             pass
 
                     self._log(f'Loaded {len(data)} bars of GOOG test data (from {data.index[0]} to {data.index[-1]})')
-                    return data if len(data) > 0 else None
+                    if len(data) > 0:
+                        self._last_load_was_real = True
+                        return data
+                    return None
                 except Exception as e:
                     self._log(f'Could not load GOOG test data: {e}')
-                    # Fall through to synthetic data
+                    # Fall through to yfinance / synthetic data
 
             # Try to fetch real data using yfinance if available
             try:
@@ -602,7 +614,12 @@ class BacktestingPyProvider(BacktestingProviderBase):
                     ohlcv_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
                     available_cols = [c for c in ohlcv_cols if c in data.columns]
                     data = data[available_cols]
+                    # Round to 4 decimal places to eliminate float32 rounding noise
+                    for col in ['Open', 'High', 'Low', 'Close']:
+                        if col in data.columns:
+                            data[col] = data[col].round(4)
                     self._log(f'Loaded {len(data)} bars of real data for {symbol}')
+                    self._last_load_was_real = True
                     return data
                 else:
                     self._log(f'No data returned from yfinance for {symbol}')
@@ -612,6 +629,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
                 self._log(f'Failed to fetch real data for {symbol}: {e} - falling back to synthetic data')
 
             # Fallback: Generate synthetic data with clear warning
+            self._last_load_was_real = False
             import sys
             print(f'[WARNING] Using SYNTHETIC data for {symbol}. Results are NOT based on real market data. '
                   f'Install yfinance (pip install yfinance) for real data.', file=sys.stderr)

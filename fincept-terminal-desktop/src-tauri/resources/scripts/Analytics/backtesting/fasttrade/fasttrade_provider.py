@@ -257,10 +257,21 @@ class FastTradeProvider(BacktestingProviderBase):
                 result, request.get('id', self._generate_id())
             )
 
+            result_dict = backtest_result.to_dict()
+            using_synthetic = getattr(self, '_using_synthetic', False)
+            result_dict['using_synthetic_data'] = using_synthetic
+
+            if using_synthetic:
+                result_dict['synthetic_data_warning'] = (
+                    'WARNING: This backtest used SYNTHETIC (fake) data because real market data '
+                    'could not be loaded. Install yfinance (pip install yfinance) and ensure '
+                    'internet connectivity for real results. These results have NO financial meaning.'
+                )
+
             return {
                 'success': True,
                 'message': 'Backtest completed successfully',
-                'data': backtest_result.to_dict()
+                'data': result_dict
             }
 
         except Exception as e:
@@ -303,7 +314,13 @@ class FastTradeProvider(BacktestingProviderBase):
 
         # Fallback to synthetic data if yfinance fails
         if data.empty:
-            self._log(f'Yahoo Finance failed, generating synthetic data for {symbol}')
+            import sys
+            # Use deterministic seed based on symbol name (not constant 42)
+            sym_seed = sum(ord(c) for c in symbol) % (2**31)
+            print(f'[WARNING] Using SYNTHETIC data for {symbol} (seed={sym_seed}). '
+                  f'Results are NOT based on real market data. '
+                  f'Install yfinance (pip install yfinance) for real data.', file=sys.stderr)
+            self._log(f'WARNING: Yahoo Finance failed, generating SYNTHETIC data for {symbol}')
             data = generate_synthetic_ohlcv(
                 periods=len(pd.date_range(
                     start=start_date or '2023-01-01',
@@ -315,10 +332,12 @@ class FastTradeProvider(BacktestingProviderBase):
                 initial_price=100.0,
                 volatility=0.02,
                 drift=0.0002,
-                seed=42,
+                seed=sym_seed,
             )
+            self._using_synthetic = True
         else:
             self._log(f'Loaded {len(data)} periods of data from Yahoo Finance for {symbol}')
+            self._using_synthetic = False
 
         return data
 

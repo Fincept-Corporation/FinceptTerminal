@@ -333,75 +333,6 @@ class FairnessOpinionFramework:
             }
         }
 
-if __name__ == '__main__':
-    framework = FairnessOpinionFramework(
-        company_name="Target Corp",
-        offer_price=2_500_000_000
-    )
-
-    dcf = framework.calculate_dcf_valuation(
-        free_cash_flows=[150_000_000, 175_000_000, 200_000_000, 225_000_000, 250_000_000],
-        terminal_value=3_500_000_000,
-        wacc_low=0.08,
-        wacc_high=0.10
-    )
-
-    trading_comps = framework.calculate_trading_comps_valuation(
-        subject_metric=300_000_000,
-        multiples_low=7.5,
-        multiples_high=9.5,
-        metric_name="EBITDA"
-    )
-
-    precedent = framework.calculate_precedent_transactions_valuation(
-        subject_metric=300_000_000,
-        multiples_low=8.0,
-        multiples_high=10.0,
-        metric_name="EBITDA"
-    )
-
-    valuation_ranges = [
-        ValuationRange(ValuationMethod.DCF, dcf['valuation_range']['low'],
-                      dcf['valuation_range']['high'], dcf['valuation_range']['midpoint'], 0.40),
-        ValuationRange(ValuationMethod.TRADING_COMPS, trading_comps['valuation_range']['low'],
-                      trading_comps['valuation_range']['high'], trading_comps['valuation_range']['midpoint'], 0.30),
-        ValuationRange(ValuationMethod.PRECEDENT_TRANSACTIONS, precedent['valuation_range']['low'],
-                      precedent['valuation_range']['high'], precedent['valuation_range']['midpoint'], 0.30)
-    ]
-
-    summary = framework.weighted_valuation_summary(valuation_ranges)
-
-    print("=== FAIRNESS OPINION VALUATION SUMMARY ===\n")
-    print(f"Company: {summary['company_name']}")
-    print(f"Offer Price: ${summary['offer_price']:,.0f}\n")
-    print(f"Weighted Valuation Range:")
-    print(f"  Low:      ${summary['weighted_valuation_range']['low']:,.0f}")
-    print(f"  Midpoint: ${summary['weighted_valuation_range']['midpoint']:,.0f}")
-    print(f"  High:     ${summary['weighted_valuation_range']['high']:,.0f}\n")
-    print(f"Offer Within Range: {summary['offer_within_range']}")
-    print(f"Position in Range: {summary['position_in_range']:.1f}%\n")
-
-    print("Valuation Methods:")
-    for method in summary['methods_used']:
-        print(f"\n  {method['method'].upper()} ({method['weight']:.0f}% weight):")
-        print(f"    Range: ${method['low']:,.0f} - ${method['high']:,.0f}")
-        print(f"    Midpoint: ${method['midpoint']:,.0f}")
-
-    qualitative_factors = [
-        "Strategic rationale and synergies",
-        "Market conditions and timing",
-        "Process and alternatives considered",
-        "Premium to unaffected price",
-        "Board and management evaluation"
-    ]
-
-    fairness = framework.fairness_determination(summary, qualitative_factors)
-
-    print("\n\n=== FAIRNESS CONCLUSION ===")
-    print(f"Quantitative Conclusion: {fairness['quantitative_analysis']['conclusion']}")
-    print(f"\nFairness Opinion: The offer price of ${fairness['offer_price']:,.0f} is")
-    print(f"{fairness['fairness_conclusion']['conclusion']}")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -423,22 +354,39 @@ def main():
             offer_price = float(sys.argv[3])
             qualitative_factors = json.loads(sys.argv[4])
 
+            # valuation_methods can be a dict with 'methods' key, or a list directly
+            company_name = 'Target Company'
+            if isinstance(valuation_methods, dict):
+                company_name = valuation_methods.get('company_name', 'Target Company')
+                methods_list = valuation_methods.get('methods', [])
+            elif isinstance(valuation_methods, list):
+                methods_list = valuation_methods
+            else:
+                methods_list = []
+
             framework = FairnessOpinionFramework(
-                company_name=valuation_methods.get('company_name', 'Target Company'),
-                offer_price_per_share=offer_price
+                company_name=company_name,
+                offer_price=offer_price
             )
 
             # Convert valuation methods data to ValuationRange objects
             valuation_ranges = []
-            for method_data in valuation_methods.get('methods', []):
+            for method_data in methods_list:
+                method_name = method_data.get('method', 'DCF').upper().replace(' ', '_')
                 val_range = ValuationRange(
-                    method=ValuationMethod[method_data['method'].upper()],
+                    method=ValuationMethod[method_name],
                     low=method_data['low'],
                     high=method_data['high'],
-                    midpoint=method_data.get('midpoint', (method_data['low'] + method_data['high']) / 2),
+                    midpoint=method_data.get('midpoint', method_data.get('mid', (method_data['low'] + method_data['high']) / 2)),
                     weight=method_data.get('weight', 1.0)
                 )
                 valuation_ranges.append(val_range)
+
+            # Auto-normalize weights if they don't sum to 1.0
+            total_weight = sum(v.weight for v in valuation_ranges)
+            if total_weight > 0 and abs(total_weight - 1.0) > 0.01:
+                for v in valuation_ranges:
+                    v.weight = v.weight / total_weight
 
             analysis = framework.weighted_valuation_summary(valuation_ranges)
 

@@ -179,14 +179,21 @@ export class DealDatabaseService {
   static async scanFilings(
     daysBack: number = 30,
     filingTypes?: string[]
-  ): Promise<any> {
+  ): Promise<{
+    filings_found: number;
+    deals_parsed: number;
+    deals_created: number;
+    filings: any[];
+    deals: any[];
+    deals_count: number;
+  }> {
     const result = await invoke('scan_ma_filings', {
       daysBack,
       filingTypes: filingTypes ? JSON.stringify(filingTypes) : undefined,
     });
     const parsed = JSON.parse(result as string);
     if (parsed.success) {
-      return parsed.data || [];
+      return parsed.data || { filings_found: 0, deals_parsed: 0, deals_created: 0, filings: [], deals: [], deals_count: 0 };
     } else {
       throw new Error(parsed.error || 'Failed to scan filings');
     }
@@ -229,7 +236,23 @@ export class DealDatabaseService {
     });
     const parsed = JSON.parse(result as string);
     if (parsed.success) {
-      return parsed.data || [];
+      // Map DB column names to MADeal interface
+      return (parsed.data || []).map((d: any) => ({
+        deal_id: d.deal_id || '',
+        target_name: d.target_name || '',
+        acquirer_name: d.acquirer_name || '',
+        deal_value: d.deal_value || 0,
+        offer_price_per_share: d.offer_price_per_share,
+        premium_1day: d.premium_1day || 0,
+        payment_cash_pct: d.cash_percentage ?? d.payment_cash_pct ?? 0,
+        payment_stock_pct: d.stock_percentage ?? d.payment_stock_pct ?? 0,
+        ev_revenue: d.ev_revenue,
+        ev_ebitda: d.ev_ebitda,
+        synergies: d.synergies_disclosed ?? d.synergies,
+        status: d.deal_status || d.status || 'Unknown',
+        industry: d.industry || 'General',
+        announced_date: d.announcement_date || d.announced_date || '',
+      }));
     } else {
       throw new Error(parsed.error || 'Failed to get deals');
     }
@@ -313,7 +336,20 @@ export class ValuationService {
       balanceSheet: JSON.stringify(inputs.balance_sheet),
       sharesOutstanding: inputs.shares_outstanding,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'DCF calculation failed');
+    const d = parsed.data || {};
+    // Flatten nested Python response to match frontend expectations
+    return {
+      equity_value_per_share: d.valuation_per_share?.price_per_share ?? 0,
+      enterprise_value: d.enterprise_value?.enterprise_value ?? 0,
+      equity_value: d.equity_value?.equity_value ?? 0,
+      wacc: d.wacc?.wacc ?? 0,
+      terminal_value_contribution: d.enterprise_value?.terminal_value_contribution,
+      fcf_details: d.enterprise_value?.fcf_details,
+      shares_outstanding: d.valuation_per_share?.shares_used,
+      summary: d.summary,
+    };
   }
 
   /**
@@ -461,7 +497,18 @@ export class LBOModelService {
       equityInvested,
       holdingPeriod,
     });
-    return JSON.parse(result as string);
+    const parsed = JSON.parse(result as string);
+    if (!parsed.success) throw new Error(parsed.error || 'LBO returns calculation failed');
+    const d = parsed.data || {};
+    return {
+      irr: d.annualized_return || d.irr || 0,
+      moic: d.moic || d.cash_on_cash_multiple || 0,
+      absolute_gain: d.absolute_gain || 0,
+      absolute_gain_pct: d.absolute_gain_pct || 0,
+      initial_equity: d.initial_equity_investment || 0,
+      exit_equity: d.exit_equity_value || 0,
+      holding_period: d.holding_period_years || 0,
+    };
   }
 
   /**

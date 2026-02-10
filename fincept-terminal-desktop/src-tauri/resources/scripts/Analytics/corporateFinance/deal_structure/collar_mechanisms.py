@@ -346,14 +346,25 @@ def main():
 
     try:
         if command == "collar":
-            if len(sys.argv) < 6:
-                raise ValueError("Announcement price, target shares, base exchange ratio, floor price, and cap price required")
+            if len(sys.argv) < 3:
+                raise ValueError("Collar parameters required")
 
-            announcement_price = float(sys.argv[2])
-            target_shares = float(sys.argv[3])
-            base_exchange_ratio = float(sys.argv[4])
-            floor_price = float(sys.argv[5])
-            cap_price = float(sys.argv[6])
+            # Accept either JSON dict or positional args
+            try:
+                params = json.loads(sys.argv[2])
+                announcement_price = float(params.get('announcement_price', params.get('acquirer_price', 50.0)))
+                target_shares = float(params.get('target_shares', 1000000))
+                base_exchange_ratio = float(params.get('base_exchange_ratio', params.get('exchange_ratio', 1.0)))
+                floor_price = float(params.get('floor_price', params.get('collar_low', announcement_price * 0.85)))
+                cap_price = float(params.get('cap_price', params.get('collar_high', announcement_price * 1.15)))
+            except (json.JSONDecodeError, TypeError):
+                if len(sys.argv) < 7:
+                    raise ValueError("Announcement price, target shares, base exchange ratio, floor price, and cap price required")
+                announcement_price = float(sys.argv[2])
+                target_shares = float(sys.argv[3])
+                base_exchange_ratio = float(sys.argv[4])
+                floor_price = float(sys.argv[5])
+                cap_price = float(sys.argv[6])
 
             collar = CollarMechanism(
                 announcement_price=announcement_price,

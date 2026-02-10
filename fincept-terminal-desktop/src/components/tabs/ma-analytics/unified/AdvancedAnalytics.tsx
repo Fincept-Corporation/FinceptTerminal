@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Activity, PlayCircle, Loader2, TrendingUp, BarChart3, Target, Percent, Plus, Trash2 } from 'lucide-react';
+import { Activity, PlayCircle, Loader2, TrendingUp, Target, Plus, Trash2 } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 import { MAAnalyticsService } from '@/services/maAnalyticsService';
 import { showSuccess, showError } from '@/utils/notifications';
@@ -97,90 +97,86 @@ export const AdvancedAnalytics: React.FC = () => {
     setCompData(updated);
   };
 
+  const inputStyle: React.CSSProperties = { ...COMMON_STYLES.inputField };
+  const smallInputStyle: React.CSSProperties = { ...COMMON_STYLES.inputField, padding: '4px 8px', fontSize: TYPOGRAPHY.TINY };
+
   const renderMonteCarloInputs = () => (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.DEFAULT }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Base Valuation ($M)</label>
+          <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>BASE VALUATION ($M)</label>
           <input
             type="number"
             value={mcInputs.baseValuation}
             onChange={e => setMcInputs({ ...mcInputs, baseValuation: parseFloat(e.target.value) || 0 })}
-            className="w-full px-3 py-2 rounded text-sm text-white"
-            style={{ backgroundColor: FINCEPT.CHARCOAL }}
+            style={inputStyle}
           />
         </div>
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Discount Rate (%)</label>
+          <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>DISCOUNT RATE (%)</label>
           <input
             type="number"
             value={mcInputs.discountRate}
             onChange={e => setMcInputs({ ...mcInputs, discountRate: parseFloat(e.target.value) || 0 })}
-            className="w-full px-3 py-2 rounded text-sm text-white"
-            style={{ backgroundColor: FINCEPT.CHARCOAL }}
+            style={inputStyle}
           />
         </div>
       </div>
 
-      <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-        <h4 className="text-xs font-medium text-white mb-3">Revenue Growth Distribution</h4>
-        <div className="grid grid-cols-2 gap-3">
+      <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+        <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.SMALL }}>REVENUE GROWTH DISTRIBUTION</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Mean (%)</label>
+            <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>MEAN (%)</label>
             <input
               type="number"
               value={mcInputs.revenueGrowthMean}
               onChange={e => setMcInputs({ ...mcInputs, revenueGrowthMean: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded text-sm text-white"
-              style={{ backgroundColor: FINCEPT.PANEL_BG }}
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Std Dev (%)</label>
+            <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>STD DEV (%)</label>
             <input
               type="number"
               value={mcInputs.revenueGrowthStd}
               onChange={e => setMcInputs({ ...mcInputs, revenueGrowthStd: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded text-sm text-white"
-              style={{ backgroundColor: FINCEPT.PANEL_BG }}
+              style={inputStyle}
             />
           </div>
         </div>
       </div>
 
-      <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-        <h4 className="text-xs font-medium text-white mb-3">Margin Distribution</h4>
-        <div className="grid grid-cols-2 gap-3">
+      <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+        <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.SMALL }}>MARGIN DISTRIBUTION</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Mean (%)</label>
+            <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>MEAN (%)</label>
             <input
               type="number"
               value={mcInputs.marginMean}
               onChange={e => setMcInputs({ ...mcInputs, marginMean: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded text-sm text-white"
-              style={{ backgroundColor: FINCEPT.PANEL_BG }}
+              style={inputStyle}
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Std Dev (%)</label>
+            <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>STD DEV (%)</label>
             <input
               type="number"
               value={mcInputs.marginStd}
               onChange={e => setMcInputs({ ...mcInputs, marginStd: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded text-sm text-white"
-              style={{ backgroundColor: FINCEPT.PANEL_BG }}
+              style={inputStyle}
             />
           </div>
         </div>
       </div>
 
       <div>
-        <label className="text-xs text-gray-400 mb-1 block">Number of Simulations</label>
+        <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>NUMBER OF SIMULATIONS</label>
         <select
           value={mcInputs.simulations}
           onChange={e => setMcInputs({ ...mcInputs, simulations: parseInt(e.target.value) })}
-          className="w-full px-3 py-2 rounded text-sm text-white"
-          style={{ backgroundColor: FINCEPT.CHARCOAL }}
+          style={inputStyle}
         >
           <option value={1000}>1,000</option>
           <option value={5000}>5,000</option>
@@ -193,137 +189,74 @@ export const AdvancedAnalytics: React.FC = () => {
   );
 
   const renderRegressionInputs = () => (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.DEFAULT }}>
       <div>
-        <label className="text-xs text-gray-400 mb-1 block">Regression Type</label>
-        <div className="flex gap-2">
+        <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>REGRESSION TYPE</label>
+        <div style={{ display: 'flex', gap: SPACING.SMALL }}>
           <button
             onClick={() => setRegressionType('ols')}
-            className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all ${
-              regressionType === 'ols' ? 'text-white' : 'text-gray-400'
-            }`}
-            style={{ backgroundColor: regressionType === 'ols' ? FINCEPT.ORANGE + '30' : FINCEPT.CHARCOAL }}
+            style={COMMON_STYLES.tabButton(regressionType === 'ols')}
           >
-            OLS (Simple)
+            OLS (SIMPLE)
           </button>
           <button
             onClick={() => setRegressionType('multiple')}
-            className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all ${
-              regressionType === 'multiple' ? 'text-white' : 'text-gray-400'
-            }`}
-            style={{ backgroundColor: regressionType === 'multiple' ? FINCEPT.ORANGE + '30' : FINCEPT.CHARCOAL }}
+            style={COMMON_STYLES.tabButton(regressionType === 'multiple')}
           >
-            Multiple Regression
+            MULTIPLE REGRESSION
           </button>
         </div>
       </div>
 
-      <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs font-medium text-white">Comparable Companies</h4>
+      <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.SMALL }}>
+          <span style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE }}>COMPARABLE COMPANIES</span>
           <button
             onClick={addComp}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: FINCEPT.ORANGE + '20', color: FINCEPT.ORANGE }}
+            style={{ ...COMMON_STYLES.buttonSecondary, display: 'flex', alignItems: 'center', gap: SPACING.TINY, padding: '4px 8px', color: FINCEPT.ORANGE }}
           >
-            <Plus size={12} /> Add
+            <Plus size={10} /> ADD
           </button>
         </div>
-        <div className="space-y-2 max-h-48 overflow-y-auto">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, maxHeight: 200, overflowY: 'auto' }}>
           {compData.map((comp, idx) => (
-            <div key={idx} className="grid grid-cols-6 gap-2 items-center">
-              <input
-                type="text"
-                value={comp.name}
-                onChange={e => updateComp(idx, 'name', e.target.value)}
-                className="px-2 py-1 rounded text-xs text-white"
-                style={{ backgroundColor: FINCEPT.PANEL_BG }}
-                placeholder="Name"
-              />
-              <input
-                type="number"
-                value={comp.ev}
-                onChange={e => updateComp(idx, 'ev', e.target.value)}
-                className="px-2 py-1 rounded text-xs text-white"
-                style={{ backgroundColor: FINCEPT.PANEL_BG }}
-                placeholder="EV"
-              />
-              <input
-                type="number"
-                value={comp.revenue}
-                onChange={e => updateComp(idx, 'revenue', e.target.value)}
-                className="px-2 py-1 rounded text-xs text-white"
-                style={{ backgroundColor: FINCEPT.PANEL_BG }}
-                placeholder="Revenue"
-              />
-              <input
-                type="number"
-                value={comp.ebitda}
-                onChange={e => updateComp(idx, 'ebitda', e.target.value)}
-                className="px-2 py-1 rounded text-xs text-white"
-                style={{ backgroundColor: FINCEPT.PANEL_BG }}
-                placeholder="EBITDA"
-              />
-              <input
-                type="number"
-                value={comp.growth}
-                onChange={e => updateComp(idx, 'growth', e.target.value)}
-                className="px-2 py-1 rounded text-xs text-white"
-                style={{ backgroundColor: FINCEPT.PANEL_BG }}
-                placeholder="Growth %"
-              />
+            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr auto', gap: SPACING.TINY, alignItems: 'center' }}>
+              <input type="text" value={comp.name} onChange={e => updateComp(idx, 'name', e.target.value)} style={smallInputStyle} placeholder="Name" />
+              <input type="number" value={comp.ev} onChange={e => updateComp(idx, 'ev', e.target.value)} style={smallInputStyle} placeholder="EV" />
+              <input type="number" value={comp.revenue} onChange={e => updateComp(idx, 'revenue', e.target.value)} style={smallInputStyle} placeholder="Revenue" />
+              <input type="number" value={comp.ebitda} onChange={e => updateComp(idx, 'ebitda', e.target.value)} style={smallInputStyle} placeholder="EBITDA" />
+              <input type="number" value={comp.growth} onChange={e => updateComp(idx, 'growth', e.target.value)} style={smallInputStyle} placeholder="Growth %" />
               <button
                 onClick={() => removeComp(idx)}
-                className="p-1 rounded hover:bg-red-500/20"
                 disabled={compData.length <= 2}
+                style={{ background: 'none', border: 'none', cursor: compData.length <= 2 ? 'not-allowed' : 'pointer', padding: '4px' }}
               >
-                <Trash2 size={12} className={compData.length <= 2 ? 'text-gray-600' : 'text-red-400'} />
+                <Trash2 size={12} color={compData.length <= 2 ? FINCEPT.MUTED : FINCEPT.RED} />
               </button>
             </div>
           ))}
         </div>
-        <div className="mt-2 grid grid-cols-6 gap-2 text-xs text-gray-500">
-          <span>Name</span>
-          <span>EV ($M)</span>
-          <span>Rev ($M)</span>
-          <span>EBITDA</span>
-          <span>Growth %</span>
-          <span></span>
+        <div style={{ marginTop: SPACING.SMALL, display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr auto', gap: SPACING.TINY }}>
+          {['Name', 'EV ($M)', 'Rev ($M)', 'EBITDA', 'Growth %', ''].map((h, i) => (
+            <span key={i} style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED }}>{h}</span>
+          ))}
         </div>
       </div>
 
-      <div className="p-3 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-        <h4 className="text-xs font-medium text-white mb-3">Subject Company Metrics</h4>
-        <div className="grid grid-cols-3 gap-3">
+      <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+        <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.SMALL }}>SUBJECT COMPANY METRICS</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.SMALL }}>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Revenue ($M)</label>
-            <input
-              type="number"
-              value={subjectMetrics.revenue}
-              onChange={e => setSubjectMetrics({ ...subjectMetrics, revenue: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded text-sm text-white"
-              style={{ backgroundColor: FINCEPT.PANEL_BG }}
-            />
+            <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>REVENUE ($M)</label>
+            <input type="number" value={subjectMetrics.revenue} onChange={e => setSubjectMetrics({ ...subjectMetrics, revenue: parseFloat(e.target.value) || 0 })} style={inputStyle} />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">EBITDA ($M)</label>
-            <input
-              type="number"
-              value={subjectMetrics.ebitda}
-              onChange={e => setSubjectMetrics({ ...subjectMetrics, ebitda: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded text-sm text-white"
-              style={{ backgroundColor: FINCEPT.PANEL_BG }}
-            />
+            <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>EBITDA ($M)</label>
+            <input type="number" value={subjectMetrics.ebitda} onChange={e => setSubjectMetrics({ ...subjectMetrics, ebitda: parseFloat(e.target.value) || 0 })} style={inputStyle} />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Growth (%)</label>
-            <input
-              type="number"
-              value={subjectMetrics.growth}
-              onChange={e => setSubjectMetrics({ ...subjectMetrics, growth: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded text-sm text-white"
-              style={{ backgroundColor: FINCEPT.PANEL_BG }}
-            />
+            <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.TINY }}>GROWTH (%)</label>
+            <input type="number" value={subjectMetrics.growth} onChange={e => setSubjectMetrics({ ...subjectMetrics, growth: parseFloat(e.target.value) || 0 })} style={inputStyle} />
           </div>
         </div>
       </div>
@@ -334,31 +267,26 @@ export const AdvancedAnalytics: React.FC = () => {
     if (!result) return null;
 
     return (
-      <div className="space-y-4">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.DEFAULT }}>
         {/* Key Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="p-3 rounded text-center" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <div className="text-xs text-gray-400">Mean Valuation</div>
-            <div className="text-lg font-bold text-white">${(result.mean || 0).toFixed(0)}M</div>
-          </div>
-          <div className="p-3 rounded text-center" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <div className="text-xs text-gray-400">Median Valuation</div>
-            <div className="text-lg font-bold text-white">${(result.median || 0).toFixed(0)}M</div>
-          </div>
-          <div className="p-3 rounded text-center" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <div className="text-xs text-gray-400">Std Deviation</div>
-            <div className="text-lg font-bold text-white">${(result.std || 0).toFixed(0)}M</div>
-          </div>
-          <div className="p-3 rounded text-center" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <div className="text-xs text-gray-400">CV</div>
-            <div className="text-lg font-bold text-white">{((result.std / result.mean) * 100 || 0).toFixed(1)}%</div>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
+          {[
+            { label: 'MEAN VALUATION', value: `$${(result.mean || 0).toFixed(0)}M` },
+            { label: 'MEDIAN VALUATION', value: `$${(result.median || 0).toFixed(0)}M` },
+            { label: 'STD DEVIATION', value: `$${(result.std || 0).toFixed(0)}M` },
+            { label: 'CV', value: `${((result.std / result.mean) * 100 || 0).toFixed(1)}%` },
+          ].map(item => (
+            <div key={item.label} style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', textAlign: 'center' }}>
+              <div style={COMMON_STYLES.dataLabel}>{item.label}</div>
+              <div style={{ fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>{item.value}</div>
+            </div>
+          ))}
         </div>
 
         {/* Percentiles */}
-        <div className="p-4 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-          <h4 className="text-xs font-medium text-white mb-3">Valuation Distribution</h4>
-          <div className="space-y-2">
+        <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+          <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.SMALL }}>VALUATION DISTRIBUTION</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
             {[
               { label: '5th Percentile', key: 'p5', color: '#ef4444' },
               { label: '25th Percentile', key: 'p25', color: '#f97316' },
@@ -366,19 +294,18 @@ export const AdvancedAnalytics: React.FC = () => {
               { label: '75th Percentile', key: 'p75', color: '#22c55e' },
               { label: '95th Percentile', key: 'p95', color: '#10b981' },
             ].map(item => (
-              <div key={item.key} className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">{item.label}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 rounded-full overflow-hidden" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        backgroundColor: item.color,
-                        width: `${Math.min(100, ((result[item.key] || 0) / (result.p95 || 1)) * 100)}%`,
-                      }}
-                    />
+              <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{item.label}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+                  <div style={{ width: '96px', height: '6px', borderRadius: '2px', overflow: 'hidden', backgroundColor: FINCEPT.PANEL_BG }}>
+                    <div style={{
+                      height: '100%',
+                      borderRadius: '2px',
+                      backgroundColor: item.color,
+                      width: `${Math.min(100, ((result[item.key] || 0) / (result.p95 || 1)) * 100)}%`,
+                    }} />
                   </div>
-                  <span className="text-sm font-medium text-white w-20 text-right">
+                  <span style={{ fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, width: '80px', textAlign: 'right' }}>
                     ${(result[item.key] || 0).toFixed(0)}M
                   </span>
                 </div>
@@ -388,14 +315,14 @@ export const AdvancedAnalytics: React.FC = () => {
         </div>
 
         {/* Range */}
-        <div className="p-4 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-          <h4 className="text-xs font-medium text-white mb-2">90% Confidence Interval</h4>
-          <div className="flex items-center justify-center gap-4">
-            <span className="text-lg font-medium" style={{ color: FINCEPT.ORANGE }}>
+        <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+          <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.SMALL }}>90% CONFIDENCE INTERVAL</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.DEFAULT }}>
+            <span style={{ fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.ORANGE }}>
               ${(result.p5 || 0).toFixed(0)}M
             </span>
-            <span className="text-gray-500">—</span>
-            <span className="text-lg font-medium" style={{ color: FINCEPT.ORANGE }}>
+            <span style={{ color: FINCEPT.MUTED }}>—</span>
+            <span style={{ fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.ORANGE }}>
               ${(result.p95 || 0).toFixed(0)}M
             </span>
           </div>
@@ -408,36 +335,40 @@ export const AdvancedAnalytics: React.FC = () => {
     if (!result) return null;
 
     return (
-      <div className="space-y-4">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.DEFAULT }}>
         {/* Implied Valuation */}
-        <div className="p-4 rounded text-center" style={{ backgroundColor: FINCEPT.ORANGE + '20' }}>
-          <div className="text-xs text-gray-400 mb-1">Implied Enterprise Value</div>
-          <div className="text-3xl font-bold" style={{ color: FINCEPT.ORANGE }}>
+        <div style={{ padding: SPACING.DEFAULT, borderRadius: '2px', textAlign: 'center', backgroundColor: `${FINCEPT.ORANGE}20`, border: `1px solid ${FINCEPT.ORANGE}` }}>
+          <div style={COMMON_STYLES.dataLabel}>IMPLIED ENTERPRISE VALUE</div>
+          <div style={{ fontSize: '24px', fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.ORANGE, marginTop: SPACING.TINY }}>
             ${(result.implied_ev || 0).toFixed(0)}M
           </div>
         </div>
 
         {/* Regression Stats */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 rounded text-center" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <div className="text-xs text-gray-400">R-Squared</div>
-            <div className="text-lg font-bold text-white">{((result.r_squared || 0) * 100).toFixed(1)}%</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
+          <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', textAlign: 'center' }}>
+            <div style={COMMON_STYLES.dataLabel}>R-SQUARED</div>
+            <div style={{ fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+              {((result.r_squared || 0) * 100).toFixed(1)}%
+            </div>
           </div>
-          <div className="p-3 rounded text-center" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <div className="text-xs text-gray-400">Adj. R-Squared</div>
-            <div className="text-lg font-bold text-white">{((result.adj_r_squared || 0) * 100).toFixed(1)}%</div>
+          <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', textAlign: 'center' }}>
+            <div style={COMMON_STYLES.dataLabel}>ADJ. R-SQUARED</div>
+            <div style={{ fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+              {((result.adj_r_squared || 0) * 100).toFixed(1)}%
+            </div>
           </div>
         </div>
 
         {/* Coefficients */}
         {result.coefficients && (
-          <div className="p-4 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <h4 className="text-xs font-medium text-white mb-3">Regression Coefficients</h4>
-            <div className="space-y-2">
+          <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.SMALL }}>REGRESSION COEFFICIENTS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL }}>
               {Object.entries(result.coefficients).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{key.replace(/_/g, ' ')}</span>
-                  <span className="text-sm font-medium text-white">{(value as number).toFixed(4)}</span>
+                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{key.replace(/_/g, ' ')}</span>
+                  <span style={{ fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE }}>{(value as number).toFixed(4)}</span>
                 </div>
               ))}
             </div>
@@ -446,13 +377,13 @@ export const AdvancedAnalytics: React.FC = () => {
 
         {/* Implied Multiples */}
         {result.implied_multiples && (
-          <div className="p-4 rounded" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
-            <h4 className="text-xs font-medium text-white mb-3">Implied Multiples</h4>
-            <div className="grid grid-cols-2 gap-3">
+          <div style={{ padding: SPACING.DEFAULT, backgroundColor: FINCEPT.DARK_BG, borderRadius: '2px', border: `1px solid ${FINCEPT.BORDER}` }}>
+            <div style={{ ...COMMON_STYLES.dataLabel, color: FINCEPT.WHITE, marginBottom: SPACING.SMALL }}>IMPLIED MULTIPLES</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.SMALL }}>
               {Object.entries(result.implied_multiples).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between p-2 rounded" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
-                  <span className="text-xs text-gray-400">{key.toUpperCase()}</span>
-                  <span className="text-sm font-bold" style={{ color: FINCEPT.ORANGE }}>{(value as number).toFixed(1)}x</span>
+                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: SPACING.SMALL, backgroundColor: FINCEPT.PANEL_BG, borderRadius: '2px' }}>
+                  <span style={COMMON_STYLES.dataLabel}>{key.toUpperCase()}</span>
+                  <span style={{ fontSize: TYPOGRAPHY.SMALL, fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.ORANGE }}>{(value as number).toFixed(1)}x</span>
                 </div>
               ))}
             </div>
@@ -463,75 +394,78 @@ export const AdvancedAnalytics: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: FINCEPT.CHARCOAL }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: FINCEPT.DARK_BG, fontFamily: TYPOGRAPHY.MONO }}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: FINCEPT.PANEL_BG }}>
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg" style={{ backgroundColor: FINCEPT.ORANGE + '20' }}>
-            <Activity size={20} style={{ color: FINCEPT.ORANGE }} />
-          </div>
-          <div>
-            <h2 className={TYPOGRAPHY.HEADING}>Advanced Analytics</h2>
-            <p className="text-xs text-gray-400">Monte Carlo simulation and regression-based valuation</p>
-          </div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: SPACING.DEFAULT,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+          <Activity size={14} color={FINCEPT.ORANGE} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE, letterSpacing: '0.5px' }}>ADVANCED ANALYTICS</span>
+          <span style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.MUTED }}>MONTE CARLO & REGRESSION</span>
         </div>
         <button
           onClick={runAnalysis}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-90 disabled:opacity-50"
-          style={{ backgroundColor: FINCEPT.ORANGE, color: '#000' }}
+          style={{ ...COMMON_STYLES.buttonPrimary, display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}
         >
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
-          Run Analysis
+          {loading ? <Loader2 size={10} className="animate-spin" /> : <PlayCircle size={10} />}
+          RUN ANALYSIS
         </button>
       </div>
 
       {/* Analysis Type Tabs */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: FINCEPT.PANEL_BG }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACING.SMALL,
+        padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+        backgroundColor: FINCEPT.HEADER_BG,
+        borderBottom: `1px solid ${FINCEPT.BORDER}`,
+      }}>
         <button
           onClick={() => { setAnalysisType('montecarlo'); setResult(null); }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            analysisType === 'montecarlo' ? 'text-white' : 'text-gray-400 hover:text-white'
-          }`}
-          style={{ backgroundColor: analysisType === 'montecarlo' ? FINCEPT.PANEL_BG : 'transparent' }}
+          style={{ ...COMMON_STYLES.tabButton(analysisType === 'montecarlo'), display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}
         >
-          <Target size={16} /> Monte Carlo
+          <Target size={12} /> MONTE CARLO
         </button>
         <button
           onClick={() => { setAnalysisType('regression'); setResult(null); }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            analysisType === 'regression' ? 'text-white' : 'text-gray-400 hover:text-white'
-          }`}
-          style={{ backgroundColor: analysisType === 'regression' ? FINCEPT.PANEL_BG : 'transparent' }}
+          style={{ ...COMMON_STYLES.tabButton(analysisType === 'regression'), display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}
         >
-          <TrendingUp size={16} /> Regression
+          <TrendingUp size={12} /> REGRESSION
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div style={{ flex: 1, overflow: 'auto', padding: SPACING.DEFAULT }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
           {/* Input Panel */}
-          <div className="p-4 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
-            <h3 className="text-sm font-medium text-white mb-4">
-              {analysisType === 'montecarlo' ? 'Monte Carlo Parameters' : 'Regression Inputs'}
-            </h3>
+          <div style={{ ...COMMON_STYLES.metricCard }}>
+            <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>
+              {analysisType === 'montecarlo' ? 'MONTE CARLO PARAMETERS' : 'REGRESSION INPUTS'}
+            </div>
             {analysisType === 'montecarlo' ? renderMonteCarloInputs() : renderRegressionInputs()}
           </div>
 
           {/* Results Panel */}
-          <div className="p-4 rounded-lg" style={{ backgroundColor: FINCEPT.PANEL_BG }}>
-            <h3 className="text-sm font-medium text-white mb-4">Analysis Results</h3>
+          <div style={{ ...COMMON_STYLES.metricCard }}>
+            <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.DEFAULT }}>ANALYSIS RESULTS</div>
             {loading ? (
-              <div className="flex items-center justify-center h-48">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px' }}>
                 <Loader2 size={24} className="animate-spin" style={{ color: FINCEPT.ORANGE }} />
               </div>
             ) : result ? (
               analysisType === 'montecarlo' ? renderMonteCarloResults() : renderRegressionResults()
             ) : (
-              <div className="flex flex-col items-center justify-center h-48 text-gray-500 text-sm">
-                <Activity size={32} className="mb-2 opacity-50" />
-                <p>Click "Run Analysis" to start</p>
+              <div style={{ ...COMMON_STYLES.emptyState, height: '200px' }}>
+                <Activity size={32} style={{ opacity: 0.3, marginBottom: SPACING.SMALL }} />
+                <span style={{ fontSize: TYPOGRAPHY.SMALL, color: FINCEPT.GRAY }}>Click "RUN ANALYSIS" to start</span>
               </div>
             )}
           </div>

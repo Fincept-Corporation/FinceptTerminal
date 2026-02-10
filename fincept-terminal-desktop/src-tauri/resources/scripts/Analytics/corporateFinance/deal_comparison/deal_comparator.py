@@ -273,55 +273,6 @@ class DealComparator:
             }
         }
 
-if __name__ == '__main__':
-    deals = [
-        Deal("D001", "Target A", "Acquirer X", 1_000_000_000, 45.00, 35, 100, 0, 5.0, 12.0, 150_000_000, "Completed", "Technology", "2024-01-15"),
-        Deal("D002", "Target B", "Acquirer Y", 2_500_000_000, 82.50, 42, 60, 40, 8.0, 15.0, 300_000_000, "Pending", "Technology", "2024-03-20"),
-        Deal("D003", "Target C", "Acquirer Z", 750_000_000, 28.00, 28, 100, 0, 4.5, 10.0, 100_000_000, "Completed", "Healthcare", "2024-02-10"),
-        Deal("D004", "Target D", "Acquirer W", 1_800_000_000, 65.00, 38, 50, 50, 6.5, 13.5, 250_000_000, "Announced", "Technology", "2024-04-05"),
-    ]
-
-    comparator = DealComparator()
-
-    comparison = comparator.compare_deals(deals)
-
-    print("=== DEAL COMPARISON ===\n")
-    print(f"Number of Deals: {comparison['num_deals']}\n")
-
-    print("Deal Value Statistics:")
-    dv_stats = comparison['statistics']['deal_value']
-    print(f"  Min: ${dv_stats['min']:,.0f}")
-    print(f"  Max: ${dv_stats['max']:,.0f}")
-    print(f"  Mean: ${dv_stats['mean']:,.0f}")
-    print(f"  Median: ${dv_stats['median']:,.0f}")
-
-    print("\nPremium Statistics:")
-    prem_stats = comparison['statistics']['premium_1day']
-    print(f"  Min: {prem_stats['min']:.1f}%")
-    print(f"  Max: {prem_stats['max']:.1f}%")
-    print(f"  Mean: {prem_stats['mean']:.1f}%")
-    print(f"  Median: {prem_stats['median']:.1f}%")
-
-    payment = comparator.payment_structure_analysis(deals)
-    print("\n\n=== PAYMENT STRUCTURE ANALYSIS ===")
-    print(f"All Cash: {payment['all_cash_deals']} ({payment['distribution']['all_cash_pct']:.0f}%)")
-    print(f"All Stock: {payment['all_stock_deals']} ({payment['distribution']['all_stock_pct']:.0f}%)")
-    print(f"Mixed: {payment['mixed_deals']} ({payment['distribution']['mixed_pct']:.0f}%)")
-
-    industry = comparator.industry_analysis(deals)
-    print("\n\n=== INDUSTRY ANALYSIS ===")
-    for ind, stats in industry['industry_statistics'].items():
-        print(f"\n{ind}:")
-        print(f"  Count: {stats['count']}")
-        print(f"  Total Value: ${stats['total_value']:,.0f}")
-        print(f"  Avg Premium: {stats['avg_premium']:.1f}%")
-
-    benchmark = comparator.premium_benchmarking(deals[1], [deals[0], deals[2], deals[3]])
-    print("\n\n=== PREMIUM BENCHMARKING ===")
-    print(f"Target Deal: {benchmark['target_deal']['target']} ({benchmark['target_deal']['premium']:.1f}%)")
-    print(f"Position: {benchmark['target_position']}")
-    print(f"Median Premium: {benchmark['comparable_premiums']['median']:.1f}%")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -334,26 +285,108 @@ def main():
 
     command = sys.argv[1]
 
+    def _parse_deals(deals_data):
+        """Parse deal dicts into Deal objects"""
+        deals = []
+        for d in deals_data:
+            deals.append(Deal(
+                deal_id=d.get('deal_id', ''),
+                target_name=d.get('target_name', d.get('target', '')),
+                acquirer_name=d.get('acquirer_name', d.get('acquirer', '')),
+                deal_value=d.get('deal_value', 0),
+                offer_price_per_share=d.get('offer_price_per_share', d.get('offer_price', None)),
+                premium_1day=d.get('premium_1day', d.get('premium', 0)),
+                payment_cash_pct=d.get('payment_cash_pct', d.get('cash_pct', 0)),
+                payment_stock_pct=d.get('payment_stock_pct', d.get('stock_pct', 0)),
+                ev_revenue=d.get('ev_revenue', None),
+                ev_ebitda=d.get('ev_ebitda', None),
+                synergies=d.get('synergies', None),
+                status=d.get('status', d.get('deal_status', '')),
+                industry=d.get('industry', ''),
+                announced_date=d.get('announced_date', d.get('announcement_date', ''))
+            ))
+        return deals
+
     try:
         if command == "compare":
+            # Rust sends: "compare" deals_json
             if len(sys.argv) < 3:
                 raise ValueError("Deals data required")
 
             deals_data = json.loads(sys.argv[2])
-
+            deals = _parse_deals(deals_data)
             comparator = DealComparator()
 
-            # Perform comprehensive comparison
-            analysis = {
-                "deals_count": len(deals_data),
-                "deals_data": deals_data
-            }
+            if len(deals) >= 2:
+                analysis = comparator.compare_deals(deals)
+            else:
+                analysis = {"deals_count": len(deals), "deals_data": deals_data}
 
             result = {"success": True, "data": analysis}
-            print(json.dumps(result))
+            print(json.dumps(result, default=str))
+
+        elif command == "rank":
+            # Rust sends: "rank" deals_json criteria
+            if len(sys.argv) < 4:
+                raise ValueError("Deals data and criteria required")
+
+            deals_data = json.loads(sys.argv[2])
+            criteria = sys.argv[3]
+            deals = _parse_deals(deals_data)
+            comparator = DealComparator()
+
+            analysis = comparator.rank_deals(deals, criteria=criteria)
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result, default=str))
+
+        elif command == "benchmark":
+            # Rust sends: "benchmark" target_deal_json comparable_deals_json
+            if len(sys.argv) < 4:
+                raise ValueError("Target deal and comparable deals required")
+
+            target_deal_data = json.loads(sys.argv[2])
+            comparable_deals_data = json.loads(sys.argv[3])
+
+            target_deals = _parse_deals([target_deal_data])
+            comparable_deals = _parse_deals(comparable_deals_data)
+            comparator = DealComparator()
+
+            if target_deals and comparable_deals:
+                analysis = comparator.premium_benchmarking(target_deals[0], comparable_deals)
+            else:
+                analysis = {"error": "Insufficient data for benchmarking"}
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result, default=str))
+
+        elif command == "payment_analysis":
+            # Rust sends: "payment_analysis" deals_json
+            if len(sys.argv) < 3:
+                raise ValueError("Deals data required")
+
+            deals_data = json.loads(sys.argv[2])
+            deals = _parse_deals(deals_data)
+            comparator = DealComparator()
+
+            analysis = comparator.payment_structure_analysis(deals)
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result, default=str))
+
+        elif command == "industry_analysis":
+            # Rust sends: "industry_analysis" deals_json
+            if len(sys.argv) < 3:
+                raise ValueError("Deals data required")
+
+            deals_data = json.loads(sys.argv[2])
+            deals = _parse_deals(deals_data)
+            comparator = DealComparator()
+
+            analysis = comparator.industry_analysis(deals)
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result, default=str))
 
         else:
-            result = {"success": False, "error": f"Unknown command: {command}"}
+            result = {"success": False, "error": f"Unknown command: {command}. Available: compare, rank, benchmark, payment_analysis, industry_analysis"}
             print(json.dumps(result))
             sys.exit(1)
 

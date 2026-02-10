@@ -86,7 +86,12 @@ def load_yfinance_data(symbol: str, start_date: str = None,
             ohlcv = ['Open', 'High', 'Low', 'Close', 'Volume']
             data.columns = [c.capitalize() for c in data.columns]
             available = [c for c in ohlcv if c in data.columns]
-            return data[available]
+            data = data[available]
+            # Round to 4 decimal places to eliminate float32 rounding noise
+            for col in ['Open', 'High', 'Low', 'Close']:
+                if col in data.columns:
+                    data[col] = data[col].round(4)
+            return data
     except Exception:
         pass
     return None

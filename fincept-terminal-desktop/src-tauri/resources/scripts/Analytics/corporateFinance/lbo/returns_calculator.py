@@ -87,27 +87,6 @@ class ReturnsCalculator:
             'excess_moic': returns['moic'] - ((1 + hurdle_irr) ** returns['holding_period_years'])
         }
 
-if __name__ == '__main__':
-    calc = ReturnsCalculator()
-
-    initial_equity = 1_500_000_000
-    exit_equity = 4_200_000_000
-    holding_period = 5
-
-    returns = calc.comprehensive_returns(initial_equity, exit_equity, holding_period)
-
-    print(f"Initial Investment: ${returns['initial_equity_investment']:,.0f}")
-    print(f"Exit Value: ${returns['exit_equity_value']:,.0f}")
-    print(f"Holding Period: {returns['holding_period_years']} years")
-    print(f"\nIRR: {returns['irr']:.1f}%")
-    print(f"MOIC: {returns['moic']:.2f}x")
-    print(f"Absolute Gain: ${returns['absolute_gain']:,.0f} ({returns['absolute_gain_pct']:.1f}%)")
-
-    hurdle = calc.calculate_hurdle_metrics(returns, hurdle_irr=0.20)
-    print(f"\nHurdle IRR: {hurdle['hurdle_irr']:.1f}%")
-    print(f"Excess IRR: {hurdle['excess_irr']:.1f}%")
-    print(f"Meets Hurdle: {hurdle['meets_hurdle']}")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys

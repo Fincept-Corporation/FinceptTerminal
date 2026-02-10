@@ -61,6 +61,10 @@ def fetch_yfinance_data(
 
             df.index.name = 'date'
             df = df.dropna()
+            # Round to 4 decimal places to eliminate float32 rounding noise
+            for col in ['open', 'high', 'low', 'close']:
+                if col in df.columns:
+                    df[col] = df[col].round(4)
             result[sym] = df
             print(f'[ZL-DATA] {sym}: {len(df)} bars loaded', file=sys.stderr)
 
@@ -77,12 +81,20 @@ def _generate_synthetic_data(
     start_date: str,
     end_date: str,
 ) -> Dict[str, pd.DataFrame]:
-    """Generate synthetic GBM price data as fallback."""
+    """Generate synthetic GBM price data as fallback.
+
+    WARNING: This produces fake data. Results are NOT based on real market data.
+    Uses deterministic seed based on symbol char codes (not hash() which varies per-run).
+    """
+    print('[ZL-DATA] WARNING: Generating SYNTHETIC data. Results will NOT reflect '
+          'real market conditions. Install yfinance: pip install yfinance', file=sys.stderr)
     result = {}
     dates = pd.bdate_range(start=start_date, end=end_date, tz='UTC')
 
     for sym in symbols:
-        np.random.seed(hash(sym) % 2**31)
+        # Use deterministic seed: sum of char codes (NOT hash() which is randomized per-run)
+        seed = sum(ord(c) for c in sym) % (2**31)
+        np.random.seed(seed)
         n = len(dates)
         price = 100.0
         prices = []

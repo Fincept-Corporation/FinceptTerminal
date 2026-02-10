@@ -72,7 +72,7 @@ class ProFormaBuilder:
         pf_cogs = self.acquirer.cogs + self.target.cogs
         pf_gross_profit = pf_revenue - pf_cogs
 
-        pf_sg_a = self.acquirer.sg_a + self.target.sg_a - (synergies * synergy_realization * 0.6)
+        pf_sg_a = self.acquirer.sg_a + self.target.sg_a - (self.synergies * synergy_realization * 0.6)
         pf_r_d = self.acquirer.r_d + self.target.r_d
         pf_depreciation = self.acquirer.depreciation + self.target.depreciation
 
@@ -111,7 +111,7 @@ class ProFormaBuilder:
             'net_margin': (pf_net_income / pf_revenue * 100) if pf_revenue else 0,
             'shares_outstanding': pf_shares,
             'eps': pf_eps,
-            'synergies_realized': synergies * synergy_realization,
+            'synergies_realized': self.synergies * synergy_realization,
             'integration_costs': integration_cost_impact
         }
 

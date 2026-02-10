@@ -235,6 +235,8 @@ class BrokerageName(IntEnum):
     TERMINAL_LINK = 23
     TRADING_TECHNOLOGIES = 24
     QUANTCONNECT = 25
+    ALPHA_STREAMS = 26
+    BINANCE = 6
 
     # Aliases
     Default = 0
@@ -263,6 +265,8 @@ class BrokerageName(IntEnum):
     TerminalLinkBrokerage = 23
     TradingTechnologiesBrokerage = 24
     QuantConnectBrokerage = 25
+    AlphaStreamsBrokerage = 26
+    Binance = 6
 
 
 class AccountType(IntEnum):

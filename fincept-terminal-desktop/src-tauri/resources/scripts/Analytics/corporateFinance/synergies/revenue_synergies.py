@@ -351,7 +351,56 @@ def main():
     command = sys.argv[1]
 
     try:
-        if command == "revenue_synergy":
+        if command == "revenue":
+            # Rust sends: "revenue" synergy_type synergy_params_json
+            if len(sys.argv) < 4:
+                raise ValueError("Synergy type and params required")
+
+            synergy_type = sys.argv[2]
+            params = json.loads(sys.argv[3])
+
+            analyzer = RevenueSynergyAnalyzer(
+                tax_rate=params.get('tax_rate', 0.25),
+                synergy_discount_rate=params.get('discount_rate', 0.15)
+            )
+
+            if synergy_type == "cross_sell":
+                analysis = analyzer.calculate_cross_sell_synergy(
+                    acquirer_customers=params.get('acquirer_customers', 0),
+                    target_customers=params.get('target_customers', 0),
+                    acquirer_arpu=params.get('acquirer_arpu', 0),
+                    target_arpu=params.get('target_arpu', 0),
+                    cross_sell_rate=params.get('cross_sell_rate', 0.1),
+                    ramp_years=params.get('ramp_years', 3)
+                )
+            elif synergy_type == "pricing_power":
+                analysis = analyzer.calculate_pricing_power_synergy(
+                    combined_revenue=params.get('combined_revenue', 0),
+                    price_increase_pct=params.get('price_increase_pct', 0.02),
+                    volume_loss_pct=params.get('volume_loss_pct', 0.05),
+                    ramp_years=params.get('ramp_years', 2)
+                )
+            elif synergy_type == "market_expansion":
+                analysis = analyzer.calculate_market_expansion_synergy(
+                    target_revenue_new_markets=params.get('target_revenue_new_markets', params.get('target_revenue', 0)),
+                    acquirer_product_penetration=params.get('acquirer_product_penetration', params.get('new_market_penetration', 0.1)),
+                    market_share_gain=params.get('market_share_gain', 0.05),
+                    ramp_years=params.get('ramp_years', 4)
+                )
+            else:
+                analysis = analyzer.calculate_cross_sell_synergy(
+                    acquirer_customers=params.get('acquirer_customers', 0),
+                    target_customers=params.get('target_customers', 0),
+                    acquirer_arpu=params.get('acquirer_arpu', 0),
+                    target_arpu=params.get('target_arpu', 0),
+                    cross_sell_rate=params.get('cross_sell_rate', 0.1),
+                    ramp_years=params.get('ramp_years', 3)
+                )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        elif command == "revenue_synergy":
             if len(sys.argv) < 7:
                 raise ValueError("Acquirer customers, target customers, acquirer ARPU, target ARPU, cross-sell rate, and ramp years required")
 
@@ -377,7 +426,7 @@ def main():
             print(json.dumps(result))
 
         else:
-            result = {"success": False, "error": f"Unknown command: {command}"}
+            result = {"success": False, "error": f"Unknown command: {command}. Available: revenue, revenue_synergy"}
             print(json.dumps(result))
             sys.exit(1)
 

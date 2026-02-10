@@ -74,12 +74,20 @@ class TradingCompsAnalyzer:
 
             revenue_ltm = info.get('totalRevenue', 0)
             ebitda_ltm = info.get('ebitda', 0)
-            ebit_ltm = info.get('ebit', ebitda_ltm)
-            net_income_ltm = info.get('netIncome', 0)
+            # yfinance: 'ebit' is often None, derive from operatingMargins
+            ebit_ltm = info.get('ebit', 0) or 0
+            if ebit_ltm == 0 and revenue_ltm and info.get('operatingMargins'):
+                ebit_ltm = revenue_ltm * info['operatingMargins']
+            if ebit_ltm == 0:
+                ebit_ltm = ebitda_ltm
+            # yfinance: 'netIncome' is often None, use 'netIncomeToCommon' or profitMargins
+            net_income_ltm = info.get('netIncome', 0) or info.get('netIncomeToCommon', 0) or 0
+            if net_income_ltm == 0 and revenue_ltm and info.get('profitMargins'):
+                net_income_ltm = revenue_ltm * info['profitMargins']
 
             revenue_growth = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
             ebitda_margin = (ebitda_ltm / revenue_ltm * 100) if revenue_ltm else 0
-            net_margin = (net_income_ltm / revenue_ltm * 100) if revenue_ltm else 0
+            net_margin = (net_income_ltm / revenue_ltm * 100) if revenue_ltm and net_income_ltm else 0
             roe = info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0
             roa = info.get('returnOnAssets', 0) * 100 if info.get('returnOnAssets') else 0
 
@@ -322,7 +330,42 @@ def main():
     analyzer = TradingCompsAnalyzer()
 
     try:
-        if command == "find_comps":
+        if command == "trading_comps":
+            # Rust sends: "trading_comps" target_ticker comp_tickers_json
+            if len(sys.argv) < 4:
+                raise ValueError("Target ticker and comp tickers required")
+
+            target_ticker = sys.argv[2]
+            comp_tickers = json.loads(sys.argv[3])
+
+            # Fetch target data
+            target_comp = analyzer.fetch_comp_data(target_ticker)
+            target_financials = {}
+            if target_comp:
+                target_financials = {
+                    'revenue': target_comp.revenue_ltm,
+                    'ebitda': target_comp.ebitda_ltm,
+                    'ebit': target_comp.ebit_ltm,
+                    'net_income': target_comp.net_income_ltm
+                }
+
+            # Fetch comps
+            comps = []
+            for ticker in comp_tickers:
+                comp = analyzer.fetch_comp_data(ticker)
+                if comp and comp.market_cap > 0:
+                    comps.append(comp)
+
+            if not comps:
+                result = {"success": True, "data": {"comparables": [], "comp_count": 0, "target": target_ticker}}
+                print(json.dumps(result))
+            else:
+                comp_table = analyzer.build_comp_table(comps, target_financials if target_financials else None)
+                comp_table['target_ticker'] = target_ticker
+                result = {"success": True, "data": comp_table}
+                print(json.dumps(result, default=str))
+
+        elif command == "find_comps":
             # find_comparables(industry)
             if len(sys.argv) < 3:
                 raise ValueError("Industry required")
@@ -357,7 +400,7 @@ def main():
         else:
             result = {
                 "success": False,
-                "error": f"Unknown command: {command}. Available: find_comps, build_table"
+                "error": f"Unknown command: {command}. Available: trading_comps, find_comps, build_table"
             }
             print(json.dumps(result))
             sys.exit(1)

@@ -90,6 +90,9 @@ pub mod analytics;
 // FinancePy - Derivatives Pricing
 pub mod financepy;
 
+// py_vollib - Black, Black-Scholes, Black-Scholes-Merton pricing
+pub mod vollib;
+
 // AI Agents
 pub mod ai_agents;
 
@@ -123,6 +126,9 @@ pub mod fortitudo_analytics;
 
 // Functime Analytics - Time Series Forecasting
 pub mod functime_analytics;
+
+// GluonTS - Deep Learning Time Series Forecasting
+pub mod gluonts;
 
 // High-Performance OrderBook Processing
 pub mod orderbook;
@@ -177,3 +183,12 @@ pub mod strategies;
 
 // Algo Trading - Visual condition-based strategy builder, deployment, scanner
 pub mod algo_trading;
+
+// TALIpp - Incremental Technical Analysis Indicators
+pub mod talipp;
+
+// PyPME - Public Market Equivalent calculations
+pub mod pypme;
+
+// GS-Quant - Goldman Sachs Quant Analytics
+pub mod gs_quant;

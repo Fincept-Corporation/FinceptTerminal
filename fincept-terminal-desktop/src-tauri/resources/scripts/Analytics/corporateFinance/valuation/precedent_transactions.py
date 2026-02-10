@@ -351,12 +351,32 @@ def main():
             target_data = json.loads(sys.argv[2])
             comp_deals = json.loads(sys.argv[3])
 
-            # Convert comp_deals to TransactionComp objects if needed
-            from corporateFinance.valuation.precedent_transactions import TransactionComp
+            # Convert comp_deals dicts to TransactionComp objects
+            # Frontend sends MADeal-shaped objects; map to TransactionComp fields
             comps = []
             for deal in comp_deals:
                 if isinstance(deal, dict):
-                    comps.append(TransactionComp(**deal))
+                    ev = deal.get('deal_value', 0)
+                    revenue = deal.get('revenue', 0)
+                    ebitda = deal.get('ebitda', 0)
+                    comps.append(TransactionComp(
+                        deal_id=deal.get('deal_id', ''),
+                        announcement_date=deal.get('announcement_date', deal.get('announced_date', '')),
+                        acquirer_name=deal.get('acquirer_name', 'Unknown'),
+                        target_name=deal.get('target_name', 'Unknown'),
+                        deal_value=ev,
+                        enterprise_value=deal.get('enterprise_value', ev),
+                        revenue=revenue,
+                        ebitda=ebitda,
+                        ev_revenue=deal.get('ev_revenue', 0) or (ev / revenue if revenue else 0),
+                        ev_ebitda=deal.get('ev_ebitda', 0) or (ev / ebitda if ebitda else 0),
+                        ev_ebit=deal.get('ev_ebit', 0),
+                        price_earnings=deal.get('price_earnings', deal.get('pe', 0)) or 0,
+                        premium_1day=deal.get('premium_1day', 0),
+                        premium_4week=deal.get('premium_4week', 0),
+                        payment_method=deal.get('payment_method', deal.get('payment', '')),
+                        deal_status=deal.get('deal_status', deal.get('status', ''))
+                    ))
                 else:
                     comps.append(deal)
 

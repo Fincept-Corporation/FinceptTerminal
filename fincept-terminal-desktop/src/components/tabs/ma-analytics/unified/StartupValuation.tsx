@@ -419,7 +419,7 @@ export const StartupValuation: React.FC = () => {
               <div key={idx} style={{
                 padding: SPACING.SMALL,
                 backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 border: `1px solid ${FINCEPT.BORDER}`,
               }}>
                 <div style={{ fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginBottom: SPACING.TINY }}>
@@ -512,7 +512,7 @@ export const StartupValuation: React.FC = () => {
             <div style={{
               padding: SPACING.SMALL,
               backgroundColor: `${FINCEPT.ORANGE}15`,
-              borderRadius: '4px',
+              borderRadius: '2px',
               border: `1px solid ${FINCEPT.ORANGE}40`,
             }}>
               <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.ORANGE, fontWeight: TYPOGRAPHY.BOLD }}>
@@ -548,7 +548,7 @@ export const StartupValuation: React.FC = () => {
           <div style={{
             padding: SPACING.DEFAULT,
             backgroundColor: FINCEPT.PANEL_BG,
-            borderRadius: '4px',
+            borderRadius: '2px',
             border: `1px solid ${FINCEPT.ORANGE}`,
             marginBottom: SPACING.DEFAULT,
             textAlign: 'center',
@@ -584,7 +584,7 @@ export const StartupValuation: React.FC = () => {
             <div style={{
               padding: SPACING.DEFAULT,
               backgroundColor: FINCEPT.PANEL_BG,
-              borderRadius: '4px',
+              borderRadius: '2px',
               border: `1px solid ${FINCEPT.ORANGE}`,
               textAlign: 'center',
             }}>
@@ -621,7 +621,7 @@ export const StartupValuation: React.FC = () => {
               <div key={methodName} style={{
                 padding: SPACING.SMALL,
                 backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -647,7 +647,7 @@ export const StartupValuation: React.FC = () => {
             color: FINCEPT.GRAY,
             backgroundColor: FINCEPT.PANEL_BG,
             padding: SPACING.SMALL,
-            borderRadius: '4px',
+            borderRadius: '2px',
             overflow: 'auto',
             maxHeight: '200px',
           }}>
@@ -723,7 +723,7 @@ export const StartupValuation: React.FC = () => {
               padding: SPACING.SMALL,
               backgroundColor: loading ? FINCEPT.PANEL_BG : FINCEPT.ORANGE,
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '2px',
               color: loading ? FINCEPT.GRAY : FINCEPT.DARK_BG,
               cursor: loading ? 'not-allowed' : 'pointer',
               fontSize: TYPOGRAPHY.SMALL,

@@ -94,6 +94,7 @@ class SymbolData(object):
     
     def __init__(self, symbol, bar_period, window_size):
         self._symbol = symbol
+        self.symbol = symbol
         # The period used when population the Bars rolling window
         self.bar_period = bar_period
         # A rolling window of data, data needs to be pumped into Bars by using Bars.update( trade_bar ) and can be accessed like:

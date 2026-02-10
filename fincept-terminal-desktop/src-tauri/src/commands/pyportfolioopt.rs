@@ -189,24 +189,26 @@ pub async fn pyportfolioopt_discrete_allocation(
     execute_pyportfolioopt_operation(app, "discrete_allocation", data).await
 }
 
-/// Run backtest (stub - simplified for now)
+/// Run rolling-window backtest
 #[tauri::command]
 pub async fn pyportfolioopt_backtest(
     app: tauri::AppHandle,
     prices_json: String,
     config: PyPortfolioOptConfig,
-    _rebalance_frequency: i32,
-    _lookback_period: i32,
+    rebalance_frequency: i32,
+    lookback_period: i32,
 ) -> Result<String, String> {
     let data = serde_json::json!({
         "prices_json": prices_json,
-        "config": config
+        "config": config,
+        "rebalance_frequency": rebalance_frequency,
+        "lookback_period": lookback_period
     });
 
     execute_pyportfolioopt_operation(app, "backtest", data).await
 }
 
-/// Calculate risk decomposition (stub - simplified for now)
+/// Calculate risk decomposition
 #[tauri::command]
 pub async fn pyportfolioopt_risk_decomposition(
     app: tauri::AppHandle,
@@ -223,7 +225,7 @@ pub async fn pyportfolioopt_risk_decomposition(
     execute_pyportfolioopt_operation(app, "risk_decomposition", data).await
 }
 
-/// Black-Litterman optimization (stub - simplified for now)
+/// Black-Litterman optimization
 #[tauri::command]
 pub async fn pyportfolioopt_black_litterman(
     app: tauri::AppHandle,
@@ -244,7 +246,7 @@ pub async fn pyportfolioopt_black_litterman(
     execute_pyportfolioopt_operation(app, "black_litterman", data).await
 }
 
-/// HRP optimization (stub - simplified for now)
+/// HRP optimization
 #[tauri::command]
 pub async fn pyportfolioopt_hrp(
     app: tauri::AppHandle,
@@ -259,7 +261,7 @@ pub async fn pyportfolioopt_hrp(
     execute_pyportfolioopt_operation(app, "hrp", data).await
 }
 
-/// Generate comprehensive portfolio report (stub - simplified for now)
+/// Generate comprehensive portfolio report
 #[tauri::command]
 pub async fn pyportfolioopt_generate_report(
     app: tauri::AppHandle,
@@ -272,4 +274,169 @@ pub async fn pyportfolioopt_generate_report(
     });
 
     execute_pyportfolioopt_operation(app, "generate_report", data).await
+}
+
+// ============================================================================
+// Sensitivity Analysis
+// ============================================================================
+
+/// Run sensitivity analysis on a configuration parameter
+#[tauri::command]
+pub async fn pyportfolioopt_sensitivity_analysis(
+    app: tauri::AppHandle,
+    prices_json: String,
+    config: PyPortfolioOptConfig,
+    parameter: String,
+    values: Option<Vec<f64>>,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "config": config,
+        "parameter": parameter,
+        "values": values
+    });
+
+    execute_pyportfolioopt_operation(app, "sensitivity_analysis", data).await
+}
+
+// ============================================================================
+// Additional Optimizers
+// ============================================================================
+
+/// Risk Parity optimization
+#[tauri::command]
+pub async fn pyportfolioopt_risk_parity(
+    app: tauri::AppHandle,
+    prices_json: String,
+    risk_measure: Option<String>,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "risk_measure": risk_measure.unwrap_or_else(|| "volatility".to_string())
+    });
+
+    execute_pyportfolioopt_operation(app, "risk_parity", data).await
+}
+
+/// Equal weighting (1/N) portfolio
+#[tauri::command]
+pub async fn pyportfolioopt_equal_weight(
+    app: tauri::AppHandle,
+    prices_json: String,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json
+    });
+
+    execute_pyportfolioopt_operation(app, "equal_weight", data).await
+}
+
+/// Inverse volatility weighting
+#[tauri::command]
+pub async fn pyportfolioopt_inverse_volatility(
+    app: tauri::AppHandle,
+    prices_json: String,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json
+    });
+
+    execute_pyportfolioopt_operation(app, "inverse_volatility", data).await
+}
+
+/// Market neutral (long/short) portfolio
+#[tauri::command]
+pub async fn pyportfolioopt_market_neutral(
+    app: tauri::AppHandle,
+    prices_json: String,
+    long_exposure: Option<f64>,
+    short_exposure: Option<f64>,
+    objective: Option<String>,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "long_exposure": long_exposure.unwrap_or(1.0),
+        "short_exposure": short_exposure.unwrap_or(-1.0),
+        "objective": objective.unwrap_or_else(|| "max_sharpe".to_string())
+    });
+
+    execute_pyportfolioopt_operation(app, "market_neutral", data).await
+}
+
+/// Minimum tracking error relative to benchmark
+#[tauri::command]
+pub async fn pyportfolioopt_min_tracking_error(
+    app: tauri::AppHandle,
+    prices_json: String,
+    benchmark_weights: HashMap<String, f64>,
+    target_return: Option<f64>,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "benchmark_weights": benchmark_weights,
+        "target_return": target_return
+    });
+
+    execute_pyportfolioopt_operation(app, "min_tracking_error", data).await
+}
+
+/// Maximum diversification portfolio
+#[tauri::command]
+pub async fn pyportfolioopt_max_diversification(
+    app: tauri::AppHandle,
+    prices_json: String,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json
+    });
+
+    execute_pyportfolioopt_operation(app, "max_diversification", data).await
+}
+
+// ============================================================================
+// Advanced Objectives
+// ============================================================================
+
+/// Optimize with custom sector constraints
+#[tauri::command]
+pub async fn pyportfolioopt_custom_constraints(
+    app: tauri::AppHandle,
+    prices_json: String,
+    objective: Option<String>,
+    sector_mapper: Option<HashMap<String, String>>,
+    sector_lower: Option<HashMap<String, f64>>,
+    sector_upper: Option<HashMap<String, f64>>,
+    weight_bounds: Option<(f64, f64)>,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "objective": objective.unwrap_or_else(|| "max_sharpe".to_string()),
+        "sector_mapper": sector_mapper,
+        "sector_lower": sector_lower,
+        "sector_upper": sector_upper,
+        "weight_bounds": weight_bounds.unwrap_or((0.0, 1.0))
+    });
+
+    execute_pyportfolioopt_operation(app, "custom_constraints", data).await
+}
+
+/// Views-based Black-Litterman optimization (advanced objectives)
+#[tauri::command]
+pub async fn pyportfolioopt_views_optimization(
+    app: tauri::AppHandle,
+    prices_json: String,
+    views: HashMap<String, f64>,
+    view_confidences: Option<Vec<f64>>,
+    market_caps_json: Option<String>,
+    risk_aversion: Option<f64>,
+) -> Result<String, String> {
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "views": views,
+        "view_confidences": view_confidences,
+        "market_caps_json": market_caps_json,
+        "risk_aversion": risk_aversion.unwrap_or(1.0)
+    });
+
+    execute_pyportfolioopt_operation(app, "views_optimization", data).await
 }

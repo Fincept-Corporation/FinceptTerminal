@@ -70,6 +70,7 @@ const AlternativeInvestmentsTab = React.lazy(() => import('@/components/tabs/alt
 const MarketSimTab = React.lazy(() => import('@/components/tabs/market-sim').then(m => ({ default: m.MarketSimTab })));
 const StrategiesTab = React.lazy(() => import('@/components/tabs/strategies'));
 const AlgoTradingTab = React.lazy(() => import('@/components/tabs/algo-trading'));
+const QuantLibCoreTab = React.lazy(() => import('@/components/tabs/quantlib-core'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -588,6 +589,7 @@ function FinxeptTerminalContent() {
     { label: 'Algo Trading', action: () => setActiveTab('algo-trading') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp') },
+    { label: 'QuantLib', action: () => setActiveTab('quantlib-core') },
     { label: 'Data Sources', action: () => setActiveTab('datasources') },
     { label: 'Data Mapping', action: () => setActiveTab('datamapping') },
     { label: 'Report Builder', action: () => setActiveTab('reportbuilder') },
@@ -927,6 +929,13 @@ function FinxeptTerminalContent() {
                   AI Quant Lab
                 </TabsTrigger>
                 <TabsTrigger
+                  value="quantlib-core"
+                  style={activeTab === 'quantlib-core' ? tabStyles.active : tabStyles.default}
+                  title="QuantLib"
+                >
+                  QuantLib
+                </TabsTrigger>
+                <TabsTrigger
                   value="settings"
                   style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
                   title="Settings"
@@ -1155,6 +1164,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="market-sim" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <MarketSimTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="quantlib-core" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <QuantLibCoreTab />
               </React.Suspense>
             </TabsContent>
           </Tabs>

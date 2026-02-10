@@ -38,6 +38,19 @@ class ConsolidatorBase:
         self._working_bar = None
         self.consolidated = None
 
+    def __getattr__(self, name):
+        # Ensure data_consolidated always exists even if subclass skips super().__init__
+        if name == 'data_consolidated':
+            self.data_consolidated = EventHandler()
+            return self.data_consolidated
+        if name == '_working_bar':
+            self._working_bar = None
+            return None
+        if name == 'consolidated':
+            self.consolidated = None
+            return None
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
     def update(self, data):
         raise NotImplementedError
 
@@ -123,7 +136,7 @@ class QuoteBarConsolidator(ConsolidatorBase):
 class RenkoConsolidator(ConsolidatorBase):
     """Renko bar consolidator."""
 
-    def __init__(self, bar_size: float, renko_type=None):
+    def __init__(self, bar_size: float, renko_type=None, force_classic=None):
         super().__init__()
         self._bar_size = bar_size
         self._last_close = None

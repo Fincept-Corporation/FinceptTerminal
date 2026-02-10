@@ -30,7 +30,7 @@ const FINCEPT = {
   PURPLE: '#9D4EDD',      // Tertiary accent
 };
 
-type InstrumentType = 'bonds' | 'equity-options' | 'fx-options' | 'swaps' | 'credit';
+type InstrumentType = 'bonds' | 'equity-options' | 'fx-options' | 'swaps' | 'credit' | 'vollib';
 
 interface BondResult {
   clean_price: number;
@@ -115,6 +115,19 @@ export function DerivativesTab() {
     freq: 2,
     notional: 1000000,
     discountRate: 3.5
+  });
+
+  // py_vollib state
+  const [vollibModel, setVollibModel] = useState<'black' | 'bs' | 'bsm'>('bs');
+  const [vollibParams, setVollibParams] = useState({
+    S: 100,
+    K: 100,
+    t: 0.25,
+    r: 0.05,
+    sigma: 0.20,
+    q: 0.02,
+    flag: 'c',
+    optionPrice: 5.0,
   });
 
   // CDS state
@@ -272,6 +285,56 @@ export function DerivativesTab() {
     }
   };
 
+  // py_vollib handlers
+  const calculateVollibPrice = async () => {
+    setLoading(true); setError(null);
+    try {
+      const p = vollibParams;
+      let resultStr: string;
+      if (vollibModel === 'black') {
+        resultStr = await invoke<string>('vollib_black_price', { s: p.S, k: p.K, t: p.t, r: p.r, sigma: p.sigma, flag: p.flag });
+      } else if (vollibModel === 'bs') {
+        resultStr = await invoke<string>('vollib_bs_price', { s: p.S, k: p.K, t: p.t, r: p.r, sigma: p.sigma, flag: p.flag });
+      } else {
+        resultStr = await invoke<string>('vollib_bsm_price', { s: p.S, k: p.K, t: p.t, r: p.r, sigma: p.sigma, q: p.q, flag: p.flag });
+      }
+      setResult(JSON.parse(resultStr));
+    } catch (e: any) { setError(e.toString()); } finally { setLoading(false); }
+  };
+
+  const calculateVollibGreeks = async () => {
+    setLoading(true); setError(null);
+    try {
+      const p = vollibParams;
+      let resultStr: string;
+      if (vollibModel === 'black') {
+        resultStr = await invoke<string>('vollib_black_greeks', { s: p.S, k: p.K, t: p.t, r: p.r, sigma: p.sigma, flag: p.flag });
+      } else if (vollibModel === 'bs') {
+        resultStr = await invoke<string>('vollib_bs_greeks', { s: p.S, k: p.K, t: p.t, r: p.r, sigma: p.sigma, flag: p.flag });
+      } else {
+        resultStr = await invoke<string>('vollib_bsm_greeks', { s: p.S, k: p.K, t: p.t, r: p.r, sigma: p.sigma, q: p.q, flag: p.flag });
+      }
+      const greeks = JSON.parse(resultStr);
+      setResult({ price: null, greeks });
+    } catch (e: any) { setError(e.toString()); } finally { setLoading(false); }
+  };
+
+  const calculateVollibIV = async () => {
+    setLoading(true); setError(null);
+    try {
+      const p = vollibParams;
+      let resultStr: string;
+      if (vollibModel === 'black') {
+        resultStr = await invoke<string>('vollib_black_iv', { price: p.optionPrice, s: p.S, k: p.K, t: p.t, r: p.r, flag: p.flag });
+      } else if (vollibModel === 'bs') {
+        resultStr = await invoke<string>('vollib_bs_iv', { price: p.optionPrice, s: p.S, k: p.K, t: p.t, r: p.r, flag: p.flag });
+      } else {
+        resultStr = await invoke<string>('vollib_bsm_iv', { price: p.optionPrice, s: p.S, k: p.K, t: p.t, r: p.r, q: p.q, flag: p.flag });
+      }
+      setResult(JSON.parse(resultStr));
+    } catch (e: any) { setError(e.toString()); } finally { setLoading(false); }
+  };
+
   const copyResults = () => {
     if (result) {
       navigator.clipboard.writeText(JSON.stringify(result, null, 2));
@@ -284,7 +347,8 @@ export function DerivativesTab() {
       { id: 'equity-options', label: 'EQUITY OPTIONS', icon: TrendingUp },
       { id: 'fx-options', label: 'FX OPTIONS', icon: Activity },
       { id: 'swaps', label: 'IR SWAPS', icon: BarChart3 },
-      { id: 'credit', label: 'CREDIT', icon: Target }
+      { id: 'credit', label: 'CREDIT', icon: Target },
+      { id: 'vollib', label: 'PY_VOLLIB', icon: Zap }
     ];
 
     return (
@@ -1068,6 +1132,152 @@ export function DerivativesTab() {
     </div>
   );
 
+  const renderVolLibPanel = () => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+      {/* Pricing & Greeks */}
+      <div style={panelStyle}>
+        <div style={sectionHeaderStyle}>
+          <Zap size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>PY_VOLLIB PRICING & GREEKS</span>
+        </div>
+
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Model selector */}
+          <div>
+            <label style={labelStyle}>PRICING MODEL</label>
+            <select
+              value={vollibModel}
+              onChange={(e) => setVollibModel(e.target.value as any)}
+              style={inputStyle}
+            >
+              <option value="black">Black (Futures/Forwards)</option>
+              <option value="bs">Black-Scholes (Equity, no dividends)</option>
+              <option value="bsm">Black-Scholes-Merton (Equity + dividends)</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={labelStyle}>{vollibModel === 'black' ? 'FORWARD PRICE' : 'SPOT PRICE'} (S)</label>
+              <input type="text" inputMode="decimal" value={vollibParams.S}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^-?\d*\.?\d*$/.test(v)) setVollibParams({ ...vollibParams, S: parseFloat(v) || 0 }); }}
+                style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>STRIKE (K)</label>
+              <input type="text" inputMode="decimal" value={vollibParams.K}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^-?\d*\.?\d*$/.test(v)) setVollibParams({ ...vollibParams, K: parseFloat(v) || 0 }); }}
+                style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={labelStyle}>TIME TO EXPIRY (years)</label>
+              <input type="text" inputMode="decimal" value={vollibParams.t}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^-?\d*\.?\d*$/.test(v)) setVollibParams({ ...vollibParams, t: parseFloat(v) || 0 }); }}
+                style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>RISK-FREE RATE (decimal)</label>
+              <input type="text" inputMode="decimal" value={vollibParams.r}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^-?\d*\.?\d*$/.test(v)) setVollibParams({ ...vollibParams, r: parseFloat(v) || 0 }); }}
+                style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: vollibModel === 'bsm' ? '1fr 1fr 1fr' : '1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={labelStyle}>VOLATILITY (decimal)</label>
+              <input type="text" inputMode="decimal" value={vollibParams.sigma}
+                onChange={(e) => { const v = e.target.value; if (v === '' || /^-?\d*\.?\d*$/.test(v)) setVollibParams({ ...vollibParams, sigma: parseFloat(v) || 0 }); }}
+                style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>OPTION TYPE</label>
+              <select value={vollibParams.flag}
+                onChange={(e) => setVollibParams({ ...vollibParams, flag: e.target.value })}
+                style={inputStyle}>
+                <option value="c">Call</option>
+                <option value="p">Put</option>
+              </select>
+            </div>
+            {vollibModel === 'bsm' && (
+              <div>
+                <label style={labelStyle}>DIVIDEND YIELD (q)</label>
+                <input type="text" inputMode="decimal" value={vollibParams.q}
+                  onChange={(e) => { const v = e.target.value; if (v === '' || /^-?\d*\.?\d*$/.test(v)) setVollibParams({ ...vollibParams, q: parseFloat(v) || 0 }); }}
+                  style={inputStyle} />
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <button onClick={calculateVollibPrice} disabled={loading}
+              style={{ ...primaryButtonStyle, opacity: loading ? 0.5 : 1 }}>
+              {loading ? 'CALCULATING...' : 'CALCULATE PRICE'}
+            </button>
+            <button onClick={calculateVollibGreeks} disabled={loading}
+              style={{ ...primaryButtonStyle, opacity: loading ? 0.5 : 1, backgroundColor: FINCEPT.CYAN, color: FINCEPT.DARK_BG }}>
+              {loading ? 'CALCULATING...' : 'CALCULATE GREEKS'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Implied Volatility */}
+      <div style={panelStyle}>
+        <div style={sectionHeaderStyle}>
+          <Activity size={14} style={{ color: FINCEPT.ORANGE }} />
+          <span style={{ fontSize: '11px', fontWeight: 700, color: FINCEPT.WHITE }}>IMPLIED VOLATILITY (PY_VOLLIB)</span>
+        </div>
+
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ padding: '8px', backgroundColor: `${FINCEPT.CYAN}10`, border: `1px solid ${FINCEPT.CYAN}30`, borderRadius: '2px' }}>
+            <span style={{ fontSize: '9px', color: FINCEPT.CYAN }}>
+              Model: {vollibModel === 'black' ? 'Black' : vollibModel === 'bs' ? 'Black-Scholes' : 'Black-Scholes-Merton'}
+              {' '}| Uses same S, K, t, r{vollibModel === 'bsm' ? ', q' : ''} from left panel
+            </span>
+          </div>
+
+          <div>
+            <label style={labelStyle}>MARKET OPTION PRICE</label>
+            <input type="text" inputMode="decimal" value={vollibParams.optionPrice}
+              onChange={(e) => { const v = e.target.value; if (v === '' || /^-?\d*\.?\d*$/.test(v)) setVollibParams({ ...vollibParams, optionPrice: parseFloat(v) || 0 }); }}
+              style={inputStyle} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={labelStyle}>{vollibModel === 'black' ? 'FORWARD' : 'SPOT'} (S)</label>
+              <div style={{ ...inputStyle, backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.CYAN }}>{vollibParams.S}</div>
+            </div>
+            <div>
+              <label style={labelStyle}>STRIKE (K)</label>
+              <div style={{ ...inputStyle, backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.CYAN }}>{vollibParams.K}</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={labelStyle}>TIME (t)</label>
+              <div style={{ ...inputStyle, backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.CYAN }}>{vollibParams.t}</div>
+            </div>
+            <div>
+              <label style={labelStyle}>RATE (r)</label>
+              <div style={{ ...inputStyle, backgroundColor: FINCEPT.HEADER_BG, color: FINCEPT.CYAN }}>{vollibParams.r}</div>
+            </div>
+          </div>
+
+          <button onClick={calculateVollibIV} disabled={loading}
+            style={{ ...primaryButtonStyle, opacity: loading ? 0.5 : 1 }}>
+            {loading ? 'CALCULATING...' : 'CALCULATE IMPLIED VOL'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderResults = () => {
     if (error) {
       return (
@@ -1275,7 +1485,7 @@ export function DerivativesTab() {
               DERIVATIVES PRICING
             </h1>
             <span style={{ fontSize: '9px', color: FINCEPT.GRAY, letterSpacing: '0.5px' }}>
-              PROFESSIONAL VALUATION POWERED BY FINANCEPY
+              PROFESSIONAL VALUATION POWERED BY FINANCEPY & PY_VOLLIB
             </span>
           </div>
         </div>
@@ -1302,6 +1512,7 @@ export function DerivativesTab() {
           {activeInstrument === 'fx-options' && renderFXOptionsPanel()}
           {activeInstrument === 'swaps' && renderSwapsPanel()}
           {activeInstrument === 'credit' && renderCreditPanel()}
+          {activeInstrument === 'vollib' && renderVolLibPanel()}
 
           {renderResults()}
         </div>
@@ -1321,7 +1532,7 @@ export function DerivativesTab() {
         <span>DERIVATIVES TAB</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <span>INSTRUMENT: {activeInstrument.toUpperCase().replace('-', ' ')}</span>
-          <span style={{ color: FINCEPT.CYAN }}>FINANCEPY v1.0.1</span>
+          <span style={{ color: FINCEPT.CYAN }}>{activeInstrument === 'vollib' ? 'PY_VOLLIB' : 'FINANCEPY v1.0.1'}</span>
         </div>
       </div>
     </div>

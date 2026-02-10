@@ -43,6 +43,17 @@ class Time:
         """Get start of day for a datetime"""
         return dt.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    @staticmethod
+    def each_tradeable_day_in_time_zone(exchange_hours, start, end, time_zone=None, include_extended=False):
+        """Yield each tradeable day between start and end."""
+        current = start
+        while current <= end:
+            if current.weekday() < 5:  # Mon-Fri
+                yield current
+            current += timedelta(days=1)
+
+    EachTradeableDayInTimeZone = each_tradeable_day_in_time_zone
+
 
 class TimeZones:
     """Common timezone definitions (replaces LEAN's TimeZones)"""
@@ -98,17 +109,29 @@ class Extensions:
         return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
     @staticmethod
-    def convert_from_utc(dt: datetime, tz: timezone) -> datetime:
+    def _resolve_tz(tz):
+        """Resolve timezone: accept string or tzinfo object."""
+        if isinstance(tz, str):
+            try:
+                from zoneinfo import ZoneInfo
+                return ZoneInfo(tz)
+            except (ImportError, KeyError):
+                return timezone.utc
+        return tz if tz is not None else timezone.utc
+
+    @staticmethod
+    def convert_from_utc(dt: datetime, tz) -> datetime:
         """Convert UTC datetime to specified timezone"""
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(tz)
+        return dt.astimezone(Extensions._resolve_tz(tz))
 
     @staticmethod
-    def convert_to_utc(dt: datetime, tz: timezone) -> datetime:
+    def convert_to_utc(dt: datetime, tz) -> datetime:
         """Convert datetime from specified timezone to UTC"""
+        resolved_tz = Extensions._resolve_tz(tz)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=tz)
+            dt = dt.replace(tzinfo=resolved_tz)
         return dt.astimezone(timezone.utc)
 
     @staticmethod
@@ -141,6 +164,25 @@ class Extensions:
             return float('inf') if (a > 0) == (b > 0) else float('-inf')
         return a * b
 
+    @staticmethod
+    def is_option(security_type) -> bool:
+        """Check if security type is an option type."""
+        val = int(security_type) if hasattr(security_type, '__int__') else security_type
+        return val in (2, 9, 10)  # OPTION, FUTURE_OPTION, INDEX_OPTION
+
+    @staticmethod
+    def get_order_direction(quantity) -> int:
+        """Get order direction from quantity."""
+        if quantity > 0:
+            return 0  # BUY
+        elif quantity < 0:
+            return 1  # SELL
+        return 2  # HOLD
+
+    # PascalCase aliases
+    IsOption = is_option
+    GetOrderDirection = get_order_direction
+
 
 class IndicatorExtensions:
     """Extension methods for indicators"""
@@ -160,6 +202,47 @@ class IndicatorExtensions:
         """Chain indicators together"""
         return indicator
 
+    @staticmethod
+    def over(indicator: Any, other: Any, selector: Any = None) -> Any:
+        """Chain indicator over another (e.g., SMA over RSI)"""
+        return indicator
+
+    @staticmethod
+    def minus(indicator: Any, other: Any) -> Any:
+        """Subtract one indicator from another"""
+        return indicator
+
+    @staticmethod
+    def plus(indicator: Any, other: Any) -> Any:
+        """Add one indicator to another"""
+        return indicator
+
+    @staticmethod
+    def times(indicator: Any, factor: float) -> Any:
+        """Multiply indicator by factor"""
+        return indicator
+
+    Of = of
+    Over = over
+    SMA = sma
+    EMA = ema
+
+
+class _WrapperEventHandler:
+    """Supports += and -= for wrapper event registration."""
+    def __init__(self):
+        self._handlers = []
+    def __iadd__(self, handler):
+        self._handlers.append(handler)
+        return self
+    def __isub__(self, handler):
+        if handler in self._handlers:
+            self._handlers.remove(handler)
+        return self
+    def __call__(self, *args, **kwargs):
+        for h in self._handlers:
+            h(*args, **kwargs)
+
 
 class SimpleMovingAverageWrapper:
     """Wrapper to compute SMA of another indicator"""
@@ -170,6 +253,7 @@ class SimpleMovingAverageWrapper:
         self._values: List[float] = []
         self._current = 0.0
         self.is_ready = False
+        self.updated = _WrapperEventHandler()
 
     def update(self, value: float) -> bool:
         """Update with new value"""
@@ -205,6 +289,7 @@ class ExponentialMovingAverageWrapper:
         self._count = 0
         self._multiplier = 2.0 / (period + 1)
         self.is_ready = False
+        self.updated = _WrapperEventHandler()
 
     def update(self, value: float) -> bool:
         """Update with new value"""
@@ -240,19 +325,57 @@ class BuyingPowerModelExtensions:
             security.set_leverage(leverage)
 
 
+class _BrokerageMarkets(dict):
+    """Dict that supports both SecurityType enum and string keys for default_markets."""
+    _STR_MAP = {
+        'equity': 1, 'option': 2, 'forex': 4, 'future': 5, 'crypto': 7,
+        'index': 6, 'index_option': 12, 'future_option': 13, 'cfd': 8,
+    }
+
+    def __getitem__(self, key):
+        # Try direct lookup first
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            pass
+        # Try by string name
+        if isinstance(key, str):
+            for k, v in super().items():
+                if str(k).lower().replace('securitytype.', '') == key.lower():
+                    return v
+        # Try by int value
+        if isinstance(key, int):
+            for k, v in super().items():
+                if getattr(k, 'value', k) == key:
+                    return v
+        raise KeyError(key)
+
+    def __contains__(self, key):
+        try:
+            self[key]
+            return True
+        except KeyError:
+            return False
+
+
 class DefaultBrokerageModel:
     """Default brokerage model implementation"""
 
     def __init__(self, account_type: int = 0):
-        from .enums import AccountType
+        from .enums import AccountType, SecurityType, Market
         self.account_type = account_type
-        self.default_markets = {
-            'equity': 'usa',
-            'option': 'usa',
-            'future': 'cme',
-            'forex': 'oanda',
-            'crypto': 'binance',
-        }
+        # Support both string keys ('equity') and SecurityType enum keys
+        self.default_markets = _BrokerageMarkets({
+            SecurityType.EQUITY: Market.USA,
+            SecurityType.OPTION: Market.USA,
+            SecurityType.FUTURE: Market.CME,
+            SecurityType.FOREX: Market.OANDA,
+            SecurityType.CRYPTO: Market.BINANCE,
+            SecurityType.INDEX: Market.USA,
+            SecurityType.INDEX_OPTION: Market.USA,
+            SecurityType.FUTURE_OPTION: Market.CME,
+            SecurityType.CFD: Market.OANDA,
+        })
 
     def get_leverage(self, security: Any) -> float:
         """Get default leverage for security type"""
@@ -278,12 +401,18 @@ class DefaultBrokerageModel:
 class RateOfChangePercent:
     """Rate of change percentage indicator"""
 
-    def __init__(self, period: int = 14):
-        self.period = period
+    def __init__(self, name_or_period=14, period=None):
+        # Support both RateOfChangePercent(14) and RateOfChangePercent("name", 1)
+        if isinstance(name_or_period, str):
+            self.name = name_or_period
+            self.period = period if period is not None else 14
+        else:
+            self.period = name_or_period
+            self.name = f"ROCP({self.period})"
         self._values: List[float] = []
         self._current = 0.0
         self.is_ready = False
-        self.name = f"ROCP({period})"
+        self.updated = _WrapperEventHandler()
 
     def update(self, time: datetime, value: float) -> bool:
         """Update indicator with new value"""

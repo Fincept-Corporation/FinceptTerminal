@@ -173,7 +173,12 @@ class YFData(Data):
                     df.columns = [c.title() for c in df.columns]
                     # Keep OHLCV
                     cols = [c for c in ['Open', 'High', 'Low', 'Close', 'Volume'] if c in df.columns]
-                    data[sym] = df[cols]
+                    df = df[cols]
+                    # Round to 4 decimal places to eliminate float32 rounding noise
+                    for col in ['Open', 'High', 'Low', 'Close']:
+                        if col in df.columns:
+                            df[col] = df[col].round(4)
+                    data[sym] = df
             except Exception:
                 continue
 

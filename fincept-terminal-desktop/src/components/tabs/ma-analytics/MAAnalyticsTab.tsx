@@ -183,7 +183,7 @@ const MAAnalyticsTabNew: React.FC = () => {
             padding: '8px 12px',
             backgroundColor: isActive ? FINCEPT.PANEL_BG : 'transparent',
             border: `1px solid ${isActive ? FINCEPT.ORANGE : 'transparent'}`,
-            borderRadius: '4px',
+            borderRadius: '2px',
             color: isActive ? FINCEPT.ORANGE : FINCEPT.GRAY,
             cursor: 'pointer',
             transition: 'all 0.15s',

@@ -267,81 +267,6 @@ class MonteCarloValuation:
             'potential_loss_pct': ((deal_value - var_value) / deal_value * 100) if deal_value > 0 else 0
         }
 
-if __name__ == '__main__':
-    mc = MonteCarloValuation(num_simulations=10000, random_seed=42)
-
-    synergies = mc.simulate_synergies(
-        base_revenue_synergy=50_000_000,
-        base_cost_synergy=30_000_000,
-        revenue_std_dev_pct=0.30,
-        cost_std_dev_pct=0.20,
-        correlation=0.3
-    )
-
-    print("=== MONTE CARLO SYNERGY SIMULATION ===\n")
-    print(f"Simulations: {synergies['num_simulations']:,}\n")
-
-    print("Total Synergies:")
-    total = synergies['total_synergies']
-    print(f"  Mean: ${total['mean']:,.0f}")
-    print(f"  Median: ${total['median']:,.0f}")
-    print(f"  Std Dev: ${total['std']:,.0f}")
-    print(f"  5th Percentile: ${total['percentile_5']:,.0f}")
-    print(f"  95th Percentile: ${total['percentile_95']:,.0f}")
-    print(f"  Probability Positive: {synergies['probability_positive']:.1f}%")
-
-    print("\n\nRevenue Synergies:")
-    rev = synergies['revenue_synergies']
-    print(f"  Mean: ${rev['mean']:,.0f}")
-    print(f"  Range (5th-95th): ${rev['percentile_5']:,.0f} - ${rev['percentile_95']:,.0f}")
-
-    print("\nCost Synergies:")
-    cost = synergies['cost_synergies']
-    print(f"  Mean: ${cost['mean']:,.0f}")
-    print(f"  Range (5th-95th): ${cost['percentile_5']:,.0f} - ${cost['percentile_95']:,.0f}")
-
-    deal_returns = mc.simulate_deal_returns(
-        purchase_price=500_000_000,
-        synergy_mean=80_000_000,
-        synergy_std=20_000_000,
-        integration_cost_mean=50_000_000,
-        integration_cost_std=15_000_000,
-        years_to_realize=3,
-        discount_rate=0.10
-    )
-
-    print("\n\n=== DEAL RETURNS SIMULATION ===")
-    npv = deal_returns['npv_statistics']
-    print(f"\nNPV Statistics:")
-    print(f"  Mean: ${npv['mean']:,.0f}")
-    print(f"  Median: ${npv['median']:,.0f}")
-    print(f"  Std Dev: ${npv['std']:,.0f}")
-    print(f"  5th Percentile: ${npv['percentile_5']:,.0f}")
-    print(f"  95th Percentile: ${npv['percentile_95']:,.0f}")
-    print(f"\nProbability Positive NPV: {deal_returns['probability_positive_npv']:.1f}%")
-    print(f"Value at Risk (5%): ${deal_returns['value_at_risk_5pct']:,.0f}")
-
-    accretion = mc.simulate_accretion_dilution(
-        acquirer_eps=5.00,
-        target_eps=2.50,
-        purchase_price_mean=800_000_000,
-        purchase_price_std=100_000_000,
-        synergy_mean=40_000_000,
-        synergy_std=10_000_000,
-        acquirer_shares=100_000_000,
-        target_shares=50_000_000,
-        payment_stock_pct=0.6
-    )
-
-    print("\n\n=== EPS ACCRETION/DILUTION SIMULATION ===")
-    acc = accretion['accretion_statistics']
-    print(f"\nAccretion/Dilution %:")
-    print(f"  Expected: {accretion['expected_accretion_pct']:+.2f}%")
-    print(f"  Median: {acc['median']:+.2f}%")
-    print(f"  5th Percentile: {acc['percentile_5']:+.2f}%")
-    print(f"  95th Percentile: {acc['percentile_95']:+.2f}%")
-    print(f"\nProbability Accretive: {accretion['probability_accretive']:.1f}%")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -356,20 +281,32 @@ def main():
 
     try:
         if command == "monte_carlo":
-            if len(sys.argv) < 9:
-                raise ValueError("All parameters required: base_valuation, revenue_growth_mean, revenue_growth_std, margin_mean, margin_std, discount_rate, simulations")
+            if len(sys.argv) < 3:
+                raise ValueError("Monte Carlo parameters required")
 
-            base_valuation = float(sys.argv[2])
-            revenue_growth_mean = float(sys.argv[3])
-            revenue_growth_std = float(sys.argv[4])
-            margin_mean = float(sys.argv[5])
-            margin_std = float(sys.argv[6])
-            discount_rate = float(sys.argv[7])
-            simulations = int(sys.argv[8])
+            # Accept either JSON dict or positional args
+            try:
+                params = json.loads(sys.argv[2])
+                base_valuation = float(params.get('base_valuation', params.get('base_value', 1000000000)))
+                revenue_growth_mean = float(params.get('revenue_growth_mean', params.get('growth_mean', 0.05)))
+                revenue_growth_std = float(params.get('revenue_growth_std', params.get('growth_std', params.get('volatility', 0.15))))
+                margin_mean = float(params.get('margin_mean', 0.15))
+                margin_std = float(params.get('margin_std', 0.05))
+                discount_rate = float(params.get('discount_rate', 0.10))
+                simulations = int(params.get('num_simulations', params.get('simulations', 1000)))
+            except (json.JSONDecodeError, TypeError):
+                if len(sys.argv) < 9:
+                    raise ValueError("All parameters required: base_valuation, revenue_growth_mean, revenue_growth_std, margin_mean, margin_std, discount_rate, simulations")
+                base_valuation = float(sys.argv[2])
+                revenue_growth_mean = float(sys.argv[3])
+                revenue_growth_std = float(sys.argv[4])
+                margin_mean = float(sys.argv[5])
+                margin_std = float(sys.argv[6])
+                discount_rate = float(sys.argv[7])
+                simulations = int(sys.argv[8])
 
             mc = MonteCarloValuation(num_simulations=simulations)
 
-            # Run synergy simulation as example
             analysis = mc.simulate_synergies(
                 base_revenue_synergy=base_valuation * revenue_growth_mean,
                 base_cost_synergy=base_valuation * margin_mean,

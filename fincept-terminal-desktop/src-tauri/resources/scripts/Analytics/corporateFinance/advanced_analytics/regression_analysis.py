@@ -255,54 +255,6 @@ class MARegression:
             }
         }
 
-if __name__ == '__main__':
-    analyzer = MARegression()
-
-    comp_data = [
-        {'ev': 5_000_000_000, 'revenue': 1_000_000_000, 'ebitda_margin': 25, 'growth': 15},
-        {'ev': 8_000_000_000, 'revenue': 1_500_000_000, 'ebitda_margin': 30, 'growth': 20},
-        {'ev': 3_500_000_000, 'revenue': 800_000_000, 'ebitda_margin': 20, 'growth': 12},
-        {'ev': 6_500_000_000, 'revenue': 1_200_000_000, 'ebitda_margin': 28, 'growth': 18},
-        {'ev': 4_000_000_000, 'revenue': 900_000_000, 'ebitda_margin': 22, 'growth': 14}
-    ]
-
-    subject = {'revenue': 1_100_000_000, 'ebitda_margin': 26, 'growth': 16}
-
-    valuation = analyzer.multiple_regression_valuation(comp_data, subject)
-
-    print("=== REGRESSION-BASED VALUATION ===\n")
-    print(f"Predicted Value: ${valuation['predicted_value']:,.0f}")
-    print(f"95% Prediction Interval:")
-    print(f"  Lower: ${valuation['prediction_interval']['lower']:,.0f}")
-    print(f"  Upper: ${valuation['prediction_interval']['upper']:,.0f}")
-    print(f"\nR-Squared: {valuation['regression_statistics']['r_squared']:.3f}")
-    print(f"Adjusted R-Squared: {valuation['regression_statistics']['adjusted_r_squared']:.3f}")
-
-    print("\n\nCoefficients:")
-    for feature, stats in valuation['coefficients'].items():
-        sig = "***" if stats['significant'] else ""
-        print(f"  {feature}: {stats['coefficient']:,.0f} (t={stats['t_statistic']:.2f}, p={stats['p_value']:.4f}) {sig}")
-
-    deal_data = [
-        {'premium': 35, 'size': 500, 'leverage': 0.3, 'growth': 10, 'multiple': 8},
-        {'premium': 42, 'size': 1000, 'leverage': 0.25, 'growth': 15, 'multiple': 10},
-        {'premium': 28, 'size': 300, 'leverage': 0.4, 'growth': 8, 'multiple': 7},
-        {'premium': 38, 'size': 750, 'leverage': 0.3, 'growth': 12, 'multiple': 9},
-        {'premium': 45, 'size': 1200, 'leverage': 0.2, 'growth': 18, 'multiple': 11}
-    ]
-
-    premium_analysis = analyzer.premium_regression(deal_data)
-
-    print("\n\n=== PREMIUM REGRESSION ANALYSIS ===")
-    print(f"R-Squared: {premium_analysis['regression_statistics']['r_squared']:.3f}")
-    print(f"Base Premium: {premium_analysis['regression_statistics']['intercept']:.1f}%\n")
-
-    print("Premium Drivers:")
-    for driver, stats in premium_analysis['premium_drivers'].items():
-        sig = "***" if stats['significant'] else ""
-        print(f"  {driver}: {stats['coefficient']:+.2f}% {sig}")
-        print(f"    {stats['interpretation']}")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -317,22 +269,57 @@ def main():
 
     try:
         if command == "regression":
-            if len(sys.argv) < 5:
-                raise ValueError("Comp data, subject metrics, and regression type required")
+            if len(sys.argv) < 3:
+                raise ValueError("Regression parameters required")
 
-            comp_data = json.loads(sys.argv[2])
-            subject_metrics = json.loads(sys.argv[3])
-            regression_type = sys.argv[4]
+            # Accept either a single JSON dict with all params, or positional args
+            try:
+                params = json.loads(sys.argv[2])
+            except (json.JSONDecodeError, TypeError):
+                params = {}
 
-            analyzer = MARegression()
-
-            # Route to appropriate regression
-            if regression_type == "premium":
-                analysis = analyzer.premium_regression(comp_data)
-            elif regression_type == "multiple":
-                analysis = analyzer.multiple_regression(comp_data, subject_metrics)
+            # Check if params is a wrapper dict with comp_data, subject_metrics, type keys
+            if isinstance(params, dict) and ('comp_data' in params or 'dependent' in params):
+                if 'dependent' in params:
+                    # Simple regression input format
+                    dependent = params['dependent']
+                    independent = params['independent']
+                    analyzer = MARegression()
+                    y = np.array(dependent)
+                    X = np.array(independent).T if len(np.array(independent).shape) > 1 else np.array(independent).reshape(-1, 1)
+                    result_data = analyzer.linear_regression(X, y)
+                    analysis = {
+                        'r_squared': result_data.r_squared,
+                        'adjusted_r_squared': result_data.adjusted_r_squared,
+                        'coefficients': result_data.coefficients.tolist(),
+                        'intercept': result_data.intercept,
+                        'p_values': result_data.p_values.tolist(),
+                        'std_errors': result_data.std_errors.tolist()
+                    }
+                else:
+                    comp_data = params.get('comp_data', [])
+                    subject_metrics = params.get('subject_metrics', {})
+                    regression_type = params.get('type', params.get('regression_type', 'premium'))
+                    analyzer = MARegression()
+                    if regression_type == "premium":
+                        analysis = analyzer.premium_regression(comp_data)
+                    elif regression_type == "multiple":
+                        analysis = analyzer.multiple_regression(comp_data, subject_metrics)
+                    else:
+                        analysis = analyzer.premium_regression(comp_data)
             else:
-                analysis = analyzer.premium_regression(comp_data)
+                # Positional args: comp_data subject_metrics regression_type
+                comp_data = params if isinstance(params, list) else json.loads(sys.argv[2])
+                subject_metrics = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}
+                regression_type = sys.argv[4] if len(sys.argv) > 4 else "premium"
+
+                analyzer = MARegression()
+                if regression_type == "premium":
+                    analysis = analyzer.premium_regression(comp_data)
+                elif regression_type == "multiple":
+                    analysis = analyzer.multiple_regression(comp_data, subject_metrics)
+                else:
+                    analysis = analyzer.premium_regression(comp_data)
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

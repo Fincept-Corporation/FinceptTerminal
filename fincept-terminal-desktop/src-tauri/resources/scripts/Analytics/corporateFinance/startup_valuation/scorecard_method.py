@@ -1,5 +1,6 @@
 """Scorecard Valuation Method"""
 from typing import Dict, Any
+import sys
 
 class ScorecardMethod:
     """Scorecard (or Payne) Method for startup valuation"""
@@ -171,7 +172,17 @@ def main():
             factor_assessments = json.loads(sys.argv[4])
 
             scorecard = ScorecardMethod(region=region)
-            valuation = scorecard.comprehensive_assessment(stage=stage, **factor_assessments)
+            # Map alternative frontend key names to scorecard factor names
+            key_map = {
+                'market_opportunity': 'size_of_opportunity', 'market_size': 'size_of_opportunity',
+                'marketing_channels': 'marketing_sales_channels', 'sales_channels': 'marketing_sales_channels',
+                'need_for_investment': 'need_for_additional_investment',
+                'other': 'other_factors',
+            }
+            mapped = {}
+            for k, v in factor_assessments.items():
+                mapped[key_map.get(k, k)] = v
+            valuation = scorecard.calculate_valuation(stage=stage, factor_assessments=mapped)
 
             result = {"success": True, "data": valuation}
             print(json.dumps(result))

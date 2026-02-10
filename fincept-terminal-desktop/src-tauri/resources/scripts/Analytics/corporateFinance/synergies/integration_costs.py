@@ -362,20 +362,37 @@ def main():
     command = sys.argv[1]
 
     try:
-        if command == "integration_cost":
-            if len(sys.argv) < 5:
-                raise ValueError("Deal value, systems to integrate, and complexity factor required")
+        if command in ("integration", "integration_cost"):
+            if len(sys.argv) < 3:
+                raise ValueError("Deal size and complexity level required")
 
-            deal_value = float(sys.argv[2])
-            systems_to_integrate = int(sys.argv[3])
-            complexity_factor = float(sys.argv[4])
+            # Accept either JSON dict or positional args
+            try:
+                params = json.loads(sys.argv[2])
+                deal_value = float(params.get('deal_size', params.get('deal_value', 0)))
+                complexity_level = str(params.get('complexity', params.get('complexity_level', 'medium')))
+                integration_plan = {k: v for k, v in params.items() if k not in ('deal_size', 'deal_value', 'complexity', 'complexity_level')}
+            except (json.JSONDecodeError, TypeError):
+                if len(sys.argv) < 4:
+                    raise ValueError("Deal size and complexity level required")
+                deal_value = float(sys.argv[2])
+                complexity_level = sys.argv[3]
+                integration_plan = json.loads(sys.argv[4]) if len(sys.argv) > 4 else {}
+
+            # Map complexity level string to numeric factor
+            complexity_map = {'low': 0.5, 'medium': 1.0, 'high': 1.5, 'very_high': 2.0}
+            complexity_factor = complexity_map.get(complexity_level, 1.0)
+            if isinstance(complexity_level, (int, float)) or complexity_level.replace('.', '').isdigit():
+                complexity_factor = float(complexity_level)
+
+            systems_to_integrate = integration_plan.get('systems_to_integrate', 5)
 
             analyzer = IntegrationCostAnalyzer(deal_value=deal_value)
 
             analysis = analyzer.estimate_it_integration(
                 systems_to_integrate=systems_to_integrate,
                 complexity_factor=complexity_factor,
-                third_party_consulting=True
+                third_party_consulting=integration_plan.get('third_party_consulting', True)
             )
 
             result = {"success": True, "data": analysis}

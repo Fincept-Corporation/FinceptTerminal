@@ -2,6 +2,7 @@
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from enum import Enum
+import sys
 
 class PaymentType(Enum):
     ALL_CASH = "all_cash"
@@ -258,25 +259,42 @@ def main():
 
     try:
         if command == "payment":
-            if len(sys.argv) < 6:
-                raise ValueError("Purchase price, cash percentage, acquirer cash, and debt capacity required")
+            if len(sys.argv) < 3:
+                raise ValueError("Payment parameters required")
 
-            purchase_price = float(sys.argv[2])
-            cash_percentage = float(sys.argv[3])
-            acquirer_cash = float(sys.argv[4])
-            debt_capacity = float(sys.argv[5])
+            # Accept either JSON dict or positional args
+            try:
+                params = json.loads(sys.argv[2])
+                total = float(params.get('total_consideration', params.get('purchase_price', 0)))
+                cash_pct = float(params.get('cash_pct', params.get('cash_percentage', 50))) / 100.0 if params.get('cash_pct', params.get('cash_percentage', 50)) > 1 else float(params.get('cash_pct', params.get('cash_percentage', 0.5)))
+                acquirer_cash = float(params.get('acquirer_cash', total * cash_pct))
+                debt_capacity = float(params.get('debt_capacity', total * 0.5))
+                acq_shares = float(params.get('acquirer_shares_outstanding', 100_000_000))
+                acq_price = float(params.get('acquirer_share_price', 50.0))
+                tgt_shares = float(params.get('target_shares_outstanding', 20_000_000))
+                tgt_price = float(params.get('target_share_price', 30.0))
+            except (json.JSONDecodeError, TypeError):
+                if len(sys.argv) < 6:
+                    raise ValueError("Purchase price, cash percentage, acquirer cash, and debt capacity required")
+                total = float(sys.argv[2])
+                cash_pct = float(sys.argv[3])
+                acquirer_cash = float(sys.argv[4])
+                debt_capacity = float(sys.argv[5])
+                acq_shares = 100_000_000
+                acq_price = 50.0
+                tgt_shares = 20_000_000
+                tgt_price = 30.0
 
-            # Use default values for analyzer parameters or get from optional args
             analyzer = PaymentStructureAnalyzer(
-                acquirer_shares_outstanding=100_000_000,
-                acquirer_share_price=50.00,
-                target_shares_outstanding=20_000_000,
-                target_share_price=30.00
+                acquirer_shares_outstanding=acq_shares,
+                acquirer_share_price=acq_price,
+                target_shares_outstanding=tgt_shares,
+                target_share_price=tgt_price
             )
 
             analysis = analyzer.analyze_mixed_payment(
-                purchase_price=purchase_price,
-                cash_percentage=cash_percentage,
+                purchase_price=total,
+                cash_percentage=cash_pct,
                 acquirer_cash=acquirer_cash,
                 debt_capacity=debt_capacity
             )

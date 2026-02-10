@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Download, RefreshCw, ChevronDown, X, AlertCircle, Check, Loader2 } from 'lucide-react';
+import { Search, Download, RefreshCw, ChevronDown, X, AlertCircle, Check, Loader2, Globe } from 'lucide-react';
 import {
   masterContractService,
   type SymbolSearchResult,
@@ -51,6 +51,14 @@ interface SymbolSearchProps {
   exchangeFilter?: string;
   /** Filter by instrument type */
   instrumentTypeFilter?: string;
+  /**
+   * Use direct search via adapter instead of master contract service.
+   * When true, onDirectSearch must be provided.
+   * Used for brokers like yfinance that don't have master contract data.
+   */
+  useDirectSearch?: boolean;
+  /** Direct search function - called when useDirectSearch is true */
+  onDirectSearch?: (query: string) => Promise<SymbolSearchResult[]>;
 }
 
 export function SymbolSearch({
@@ -61,7 +69,9 @@ export function SymbolSearch({
   placeholder = 'Search stocks...',
   showDownloadStatus = true,
   exchangeFilter,
-  instrumentTypeFilter
+  instrumentTypeFilter,
+  useDirectSearch = false,
+  onDirectSearch,
 }: SymbolSearchProps) {
   // State
   const [isOpen, setIsOpen] = useState(false);
@@ -82,8 +92,14 @@ export function SymbolSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<number | null>(null);
 
-  // Check if master contract data exists on mount
+  // Check if master contract data exists on mount (skip for direct search brokers)
   useEffect(() => {
+    if (useDirectSearch) {
+      // Direct search brokers (e.g. yfinance) don't use master contract
+      setSymbolCount(-1); // -1 signals "ready" without master contract
+      return;
+    }
+
     const checkData = async () => {
       try {
         const count = await masterContractService.getSymbolCount(brokerId);
@@ -100,7 +116,7 @@ export function SymbolSearch({
     };
 
     checkData();
-  }, [brokerId]);
+  }, [brokerId, useDirectSearch]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -124,19 +140,26 @@ export function SymbolSearch({
 
     setIsSearching(true);
     try {
-      const searchResults = await masterContractService.safeSearch(brokerId, searchQuery, {
-        exchange: selectedFilterExchange,
-        instrumentType: instrumentTypeFilter,
-        limit: 50
-      });
-      setResults(searchResults);
+      if (useDirectSearch && onDirectSearch) {
+        // Direct search via adapter (e.g. yfinance Python subprocess)
+        const searchResults = await onDirectSearch(searchQuery);
+        setResults(searchResults);
+      } else {
+        // Standard master contract search
+        const searchResults = await masterContractService.safeSearch(brokerId, searchQuery, {
+          exchange: selectedFilterExchange,
+          instrumentType: instrumentTypeFilter,
+          limit: 50
+        });
+        setResults(searchResults);
+      }
     } catch (error) {
       console.error('[SymbolSearch] Search error:', error);
       setResults([]);
     } finally {
       setIsSearching(false);
     }
-  }, [brokerId, selectedFilterExchange, instrumentTypeFilter]);
+  }, [brokerId, selectedFilterExchange, instrumentTypeFilter, useDirectSearch, onDirectSearch]);
 
   // Handle query change with debounce
   const handleQueryChange = (value: string) => {
@@ -146,9 +169,11 @@ export function SymbolSearch({
       clearTimeout(searchTimeoutRef.current);
     }
 
+    // Longer debounce for direct search (Python subprocess) vs local DB
+    const debounceMs = useDirectSearch ? 400 : 150;
     searchTimeoutRef.current = window.setTimeout(() => {
       performSearch(value);
-    }, 150);
+    }, debounceMs);
   };
 
   // Handle symbol selection
@@ -343,8 +368,8 @@ export function SymbolSearch({
             )}
           </div>
 
-          {/* Status/Download Bar */}
-          {showDownloadStatus && (
+          {/* Status/Download Bar - hidden for direct search brokers */}
+          {showDownloadStatus && !useDirectSearch && (
             <div style={{
               padding: '6px 12px',
               backgroundColor: FINCEPT.HEADER_BG,
@@ -399,6 +424,23 @@ export function SymbolSearch({
                 )}
                 {symbolCount > 0 ? 'REFRESH' : 'DOWNLOAD'}
               </button>
+            </div>
+          )}
+          {/* Direct search info bar */}
+          {useDirectSearch && (
+            <div style={{
+              padding: '6px 12px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `1px solid ${FINCEPT.BORDER}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '9px'
+            }}>
+              <Globe size={10} color={FINCEPT.CYAN} />
+              <span style={{ color: FINCEPT.GRAY }}>
+                Search Yahoo Finance — global stocks, ETFs, indices
+              </span>
             </div>
           )}
 
@@ -503,6 +545,15 @@ export function SymbolSearch({
                 fontSize: '11px'
               }}>
                 No symbols found for "{query}"
+              </div>
+            ) : useDirectSearch ? (
+              <div style={{
+                padding: '16px',
+                textAlign: 'center',
+                color: FINCEPT.MUTED,
+                fontSize: '10px'
+              }}>
+                Type a symbol name (e.g. AAPL, RELIANCE, TSLA)
               </div>
             ) : symbolCount === 0 ? (
               <div style={{

@@ -731,6 +731,11 @@ def load_yfinance_data(
             required = ['open', 'high', 'low', 'close', 'volume']
             available = [col for col in required if col in df.columns]
 
+            # Round to 4 decimal places to eliminate float32 rounding noise
+            for col in ['open', 'high', 'low', 'close']:
+                if col in df.columns:
+                    df[col] = df[col].round(4)
+
             return df[available]
 
         return pd.DataFrame()

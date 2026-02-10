@@ -229,17 +229,39 @@ def main():
 
     command = sys.argv[1]
 
+    def _parse_optional_json(val):
+        """Parse a JSON string, returning None for 'null' or empty strings"""
+        if val is None or val == 'null' or val == '' or val == 'None':
+            return None
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
     try:
         if command == "quick_pre_revenue":
+            # Rust sends: "quick_pre_revenue" idea_quality team_quality prototype_status market_size
             if len(sys.argv) < 6:
-                raise ValueError("Startup name and quality scores required")
-            startup_name = sys.argv[2] if len(sys.argv) > 2 else "Startup"
-            idea_quality = int(sys.argv[3]) if len(sys.argv) > 3 else 50
-            team_quality = int(sys.argv[4]) if len(sys.argv) > 4 else 50
-            prototype_status = int(sys.argv[5]) if len(sys.argv) > 5 else 50
-            market_size = int(sys.argv[6]) if len(sys.argv) > 6 else 50
+                raise ValueError("Quality scores required: idea_quality, team_quality, prototype_status, market_size")
 
-            startup = StartupValuationSummary(startup_name)
+            # Parse quality scores - accept int, float, or descriptive strings
+            def parse_quality(val):
+                try:
+                    f = float(val)
+                    # If 0-1 scale, convert to 0-100
+                    return int(f * 100) if f <= 1.0 else int(f)
+                except ValueError:
+                    # Map string descriptions to 0-100 scale
+                    quality_map = {'low': 25, 'small': 25, 'medium': 50, 'moderate': 50,
+                                   'high': 75, 'large': 75, 'very_high': 90, 'excellent': 90}
+                    return quality_map.get(val.lower(), 50)
+
+            idea_quality = parse_quality(sys.argv[2])
+            team_quality = parse_quality(sys.argv[3])
+            prototype_status = parse_quality(sys.argv[4])
+            market_size = parse_quality(sys.argv[5])
+
+            startup = StartupValuationSummary("Startup")
             valuation = startup.quick_pre_revenue_valuation(
                 idea_quality=idea_quality,
                 team_quality=team_quality,
@@ -251,21 +273,39 @@ def main():
             print(json.dumps(result))
 
         elif command == "comprehensive":
+            # Rust sends: "comprehensive" startup_name berkus_scores scorecard_inputs vc_inputs first_chicago_scenarios risk_factor_assessments
+            # Any of the optional args may be "null"
             if len(sys.argv) < 3:
-                raise ValueError("Startup name and inputs required")
+                raise ValueError("Startup name required")
+
             startup_name = sys.argv[2]
-            inputs = {}
-            if len(sys.argv) > 3:
-                inputs = json.loads(sys.argv[3])
+            berkus_scores = _parse_optional_json(sys.argv[3]) if len(sys.argv) > 3 else None
+            scorecard_inputs = _parse_optional_json(sys.argv[4]) if len(sys.argv) > 4 else None
+            vc_inputs = _parse_optional_json(sys.argv[5]) if len(sys.argv) > 5 else None
+            first_chicago_scenarios = _parse_optional_json(sys.argv[6]) if len(sys.argv) > 6 else None
+            risk_factor_assessments = _parse_optional_json(sys.argv[7]) if len(sys.argv) > 7 else None
 
             startup = StartupValuationSummary(startup_name)
+
+            inputs = {}
+            if berkus_scores is not None:
+                inputs['berkus_scores'] = berkus_scores
+            if scorecard_inputs is not None:
+                inputs['scorecard_inputs'] = scorecard_inputs
+            if vc_inputs is not None:
+                inputs['vc_inputs'] = vc_inputs
+            if first_chicago_scenarios is not None:
+                inputs['first_chicago_scenarios'] = first_chicago_scenarios
+            if risk_factor_assessments is not None:
+                inputs['risk_factor_assessments'] = risk_factor_assessments
+
             valuation = startup.comprehensive_valuation(**inputs)
 
             result = {"success": True, "data": valuation}
             print(json.dumps(result))
 
         else:
-            result = {"success": False, "error": f"Unknown command: {command}"}
+            result = {"success": False, "error": f"Unknown command: {command}. Available: quick_pre_revenue, comprehensive"}
             print(json.dumps(result))
             sys.exit(1)
 

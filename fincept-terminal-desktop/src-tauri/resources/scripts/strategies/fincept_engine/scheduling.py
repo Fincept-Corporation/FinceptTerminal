@@ -31,8 +31,12 @@ class DateRules:
     def week_end(self, days_offset: int = 0):
         return DateRule("week_end", days_offset=days_offset)
 
-    def on(self, year: int, month: int, day: int):
-        return DateRule("on", date=datetime(year, month, day))
+    def on(self, year_or_date=None, month=None, day=None):
+        if isinstance(year_or_date, datetime):
+            return DateRule("on", date=year_or_date)
+        elif year_or_date is not None and month is not None and day is not None:
+            return DateRule("on", date=datetime(year_or_date, month, day))
+        return DateRule("on", date=datetime.now())
 
     def today(self):
         return DateRule("today")
@@ -83,8 +87,10 @@ class TimeRules:
     def __init__(self, algorithm=None):
         self._algorithm = algorithm
 
-    def at(self, hour: int, minute: int = 0, second: int = 0):
-        return TimeRule("at", time=time(hour, minute, second))
+    def at(self, hour: int, minute: int = 0, second_or_tz=0):
+        # Third arg can be seconds (int) or timezone (ignored)
+        sec = second_or_tz if isinstance(second_or_tz, int) else 0
+        return TimeRule("at", time=time(hour, minute, sec))
 
     def after_market_open(self, symbol=None, minutes_after: float = 0):
         # Default market open: 9:30 AM

@@ -345,68 +345,6 @@ class TechnologyMetrics:
             }
         }
 
-if __name__ == '__main__':
-    saas_analyzer = TechnologyMetrics(TechBusinessModel.SAAS)
-
-    saas_metrics = saas_analyzer.calculate_saas_metrics(
-        arr=100_000_000,
-        revenue_growth_rate=60,
-        gross_margin=0.78,
-        net_retention_rate=125,
-        cac=10_000,
-        ltv=35_000,
-        burn_multiple=1.2
-    )
-
-    print("=== SAAS METRICS ANALYSIS ===\n")
-    print(f"ARR: ${saas_metrics['arr']:,.0f}")
-    print(f"Growth Rate: {saas_metrics['revenue_growth_rate']:.0f}%")
-    print(f"Gross Margin: {saas_metrics['gross_margin']:.1f}%")
-    print(f"Net Retention Rate: {saas_metrics['net_retention_rate']:.0f}%\n")
-
-    print("Key Metrics:")
-    print(f"  Rule of 40: {saas_metrics['key_metrics']['rule_of_40']:.1f}")
-    print(f"  LTV/CAC Ratio: {saas_metrics['key_metrics']['ltv_cac_ratio']:.1f}x")
-    print(f"  CAC Payback: {saas_metrics['key_metrics']['cac_payback_months']:.1f} months")
-    print(f"  Magic Number: {saas_metrics['key_metrics']['magic_number']:.2f}")
-    print(f"\nEfficiency Score: {saas_metrics['efficiency_score']}/100")
-    print(f"Premium Multiple Justified: {saas_metrics['valuation_implications']['premium_multiple_justified']}")
-    print(f"\nSuggested ARR Multiple Range:")
-    mult = saas_metrics['valuation_implications']['suggested_multiple_range']
-    print(f"  Low: {mult['low']:.1f}x")
-    print(f"  Mid: {mult['mid']:.1f}x")
-    print(f"  High: {mult['high']:.1f}x")
-
-    marketplace_analyzer = TechnologyMetrics(TechBusinessModel.MARKETPLACE)
-
-    marketplace = marketplace_analyzer.calculate_marketplace_metrics(
-        gmv=500_000_000,
-        take_rate=18.0,
-        revenue=90_000_000,
-        liquidity_score=75,
-        supply_side_retention=82,
-        demand_side_retention=88
-    )
-
-    print("\n\n=== MARKETPLACE METRICS ===")
-    print(f"GMV: ${marketplace['gmv']:,.0f}")
-    print(f"Revenue: ${marketplace['revenue']:,.0f}")
-    print(f"Take Rate: {marketplace['take_rate']:.1f}%")
-    print(f"Network Strength: {marketplace['network_strength']:.1f}%")
-    print(f"Quality Score: {marketplace['marketplace_quality_score']}/100")
-    print(f"\nGMV Multiple Range:")
-    gmv_mult = marketplace['gmv_multiple_range']
-    print(f"  {gmv_mult['low']:.2f}x - {gmv_mult['high']:.2f}x")
-
-    benchmarks = saas_analyzer.tech_acquisition_multiples_benchmark()
-    print("\n\n=== TECH M&A MULTIPLES BENCHMARKS ===")
-    for sector, data in benchmarks.items():
-        print(f"\n{sector.upper().replace('_', ' ')}:")
-        print(f"  Key Driver: {data['key_driver']}")
-        for metric, values in data.items():
-            if metric != 'key_driver':
-                print(f"  {metric.replace('_', ' ').title()}: {values['median']:.1f}x median")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -438,6 +376,18 @@ def main():
                 model = TechBusinessModel.SAAS  # default
 
             analyzer = TechnologyMetrics(model)
+
+            # Map common alternative key names for SaaS
+            saas_aliases = {
+                'revenue': 'arr', 'annual_recurring_revenue': 'arr',
+                'growth_rate': 'revenue_growth_rate', 'growth': 'revenue_growth_rate',
+                'net_retention': 'net_retention_rate', 'nrr': 'net_retention_rate',
+                'customer_acquisition_cost': 'cac',
+                'lifetime_value': 'ltv',
+            }
+            for old_key, new_key in saas_aliases.items():
+                if old_key in company_data and new_key not in company_data:
+                    company_data[new_key] = company_data.pop(old_key)
 
             # Route to appropriate calculation based on model
             if model == TechBusinessModel.SAAS:

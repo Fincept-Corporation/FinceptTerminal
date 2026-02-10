@@ -5,13 +5,26 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Database, Search, FileText, TrendingUp, RefreshCw, Scan, AlertCircle } from 'lucide-react';
+import { Database, Search, FileText, TrendingUp, RefreshCw, Scan, AlertCircle, ExternalLink } from 'lucide-react';
 import { FINCEPT, TYPOGRAPHY, SPACING, COMMON_STYLES } from '../../portfolio-tab/finceptStyles';
 import { MAAnalyticsService, type MADeal } from '@/services/maAnalyticsService';
+
+interface SECFiling {
+  accession_number: string;
+  filing_type: string;
+  filing_date: string;
+  company_name: string;
+  cik: string;
+  filing_url: string;
+  confidence_score: number;
+  deal_indicators?: string;
+}
 
 export const DealDatabase: React.FC = () => {
   const [deals, setDeals] = useState<MADeal[]>([]);
   const [selectedDeal, setSelectedDeal] = useState<MADeal | null>(null);
+  const [recentFilings, setRecentFilings] = useState<SECFiling[]>([]);
+  const [showFilings, setShowFilings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -49,9 +62,23 @@ export const DealDatabase: React.FC = () => {
     setStatusMessage({ type: 'info', text: `Scanning SEC filings from the last ${scanDays} days...` });
     try {
       const result = await MAAnalyticsService.DealDatabase.scanFilings(scanDays);
-      const count = Array.isArray(result) ? result.length : 0;
-      setStatusMessage({ type: 'success', text: `Found ${count} M&A filings. Refreshing deals...` });
-      // Reload deals after scanning
+      const filingsFound = result.filings_found || 0;
+      const dealsParsed = result.deals_parsed || 0;
+      const dealsCreated = result.deals_created || 0;
+      const totalDeals = dealsParsed + dealsCreated;
+
+      // Store filings for display
+      if (result.filings && result.filings.length > 0) {
+        setRecentFilings(result.filings);
+        setShowFilings(true);
+      }
+
+      setStatusMessage({
+        type: 'success',
+        text: `Found ${filingsFound} filings, ${totalDeals} deal${totalDeals !== 1 ? 's' : ''} added to database`,
+      });
+
+      // Reload deals from database
       await loadDeals();
     } catch (error) {
       console.error('Failed to scan filings:', error);
@@ -98,7 +125,7 @@ export const DealDatabase: React.FC = () => {
             <div style={{
               padding: SPACING.SMALL,
               marginBottom: SPACING.SMALL,
-              borderRadius: '4px',
+              borderRadius: '2px',
               fontSize: TYPOGRAPHY.TINY,
               backgroundColor: statusMessage.type === 'error' ? `${FINCEPT.RED}20` :
                              statusMessage.type === 'success' ? `${FINCEPT.GREEN}20` :
@@ -148,7 +175,7 @@ export const DealDatabase: React.FC = () => {
                 padding: SPACING.SMALL,
                 backgroundColor: FINCEPT.PANEL_BG,
                 border: `1px solid ${FINCEPT.BORDER}`,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 color: FINCEPT.GRAY,
                 cursor: loading ? 'not-allowed' : 'pointer',
                 display: 'flex',
@@ -190,7 +217,7 @@ export const DealDatabase: React.FC = () => {
                 padding: SPACING.SMALL,
                 backgroundColor: scanning ? FINCEPT.PANEL_BG : FINCEPT.ORANGE,
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: '2px',
                 color: scanning ? FINCEPT.GRAY : FINCEPT.DARK_BG,
                 cursor: scanning ? 'not-allowed' : 'pointer',
                 fontSize: TYPOGRAPHY.TINY,
@@ -507,20 +534,118 @@ export const DealDatabase: React.FC = () => {
             </div>
           </>
         ) : (
-          <div style={COMMON_STYLES.emptyState}>
-            <FileText size={48} style={{ opacity: 0.3, marginBottom: SPACING.DEFAULT }} />
-            <div style={{ fontSize: TYPOGRAPHY.BODY, color: FINCEPT.GRAY }}>
-              Select a deal to view details
-            </div>
-            <div style={{
-              fontSize: TYPOGRAPHY.TINY,
-              color: FINCEPT.MUTED,
-              marginTop: SPACING.SMALL,
-              maxWidth: '300px',
-              textAlign: 'center',
-            }}>
-              Track M&A deals, save valuations, and manage your deal pipeline
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            {/* Empty state prompt */}
+            {!showFilings && (
+              <div style={COMMON_STYLES.emptyState}>
+                <FileText size={48} style={{ opacity: 0.3, marginBottom: SPACING.DEFAULT }} />
+                <div style={{ fontSize: TYPOGRAPHY.BODY, color: FINCEPT.GRAY }}>
+                  Select a deal to view details
+                </div>
+                <div style={{
+                  fontSize: TYPOGRAPHY.TINY,
+                  color: FINCEPT.MUTED,
+                  marginTop: SPACING.SMALL,
+                  maxWidth: '300px',
+                  textAlign: 'center',
+                }}>
+                  Track M&A deals, save valuations, and manage your deal pipeline
+                </div>
+              </div>
+            )}
+
+            {/* Recent SEC Filings */}
+            {showFilings && recentFilings.length > 0 && (
+              <div style={{ flex: 1, overflow: 'auto', padding: SPACING.LARGE }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: SPACING.DEFAULT,
+                }}>
+                  <div style={COMMON_STYLES.dataLabel}>RECENT SEC FILINGS</div>
+                  <button
+                    onClick={() => setShowFilings(false)}
+                    style={{
+                      padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+                      backgroundColor: 'transparent',
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      borderRadius: '2px',
+                      color: FINCEPT.GRAY,
+                      cursor: 'pointer',
+                      fontSize: TYPOGRAPHY.TINY,
+                    }}
+                  >
+                    HIDE
+                  </button>
+                </div>
+
+                <div style={{
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  borderRadius: '2px',
+                  overflow: 'hidden',
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
+                    <thead>
+                      <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', color: FINCEPT.ORANGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>COMPANY</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', color: FINCEPT.ORANGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>TYPE</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', color: FINCEPT.ORANGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>DATE</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'center', color: FINCEPT.ORANGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>CONFIDENCE</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', color: FINCEPT.ORANGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>INDICATORS</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'center', color: FINCEPT.ORANGE, borderBottom: `1px solid ${FINCEPT.BORDER}` }}>LINK</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentFilings.map((filing) => {
+                        const confidenceColor = filing.confidence_score >= 0.9 ? FINCEPT.GREEN
+                          : filing.confidence_score >= 0.75 ? FINCEPT.YELLOW
+                          : FINCEPT.GRAY;
+                        return (
+                          <tr key={filing.accession_number} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                            <td style={{ padding: '8px 12px', color: FINCEPT.WHITE, fontWeight: TYPOGRAPHY.BOLD }}>
+                              {filing.company_name}
+                            </td>
+                            <td style={{ padding: '8px 12px' }}>
+                              <span style={{
+                                padding: '2px 6px',
+                                borderRadius: '2px',
+                                backgroundColor: `${FINCEPT.CYAN}20`,
+                                color: FINCEPT.CYAN,
+                                fontSize: TYPOGRAPHY.TINY,
+                              }}>
+                                {filing.filing_type}
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px 12px', color: FINCEPT.GRAY }}>
+                              {filing.filing_date}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                              <span style={{ color: confidenceColor, fontWeight: TYPOGRAPHY.BOLD }}>
+                                {(filing.confidence_score * 100).toFixed(0)}%
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px 12px', color: FINCEPT.MUTED, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {filing.deal_indicators || '-'}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                              <a
+                                href={filing.filing_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: FINCEPT.ORANGE, textDecoration: 'none' }}
+                              >
+                                <ExternalLink size={12} />
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

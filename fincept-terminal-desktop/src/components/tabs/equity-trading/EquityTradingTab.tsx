@@ -32,7 +32,7 @@ import {
 } from './components';
 import type { SymbolSearchResult, SupportedBroker } from '@/services/trading/masterContractService';
 
-import type { StockExchange, Quote, MarketDepth, TimeFrame } from '@/brokers/stocks/types';
+import type { StockExchange, Quote, MarketDepth, TimeFrame, Instrument } from '@/brokers/stocks/types';
 import { GridTradingPanel } from '../trading/grid-trading';
 import { MonitoringPanel } from '../trading/monitoring/MonitoringPanel';
 import { AlgoTradingPanel } from '../trading/algo-trading';
@@ -237,13 +237,19 @@ function EquityTradingContent() {
 
   useWorkspaceTabState('equity-trading', getWorkspaceState, setWorkspaceState);
 
-  // Set correct chart interval when broker changes or on initial load
+  // Set correct chart interval and UI state when broker changes
   // yfinance only supports daily data, real brokers default to 5m intraday
   useEffect(() => {
     if (activeBroker) {
       const defaultInterval = activeBroker === 'yfinance' ? '1d' : '5m';
       setChartInterval(defaultInterval);
       console.log(`[EquityTrading] Setting chart interval to ${defaultInterval} for broker ${activeBroker}`);
+
+      // For yfinance, force right panel to 'info' (no depth/orderbook data)
+      if (activeBroker === 'yfinance') {
+        setRightPanelView('info');
+        setCenterView('chart');
+      }
     }
   }, [activeBroker]);
 
@@ -388,18 +394,20 @@ function EquityTradingContent() {
           console.warn(`[EquityTrading] Failed to fetch initial quote:`, quoteErr);
         }
 
-        // Fetch initial market depth
-        try {
-          const initialDepth = await adapter.getMarketDepth(selectedSymbol, selectedExchange);
-          if (!isCancelled && initialDepth) {
-            setMarketDepth(initialDepth);
-            console.log(`[EquityTrading] Initial depth loaded for ${selectedSymbol}:`, {
-              bids: initialDepth.bids?.length || 0,
-              asks: initialDepth.asks?.length || 0,
-            });
+        // Fetch initial market depth (skip for yfinance - no real depth data)
+        if (activeBroker !== 'yfinance') {
+          try {
+            const initialDepth = await adapter.getMarketDepth(selectedSymbol, selectedExchange);
+            if (!isCancelled && initialDepth) {
+              setMarketDepth(initialDepth);
+              console.log(`[EquityTrading] Initial depth loaded for ${selectedSymbol}:`, {
+                bids: initialDepth.bids?.length || 0,
+                asks: initialDepth.asks?.length || 0,
+              });
+            }
+          } catch (depthErr) {
+            console.warn(`[EquityTrading] Failed to fetch initial depth:`, depthErr);
           }
-        } catch (depthErr) {
-          console.warn(`[EquityTrading] Failed to fetch initial depth:`, depthErr);
         }
 
         setIsLoadingQuote(false);
@@ -730,10 +738,11 @@ function EquityTradingContent() {
 
         console.log(`[EquityTrading] Polling ${selectedSymbol} (market ${marketOpen ? 'OPEN' : 'CLOSED'})...`);
 
-        // Fetch quote and depth in parallel
+        // Fetch quote (and depth for non-yfinance brokers) in parallel
+        const skipDepth = activeBroker === 'yfinance';
         const [freshQuote, freshDepth] = await Promise.all([
           adapter.getQuote(selectedSymbol, selectedExchange).catch(() => null),
-          adapter.getMarketDepth(selectedSymbol, selectedExchange).catch(() => null),
+          skipDepth ? Promise.resolve(null) : adapter.getMarketDepth(selectedSymbol, selectedExchange).catch(() => null),
         ]);
 
         const ttl = getCacheTTL(selectedExchange);
@@ -797,6 +806,33 @@ function EquityTradingContent() {
       });
     }
   };
+
+  // YFinance-specific helpers
+  const isYFinance = activeBroker === 'yfinance';
+
+  // Direct search callback for yfinance (bypasses master contract)
+  const handleYFinanceSearch = useCallback(async (query: string): Promise<SymbolSearchResult[]> => {
+    if (!adapter) return [];
+    try {
+      const instruments: Instrument[] = await adapter.searchSymbols(query);
+      // Convert Instrument[] to SymbolSearchResult[] format
+      return instruments.map(inst => ({
+        symbol: inst.symbol,
+        br_symbol: inst.tradingSymbol || inst.symbol,
+        name: inst.name || null,
+        exchange: inst.exchange,
+        token: inst.token || '',
+        expiry: inst.expiry || null,
+        strike: inst.strike || null,
+        lot_size: inst.lotSize || null,
+        instrument_type: inst.instrumentType || null,
+        tick_size: inst.tickSize || null,
+      }));
+    } catch (error) {
+      console.error('[EquityTrading] YFinance search error:', error);
+      return [];
+    }
+  }, [adapter]);
 
   // Calculate derived values
   const currentPrice = quote?.lastPrice || 0;
@@ -1061,8 +1097,10 @@ function EquityTradingContent() {
           selectedExchange={selectedExchange}
           onSymbolSelect={handleSelectSymbol}
           brokerId={(activeBroker || 'angelone') as SupportedBroker}
-          placeholder="Search stocks, F&O, commodities..."
-          showDownloadStatus={true}
+          placeholder={isYFinance ? "Search global stocks (e.g. AAPL, RELIANCE)..." : "Search stocks, F&O, commodities..."}
+          showDownloadStatus={!isYFinance}
+          useDirectSearch={isYFinance}
+          onDirectSearch={isYFinance ? handleYFinanceSearch : undefined}
         />
 
         {/* Price Display */}
@@ -1098,18 +1136,23 @@ function EquityTradingContent() {
 
         {/* Market Stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '11px', willChange: 'contents' }}>
-          <div style={{ minWidth: '60px' }}>
-            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
-            <div style={{ color: FINCEPT.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-              {quote?.bid ? fmtPrice(quote.bid) : '--'}
-            </div>
-          </div>
-          <div style={{ minWidth: '60px' }}>
-            <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
-            <div style={{ color: FINCEPT.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
-              {quote?.ask ? fmtPrice(quote.ask) : '--'}
-            </div>
-          </div>
+          {/* BID/ASK - hidden for yfinance (no real bid/ask data) */}
+          {!isYFinance && (
+            <>
+              <div style={{ minWidth: '60px' }}>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
+                <div style={{ color: FINCEPT.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+                  {quote?.bid ? fmtPrice(quote.bid) : '--'}
+                </div>
+              </div>
+              <div style={{ minWidth: '60px' }}>
+                <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
+                <div style={{ color: FINCEPT.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+                  {quote?.ask ? fmtPrice(quote.ask) : '--'}
+                </div>
+              </div>
+            </>
+          )}
           <div style={{ minWidth: '100px' }}>
             <div style={{ color: FINCEPT.GRAY, fontSize: '9px', marginBottom: '2px' }}>DAY RANGE</div>
             <div style={{ color: FINCEPT.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
@@ -1438,7 +1481,7 @@ function EquityTradingContent() {
               gap: '8px',
               flexShrink: 0
             }}>
-              {(['CHART', 'DEPTH', 'TRADES', 'ALGO'] as const).map((view) => (
+              {(['CHART', ...(isYFinance ? [] : ['DEPTH'] as const), 'TRADES', 'ALGO'] as const).map((view) => (
                 <button
                   key={view}
                   onClick={() => setCenterView(view.toLowerCase() as CenterView)}
@@ -1882,7 +1925,11 @@ function EquityTradingContent() {
               alignItems: 'center'
             }}>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {(['orderbook', 'marketdepth', 'info'] as RightPanelView[]).map((view) => (
+                {/* Hide orderbook/depth for yfinance - no real depth data */}
+                {(isYFinance
+                  ? ['info'] as RightPanelView[]
+                  : ['orderbook', 'marketdepth', 'info'] as RightPanelView[]
+                ).map((view) => (
                   <button
                     key={view}
                     onClick={() => setRightPanelView(view)}

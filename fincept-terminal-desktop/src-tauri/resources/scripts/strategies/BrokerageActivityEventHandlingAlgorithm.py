@@ -21,7 +21,7 @@ class BrokerageActivityEventHandlingAlgorithm(QCAlgorithm):
     ### Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.
     ### </summary>
     def initialize(self):
-        self.set_start_date(2013, 10, 07)
+        self.set_start_date(2013, 10, 7)
         self.set_end_date(2013, 10, 11)
         self.set_cash(100000)
 

@@ -578,20 +578,19 @@ def main():
     command = sys.argv[1]
 
     try:
-        if command == "calculate":
-            # calculate_dcf(company_name, wacc_inputs, fcf_inputs, growth_rates, terminal_growth_rate, balance_sheet, shares_outstanding)
+        if command in ("calculate", "dcf"):
+            # Rust sends: "dcf" wacc_inputs fcf_inputs growth_rates terminal_growth balance_sheet shares_outstanding
             if len(sys.argv) < 8:
-                raise ValueError("All DCF inputs required: company_name, wacc_inputs, fcf_inputs, growth_rates, terminal_growth, balance_sheet, shares")
+                raise ValueError("All DCF inputs required: wacc_inputs, fcf_inputs, growth_rates, terminal_growth, balance_sheet, shares")
 
-            company_name = sys.argv[2]
-            wacc_inputs = json.loads(sys.argv[3])
-            fcf_inputs = json.loads(sys.argv[4])
-            growth_rates = json.loads(sys.argv[5])
-            terminal_growth_rate = float(sys.argv[6])
-            balance_sheet = json.loads(sys.argv[7])
-            shares_outstanding = float(sys.argv[8])
+            wacc_inputs = json.loads(sys.argv[2])
+            fcf_inputs = json.loads(sys.argv[3])
+            growth_rates = json.loads(sys.argv[4])
+            terminal_growth_rate = float(sys.argv[5])
+            balance_sheet = json.loads(sys.argv[6])
+            shares_outstanding = float(sys.argv[7])
 
-            dcf = DCFModel(company_name)
+            dcf = DCFModel("Target Company")
             dcf_result = dcf.comprehensive_dcf(
                 wacc_inputs=wacc_inputs,
                 fcf_inputs=fcf_inputs,
@@ -607,10 +606,38 @@ def main():
             }
             print(json.dumps(result))
 
+        elif command == "sensitivity":
+            # Rust sends: "sensitivity" base_fcf growth_rates terminal_growth_scenarios wacc_scenarios balance_sheet shares_outstanding
+            if len(sys.argv) < 8:
+                raise ValueError("Sensitivity inputs required: base_fcf, growth_rates, terminal_growth_scenarios, wacc_scenarios, balance_sheet, shares")
+
+            base_fcf = float(sys.argv[2])
+            growth_rates = json.loads(sys.argv[3])
+            terminal_growth_scenarios = json.loads(sys.argv[4])
+            wacc_scenarios = json.loads(sys.argv[5])
+            balance_sheet = json.loads(sys.argv[6])
+            shares_outstanding = float(sys.argv[7])
+
+            dcf = DCFModel("Target Company")
+            sensitivity_result = dcf.sensitivity_analysis(
+                base_fcf=base_fcf,
+                growth_rates=growth_rates,
+                terminal_growth_scenarios=terminal_growth_scenarios,
+                wacc_scenarios=wacc_scenarios,
+                balance_sheet=balance_sheet,
+                shares_outstanding=shares_outstanding
+            )
+
+            result = {
+                "success": True,
+                "data": sensitivity_result
+            }
+            print(json.dumps(result))
+
         else:
             result = {
                 "success": False,
-                "error": f"Unknown command: {command}. Available: calculate"
+                "error": f"Unknown command: {command}. Available: dcf, sensitivity"
             }
             print(json.dumps(result))
             sys.exit(1)

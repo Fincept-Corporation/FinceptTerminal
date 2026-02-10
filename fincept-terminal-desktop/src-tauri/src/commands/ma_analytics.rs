@@ -10,16 +10,15 @@ use crate::python;
 pub async fn scan_ma_filings(
     app: tauri::AppHandle,
     days_back: Option<i32>,
-    filing_types: Option<String>,
+    _filing_types: Option<String>,
 ) -> Result<String, String> {
-    let mut args = vec!["scan".to_string()];
+    // Use deal_tracker "update" which scans filings, parses high-confidence ones,
+    // and stores parsed deals into the ma_deals table automatically.
+    let mut args = vec!["update".to_string()];
     if let Some(days) = days_back {
         args.push(days.to_string());
     }
-    if let Some(types) = filing_types {
-        args.push(types);
-    }
-    python::execute(&app, "Analytics/corporateFinance/deal_database/deal_scanner.py", args).await
+    python::execute(&app, "Analytics/corporateFinance/deal_database/deal_tracker.py", args).await
 }
 
 #[tauri::command]
@@ -362,12 +361,15 @@ pub async fn comprehensive_startup_valuation(
     first_chicago_scenarios: Option<String>,
     risk_factor_assessments: Option<String>,
 ) -> Result<String, String> {
-    let mut args = vec!["comprehensive".to_string(), startup_name];
-    if let Some(bs) = berkus_scores { args.push(bs); }
-    if let Some(si) = scorecard_inputs { args.push(si); }
-    if let Some(vi) = vc_inputs { args.push(vi); }
-    if let Some(fcs) = first_chicago_scenarios { args.push(fcs); }
-    if let Some(rfa) = risk_factor_assessments { args.push(rfa); }
+    let args = vec![
+        "comprehensive".to_string(),
+        startup_name,
+        berkus_scores.unwrap_or_else(|| "null".to_string()),
+        scorecard_inputs.unwrap_or_else(|| "null".to_string()),
+        vc_inputs.unwrap_or_else(|| "null".to_string()),
+        first_chicago_scenarios.unwrap_or_else(|| "null".to_string()),
+        risk_factor_assessments.unwrap_or_else(|| "null".to_string()),
+    ];
     python::execute(&app, "Analytics/corporateFinance/startup_valuation/startup_summary.py", args).await
 }
 

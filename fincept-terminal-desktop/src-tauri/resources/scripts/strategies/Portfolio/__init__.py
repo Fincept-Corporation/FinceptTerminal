@@ -1,9 +1,15 @@
+# ============================================================================
+# Fincept Terminal - Portfolio Shim
+# Re-exports from fincept_engine + dynamic submodule stubs
+# ============================================================================
+
 import sys, os, types
+
 _parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _parent not in sys.path:
     sys.path.insert(0, _parent)
 
-from AlgorithmImports import (
+from fincept_engine.algorithm_imports import (
     PortfolioConstructionModel,
     EqualWeightingPortfolioConstructionModel,
     InsightWeightingPortfolioConstructionModel,
@@ -14,6 +20,9 @@ from AlgorithmImports import (
     SectorWeightingPortfolioConstructionModel,
     PortfolioTarget, PortfolioBias
 )
+from fincept_engine.framework.portfolio_construction import (
+    UnconstrainedMeanVariancePortfolioOptimizer
+)
 
 _submodules = {
     'EqualWeightingPortfolioConstructionModel': {'EqualWeightingPortfolioConstructionModel': EqualWeightingPortfolioConstructionModel},
@@ -23,6 +32,7 @@ _submodules = {
     'AccumulativeInsightPortfolioConstructionModel': {'AccumulativeInsightPortfolioConstructionModel': AccumulativeInsightPortfolioConstructionModel},
     'ConfidenceWeightedPortfolioConstructionModel': {'ConfidenceWeightedPortfolioConstructionModel': ConfidenceWeightedPortfolioConstructionModel},
     'SectorWeightingPortfolioConstructionModel': {'SectorWeightingPortfolioConstructionModel': SectorWeightingPortfolioConstructionModel},
+    'UnconstrainedMeanVariancePortfolioOptimizer': {'UnconstrainedMeanVariancePortfolioOptimizer': UnconstrainedMeanVariancePortfolioOptimizer},
 }
 
 for _name, _attrs in _submodules.items():

@@ -25,6 +25,8 @@ import AlertsView from './portfolio/AlertsView';
 import QuantStatsView from './portfolio/QuantStatsView';
 import ActiveManagementView from './portfolio/ActiveManagementView';
 import PortfolioOptimizationView from './portfolio/PortfolioOptimizationView';
+import PyPMEView from './portfolio/PyPMEView';
+import SkfolioView from './portfolio/SkfolioView';
 import { CustomIndexView, CreateIndexModal } from './custom-index';
 import CreatePortfolioModal from './modals/CreatePortfolioModal';
 import AddAssetModal from './modals/AddAssetModal';
@@ -35,7 +37,7 @@ import { formatCurrency, formatPercent } from './portfolio/utils';
 import { TabFooter } from '@/components/common/TabFooter';
 import { showError } from '@/utils/notifications';
 
-type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization' | 'indices' | 'quantstats';
+type SubTab = 'positions' | 'history' | 'analytics' | 'sectors' | 'performance' | 'risk' | 'reports' | 'alerts' | 'active-mgmt' | 'optimization' | 'indices' | 'quantstats' | 'pme' | 'skfolio';
 
 const PortfolioTab: React.FC = () => {
   const { t } = useTranslation('portfolio');
@@ -184,6 +186,8 @@ const PortfolioTab: React.FC = () => {
     { id: 'optimization' as SubTab, label: t('views.optimization', 'OPTIMIZATION'), icon: Target },
     { id: 'active-mgmt' as SubTab, label: t('views.activeMgmt'), icon: Activity },
     { id: 'quantstats' as SubTab, label: t('views.quantstats', 'QUANTSTATS'), icon: Activity },
+    { id: 'pme' as SubTab, label: 'PME', icon: TrendingUp },
+    { id: 'skfolio' as SubTab, label: 'SKFOLIO', icon: Layers },
     { id: 'reports' as SubTab, label: t('views.reports'), icon: BarChart3 },
     { id: 'alerts' as SubTab, label: t('views.alerts'), icon: AlertCircle }
   ];
@@ -601,6 +605,8 @@ const PortfolioTab: React.FC = () => {
               {activeSubTab === 'risk' && <div id="risk-view" style={{ height: '100%' }}><RiskMetricsView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'optimization' && <div id="optimization-view" style={{ height: '100%' }}><PortfolioOptimizationView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'quantstats' && <div id="quantstats-view" style={{ height: '100%' }}><QuantStatsView portfolioSummary={portfolioSummary} /></div>}
+              {activeSubTab === 'pme' && <div id="pme-view" style={{ height: '100%' }}><PyPMEView portfolioSummary={portfolioSummary} /></div>}
+              {activeSubTab === 'skfolio' && <div id="skfolio-view" style={{ height: '100%' }}><SkfolioView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'reports' && <div id="reports-view" style={{ height: '100%' }}><ReportsView portfolioSummary={portfolioSummary} transactions={transactions} /></div>}
               {activeSubTab === 'alerts' && <div id="alerts-view" style={{ height: '100%' }}><AlertsView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'active-mgmt' && (

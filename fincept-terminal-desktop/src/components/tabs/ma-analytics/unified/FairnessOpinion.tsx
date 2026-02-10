@@ -172,7 +172,7 @@ export const FairnessOpinion: React.FC = () => {
               <div key={idx} style={{
                 padding: SPACING.SMALL,
                 backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '4px',
+                borderRadius: '2px',
                 border: `1px solid ${FINCEPT.BORDER}`,
               }}>
                 <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.ORANGE, marginBottom: '4px' }}>
@@ -237,7 +237,7 @@ export const FairnessOpinion: React.FC = () => {
                     padding: '6px',
                     marginBottom: '2px',
                     backgroundColor: fairnessInputs.selectedFactors.has(factor) ? `${FINCEPT.GREEN}20` : FINCEPT.PANEL_BG,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     border: `1px solid ${fairnessInputs.selectedFactors.has(factor) ? FINCEPT.GREEN : FINCEPT.BORDER}`,
                     cursor: 'pointer',
                     display: 'flex',
@@ -294,7 +294,7 @@ export const FairnessOpinion: React.FC = () => {
             <div style={{
               padding: SPACING.SMALL,
               backgroundColor: `${FINCEPT.CYAN}15`,
-              borderRadius: '4px',
+              borderRadius: '2px',
               fontSize: TYPOGRAPHY.TINY,
               color: FINCEPT.CYAN,
             }}>
@@ -313,7 +313,7 @@ export const FairnessOpinion: React.FC = () => {
               <div key={factor.key} style={{
                 padding: SPACING.SMALL,
                 backgroundColor: FINCEPT.PANEL_BG,
-                borderRadius: '4px',
+                borderRadius: '2px',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -357,7 +357,7 @@ export const FairnessOpinion: React.FC = () => {
             <div style={{
               padding: SPACING.DEFAULT,
               backgroundColor: result.is_fair ? `${FINCEPT.GREEN}20` : `${FINCEPT.RED}20`,
-              borderRadius: '4px',
+              borderRadius: '2px',
               border: `2px solid ${result.is_fair ? FINCEPT.GREEN : FINCEPT.RED}`,
               textAlign: 'center',
               marginBottom: SPACING.DEFAULT,
@@ -413,7 +413,7 @@ export const FairnessOpinion: React.FC = () => {
                 <div key={item.label} style={{
                   padding: SPACING.SMALL,
                   backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   textAlign: 'center',
                 }}>
                   <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>{item.label}</div>
@@ -436,7 +436,7 @@ export const FairnessOpinion: React.FC = () => {
             <div style={{
               padding: SPACING.DEFAULT,
               backgroundColor: FINCEPT.PANEL_BG,
-              borderRadius: '4px',
+              borderRadius: '2px',
               border: `1px solid ${FINCEPT.ORANGE}`,
               textAlign: 'center',
               marginBottom: SPACING.DEFAULT,
@@ -489,7 +489,7 @@ export const FairnessOpinion: React.FC = () => {
             color: FINCEPT.GRAY,
             backgroundColor: FINCEPT.PANEL_BG,
             padding: SPACING.SMALL,
-            borderRadius: '4px',
+            borderRadius: '2px',
             overflow: 'auto',
             maxHeight: '200px',
           }}>
@@ -562,7 +562,7 @@ export const FairnessOpinion: React.FC = () => {
               padding: SPACING.SMALL,
               backgroundColor: loading ? FINCEPT.PANEL_BG : FINCEPT.ORANGE,
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '2px',
               color: loading ? FINCEPT.GRAY : FINCEPT.DARK_BG,
               cursor: loading ? 'not-allowed' : 'pointer',
               fontSize: TYPOGRAPHY.SMALL,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { TrendingUp, BarChart3, PieChart, LineChart, Target, Shield, Calculator, Download } from 'lucide-react';
+import { TrendingUp, BarChart3, PieChart, LineChart, Target, Shield, Calculator, Download, Layers } from 'lucide-react';
 import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Scatter, ScatterChart, ZAxis } from 'recharts';
 import { getSetting, saveSetting } from '@/services/core/sqliteService';
@@ -166,7 +166,31 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
   const [loading, setLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null); // Track which action is loading
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'optimize' | 'frontier' | 'backtest' | 'allocation' | 'risk'>('optimize');
+  const [activeTab, setActiveTab] = useState<'optimize' | 'frontier' | 'backtest' | 'allocation' | 'risk' | 'strategies'>('optimize');
+
+  // Risk analysis state
+  const [riskDecomp, setRiskDecomp] = useState<{
+    marginal_contribution: Record<string, number>;
+    component_contribution: Record<string, number>;
+    percentage_contribution: Record<string, number>;
+    portfolio_volatility: number;
+  } | null>(null);
+  const [sensitivityResults, setSensitivityResults] = useState<{
+    parameter: string;
+    results: Array<Record<string, number>>;
+  } | null>(null);
+  const [sensitivityParam, setSensitivityParam] = useState('risk_free_rate');
+
+  // Strategies state
+  const [selectedStrategy, setSelectedStrategy] = useState('risk_parity');
+  const [strategyResults, setStrategyResults] = useState<{
+    weights: Record<string, number>;
+    performance: { expected_return: number; volatility: number; sharpe_ratio: number; [key: string]: any };
+    [key: string]: any;
+  } | null>(null);
+  const [marketNeutralLong, setMarketNeutralLong] = useState(1.3);
+  const [marketNeutralShort, setMarketNeutralShort] = useState(-0.3);
+  const [benchmarkWeightsStr, setBenchmarkWeightsStr] = useState('{}');
 
   // Load initial state
   useEffect(() => {
@@ -181,7 +205,7 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
       setConfig(savedConfig);
       setSkfolioConfig(savedSkfolioConfig);
       setResults(savedResults);
-      setActiveTab(savedActiveTab as 'optimize' | 'backtest' | 'frontier' | 'allocation' | 'risk');
+      setActiveTab(savedActiveTab as 'optimize' | 'backtest' | 'frontier' | 'allocation' | 'risk' | 'strategies');
     };
     loadInitialState();
   }, []);
@@ -622,6 +646,136 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
     }
   };
 
+  // Risk Decomposition
+  const handleRiskDecomposition = async () => {
+    if (loadingAction === 'risk') return;
+    setLoadingAction('risk');
+    setLoading(true);
+    setError(null);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    try {
+      const pricesJson = JSON.stringify({ symbols: assetSymbols.split(',').map(s => s.trim()) });
+      const pyportfoliooptConfig = {
+        optimization_method: config.optimization_method,
+        objective: config.objective,
+        expected_returns_method: config.expected_returns_method,
+        risk_model_method: config.risk_model_method,
+        risk_free_rate: config.risk_free_rate,
+        risk_aversion: 1.0,
+        market_neutral: false,
+        weight_bounds: [config.weight_bounds_min, config.weight_bounds_max] as [number, number],
+        gamma: config.gamma, span: 500, frequency: 252, delta: 0.95,
+        shrinkage_target: "constant_variance", beta: 0.95, tau: 0.1,
+        linkage_method: "ward", distance_metric: "euclidean",
+        total_portfolio_value: config.total_portfolio_value,
+      };
+
+      const response = await invoke<string>('pyportfolioopt_risk_decomposition', {
+        pricesJson,
+        weights: results?.weights || {},
+        config: pyportfoliooptConfig,
+      });
+      setRiskDecomp(JSON.parse(response));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Risk decomposition failed');
+    } finally {
+      setLoading(false);
+      setLoadingAction(null);
+    }
+  };
+
+  // Sensitivity Analysis
+  const handleSensitivityAnalysis = async () => {
+    if (loadingAction === 'sensitivity') return;
+    setLoadingAction('sensitivity');
+    setLoading(true);
+    setError(null);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    try {
+      const pricesJson = JSON.stringify({ symbols: assetSymbols.split(',').map(s => s.trim()) });
+      const pyportfoliooptConfig = {
+        optimization_method: config.optimization_method,
+        objective: config.objective,
+        expected_returns_method: config.expected_returns_method,
+        risk_model_method: config.risk_model_method,
+        risk_free_rate: config.risk_free_rate,
+        risk_aversion: 1.0,
+        market_neutral: false,
+        weight_bounds: [config.weight_bounds_min, config.weight_bounds_max] as [number, number],
+        gamma: config.gamma, span: 500, frequency: 252, delta: 0.95,
+        shrinkage_target: "constant_variance", beta: 0.95, tau: 0.1,
+        linkage_method: "ward", distance_metric: "euclidean",
+        total_portfolio_value: config.total_portfolio_value,
+      };
+
+      const response = await invoke<string>('pyportfolioopt_sensitivity_analysis', {
+        pricesJson,
+        config: pyportfoliooptConfig,
+        parameter: sensitivityParam,
+        values: null,
+      });
+      setSensitivityResults(JSON.parse(response));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sensitivity analysis failed');
+    } finally {
+      setLoading(false);
+      setLoadingAction(null);
+    }
+  };
+
+  // Strategy Optimization (additional optimizers)
+  const handleStrategyOptimize = async () => {
+    if (loadingAction === 'strategy') return;
+    setLoadingAction('strategy');
+    setLoading(true);
+    setError(null);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    try {
+      const pricesJson = JSON.stringify({ symbols: assetSymbols.split(',').map(s => s.trim()) });
+      let response: string;
+
+      switch (selectedStrategy) {
+        case 'risk_parity':
+          response = await invoke<string>('pyportfolioopt_risk_parity', { pricesJson });
+          break;
+        case 'equal_weight':
+          response = await invoke<string>('pyportfolioopt_equal_weight', { pricesJson });
+          break;
+        case 'inverse_volatility':
+          response = await invoke<string>('pyportfolioopt_inverse_volatility', { pricesJson });
+          break;
+        case 'market_neutral':
+          response = await invoke<string>('pyportfolioopt_market_neutral', {
+            pricesJson,
+            longExposure: marketNeutralLong,
+            shortExposure: marketNeutralShort,
+          });
+          break;
+        case 'min_tracking_error':
+          response = await invoke<string>('pyportfolioopt_min_tracking_error', {
+            pricesJson,
+            benchmarkWeights: JSON.parse(benchmarkWeightsStr),
+          });
+          break;
+        case 'max_diversification':
+          response = await invoke<string>('pyportfolioopt_max_diversification', { pricesJson });
+          break;
+        default:
+          throw new Error(`Unknown strategy: ${selectedStrategy}`);
+      }
+
+      setStrategyResults(JSON.parse(response));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Strategy optimization failed');
+    } finally {
+      setLoading(false);
+      setLoadingAction(null);
+    }
+  };
+
   return (
     <div style={{
       height: '100%',
@@ -639,6 +793,7 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
           { id: 'backtest', label: 'BACKTEST', icon: BarChart3 },
           { id: 'allocation', label: 'ALLOCATION', icon: PieChart },
           { id: 'risk', label: 'RISK ANALYSIS', icon: Shield },
+          { id: 'strategies', label: 'STRATEGIES', icon: Layers },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -1595,16 +1750,352 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
 
       {/* RISK ANALYSIS TAB */}
       {activeTab === 'risk' && (
-        <div style={{
-          padding: SPACING.XLARGE,
-          textAlign: 'center',
-          backgroundColor: FINCEPT.PANEL_BG,
-          border: BORDERS.STANDARD,
-          borderRadius: '2px',
-          color: FINCEPT.GRAY,
-          fontSize: TYPOGRAPHY.BODY
-        }}>
-          Risk decomposition and correlation matrix analysis coming soon...
+        <div>
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: SPACING.DEFAULT, marginBottom: SPACING.XLARGE }}>
+            <button
+              onClick={handleRiskDecomposition}
+              disabled={loadingAction === 'risk'}
+              style={{
+                ...COMMON_STYLES.buttonPrimary,
+                padding: `${SPACING.DEFAULT} ${SPACING.XLARGE}`,
+                backgroundColor: loadingAction === 'risk' ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                color: loadingAction === 'risk' ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+                cursor: loadingAction === 'risk' ? 'not-allowed' : 'pointer',
+                opacity: loadingAction === 'risk' ? 0.6 : 1,
+              }}
+            >
+              {loadingAction === 'risk' ? 'ANALYZING...' : 'RUN RISK DECOMPOSITION'}
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+              <select
+                value={sensitivityParam}
+                onChange={(e) => setSensitivityParam(e.target.value)}
+                style={{ ...COMMON_STYLES.inputField, width: '180px' }}
+              >
+                <option value="risk_free_rate">Risk-Free Rate</option>
+                <option value="gamma">L2 Regularization</option>
+                <option value="risk_aversion">Risk Aversion</option>
+              </select>
+              <button
+                onClick={handleSensitivityAnalysis}
+                disabled={loadingAction === 'sensitivity'}
+                style={{
+                  ...COMMON_STYLES.buttonSecondary,
+                  padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`,
+                  color: loadingAction === 'sensitivity' ? FINCEPT.GRAY : FINCEPT.CYAN,
+                  borderColor: loadingAction === 'sensitivity' ? FINCEPT.GRAY : FINCEPT.CYAN,
+                  cursor: loadingAction === 'sensitivity' ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {loadingAction === 'sensitivity' ? 'RUNNING...' : 'SENSITIVITY ANALYSIS'}
+              </button>
+            </div>
+          </div>
+
+          {/* Risk Decomposition Results */}
+          {riskDecomp && (
+            <div style={{ marginBottom: SPACING.XLARGE }}>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.ORANGE}`, paddingBottom: SPACING.MEDIUM, marginBottom: SPACING.LARGE }}>
+                RISK DECOMPOSITION
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.LARGE }}>
+                <div style={{ ...COMMON_STYLES.metricCard, padding: SPACING.LARGE }}>
+                  <div style={{ ...COMMON_STYLES.dataLabel }}>Portfolio Volatility</div>
+                  <div style={{ color: FINCEPT.YELLOW, fontSize: '18px', fontWeight: TYPOGRAPHY.BOLD }}>
+                    {(riskDecomp.portfolio_volatility * 100).toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Risk contribution table */}
+              <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', ...COMMON_STYLES.tableHeader }}>
+                  <span>Asset</span>
+                  <span>Marginal</span>
+                  <span>Component</span>
+                  <span>% Contribution</span>
+                </div>
+                {Object.keys(riskDecomp.percentage_contribution)
+                  .sort((a, b) => (riskDecomp.percentage_contribution[b] || 0) - (riskDecomp.percentage_contribution[a] || 0))
+                  .map((asset, idx) => (
+                    <div
+                      key={asset}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 1fr 1fr',
+                        padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+                        borderBottom: BORDERS.STANDARD,
+                        fontSize: TYPOGRAPHY.SMALL,
+                        backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                      }}
+                    >
+                      <span style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{asset}</span>
+                      <span style={{ color: FINCEPT.WHITE }}>{(riskDecomp.marginal_contribution[asset] * 100).toFixed(4)}%</span>
+                      <span style={{ color: FINCEPT.WHITE }}>{(riskDecomp.component_contribution[asset] * 100).toFixed(4)}%</span>
+                      <span style={{ color: FINCEPT.ORANGE, fontWeight: TYPOGRAPHY.BOLD }}>
+                        {(riskDecomp.percentage_contribution[asset] * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sensitivity Analysis Results */}
+          {sensitivityResults && (
+            <div>
+              <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.CYAN}`, paddingBottom: SPACING.MEDIUM, marginBottom: SPACING.LARGE }}>
+                SENSITIVITY ANALYSIS: {sensitivityResults.parameter.toUpperCase().replace(/_/g, ' ')}
+              </div>
+
+              {/* Chart */}
+              {sensitivityResults.results.length > 0 && (
+                <div style={{ backgroundColor: FINCEPT.PANEL_BG, padding: SPACING.LARGE, border: BORDERS.STANDARD, borderRadius: '2px', marginBottom: SPACING.LARGE }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <RechartsLine data={sensitivityResults.results}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#333" strokeOpacity={0.3} />
+                      <XAxis dataKey={sensitivityResults.parameter} stroke={FINCEPT.GRAY} tick={{ fill: FINCEPT.GRAY, fontSize: 10 }} />
+                      <YAxis stroke={FINCEPT.GRAY} tick={{ fill: FINCEPT.GRAY, fontSize: 10 }} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: FINCEPT.HEADER_BG, border: `1px solid ${FINCEPT.CYAN}`, borderRadius: '2px', fontSize: TYPOGRAPHY.SMALL }}
+                        labelStyle={{ color: FINCEPT.CYAN }}
+                      />
+                      <Line type="monotone" dataKey="expected_return" stroke={FINCEPT.GREEN} dot={false} name="Expected Return" />
+                      <Line type="monotone" dataKey="volatility" stroke={FINCEPT.YELLOW} dot={false} name="Volatility" />
+                      <Line type="monotone" dataKey="sharpe_ratio" stroke={FINCEPT.ORANGE} dot={false} name="Sharpe Ratio" />
+                    </RechartsLine>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Table */}
+              <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, borderRadius: '2px', overflow: 'auto', maxHeight: '300px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', ...COMMON_STYLES.tableHeader }}>
+                  <span>{sensitivityResults.parameter.replace(/_/g, ' ')}</span>
+                  <span>Expected Return</span>
+                  <span>Volatility</span>
+                  <span>Sharpe Ratio</span>
+                </div>
+                {sensitivityResults.results.map((row, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 1fr 1fr',
+                      padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+                      borderBottom: BORDERS.STANDARD,
+                      fontSize: TYPOGRAPHY.SMALL,
+                      backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                    }}
+                  >
+                    <span style={{ color: FINCEPT.CYAN }}>{(row[sensitivityResults.parameter] ?? 0).toFixed(4)}</span>
+                    <span style={{ color: FINCEPT.GREEN }}>{((row.expected_return ?? 0) * 100).toFixed(2)}%</span>
+                    <span style={{ color: FINCEPT.YELLOW }}>{((row.volatility ?? 0) * 100).toFixed(2)}%</span>
+                    <span style={{ color: FINCEPT.ORANGE }}>{(row.sharpe_ratio ?? 0).toFixed(3)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!riskDecomp && !sensitivityResults && !loading && (
+            <div style={{ padding: '48px', textAlign: 'center', color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY, backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, borderRadius: '2px' }}>
+              Run risk decomposition or sensitivity analysis to see results. Run optimization first if you haven't already.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* STRATEGIES TAB */}
+      {activeTab === 'strategies' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.XLARGE }}>
+          {/* Strategy Configuration */}
+          <div>
+            <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.ORANGE}`, paddingBottom: SPACING.MEDIUM }}>
+              ADDITIONAL STRATEGIES (PyPortfolioOpt)
+            </div>
+
+            {/* Strategy Selector */}
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>STRATEGY</label>
+              <select
+                value={selectedStrategy}
+                onChange={(e) => setSelectedStrategy(e.target.value)}
+                style={{ ...COMMON_STYLES.inputField, transition: EFFECTS.TRANSITION_STANDARD }}
+              >
+                <option value="risk_parity">Risk Parity - Equal risk contribution</option>
+                <option value="equal_weight">Equal Weight - 1/N portfolio</option>
+                <option value="inverse_volatility">Inverse Volatility - Weight by inverse vol</option>
+                <option value="market_neutral">Market Neutral - Long/short zero net exposure</option>
+                <option value="min_tracking_error">Min Tracking Error - Stay close to benchmark</option>
+                <option value="max_diversification">Max Diversification - Maximize diversification ratio</option>
+              </select>
+            </div>
+
+            {/* Asset Symbols */}
+            <div style={{ marginBottom: SPACING.LARGE }}>
+              <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>ASSET SYMBOLS</label>
+              <input
+                type="text"
+                value={assetSymbols}
+                onChange={(e) => setAssetSymbols(e.target.value)}
+                style={{ ...COMMON_STYLES.inputField }}
+                placeholder="AAPL,GOOGL,MSFT,AMZN,TSLA"
+              />
+            </div>
+
+            {/* Market Neutral Config */}
+            {selectedStrategy === 'market_neutral' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM, marginBottom: SPACING.LARGE }}>
+                <div>
+                  <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>LONG EXPOSURE</label>
+                  <input
+                    type="text" inputMode="decimal"
+                    value={marketNeutralLong}
+                    onChange={(e) => setMarketNeutralLong(parseFloat(e.target.value) || 1.0)}
+                    style={{ ...COMMON_STYLES.inputField }}
+                  />
+                </div>
+                <div>
+                  <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>SHORT EXPOSURE</label>
+                  <input
+                    type="text" inputMode="decimal"
+                    value={marketNeutralShort}
+                    onChange={(e) => setMarketNeutralShort(parseFloat(e.target.value) || -1.0)}
+                    style={{ ...COMMON_STYLES.inputField }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Min Tracking Error Config */}
+            {selectedStrategy === 'min_tracking_error' && (
+              <div style={{ marginBottom: SPACING.LARGE }}>
+                <label style={{ ...COMMON_STYLES.dataLabel, display: 'block', marginBottom: SPACING.SMALL }}>
+                  BENCHMARK WEIGHTS (JSON)
+                </label>
+                <input
+                  type="text"
+                  value={benchmarkWeightsStr}
+                  onChange={(e) => setBenchmarkWeightsStr(e.target.value)}
+                  style={{ ...COMMON_STYLES.inputField }}
+                  placeholder='{"AAPL": 0.3, "MSFT": 0.3, "GOOGL": 0.4}'
+                />
+              </div>
+            )}
+
+            {/* Run Button */}
+            <button
+              onClick={handleStrategyOptimize}
+              disabled={loadingAction === 'strategy'}
+              style={{
+                width: '100%',
+                padding: `${SPACING.DEFAULT} ${SPACING.LARGE}`,
+                backgroundColor: loadingAction === 'strategy' ? FINCEPT.MUTED : FINCEPT.ORANGE,
+                color: loadingAction === 'strategy' ? FINCEPT.GRAY : FINCEPT.DARK_BG,
+                border: 'none', borderRadius: '2px',
+                fontFamily: TYPOGRAPHY.MONO, fontSize: TYPOGRAPHY.SMALL,
+                fontWeight: TYPOGRAPHY.BOLD, letterSpacing: TYPOGRAPHY.WIDE,
+                textTransform: 'uppercase' as const,
+                cursor: loadingAction === 'strategy' ? 'not-allowed' : 'pointer',
+                opacity: loadingAction === 'strategy' ? 0.6 : 1,
+                transition: EFFECTS.TRANSITION_STANDARD,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: SPACING.MEDIUM
+              }}
+            >
+              <Layers size={16} />
+              {loadingAction === 'strategy' ? 'RUNNING...' : 'RUN STRATEGY'}
+            </button>
+          </div>
+
+          {/* Strategy Results */}
+          <div>
+            <div style={{ ...COMMON_STYLES.sectionHeader, borderBottom: `1px solid ${FINCEPT.ORANGE}`, paddingBottom: SPACING.MEDIUM }}>
+              STRATEGY RESULTS
+            </div>
+
+            {strategyResults ? (
+              <>
+                {/* Performance Metrics */}
+                {strategyResults.performance && (
+                  <div style={{ marginBottom: SPACING.XLARGE }}>
+                    <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.MEDIUM }}>
+                      PERFORMANCE METRICS
+                    </div>
+                    <div style={{ backgroundColor: FINCEPT.PANEL_BG, padding: SPACING.DEFAULT, border: BORDERS.STANDARD, borderRadius: '2px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT, fontSize: TYPOGRAPHY.SMALL }}>
+                        <div>
+                          <div style={{ color: FINCEPT.GRAY }}>Expected Return</div>
+                          <div style={{ color: FINCEPT.GREEN, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
+                            {(strategyResults.performance.expected_return * 100).toFixed(2)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color: FINCEPT.GRAY }}>Volatility</div>
+                          <div style={{ color: FINCEPT.YELLOW, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
+                            {(strategyResults.performance.volatility * 100).toFixed(2)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color: FINCEPT.GRAY }}>Sharpe Ratio</div>
+                          <div style={{ color: FINCEPT.ORANGE, fontSize: '14px', fontWeight: TYPOGRAPHY.BOLD }}>
+                            {strategyResults.performance.sharpe_ratio.toFixed(3)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Weights */}
+                {strategyResults.weights && (
+                  <div>
+                    <div style={{ color: FINCEPT.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD, marginBottom: SPACING.MEDIUM }}>
+                      OPTIMAL WEIGHTS
+                    </div>
+                    <div style={{ backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, borderRadius: '2px', maxHeight: '300px', overflow: 'auto' }}>
+                      {Object.entries(strategyResults.weights)
+                        .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
+                        .map(([symbol, weight]) => (
+                          <div
+                            key={symbol}
+                            style={{
+                              padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+                              borderBottom: `1px solid ${FINCEPT.HEADER_BG}`,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              fontSize: TYPOGRAPHY.SMALL,
+                            }}
+                          >
+                            <span style={{ color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{symbol}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM }}>
+                              <div style={{ width: '100px', height: '6px', backgroundColor: FINCEPT.HEADER_BG, borderRadius: '2px', position: 'relative', overflow: 'hidden' }}>
+                                <div style={{
+                                  position: 'absolute',
+                                  left: weight < 0 ? `${50 + weight * 50}%` : '50%',
+                                  top: 0, height: '100%',
+                                  width: `${Math.abs(weight) * 50}%`,
+                                  backgroundColor: weight >= 0 ? FINCEPT.ORANGE : FINCEPT.RED,
+                                }} />
+                              </div>
+                              <span style={{ color: weight >= 0 ? FINCEPT.WHITE : FINCEPT.RED, width: '60px', textAlign: 'right' }}>
+                                {(weight * 100).toFixed(2)}%
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ padding: '48px', textAlign: 'center', color: FINCEPT.GRAY, fontSize: TYPOGRAPHY.BODY, backgroundColor: FINCEPT.PANEL_BG, border: BORDERS.STANDARD, borderRadius: '2px' }}>
+                Select a strategy and click "RUN STRATEGY" to see results
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

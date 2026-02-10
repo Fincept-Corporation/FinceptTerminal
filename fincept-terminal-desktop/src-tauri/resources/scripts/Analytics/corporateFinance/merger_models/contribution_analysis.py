@@ -71,10 +71,40 @@ def main():
 
             acquirer_data = json.loads(sys.argv[2])
             target_data = json.loads(sys.argv[3])
-            ownership_split = float(sys.argv[4])  # This is target ownership percentage (0-1)
+            # ownership_split can be a float or a JSON dict with acquirer_shares/target_shares
+            ownership_arg = sys.argv[4] if len(sys.argv) > 4 else '0.2'
+            try:
+                ownership_split = float(ownership_arg)
+            except ValueError:
+                ownership_json = json.loads(ownership_arg)
+                acq_shares = ownership_json.get('acquirer_shares', 100000000)
+                tgt_shares = ownership_json.get('target_shares', 20000000)
+                ownership_split = tgt_shares / (acq_shares + tgt_shares)
 
-            acquirer = CompanyFinancials(**acquirer_data)
-            target = CompanyFinancials(**target_data)
+            # Build CompanyFinancials with defaults for missing fields
+            def build_financials(data):
+                rev = data.get('revenue', 0)
+                defaults = {
+                    'revenue': rev, 'cogs': data.get('cogs', rev * 0.6),
+                    'gross_profit': data.get('gross_profit', rev * 0.4),
+                    'sg_a': data.get('sg_a', rev * 0.2), 'r_d': data.get('r_d', 0),
+                    'depreciation': data.get('depreciation', rev * 0.03),
+                    'ebitda': data.get('ebitda', 0), 'ebit': data.get('ebit', 0),
+                    'interest_expense': data.get('interest_expense', 0),
+                    'ebt': data.get('ebt', 0), 'taxes': data.get('taxes', 0),
+                    'net_income': data.get('net_income', 0),
+                    'shares_outstanding': data.get('shares_outstanding', 0),
+                    'eps': data.get('eps', 0),
+                    'total_assets': data.get('total_assets', 0),
+                    'total_liabilities': data.get('total_liabilities', 0),
+                    'shareholders_equity': data.get('shareholders_equity', 0),
+                    'cash': data.get('cash', 0), 'debt': data.get('debt', 0)
+                }
+                defaults.update(data)
+                return CompanyFinancials(**{k: defaults[k] for k in CompanyFinancials.__dataclass_fields__})
+
+            acquirer = build_financials(acquirer_data)
+            target = build_financials(target_data)
 
             # Calculate shares based on ownership split
             # ownership_split represents target's ownership in combined entity

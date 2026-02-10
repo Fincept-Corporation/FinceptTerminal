@@ -256,6 +256,15 @@ export const COMMANDS: Command[] = [
     keywords: ['mcp', 'servers', 'protocol', 'model']
   },
   {
+    id: 'quantlib-core',
+    name: 'QuantLib',
+    description: 'Quantitative finance: core, regulatory, volatility & models',
+    aliases: ['quantlib', 'qlcore', 'quantlib-core', 'ql-reg', 'ql-vol', 'ql-models'],
+    category: 'tool',
+    action: 'quantlib-core',
+    keywords: ['quantlib', 'core', 'distributions', 'black-scholes', 'interpolation', 'cashflows', 'var', 'finance', 'math', 'regulatory', 'basel', 'ifrs9', 'volatility', 'sabr', 'heston', 'models', 'dupire', 'svi']
+  },
+  {
     id: 'excel',
     name: 'Excel Workbook',
     description: 'Excel integration',

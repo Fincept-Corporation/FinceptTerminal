@@ -83,7 +83,7 @@ class CallbackCommandRegressionAlgorithm(QCAlgorithm):
         potential_command.parameters = { "tag": "Signal X" }
 
         command_link = self.link(potential_command)
-        if "command[target][0]=BAC&command[quantity]=10&command[parameters][tag]=Signal+X&command[$type]=VoidCommand" not in command_link:
+        if "command[parameters][tag]=Signal+X&command[quantity]=10&command[target][0]=BAC&command[$type]=VoidCommand" not in command_link:
             raise ValueError(f'Invalid link was generated! {command_link}')
         self.notify.email("email@address", "Trade Command Event", f"Signal X trade\nFollow link to trigger: {command_link}")
 

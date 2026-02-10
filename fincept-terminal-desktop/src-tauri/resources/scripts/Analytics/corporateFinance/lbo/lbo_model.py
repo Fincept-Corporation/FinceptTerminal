@@ -37,7 +37,11 @@ class LBOModel:
         self.capital_structure = CapitalStructureBuilder(self.entry_ev, self.entry_ebitda)
         cap_structure = self.capital_structure.optimize_capital_structure(target_leverage)
 
-        revenue_growth = self.assumptions.get('revenue_growth', [0.05] * projection_years)
+        revenue_growth_raw = self.assumptions.get('revenue_growth', 0.05)
+        if isinstance(revenue_growth_raw, (int, float)):
+            revenue_growth = [revenue_growth_raw] * projection_years
+        else:
+            revenue_growth = list(revenue_growth_raw)
         ebitda_margin = self.assumptions.get('ebitda_margin', 0.15)
         capex_pct = self.assumptions.get('capex_pct_revenue', 0.03)
         nwc_pct = self.assumptions.get('nwc_pct_revenue', 0.05)
@@ -240,10 +244,61 @@ def main():
             }
             print(json.dumps(result))
 
+        elif command == "sensitivity":
+            # Rust sends: "sensitivity" base_case revenue_growth_scenarios exit_multiple_scenarios
+            if len(sys.argv) < 5:
+                raise ValueError("Base case, revenue growth scenarios, and exit multiple scenarios required")
+
+            base_case = json.loads(sys.argv[2])
+            revenue_growth_scenarios = json.loads(sys.argv[3])
+            exit_multiple_scenarios = json.loads(sys.argv[4])
+
+            target_company = base_case.get('company_data', base_case)
+            assumptions = base_case.get('assumptions', {})
+
+            model = LBOModel(target_company, assumptions)
+            base_results = model.build_complete_model(assumptions.get('projection_years', 5))
+
+            # Build sensitivity matrix: revenue growth vs exit multiple
+            sensitivity_matrix = []
+            for rev_growth in revenue_growth_scenarios:
+                for exit_mult in exit_multiple_scenarios:
+                    modified_assumptions = dict(assumptions)
+                    modified_assumptions['revenue_growth'] = rev_growth
+                    modified_assumptions['exit_multiple'] = exit_mult
+
+                    mod_model = LBOModel(target_company, modified_assumptions)
+                    mod_results = mod_model.build_complete_model(modified_assumptions.get('projection_years', 5))
+
+                    # returns_analysis is keyed by exit multiple
+                    ret_analysis = mod_results.get('returns_analysis', {})
+                    # Pick the returns for the current exit_mult, or first available
+                    ret = ret_analysis.get(exit_mult, ret_analysis.get(str(exit_mult), {}))
+                    if not ret and ret_analysis:
+                        ret = next(iter(ret_analysis.values()))
+                    sensitivity_matrix.append({
+                        'revenue_growth': rev_growth,
+                        'exit_multiple': exit_mult,
+                        'irr': ret.get('annualized_return', ret.get('irr', 0)),
+                        'moic': ret.get('moic', 0),
+                        'equity_value': ret.get('exit_equity_value', 0)
+                    })
+
+            result = {
+                "success": True,
+                "data": {
+                    "base_case": base_results,
+                    "sensitivity_matrix": sensitivity_matrix,
+                    "revenue_growth_range": revenue_growth_scenarios,
+                    "exit_multiple_range": exit_multiple_scenarios
+                }
+            }
+            print(json.dumps(result))
+
         else:
             result = {
                 "success": False,
-                "error": f"Unknown command: {command}. Available: build"
+                "error": f"Unknown command: {command}. Available: build, sensitivity"
             }
             print(json.dumps(result))
             sys.exit(1)

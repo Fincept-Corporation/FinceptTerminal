@@ -1,6 +1,7 @@
 """Risk Factor Summation Method"""
 from typing import Dict, Any
 from enum import Enum
+import sys
 
 class RiskFactor(Enum):
     """12 standard risk factors"""
@@ -196,7 +197,24 @@ def main():
             risk_assessments = json.loads(sys.argv[3])
 
             rfs = RiskFactorSummation(base_valuation=base_valuation)
-            valuation = rfs.quick_assessment(base_valuation=base_valuation, **risk_assessments)
+            # Map frontend keys to quick_assessment params
+            key_map = {
+                'management_risk': 'management_risk',
+                'stage_of_business': 'stage_risk', 'stage_risk': 'stage_risk',
+                'technology_risk': 'technology_risk',
+                'competition_risk': 'competition_risk',
+                'market_risk': 'market_risk', 'sales_risk': 'market_risk',
+                'funding_risk': 'funding_risk', 'funding_capital': 'funding_risk',
+            }
+            mapped = {}
+            for k, v in risk_assessments.items():
+                if k in key_map:
+                    mapped[key_map[k]] = v
+            # Ensure all required params have defaults (0 = average risk)
+            for required_key in ('management_risk', 'stage_risk', 'technology_risk', 'competition_risk', 'market_risk', 'funding_risk'):
+                if required_key not in mapped:
+                    mapped[required_key] = 0
+            valuation = rfs.quick_assessment(base_valuation=base_valuation, **mapped)
 
             result = {"success": True, "data": valuation}
             print(json.dumps(result))

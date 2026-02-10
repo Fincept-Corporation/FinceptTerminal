@@ -346,56 +346,6 @@ class ProcessQualityAssessment:
 
         return weaknesses
 
-if __name__ == '__main__':
-    assessment = ProcessQualityAssessment(ProcessType.TARGETED_AUCTION)
-
-    market_check = assessment.evaluate_market_check(
-        parties_contacted=25,
-        ndas_executed=18,
-        management_presentations=12,
-        bids_received=5
-    )
-
-    print("=== MARKET CHECK EVALUATION ===\n")
-    print(f"Process Type: {market_check['process_type'].replace('_', ' ').title()}")
-    print(f"Parties Contacted: {market_check['parties_contacted']}")
-    print(f"NDAs Executed: {market_check['ndas_executed']}")
-    print(f"Management Presentations: {market_check['management_presentations']}")
-    print(f"Bids Received: {market_check['bids_received']}")
-    print(f"Quality Score: {market_check['quality_score']}/100")
-    print(f"Process Adequate: {market_check['process_adequate']}")
-
-    bidders = [
-        Bidder("Strategic A", BidderType.STRATEGIC, 2_000_000_000, 2_400_000_000, False),
-        Bidder("Strategic B", BidderType.STRATEGIC, 2_100_000_000, 2_500_000_000, True),
-        Bidder("PE Firm A", BidderType.FINANCIAL_SPONSOR, 1_900_000_000, 2_300_000_000, False),
-        Bidder("Strategic C", BidderType.STRATEGIC, 1_800_000_000, 2_200_000_000, False),
-    ]
-
-    competition = assessment.analyze_competitive_tension(bidders)
-
-    print("\n\n=== COMPETITIVE TENSION ANALYSIS ===")
-    print(f"Total Bidders: {competition['total_bidders']}")
-    print(f"Strategic: {competition['strategic_bidders']}, Financial: {competition['financial_bidders']}")
-    print(f"Competitive Tension: {competition['competitive_tension'].title()}")
-    print(f"Bid Increment: {competition['bid_increment_pct']:.1f}%")
-    print(f"Bidders Improved: {competition['bidders_improved_offers']}/{competition['bidders_with_final_bids']}")
-
-    board = assessment.evaluate_board_process(
-        board_meetings=5,
-        special_committee=True,
-        independent_financial_advisor=True,
-        independent_legal_counsel=True,
-        management_conflicts=False,
-        fairness_opinion_obtained=True
-    )
-
-    print("\n\n=== BOARD PROCESS EVALUATION ===")
-    print(f"Governance Score: {board['governance_score']}/100")
-    print(f"Rating: {board['governance_rating'].title()}")
-    print(f"Best Practices Met: {board['best_practices_met']}")
-    print(f"Process Defensible: {board['process_defensible']}")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -415,12 +365,56 @@ def main():
 
             process_factors = json.loads(sys.argv[2])
 
-            assessment = ProcessQualityAssessment()
+            # Extract process_type from input, default to 'targeted_auction'
+            process_type_str = process_factors.get('process_type', 'targeted_auction').upper()
+            process_type = ProcessType[process_type_str] if process_type_str in ProcessType.__members__ else ProcessType.TARGETED_AUCTION
 
-            # Default analysis combining all aspects
-            result_data = {
-                "process_factors": process_factors
-            }
+            assessment = ProcessQualityAssessment(process_type)
+
+            result_data = {}
+
+            # Market check analysis
+            mc = process_factors.get('market_check', {})
+            if mc:
+                result_data['market_check'] = assessment.evaluate_market_check(
+                    parties_contacted=mc.get('parties_contacted', 0),
+                    ndas_executed=mc.get('ndas_executed', 0),
+                    management_presentations=mc.get('management_presentations', 0),
+                    bids_received=mc.get('bids_received', 0),
+                    go_shop_period_days=mc.get('go_shop_period_days')
+                )
+
+            # Board process analysis
+            bp = process_factors.get('board_process', {})
+            if bp:
+                result_data['board_process'] = assessment.evaluate_board_process(
+                    board_meetings=bp.get('board_meetings', 0),
+                    special_committee=bp.get('special_committee', False),
+                    independent_financial_advisor=bp.get('independent_financial_advisor', False),
+                    independent_legal_counsel=bp.get('independent_legal_counsel', False),
+                    management_conflicts=bp.get('management_conflicts', False),
+                    fairness_opinion_obtained=bp.get('fairness_opinion_obtained', False)
+                )
+
+            # Timing analysis
+            tp = process_factors.get('timing', {})
+            if tp:
+                result_data['timing_analysis'] = assessment.timing_pressure_analysis(
+                    process_duration_days=tp.get('process_duration_days', 90),
+                    termination_fee_pct=tp.get('termination_fee_pct', 3.0),
+                    go_shop_allowed=tp.get('go_shop_allowed', False),
+                    no_shop_period=tp.get('no_shop_period', True),
+                    financing_contingency=tp.get('financing_contingency', False)
+                )
+
+            # Comprehensive evaluation if we have enough data
+            if 'market_check' in result_data and 'board_process' in result_data and 'timing_analysis' in result_data:
+                result_data['comprehensive'] = assessment.comprehensive_process_evaluation(
+                    market_check=result_data['market_check'],
+                    competitive_tension={'competitive_tension': process_factors.get('competitive_tension', 'moderate')},
+                    board_process=result_data['board_process'],
+                    timing_analysis=result_data['timing_analysis']
+                )
 
             result = {"success": True, "data": result_data}
             print(json.dumps(result))

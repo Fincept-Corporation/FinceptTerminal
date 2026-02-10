@@ -151,7 +151,19 @@ def main():
             factor_scores = json.loads(sys.argv[2])
 
             berkus = BerkusMethod(max_value_per_factor=factor_scores.get('max_value_per_factor', 500_000))
-            valuation = berkus.quick_assessment(**{k: v for k, v in factor_scores.items() if k != 'max_value_per_factor'})
+            # Map frontend keys to quick_assessment params
+            key_map = {
+                'sound_idea': 'idea_score', 'idea_score': 'idea_score',
+                'prototype': 'prototype_score', 'prototype_score': 'prototype_score',
+                'quality_team': 'team_score', 'quality_management': 'team_score', 'team_score': 'team_score',
+                'strategic_relationships': 'relationships_score', 'relationships_score': 'relationships_score',
+                'product_rollout': 'rollout_score', 'rollout_score': 'rollout_score',
+            }
+            mapped = {}
+            for k, v in factor_scores.items():
+                if k in key_map:
+                    mapped[key_map[k]] = v
+            valuation = berkus.quick_assessment(**mapped)
 
             result = {"success": True, "data": valuation}
             print(json.dumps(result))

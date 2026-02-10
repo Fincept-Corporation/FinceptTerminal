@@ -102,14 +102,15 @@ class FinceptStrategyRunner:
                     continue
 
                 # Convert to list of dicts
+                # Round prices to 4 decimal places to eliminate float32 rounding noise
                 bars = []
                 for idx, row in df.iterrows():
                     bars.append({
                         'time': idx.strftime('%Y-%m-%d %H:%M:%S'),
-                        'open': float(row['Open']),
-                        'high': float(row['High']),
-                        'low': float(row['Low']),
-                        'close': float(row['Close']),
+                        'open': round(float(row['Open']), 4),
+                        'high': round(float(row['High']), 4),
+                        'low': round(float(row['Low']), 4),
+                        'close': round(float(row['Close']), 4),
                         'volume': float(row['Volume'])
                     })
 

@@ -295,6 +295,14 @@ class VectorBTProvider(BacktestingProviderBase):
             result_dict['using_synthetic_data'] = using_synthetic
             result_dict['extended_stats'] = extended
 
+            if using_synthetic:
+                result_dict['synthetic_data_warning'] = (
+                    'WARNING: This backtest used SYNTHETIC (fake) data because real market data '
+                    'could not be loaded. Install yfinance (pip install yfinance) and ensure '
+                    'internet connectivity for real results. These results have NO financial meaning.'
+                )
+                logs.append(f'{self._current_timestamp()}: *** SYNTHETIC DATA WARNING: Results are based on fake data ***')
+
             # Include detailed analysis sub-results
             result_dict['trade_analysis'] = all_metrics.get('trade_analysis', {})
             result_dict['drawdown_analysis'] = all_metrics.get('drawdown_analysis', {})
@@ -1432,12 +1440,21 @@ class VectorBTProvider(BacktestingProviderBase):
                 name='Close'
             )
 
+            # Round to 4 decimal places to eliminate float32 rounding noise
+            # from Yahoo Finance API (which returns slightly different float
+            # representations across requests, shifting SMA signals by 1 bar).
+            close_series = close_series.round(4)
+
         except ImportError:
-            self._error('yfinance not installed', None)
+            print('[VBT] WARNING: yfinance not installed - using SYNTHETIC data. '
+                  'Results will NOT reflect real market conditions. '
+                  'Install yfinance: pip install yfinance', file=sys.stderr)
             using_synthetic = True
             close_series = self._generate_synthetic_data(symbols, start_date, end_date)
         except Exception as e:
-            self._error(f'Data download failed for {normalized_symbols}: {e}', e)
+            print(f'[VBT] WARNING: Data download failed for {normalized_symbols}: {e} - '
+                  f'using SYNTHETIC data. Results will NOT reflect real market conditions.',
+                  file=sys.stderr)
             using_synthetic = True
             close_series = self._generate_synthetic_data(symbols, start_date, end_date)
 
@@ -1509,7 +1526,13 @@ class VectorBTProvider(BacktestingProviderBase):
 
     @staticmethod
     def _generate_synthetic_data(symbols: list, start_date: str, end_date: str):
-        """Generate synthetic price data as fallback."""
+        """Generate synthetic price data as fallback.
+
+        WARNING: This produces fake data and should only be used when real market
+        data is unavailable. Results from synthetic data have no financial meaning.
+        Uses a deterministic seed based on symbol name (not Python's hash() which
+        is randomized across runs).
+        """
         import pandas as pd
         import numpy as np
 
@@ -1517,7 +1540,10 @@ class VectorBTProvider(BacktestingProviderBase):
         if len(dates) == 0:
             dates = pd.date_range(start='2023-01-01', periods=252, freq='B')
 
-        np.random.seed(hash(symbols[0]) % 2**31 if symbols else 42)
+        # Use deterministic seed: sum of char codes (NOT hash() which is randomized per-run)
+        sym = symbols[0] if symbols else 'DEFAULT'
+        seed = sum(ord(c) for c in sym) % (2**31)
+        np.random.seed(seed)
         price = 100.0
         prices = []
         for _ in range(len(dates)):
@@ -1733,7 +1759,7 @@ class VectorBTProvider(BacktestingProviderBase):
             if isinstance(bench_data, pd.DataFrame):
                 bench_data = bench_data.iloc[:, 0]
             if bench_data is not None and len(bench_data) > 0:
-                values = bench_data.values.astype(float).flatten()
+                values = np.round(bench_data.values.astype(float).flatten(), 4)
                 normalized = values / values[0]
                 if len(normalized) != target_len:
                     indices = np.linspace(0, len(normalized) - 1, target_len).astype(int)

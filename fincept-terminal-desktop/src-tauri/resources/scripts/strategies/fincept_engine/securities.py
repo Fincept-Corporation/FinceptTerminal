@@ -42,7 +42,10 @@ class Security:
         self.margin_interest_rate_model = None
         self._custom_properties = {}
         self._option_chain_provider = None
+        self.subscriptions = []  # List of subscription data configs
         self.holdings = SecurityHolding_(symbol)
+        self.cache = _SecurityCache()
+        self.data = _DynamicSecurityData()
         self.symbol_properties = SymbolProperties()
         self.quote_currency = QuoteCurrency()
         self.base_currency = QuoteCurrency()
@@ -74,6 +77,49 @@ class Security:
 
     def set_margin_interest_rate_model(self, model):
         self.margin_interest_rate_model = model
+
+    def set_volatility_model(self, model):
+        self.volatility_model = model
+
+    def set_shortable_provider(self, provider):
+        self._shortable_provider = provider
+
+    def set_option_exercise_model(self, model):
+        self._option_exercise_model = model
+
+    def set_option_assignment_model(self, model):
+        self._option_assignment_model = model
+
+    def add(self, key, value):
+        """Add custom property to security."""
+        self._custom_properties[key] = value
+
+    @property
+    def key(self):
+        """Security key for subscriptions."""
+        return str(self.symbol)
+
+    # PascalCase aliases
+    def SetFilter(self, *args, **kwargs):
+        return self.set_filter(*args, **kwargs)
+
+    def SetLeverage(self, leverage):
+        return self.set_leverage(leverage)
+
+    def SetFeeModel(self, model):
+        return self.set_fee_model(model)
+
+    def SetFillModel(self, model):
+        return self.set_fill_model(model)
+
+    def SetSlippageModel(self, model):
+        return self.set_slippage_model(model)
+
+    def SetBuyingPowerModel(self, model):
+        return self.set_buying_power_model(model)
+
+    def SetVolatilityModel(self, model):
+        return self.set_volatility_model(model)
 
     def set_filter(self, *args, **kwargs):
         """Set option/future chain filter. Accepts filter function or min/max params."""
@@ -126,6 +172,10 @@ class Security:
     def __setitem__(self, key, value):
         self._custom_properties[key] = value
 
+    @property
+    def Symbol(self):
+        return self.symbol
+
     def __repr__(self):
         return f"Security({self.symbol}, price={self.price:.2f})"
 
@@ -154,6 +204,7 @@ class Exchange:
     def __init__(self):
         self.exchange_open = True
         self.hours = ExchangeHours()
+        self.time_zone = "America/New_York"
 
     @property
     def local_time(self):
@@ -166,6 +217,15 @@ class ExchangeHours:
     def __init__(self):
         self.is_open = True
         self.regular_market_duration = None
+
+    @staticmethod
+    def always_open(time_zone=None):
+        """Return exchange hours that are always open."""
+        eh = ExchangeHours()
+        eh.is_open = True
+        return eh
+
+    AlwaysOpen = always_open
 
     def is_date_open(self, date) -> bool:
         return True
@@ -245,13 +305,57 @@ class SecurityHolding_:
 
 class SymbolProperties:
     """Symbol properties like lot size, minimum price variation."""
-    def __init__(self):
-        self.lot_size = 1
-        self.minimum_price_variation = 0.01
+    def __init__(self, description="", quote_currency="USD", contract_multiplier=1.0,
+                 minimum_price_variation=0.01, lot_size=1, market_ticker=None):
+        self.description = description
+        self.quote_currency_symbol = quote_currency
+        self.contract_multiplier = contract_multiplier
+        self.minimum_price_variation = minimum_price_variation
+        self.lot_size = lot_size
+        self.market_ticker = market_ticker or ""
         self.minimum_order_size = 1
-        self.contract_multiplier = 1.0
         self.priceMagnifier = 1
-        self.description = ""
+
+
+class _SecurityCache:
+    """Security data cache."""
+    def __init__(self):
+        self._data = {}
+    def add_data(self, data):
+        pass
+    def add_data_list(self, data_list, data_type=None, from_subscription=False):
+        if data_type is not None:
+            self._data[data_type] = list(data_list) if data_list else []
+    def get_data(self):
+        return self._data
+
+
+class _DynamicSecurityData:
+    """Dynamic security data providing access to custom data types."""
+    def __init__(self):
+        self._store = {}
+    def get(self, data_type=None):
+        if data_type and data_type in self._store:
+            items = self._store[data_type]
+            return items[-1] if items else None
+        return None
+    def get_all(self, data_type=None):
+        if data_type and data_type in self._store:
+            return self._store[data_type]
+        return []
+    def has_data(self, data_type=None):
+        if data_type:
+            return data_type in self._store and len(self._store[data_type]) > 0
+        return len(self._store) > 0
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return None
+
+    # PascalCase aliases
+    Get = get
+    GetAll = get_all
+    HasData = has_data
 
 
 class QuoteCurrency:

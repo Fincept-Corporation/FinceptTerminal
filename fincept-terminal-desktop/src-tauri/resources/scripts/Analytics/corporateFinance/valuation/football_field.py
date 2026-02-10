@@ -291,14 +291,16 @@ def main():
     chart = FootballFieldChart()
 
     try:
-        if command == "generate":
+        if command in ("generate", "football_field"):
+            # Rust sends: "football_field" valuation_methods_json shares_outstanding
             if len(sys.argv) < 3:
                 raise ValueError("Valuation methods JSON required")
 
             valuation_methods = json.loads(sys.argv[2])
-            current_price = float(sys.argv[3]) if len(sys.argv) > 3 else None
-            offer_price = float(sys.argv[4]) if len(sys.argv) > 4 else None
-            format_type = sys.argv[5] if len(sys.argv) > 5 else 'auto'
+            shares_outstanding = float(sys.argv[3]) if len(sys.argv) > 3 else None
+            current_price = None
+            offer_price = None
+            format_type = 'auto'
 
             # Build valuation ranges
             valuation_ranges = []
@@ -337,7 +339,7 @@ def main():
             print(json.dumps(result, default=str))
 
         else:
-            result = {"success": False, "error": f"Unknown command: {command}. Available: generate"}
+            result = {"success": False, "error": f"Unknown command: {command}. Available: generate, football_field"}
             print(json.dumps(result))
             sys.exit(1)
 

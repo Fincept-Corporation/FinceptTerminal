@@ -263,64 +263,6 @@ class EarnoutCalculator:
             'measurement_period_years': measurement_period
         }
 
-if __name__ == '__main__':
-    calculator = EarnoutCalculator(discount_rate=0.12)
-
-    tranches = [
-        EarnoutTranche(
-            metric=EarnoutMetric.REVENUE,
-            threshold=100_000_000,
-            payment=50_000_000,
-            measurement_period_years=2,
-            description="Year 2 revenue > $100M"
-        ),
-        EarnoutTranche(
-            metric=EarnoutMetric.EBITDA,
-            threshold=20_000_000,
-            payment=30_000_000,
-            measurement_period_years=3,
-            description="Year 3 EBITDA > $20M"
-        )
-    ]
-
-    probabilities = [0.60, 0.40]
-
-    earnout = calculator.calculate_simple_earnout(
-        base_price=300_000_000,
-        earnout_tranches=tranches,
-        probability_weights=probabilities
-    )
-
-    print("=== EARNOUT VALUATION ===\n")
-    print(f"Base Purchase Price: ${earnout['base_price']:,.0f}")
-    print(f"Total Earnout (Face Value): ${earnout['total_earnout_face_value']:,.0f}")
-    print(f"Total Earnout (PV): ${earnout['total_earnout_pv']:,.0f}")
-    print(f"Expected Earnout Value: ${earnout['total_earnout_expected_value']:,.0f}")
-    print(f"Total Expected Consideration: ${earnout['total_consideration']:,.0f}")
-    print(f"Earnout as % of Deal: {earnout['earnout_as_pct_of_deal']:.1f}%\n")
-
-    print("Tranche Details:")
-    for tranche in earnout['earnout_tranches']:
-        print(f"\n  {tranche['description']}")
-        print(f"    Payment if Achieved: ${tranche['payment_if_achieved']:,.0f}")
-        print(f"    Probability: {tranche['probability']:.0f}%")
-        print(f"    Expected Value: ${tranche['expected_value']:,.0f}")
-
-    continuous = calculator.continuous_earnout(
-        base_price=300_000_000,
-        metric_baseline=80_000_000,
-        earnout_rate=0.50,
-        cap=60_000_000,
-        measurement_years=3,
-        expected_metric_path=[90_000_000, 105_000_000, 125_000_000]
-    )
-
-    print("\n\n=== CONTINUOUS EARNOUT ===")
-    print(f"Earnout Rate: ${continuous['earnout_rate']:.2f} per revenue dollar above baseline")
-    print(f"Cap: ${continuous['cap']:,.0f}")
-    print(f"Total Earnout PV: ${continuous['total_earnout_pv']:,.0f}")
-    print(f"Total Consideration: ${continuous['total_consideration']:,.0f}")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys

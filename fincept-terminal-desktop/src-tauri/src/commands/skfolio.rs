@@ -1,8 +1,21 @@
 // skfolio Portfolio Optimization Commands
+// Uses python_skfolio_lib/worker_handler.py with operation + JSON dispatch
 use crate::python;
+use tauri::command;
 
-/// Optimize portfolio using skfolio
-#[tauri::command]
+/// Helper to execute a skfolio operation via worker_handler.py
+fn execute_skfolio_op(
+    app: &tauri::AppHandle,
+    operation: &str,
+    data: serde_json::Value,
+) -> Result<String, String> {
+    let args = vec![operation.to_string(), data.to_string()];
+    python::execute_sync(app, "Analytics/python_skfolio_lib/worker_handler.py", args)
+}
+
+// ==================== PORTFOLIO OPTIMIZATION ====================
+
+#[command]
 pub async fn skfolio_optimize_portfolio(
     app: tauri::AppHandle,
     prices_data: String,
@@ -11,112 +24,63 @@ pub async fn skfolio_optimize_portfolio(
     risk_measure: Option<String>,
     config: Option<String>,
 ) -> Result<String, String> {
-    println!("[skfolio] Starting portfolio optimization");
-    println!("[skfolio] Prices data: {}", prices_data);
-    println!("[skfolio] Optimization method: {:?}", optimization_method);
-    println!("[skfolio] Objective function: {:?}", objective_function);
-    println!("[skfolio] Risk measure: {:?}", risk_measure);
-    println!("[skfolio] Config: {:?}", config);
+    let config_val: serde_json::Value = config
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or(serde_json::json!({}));
 
-    let mut args = vec![
-        "optimize".to_string(),
-        prices_data.clone(),
-    ];
-
-    // Add optimization parameters
-    let opt_method = optimization_method.unwrap_or_else(|| "mean_risk".to_string());
-    let obj_func = objective_function.unwrap_or_else(|| "maximize_ratio".to_string());
-    let risk_meas = risk_measure.unwrap_or_else(|| "cvar".to_string());
-
-    args.push(opt_method.clone());
-    args.push(obj_func.clone());
-    args.push(risk_meas.clone());
-
-    println!("[skfolio] Final args before config: {:?}", args);
-
-    // Add additional config as JSON if provided
-    if let Some(cfg) = config {
-        println!("[skfolio] Adding config: {}", cfg);
-        args.push(cfg);
-    }
-
-    println!("[skfolio] All args: {:?}", args);
-
-    println!("[skfolio] Executing Python script...");
-    let result = python::execute(&app, "Analytics/skfolio_wrapper.py", args).await;
-
-    match &result {
-        Ok(output) => {
-            println!("[skfolio] Python execution successful");
-            println!("[skfolio] Output length: {} bytes", output.len());
-            if output.len() < 500 {
-                println!("[skfolio] Output: {}", output);
-            } else {
-                println!("[skfolio] Output (first 500 chars): {}...", &output[..500]);
-            }
-        }
-        Err(e) => {
-            println!("[skfolio] ERROR: Python execution failed: {}", e);
-        }
-    }
-
-    result
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "optimization_method": optimization_method.unwrap_or_else(|| "mean_risk".to_string()),
+        "objective_function": objective_function.unwrap_or_else(|| "maximize_ratio".to_string()),
+        "risk_measure": risk_measure.unwrap_or_else(|| "variance".to_string()),
+        "config": config_val
+    });
+    execute_skfolio_op(&app, "optimize", payload)
 }
 
-/// Run hyperparameter tuning
-#[tauri::command]
-pub async fn skfolio_hyperparameter_tuning(
+// ==================== EFFICIENT FRONTIER ====================
+
+#[command]
+pub async fn skfolio_efficient_frontier(
     app: tauri::AppHandle,
     prices_data: String,
-    param_grid: Option<String>,
-    cv_method: Option<String>,
-) -> Result<String, String> {
-    let mut args = vec![
-        "hyperparameter_tuning".to_string(),
-        prices_data,
-    ];
-
-    if let Some(grid) = param_grid {
-        args.push(grid);
-    } else {
-        args.push("null".to_string());
-    }
-
-    if let Some(cv) = cv_method {
-        args.push(cv);
-    } else {
-        args.push("walk_forward".to_string());
-    }
-
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
-}
-
-/// Run portfolio backtest
-#[tauri::command]
-pub async fn skfolio_backtest_strategy(
-    app: tauri::AppHandle,
-    prices_data: String,
-    rebalance_freq: Option<i32>,
-    window_size: Option<i32>,
+    n_portfolios: Option<i32>,
     config: Option<String>,
 ) -> Result<String, String> {
-    let mut args = vec![
-        "backtest".to_string(),
-        prices_data,
-    ];
+    let config_val: serde_json::Value = config
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or(serde_json::json!({}));
 
-    args.push(rebalance_freq.unwrap_or(21).to_string());
-    args.push(window_size.unwrap_or(252).to_string());
-
-    if let Some(cfg) = config {
-        args.push(cfg);
-    }
-
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "n_portfolios": n_portfolios.unwrap_or(100),
+        "risk_measure": config_val.get("risk_measure").and_then(|v| v.as_str()).unwrap_or("variance")
+    });
+    execute_skfolio_op(&app, "efficient_frontier", payload)
 }
 
-/// Perform stress testing
-#[tauri::command]
+// ==================== RISK METRICS ====================
+
+#[command]
+pub async fn skfolio_risk_metrics(
+    app: tauri::AppHandle,
+    prices_data: String,
+    weights: Option<String>,
+) -> Result<String, String> {
+    let weights_val: serde_json::Value = weights
+        .and_then(|w| serde_json::from_str(&w).ok())
+        .unwrap_or(serde_json::Value::Null);
+
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "weights": weights_val
+    });
+    execute_skfolio_op(&app, "risk_metrics", payload)
+}
+
+// ==================== STRESS TESTING ====================
+
+#[command]
 pub async fn skfolio_stress_test(
     app: tauri::AppHandle,
     prices_data: String,
@@ -124,164 +88,208 @@ pub async fn skfolio_stress_test(
     scenarios: Option<String>,
     n_simulations: Option<i32>,
 ) -> Result<String, String> {
-    let mut args = vec![
-        "stress_test".to_string(),
-        prices_data,
-        weights,
-    ];
+    let weights_val: serde_json::Value = serde_json::from_str(&weights)
+        .unwrap_or(serde_json::Value::Null);
+    let scenarios_val: serde_json::Value = scenarios
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(serde_json::Value::Null);
 
-    if let Some(scen) = scenarios {
-        args.push(scen);
-    } else {
-        args.push("null".to_string());
-    }
-
-    args.push(n_simulations.unwrap_or(10000).to_string());
-
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "weights": weights_val,
+        "scenarios": scenarios_val,
+        "n_simulations": n_simulations.unwrap_or(10000)
+    });
+    execute_skfolio_op(&app, "stress_test", payload)
 }
 
-/// Generate efficient frontier
-#[tauri::command]
-pub async fn skfolio_efficient_frontier(
+// ==================== BACKTESTING ====================
+
+#[command]
+pub async fn skfolio_backtest_strategy(
     app: tauri::AppHandle,
     prices_data: String,
-    n_portfolios: Option<i32>,
+    rebalance_freq: Option<i32>,
+    window_size: Option<i32>,
     config: Option<String>,
 ) -> Result<String, String> {
-    println!("[skfolio] Starting efficient frontier generation");
-    println!("[skfolio] Prices data: {}", prices_data);
-    println!("[skfolio] Number of portfolios: {:?}", n_portfolios);
-    println!("[skfolio] Config: {:?}", config);
+    let config_val: serde_json::Value = config
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or(serde_json::json!({}));
 
-    let mut args = vec![
-        "efficient_frontier".to_string(),
-        prices_data.clone(),
-    ];
-
-    let n_ports = n_portfolios.unwrap_or(100);
-    args.push(n_ports.to_string());
-    println!("[skfolio] Number of portfolios arg: {}", n_ports);
-
-    if let Some(cfg) = config {
-        println!("[skfolio] Adding config: {}", cfg);
-        args.push(cfg);
-    }
-
-    println!("[skfolio] All args: {:?}", args);
-
-    println!("[skfolio] Executing Python script...");
-    let result = python::execute(&app, "Analytics/skfolio_wrapper.py", args).await;
-
-    match &result {
-        Ok(output) => {
-            println!("[skfolio] Python execution successful");
-            println!("[skfolio] Output length: {} bytes", output.len());
-            if output.len() < 1000 {
-                println!("[skfolio] Output: {}", output);
-            } else {
-                println!("[skfolio] Output (first 1000 chars): {}...", &output[..1000]);
-            }
-        }
-        Err(e) => {
-            println!("[skfolio] ERROR: Python execution failed: {}", e);
-        }
-    }
-
-    result
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "rebalance_freq": rebalance_freq.unwrap_or(21),
+        "window_size": window_size.unwrap_or(252),
+        "optimization_method": config_val.get("optimization_method").and_then(|v| v.as_str()).unwrap_or("mean_risk"),
+        "risk_measure": config_val.get("risk_measure").and_then(|v| v.as_str()).unwrap_or("variance")
+    });
+    execute_skfolio_op(&app, "backtest", payload)
 }
 
-/// Calculate risk attribution
-#[tauri::command]
-pub async fn skfolio_risk_attribution(
-    app: tauri::AppHandle,
-    prices_data: String,
-    weights: String,
-) -> Result<String, String> {
-    let args = vec![
-        "risk_attribution".to_string(),
-        prices_data,
-        weights,
-    ];
+// ==================== COMPARE STRATEGIES ====================
 
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
-}
-
-/// Compare multiple strategies
-#[tauri::command]
+#[command]
 pub async fn skfolio_compare_strategies(
     app: tauri::AppHandle,
     prices_data: String,
     strategies: String,
     metric: Option<String>,
 ) -> Result<String, String> {
-    let mut args = vec![
-        "compare_strategies".to_string(),
-        prices_data,
-        strategies,
-    ];
+    let strategies_val: serde_json::Value = serde_json::from_str(&strategies)
+        .unwrap_or(serde_json::Value::Null);
 
-    args.push(metric.unwrap_or_else(|| "sharpe_ratio".to_string()));
-
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "strategies": strategies_val,
+        "metric": metric.unwrap_or_else(|| "sharpe_ratio".to_string())
+    });
+    execute_skfolio_op(&app, "compare_strategies", payload)
 }
 
-/// Generate comprehensive portfolio report
-#[tauri::command]
-pub async fn skfolio_generate_report(
+// ==================== RISK ATTRIBUTION ====================
+
+#[command]
+pub async fn skfolio_risk_attribution(
     app: tauri::AppHandle,
     prices_data: String,
     weights: String,
-    config: Option<String>,
 ) -> Result<String, String> {
-    let mut args = vec![
-        "generate_report".to_string(),
-        prices_data,
-        weights,
-    ];
+    let weights_val: serde_json::Value = serde_json::from_str(&weights)
+        .unwrap_or(serde_json::Value::Null);
 
-    if let Some(cfg) = config {
-        args.push(cfg);
-    }
-
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "weights": weights_val
+    });
+    execute_skfolio_op(&app, "risk_attribution", payload)
 }
 
-/// Export portfolio weights
-#[tauri::command]
-pub async fn skfolio_export_weights(
+// ==================== HYPERPARAMETER TUNING ====================
+
+#[command]
+pub async fn skfolio_hyperparameter_tuning(
     app: tauri::AppHandle,
-    weights: String,
-    asset_names: String,
-    filename: Option<String>,
+    prices_data: String,
+    param_grid: Option<String>,
+    cv_method: Option<String>,
 ) -> Result<String, String> {
-    let mut args = vec![
-        "export_weights".to_string(),
-        weights,
-        asset_names,
-    ];
+    let param_grid_val: serde_json::Value = param_grid
+        .and_then(|p| serde_json::from_str(&p).ok())
+        .unwrap_or(serde_json::Value::Null);
 
-    if let Some(fname) = filename {
-        args.push(fname);
-    }
-
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "param_grid": param_grid_val,
+        "cv_method": cv_method.unwrap_or_else(|| "walk_forward".to_string())
+    });
+    execute_skfolio_op(&app, "hyperparameter_tune", payload)
 }
 
-/// Scenario analysis
-#[tauri::command]
+// ==================== MEASURES ====================
+
+#[command]
+pub async fn skfolio_measures(
+    app: tauri::AppHandle,
+    prices_data: String,
+    weights: Option<String>,
+    measure_name: Option<String>,
+) -> Result<String, String> {
+    let weights_val: serde_json::Value = weights
+        .and_then(|w| serde_json::from_str(&w).ok())
+        .unwrap_or(serde_json::Value::Null);
+
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "weights": weights_val,
+        "measure_name": measure_name
+    });
+    execute_skfolio_op(&app, "measures", payload)
+}
+
+// ==================== MODEL VALIDATION ====================
+
+#[command]
+pub async fn skfolio_validate_model(
+    app: tauri::AppHandle,
+    prices_data: String,
+    validation_method: Option<String>,
+    risk_measure: Option<String>,
+) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "validation_method": validation_method.unwrap_or_else(|| "walk_forward".to_string()),
+        "risk_measure": risk_measure.unwrap_or_else(|| "variance".to_string())
+    });
+    execute_skfolio_op(&app, "validate_model", payload)
+}
+
+// ==================== SCENARIO ANALYSIS ====================
+
+#[command]
 pub async fn skfolio_scenario_analysis(
     app: tauri::AppHandle,
     prices_data: String,
     weights: String,
     scenarios: String,
 ) -> Result<String, String> {
-    let args = vec![
-        "scenario_analysis".to_string(),
-        prices_data,
-        weights,
-        scenarios,
-    ];
+    let weights_val: serde_json::Value = serde_json::from_str(&weights)
+        .unwrap_or(serde_json::Value::Null);
+    let scenarios_val: serde_json::Value = serde_json::from_str(&scenarios)
+        .unwrap_or(serde_json::Value::Null);
 
-    python::execute(&app, "Analytics/skfolio_wrapper.py", args).await
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "weights": weights_val,
+        "scenarios": scenarios_val
+    });
+    execute_skfolio_op(&app, "scenario_analysis", payload)
+}
+
+// ==================== GENERATE REPORT ====================
+
+#[command]
+pub async fn skfolio_generate_report(
+    app: tauri::AppHandle,
+    prices_data: String,
+    weights: String,
+    config: Option<String>,
+) -> Result<String, String> {
+    let config_val: serde_json::Value = config
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    let payload = serde_json::json!({
+        "prices_data": prices_data,
+        "weights": weights,
+        "optimization_method": config_val.get("optimization_method").and_then(|v| v.as_str()).unwrap_or("mean_risk"),
+        "objective_function": config_val.get("objective_function").and_then(|v| v.as_str()).unwrap_or("maximize_ratio"),
+        "risk_measure": config_val.get("risk_measure").and_then(|v| v.as_str()).unwrap_or("variance"),
+        "config": config_val
+    });
+    execute_skfolio_op(&app, "generate_report", payload)
+}
+
+// ==================== EXPORT WEIGHTS ====================
+
+#[command]
+pub async fn skfolio_export_weights(
+    app: tauri::AppHandle,
+    weights: String,
+    asset_names: String,
+    filename: Option<String>,
+) -> Result<String, String> {
+    // Export is handled client-side; this returns weights in a structured format
+    let weights_val: serde_json::Value = serde_json::from_str(&weights)
+        .unwrap_or(serde_json::Value::Null);
+    let names_val: serde_json::Value = serde_json::from_str(&asset_names)
+        .unwrap_or(serde_json::Value::Null);
+
+    let result = serde_json::json!({
+        "status": "success",
+        "weights": weights_val,
+        "asset_names": names_val,
+        "filename": filename
+    });
+    Ok(result.to_string())
 }

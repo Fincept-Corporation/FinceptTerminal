@@ -1,5 +1,6 @@
 """Venture Capital (VC) Method of Valuation"""
 from typing import Dict, Any, Optional
+import sys
 
 class VCMethod:
     """Venture Capital Method for startup valuation"""

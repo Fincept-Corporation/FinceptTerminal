@@ -11,13 +11,50 @@ from .types import Symbol
 class _ScheduleSettings:
     """Schedule settings for universe."""
     def __init__(self):
-        self.on = None
-        self.at = None
+        self._on_rule = None
+        self._at_rule = None
+    def on(self, date_rule=None):
+        """Set date rule for scheduled universe selection."""
+        self._on_rule = date_rule
+        return self
+    def at(self, time_rule=None):
+        """Set time rule for scheduled universe selection."""
+        self._at_rule = time_rule
+        return self
+
+class _ETFSettings:
+    """ETF universe settings."""
+    _is_etf = True
+    def __init__(self):
+        self.symbol = None
+        self._filter_func = None
+    def __call__(self, *args, **kwargs):
+        # Called as self.universe.etf(spy, universe_settings, filter_func)
+        for a in args:
+            if isinstance(a, Symbol):
+                self.symbol = a
+            elif callable(a) and not isinstance(a, type) and not isinstance(a, UniverseSettings):
+                self._filter_func = a
+        return self
+
+class _QC500Settings:
+    """QC500 universe settings."""
+    def __init__(self):
+        pass
+    def __call__(self, *args, **kwargs):
+        return self
+
+class _TopSettings:
+    """Top N universe settings."""
+    def __init__(self):
+        pass
+    def __call__(self, *args, **kwargs):
+        return self
 
 class UniverseSettings:
     """Settings for universe subscriptions."""
 
-    def __init__(self):
+    def __init__(self, *args):
         self.resolution = Resolution.MINUTE
         self.leverage = 1.0
         self.fill_forward = True
@@ -26,6 +63,9 @@ class UniverseSettings:
         self.data_normalization_mode = 0
         self.asynchronous = False
         self.schedule = _ScheduleSettings()
+        self.etf = _ETFSettings()
+        self.qc_500 = _QC500Settings()
+        self.top = _TopSettings()
 
 
 class CoarseFundamental:

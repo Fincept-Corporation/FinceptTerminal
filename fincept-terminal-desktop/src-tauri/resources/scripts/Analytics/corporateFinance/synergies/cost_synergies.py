@@ -407,7 +407,54 @@ def main():
     command = sys.argv[1]
 
     try:
-        if command == "cost_synergy":
+        if command == "cost":
+            # Rust sends: "cost" synergy_type synergy_params_json
+            if len(sys.argv) < 4:
+                raise ValueError("Synergy type and params required")
+
+            synergy_type = sys.argv[2]
+            params = json.loads(sys.argv[3])
+
+            analyzer = CostSynergyAnalyzer(
+                tax_rate=params.get('tax_rate', 0.25),
+                cost_of_capital=params.get('cost_of_capital', 0.10)
+            )
+
+            if synergy_type == "headcount":
+                analysis = analyzer.calculate_headcount_synergy(
+                    duplicate_roles=params.get('duplicate_roles', 0),
+                    average_loaded_cost=params.get('average_loaded_cost', 0),
+                    severance_multiple=params.get('severance_multiple', 1.0),
+                    ramp_years=params.get('ramp_years', 2)
+                )
+            elif synergy_type == "facilities":
+                analysis = analyzer.calculate_facilities_synergy(
+                    facilities_to_close=params.get('facilities_to_close', 0),
+                    annual_cost_per_facility=params.get('annual_cost_per_facility', 0),
+                    closure_cost_per_facility=params.get('closure_cost_per_facility', 0),
+                    lease_termination_cost=params.get('lease_termination_cost', 0),
+                    ramp_years=params.get('ramp_years', 2)
+                )
+            elif synergy_type == "procurement":
+                analysis = analyzer.calculate_procurement_synergy(
+                    combined_spend=params.get('combined_spend', 0),
+                    volume_discount=params.get('volume_discount', 0.05),
+                    supplier_rationalization_benefit=params.get('supplier_rationalization_benefit', 0.02),
+                    implementation_cost=params.get('implementation_cost', 0),
+                    ramp_years=params.get('ramp_years', 3)
+                )
+            else:
+                analysis = analyzer.calculate_headcount_synergy(
+                    duplicate_roles=params.get('duplicate_roles', 0),
+                    average_loaded_cost=params.get('average_loaded_cost', 0),
+                    severance_multiple=params.get('severance_multiple', 1.0),
+                    ramp_years=params.get('ramp_years', 2)
+                )
+
+            result = {"success": True, "data": analysis}
+            print(json.dumps(result))
+
+        elif command == "cost_synergy":
             if len(sys.argv) < 6:
                 raise ValueError("Duplicate roles, average loaded cost, severance multiple, and ramp years required")
 
@@ -429,7 +476,7 @@ def main():
             print(json.dumps(result))
 
         else:
-            result = {"success": False, "error": f"Unknown command: {command}"}
+            result = {"success": False, "error": f"Unknown command: {command}. Available: cost, cost_synergy"}
             print(json.dumps(result))
             sys.exit(1)
 

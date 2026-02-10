@@ -157,23 +157,23 @@ def main():
             from corporateFinance.lbo.capital_structure import DebtTranche
 
             tranches = []
-            for t in debt_structure.get('tranches', []):
+            for t in (debt_structure.get('tranches', []) if isinstance(debt_structure, dict) else debt_structure):
                 tranche = DebtTranche(
-                    t.get('name', ''),
-                    t.get('principal', 0),
-                    t.get('interest_rate', 0),
-                    t.get('maturity', 0),
-                    t.get('tranche_type', ''),
-                    t.get('amortization_rate', 0),
-                    t.get('sweep_priority', 0)
+                    name=t.get('name', ''),
+                    amount=t.get('amount', t.get('principal', 0)),
+                    interest_rate=t.get('interest_rate', 0),
+                    amortization_years=t.get('amortization_years', t.get('maturity_years', t.get('maturity', 7))),
+                    type=t.get('type', t.get('tranche_type', 'Term Loan')),
+                    mandatory_amortization=t.get('mandatory_amortization', t.get('mandatory_amort_pct', t.get('amortization_rate', 0))),
+                    sweep_percentage=t.get('sweep_percentage', t.get('sweep_priority', 0))
                 )
                 tranches.append(tranche)
 
             debt_schedule = DebtSchedule(tranches)
+            fcf_list = cash_flows if isinstance(cash_flows, list) else cash_flows.get('fcf_projection', cash_flows.get('cash_flows', []))
             schedule = debt_schedule.calculate_annual_schedule(
-                cash_flows.get('fcf_projection', []),
-                years=len(cash_flows.get('fcf_projection', [])),
-                sweep_percentage=sweep_percentage
+                fcf_list,
+                years=len(fcf_list) if fcf_list else 7
             )
             summary = debt_schedule.summarize_debt_paydown(schedule)
 

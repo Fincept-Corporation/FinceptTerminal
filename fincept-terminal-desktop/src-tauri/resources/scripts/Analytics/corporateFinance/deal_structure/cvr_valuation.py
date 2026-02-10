@@ -301,14 +301,25 @@ def main():
 
     try:
         if command == "cvr":
-            if len(sys.argv) < 5:
-                raise ValueError("Payment if approved, approval probability, and expected decision years required")
+            if len(sys.argv) < 3:
+                raise ValueError("CVR parameters required")
 
-            payment_if_approved = float(sys.argv[2])
-            approval_probability = float(sys.argv[3])
-            expected_decision_years = float(sys.argv[4])
+            # Accept either JSON dict or positional args
+            try:
+                params = json.loads(sys.argv[2])
+                payment_if_approved = float(params.get('payment_if_approved', params.get('payout_per_share', 0)))
+                approval_probability = float(params.get('approval_probability', params.get('probability', 0.5)))
+                expected_decision_years = float(params.get('expected_decision_years', params.get('expected_timeline_years', 2)))
+                discount_rate = float(params.get('discount_rate', 0.12))
+            except (json.JSONDecodeError, TypeError):
+                if len(sys.argv) < 5:
+                    raise ValueError("Payment if approved, approval probability, and expected decision years required")
+                payment_if_approved = float(sys.argv[2])
+                approval_probability = float(sys.argv[3])
+                expected_decision_years = float(sys.argv[4])
+                discount_rate = 0.12
 
-            cvr = CVRValuation(discount_rate=0.12)
+            cvr = CVRValuation(discount_rate=discount_rate)
 
             analysis = cvr.value_regulatory_cvr(
                 payment_if_approved=payment_if_approved,

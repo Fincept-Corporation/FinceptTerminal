@@ -13,6 +13,7 @@ import { OverviewTab } from './tabs/OverviewTab';
 import { FinancialsTab } from './tabs/FinancialsTab';
 import { AnalysisTab } from './tabs/AnalysisTab';
 import { TechnicalsTab } from './tabs/TechnicalsTab';
+import { TalippTab } from './tabs/TalippTab';
 import { NewsTab } from './tabs/NewsTab';
 
 // Import existing components
@@ -341,6 +342,7 @@ const EquityResearchTab: React.FC = () => {
               { id: 'financials', label: 'FINANCIALS', icon: BarChart3 },
               { id: 'analysis', label: 'ANALYSIS', icon: FileText },
               { id: 'technicals', label: 'TECHNICALS', icon: BarChart3 },
+              { id: 'talipp', label: 'TALIPP', icon: BarChart3 },
               { id: 'peers', label: 'PEERS', icon: Users },
               { id: 'news', label: 'NEWS', icon: Newspaper },
             ].map((tab) => {
@@ -577,6 +579,11 @@ const EquityResearchTab: React.FC = () => {
             technicalsLoading={technicalsLoading}
             historicalData={historicalData}
           />
+        )}
+
+        {/* TALIpp Tab */}
+        {activeTab === 'talipp' && (
+          <TalippTab historicalData={historicalData} />
         )}
 
         {/* Peers Tab */}

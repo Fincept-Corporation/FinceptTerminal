@@ -8,6 +8,7 @@
 import {
   Activity, Play, Target, ChevronRight, Database, Zap, TrendingUp, Tag, Split,
   DollarSign, Search, Filter, Settings, BarChart3, Code, PieChart,
+  Layers, GitBranch, LineChart, Shuffle,
 } from 'lucide-react';
 
 // ============================================================================
@@ -18,7 +19,7 @@ export type BacktestingProviderSlug = 'vectorbt' | 'backtestingpy' | 'fasttrade'
 
 export type CommandType =
   | 'backtest' | 'optimize' | 'walk_forward' | 'indicator'
-  | 'indicator_signals';
+  | 'indicator_signals' | 'labels' | 'splits' | 'returns' | 'signals';
 
 interface StrategyParam {
   name: string;
@@ -79,6 +80,10 @@ export const ALL_COMMANDS: Command[] = [
   { id: 'walk_forward', label: 'Walk Forward', icon: ChevronRight, description: 'Walk-forward validation', color: C.BLUE },
   { id: 'indicator', label: 'Indicators', icon: Activity, description: 'Calculate indicators', color: C.PURPLE },
   { id: 'indicator_signals', label: 'Ind. Signals', icon: Zap, description: 'Indicator signals', color: C.YELLOW },
+  { id: 'labels', label: 'ML Labels', icon: Layers, description: 'Generate ML labels', color: C.CYAN },
+  { id: 'splits', label: 'Splitters', icon: GitBranch, description: 'Cross-validation splits', color: C.BLUE },
+  { id: 'returns', label: 'Returns', icon: LineChart, description: 'Returns analysis', color: C.GREEN },
+  { id: 'signals', label: 'Rand. Signals', icon: Shuffle, description: 'Random signal generators', color: C.YELLOW },
 ];
 
 // ============================================================================
@@ -361,6 +366,7 @@ const VECTORBT_CONFIG: BacktestingProviderConfig = {
   displayName: 'VECTORBT',
   commands: [
     'backtest', 'optimize', 'walk_forward', 'indicator', 'indicator_signals',
+    'labels', 'splits', 'returns', 'signals',
   ],
   commandMap: {
     backtest: 'run_backtest',
@@ -368,6 +374,10 @@ const VECTORBT_CONFIG: BacktestingProviderConfig = {
     walk_forward: 'walk_forward',
     indicator: 'indicator_param_sweep',
     indicator_signals: 'indicator_signals',
+    labels: 'generate_labels',
+    splits: 'generate_splits',
+    returns: 'analyze_returns',
+    signals: 'generate_signals',
   },
   strategies: {
     trend: [...SHARED_TREND, ...VBT_EXTRA_TREND],

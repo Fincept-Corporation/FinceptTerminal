@@ -359,52 +359,6 @@ class HealthcareMetrics:
             }
         }
 
-if __name__ == '__main__':
-    pharma = HealthcareMetrics(HealthcareSegment.PHARMA)
-
-    drug = pharma.value_drug_candidate(
-        peak_sales=2_000_000_000,
-        years_to_peak=5,
-        patent_life_remaining=12,
-        probability_of_success=0.35,
-        development_costs_remaining=500_000_000,
-        discount_rate=0.12
-    )
-
-    print("=== DRUG CANDIDATE VALUATION ===\n")
-    print(f"Peak Sales: ${drug['peak_sales']:,.0f}")
-    print(f"Probability of Success: {drug['probability_of_success']:.0f}%")
-    print(f"NPV (Unrisked): ${drug['npv_unrisked']:,.0f}")
-    print(f"rNPV: ${drug['rnpv']:,.0f}")
-    print(f"Development Costs Remaining: ${drug['development_costs_remaining']:,.0f}")
-
-    device = HealthcareMetrics(HealthcareSegment.MEDICAL_DEVICES)
-
-    device_metrics = device.calculate_medical_device_metrics(
-        revenue=150_000_000,
-        gross_margin=0.72,
-        clinical_evidence_strength=85,
-        regulatory_approvals=['FDA', 'CE_Mark'],
-        reimbursement_coverage=90,
-        installed_base=5_000,
-        recurring_revenue_pct=0.45
-    )
-
-    print("\n\n=== MEDICAL DEVICE METRICS ===")
-    print(f"Revenue: ${device_metrics['revenue']:,.0f}")
-    print(f"Gross Margin: {device_metrics['gross_margin']:.1f}%")
-    print(f"Quality Score: {device_metrics['device_quality_score']}/100")
-    print(f"Regulatory Score: {device_metrics['regulatory_score']}/100")
-    print(f"\nRevenue Multiple Range:")
-    mult = device_metrics['revenue_multiple_range']
-    print(f"  {mult['low']:.1f}x - {mult['high']:.1f}x (Mid: {mult['mid']:.1f}x)")
-
-    benchmarks = pharma.healthcare_ma_benchmarks()
-    print("\n\n=== HEALTHCARE M&A BENCHMARKS ===")
-    for sector, data in benchmarks.items():
-        print(f"\n{sector.upper().replace('_', ' ')}:")
-        print(f"  Key Drivers: {data['key_drivers']}")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -426,24 +380,54 @@ def main():
             company_data = json.loads(sys.argv[3])
 
             # Determine segment from sector
-            if 'pharma' in sector.lower() or 'biotech' in sector.lower():
-                segment = HealthcareSegment.PHARMA_BIOTECH
+            if 'pharma' in sector.lower():
+                segment = HealthcareSegment.PHARMA
+            elif 'biotech' in sector.lower():
+                segment = HealthcareSegment.BIOTECH
             elif 'device' in sector.lower():
                 segment = HealthcareSegment.MEDICAL_DEVICES
             elif 'service' in sector.lower():
                 segment = HealthcareSegment.HEALTHCARE_SERVICES
+            elif 'healthtech' in sector.lower() or 'tech' in sector.lower():
+                segment = HealthcareSegment.HEALTHTECH
             else:
-                segment = HealthcareSegment.PHARMA_BIOTECH  # default
+                segment = HealthcareSegment.PHARMA  # default
 
             analyzer = HealthcareMetrics(segment)
 
+            # Map alternative key names to expected parameter names
+            pharma_aliases = {
+                'peak_sales_estimate': 'peak_sales',
+                'patent_years_remaining': 'patent_life_remaining',
+                'success_probability': 'probability_of_success',
+                'dev_costs': 'development_costs_remaining',
+                'target_market_size': None,  # informational only, not a method param
+                'drug_name': None,  # informational only
+                'phase': None,  # informational only
+            }
+            for old_key, new_key in pharma_aliases.items():
+                if old_key in company_data:
+                    if new_key:
+                        company_data[new_key] = company_data.pop(old_key)
+                    else:
+                        company_data.pop(old_key)
+
             # Route to appropriate calculation
-            if segment == HealthcareSegment.PHARMA_BIOTECH:
-                analysis = analyzer.calculate_drug_candidate_value(**company_data)
+            if segment in (HealthcareSegment.PHARMA, HealthcareSegment.BIOTECH):
+                # Provide defaults for required params
+                company_data.setdefault('probability_of_success', 0.5)
+                company_data.setdefault('development_costs_remaining', 0)
+                # Filter to only accepted kwargs
+                import inspect
+                valid_params = set(inspect.signature(analyzer.value_drug_candidate).parameters.keys())
+                filtered = {k: v for k, v in company_data.items() if k in valid_params}
+                analysis = analyzer.value_drug_candidate(**filtered)
             elif segment == HealthcareSegment.MEDICAL_DEVICES:
                 analysis = analyzer.calculate_medical_device_metrics(**company_data)
             elif segment == HealthcareSegment.HEALTHCARE_SERVICES:
                 analysis = analyzer.calculate_healthcare_services_metrics(**company_data)
+            elif segment == HealthcareSegment.HEALTHTECH:
+                analysis = analyzer.calculate_healthtech_metrics(**company_data)
 
             result = {"success": True, "data": analysis}
             print(json.dumps(result))

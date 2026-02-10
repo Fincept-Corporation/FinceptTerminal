@@ -230,10 +230,11 @@ export class YFinancePaperTradingAdapter extends BaseStockBrokerAdapter {
       change: yq.change,
       changePercent: yq.change_percent,
       volume: yq.volume || 0,
-      bid: yq.price - 0.01,
-      bidQty: 100,
-      ask: yq.price + 0.01,
-      askQty: 100,
+      // YFinance doesn't provide real bid/ask data - don't fake it
+      bid: 0,
+      bidQty: 0,
+      ask: 0,
+      askQty: 0,
       timestamp: yq.timestamp * 1000,
     };
   }
@@ -283,6 +284,71 @@ export class YFinancePaperTradingAdapter extends BaseStockBrokerAdapter {
     return quote;
   }
 
+  /**
+   * Override batch quotes to use yfinance batch_quotes command (single Python process)
+   * instead of the default one-by-one approach which spawns N separate processes.
+   */
+  async getQuotes(
+    instruments: Array<{ symbol: string; exchange: StockExchange }>
+  ): Promise<Quote[]> {
+    if (instruments.length === 0) return [];
+
+    // Separate cached vs uncached
+    const now = Date.now();
+    const results: Quote[] = [];
+    const uncached: Array<{ symbol: string; exchange: StockExchange }> = [];
+
+    for (const inst of instruments) {
+      const cached = this.quoteCache.get(inst.symbol);
+      if (cached && now - cached.fetchedAt < this.cacheTTL) {
+        results.push(cached.quote);
+      } else {
+        uncached.push(inst);
+      }
+    }
+
+    if (uncached.length === 0) return results;
+
+    // Fetch uncached symbols in a single batch call
+    try {
+      const symbols = uncached.map(i => i.symbol);
+      const result = await invoke<string>('execute_yfinance_command', {
+        command: 'batch_quotes',
+        args: symbols,
+      });
+      const data = JSON.parse(result);
+
+      if (Array.isArray(data)) {
+        for (const yq of data) {
+          if (yq && !yq.error) {
+            const inst = uncached.find(i => i.symbol === yq.symbol);
+            const exchange = inst?.exchange || this.getExchange(yq.symbol, yq.exchange);
+            const quote = this.convertQuote(yq as YFinanceQuote, exchange);
+            this.quoteCache.set(yq.symbol, { quote, fetchedAt: now });
+            results.push(quote);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[YFinance] Batch quotes error:', error);
+      // Fallback: fetch individually for any that failed
+      for (const inst of uncached) {
+        try {
+          const quote = await this.getQuoteInternal(inst.symbol, inst.exchange);
+          results.push(quote);
+        } catch {
+          // Skip failed symbols
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Valid yfinance intervals: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo
+   * Intraday data (<1d) only available for last 60 days.
+   */
   protected async getOHLCVInternal(
     symbol: string,
     _exchange: StockExchange,
@@ -291,26 +357,36 @@ export class YFinancePaperTradingAdapter extends BaseStockBrokerAdapter {
     to: Date
   ): Promise<OHLCV[]> {
     try {
-      // Map TimeFrame to yfinance interval format
+      // Map TimeFrame to valid yfinance interval strings
       const intervalMap: Record<TimeFrame, string> = {
         '1m': '1m',
-        '3m': '5m', // yfinance doesn't have 3m, use 5m
+        '3m': '5m',
         '5m': '5m',
-        '10m': '15m', // yfinance doesn't have 10m, use 15m
+        '10m': '15m',
         '15m': '15m',
         '30m': '30m',
         '1h': '1h',
-        '2h': '60m', // yfinance doesn't have 2h, use 60m
-        '4h': '60m', // yfinance doesn't have 4h, use 60m
+        '2h': '1h',
+        '4h': '1h',
         '1d': '1d',
         '1w': '1wk',
         '1M': '1mo',
       };
       const interval = intervalMap[timeframe] || '1d';
 
+      // Clamp date range for intraday - yfinance only has 60 days of intraday data
+      let effectiveFrom = from;
+      if (['1m', '5m', '15m', '30m', '1h'].includes(interval)) {
+        const maxIntraday = new Date();
+        maxIntraday.setDate(maxIntraday.getDate() - 59);
+        if (effectiveFrom < maxIntraday) {
+          effectiveFrom = maxIntraday;
+        }
+      }
+
       const result = await invoke<string>('execute_yfinance_command', {
         command: 'historical',
-        args: [symbol, from.toISOString().split('T')[0], to.toISOString().split('T')[0], interval],
+        args: [symbol, effectiveFrom.toISOString().split('T')[0], to.toISOString().split('T')[0], interval],
       });
       const data = JSON.parse(result);
       if (data.error || !Array.isArray(data)) return [];
@@ -327,12 +403,11 @@ export class YFinancePaperTradingAdapter extends BaseStockBrokerAdapter {
     }
   }
 
-  protected async getMarketDepthInternal(symbol: string, _exchange: StockExchange): Promise<MarketDepth> {
-    const cached = this.quoteCache.get(symbol);
-    const price = cached?.quote.lastPrice || 100;
+  protected async getMarketDepthInternal(_symbol: string, _exchange: StockExchange): Promise<MarketDepth> {
+    // YFinance doesn't provide market depth data - return empty
     return {
-      bids: Array.from({ length: 5 }, (_, i) => ({ price: price - 0.01 * (i + 1), quantity: 100 * (i + 1) })),
-      asks: Array.from({ length: 5 }, (_, i) => ({ price: price + 0.01 * (i + 1), quantity: 100 * (i + 1) })),
+      bids: [],
+      asks: [],
       timestamp: Date.now(),
     };
   }

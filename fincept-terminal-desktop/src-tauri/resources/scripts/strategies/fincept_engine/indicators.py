@@ -8,11 +8,52 @@ from typing import Optional
 import math
 
 
+class _IndicatorEventHandler:
+    """Supports += and -= for indicator event registration."""
+    def __init__(self):
+        self._handlers = []
+    def __iadd__(self, handler):
+        self._handlers.append(handler)
+        return self
+    def __isub__(self, handler):
+        if handler in self._handlers:
+            self._handlers.remove(handler)
+        return self
+    def __call__(self, *args, **kwargs):
+        for h in self._handlers:
+            h(*args, **kwargs)
+
+
+class _IndicatorWindow:
+    """Rolling window for indicator values."""
+    def __init__(self, size):
+        self._size = size
+        self._data = deque(maxlen=size)
+    def __getitem__(self, index):
+        return self._data[index] if index < len(self._data) else IndicatorDataPoint(0.0)
+    def __len__(self):
+        return len(self._data)
+    @property
+    def count(self):
+        return len(self._data)
+    @property
+    def size(self):
+        return self._size
+    @size.setter
+    def size(self, value):
+        self._size = value
+        self._data = deque(self._data, maxlen=value)
+    @property
+    def is_ready(self):
+        return len(self._data) >= self._size
+
+
 class IndicatorDataPoint:
     """Single indicator value at a point in time."""
     def __init__(self, value: float = 0.0, time=None):
         self.value = value
         self.time = time
+        self.window = _IndicatorWindow(1)
 
     def __float__(self):
         return self.value
@@ -33,6 +74,8 @@ class IndicatorBase:
         self._window = deque(maxlen=period)
         self.warm_up_period = period
         self._is_ready_override = False
+        self.updated = _IndicatorEventHandler()
+        self.window = _IndicatorWindow(period)
 
     @property
     def is_ready(self) -> bool:
@@ -46,11 +89,34 @@ class IndicatorBase:
     def samples(self) -> int:
         return self._samples
 
-    def update(self, time, value: float) -> bool:
+    def update(self, time_or_input, value: float = None) -> bool:
+        # Support both update(time, value) and update(bar) patterns
+        if value is not None:
+            time = time_or_input
+            val = float(value)
+        elif isinstance(time_or_input, (int, float)):
+            time = None
+            val = float(time_or_input)
+        elif hasattr(time_or_input, 'close'):
+            # TradeBar / bar-like object
+            time = getattr(time_or_input, 'time', getattr(time_or_input, 'end_time', None))
+            val = float(time_or_input.close)
+        elif hasattr(time_or_input, 'value'):
+            time = getattr(time_or_input, 'time', None)
+            val = float(time_or_input.value)
+        elif hasattr(time_or_input, 'price'):
+            time = getattr(time_or_input, 'time', None)
+            val = float(time_or_input.price)
+        else:
+            time = None
+            try:
+                val = float(time_or_input)
+            except (TypeError, ValueError):
+                val = 0.0
         self.previous = IndicatorDataPoint(self.current.value, self.current.time)
-        self._window.append(value)
+        self._window.append(val)
         self._samples += 1
-        result = self._compute(value)
+        result = self._compute(val)
         self.current = IndicatorDataPoint(result, time)
         return self.is_ready
 
@@ -175,7 +241,7 @@ class MovingAverageConvergenceDivergence(IndicatorBase):
 class RelativeStrengthIndex(IndicatorBase):
     """RSI indicator."""
 
-    def __init__(self, name: str = "RSI", period: int = 14):
+    def __init__(self, name: str = "RSI", period: int = 14, moving_average_type=None):
         super().__init__(name, period)
         self._avg_gain = 0
         self._avg_loss = 0
@@ -257,6 +323,16 @@ class AverageTrueRange(IndicatorBase):
         self._prev_close = None
         self._tr_values = deque(maxlen=period)
 
+    def update(self, time_or_input, value: float = None) -> bool:
+        # Support update(bar) where bar has high/low/close
+        if value is None and hasattr(time_or_input, 'high') and hasattr(time_or_input, 'low') and hasattr(time_or_input, 'close'):
+            bar = time_or_input
+            return self.update_bar(
+                getattr(bar, 'time', getattr(bar, 'end_time', None)),
+                float(bar.high), float(bar.low), float(bar.close)
+            )
+        return super().update(time_or_input, value)
+
     def update_bar(self, time, high: float, low: float, close: float) -> bool:
         if self._prev_close is None:
             tr = high - low
@@ -293,6 +369,28 @@ class Stochastic(IndicatorBase):
         self.fast_stoch = IndicatorDataPoint(0.0)
         self.stoch_k = IndicatorDataPoint(0.0)
         self.stoch_d = ExponentialMovingAverage("StochD", d_period)
+        self.warm_up_period = period
+        self._k_period = k_period
+
+    @property
+    def is_ready(self) -> bool:
+        # Stochastic produces valid output once it has enough data in the window
+        # LEAN's Stochastic is ready when all sub-components have data
+        return self._is_ready_override or self._samples >= max(self._k_period, self.period - 1)
+
+    @is_ready.setter
+    def is_ready(self, value: bool):
+        self._is_ready_override = value
+
+    def update(self, time_or_input, value: float = None) -> bool:
+        # Support update(bar) where bar has high/low/close
+        if value is None and hasattr(time_or_input, 'high') and hasattr(time_or_input, 'low') and hasattr(time_or_input, 'close'):
+            bar = time_or_input
+            return self.update_bar(
+                getattr(bar, 'time', getattr(bar, 'end_time', None)),
+                float(bar.high), float(bar.low), float(bar.close)
+            )
+        return super().update(time_or_input, value)
 
     def update_bar(self, time, high: float, low: float, close: float) -> bool:
         self._highs.append(high)
@@ -356,6 +454,15 @@ class WilliamsPercentR(IndicatorBase):
         self._highs = deque(maxlen=period)
         self._lows = deque(maxlen=period)
 
+    def update(self, time_or_input, value: float = None) -> bool:
+        if value is None and hasattr(time_or_input, 'high') and hasattr(time_or_input, 'low') and hasattr(time_or_input, 'close'):
+            bar = time_or_input
+            return self.update_bar(
+                getattr(bar, 'time', getattr(bar, 'end_time', None)),
+                float(bar.high), float(bar.low), float(bar.close)
+            )
+        return super().update(time_or_input, value)
+
     def update_bar(self, time, high: float, low: float, close: float) -> bool:
         self._highs.append(high)
         self._lows.append(low)
@@ -384,6 +491,15 @@ class CommodityChannelIndex(IndicatorBase):
     def __init__(self, name: str = "CCI", period: int = 20):
         super().__init__(name, period)
         self._tp_values = deque(maxlen=period)
+
+    def update(self, time_or_input, value: float = None) -> bool:
+        if value is None and hasattr(time_or_input, 'high') and hasattr(time_or_input, 'low') and hasattr(time_or_input, 'close'):
+            bar = time_or_input
+            return self.update_bar(
+                getattr(bar, 'time', getattr(bar, 'end_time', None)),
+                float(bar.high), float(bar.low), float(bar.close)
+            )
+        return super().update(time_or_input, value)
 
     def update_bar(self, time, high: float, low: float, close: float) -> bool:
         tp = (high + low + close) / 3.0
@@ -424,6 +540,15 @@ class AverageDirectionalIndex(IndicatorBase):
         self._dx_values = deque(maxlen=period)
         self.positive_directional_index = IndicatorDataPoint(0.0)
         self.negative_directional_index = IndicatorDataPoint(0.0)
+
+    def update(self, time_or_input, value: float = None) -> bool:
+        if value is None and hasattr(time_or_input, 'high') and hasattr(time_or_input, 'low') and hasattr(time_or_input, 'close'):
+            bar = time_or_input
+            return self.update_bar(
+                getattr(bar, 'time', getattr(bar, 'end_time', None)),
+                float(bar.high), float(bar.low), float(bar.close)
+            )
+        return super().update(time_or_input, value)
 
     def update_bar(self, time, high: float, low: float, close: float) -> bool:
         if self._prev_high is None:

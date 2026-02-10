@@ -310,8 +310,9 @@ export const ValuationToolkit: React.FC = () => {
 
       const res = await MAAnalyticsService.Valuation.calculatePrecedentTransactions(targetData, compDeals);
       setResult(res);
+      const impliedEV = (res as any)?.data?.target_valuation?.valuations?.blended_median || 0;
       showSuccess('Precedent Transactions Complete', [
-        { label: 'IMPLIED EV', value: formatCurrency(res.valuation || 0) }
+        { label: 'IMPLIED EV', value: formatCurrency(impliedEV) }
       ]);
     } catch (error) {
       showError('Precedent Transactions failed', [
@@ -624,7 +625,7 @@ export const ValuationToolkit: React.FC = () => {
                   <div key={idx} style={{
                     backgroundColor: FINCEPT.HEADER_BG,
                     padding: SPACING.SMALL,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     border: `1px solid ${FINCEPT.BORDER}`,
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.TINY }}>
@@ -888,7 +889,7 @@ export const ValuationToolkit: React.FC = () => {
                     <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>YEAR-BY-YEAR SCHEDULE</div>
                     <div style={{
                       backgroundColor: FINCEPT.PANEL_BG,
-                      borderRadius: '4px',
+                      borderRadius: '2px',
                       overflow: 'auto',
                     }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
@@ -925,7 +926,7 @@ export const ValuationToolkit: React.FC = () => {
                 <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>IRR SENSITIVITY TABLE</div>
                 <div style={{
                   backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   overflow: 'auto',
                   marginBottom: SPACING.DEFAULT,
                 }}>
@@ -966,7 +967,7 @@ export const ValuationToolkit: React.FC = () => {
                 <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>MOIC SENSITIVITY TABLE</div>
                 <div style={{
                   backgroundColor: FINCEPT.PANEL_BG,
-                  borderRadius: '4px',
+                  borderRadius: '2px',
                   overflow: 'auto',
                 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
@@ -1006,76 +1007,272 @@ export const ValuationToolkit: React.FC = () => {
             )}
 
             {/* Precedent Transaction Results */}
-            {method === 'precedent' && result.valuation && (
+            {method === 'precedent' && result?.data?.comparables && (
               <div style={{ marginBottom: SPACING.LARGE }}>
-                {result.range && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.DEFAULT }}>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>LOW IMPLIED EV</div>
-                      <div style={{ fontSize: '20px', color: FINCEPT.RED, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.range.min || 0)}
+                {/* Implied Valuation Summary */}
+                {result.data.target_valuation?.valuations && (() => {
+                  const v = result.data.target_valuation.valuations;
+                  const low = v.ev_ebitda_q1 || v.ev_revenue_q1 || 0;
+                  const mid = v.blended_median || v.ev_ebitda_median || v.ev_revenue_median || 0;
+                  const high = v.ev_ebitda_q3 || v.ev_revenue_q3 || 0;
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.DEFAULT }}>
+                      <div style={COMMON_STYLES.metricCard}>
+                        <div style={COMMON_STYLES.dataLabel}>LOW IMPLIED EV (Q1)</div>
+                        <div style={{ fontSize: '20px', color: FINCEPT.RED, marginTop: SPACING.TINY }}>
+                          {formatCurrency(low)}
+                        </div>
+                      </div>
+                      <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.CYAN}15`, borderLeft: `3px solid ${FINCEPT.CYAN}` }}>
+                        <div style={COMMON_STYLES.dataLabel}>BLENDED IMPLIED EV</div>
+                        <div style={{ fontSize: '24px', color: FINCEPT.CYAN, marginTop: SPACING.TINY }}>
+                          {formatCurrency(mid)}
+                        </div>
+                      </div>
+                      <div style={COMMON_STYLES.metricCard}>
+                        <div style={COMMON_STYLES.dataLabel}>HIGH IMPLIED EV (Q3)</div>
+                        <div style={{ fontSize: '20px', color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
+                          {formatCurrency(high)}
+                        </div>
                       </div>
                     </div>
-                    <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.CYAN}15` }}>
-                      <div style={COMMON_STYLES.dataLabel}>MID IMPLIED EV</div>
-                      <div style={{ fontSize: '24px', color: FINCEPT.CYAN, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.valuation || 0)}
+                  );
+                })()}
+
+                {/* Implied EV by Method */}
+                {result.data.target_valuation?.valuations && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT, marginBottom: SPACING.DEFAULT }}>
+                    {result.data.target_valuation.valuations.ev_revenue_median != null && (
+                      <div style={COMMON_STYLES.metricCard}>
+                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/Revenue Implied</div>
+                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+                          {formatCurrency(result.data.target_valuation.valuations.ev_revenue_median)}
+                        </div>
                       </div>
-                    </div>
-                    <div style={COMMON_STYLES.metricCard}>
-                      <div style={COMMON_STYLES.dataLabel}>HIGH IMPLIED EV</div>
-                      <div style={{ fontSize: '20px', color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
-                        {formatCurrency(result.range.max || 0)}
+                    )}
+                    {result.data.target_valuation.valuations.ev_ebitda_median != null && (
+                      <div style={COMMON_STYLES.metricCard}>
+                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/EBITDA Implied</div>
+                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+                          {formatCurrency(result.data.target_valuation.valuations.ev_ebitda_median)}
+                        </div>
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Transaction Multiples Summary */}
+                {result.data.summary_statistics && (
+                  <div style={{ marginBottom: SPACING.DEFAULT }}>
+                    <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>TRANSACTION MULTIPLES</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
+                      {[
+                        { label: 'EV/Revenue', median: result.data.summary_statistics.median?.['EV/Revenue'], mean: result.data.summary_statistics.mean?.['EV/Revenue'] },
+                        { label: 'EV/EBITDA', median: result.data.summary_statistics.median?.['EV/EBITDA'], mean: result.data.summary_statistics.mean?.['EV/EBITDA'] },
+                        { label: 'Premium 1D%', median: result.data.summary_statistics.median?.['Premium 1-Day (%)'], mean: result.data.summary_statistics.mean?.['Premium 1-Day (%)'] },
+                        { label: 'Deal Val ($M)', median: result.data.summary_statistics.median?.['Deal Value ($M)'], mean: result.data.summary_statistics.mean?.['Deal Value ($M)'] },
+                      ].map((m) => (
+                        <div key={m.label} style={COMMON_STYLES.metricCard}>
+                          <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>{m.label}</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY }}>
+                            <span style={{ color: FINCEPT.GRAY }}>Median:</span>
+                            <span style={{ color: FINCEPT.CYAN }}>{m.label.includes('$M') ? formatCurrency((m.median || 0) * 1_000_000) : `${(m.median || 0).toFixed(2)}${m.label.includes('%') ? '%' : 'x'}`}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: TYPOGRAPHY.TINY }}>
+                            <span style={{ color: FINCEPT.GRAY }}>Mean:</span>
+                            <span style={{ color: FINCEPT.WHITE }}>{m.label.includes('$M') ? formatCurrency((m.mean || 0) * 1_000_000) : `${(m.mean || 0).toFixed(2)}${m.label.includes('%') ? '%' : 'x'}`}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {result.assumptions?.multiples && (
-                  <div style={{ marginBottom: SPACING.DEFAULT }}>
-                    <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>TRANSACTION MULTIPLES</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.DEFAULT }}>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>EV/REVENUE</div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: FINCEPT.GRAY }}>Mean:</span>
-                          <span style={{ color: FINCEPT.WHITE }}>{result.assumptions.multiples.ev_revenue?.mean?.toFixed(2)}x</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: FINCEPT.GRAY }}>Median:</span>
-                          <span style={{ color: FINCEPT.WHITE }}>{result.assumptions.multiples.ev_revenue?.median?.toFixed(2)}x</span>
-                        </div>
-                      </div>
-                      <div style={COMMON_STYLES.metricCard}>
-                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY, marginBottom: SPACING.TINY }}>EV/EBITDA</div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: FINCEPT.GRAY }}>Mean:</span>
-                          <span style={{ color: FINCEPT.WHITE }}>{result.assumptions.multiples.ev_ebitda?.mean?.toFixed(2)}x</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: FINCEPT.GRAY }}>Median:</span>
-                          <span style={{ color: FINCEPT.WHITE }}>{result.assumptions.multiples.ev_ebitda?.median?.toFixed(2)}x</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Comparable Transactions Table */}
+                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>COMPARABLE TRANSACTIONS ({result.data.comp_count})</div>
+                <div style={{
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  borderRadius: '2px',
+                  overflow: 'auto',
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
+                    <thead>
+                      <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
+                        {['Date', 'Acquirer', 'Target', 'Deal ($M)', 'EV/Rev', 'EV/EBITDA', 'Prem. 1D%', 'Payment'].map((h) => (
+                          <th key={h} style={{ padding: '8px 6px', textAlign: h === 'Date' || h === 'Acquirer' || h === 'Target' || h === 'Payment' ? 'left' : 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}`, whiteSpace: 'nowrap' }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.data.comparables.map((row: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.GRAY }}>{row['Date']}</td>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.WHITE, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row['Acquirer']}</td>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row['Target']}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['Deal Value ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/Revenue'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/EBITDA'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: (row['Premium 1-Day (%)'] || 0) > 0 ? FINCEPT.GREEN : FINCEPT.GRAY }}>{(row['Premium 1-Day (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.GRAY }}>{row['Payment'] || '—'}</td>
+                        </tr>
+                      ))}
+                      {/* Median Row */}
+                      {result.data.summary_statistics?.median && (
+                        <tr style={{ backgroundColor: `${FINCEPT.CYAN}10`, borderTop: `2px solid ${FINCEPT.CYAN}` }}>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>MEDIAN</td>
+                          <td style={{ padding: '8px 6px' }}>—</td>
+                          <td style={{ padding: '8px 6px' }}>—</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Deal Value ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/Revenue'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/EBITDA'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Premium 1-Day (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px' }}>—</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
-            {/* Full JSON Results */}
-            <div style={COMMON_STYLES.dataLabel}>DETAILED RESULTS</div>
-            <pre style={{
-              fontSize: TYPOGRAPHY.TINY,
-              color: FINCEPT.GRAY,
-              backgroundColor: FINCEPT.PANEL_BG,
-              padding: SPACING.DEFAULT,
-              borderRadius: '4px',
-              overflow: 'auto',
-              maxHeight: '300px',
-            }}>
-              {JSON.stringify(result, null, 2)}
-            </pre>
+            {/* Trading Comps Results */}
+            {method === 'comps' && result?.data?.comparables && (
+              <div style={{ marginBottom: SPACING.LARGE }}>
+                {/* Target & Summary Header */}
+                {result.data.target_ticker && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: SPACING.DEFAULT,
+                    marginBottom: SPACING.DEFAULT,
+                  }}>
+                    <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.CYAN}15`, borderLeft: `3px solid ${FINCEPT.CYAN}` }}>
+                      <div style={COMMON_STYLES.dataLabel}>TARGET</div>
+                      <div style={{ fontSize: '24px', fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.CYAN, marginTop: SPACING.TINY }}>
+                        {result.data.target_ticker}
+                      </div>
+                    </div>
+                    <div style={COMMON_STYLES.metricCard}>
+                      <div style={COMMON_STYLES.dataLabel}>COMPARABLES</div>
+                      <div style={{ fontSize: '24px', fontWeight: TYPOGRAPHY.BOLD, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+                        {result.data.comp_count}
+                      </div>
+                    </div>
+                    <div style={COMMON_STYLES.metricCard}>
+                      <div style={COMMON_STYLES.dataLabel}>AS OF</div>
+                      <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+                        {result.data.as_of_date}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Implied Valuation from Comps */}
+                {result.data.target_valuation?.valuations && (
+                  <div style={{ marginBottom: SPACING.DEFAULT }}>
+                    <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>IMPLIED ENTERPRISE VALUE</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: SPACING.DEFAULT }}>
+                      <div style={COMMON_STYLES.metricCard}>
+                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/Revenue (Median)</div>
+                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+                          {formatCurrency(result.data.target_valuation.valuations.ev_revenue_median || 0)}
+                        </div>
+                      </div>
+                      <div style={COMMON_STYLES.metricCard}>
+                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>EV/EBITDA (Median)</div>
+                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.WHITE, marginTop: SPACING.TINY }}>
+                          {formatCurrency(result.data.target_valuation.valuations.ev_ebitda_median || 0)}
+                        </div>
+                      </div>
+                      <div style={{ ...COMMON_STYLES.metricCard, backgroundColor: `${FINCEPT.GREEN}15`, borderLeft: `3px solid ${FINCEPT.GREEN}` }}>
+                        <div style={{ fontSize: TYPOGRAPHY.TINY, color: FINCEPT.GRAY }}>Blended Median</div>
+                        <div style={{ fontSize: TYPOGRAPHY.HEADING, color: FINCEPT.GREEN, marginTop: SPACING.TINY }}>
+                          {formatCurrency(result.data.target_valuation.valuations.blended_median || 0)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Comp Table */}
+                <div style={{ ...COMMON_STYLES.dataLabel, marginBottom: SPACING.SMALL }}>COMPARABLE COMPANIES</div>
+                <div style={{
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  borderRadius: '2px',
+                  overflow: 'auto',
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
+                    <thead>
+                      <tr style={{ backgroundColor: FINCEPT.HEADER_BG }}>
+                        {['Ticker', 'Company', 'Mkt Cap ($M)', 'EV ($M)', 'EV/Rev', 'EV/EBITDA', 'EV/EBIT', 'P/E', 'Rev Gr.%', 'EBITDA Mg.%', 'Net Mg.%', 'ROE%'].map((h) => (
+                          <th key={h} style={{ padding: '8px 6px', textAlign: h === 'Ticker' || h === 'Company' ? 'left' : 'right', color: FINCEPT.GRAY, borderBottom: `1px solid ${FINCEPT.BORDER}`, whiteSpace: 'nowrap' }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.data.comparables.map((row: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: `1px solid ${FINCEPT.BORDER}` }}>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>{row['Ticker']}</td>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.WHITE, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row['Company']}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['Market Cap ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/Revenue'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/EBITDA'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EV/EBIT'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['P/E'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: (row['Rev Growth (%)'] || 0) >= 0 ? FINCEPT.GREEN : FINCEPT.RED }}>{(row['Rev Growth (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['EBITDA Margin (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['Net Margin (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.WHITE }}>{(row['ROE (%)'] || 0).toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                      {/* Median Summary Row */}
+                      {result.data.summary_statistics?.median && (
+                        <tr style={{ backgroundColor: `${FINCEPT.CYAN}10`, borderTop: `2px solid ${FINCEPT.CYAN}` }}>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>MEDIAN</td>
+                          <td style={{ padding: '8px 6px', color: FINCEPT.GRAY }}>—</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Market Cap ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV ($M)'] || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/Revenue'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/EBITDA'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EV/EBIT'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['P/E'] || 0).toFixed(1)}x</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Rev Growth (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['EBITDA Margin (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['Net Margin (%)'] || 0).toFixed(1)}%</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', color: FINCEPT.CYAN }}>{(result.data.summary_statistics.median['ROE (%)'] || 0).toFixed(1)}%</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Fallback: Raw JSON for unhandled result formats */}
+            {!((method === 'dcf' && result?.equity_value_per_share) ||
+               (method === 'lbo') ||
+               (method === 'comps' && result?.data?.comparables) ||
+               (method === 'precedent' && result?.data?.comparables)) && (
+              <div>
+                <div style={COMMON_STYLES.dataLabel}>DETAILED RESULTS</div>
+                <pre style={{
+                  fontSize: TYPOGRAPHY.TINY,
+                  color: FINCEPT.GRAY,
+                  backgroundColor: FINCEPT.PANEL_BG,
+                  padding: SPACING.DEFAULT,
+                  borderRadius: '2px',
+                  overflow: 'auto',
+                  maxHeight: '300px',
+                }}>
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
         ) : (
           <div style={COMMON_STYLES.emptyState}>

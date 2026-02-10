@@ -233,6 +233,17 @@ def main():
             target = json.loads(sys.argv[3])
             deal_terms = json.loads(sys.argv[4])
 
+            # Convert percentage-based payment to absolute amounts if needed
+            pp = deal_terms.get('purchase_price', 0)
+            if 'cash_consideration' not in deal_terms and pp:
+                cash_pct = deal_terms.get('payment_cash_pct', deal_terms.get('cash_pct', 50)) / 100
+                stock_pct = deal_terms.get('payment_stock_pct', deal_terms.get('stock_pct', 50)) / 100
+                deal_terms['cash_consideration'] = pp * cash_pct
+                deal_terms['stock_consideration'] = pp * stock_pct
+            if 'acquirer_stock_price' not in deal_terms:
+                deal_terms['acquirer_stock_price'] = acquirer.get('stock_price',
+                    acquirer.get('eps', 1) * 15 if acquirer.get('eps') else 50)
+
             model = MergerModel(acquirer, target, deal_terms)
             results = model.build_complete_model()
 
@@ -242,10 +253,68 @@ def main():
             }
             print(json.dumps(result))
 
+        elif command == "accretion_dilution":
+            # Rust sends: "accretion_dilution" merger_model_data_json
+            if len(sys.argv) < 3:
+                raise ValueError("Merger model data required")
+
+            model_data = json.loads(sys.argv[2])
+            acquirer = model_data.get('acquirer_data', {})
+            target = model_data.get('target_data', {})
+            deal_terms = model_data.get('deal_terms', {})
+
+            model = MergerModel(acquirer, target, deal_terms)
+            results = model.build_complete_model()
+
+            result = {
+                "success": True,
+                "data": {
+                    "accretion_dilution": results.get('accretion_dilution', {}),
+                    "breakeven_synergies": results.get('breakeven_synergies', 0),
+                    "deal_overview": results.get('deal_overview', {})
+                }
+            }
+            print(json.dumps(result))
+
+        elif command == "pro_forma":
+            # Rust sends: "pro_forma" acquirer_data target_data year
+            if len(sys.argv) < 5:
+                raise ValueError("Acquirer data, target data, and year required")
+
+            acquirer = json.loads(sys.argv[2])
+            target = json.loads(sys.argv[3])
+            year = int(sys.argv[4])
+
+            deal_terms = {
+                'purchase_price': target.get('enterprise_value', target.get('market_cap', 0)),
+                'cash_consideration': target.get('enterprise_value', 0) * 0.5,
+                'stock_consideration': target.get('enterprise_value', 0) * 0.5,
+                'acquirer_stock_price': acquirer.get('stock_price', 100),
+                'synergies': 0,
+                'integration_costs': 0,
+                'tax_rate': 0.21,
+            }
+
+            model = MergerModel(acquirer, target, deal_terms)
+            results = model.build_complete_model()
+
+            pro_forma_data = results.get('multi_year_projections', {})
+            year_data = pro_forma_data.get(str(year), results.get('pro_forma_year1', {}))
+
+            result = {
+                "success": True,
+                "data": {
+                    "pro_forma": year_data,
+                    "year": year,
+                    "standalone_vs_proforma": results.get('standalone_vs_proforma', {})
+                }
+            }
+            print(json.dumps(result))
+
         else:
             result = {
                 "success": False,
-                "error": f"Unknown command: {command}. Available: build"
+                "error": f"Unknown command: {command}. Available: build, accretion_dilution, pro_forma"
             }
             print(json.dumps(result))
             sys.exit(1)

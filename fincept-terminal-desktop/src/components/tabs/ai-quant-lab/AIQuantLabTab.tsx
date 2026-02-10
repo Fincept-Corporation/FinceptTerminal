@@ -54,9 +54,11 @@ import { HFTPanel } from './HFTPanel';
 import { MetaLearningPanel } from './MetaLearningPanel';
 import { RollingRetrainingPanel } from './RollingRetrainingPanel';
 import { AdvancedModelsPanel } from './AdvancedModelsPanel';
+import { GluonTSPanel } from './GluonTSPanel';
+import { GsQuantPanel } from './GsQuantPanel';
 
 
-type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'ffn_analytics' | 'functime' | 'fortitudo' | 'statsmodels' | 'cfa_quant' | 'deep_agent' | 'rl_trading' | 'online_learning' | 'hft' | 'meta_learning' | 'rolling_retraining' | 'advanced_models';
+type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'ffn_analytics' | 'functime' | 'fortitudo' | 'statsmodels' | 'cfa_quant' | 'deep_agent' | 'rl_trading' | 'online_learning' | 'hft' | 'meta_learning' | 'rolling_retraining' | 'advanced_models' | 'gluonts' | 'gs_quant';
 
 interface ModuleItem {
   id: ViewMode;
@@ -212,7 +214,9 @@ export default function AIQuantLabTab() {
     { id: 'functime', label: 'Functime', shortLabel: 'FUNC', icon: Zap, category: 'Analytics', color: moduleColors.yellow },
     { id: 'fortitudo', label: 'Fortitudo', shortLabel: 'FORT', icon: Database, category: 'Analytics', color: moduleColors.blue },
     { id: 'statsmodels', label: 'Statsmodels', shortLabel: 'STATS', icon: Sigma, category: 'Analytics', color: moduleColors.cyan },
-    { id: 'cfa_quant', label: 'CFA Quant', shortLabel: 'CFA', icon: Calculator, category: 'Analytics', color: moduleColors.orange }
+    { id: 'cfa_quant', label: 'CFA Quant', shortLabel: 'CFA', icon: Calculator, category: 'Analytics', color: moduleColors.orange },
+    { id: 'gluonts', label: 'GluonTS', shortLabel: 'GLUON', icon: Brain, category: 'Analytics', color: moduleColors.magenta },
+    { id: 'gs_quant', label: 'GS Quant', shortLabel: 'GS-Q', icon: Sigma, category: 'Analytics', color: moduleColors.purple }
   ];
 
   const activeModule = modules.find(m => m.id === state.activeView) || modules[0];
@@ -520,6 +524,8 @@ export default function AIQuantLabTab() {
             {state.activeView === 'fortitudo' && <FortitudoPanel />}
             {state.activeView === 'statsmodels' && <StatsmodelsPanel />}
             {state.activeView === 'cfa_quant' && <CFAQuantPanel />}
+            {state.activeView === 'gluonts' && <GluonTSPanel />}
+            {state.activeView === 'gs_quant' && <GsQuantPanel />}
           </div>
         </div>
 

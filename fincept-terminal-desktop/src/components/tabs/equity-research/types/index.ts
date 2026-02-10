@@ -125,7 +125,7 @@ export interface TechnicalsData {
 }
 
 export type ChartPeriod = '1M' | '3M' | '6M' | '1Y' | '5Y';
-export type ActiveTab = 'overview' | 'financials' | 'analysis' | 'technicals' | 'peers' | 'news';
+export type ActiveTab = 'overview' | 'financials' | 'analysis' | 'technicals' | 'talipp' | 'peers' | 'news';
 
 // ===== Indicator Types =====
 

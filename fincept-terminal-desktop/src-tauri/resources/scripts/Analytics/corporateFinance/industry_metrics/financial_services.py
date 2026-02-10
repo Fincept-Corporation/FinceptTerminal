@@ -366,57 +366,6 @@ class FinancialServicesMetrics:
             }
         }
 
-if __name__ == '__main__':
-    analyzer = FinancialServicesMetrics()
-
-    bank = analyzer.calculate_bank_metrics(
-        total_assets=50_000_000_000,
-        deposits=40_000_000_000,
-        loans=35_000_000_000,
-        net_interest_margin=3.2,
-        efficiency_ratio=58,
-        npa_ratio=1.2,
-        tier1_capital_ratio=12.5,
-        roe=13.5
-    )
-
-    print("=== BANK M&A METRICS ===\n")
-    print(f"Total Assets: ${bank['total_assets']:,.0f}")
-    print(f"Loan/Deposit Ratio: {bank['loan_to_deposit_ratio']:.1f}%")
-    print(f"ROE: {bank['roe']:.1f}%")
-    print(f"Efficiency Ratio: {bank['efficiency_ratio']:.1f}%")
-    print(f"NPA Ratio: {bank['npa_ratio']:.1f}%")
-    print(f"\nProfitability Score: {bank['profitability_score']}/100")
-    print(f"Asset Quality Score: {bank['asset_quality_score']:.0f}/100")
-    print(f"\nPrice/Tangible Book Range:")
-    ptbv = bank['price_to_tangible_book_range']
-    print(f"  {ptbv['low']:.2f}x - {ptbv['high']:.2f}x (Mid: {ptbv['mid']:.2f}x)")
-    print(f"Core Deposit Premium: ${bank['core_deposit_premium']:,.0f}")
-
-    wealth = analyzer.calculate_wealth_management_metrics(
-        aum=75_000_000_000,
-        net_flows=3_000_000_000,
-        advisory_fee_rate=0.70,
-        client_retention=93,
-        advisor_productivity=125_000_000,
-        operating_margin=22
-    )
-
-    print("\n\n=== WEALTH MANAGEMENT METRICS ===")
-    print(f"AUM: ${wealth['aum']:,.0f}")
-    print(f"Organic Growth: {wealth['organic_growth_rate']:.1f}%")
-    print(f"Advisory Fee Rate: {wealth['advisory_fee_rate']:.2f}%")
-    print(f"Quality Score: {wealth['wealth_quality_score']}/100")
-    print(f"\nAUM Multiple Range:")
-    aum_mult = wealth['aum_multiple_range']
-    print(f"  {aum_mult['low']:.2f}% - {aum_mult['high']:.2f}%")
-
-    benchmarks = analyzer.financial_services_benchmarks()
-    print("\n\n=== FINANCIAL SERVICES M&A BENCHMARKS ===")
-    for sector, data in benchmarks.items():
-        print(f"\n{sector.upper()}:")
-        print(f"  Key Drivers: {data['key_drivers']}")
-
 def main():
     """CLI entry point - outputs JSON for Tauri integration"""
     import sys
@@ -439,9 +388,30 @@ def main():
 
             analyzer = FinancialServicesMetrics()
 
+            # Map common alternative key names
+            key_aliases = {
+                'total_deposits': 'deposits', 'total_loans': 'loans',
+                'net_interest_income': 'net_interest_margin',
+                'tier1_capital': 'tier1_capital_ratio',
+                'loan_loss_provision_rate': 'npa_ratio',
+                'npl_ratio': 'npa_ratio',
+                'return_on_equity': 'roe',
+            }
+            for old_key, new_key in key_aliases.items():
+                if old_key in institution_data and new_key not in institution_data:
+                    institution_data[new_key] = institution_data.pop(old_key)
+
             # Route to appropriate calculation based on sector
             if 'bank' in sector.lower():
-                analysis = analyzer.calculate_bank_metrics(**institution_data)
+                # Provide defaults for required bank params
+                institution_data.setdefault('total_assets', institution_data.get('deposits', 0) * 1.2)
+                institution_data.setdefault('npa_ratio', 1.0)
+                institution_data.setdefault('roe', 10.0)
+                # Filter to only valid params
+                import inspect
+                valid_params = set(inspect.signature(analyzer.calculate_bank_metrics).parameters.keys())
+                filtered = {k: v for k, v in institution_data.items() if k in valid_params}
+                analysis = analyzer.calculate_bank_metrics(**filtered)
             elif 'wealth' in sector.lower():
                 analysis = analyzer.calculate_wealth_management_metrics(**institution_data)
             else:

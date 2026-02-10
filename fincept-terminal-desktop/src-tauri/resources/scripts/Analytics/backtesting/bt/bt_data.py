@@ -12,6 +12,10 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 
+# Module-level flag to track synthetic data usage across calls
+_last_fetch_used_synthetic = False
+
+
 def fetch_data(
     symbols: List[str],
     start_date: str,
@@ -25,14 +29,21 @@ def fetch_data(
     (close prices). Returns that format directly.
 
     Falls back to synthetic data if yfinance is not available.
+    Sets module-level _last_fetch_used_synthetic flag.
     """
+    global _last_fetch_used_synthetic
+    _last_fetch_used_synthetic = False
+
     try:
         import yfinance as yf
     except ImportError:
-        print('[BT-DATA] yfinance not installed, using synthetic data', file=sys.stderr)
+        print('[BT-DATA] WARNING: yfinance not installed, using SYNTHETIC data. '
+              'Install yfinance: pip install yfinance', file=sys.stderr)
+        _last_fetch_used_synthetic = True
         return _generate_synthetic(symbols, start_date, end_date)
 
     frames = {}
+    any_synthetic = False
     for sym in symbols:
         try:
             print(f'[BT-DATA] Fetching {sym} from {start_date} to {end_date}', file=sys.stderr)
@@ -40,9 +51,10 @@ def fetch_data(
             df = ticker.history(start=start_date, end=end_date, interval=timeframe)
 
             if df.empty:
-                print(f'[BT-DATA] No data for {sym}, using synthetic', file=sys.stderr)
+                print(f'[BT-DATA] WARNING: No data for {sym}, using SYNTHETIC', file=sys.stderr)
                 synth = _generate_synthetic([sym], start_date, end_date)
                 frames[sym] = synth[sym]
+                any_synthetic = True
                 continue
 
             # Normalize columns
@@ -53,16 +65,25 @@ def fetch_data(
             else:
                 df.index = df.index.tz_convert('UTC')
 
-            frames[sym] = df['close']
+            # Round to 4 decimal places to eliminate float32 rounding noise
+            # from Yahoo Finance API (slightly different values across requests)
+            frames[sym] = df['close'].round(4)
             print(f'[BT-DATA] {sym}: {len(df)} bars loaded', file=sys.stderr)
 
         except Exception as e:
-            print(f'[BT-DATA] Error fetching {sym}: {e}, using synthetic', file=sys.stderr)
+            print(f'[BT-DATA] WARNING: Error fetching {sym}: {e}, using SYNTHETIC', file=sys.stderr)
             synth = _generate_synthetic([sym], start_date, end_date)
             frames[sym] = synth[sym]
+            any_synthetic = True
 
+    _last_fetch_used_synthetic = any_synthetic
     result = pd.DataFrame(frames).dropna()
     return result
+
+
+def was_last_fetch_synthetic() -> bool:
+    """Return whether the last fetch_data call used any synthetic data."""
+    return _last_fetch_used_synthetic
 
 
 def fetch_ohlcv(
@@ -98,6 +119,10 @@ def fetch_ohlcv(
                 df.index = df.index.tz_convert('UTC')
             df.index.name = 'date'
             df = df.dropna()
+            # Round to 4 decimal places to eliminate float32 rounding noise
+            for col in ['open', 'high', 'low', 'close']:
+                if col in df.columns:
+                    df[col] = df[col].round(4)
             result[sym] = df
         except Exception as e:
             synth = _generate_ohlcv_synthetic([sym], start_date, end_date)
@@ -110,11 +135,19 @@ def _generate_synthetic(
     start_date: str,
     end_date: str,
 ) -> pd.DataFrame:
-    """Generate synthetic GBM close prices as fallback."""
+    """Generate synthetic GBM close prices as fallback.
+
+    WARNING: This produces fake data. Results are NOT based on real market data.
+    Uses deterministic seed based on symbol char codes (not hash() which varies per-run).
+    """
+    print('[BT-DATA] WARNING: Generating SYNTHETIC data. Results will NOT reflect '
+          'real market conditions. Install yfinance: pip install yfinance', file=sys.stderr)
     dates = pd.bdate_range(start=start_date, end=end_date, tz='UTC')
     frames = {}
     for sym in symbols:
-        np.random.seed(hash(sym) % 2**31)
+        # Use deterministic seed: sum of char codes (NOT hash() which is randomized per-run)
+        seed = sum(ord(c) for c in sym) % (2**31)
+        np.random.seed(seed)
         n = len(dates)
         price = 100.0
         prices = []
@@ -131,11 +164,19 @@ def _generate_ohlcv_synthetic(
     start_date: str,
     end_date: str,
 ) -> Dict[str, pd.DataFrame]:
-    """Generate synthetic OHLCV data as fallback."""
+    """Generate synthetic OHLCV data as fallback.
+
+    WARNING: This produces fake data. Results are NOT based on real market data.
+    Uses deterministic seed based on symbol char codes (not hash() which varies per-run).
+    """
+    print('[BT-DATA] WARNING: Generating SYNTHETIC OHLCV data. Results will NOT reflect '
+          'real market conditions. Install yfinance: pip install yfinance', file=sys.stderr)
     dates = pd.bdate_range(start=start_date, end=end_date, tz='UTC')
     result = {}
     for sym in symbols:
-        np.random.seed(hash(sym) % 2**31)
+        # Use deterministic seed: sum of char codes (NOT hash() which is randomized per-run)
+        seed = sum(ord(c) for c in sym) % (2**31)
+        np.random.seed(seed)
         n = len(dates)
         price = 100.0
         prices = []

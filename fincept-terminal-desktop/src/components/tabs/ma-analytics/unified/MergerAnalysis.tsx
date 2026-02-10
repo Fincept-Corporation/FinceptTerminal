@@ -920,7 +920,7 @@ export const MergerAnalysis: React.FC = () => {
                 {result.data.scenarios && Array.isArray(result.data.scenarios) && (
                   <div style={{
                     backgroundColor: FINCEPT.PANEL_BG,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     overflow: 'auto',
                   }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: TYPOGRAPHY.TINY }}>
@@ -988,7 +988,7 @@ export const MergerAnalysis: React.FC = () => {
                 {result.data.contributions && (
                   <div style={{
                     backgroundColor: FINCEPT.PANEL_BG,
-                    borderRadius: '4px',
+                    borderRadius: '2px',
                     overflow: 'auto',
                     marginBottom: SPACING.DEFAULT,
                   }}>
@@ -1061,7 +1061,7 @@ export const MergerAnalysis: React.FC = () => {
               color: FINCEPT.GRAY,
               backgroundColor: FINCEPT.PANEL_BG,
               padding: SPACING.DEFAULT,
-              borderRadius: '4px',
+              borderRadius: '2px',
               overflow: 'auto',
               maxHeight: '300px',
             }}>

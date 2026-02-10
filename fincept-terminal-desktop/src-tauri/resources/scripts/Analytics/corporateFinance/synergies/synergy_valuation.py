@@ -299,15 +299,27 @@ def main():
     command = sys.argv[1]
 
     try:
-        if command == "synergy_valuation":
+        if command in ("dcf", "synergy_valuation"):
+            # Rust sends: "dcf" revenue_synergies cost_synergies integration_costs discount_rate
             if len(sys.argv) < 5:
                 raise ValueError("Revenue synergies, cost synergies, and integration costs required")
 
-            revenue_synergies = json.loads(sys.argv[2])
-            cost_synergies = json.loads(sys.argv[3])
-            integration_costs = json.loads(sys.argv[4])
+            revenue_synergies_raw = json.loads(sys.argv[2])
+            cost_synergies_raw = json.loads(sys.argv[3])
+            integration_costs_raw = json.loads(sys.argv[4])
+            discount_rate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.10
 
-            valuator = SynergyValuation(wacc=0.10, terminal_growth_rate=0.02, tax_rate=0.25)
+            # Ensure all inputs are lists (Rust may send scalar values)
+            def ensure_list(val, years=10):
+                if isinstance(val, (int, float)):
+                    return [val] * years
+                return list(val)
+
+            revenue_synergies = ensure_list(revenue_synergies_raw)
+            cost_synergies = ensure_list(cost_synergies_raw)
+            integration_costs = ensure_list(integration_costs_raw)
+
+            valuator = SynergyValuation(wacc=discount_rate, terminal_growth_rate=0.02, tax_rate=0.25)
 
             analysis = valuator.value_synergies_dcf(
                 annual_revenue_synergies=revenue_synergies,
@@ -320,7 +332,7 @@ def main():
             print(json.dumps(result))
 
         else:
-            result = {"success": False, "error": f"Unknown command: {command}"}
+            result = {"success": False, "error": f"Unknown command: {command}. Available: dcf, synergy_valuation"}
             print(json.dumps(result))
             sys.exit(1)
 

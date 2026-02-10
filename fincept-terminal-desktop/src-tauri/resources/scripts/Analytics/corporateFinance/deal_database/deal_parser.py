@@ -15,8 +15,15 @@ sys.path.insert(0, str(analytics_path))
 
 try:
     from edgar_tools import Company, Filing
+    EDGAR_AVAILABLE = True
 except ImportError:
-    from edgartools import Company, Filing
+    try:
+        from edgartools import Company, Filing
+        EDGAR_AVAILABLE = True
+    except ImportError:
+        EDGAR_AVAILABLE = False
+        Company = None
+        Filing = None
 
 # Use absolute imports instead of relative imports
 from corporateFinance.config import DEAL_TYPES, PAYMENT_METHODS, INDUSTRIES

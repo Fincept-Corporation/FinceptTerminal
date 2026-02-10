@@ -1,6 +1,7 @@
 """First Chicago Method - Scenario-Based Valuation"""
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+import sys
 
 @dataclass
 class Scenario:
@@ -203,7 +204,33 @@ def main():
             scenarios = json.loads(sys.argv[2])
 
             fc = FirstChicagoMethod()
-            valuation = fc.multi_scenario_valuation(scenarios)
+
+            # Ensure each scenario has required 'exit_year' with sensible default
+            for key in ('best_case', 'base_case', 'worst_case'):
+                sc = scenarios.get(key, {})
+                if 'exit_year' not in sc:
+                    sc['exit_year'] = sc.get('years_to_exit', sc.get('timeline_years', 5))
+                scenarios[key] = sc
+
+            # Extract probabilities from inline probability keys if not separate
+            probs = scenarios.get('probabilities', None)
+            if probs is None:
+                bc = scenarios.get('best_case', {})
+                ba = scenarios.get('base_case', {})
+                wc = scenarios.get('worst_case', {})
+                if 'probability' in bc or 'probability' in ba or 'probability' in wc:
+                    probs = {
+                        'best': bc.get('probability', 0.20),
+                        'base': ba.get('probability', 0.50),
+                        'worst': wc.get('probability', 0.30)
+                    }
+
+            valuation = fc.three_scenario_valuation(
+                best_case=scenarios.get('best_case', {}),
+                base_case=scenarios.get('base_case', {}),
+                worst_case=scenarios.get('worst_case', {}),
+                probabilities=probs
+            )
 
             result = {"success": True, "data": valuation}
             print(json.dumps(result))

@@ -18,7 +18,7 @@ def get_quote(symbol):
         hist = ticker.history(period="1d")
 
         if hist.empty:
-            return None
+            return {"error": "No data available", "symbol": symbol}
 
         current_price = hist['Close'].iloc[-1]
         previous_close = info.get('previousClose', current_price)
@@ -58,7 +58,7 @@ def get_historical(symbol, start_date, end_date, interval='1d'):
         hist = ticker.history(start=start_date, end=end_date, interval=interval)
 
         if hist.empty:
-            return None
+            return []
 
         historical_data = []
         for index, row in hist.iterrows():
@@ -184,13 +184,60 @@ def get_financials(symbol):
         return {"error": str(e), "symbol": symbol}
 
 def get_batch_quotes(symbols):
-    """Fetch quotes for multiple symbols at once"""
-    results = []
-    for symbol in symbols:
-        quote = get_quote(symbol)
-        if quote:
-            results.append(quote)
-    return results
+    """Fetch quotes for multiple symbols at once using yfinance batch download"""
+    try:
+        # Use yfinance download() for true batch fetching (single HTTP request)
+        data = yf.download(symbols, period="2d", group_by='ticker', progress=False, threads=True)
+
+        if data is None or data.empty:
+            return []
+
+        results = []
+        for symbol in symbols:
+            try:
+                if len(symbols) == 1:
+                    # Single symbol: data columns are flat (Open, High, Low, Close, Volume)
+                    hist = data
+                else:
+                    # Multiple symbols: data columns are multi-level (symbol, OHLCV)
+                    if symbol not in data.columns.get_level_values(0):
+                        continue
+                    hist = data[symbol]
+
+                if hist.empty or hist.dropna(how='all').empty:
+                    continue
+
+                hist = hist.dropna(how='all')
+                current_price = float(hist['Close'].iloc[-1])
+                previous_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
+                change = current_price - previous_close
+                change_percent = (change / previous_close) * 100 if previous_close else 0
+
+                results.append({
+                    "symbol": symbol,
+                    "price": round(current_price, 2),
+                    "change": round(change, 2),
+                    "change_percent": round(change_percent, 2),
+                    "volume": int(hist['Volume'].iloc[-1]) if not pd.isna(hist['Volume'].iloc[-1]) else 0,
+                    "high": round(float(hist['High'].iloc[-1]), 2) if not pd.isna(hist['High'].iloc[-1]) else None,
+                    "low": round(float(hist['Low'].iloc[-1]), 2) if not pd.isna(hist['Low'].iloc[-1]) else None,
+                    "open": round(float(hist['Open'].iloc[-1]), 2) if not pd.isna(hist['Open'].iloc[-1]) else None,
+                    "previous_close": round(previous_close, 2),
+                    "timestamp": int(datetime.now().timestamp()),
+                    "exchange": ""
+                })
+            except Exception:
+                continue
+
+        return results
+    except Exception as e:
+        # Fallback: fetch one by one
+        results = []
+        for symbol in symbols:
+            quote = get_quote(symbol)
+            if quote and "error" not in quote:
+                results.append(quote)
+        return results
 
 def get_company_profile(symbol):
     """Get company profile data formatted for peer comparison"""
@@ -283,71 +330,65 @@ def get_multiple_ratios(symbols):
             results.append(ratios)
     return results
 
-def search_symbols(query, limit=50):
+def search_symbols(query, limit=20):
     """
-    Search for stock symbols using yfinance
-    Returns a list of matching symbols with company info
+    Search for stock symbols using yfinance's search API.
+    Fast — uses Yahoo Finance's search endpoint instead of brute-force .info calls.
     """
     try:
-        import yfinance as yf
+        from urllib.request import urlopen, Request
+        from urllib.parse import quote as url_quote
+        import ssl
 
-        # Common exchanges and suffixes to try
-        exchanges = ['', '.NS', '.BO', '.L', '.TO', '.AX', '.HK', '.SS', '.SZ']
         results = []
-        query_upper = query.upper()
+        query_str = query.strip()
+        if not query_str:
+            return {"results": [], "query": query, "count": 0}
 
-        # Try exact match first
-        for exchange in exchanges:
-            symbol_with_exchange = query_upper + exchange
-            try:
-                ticker = yf.Ticker(symbol_with_exchange)
-                info = ticker.info
+        # Use Yahoo Finance search/autocomplete API (fast, no auth needed)
+        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={url_quote(query_str)}&quotesCount={limit}&newsCount=0&enableFuzzyQuery=false&quotesQueryId=tss_match_phrase_query"
+        ctx = ssl.create_default_context()
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
 
-                # Check if ticker is valid by verifying it has a name
-                if info.get('longName') or info.get('shortName'):
+        try:
+            with urlopen(req, timeout=5, context=ctx) as response:
+                data = json.loads(response.read().decode())
+                quotes = data.get("quotes", [])
+
+                for q in quotes:
+                    symbol = q.get("symbol", "")
+                    if not symbol:
+                        continue
                     results.append({
-                        'symbol': symbol_with_exchange,
-                        'name': info.get('longName', info.get('shortName', 'N/A')),
-                        'exchange': info.get('exchange', 'N/A'),
-                        'type': info.get('quoteType', 'EQUITY'),
-                        'currency': info.get('currency', 'USD'),
-                        'sector': info.get('sector', 'N/A'),
-                        'industry': info.get('industry', 'N/A')
+                        "symbol": symbol,
+                        "name": q.get("longname") or q.get("shortname", ""),
+                        "exchange": q.get("exchange", ""),
+                        "type": q.get("quoteType", "EQUITY"),
+                        "currency": q.get("currency", "USD"),
+                        "sector": "",
+                        "industry": q.get("industry", "")
                     })
-                    if len(results) >= limit:
-                        break
-            except:
-                continue
-
-        # If no exact matches, try common US tickers that start with the query
-        if len(results) == 0:
-            # List of popular tickers for quick matching (you can expand this)
-            popular_tickers = [
-                'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'TSLA', 'META', 'NVDA',
-                'BRK-B', 'BRK-A', 'V', 'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'UNH',
-                'DIS', 'HD', 'PYPL', 'BAC', 'NFLX', 'ADBE', 'CRM', 'CMCSA',
-                'XOM', 'VZ', 'INTC', 'ABT', 'KO', 'NKE', 'PFE', 'MRK', 'PEP',
-                'TMO', 'CSCO', 'COST', 'AVGO', 'TXN', 'ACN', 'DHR', 'NEE', 'CVX'
-            ]
-
-            matching_tickers = [t for t in popular_tickers if t.startswith(query_upper)]
-
-            for symbol in matching_tickers[:limit]:
+        except Exception as search_err:
+            # Fallback: try the exact symbol as a yfinance Ticker
+            query_upper = query_str.upper()
+            suffixes = ["", ".NS", ".BO"]
+            for suffix in suffixes:
+                candidate = query_upper + suffix
                 try:
-                    ticker = yf.Ticker(symbol)
+                    ticker = yf.Ticker(candidate)
                     info = ticker.info
-
-                    if info.get('longName') or info.get('shortName'):
+                    if info.get("longName") or info.get("shortName"):
                         results.append({
-                            'symbol': symbol,
-                            'name': info.get('longName', info.get('shortName', 'N/A')),
-                            'exchange': info.get('exchange', 'N/A'),
-                            'type': info.get('quoteType', 'EQUITY'),
-                            'currency': info.get('currency', 'USD'),
-                            'sector': info.get('sector', 'N/A'),
-                            'industry': info.get('industry', 'N/A')
+                            "symbol": candidate,
+                            "name": info.get("longName", info.get("shortName", "")),
+                            "exchange": info.get("exchange", ""),
+                            "type": info.get("quoteType", "EQUITY"),
+                            "currency": info.get("currency", "USD"),
+                            "sector": info.get("sector", ""),
+                            "industry": info.get("industry", "")
                         })
-                except:
+                        break
+                except Exception:
                     continue
 
         return {"results": results, "query": query, "count": len(results)}
