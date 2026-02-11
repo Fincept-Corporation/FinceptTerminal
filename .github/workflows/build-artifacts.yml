@@ -7,6 +7,10 @@ on:
         description: 'Build all platform artifacts for testing (replicates release pipeline)'
         required: false
         default: 'Test build for all platforms'
+      tag_name:
+        description: 'Tag name for the pre-release (e.g. v3.3.1-rc.1). Leave empty to auto-generate.'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -219,3 +223,113 @@ jobs:
           name: build-${{ matrix.os_name }}-${{ matrix.arch }}
           path: release-artifacts/
           retention-days: 30
+
+  create-prerelease:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version and determine tag
+        id: get_version
+        run: |
+          VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          INPUT_TAG="${{ github.event.inputs.tag_name }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG_NAME="$INPUT_TAG"
+          else
+            TAG_NAME="v${VERSION}-rc.${{ github.run_number }}"
+          fi
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+
+      - name: Setup Python for JSON processing
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Organize release files and generate latest.json
+        id: organize
+        run: |
+          mkdir -p release-files
+
+          VERSION="${{ steps.get_version.outputs.version }}"
+          TAG_NAME="${{ steps.get_version.outputs.tag_name }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+
+          echo "=== All downloaded artifacts ==="
+          find all-artifacts -type f | sort
+
+          # Copy installer files
+          find all-artifacts -type f -name "*.dmg" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.msi" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.AppImage" -exec cp {} release-files/ \;
+          find all-artifacts -type f -name "*.deb" -exec cp {} release-files/ \;
+
+          # Copy updater archives and signatures
+          find all-artifacts -type f \( -name "*-darwin.app.tar.gz" -o -name "*-linux.AppImage.tar.gz" -o -name "*-windows.nsis.zip" \) -exec cp {} release-files/ \;
+          find all-artifacts -type f \( -name "*-darwin.app.tar.gz.sig" -o -name "*-linux.AppImage.tar.gz.sig" -o -name "*-windows.nsis.zip.sig" \) -exec cp {} release-files/ \;
+
+          echo "=== Release files ==="
+          ls -lh release-files/
+
+          # Generate unified latest.json
+          VERSION="${VERSION}" TAG_NAME="${TAG_NAME}" REPO_URL="${REPO_URL}" python3 scripts/generate_latest_json.py
+
+          # Validate generated JSON
+          python3 -c 'import json; data = json.load(open("release-files/latest.json")); p = data.get("platforms", {}); print(f"Valid latest.json with {len(p)} platforms"); assert p, "No platforms!"'
+
+          echo "=== Final Release Files ==="
+          ls -lh release-files/
+
+          file_count=$(find release-files -type f | wc -l)
+          [ "$file_count" -eq 0 ] && { echo "Error: No release files found"; exit 1; }
+          echo "file_count=$file_count" >> $GITHUB_OUTPUT
+
+      - name: Create pre-release
+        if: steps.organize.outputs.file_count > 0
+        run: |
+          TAG_NAME="${{ steps.get_version.outputs.tag_name }}"
+
+          # Delete existing release/tag if it exists (for re-runs)
+          gh release delete "$TAG_NAME" --yes 2>/dev/null || true
+          git push origin ":refs/tags/$TAG_NAME" 2>/dev/null || true
+
+          gh release create "$TAG_NAME" \
+            --title "FinceptTerminal ${TAG_NAME} (Pre-release)" \
+            --notes "Auto-update test build from workflow run #${{ github.run_number }}.
+
+          **This is a pre-release for testing auto-update only.**
+
+          To test: point your updater endpoint to:
+          \`https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/latest.json\`" \
+            --prerelease \
+            release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print updater test instructions
+        run: |
+          TAG_NAME="${{ steps.get_version.outputs.tag_name }}"
+          echo ""
+          echo "============================================"
+          echo "  PRE-RELEASE CREATED: ${TAG_NAME}"
+          echo "============================================"
+          echo ""
+          echo "To test auto-update, update your tauri.conf.json updater endpoint to:"
+          echo ""
+          echo "  https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/latest.json"
+          echo ""
+          echo "Then install an OLDER version of the app and launch it."
+          echo "The updater should detect ${TAG_NAME} and prompt to update."
+          echo "============================================"

@@ -136,7 +136,7 @@ export default defineConfig({
     extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json', '.cjs']
   },
   optimizeDeps: {
-    exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock'],
+    exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock', '@loaders.gl/draco'],
     // Force these to be pre-bundled and ensure they have proper globals
     include: [
       'buffer',
@@ -185,7 +185,8 @@ export default defineConfig({
         'path',
         'node:path',
         'os',
-        'node:os'
+        'node:os',
+        '@loaders.gl/draco'
       ],
       output: {
         manualChunks: {

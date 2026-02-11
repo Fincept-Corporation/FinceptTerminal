@@ -6,11 +6,18 @@ Pattern: main(args) dispatches [operation, json_data].
 """
 
 import sys
+import os
 import json
 import traceback
 import numpy as np
 import pandas as pd
 from datetime import datetime
+
+# Add parent directory to path for absolute imports when run as script
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_parent_dir = os.path.dirname(_script_dir)
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
 
 
 def _series_from_list(values, dates=None, name="series"):
@@ -38,7 +45,7 @@ def _df_from_dict(data_dict, dates=None):
 
 def op_performance_analysis(data):
     """Full performance analysis: returns, risk, distribution metrics."""
-    from .timeseries_analytics import TimeseriesAnalytics, TimeseriesConfig
+    from gs_quant_wrapper.timeseries_analytics import TimeseriesAnalytics, TimeseriesConfig
 
     prices = data.get("prices", [])
     benchmark_prices = data.get("benchmark_prices", [])
@@ -62,7 +69,7 @@ def op_performance_analysis(data):
 
 def op_technical_analysis(data):
     """Technical indicators summary: SMA, EMA, RSI, MACD, Bollinger Bands, ATR."""
-    from .timeseries_analytics import TimeseriesAnalytics, TimeseriesConfig
+    from gs_quant_wrapper.timeseries_analytics import TimeseriesAnalytics, TimeseriesConfig
 
     prices = data.get("prices", [])
     high = data.get("high", [])
@@ -82,7 +89,7 @@ def op_technical_analysis(data):
 
 def op_risk_metrics(data):
     """Comprehensive risk metrics: volatility, VaR, CVaR, drawdown, ratios."""
-    from . import ts_risk_measures as risk
+    from gs_quant_wrapper import ts_risk_measures as risk
 
     returns_list = data.get("returns", [])
     risk_free_rate = data.get("risk_free_rate", 0.0)
@@ -127,7 +134,7 @@ def op_risk_metrics(data):
 
 def op_portfolio_analytics(data):
     """Portfolio analytics with benchmark comparison."""
-    from . import ts_portfolio_analytics as port
+    from gs_quant_wrapper import ts_portfolio_analytics as port
 
     returns_list = data.get("returns", [])
     benchmark_list = data.get("benchmark_returns", [])
@@ -169,7 +176,7 @@ def op_portfolio_analytics(data):
 
 def op_volatility_surface(data):
     """Forward volatility and variance term structure."""
-    from . import ts_risk_measures as risk
+    from gs_quant_wrapper import ts_risk_measures as risk
 
     returns_list = data.get("returns", [])
     tenors = data.get("tenors", [21, 63, 126, 252])
@@ -201,7 +208,7 @@ def op_volatility_surface(data):
 
 def op_statistics(data):
     """Descriptive statistics: mean, std, skew, kurtosis, percentiles, z-scores."""
-    from . import ts_math_statistics as ms
+    from gs_quant_wrapper import ts_math_statistics as ms
 
     values = data.get("values", [])
     dates = data.get("dates")
@@ -230,7 +237,7 @@ def op_statistics(data):
 
 def op_correlation_analysis(data):
     """Correlation, beta, R-squared between two series."""
-    from . import ts_math_statistics as ms
+    from gs_quant_wrapper import ts_math_statistics as ms
 
     x_values = data.get("x", [])
     y_values = data.get("y", [])
@@ -250,7 +257,7 @@ def op_correlation_analysis(data):
 
 def op_backtest(data):
     """Run a backtest strategy: buy-and-hold, momentum, mean-reversion, rebalancing."""
-    from .backtest_analytics import BacktestEngine, BacktestConfig
+    from gs_quant_wrapper.backtest_analytics import BacktestEngine, BacktestConfig
 
     prices_dict = data.get("prices", {})
     strategy = data.get("strategy", "buy_and_hold")
@@ -309,7 +316,7 @@ def op_backtest(data):
 
 def op_basket_backtest(data):
     """Basket/composite portfolio backtest."""
-    from . import ts_portfolio_analytics as port
+    from gs_quant_wrapper import ts_portfolio_analytics as port
 
     components_dict = data.get("components", {})
     weights = data.get("weights")
@@ -333,7 +340,7 @@ def op_basket_backtest(data):
 
 def op_datetime_utils(data):
     """Date/time utilities: business days, day count fractions, date ranges."""
-    from .datetime_utils import DateTimeUtils
+    from gs_quant_wrapper.datetime_utils import DateTimeUtils
 
     dt = DateTimeUtils()
     operation = data.get("sub_operation", "business_days")
@@ -369,7 +376,7 @@ def op_datetime_utils(data):
 
 def op_greeks(data):
     """Calculate Greeks for a derivative instrument."""
-    from .risk_analytics import RiskAnalytics, RiskConfig
+    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
     risk = RiskAnalytics(RiskConfig())
 
@@ -386,7 +393,7 @@ def op_greeks(data):
 
 def op_var_analysis(data):
     """Value at Risk analysis: parametric, historical, Monte Carlo, CVaR."""
-    from .risk_analytics import RiskAnalytics, RiskConfig
+    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
     returns_list = data.get("returns", [])
     confidence = data.get("confidence", 0.95)
@@ -421,7 +428,7 @@ def op_var_analysis(data):
 
 def op_stress_test(data):
     """Stress testing with standard market scenarios."""
-    from .risk_analytics import RiskAnalytics, RiskConfig
+    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
     returns_list = data.get("returns", [])
     position_value = data.get("position_value", 1000000)
@@ -453,7 +460,7 @@ def op_stress_test(data):
 
 def op_instrument_create(data):
     """Create and summarize a financial instrument."""
-    from .instrument_wrapper import InstrumentFactory
+    from gs_quant_wrapper.instrument_wrapper import InstrumentFactory
 
     factory = InstrumentFactory()
     instrument_type = data.get("instrument_type", "equity")
@@ -503,7 +510,7 @@ def op_instrument_create(data):
 
 def op_comprehensive_risk_report(data):
     """Full risk report combining Greeks, VaR, scenarios."""
-    from .risk_analytics import RiskAnalytics, RiskConfig
+    from gs_quant_wrapper.risk_analytics import RiskAnalytics, RiskConfig
 
     returns_list = data.get("returns", [])
     position_value = data.get("position_value", 1000000)
@@ -541,7 +548,7 @@ def op_comprehensive_risk_report(data):
 
 def op_historical_simulation(data):
     """Historical simulation for PnL estimation."""
-    from . import ts_portfolio_analytics as port
+    from gs_quant_wrapper import ts_portfolio_analytics as port
 
     returns_list = data.get("returns", [])
     position_value = data.get("position_value", 1000000)
