@@ -682,7 +682,7 @@ pub async fn fyers_get_history(
         .send()
         .await
         .map_err(|e| {
-            eprintln!("[fyers_get_history] ❌ Request failed: {}", e);
+            eprintln!("[fyers_get_history] Request failed: {}", e);
             format!("Request failed: {}", e)
         })?;
 
@@ -693,7 +693,7 @@ pub async fn fyers_get_history(
     eprintln!("[fyers_get_history] Response body length: {}", text.len());
 
     if text.is_empty() {
-        eprintln!("[fyers_get_history] ❌ Empty response from Fyers API");
+        eprintln!("[fyers_get_history] Empty response from Fyers API");
         return Ok(ApiResponse {
             success: false,
             data: None,
@@ -705,7 +705,7 @@ pub async fn fyers_get_history(
     eprintln!("[fyers_get_history] Response body preview: {}...", &text[..text.len().min(200)]);
 
     let body: Value = serde_json::from_str(&text).map_err(|e| {
-        eprintln!("[fyers_get_history] ❌ Parse error. Response was: {}", text);
+        eprintln!("[fyers_get_history] Parse error. Response was: {}", text);
         format!("Failed to parse response: {}. Response: {}", e, text)
     })?;
 

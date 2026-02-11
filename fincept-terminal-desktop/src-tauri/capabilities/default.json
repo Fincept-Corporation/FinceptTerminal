@@ -38,11 +38,13 @@
     "fs:allow-appdata-write",
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
+    "fs:allow-resource-read-recursive",
     {
       "identifier": "fs:scope",
       "allow": [
         { "path": "**" },
-        { "path": "$APPDATA/**" }
+        { "path": "$APPDATA/**" },
+        { "path": "$RESOURCE/**" }
       ]
     },
     "updater:default",

@@ -130,7 +130,7 @@ async fn execute_pyportfolioopt_operation(
 
     let args = vec![operation.to_string(), data_json];
 
-    crate::python::execute(&app, "Analytics/pyportfolioopt_wrapper/worker_handler.py", args).await
+    crate::python::execute(&app, "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", args).await
 }
 
 /// Optimize portfolio using PyPortfolioOpt

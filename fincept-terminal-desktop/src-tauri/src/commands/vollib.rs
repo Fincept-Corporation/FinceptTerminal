@@ -1,14 +1,14 @@
 use crate::python;
 use tauri::command;
 
-/// Helper to execute a py_vollib operation via worker_handler.py
+/// Helper to execute a py_vollib operation via descriptive_service.py
 fn execute_vollib(
     app: &tauri::AppHandle,
     operation: &str,
     data: serde_json::Value,
 ) -> Result<String, String> {
     let args = vec![operation.to_string(), data.to_string()];
-    python::execute_sync(app, "Analytics/py_vollib_wrapper/worker_handler.py", args)
+    python::execute_sync(app, "Analytics/py_vollib_wrapper/vollib_service.py", args)
 }
 
 // ==================== BLACK MODEL (futures/forwards) ====================

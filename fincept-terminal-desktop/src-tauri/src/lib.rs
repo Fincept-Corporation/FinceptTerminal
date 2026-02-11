@@ -609,8 +609,7 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-// Execute Python script via worker pool (persistent processes, no subprocess spawn per call)
-// Falls back to subprocess if worker pool is not initialized
+// Execute Python script via subprocess
 #[tauri::command]
 async fn execute_python_script(
     app: tauri::AppHandle,

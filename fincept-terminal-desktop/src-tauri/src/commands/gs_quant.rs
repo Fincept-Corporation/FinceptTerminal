@@ -1,14 +1,14 @@
 // GS-Quant Wrapper Commands - Goldman Sachs quant analytics via subprocess
 use crate::python;
 
-/// Helper to execute a gs_quant_wrapper operation via worker_handler.py
+/// Helper to execute a gs_quant_wrapper operation via descriptive_service.py
 fn execute_gs_quant(
     app: &tauri::AppHandle,
     operation: &str,
     data: serde_json::Value,
 ) -> Result<String, String> {
     let args = vec![operation.to_string(), data.to_string()];
-    python::execute_sync(app, "Analytics/gs_quant_wrapper/worker_handler.py", args)
+    python::execute_sync(app, "Analytics/gs_quant_wrapper/gs_quant_service.py", args)
 }
 
 // ============================================================================

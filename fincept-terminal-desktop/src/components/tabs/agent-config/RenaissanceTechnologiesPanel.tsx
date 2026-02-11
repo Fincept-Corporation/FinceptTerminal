@@ -8,10 +8,20 @@
  * - Real-time Position Sizing & Risk Management
  * - Team Collaboration Workflows
  * - Professional Terminal UI/UX
+ *
+ * State Management:
+ * - Uses useReducer for atomic state updates
+ * - Implements explicit state machine (idle→loading→success|error)
+ * - Proper cleanup on unmount with AbortController pattern
+ * - Input validation before API calls
+ * - Timeout protection for external calls
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useReducer, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { withTimeout } from '@/services/core/apiUtils';
+import { validateSymbol, sanitizeSymbol } from '@/services/core/validators';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import {
   TrendingUp, AlertCircle, CheckCircle, Users, Sparkles,
   Brain, Shield, FileText, Zap, Settings, Play, RefreshCw,
@@ -120,77 +130,255 @@ const SIGNAL_TYPES = [
   { value: 'pairs_trading', label: 'Pairs Trading', desc: 'Correlated asset trading' },
 ];
 
+// API timeout for external calls (30 seconds)
+const API_TIMEOUT_MS = 30000;
+
 // =============================================================================
-// MAIN COMPONENT
+// STATE MANAGEMENT - useReducer for atomic updates
 // =============================================================================
 
-export default function RenaissanceTechnologiesPanel() {
-  // State
-  const [activeTab, setActiveTab] = useState<'analysis' | 'agents' | 'config'>('analysis');
-  const [ticker, setTicker] = useState('');
-  const [signalType, setSignalType] = useState('momentum');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<SignalAnalysisResult | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [showAdvanced, setShowAdvanced] = useState(false);
+// State machine: idle → loading → success | error
+type AnalysisStatus = 'idle' | 'loading' | 'success' | 'error';
+
+interface PanelState {
+  // UI state
+  activeTab: 'analysis' | 'agents' | 'config';
+  showAdvanced: boolean;
+  currentTime: Date;
+
+  // Form state
+  ticker: string;
+  signalType: string;
+
+  // Analysis state (state machine pattern)
+  analysisStatus: AnalysisStatus;
+  analysisResult: SignalAnalysisResult | null;
+  analysisError: string | null;
 
   // Config state
-  const [riskLimits, setRiskLimits] = useState<RiskLimits>({
+  riskLimits: RiskLimits;
+
+  // Validation
+  tickerValidationError: string | null;
+}
+
+type PanelAction =
+  | { type: 'SET_ACTIVE_TAB'; payload: 'analysis' | 'agents' | 'config' }
+  | { type: 'SET_SHOW_ADVANCED'; payload: boolean }
+  | { type: 'UPDATE_TIME'; payload: Date }
+  | { type: 'SET_TICKER'; payload: string }
+  | { type: 'SET_TICKER_ERROR'; payload: string | null }
+  | { type: 'SET_SIGNAL_TYPE'; payload: string }
+  | { type: 'ANALYSIS_START' }
+  | { type: 'ANALYSIS_SUCCESS'; payload: SignalAnalysisResult }
+  | { type: 'ANALYSIS_ERROR'; payload: string }
+  | { type: 'ANALYSIS_RESET' }
+  | { type: 'UPDATE_RISK_LIMITS'; payload: RiskLimits };
+
+const initialState: PanelState = {
+  activeTab: 'analysis',
+  showAdvanced: false,
+  currentTime: new Date(),
+  ticker: '',
+  signalType: 'momentum',
+  analysisStatus: 'idle',
+  analysisResult: null,
+  analysisError: null,
+  riskLimits: {
     max_position_size_pct: 5.0,
     max_leverage: 12.5,
     max_drawdown_pct: 15.0,
     max_daily_var_pct: 2.0,
     min_signal_confidence: 0.5075,
-  });
+  },
+  tickerValidationError: null,
+};
 
-  // Update time
+function panelReducer(state: PanelState, action: PanelAction): PanelState {
+  switch (action.type) {
+    case 'SET_ACTIVE_TAB':
+      return { ...state, activeTab: action.payload };
+    case 'SET_SHOW_ADVANCED':
+      return { ...state, showAdvanced: action.payload };
+    case 'UPDATE_TIME':
+      return { ...state, currentTime: action.payload };
+    case 'SET_TICKER':
+      return { ...state, ticker: action.payload, tickerValidationError: null };
+    case 'SET_TICKER_ERROR':
+      return { ...state, tickerValidationError: action.payload };
+    case 'SET_SIGNAL_TYPE':
+      return { ...state, signalType: action.payload };
+    case 'ANALYSIS_START':
+      // Atomic update: loading state + clear previous results
+      return {
+        ...state,
+        analysisStatus: 'loading',
+        analysisResult: null,
+        analysisError: null,
+      };
+    case 'ANALYSIS_SUCCESS':
+      return {
+        ...state,
+        analysisStatus: 'success',
+        analysisResult: action.payload,
+        analysisError: null,
+      };
+    case 'ANALYSIS_ERROR':
+      return {
+        ...state,
+        analysisStatus: 'error',
+        analysisResult: null,
+        analysisError: action.payload,
+      };
+    case 'ANALYSIS_RESET':
+      return {
+        ...state,
+        analysisStatus: 'idle',
+        analysisResult: null,
+        analysisError: null,
+      };
+    case 'UPDATE_RISK_LIMITS':
+      return { ...state, riskLimits: action.payload };
+    default:
+      return state;
+  }
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
+function RenaissanceTechnologiesPanelInner() {
+  // State via reducer - atomic updates, explicit state machine
+  const [state, dispatch] = useReducer(panelReducer, initialState);
+
+  // Refs for cleanup and mounted check
+  const mountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const fetchIdRef = useRef(0); // For race condition prevention
+
+  // Destructure state for convenience
+  const {
+    activeTab,
+    showAdvanced,
+    currentTime,
+    ticker,
+    signalType,
+    analysisStatus,
+    analysisResult,
+    analysisError,
+    riskLimits,
+    tickerValidationError,
+  } = state;
+
+  // Derived state
+  const isAnalyzing = analysisStatus === 'loading';
+
+  // Cleanup on unmount
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  // Update time - with cleanup
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (mountedRef.current) {
+        dispatch({ type: 'UPDATE_TIME', payload: new Date() });
+      }
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Run signal analysis
-  const runSignalAnalysis = async () => {
-    if (!ticker) return;
+  // Validated ticker setter
+  const handleTickerChange = useCallback((value: string) => {
+    const upperValue = value.toUpperCase();
+    dispatch({ type: 'SET_TICKER', payload: upperValue });
 
-    setIsAnalyzing(true);
-    setAnalysisResult(null);
+    // Validate on change
+    if (upperValue.length > 0) {
+      const validation = validateSymbol(upperValue);
+      if (!validation.valid) {
+        dispatch({ type: 'SET_TICKER_ERROR', payload: validation.error || 'Invalid ticker' });
+      }
+    }
+  }, []);
+
+  // Run signal analysis with proper state management
+  const runSignalAnalysis = useCallback(async () => {
+    // Point 10: Input validation before API call
+    const validation = validateSymbol(ticker);
+    if (!validation.valid) {
+      dispatch({ type: 'SET_TICKER_ERROR', payload: validation.error || 'Invalid ticker' });
+      return;
+    }
+
+    const sanitizedTicker = sanitizeSymbol(ticker);
+
+    // Increment fetch ID for race condition handling (Point 1)
+    const currentFetchId = ++fetchIdRef.current;
+
+    // Abort previous request (Point 3: cleanup)
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    // Point 2: State machine transition to loading
+    dispatch({ type: 'ANALYSIS_START' });
 
     try {
       // Send only user inputs - backend will calculate signal metrics from real data
       const cliInput = {
-        ticker,
+        ticker: sanitizedTicker,
         signal_type: signalType,
         trade_value: 1_000_000, // Default $1M trade
         period: '1y',
         include_deliberation: true, // Include IC deliberation
       };
 
-      const result = await invoke<string>('execute_renaissance_cli', {
-        command: 'analyze_signal',
-        data: JSON.stringify(cliInput),
-      });
+      // Point 8: Timeout protection for external call
+      const result = await withTimeout(
+        invoke<string>('execute_renaissance_cli', {
+          command: 'analyze_signal',
+          data: JSON.stringify(cliInput),
+        }),
+        API_TIMEOUT_MS,
+        'Analysis request timed out'
+      );
+
+      // Check for abort and race conditions (Points 1, 3)
+      if (abortController.signal.aborted || currentFetchId !== fetchIdRef.current || !mountedRef.current) {
+        return;
+      }
 
       const parsed = JSON.parse(result);
 
       if (parsed.success) {
-        setAnalysisResult(parsed.data || parsed);
+        // Point 2: State machine transition to success
+        dispatch({ type: 'ANALYSIS_SUCCESS', payload: parsed.data || parsed });
       } else {
-        setAnalysisResult({
-          success: false,
-          error: parsed.error || 'Analysis failed',
-        });
+        // Point 2: State machine transition to error
+        dispatch({ type: 'ANALYSIS_ERROR', payload: parsed.error || 'Analysis failed' });
       }
     } catch (error: any) {
+      // Check if component is still mounted and this is the current request
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) {
+        return;
+      }
+
+      // Don't report abort errors
+      if (error.name === 'AbortError' || error.message === 'Request aborted') {
+        return;
+      }
+
       console.error('Analysis error:', error);
-      setAnalysisResult({
-        success: false,
-        error: error.message || 'Analysis failed',
-      });
-    } finally {
-      setIsAnalyzing(false);
+      // Point 2: State machine transition to error
+      dispatch({ type: 'ANALYSIS_ERROR', payload: error.message || 'Analysis failed' });
     }
-  };
+  }, [ticker, signalType]);
 
   return (
     <div style={{
@@ -233,7 +421,7 @@ export default function RenaissanceTechnologiesPanel() {
             {(['analysis', 'agents', 'config'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab })}
                 style={{
                   ...COMMON_STYLES.tabButton(activeTab === tab),
                   display: 'flex',
@@ -304,14 +492,16 @@ export default function RenaissanceTechnologiesPanel() {
         {activeTab === 'analysis' && (
           <AnalysisTab
             ticker={ticker}
-            setTicker={setTicker}
+            setTicker={handleTickerChange}
             signalType={signalType}
-            setSignalType={setSignalType}
+            setSignalType={(v) => dispatch({ type: 'SET_SIGNAL_TYPE', payload: v })}
             isAnalyzing={isAnalyzing}
             analysisResult={analysisResult}
+            analysisError={analysisError}
+            tickerValidationError={tickerValidationError}
             onRunAnalysis={runSignalAnalysis}
             showAdvanced={showAdvanced}
-            setShowAdvanced={setShowAdvanced}
+            setShowAdvanced={(v) => dispatch({ type: 'SET_SHOW_ADVANCED', payload: v })}
           />
         )}
 
@@ -322,7 +512,7 @@ export default function RenaissanceTechnologiesPanel() {
         {activeTab === 'config' && (
           <ConfigTab
             riskLimits={riskLimits}
-            onUpdateLimits={setRiskLimits}
+            onUpdateLimits={(limits) => dispatch({ type: 'UPDATE_RISK_LIMITS', payload: limits })}
           />
         )}
       </div>
@@ -353,6 +543,8 @@ function AnalysisTab({
   setSignalType,
   isAnalyzing,
   analysisResult,
+  analysisError,
+  tickerValidationError,
   onRunAnalysis,
   showAdvanced,
   setShowAdvanced,
@@ -363,6 +555,8 @@ function AnalysisTab({
   setSignalType: (v: string) => void;
   isAnalyzing: boolean;
   analysisResult: SignalAnalysisResult | null;
+  analysisError: string | null;
+  tickerValidationError: string | null;
   onRunAnalysis: () => void;
   showAdvanced: boolean;
   setShowAdvanced: (v: boolean) => void;
@@ -417,17 +611,31 @@ function AnalysisTab({
           <input
             type="text"
             value={ticker}
-            onChange={(e) => setTicker(e.target.value.toUpperCase())}
+            onChange={(e) => setTicker(e.target.value)}
             placeholder="AAPL"
             style={{
               ...COMMON_STYLES.inputField,
               marginTop: SPACING.SMALL,
               textTransform: 'uppercase',
               width: '200px',
+              borderColor: tickerValidationError ? FINCEPT.RED : FINCEPT.BORDER,
             }}
-            onFocus={(e) => e.currentTarget.style.borderColor = FINCEPT.ORANGE}
-            onBlur={(e) => e.currentTarget.style.borderColor = FINCEPT.BORDER}
+            onFocus={(e) => e.currentTarget.style.borderColor = tickerValidationError ? FINCEPT.RED : FINCEPT.ORANGE}
+            onBlur={(e) => e.currentTarget.style.borderColor = tickerValidationError ? FINCEPT.RED : FINCEPT.BORDER}
           />
+          {tickerValidationError && (
+            <div style={{
+              marginTop: SPACING.TINY,
+              fontSize: TYPOGRAPHY.TINY,
+              color: FINCEPT.RED,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}>
+              <AlertCircle size={10} />
+              {tickerValidationError}
+            </div>
+          )}
         </div>
 
         {/* Strategy Type & Execute - Full Width Section */}
@@ -533,6 +741,22 @@ function AnalysisTab({
           </div>
         )}
       </div>
+
+      {/* Error Display */}
+      {analysisError && (
+        <div style={{
+          ...COMMON_STYLES.panel,
+          border: `2px solid ${FINCEPT.RED}`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.DEFAULT, color: FINCEPT.RED }}>
+            <AlertCircle size={24} />
+            <div>
+              <div style={{ fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD }}>ANALYSIS FAILED</div>
+              <div style={{ fontSize: TYPOGRAPHY.SMALL, marginTop: SPACING.TINY }}>{analysisError}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       {analysisResult && <ResultsDisplay result={analysisResult} />}
@@ -1055,5 +1279,23 @@ function ConfigTab({
         These limits reflect Renaissance Technologies' proprietary risk management system.
       </div>
     </div>
+  );
+}
+
+// =============================================================================
+// EXPORTED COMPONENT - Wrapped with ErrorBoundary (Point 5)
+// =============================================================================
+
+export default function RenaissanceTechnologiesPanel() {
+  return (
+    <ErrorBoundary
+      name="Renaissance Technologies Panel"
+      variant="default"
+      onError={(error, errorInfo) => {
+        console.error('[RenTech Panel Error]', error.message, errorInfo.componentStack);
+      }}
+    >
+      <RenaissanceTechnologiesPanelInner />
+    </ErrorBoundary>
   );
 }

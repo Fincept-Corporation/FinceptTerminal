@@ -165,7 +165,7 @@ class ValueAddedMeasurement:
         return {
             "t_statistic": t_statistic,
             "significance_level": significance_level,
-            "is_significant_95": abs(t_statistic) > critical_95,
+            "is_significant_95": bool(abs(t_statistic) > critical_95),
             "sample_size": n_periods,
             "standard_error": std_active / np.sqrt(n_periods)
         }
@@ -285,7 +285,7 @@ class InformationRatioAnalysis:
         return {
             "quality_rating": quality,
             "industry_percentile": percentile,
-            "sustainability_concern": ir_annualized > 1.0  # Very high IRs often not sustainable
+            "sustainability_concern": bool(ir_annualized > 1.0)  # Very high IRs often not sustainable
         }
 
     @staticmethod

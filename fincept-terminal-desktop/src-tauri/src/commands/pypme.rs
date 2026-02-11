@@ -1,14 +1,14 @@
 use crate::python;
 use tauri::command;
 
-/// Helper to execute a PyPME operation via worker_handler.py
+/// Helper to execute a PyPME operation via descriptive_service.py
 fn execute_pypme(
     app: &tauri::AppHandle,
     operation: &str,
     data: serde_json::Value,
 ) -> Result<String, String> {
     let args = vec![operation.to_string(), data.to_string()];
-    python::execute_sync(app, "Analytics/pypme_wrapper/worker_handler.py", args)
+    python::execute_sync(app, "Analytics/pypme_wrapper/pypme_service.py", args)
 }
 
 // ==================== BASIC PME ====================

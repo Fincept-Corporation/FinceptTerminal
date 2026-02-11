@@ -322,18 +322,45 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
     }
 
     // Enable pip by modifying python312._pth (Windows only)
+    // The embeddable Python has import site commented out by default, which prevents pip from working
     #[cfg(target_os = "windows")]
     {
         let pth_file = python_dir.join("python312._pth");
+        eprintln!("[SETUP] Checking ._pth file at: {:?}", pth_file);
+
         if pth_file.exists() {
             if let Ok(content) = std::fs::read_to_string(&pth_file) {
+                eprintln!("[SETUP] Original ._pth content:\n{}", content);
+
+                // Enable import site (required for pip to work)
                 let new_content = content.replace("#import site", "import site");
-                let _ = std::fs::write(&pth_file, new_content);
+
+                // Also add Lib/site-packages to the path if not present
+                let new_content = if !new_content.contains("Lib/site-packages") && !new_content.contains("Lib\\site-packages") {
+                    format!("{}\nLib/site-packages\n", new_content.trim_end())
+                } else {
+                    new_content
+                };
+
+                eprintln!("[SETUP] New ._pth content:\n{}", new_content);
+
+                std::fs::write(&pth_file, &new_content)
+                    .map_err(|e| format!("Failed to write ._pth file: {}", e))?;
             }
         } else {
             // Create _pth file if it doesn't exist
-            let pth_content = "python312.zip\n.\n\nimport site\n";
-            let _ = std::fs::write(&pth_file, pth_content);
+            eprintln!("[SETUP] Creating new ._pth file");
+            let pth_content = "python312.zip\n.\nLib/site-packages\n\nimport site\n";
+            std::fs::write(&pth_file, pth_content)
+                .map_err(|e| format!("Failed to create ._pth file: {}", e))?;
+        }
+
+        // Also create Lib/site-packages directory if it doesn't exist
+        let site_packages = python_dir.join("Lib").join("site-packages");
+        if !site_packages.exists() {
+            std::fs::create_dir_all(&site_packages)
+                .map_err(|e| format!("Failed to create site-packages directory: {}", e))?;
+            eprintln!("[SETUP] Created site-packages directory: {:?}", site_packages);
         }
     }
 
@@ -349,17 +376,43 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
         let mut cmd = Command::new("powershell");
         cmd.args(&[
             "-Command",
-            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", get_pip_url, get_pip_path.display())
+            &format!(
+                "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '{}' -OutFile '{}'",
+                get_pip_url, get_pip_path.display()
+            )
         ]);
         cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
+
+        if !output.status.success() {
+            eprintln!("[SETUP] get-pip.py download failed: {}", String::from_utf8_lossy(&output.stderr));
+            return Err(format!("Failed to download get-pip.py: {}", String::from_utf8_lossy(&output.stderr)));
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
         let mut cmd = Command::new("curl");
         cmd.args(&["-L", "-o", get_pip_path.to_str().unwrap(), get_pip_url]);
-        cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!("Failed to download get-pip.py: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+    }
+
+    // Verify get-pip.py was downloaded
+    if !get_pip_path.exists() {
+        return Err("get-pip.py download failed - file does not exist".to_string());
+    }
+
+    let file_size = std::fs::metadata(&get_pip_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    eprintln!("[SETUP] get-pip.py downloaded, size: {} bytes", file_size);
+
+    if file_size < 1000 {
+        return Err(format!("get-pip.py appears corrupted (size: {} bytes)", file_size));
     }
 
     // Install pip
@@ -374,8 +427,12 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
         return Err(format!("Python executable not found at: {:?}", python_exe));
     }
 
+    eprintln!("[SETUP] Running: {:?} {:?}", python_exe, get_pip_path);
+
     let mut cmd = Command::new(&python_exe);
     cmd.arg(get_pip_path.to_str().unwrap());
+    // Add --no-warn-script-location to suppress warnings
+    cmd.arg("--no-warn-script-location");
 
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -390,6 +447,24 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
     }
 
     let _ = std::fs::remove_file(&get_pip_path);
+
+    // Verify pip was installed successfully
+    emit_progress(app, "python", 90, "Verifying pip installation...", false);
+
+    let mut verify_cmd = Command::new(&python_exe);
+    verify_cmd.args(&["-m", "pip", "--version"]);
+
+    #[cfg(target_os = "windows")]
+    verify_cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let verify_output = verify_cmd.output().map_err(|e| format!("Failed to verify pip: {}", e))?;
+
+    if !verify_output.status.success() {
+        eprintln!("[SETUP] pip verification failed: {}", String::from_utf8_lossy(&verify_output.stderr));
+        return Err("Pip installation verification failed - pip module not found".to_string());
+    }
+
+    eprintln!("[SETUP] pip verified: {}", String::from_utf8_lossy(&verify_output.stdout).trim());
 
     emit_progress(app, "python", 100, "Python installed", false);
     Ok(())
@@ -567,8 +642,27 @@ async fn install_uv(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String
         install_dir.join("python/bin/python3")
     };
 
+    // First verify pip is available
+    let mut verify_cmd = Command::new(&python_exe);
+    verify_cmd.args(&["-m", "pip", "--version"]);
+
+    #[cfg(target_os = "windows")]
+    verify_cmd.creation_flags(CREATE_NO_WINDOW);
+
+    eprintln!("[SETUP] Verifying pip before UV install...");
+    let verify_output = verify_cmd.output().map_err(|e| format!("Failed to check pip: {}", e))?;
+
+    if !verify_output.status.success() {
+        let stderr = String::from_utf8_lossy(&verify_output.stderr);
+        eprintln!("[SETUP] pip not available: {}", stderr);
+        return Err(format!("UV installation failed: {}: No module named pip", python_exe.display()));
+    }
+
+    eprintln!("[SETUP] pip available: {}", String::from_utf8_lossy(&verify_output.stdout).trim());
+
+    // Now install UV
     let mut cmd = Command::new(&python_exe);
-    cmd.args(&["-m", "pip", "install", "uv"]);
+    cmd.args(&["-m", "pip", "install", "--no-warn-script-location", "uv"]);
 
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -675,8 +769,9 @@ async fn install_packages_in_venv(
 
     let uv_exe = uv_candidates.iter().find(|p| p.exists());
 
+    // tauri.conf.json maps resources/requirements-*.txt directly to requirements-*.txt
     let requirements_path = app.path()
-        .resolve(&format!("resources/{}", requirements_file), tauri::path::BaseDirectory::Resource)
+        .resolve(requirements_file, tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to find {}: {}", requirements_file, e))?;
 
     emit_progress(app, "packages", 20, &format!("Installing {} packages with UV...", progress_label), false);
@@ -720,9 +815,10 @@ async fn install_packages_in_venv(
 
 /// Compute SHA-256 hash of a bundled requirements file
 fn compute_requirements_hash(app: &AppHandle, requirements_file: &str) -> Result<String, String> {
+    // tauri.conf.json maps resources/requirements-*.txt directly to requirements-*.txt
     let requirements_path = app.path()
         .resolve(
-            &format!("resources/{}", requirements_file),
+            requirements_file,
             tauri::path::BaseDirectory::Resource,
         )
         .map_err(|e| format!("Failed to resolve {}: {}", requirements_file, e))?;

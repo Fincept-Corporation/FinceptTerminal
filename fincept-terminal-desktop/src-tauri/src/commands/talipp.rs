@@ -1,14 +1,14 @@
 use crate::python;
 use tauri::command;
 
-/// Helper to execute a TALIpp indicator calculation via worker_handler.py
+/// Helper to execute a TALIpp indicator calculation via descriptive_service.py
 fn execute_talipp(
     app: &tauri::AppHandle,
     operation: &str,
     data: serde_json::Value,
 ) -> Result<String, String> {
     let args = vec![operation.to_string(), data.to_string()];
-    python::execute_sync(app, "Analytics/talipp_wrapper/worker_handler.py", args)
+    python::execute_sync(app, "Analytics/talipp_wrapper/talipp_service.py", args)
 }
 
 // ==================== TREND INDICATORS ====================

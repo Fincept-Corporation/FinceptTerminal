@@ -1,14 +1,14 @@
 use crate::python;
 use tauri::command;
 
-/// Helper to execute a GluonTS operation via worker_handler.py
+/// Helper to execute a GluonTS operation via gluonts_service.py
 fn execute_gluonts(
     app: &tauri::AppHandle,
     operation: &str,
     data: serde_json::Value,
 ) -> Result<String, String> {
     let args = vec![operation.to_string(), data.to_string()];
-    python::execute_sync(app, "Analytics/gluonts_wrapper/worker_handler.py", args)
+    python::execute_sync(app, "Analytics/gluonts_wrapper/gluonts_service.py", args)
 }
 
 // ==================== DEEP LEARNING FORECASTERS ====================

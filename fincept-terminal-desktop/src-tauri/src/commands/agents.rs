@@ -99,18 +99,42 @@ async fn execute_core_agent_with_timeout(
         .and_then(|c| c.get("model"))
         .map(|m| m.to_string())
         .unwrap_or_else(|| "no model config".to_string());
-    eprintln!("[AgentCmd] action={}, model_config={}, payload_len={}", action, model_info, payload_str.len());
+
+    // Log API keys presence (not values for security)
+    let api_keys_info = payload.get("api_keys")
+        .and_then(|k| k.as_object())
+        .map(|obj| {
+            let keys: Vec<String> = obj.keys().map(|k| k.clone()).collect();
+            format!("keys={:?}", keys)
+        })
+        .unwrap_or_else(|| "no api_keys".to_string());
+
+    eprintln!("[AgentCmd] action={}, model_config={}, payload_len={}, {}",
+              action, model_info, payload_str.len(), api_keys_info);
+
+    // Log first 1000 chars of payload for debugging
+    let payload_preview: String = payload_str.chars().take(1000).collect();
+    eprintln!("[AgentCmd] Payload preview: {}", payload_preview);
 
     let app_clone = app.clone();
-    let args: Vec<String> = vec![payload_str];
+    let args: Vec<String> = vec![payload_str.clone()];
+
+    eprintln!("[AgentCmd] Starting Python execution with timeout={}s...", timeout_secs);
+    let start_time = std::time::Instant::now();
 
     // Execute Python subprocess in a blocking task with timeout
     let result = timeout(
         Duration::from_secs(timeout_secs),
         tokio::task::spawn_blocking(move || {
-            python::execute_sync(&app_clone, "agents/finagent_core/main.py", args)
+            eprintln!("[AgentCmd] Inside blocking task, calling python::execute_sync...");
+            let exec_result = python::execute_sync(&app_clone, "agents/finagent_core/main.py", args);
+            eprintln!("[AgentCmd] python::execute_sync returned");
+            exec_result
         })
     ).await;
+
+    let elapsed = start_time.elapsed();
+    eprintln!("[AgentCmd] Python execution completed in {:.2}s", elapsed.as_secs_f64());
 
     match &result {
         Ok(Ok(Ok(ref output))) => {
@@ -120,19 +144,25 @@ async fn execute_core_agent_with_timeout(
         }
         Ok(Ok(Err(ref e))) => {
             eprintln!("[AgentCmd] PYTHON ERROR: {}", e);
+            eprintln!("[AgentCmd] This likely means the Python script failed to execute or returned an error.");
         }
         Ok(Err(ref e)) => {
-            eprintln!("[AgentCmd] TASK ERROR: {}", e);
+            eprintln!("[AgentCmd] TASK ERROR (tokio spawn_blocking failed): {}", e);
         }
         Err(_) => {
-            eprintln!("[AgentCmd] TIMEOUT after {}s", timeout_secs);
+            eprintln!("[AgentCmd] TIMEOUT after {}s - Python script did not complete in time", timeout_secs);
+            eprintln!("[AgentCmd] This could mean:");
+            eprintln!("[AgentCmd]   1. Python script is hanging/waiting for response");
+            eprintln!("[AgentCmd]   2. API call to LLM provider is taking too long");
+            eprintln!("[AgentCmd]   3. Network issues preventing API access");
+            eprintln!("[AgentCmd]   4. API key is invalid or missing");
         }
     }
 
     match result {
         Ok(Ok(inner_result)) => inner_result,
         Ok(Err(e)) => Err(format!("Task execution error: {}", e)),
-        Err(_) => Err(format!("Operation timed out after {} seconds", timeout_secs)),
+        Err(_) => Err(format!("Operation timed out after {} seconds. Check if API key is configured and LLM endpoint is accessible.", timeout_secs)),
     }
 }
 

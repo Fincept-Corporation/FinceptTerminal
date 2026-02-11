@@ -1,16 +1,16 @@
 // skfolio Portfolio Optimization Commands
-// Uses python_skfolio_lib/worker_handler.py with operation + JSON dispatch
+// Uses python_skfolio_lib/skfolio_descriptive_service.py with operation + JSON dispatch
 use crate::python;
 use tauri::command;
 
-/// Helper to execute a skfolio operation via worker_handler.py
+/// Helper to execute a skfolio operation via descriptive_service.py
 fn execute_skfolio_op(
     app: &tauri::AppHandle,
     operation: &str,
     data: serde_json::Value,
 ) -> Result<String, String> {
     let args = vec![operation.to_string(), data.to_string()];
-    python::execute_sync(app, "Analytics/python_skfolio_lib/worker_handler.py", args)
+    python::execute_sync(app, "Analytics/python_skfolio_lib/skfolio_service.py", args)
 }
 
 // ==================== PORTFOLIO OPTIMIZATION ====================

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal, Bot } from 'lucide-react';
+import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal, Bot, ArrowUpCircle, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
@@ -9,9 +9,6 @@ import { ChatModeInterface } from '@/components/chat-mode';
 import { APP_VERSION } from '@/constants/version';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CommandBar } from '@/components/command-bar';
 
 // Eagerly loaded tabs (needed immediately)
@@ -1176,103 +1173,391 @@ function FinxeptTerminalContent() {
       </div>
 
       {/* Update Available Dialog */}
-      <Dialog open={updateAvailable} onOpenChange={(open) => !open && dismissUpdate()}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Download className="h-5 w-5" />
-              Update Available
-            </DialogTitle>
-            <DialogDescription>
-              A new version of FinceptTerminal is available.
-            </DialogDescription>
-          </DialogHeader>
+      {updateAvailable && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+        }}>
+          <div style={{
+            width: '460px',
+            backgroundColor: '#0F0F0F',
+            border: '1px solid #2A2A2A',
+            borderRadius: '2px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.6), 0 0 1px #FF880040',
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: '#1A1A1A',
+              borderBottom: '2px solid #FF8800',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ArrowUpCircle size={14} color="#FF8800" />
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                  letterSpacing: '0.5px',
+                }}>
+                  UPDATE AVAILABLE
+                </span>
+              </div>
+              {!isInstalling && (
+                <button
+                  onClick={dismissUpdate}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <X size={14} color="#787878" />
+                </button>
+              )}
+            </div>
 
-          <div className="space-y-4 py-4">
-            {updateInfo && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Current Version:</span>
-                  <span className="font-mono">{updateInfo.currentVersion}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">New Version:</span>
-                  <span className="font-mono font-bold text-green-600">{updateInfo.version}</span>
-                </div>
-                {updateInfo.date && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Release Date:</span>
-                    <span>{new Date(updateInfo.date).toLocaleDateString()}</span>
+            {/* Body */}
+            <div style={{ padding: '16px' }}>
+              {/* Version Info */}
+              {updateInfo && (
+                <div style={{
+                  backgroundColor: '#000000',
+                  border: '1px solid #2A2A2A',
+                  borderRadius: '2px',
+                  padding: '12px',
+                  marginBottom: '12px',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px',
+                  }}>
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: '#787878',
+                      letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      CURRENT VERSION
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      color: '#4A4A4A',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      v{updateInfo.currentVersion}
+                    </span>
                   </div>
-                )}
-              </div>
-            )}
-
-            {updateInfo?.body && (
-              <div className="rounded-md bg-muted p-3 text-sm">
-                <p className="font-semibold mb-2">Release Notes:</p>
-                <div className="max-h-48 overflow-y-auto">
-                  <p className="text-muted-foreground whitespace-pre-wrap text-xs">{updateInfo.body}</p>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px',
+                  }}>
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: '#787878',
+                      letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      NEW VERSION
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      color: '#00D66F',
+                      fontWeight: 700,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      v{updateInfo.version}
+                    </span>
+                  </div>
+                  {updateInfo.date && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}>
+                      <span style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        color: '#787878',
+                        letterSpacing: '0.5px',
+                        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      }}>
+                        RELEASE DATE
+                      </span>
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#00E5FF',
+                        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      }}>
+                        {new Date(updateInfo.date).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {isInstalling && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span>{installProgress === 100 ? 'Installing...' : 'Downloading...'}</span>
-                  <span>{installProgress.toFixed(0)}%</span>
+              {/* Release Notes */}
+              {updateInfo?.body && (
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color: '#787878',
+                    letterSpacing: '0.5px',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    display: 'block',
+                    marginBottom: '6px',
+                  }}>
+                    RELEASE NOTES
+                  </span>
+                  <div style={{
+                    backgroundColor: '#000000',
+                    border: '1px solid #2A2A2A',
+                    borderRadius: '2px',
+                    padding: '10px',
+                    maxHeight: '120px',
+                    overflowY: 'auto',
+                  }}>
+                    <pre style={{
+                      fontSize: '10px',
+                      color: '#FFFFFF',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      margin: 0,
+                      lineHeight: '1.5',
+                    }}>
+                      {updateInfo.body}
+                    </pre>
+                  </div>
                 </div>
-                <Progress value={installProgress} />
-              </div>
-            )}
+              )}
 
-            {installProgress === 100 && isInstalling && (
-              <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertTitle>Update Ready!</AlertTitle>
-                <AlertDescription>
-                  The application will restart in a moment...
-                </AlertDescription>
-              </Alert>
-            )}
+              {/* Download Progress */}
+              {isInstalling && installProgress < 100 && (
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '6px',
+                  }}>
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: '#787878',
+                      letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      DOWNLOADING
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      color: '#FF8800',
+                      fontWeight: 700,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      {installProgress.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '4px',
+                    backgroundColor: '#000000',
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                    border: '1px solid #2A2A2A',
+                  }}>
+                    <div style={{
+                      width: `${installProgress}%`,
+                      height: '100%',
+                      backgroundColor: '#FF8800',
+                      transition: 'width 0.3s ease',
+                      borderRadius: '2px',
+                    }} />
+                  </div>
+                </div>
+              )}
 
-            {error && (
-              <Alert variant="destructive">
-                <XCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+              {/* Update Ready */}
+              {installProgress === 100 && isInstalling && (
+                <div style={{
+                  padding: '10px 12px',
+                  backgroundColor: '#00D66F15',
+                  border: '1px solid #00D66F40',
+                  borderRadius: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                }}>
+                  <CheckCircle2 size={14} color="#00D66F" />
+                  <div>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      color: '#00D66F',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      display: 'block',
+                    }}>
+                      UPDATE INSTALLED
+                    </span>
+                    <span style={{
+                      fontSize: '9px',
+                      color: '#787878',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      Restarting application...
+                    </span>
+                  </div>
+                </div>
+              )}
 
-            {!isInstalling && (
-              <p className="text-xs text-muted-foreground">
-                The update will download and install automatically. Your app will restart after installation.
-              </p>
-            )}
+              {/* Error */}
+              {error && (
+                <div style={{
+                  padding: '10px 12px',
+                  backgroundColor: '#FF3B3B15',
+                  border: '1px solid #FF3B3B40',
+                  borderRadius: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                }}>
+                  <XCircle size={14} color="#FF3B3B" />
+                  <span style={{
+                    fontSize: '10px',
+                    color: '#FF3B3B',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                  }}>
+                    {error}
+                  </span>
+                </div>
+              )}
+
+              {/* Info text */}
+              {!isInstalling && !error && (
+                <span style={{
+                  fontSize: '9px',
+                  color: '#4A4A4A',
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                }}>
+                  The update will download and install automatically. Your app will restart after installation.
+                </span>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: '#1A1A1A',
+              borderTop: '1px solid #2A2A2A',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '8px',
+            }}>
+              {!isInstalling && !error && (
+                <>
+                  <button
+                    onClick={dismissUpdate}
+                    style={{
+                      padding: '6px 10px',
+                      backgroundColor: 'transparent',
+                      border: '1px solid #2A2A2A',
+                      color: '#787878',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      borderRadius: '2px',
+                      cursor: 'pointer',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      letterSpacing: '0.5px',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#FF8800';
+                      e.currentTarget.style.color = '#FFFFFF';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#2A2A2A';
+                      e.currentTarget.style.color = '#787878';
+                    }}
+                  >
+                    LATER
+                  </button>
+                  <button
+                    onClick={installUpdate}
+                    style={{
+                      padding: '6px 14px',
+                      backgroundColor: '#FF8800',
+                      color: '#000000',
+                      border: 'none',
+                      borderRadius: '2px',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      letterSpacing: '0.5px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <Download size={10} />
+                    UPDATE NOW
+                  </button>
+                </>
+              )}
+              {isInstalling && installProgress < 100 && (
+                <button
+                  disabled
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: '#4A4A4A',
+                    color: '#000000',
+                    border: 'none',
+                    borderRadius: '2px',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'not-allowed',
+                    opacity: 0.7,
+                  }}
+                >
+                  <RefreshCw size={10} className="animate-spin" />
+                  DOWNLOADING...
+                </button>
+              )}
+            </div>
           </div>
-
-          <DialogFooter>
-            {!isInstalling && !error && (
-              <>
-                <Button variant="outline" onClick={dismissUpdate}>
-                  Later
-                </Button>
-                <Button onClick={installUpdate}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Update Now
-                </Button>
-              </>
-            )}
-            {isInstalling && (
-              <Button disabled>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                {installProgress === 100 ? 'Installing...' : 'Downloading...'}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       {workspaceDialogMode && (
         <WorkspaceDialog

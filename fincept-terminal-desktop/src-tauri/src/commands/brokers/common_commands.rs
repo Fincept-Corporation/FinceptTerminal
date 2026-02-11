@@ -148,7 +148,7 @@ pub async fn get_indian_broker_credentials(
             })
         }
         Err(e) => {
-            eprintln!("[get_indian_broker_credentials] ❌ Error: {}", e);
+            eprintln!("[get_indian_broker_credentials] Error: {}", e);
             Ok(ApiResponse {
                 success: false,
                 data: None,

@@ -10,10 +10,20 @@
  * - Tools browser with selection
  * - Chat interface with routing
  * - System capabilities view
+ *
+ * State Management (STATE_MANAGEMENT.md compliance):
+ * - ErrorBoundary wrapper for graceful error handling
+ * - AbortController for cleanup on unmount
+ * - mountedRef to prevent stale state updates
+ * - Input validation before API calls
+ * - Timeout protection for external calls
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { withTimeout } from '@/services/core/apiUtils';
+import { validateSymbol, sanitizeSymbol, validateString } from '@/services/core/validators';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import {
   Bot, RefreshCw, Play, Code, AlertCircle, CheckCircle,
   Users, TrendingUp, Globe, Building2, Wrench, Brain,
@@ -294,8 +304,8 @@ const AgentConfigTab: React.FC = () => {
     memory_create_user_memories: boolean;
     memory_create_session_summary: boolean;
   }>({
-    provider: 'openai',
-    model_id: 'gpt-4-turbo',
+    provider: 'fincept',  // Default to Fincept LLM until user changes
+    model_id: 'fincept-llm',
     temperature: 0.7,
     max_tokens: 4096,
     tools: [],
@@ -371,6 +381,11 @@ const AgentConfigTab: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Cleanup refs (STATE_MANAGEMENT.md: Point 3 - Cleanup on Unmount)
+  const mountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const fetchIdRef = useRef(0); // For race condition prevention
+
   // Tools state
   const [toolSearch, setToolSearch] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['finance']));
@@ -408,9 +423,21 @@ const AgentConfigTab: React.FC = () => {
   // Effects
   // =============================================================================
 
+  // Cleanup on unmount (STATE_MANAGEMENT.md: Point 3)
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
   useEffect(() => {
     // Load all data in parallel with timeout
     const loadInitialData = async () => {
+      // Track this fetch operation for race condition prevention
+      const currentFetchId = ++fetchIdRef.current;
+
       setLoading(true);
       setError(null);
 
@@ -422,16 +449,22 @@ const AgentConfigTab: React.FC = () => {
           loadLLMConfigs(),
         ]);
 
+        // STATE_MANAGEMENT.md: Point 8 - Timeout Protection
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Loading timeout - please check your backend service')), 30000)
         );
 
         await Promise.race([criticalPromise, timeoutPromise]);
       } catch (err: any) {
+        // Only update state if still mounted and this is the current request
+        if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
         console.error('Failed to load initial data:', err);
         setError(err.message || 'Failed to load agent data');
       } finally {
-        setLoading(false);
+        // Only update state if still mounted and this is the current request
+        if (mountedRef.current && currentFetchId === fetchIdRef.current) {
+          setLoading(false);
+        }
       }
 
       // Load system data in background (non-blocking)
@@ -454,21 +487,38 @@ const AgentConfigTab: React.FC = () => {
       const configs = await getLLMConfigs();
       setConfiguredLLMs(configs);
 
-      // Set active config as default if available
-      const activeConfig = await getActiveLLMConfig();
-      if (activeConfig) {
+      // Priority order for default LLM selection:
+      // 1. Fincept LLM (provider='fincept', always preferred if available)
+      // 2. User's active config from settings
+      // 3. First configured LLM as fallback
+
+      // Check if Fincept LLM is available (provider ID is 'fincept')
+      const finceptLLM = configs.find(c => c.provider === 'fincept');
+      if (finceptLLM) {
+        // Use Fincept LLM as default
         setEditedConfig(prev => ({
           ...prev,
-          provider: activeConfig.provider,
-          model_id: activeConfig.model,
+          provider: finceptLLM.provider,
+          model_id: finceptLLM.model,
         }));
-      } else if (configs.length > 0) {
-        // Use first configured LLM if no active one
-        setEditedConfig(prev => ({
-          ...prev,
-          provider: configs[0].provider,
-          model_id: configs[0].model,
-        }));
+        console.log('[AgentConfigTab] Using Fincept LLM as default provider');
+      } else {
+        // Fall back to active config or first available
+        const activeConfig = await getActiveLLMConfig();
+        if (activeConfig) {
+          setEditedConfig(prev => ({
+            ...prev,
+            provider: activeConfig.provider,
+            model_id: activeConfig.model,
+          }));
+        } else if (configs.length > 0) {
+          // Use first configured LLM if no active one
+          setEditedConfig(prev => ({
+            ...prev,
+            provider: configs[0].provider,
+            model_id: configs[0].model,
+          }));
+        }
       }
 
       console.log('[AgentConfigTab] Loaded LLM configs from settings:', configs.length);
@@ -658,16 +708,28 @@ const AgentConfigTab: React.FC = () => {
       for (const config of llmConfigs) {
         if (config.api_key) {
           const providerUpper = config.provider.toUpperCase();
+          // Add API key in multiple formats for maximum compatibility
           apiKeys[`${providerUpper}_API_KEY`] = config.api_key;
           apiKeys[config.provider] = config.api_key;
+          apiKeys[config.provider.toLowerCase()] = config.api_key;
         }
         // Pass base_url for custom endpoints (Ollama, Azure, etc.)
         if (config.base_url) {
           apiKeys[`${config.provider.toUpperCase()}_BASE_URL`] = config.base_url;
+          apiKeys[`${config.provider}_base_url`] = config.base_url;
         }
       }
+
+      // Debug logging
+      console.log('[AgentConfigTab] API Keys prepared:', {
+        keysAvailable: Object.keys(apiKeys),
+        hasFincept: !!(apiKeys['FINCEPT_API_KEY'] || apiKeys['fincept'] || apiKeys['FINCEPT']),
+        hasOpenAI: !!(apiKeys['OPENAI_API_KEY'] || apiKeys['openai'] || apiKeys['OPENAI']),
+      });
+
       return apiKeys;
-    } catch {
+    } catch (err) {
+      console.error('[AgentConfigTab] Failed to get API keys:', err);
       return {};
     }
   };
@@ -735,7 +797,15 @@ const AgentConfigTab: React.FC = () => {
   // =============================================================================
 
   const runAgent = async () => {
-    if (!testQuery.trim()) return;
+    // STATE_MANAGEMENT.md: Point 10 - Input Validation
+    const queryValidation = validateString(testQuery, { minLength: 1, maxLength: 10000 });
+    if (!queryValidation.valid) {
+      setError(queryValidation.error || 'Invalid query');
+      return;
+    }
+
+    // Track this execution for race condition prevention
+    const currentFetchId = ++fetchIdRef.current;
 
     setExecuting(true);
     setError(null);
@@ -744,10 +814,43 @@ const AgentConfigTab: React.FC = () => {
     try {
       const apiKeys = await getApiKeys();
 
+      // Check if component is still mounted
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
+      // Validate that the selected provider has an API key configured
+      const providerKey = editedConfig.provider.toLowerCase();
+      const providerKeyUpper = `${editedConfig.provider.toUpperCase()}_API_KEY`;
+      const hasProviderKey = apiKeys[providerKey] || apiKeys[providerKeyUpper];
+
+      console.log('[AgentConfigTab] API Key validation:', {
+        provider: editedConfig.provider,
+        providerKey,
+        providerKeyUpper,
+        hasProviderKey,
+        availableKeys: Object.keys(apiKeys),
+        apiKeysSnapshot: Object.keys(apiKeys).reduce((acc, key) => {
+          acc[key] = apiKeys[key] ? `***${apiKeys[key].slice(-4)}` : 'undefined';
+          return acc;
+        }, {} as Record<string, string>),
+      });
+
+      if (!hasProviderKey && editedConfig.provider !== 'ollama') {
+        setError(
+          `${editedConfig.provider.toUpperCase()} API key not configured. ` +
+          `Please go to Settings → LLM Configuration and add your API key for ${editedConfig.provider}.`
+        );
+        setExecuting(false);
+        return;
+      }
+
       // Check if we should use auto-routing
       if (useAutoRouting) {
-        // First, route the query
-        const routingResult = await agentService.routeQuery(testQuery, apiKeys);
+        // First, route the query with timeout protection
+        const routingResult = await withTimeout(
+          agentService.routeQuery(testQuery, apiKeys),
+          15000, // 15 second timeout for routing
+          'Query routing timed out'
+        );
         setLastRoutingResult(routingResult);
 
         // Add system message about routing
@@ -768,7 +871,11 @@ const AgentConfigTab: React.FC = () => {
           editedConfig.instructions,
           buildDetailedConfigOptions()
         );
-        const result = await agentService.executeRoutedQuery(testQuery, apiKeys, undefined, userConfig);
+        const result = await withTimeout(
+          agentService.executeRoutedQuery(testQuery, apiKeys, undefined, userConfig),
+          60000, // 60 second timeout for execution
+          'Agent execution timed out'
+        );
         setTestResult(result);
 
         setChatMessages(prev => [
@@ -790,11 +897,29 @@ const AgentConfigTab: React.FC = () => {
           buildDetailedConfigOptions()
         );
 
+        // Debug logging
+        console.log('[AgentConfigTab] Running agent with config:', {
+          provider: editedConfig.provider,
+          model_id: editedConfig.model_id,
+          hasApiKey: !!apiKeys[editedConfig.provider.toLowerCase()] || !!apiKeys[`${editedConfig.provider.toUpperCase()}_API_KEY`],
+          apiKeyKeys: Object.keys(apiKeys),
+          configKeys: Object.keys(config),
+          fullConfig: config,
+        });
+
         let result;
         if (selectedOutputModel) {
-          result = await agentService.runAgentStructured(testQuery, config, selectedOutputModel, apiKeys);
+          result = await withTimeout(
+            agentService.runAgentStructured(testQuery, config, selectedOutputModel, apiKeys),
+            60000, // 60 second timeout
+            'Agent execution timed out'
+          );
         } else {
-          result = await agentService.runAgent(testQuery, config, apiKeys);
+          result = await withTimeout(
+            agentService.runAgent(testQuery, config, apiKeys),
+            60000, // 60 second timeout
+            'Agent execution timed out'
+          );
         }
 
         setTestResult(result);
@@ -811,17 +936,37 @@ const AgentConfigTab: React.FC = () => {
         ]);
       }
 
+      // Only update state if still mounted
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
       setSuccess('Query executed successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
+      // Only update state if still mounted
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
       setError(err.toString());
     } finally {
-      setExecuting(false);
+      // Only update state if still mounted
+      if (mountedRef.current && currentFetchId === fetchIdRef.current) {
+        setExecuting(false);
+      }
     }
   };
 
   const runTeam = async () => {
-    if (teamMembers.length === 0 || !testQuery.trim()) return;
+    // STATE_MANAGEMENT.md: Point 10 - Input Validation
+    if (teamMembers.length === 0) {
+      setError('Please add at least one agent to the team');
+      return;
+    }
+    const queryValidation = validateString(testQuery, { minLength: 1, maxLength: 10000 });
+    if (!queryValidation.valid) {
+      setError(queryValidation.error || 'Invalid query');
+      return;
+    }
+
+    // Track this execution for race condition prevention
+    const currentFetchId = ++fetchIdRef.current;
 
     setExecuting(true);
     setIsStreaming(true);
@@ -836,6 +981,9 @@ const AgentConfigTab: React.FC = () => {
 
     try {
       const apiKeys = await getApiKeys();
+
+      // Check if component is still mounted
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
 
       const teamConfig = agentService.buildTeamConfig(
         'Custom Team',
@@ -925,16 +1073,32 @@ const AgentConfigTab: React.FC = () => {
   };
 
   const runWorkflow = async (workflowType: string, extraParams?: Record<string, any>) => {
+    // STATE_MANAGEMENT.md: Point 10 - Input Validation for stock analysis
+    if (workflowType === 'stock_analysis') {
+      const symbolValidation = validateSymbol(workflowSymbol);
+      if (!symbolValidation.valid) {
+        setError(symbolValidation.error || 'Invalid symbol');
+        return;
+      }
+    }
+
+    // Track this execution for race condition prevention
+    const currentFetchId = ++fetchIdRef.current;
+
     setExecuting(true);
     setError(null);
 
     try {
       const apiKeys = await getApiKeys();
+
+      // Check if component is still mounted
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
       let result;
 
       switch (workflowType) {
         case 'stock_analysis':
-          result = await agentService.runStockAnalysis(workflowSymbol, apiKeys);
+          result = await agentService.runStockAnalysis(sanitizeSymbol(workflowSymbol), apiKeys);
           break;
         case 'portfolio_rebal':
           result = await agentService.runPortfolioRebalancing({ holdings: [] }, apiKeys);
@@ -997,15 +1161,23 @@ const AgentConfigTab: React.FC = () => {
           throw new Error(`Unknown workflow: ${workflowType}`);
       }
 
+      // Only update state if still mounted
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
+
       setTestResult(result);
       if (result.success) {
         setSuccess(`${workflowType} completed`);
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err: any) {
+      // Only update state if still mounted
+      if (!mountedRef.current || currentFetchId !== fetchIdRef.current) return;
       setError(err.toString());
     } finally {
-      setExecuting(false);
+      // Only update state if still mounted
+      if (mountedRef.current && currentFetchId === fetchIdRef.current) {
+        setExecuting(false);
+      }
     }
   };
 
@@ -4377,4 +4549,20 @@ const AgentConfigTab: React.FC = () => {
   );
 };
 
-export default AgentConfigTab;
+// =============================================================================
+// EXPORTED COMPONENT - Wrapped with ErrorBoundary (STATE_MANAGEMENT.md: Point 5)
+// =============================================================================
+
+const AgentConfigTabWithErrorBoundary: React.FC = () => (
+  <ErrorBoundary
+    name="Agent Studio"
+    variant="default"
+    onError={(error, errorInfo) => {
+      console.error('[Agent Studio Error]', error.message, errorInfo.componentStack);
+    }}
+  >
+    <AgentConfigTab />
+  </ErrorBoundary>
+);
+
+export default AgentConfigTabWithErrorBoundary;

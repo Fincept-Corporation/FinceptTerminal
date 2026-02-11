@@ -374,16 +374,6 @@ export const COMMANDS: Command[] = [
     keywords: ['settings', 'preferences', 'configuration', 'options']
   },
 
-  // Missing Tabs - Added
-  {
-    id: 'analytics',
-    name: 'Analytics',
-    description: 'Financial analytics and models',
-    aliases: ['analytics', 'analysis', 'models'],
-    category: 'data',
-    action: 'analytics',
-    keywords: ['analytics', 'analysis', 'financial', 'models', 'statistics']
-  },
   {
     id: 'akshare',
     name: 'AKShare Data',

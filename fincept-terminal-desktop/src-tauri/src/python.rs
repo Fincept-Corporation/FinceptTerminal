@@ -97,24 +97,92 @@ fn resolve_python_path(app: &tauri::AppHandle, script: &str) -> Result<PathBuf, 
 fn resolve_script_path(app: &tauri::AppHandle, script: &str) -> Result<PathBuf, String> {
     let mut candidates = Vec::new();
 
-    if let Ok(res) = app.path().resource_dir() {
-        candidates.push(res.join("scripts").join(script));
+    // Tauri v2 preferred method: use resolve() with BaseDirectory::Resource
+    // This handles all platform-specific path resolution automatically
+    // tauri.conf.json maps "resources/scripts" -> "scripts", so path is just "scripts/{script}"
+    let script_resource_path = format!("scripts/{}", script);
+    match app.path().resolve(&script_resource_path, tauri::path::BaseDirectory::Resource) {
+        Ok(resolved) => {
+            // Clean up any "../" in the path (common on macOS)
+            let cleaned = if resolved.to_string_lossy().contains("..") {
+                match resolved.canonicalize() {
+                    Ok(canonical) => canonical,
+                    Err(_) => resolved.clone(),
+                }
+            } else {
+                resolved.clone()
+            };
+            candidates.push(cleaned);
+        }
+        Err(_) => {
+            // Silent fallback to other methods
+        }
     }
+
+    // Fallback: resource_dir() method
+    if let Ok(res) = app.path().resource_dir() {
+        // Primary: scripts/{script} (after tauri.conf.json mapping)
+        candidates.push(res.join("scripts").join(script));
+        // Fallback: resources/scripts/{script} (legacy path, just in case)
+        candidates.push(res.join("resources").join("scripts").join(script));
+        // Direct path (unlikely but possible)
+        candidates.push(res.join(script));
+    }
+
+    // Current executable location-based paths
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             candidates.push(dir.join("resources").join("scripts").join(script));
             candidates.push(dir.join("scripts").join(script));
+
+            // macOS-specific: Contents/Resources/ relative to MacOS directory
+            #[cfg(target_os = "macos")]
+            {
+                // exe is in Contents/MacOS/, so go up and into Resources/
+                if let Some(contents_dir) = dir.parent() {
+                    let resources_dir = contents_dir.join("Resources");
+                    candidates.push(resources_dir.join("scripts").join(script));
+                    candidates.push(resources_dir.join(script));
+                }
+            }
         }
     }
+
+    // Development: working directory based paths
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd.join("resources").join("scripts").join(script));
         candidates.push(cwd.join("src-tauri").join("resources").join("scripts").join(script));
+    }
+
+    // macOS-specific: Check app bundle structure using bundle identifier
+    #[cfg(target_os = "macos")]
+    {
+        // Standard macOS app bundle locations
+        let app_bundle_paths = [
+            "/Applications/FinceptTerminal.app/Contents/Resources/scripts",
+        ];
+        for base in &app_bundle_paths {
+            candidates.push(PathBuf::from(base).join(script));
+        }
+
+        // Check home directory Applications folder
+        if let Ok(home) = std::env::var("HOME") {
+            candidates.push(PathBuf::from(&home)
+                .join("Applications/FinceptTerminal.app/Contents/Resources/scripts")
+                .join(script));
+        }
     }
 
     for p in &candidates {
         if p.exists() {
             return Ok(clean_path(p.clone()));
         }
+    }
+
+    // Only log on failure
+    eprintln!("[Python] Script '{}' NOT FOUND. Searched paths:", script);
+    for (i, p) in candidates.iter().enumerate() {
+        eprintln!("[Python]   {}: {:?}", i, p);
     }
 
     Err(format!(
@@ -162,13 +230,15 @@ fn run_subprocess(
     data_dir: Option<&PathBuf>,
 ) -> Result<String, String> {
     let mut cmd = Command::new(python);
+    // -u flag: unbuffered output (so we see prints immediately)
     // -B flag: don't write .pyc files AND ignore existing __pycache__
-    cmd.arg("-B").arg(script).args(args)
+    cmd.arg("-u").arg("-B").arg(script).args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
     // Also set env var as belt-and-suspenders
     cmd.env("PYTHONDONTWRITEBYTECODE", "1");
+    cmd.env("PYTHONUNBUFFERED", "1");
 
     // Set FINCEPT_DATA_DIR environment variable for Python scripts
     if let Some(dir) = data_dir {

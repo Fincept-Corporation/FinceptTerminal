@@ -405,8 +405,17 @@ class CoreAgent:
 
     def get_response_content(self, response) -> str:
         """Extract text content from response."""
+        # Try .content attribute (standard agno response)
         if hasattr(response, 'content'):
             return response.content
+
+        # If response is a dict (from custom models), try to extract the text
+        if isinstance(response, dict):
+            for key in ['response', 'content', 'text', 'answer', 'message']:
+                if key in response:
+                    return str(response[key])
+
+        # Fallback to string conversion
         return str(response)
 
     def get_module(self, name: str) -> Optional[Any]:

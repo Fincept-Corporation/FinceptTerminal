@@ -459,11 +459,12 @@ pub async fn databento_live_start(
         "snapshot": snapshot.unwrap_or(false)
     });
 
-    // Get Python path from resources
-    let python_path = app.path().resolve("resources/python/python.exe", tauri::path::BaseDirectory::Resource)
+    // Get Python path (use the python module's resolver)
+    let python_path = crate::python::get_python_path(&app, None)
         .map_err(|e| format!("Failed to resolve Python path: {}", e))?;
 
-    let script_path = app.path().resolve("resources/scripts/databento_live.py", tauri::path::BaseDirectory::Resource)
+    // Get script path (tauri.conf.json maps resources/scripts -> scripts)
+    let script_path = app.path().resolve("scripts/databento_live.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to resolve script path: {}", e))?;
 
     // Spawn the live streaming process

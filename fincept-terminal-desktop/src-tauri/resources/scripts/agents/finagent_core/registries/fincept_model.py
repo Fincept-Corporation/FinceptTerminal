@@ -135,11 +135,19 @@ class FinceptChat(Model):
     def _extract_content(self, data: Any) -> str:
         """Extract text content from various response formats."""
         if isinstance(data, dict):
+            # Fincept API format: {"success": true, "data": {"response": "..."}}
+            if "data" in data and isinstance(data["data"], dict):
+                if "response" in data["data"]:
+                    return str(data["data"]["response"])
+
+            # OpenAI-style format
             if "choices" in data:
                 choices = data["choices"]
                 if choices:
                     msg = choices[0].get("message", {})
                     return msg.get("content", "")
+
+            # Other common formats
             if "response" in data:
                 return str(data["response"])
             if "content" in data:
@@ -148,7 +156,9 @@ class FinceptChat(Model):
                 return str(data["text"])
             if "answer" in data:
                 return str(data["answer"])
+
             return str(data)
+
         return str(data) if data else ""
 
     def get_provider(self) -> str:

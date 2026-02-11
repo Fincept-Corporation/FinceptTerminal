@@ -222,11 +222,6 @@ export class PaymentApiService {
     };
   }
 
-  // Get specific plan details
-  static async getPlanDetails(planId: string): Promise<PaymentApiResponse<SubscriptionPlan>> {
-    return makePaymentApiRequest<SubscriptionPlan>('GET', `/cashfree/plans/${planId}`);
-  }
-
   // Create checkout session - Updated to use /cashfree/create-order endpoint
   static async createCheckoutSession(
     apiKey: string,
@@ -322,19 +317,6 @@ export class PaymentApiService {
     );
   }
 
-  // Get specific payment details
-  static async getPaymentDetails(
-    apiKey: string,
-    paymentUuid: string
-  ): Promise<PaymentApiResponse<any>> {
-    return makePaymentApiRequest(
-      'GET',
-      `/cashfree/payments/${paymentUuid}`,
-      undefined,
-      { 'X-API-Key': apiKey }
-    );
-  }
-
   // Get transaction status - New endpoint
   static async getTransactionStatus(
     apiKey: string,
@@ -348,17 +330,6 @@ export class PaymentApiService {
     );
   }
 
-  // Webhook validation (for future use)
-  static async validateWebhook(webhookData: any): Promise<PaymentApiResponse<any>> {
-    return makePaymentApiRequest('POST', '/cashfree/webhook', webhookData);
-  }
-
-  // Debug function to test API key validity
-  static async testApiKey(apiKey: string): Promise<PaymentApiResponse<any>> {
-    return await makePaymentApiRequest('GET', '/cashfree/subscription', undefined, {
-      'X-API-Key': apiKey
-    });
-  }
 }
 
 // Updated PaymentUtils class with in-app window support
@@ -373,77 +344,6 @@ export class PaymentUtils {
     }).format(amount);
   }
 
-  // Calculate annual savings
-  static calculateAnnualSavings(monthlyPrice: number): number {
-    const annualPrice = monthlyPrice * 10; // 2 months free
-    const fullYearPrice = monthlyPrice * 12;
-    return fullYearPrice - annualPrice;
-  }
-
-  // Get plan recommendation based on usage
-  static getRecommendedPlan(apiCallsPerMonth: number): string {
-    if (apiCallsPerMonth <= 10000) return 'starter_20';
-    if (apiCallsPerMonth <= 50000) return 'professional_49';
-    if (apiCallsPerMonth <= 200000) return 'enterprise_99';
-    return 'unlimited_199';
-  }
-
-  // Validate plan selection
-  static validatePlanSelection(planId: string, availablePlans: SubscriptionPlan[]): boolean {
-    return availablePlans.some(plan => plan.plan_id === planId);
-  }
-
-  // Parse URL parameters for payment success page
-  static parsePaymentParams(url: string): { sessionId?: string; paymentId?: string } {
-    const urlParams = new URLSearchParams(url.split('?')[1]);
-    return {
-      sessionId: urlParams.get('session_id') || undefined,
-      paymentId: urlParams.get('payment_id') || undefined
-    };
-  }
-
-  // Check if subscription is expiring soon (within 7 days)
-  static isSubscriptionExpiringSoon(endDate: string): boolean {
-    const end = new Date(endDate);
-    const now = new Date();
-    const daysUntilExpiry = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return daysUntilExpiry <= 7 && daysUntilExpiry > 0;
-  }
-
-  // Get usage percentage with color coding
-  static getUsageStatus(used: number, limit: number | string): {
-    percentage: number;
-    status: 'low' | 'medium' | 'high' | 'critical';
-    color: string;
-  } {
-    if (limit === 'unlimited' || limit === -1) {
-      return { percentage: 0, status: 'low', color: 'green' };
-    }
-
-    const limitNum = typeof limit === 'string' ? parseInt(limit) : limit;
-    const percentage = Math.min((used / limitNum) * 100, 100);
-
-    let status: 'low' | 'medium' | 'high' | 'critical';
-    let color: string;
-
-    if (percentage >= 95) {
-      status = 'critical';
-      color = 'red';
-    } else if (percentage >= 80) {
-      status = 'high';
-      color = 'orange';
-    } else if (percentage >= 50) {
-      status = 'medium';
-      color = 'yellow';
-    } else {
-      status = 'low';
-      color = 'green';
-    }
-
-    return { percentage: Math.round(percentage), status, color };
-  }
-
-  // Validate payment URL before opening
   // Validate payment URL before opening
 static validatePaymentUrl(url: string): boolean {
   if (!url || url === 'undefined' || url === 'null') {
@@ -485,101 +385,6 @@ static validatePaymentUrl(url: string): boolean {
   }
 }
 
-  // Open payment URL in external browser (Tauri shell)
-  static async openPaymentUrl(
-    checkoutUrl: string,
-    planName: string = 'Subscription',
-    planPrice: number = 0
-  ): Promise<boolean> {
-    if (!this.validatePaymentUrl(checkoutUrl)) {
-      console.error('Invalid checkout URL provided');
-      const { showError } = await import('@/utils/notifications');
-      showError('Payment URL is invalid. Please try again or contact support.');
-      return false;
-    }
-
-    try {
-      // Always use external browser for Tauri
-      return this.openPaymentUrlExternal(checkoutUrl);
-    } catch (error) {
-      console.error('Failed to open payment window:', error);
-      return false;
-    }
-  }
-
-  // Enhanced payment URL opener with validation
-  static async openValidatedPaymentUrl(
-    checkoutUrl: string,
-    planName: string = 'Subscription',
-    planPrice: number = 0
-  ): Promise<boolean> {
-    if (!this.validatePaymentUrl(checkoutUrl)) {
-      console.error('Invalid or suspicious payment URL');
-      const { showError } = await import('@/utils/notifications');
-      showError('Invalid payment URL. Please contact support.');
-      return false;
-    }
-
-    return this.openPaymentUrl(checkoutUrl, planName, planPrice);
-  }
-
-  // Fallback method: Open external payment URL
-  private static async openPaymentUrlExternal(checkoutUrl: string): Promise<boolean> {
-    try {
-      const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-
-      if (!newWindow) {
-        const { showWarning } = await import('@/utils/notifications');
-
-        // Try to copy URL to clipboard as fallback
-        if (navigator.clipboard && checkoutUrl !== 'undefined') {
-          try {
-            await navigator.clipboard.writeText(checkoutUrl);
-            showWarning('Popup blocked. Payment URL copied to clipboard', [
-              { label: 'URL', value: checkoutUrl }
-            ]);
-          } catch {
-            showWarning('Please visit this URL to complete payment', [
-              { label: 'URL', value: checkoutUrl }
-            ]);
-          }
-        } else {
-          showWarning('Please visit this URL to complete payment', [
-            { label: 'URL', value: checkoutUrl }
-          ]);
-        }
-
-        return false;
-      }
-
-      return true;
-
-    } catch (error) {
-      console.error('PaymentUtils: Failed to open external payment URL:', error);
-      const { showError } = await import('@/utils/notifications');
-      showError('Failed to open payment window', [
-        { label: 'URL', value: checkoutUrl }
-      ]);
-      return false;
-    }
-  }
-
-  // Generate receipt data for successful payment
-  static generateReceiptData(paymentData: any): {
-    receiptId: string;
-    date: string;
-    description: string;
-    amount: string;
-    status: string;
-  } {
-    return {
-      receiptId: paymentData.payment_uuid || 'N/A',
-      date: new Date().toLocaleDateString(),
-      description: `Fincept API Subscription - ${paymentData.plan?.name || 'Plan'}`,
-      amount: this.formatCurrency(paymentData.plan?.price || 0),
-      status: paymentData.status || 'Completed'
-    };
-  }
 }
 
 export default PaymentApiService;

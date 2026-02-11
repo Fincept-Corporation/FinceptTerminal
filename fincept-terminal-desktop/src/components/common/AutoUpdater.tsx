@@ -1,18 +1,23 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Download, RefreshCw, CheckCircle2, XCircle, Info } from 'lucide-react';
+import { Download, RefreshCw, CheckCircle2, XCircle, Info, ArrowUpCircle, X } from 'lucide-react';
+
+const FINCEPT = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+};
 
 interface AutoUpdaterProps {
   checkOnMount?: boolean;
@@ -33,7 +38,6 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
   const relaunchTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const checkForUpdates = useCallback(async (silent = false) => {
-    // Prevent duplicate checks
     if (checkingRef.current) {
       console.log('[AutoUpdater Component] Check already in progress, skipping');
       return;
@@ -62,7 +66,6 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
         console.log('[AutoUpdater Component] No updates available');
 
         if (!silent) {
-          // Show a brief notification that app is up to date
           setError('You are running the latest version!');
           setTimeout(() => setError(null), 3000);
         }
@@ -71,7 +74,6 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('[AutoUpdater Component] Error checking for updates:', errorMessage, err);
 
-      // Silently fail for development/network errors
       if (!silent) {
         if (!errorMessage.toLowerCase().includes('network') &&
             !errorMessage.toLowerCase().includes('fetch') &&
@@ -97,7 +99,6 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
 
       console.log('[AutoUpdater Component] Starting download and installation...');
 
-      // Download and install with progress tracking
       let totalBytes = 0;
       let downloadedBytes = 0;
 
@@ -124,12 +125,10 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
       console.log('[AutoUpdater Component] Update installed successfully! Preparing to relaunch...');
       setUpdateReady(true);
 
-      // Clear any existing relaunch timer
       if (relaunchTimerRef.current) {
         clearTimeout(relaunchTimerRef.current);
       }
 
-      // Auto-relaunch after 2 seconds
       relaunchTimerRef.current = setTimeout(async () => {
         console.log('[AutoUpdater Component] Relaunching application...');
         await relaunch();
@@ -148,15 +147,13 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
     console.log('[AutoUpdater Component] Update postponed by user');
   }, []);
 
-  // Check for updates on mount
   useEffect(() => {
     if (checkOnMount) {
       console.log('[AutoUpdater Component] Initialized');
-      // Delay initial check by 15 seconds to not interfere with app startup
       const timer = setTimeout(() => {
         console.log('[AutoUpdater Component] Running initial update check...');
         checkForUpdates(true);
-      }, 15000); // Increased to 15s to avoid conflict with hook
+      }, 15000);
 
       return () => {
         clearTimeout(timer);
@@ -167,7 +164,6 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
     }
   }, [checkOnMount, checkForUpdates]);
 
-  // Set up periodic update checks
   useEffect(() => {
     if (checkIntervalMinutes > 0) {
       const interval = setInterval(() => {
@@ -179,129 +175,469 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
     }
   }, [checkIntervalMinutes, checkForUpdates]);
 
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
   return (
     <>
-      {/* Update Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Download className="h-5 w-5" />
-              Update Available
-            </DialogTitle>
-            <DialogDescription>
-              A new version of FinceptTerminal is available.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {updateInfo && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Current Version:</span>
-                  <span className="font-mono">{updateInfo.currentVersion}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">New Version:</span>
-                  <span className="font-mono font-bold text-green-600">{updateInfo.version}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Release Date:</span>
-                  <span>{updateInfo.date ? new Date(updateInfo.date).toLocaleDateString() : 'N/A'}</span>
-                </div>
+      {/* Update Dialog - Overlay */}
+      {showDialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+        }}>
+          <div style={{
+            width: '460px',
+            backgroundColor: FINCEPT.PANEL_BG,
+            border: `1px solid ${FINCEPT.BORDER}`,
+            borderRadius: '2px',
+            overflow: 'hidden',
+            boxShadow: `0 4px 24px rgba(0, 0, 0, 0.6), 0 0 1px ${FINCEPT.ORANGE}40`,
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderBottom: `2px solid ${FINCEPT.ORANGE}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ArrowUpCircle size={14} color={FINCEPT.ORANGE} />
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: FINCEPT.WHITE,
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                  letterSpacing: '0.5px',
+                }}>
+                  UPDATE AVAILABLE
+                </span>
               </div>
-            )}
+              {!downloading && !updateReady && (
+                <button
+                  onClick={handleLater}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <X size={14} color={FINCEPT.GRAY} />
+                </button>
+              )}
+            </div>
 
-            {updateInfo?.body && (
-              <div className="rounded-md bg-muted p-3 text-sm">
-                <p className="font-semibold mb-2">Release Notes:</p>
-                <p className="text-muted-foreground whitespace-pre-wrap">{updateInfo.body}</p>
-              </div>
-            )}
-
-            {downloading && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span>Downloading update...</span>
-                  <span>{downloadProgress.toFixed(0)}%</span>
+            {/* Body */}
+            <div style={{ padding: '16px' }}>
+              {/* Version Info */}
+              {updateInfo && (
+                <div style={{
+                  backgroundColor: FINCEPT.DARK_BG,
+                  border: `1px solid ${FINCEPT.BORDER}`,
+                  borderRadius: '2px',
+                  padding: '12px',
+                  marginBottom: '12px',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px',
+                  }}>
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: FINCEPT.GRAY,
+                      letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      CURRENT VERSION
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      color: FINCEPT.MUTED,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      v{updateInfo.currentVersion}
+                    </span>
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px',
+                  }}>
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: FINCEPT.GRAY,
+                      letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      NEW VERSION
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      color: FINCEPT.GREEN,
+                      fontWeight: 700,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      v{updateInfo.version}
+                    </span>
+                  </div>
+                  {updateInfo.date && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}>
+                      <span style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        color: FINCEPT.GRAY,
+                        letterSpacing: '0.5px',
+                        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      }}>
+                        RELEASE DATE
+                      </span>
+                      <span style={{
+                        fontSize: '10px',
+                        color: FINCEPT.CYAN,
+                        fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      }}>
+                        {new Date(updateInfo.date).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <Progress value={downloadProgress} />
-              </div>
-            )}
+              )}
 
-            {updateReady && (
-              <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertTitle>Update Ready!</AlertTitle>
-                <AlertDescription>
-                  The application will restart in a moment...
-                </AlertDescription>
-              </Alert>
-            )}
+              {/* Release Notes */}
+              {updateInfo?.body && (
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color: FINCEPT.GRAY,
+                    letterSpacing: '0.5px',
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    display: 'block',
+                    marginBottom: '6px',
+                  }}>
+                    RELEASE NOTES
+                  </span>
+                  <div style={{
+                    backgroundColor: FINCEPT.DARK_BG,
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                    borderRadius: '2px',
+                    padding: '10px',
+                    maxHeight: '120px',
+                    overflowY: 'auto',
+                  }}>
+                    <pre style={{
+                      fontSize: '10px',
+                      color: FINCEPT.WHITE,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      margin: 0,
+                      lineHeight: '1.5',
+                    }}>
+                      {updateInfo.body}
+                    </pre>
+                  </div>
+                </div>
+              )}
 
-            {error && (
-              <Alert variant="destructive">
-                <XCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+              {/* Download Progress */}
+              {downloading && !updateReady && (
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '6px',
+                  }}>
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: FINCEPT.GRAY,
+                      letterSpacing: '0.5px',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      {downloadProgress === 100 ? 'INSTALLING' : 'DOWNLOADING'}
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      color: FINCEPT.ORANGE,
+                      fontWeight: 700,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      {downloadProgress.toFixed(0)}%
+                    </span>
+                  </div>
+                  {/* Custom Progress Bar */}
+                  <div style={{
+                    width: '100%',
+                    height: '4px',
+                    backgroundColor: FINCEPT.DARK_BG,
+                    borderRadius: '2px',
+                    overflow: 'hidden',
+                    border: `1px solid ${FINCEPT.BORDER}`,
+                  }}>
+                    <div style={{
+                      width: `${downloadProgress}%`,
+                      height: '100%',
+                      backgroundColor: FINCEPT.ORANGE,
+                      transition: 'width 0.3s ease',
+                      borderRadius: '2px',
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Update Ready */}
+              {updateReady && (
+                <div style={{
+                  padding: '10px 12px',
+                  backgroundColor: `${FINCEPT.GREEN}15`,
+                  border: `1px solid ${FINCEPT.GREEN}40`,
+                  borderRadius: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                }}>
+                  <CheckCircle2 size={14} color={FINCEPT.GREEN} />
+                  <div>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      color: FINCEPT.GREEN,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      display: 'block',
+                    }}>
+                      UPDATE INSTALLED
+                    </span>
+                    <span style={{
+                      fontSize: '9px',
+                      color: FINCEPT.GRAY,
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    }}>
+                      Restarting application...
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Error */}
+              {error && (
+                <div style={{
+                  padding: '10px 12px',
+                  backgroundColor: `${FINCEPT.RED}15`,
+                  border: `1px solid ${FINCEPT.RED}40`,
+                  borderRadius: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                }}>
+                  <XCircle size={14} color={FINCEPT.RED} />
+                  <span style={{
+                    fontSize: '10px',
+                    color: FINCEPT.RED,
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                  }}>
+                    {error}
+                  </span>
+                </div>
+              )}
+
+              {/* Info text */}
+              {!downloading && !updateReady && !error && (
+                <span style={{
+                  fontSize: '9px',
+                  color: FINCEPT.MUTED,
+                  fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                }}>
+                  The update will download and install automatically. Your app will restart after installation.
+                </span>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: FINCEPT.HEADER_BG,
+              borderTop: `1px solid ${FINCEPT.BORDER}`,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '8px',
+            }}>
+              {!downloading && !updateReady && (
+                <>
+                  <button
+                    onClick={handleLater}
+                    style={{
+                      padding: '6px 10px',
+                      backgroundColor: 'transparent',
+                      border: `1px solid ${FINCEPT.BORDER}`,
+                      color: FINCEPT.GRAY,
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      borderRadius: '2px',
+                      cursor: 'pointer',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      letterSpacing: '0.5px',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = FINCEPT.ORANGE;
+                      e.currentTarget.style.color = FINCEPT.WHITE;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = FINCEPT.BORDER;
+                      e.currentTarget.style.color = FINCEPT.GRAY;
+                    }}
+                  >
+                    LATER
+                  </button>
+                  <button
+                    onClick={downloadAndInstall}
+                    disabled={downloading}
+                    style={{
+                      padding: '6px 14px',
+                      backgroundColor: FINCEPT.ORANGE,
+                      color: FINCEPT.DARK_BG,
+                      border: 'none',
+                      borderRadius: '2px',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                      letterSpacing: '0.5px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <Download size={10} />
+                    UPDATE NOW
+                  </button>
+                </>
+              )}
+              {downloading && !updateReady && (
+                <button
+                  disabled
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: FINCEPT.MUTED,
+                    color: FINCEPT.DARK_BG,
+                    border: 'none',
+                    borderRadius: '2px',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'not-allowed',
+                    opacity: 0.7,
+                  }}
+                >
+                  <RefreshCw size={10} className="animate-spin" />
+                  {downloadProgress === 100 ? 'INSTALLING...' : 'DOWNLOADING...'}
+                </button>
+              )}
+            </div>
           </div>
+        </div>
+      )}
 
-          <DialogFooter>
-            {!downloading && !updateReady && (
-              <>
-                <Button variant="outline" onClick={handleLater}>
-                  Later
-                </Button>
-                <Button onClick={downloadAndInstall} disabled={downloading}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download & Install
-                </Button>
-              </>
-            )}
-            {downloading && (
-              <Button disabled>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Installing...
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Manual Check Button (can be placed in settings/menu) */}
-      <Button
-        variant="ghost"
-        size="sm"
+      {/* Manual Check Button */}
+      <button
         onClick={() => checkForUpdates(false)}
         disabled={checking || downloading}
-        className="gap-2"
+        style={{
+          padding: '6px 10px',
+          backgroundColor: 'transparent',
+          border: `1px solid ${FINCEPT.BORDER}`,
+          color: FINCEPT.GRAY,
+          fontSize: '9px',
+          fontWeight: 700,
+          borderRadius: '2px',
+          cursor: checking || downloading ? 'not-allowed' : 'pointer',
+          fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+          letterSpacing: '0.5px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          transition: 'all 0.2s',
+          opacity: checking || downloading ? 0.5 : 1,
+        }}
       >
         {checking ? (
           <>
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            Checking...
+            <RefreshCw size={10} className="animate-spin" />
+            CHECKING...
           </>
         ) : (
           <>
-            <Info className="h-4 w-4" />
-            Check for Updates
+            <Info size={10} />
+            CHECK FOR UPDATES
           </>
         )}
-      </Button>
+      </button>
 
-      {/* Success/Error Toast */}
+      {/* Toast notification */}
       {error && !showDialog && (
-        <div className="fixed bottom-4 right-4 z-50 max-w-md">
-          <Alert className={error.includes('latest version') ? 'border-green-500' : 'border-red-500'}>
-            {error.includes('latest version') ? (
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-            ) : (
-              <XCircle className="h-4 w-4" />
-            )}
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+        <div style={{
+          position: 'fixed',
+          bottom: '16px',
+          right: '16px',
+          zIndex: 9999,
+          maxWidth: '320px',
+          padding: '10px 12px',
+          backgroundColor: FINCEPT.PANEL_BG,
+          border: `1px solid ${error.includes('latest version') ? FINCEPT.GREEN + '40' : FINCEPT.RED + '40'}`,
+          borderRadius: '2px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+        }}>
+          {error.includes('latest version') ? (
+            <CheckCircle2 size={12} color={FINCEPT.GREEN} />
+          ) : (
+            <XCircle size={12} color={FINCEPT.RED} />
+          )}
+          <span style={{
+            fontSize: '10px',
+            color: error.includes('latest version') ? FINCEPT.GREEN : FINCEPT.RED,
+            fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+          }}>
+            {error}
+          </span>
         </div>
       )}
     </>
