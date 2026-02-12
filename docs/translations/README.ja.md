@@ -6,13 +6,13 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[英語](README.md)\|[スペイン語](docs/translations/README.es.md)\|[中文](docs/translations/README.zh-CN.md)\|[日本語](docs/translations/README.ja.md)\|[フランス語](docs/translations/README.fr.md)\|[ドイツ語](docs/translations/README.de.md)\|[韓国人](docs/translations/README.ko.md)\|[ヒンディー語](docs/translations/README.hi.md)
+[英語](README.md)\|[スペイン語](docs/translations/README.es.md)\|[中文](docs/translations/README.zh-CN.md)\|[日本語](docs/translations/README.ja.md)\|[フランス語](docs/translations/README.fr.md)\|[ドイツ語](docs/translations/README.de.md)\|[韓国語](docs/translations/README.ko.md)\|[ヒンディー語](docs/translations/README.hi.md)
 
 ### **あなたの思考だけが限界です。データはそうではありません。**
 
 CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた最先端の金融インテリジェンス プラットフォーム。
 
-[📥 ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 ドキュメント](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬不協和音](https://discord.gg/ae87a8ygbN)
+[📥 ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 ドキュメント](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬不協和音](https://discord.gg/ae87a8ygbN)•[🤝パートナー](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
@@ -24,15 +24,15 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 
 ## 最新リリースをダウンロード
 
-**バージョン:**`v3.2.1`
+**バージョン:**`v3.3.0`
 
 | プラットフォーム  | 建築            | ダウンロード                                                                                                                              |
 | --------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS** | アップルシリコン      | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-arm64.dmg)    |
-| **macOS** | インテル          | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-x64.dmg)      |
-| **Linux** | x64 (アプリイメージ) | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.AppImage) |
-| **Linux** | x64 (Debian)  | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.deb)      |
-| **窓**     | ふーん           | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Windows-x64.msi)    |
+| **macOS** | アップルシリコン      | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
+| **macOS** | インテル          | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
+| **Linux** | x64 (アプリイメージ) | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
+| **Linux** | x64 (Debian)  | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
+| **窓**     | ふーん           | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
 
 [すべてのリリースを表示](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -233,9 +233,22 @@ xattr -cr /Applications/FinceptTerminal.app
 
 **貢献する：**新しいデータコネクタ • AI エージェント • 分析モジュール • ドキュメント • 翻訳
 
-**プロジェクトは初めてですか?**まずは私たちのものから始めましょう[開発者向けウォークスルー](docs/DEVELOPER_WALKTHROUGH.md)コードベースの完全なガイドについては、こちらをご覧ください。
+[貢献ガイド](docs/CONTRIBUTING.md)•[バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
-[貢献ガイド](docs/CONTRIBUTING.md)•[開発者向けウォークスルー](docs/DEVELOPER_WALKTHROUGH.md)•[バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+* * *
+
+## 🎓 大学および教育者向け
+
+**プロレベルの財務分析を教室に導入しましょう。**
+
+-   **$799/月**20アカウントの場合
+-   Fincept データと API へのフルアクセス
+-   金融、経済、データ サイエンスのコースに最適
+-   CFA カリキュラム分析の組み込み
+
+**興味がある？**電子メール**[support@fincept.in](mailto:support@fincept.in)**あなたの機関名を付けてください。
+
+[大学ライセンスの詳細](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 * * *
 
@@ -245,24 +258,19 @@ xattr -cr /Applications/FinceptTerminal.app
 
 ### オープンソース (AGPL-3.0)
 
--   ✅ 個人、教育、非営利目的での使用は無料
--   ✅ ネットワークサービスとして配布または使用する場合、共有の変更が必要
--   ✅ ソースコードの完全な透明性
+-   個人、教育、非営利目的での使用は無料
+-   ネットワークサービスとして配布または使用する場合は、共有の変更が必要です
+-   ソースコードの完全な透明性
 
 ### 商用ライセンス
 
--   💼 オープンソースの変更を加えずにプロプライエタリ/SaaS で使用する場合に必要
--   📞連絡先:**[support@fincept.in](mailto:support@fincept.in)**
--   📄 詳細:[商用ライセンスガイド](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+-   ビジネスで使用する場合、または商業的に Fincept データ/API にアクセスする場合に必要
+-   接触：**[support@fincept.in](mailto:support@fincept.in)**
+-   詳細：[商用ライセンスガイド](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ### 商標
 
 「Fincept Terminal」および「Fincept」はFincept Corporationの商標です。
-見る[商標ガイドライン](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
-
-### 貢献者
-
-貢献すると、次のことに同意したものとみなされます[コントリビューターライセンス契約](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
 
 © 2025-2026 Fincept Corporation.無断転載を禁じます。
 
