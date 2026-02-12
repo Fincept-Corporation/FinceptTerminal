@@ -6,7 +6,7 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[英語](README.md)\|[スペイン語](docs/translations/README.es.md)\|[中文](docs/translations/README.zh-CN.md)\|[日本語](docs/translations/README.ja.md)\|[フランス語](docs/translations/README.fr.md)\|[ドイツ語](docs/translations/README.de.md)\|[韓国語](docs/translations/README.ko.md)\|[ヒンディー語](docs/translations/README.hi.md)
+[英語](README.md)\|[スペイン語](docs/translations/README.es.md)\|[中文](docs/translations/README.zh-CN.md)\|[日本語](docs/translations/README.ja.md)\|[フランス語](docs/translations/README.fr.md)\|[ドイツ語](docs/translations/README.de.md)\|[韓国人](docs/translations/README.ko.md)\|[ヒンディー語](docs/translations/README.hi.md)
 
 ### **あなたの思考だけが限界です。データはそうではありません。**
 
@@ -52,7 +52,7 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 | 🔗**クロスドメイン**  | サプライチェーン → ポートフォリオの統合 • 地政学 → 株式 • 海事 → マクロ • データを自分の方法で統合                          | [ワークフローシステム](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                           |
 | 🎨**ワークフロー**   | ビジュアルノードエディター • Pythonエージェント • MCPツール • コード不要の自動化                                   | [カスタムノード](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCPサーバー](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢**知能**       | 3D 海洋追跡 • 衛星監視 • 地政学的枠組み • 貿易ルート分析                                                  | [海事タブ](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                             |
-| 💰**価格設定**     | 無料およびオープンソース (AGPL-3.0) • 商用ライセンスが利用可能                                              | [フルリポジトリ](https://github.com/Fincept-Corporation/FinceptTerminal)•[商用ライセンス](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                          |
+| 💰**価格設定**     | 無料およびオープンソース (AGPL-3.0) • 商用ライセンスが利用可能                                              | [Full Repository](https://github.com/Fincept-Corporation/FinceptTerminal)•[商用ライセンス](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                  |
 
 * * *
 
@@ -165,19 +165,6 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 |                                             GDP、インフレ、金利、成長サイクル                                            |                                           財務諸表、DCF、アナリストのカバレッジ                                          |                                                 グローバルなリスク監視とシナリオ分析                                                |
 
 </div>
-
-* * *
-
-## 🔗 キラー機能: クロスドメイン インテリジェンス
-
-**各モジュールが分離されている従来のターミナルとは異なり、Fincept ターミナルではすべてのドメインにわたってデータを統合できます。**
-
-    Supply Chain Data → Portfolio Optimization
-    Shipping Volumes → GDP Forecasts → Equity Positions
-    Geopolitical Events → Currency Moves → Options Hedging
-    Maritime Intelligence → Commodity Prices → Macro Strategies
-
-**異種のデータソースを組み合わせて独自のインジケーターを構築します。あなたの競争力。**
 
 * * *
 

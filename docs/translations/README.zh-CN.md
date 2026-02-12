@@ -105,7 +105,7 @@
 
 **工作流程生成器**
 
--   ReactFlow 可视化编辑器
+-   ReactFlow visual editor
 -   100+ MCP 工具集成
 -   Python 代理编排
 
@@ -168,19 +168,6 @@
 
 * * *
 
-## 🔗 杀手级功能：跨域智能
-
-**与每个模块相互隔离的传统终端不同，Fincept Terminal 允许您跨所有域集成数据：**
-
-    Supply Chain Data → Portfolio Optimization
-    Shipping Volumes → GDP Forecasts → Equity Positions
-    Geopolitical Events → Currency Moves → Options Hedging
-    Maritime Intelligence → Commodity Prices → Macro Strategies
-
-**通过组合不同的数据源来构建您自己的专有指标。您的竞争优势。**
-
-* * *
-
 ## 📥 下载
 
 **vz. 0.11**| Windows • macOS • Linux
@@ -223,8 +210,7 @@ xattr -cr /Applications/FinceptTerminal.app
 
 ## 🛣️ 接下来是什么
 
-**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026：** Paper trading • Multi-portfolio management • Mobile app • Social trading
-**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
+**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
 
 * * *
 
@@ -267,7 +253,7 @@ xattr -cr /Applications/FinceptTerminal.app
 
 -   商业用途或商业访问 Fincept 数据/API 所需
 -   接触：**[support@fincept.in](mailto:support@fincept.in)**
--   细节：[Commercial License Guide](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+-   细节：[商业许可指南](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ### 商标
 
@@ -293,6 +279,6 @@ xattr -cr /Applications/FinceptTerminal.app
 
 [![Email](https://img.shields.io/badge/Email-support@fincept.in-blue)](mailto:support@fincept.in)
 
-⭐ **星星**• 🔄**分享**• 🤝**贡献**
+⭐**星星**• 🔄**分享**• 🤝**贡献**
 
 </div>

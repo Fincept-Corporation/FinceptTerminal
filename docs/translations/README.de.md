@@ -168,19 +168,6 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 * * *
 
-## 🔗 Das Killer-Feature: Cross-Domain Intelligence
-
-**Im Gegensatz zu herkömmlichen Terminals, bei denen jedes Modul isoliert ist, können Sie mit Fincept Terminal Daten über ALLE Domänen hinweg integrieren:**
-
-    Supply Chain Data → Portfolio Optimization
-    Shipping Volumes → GDP Forecasts → Equity Positions
-    Geopolitical Events → Currency Moves → Options Hedging
-    Maritime Intelligence → Commodity Prices → Macro Strategies
-
-**Erstellen Sie Ihre eigenen proprietären Indikatoren, indem Sie unterschiedliche Datenquellen kombinieren. Ihr Wettbewerbsvorteil.**
-
-* * *
-
 ## 📥 Herunterladen
 
 **vz. 0,11**| Windows • macOS • Linux
@@ -259,7 +246,7 @@ Wir gestalten die Zukunft der Finanzanalyse – gemeinsam.
 ### Open Source (AGPL-3.0)
 
 -   Kostenlos für den persönlichen, pädagogischen und nichtkommerziellen Gebrauch
--   Requires sharing modifications when distributed or used as network service
+-   Erfordert Freigabeänderungen, wenn es verteilt oder als Netzwerkdienst verwendet wird
 -   Volle Transparenz des Quellcodes
 
 ### Kommerzielle Lizenz

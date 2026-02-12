@@ -168,19 +168,6 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 * * *
 
-## 🔗 La característica principal: inteligencia entre dominios
-
-**A diferencia de los terminales tradicionales donde cada módulo está aislado, Fincept Terminal le permite integrar datos en TODOS los dominios:**
-
-    Supply Chain Data → Portfolio Optimization
-    Shipping Volumes → GDP Forecasts → Equity Positions
-    Geopolitical Events → Currency Moves → Options Hedging
-    Maritime Intelligence → Commodity Prices → Macro Strategies
-
-**Cree sus propios indicadores patentados combinando fuentes de datos dispares. Tu ventaja competitiva.**
-
-* * *
-
 ## 📥 Descargar
 
 **vz. 0,11**| Windows • Mac OS • Linux
@@ -254,7 +241,7 @@ Estamos construyendo juntos el futuro del análisis financiero.
 
 ## 📜 Licencia
 
-**Dual Licensed: AGPL-3.0 (Open Source) + Commercial**
+**Licencia dual: AGPL-3.0 (código abierto) + Comercial**
 
 ### Código abierto (AGPL-3.0)
 
