@@ -12,7 +12,7 @@
 
 Plataforma de inteligencia financiera de última generación con análisis de nivel CFA, automatización de IA y conectividad de datos ilimitada.
 
-[📥 Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 Documentos](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 Discusiones](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 Discordia](https://discord.gg/ae87a8ygbN)
+[📥 Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 Documentos](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 Discusiones](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 Discordia](https://discord.gg/ae87a8ygbN)•[🤝 Socio](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
@@ -24,15 +24,15 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## Descargar la última versión
 
-**Versión:**`v3.2.1`
+**Versión:**`v3.3.0`
 
 | Plataforma   | Arquitectura               | Descargar                                                                                                                              |
 | ------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **macos**    | Silicio de manzana         | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-arm64.dmg)    |
-| **macos**    | Intel                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-x64.dmg)      |
-| **linux**    | x64 (Imagen de aplicación) | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.AppImage) |
-| **linux**    | x64 (Debian)               | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.deb)      |
-| **ventanas** | hshch                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Windows-x64.msi)    |
+| **macos**    | Silicio de manzana         | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
+| **macos**    | Intel                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
+| **linux**    | x64 (Imagen de aplicación) | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
+| **linux**    | x64 (Debian)               | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
+| **ventanas** | hshch                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
 
 [Ver todos los lanzamientos](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -183,7 +183,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## 📥 Descargar
 
-**vz. 0,11**| Windows • MacOS • Linux
+**vz. 0,11**| Windows • Mac OS • Linux
 
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge)](https://github.com/Fincept-Corporation/FinceptTerminal/releases)[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20App-blue?style=for-the-badge&logo=microsoft)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
 
@@ -233,36 +233,44 @@ Estamos construyendo juntos el futuro del análisis financiero.
 
 **Contribuir:**Nuevos conectores de datos • Agentes de IA • Módulos de análisis • Documentación • Traducciones
 
-**¿Nuevo en el proyecto?**Comience con nuestro[Tutorial para desarrolladores](docs/DEVELOPER_WALKTHROUGH.md)para obtener una guía completa del código base.
+[Guía contribuyente](docs/CONTRIBUTING.md)•[Informar error](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[Solicitar función](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
-[Guía contribuyente](docs/CONTRIBUTING.md)•[Tutorial para desarrolladores](docs/DEVELOPER_WALKTHROUGH.md)•[Informar error](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[Request Feature](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+* * *
+
+## 🎓 Para universidades y educadores
+
+**Lleve análisis financieros de nivel profesional a su salón de clases.**
+
+-   **$799/mes**por 20 cuentas
+-   Acceso completo a los datos y API de Fincept
+-   Perfecto para cursos de finanzas, economía y ciencia de datos
+-   Análisis curricular CFA integrado
+
+**¿Interesado?**Correo electrónico**[support@fincept.in](mailto:support@fincept.in)**con el nombre de su institución.
+
+[Detalles de la licencia universitaria](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 * * *
 
 ## 📜 Licencia
 
-**Licencia dual: AGPL-3.0 (código abierto) + Comercial**
+**Dual Licensed: AGPL-3.0 (Open Source) + Commercial**
 
 ### Código abierto (AGPL-3.0)
 
--   ✅ Gratis para uso personal, educativo y no comercial
--   ✅ Requiere modificaciones para compartir cuando se distribuye o se utiliza como servicio de red
--   ✅ Transparencia total del código fuente
+-   Gratis para uso personal, educativo y no comercial
+-   Requiere modificaciones para compartir cuando se distribuye o se utiliza como servicio de red
+-   Transparencia total del código fuente
 
 ### Licencia Comercial
 
--   💼 Requerido para uso propietario/SaaS sin modificaciones de código abierto
--   📞 Contacto:**[support@fincept.in](mailto:support@fincept.in)**
--   📄 Detalles:[Guía de licencia comercial](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+-   Requerido para uso comercial o para acceder comercialmente a Fincept Data/API
+-   Contacto:**[support@fincept.in](mailto:support@fincept.in)**
+-   Detalles:[Guía de licencia comercial](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ### Marcas registradas
 
 "Fincept Terminal" y "Fincept" son marcas comerciales de Fincept Corporation.
-Ver[Directrices de marcas comerciales](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
-
-### Colaboradores
-
-Al contribuir, aceptas nuestra[Acuerdo de licencia de colaborador](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
 
 © 2025-2026 Corporación Fincept. Reservados todos los derechos.
 

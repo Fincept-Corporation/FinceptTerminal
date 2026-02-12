@@ -12,7 +12,7 @@
 
 最先进的金融情报平台，具有 CFA 级分析、人工智能自动化和无限数据连接。
 
-[📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 文档](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 不和谐](https://discord.gg/ae87a8ygbN)
+[📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 文档](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 不和谐](https://discord.gg/ae87a8ygbN)•[🤝 合作伙伴](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
@@ -24,15 +24,15 @@
 
 ## 下载最新版本
 
-**版本：**`v3.2.1`
+**版本：**`v3.3.0`
 
 | 平台        | 建筑学         | 下载                                                                                                                              |
 | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS** | 苹果硅         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-arm64.dmg)    |
-| **macOS** | 英特尔         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-x64.dmg)      |
-| **Linux** | x64（应用程序图像） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.AppImage) |
-| **Linux** | x64（Debian） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.deb)      |
-| **视窗**    | 哈什奇         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Windows-x64.msi)    |
+| **macOS** | 苹果硅         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
+| **macOS** | 英特尔         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
+| **Linux** | x64（应用程序图像） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
+| **Linux** | x64（Debian） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
+| **视窗**    | 哈什奇         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
 
 [查看所有版本](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -223,7 +223,8 @@ xattr -cr /Applications/FinceptTerminal.app
 
 ## 🛣️ 接下来是什么
 
-**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
+**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026：** Paper trading • Multi-portfolio management • Mobile app • Social trading
+**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
 
 * * *
 
@@ -233,9 +234,22 @@ xattr -cr /Applications/FinceptTerminal.app
 
 **贡献：**新数据连接器 • AI 代理 • 分析模块 • 文档 • 翻译
 
-**刚接触该项目？**从我们的开始[开发者演练](docs/DEVELOPER_WALKTHROUGH.md)获取代码库的完整指南。
+[贡献指南](docs/CONTRIBUTING.md)•[报告错误](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[请求功能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
-[贡献指南](docs/CONTRIBUTING.md)•[开发者演练](docs/DEVELOPER_WALKTHROUGH.md)•[报告错误](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[请求功能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+* * *
+
+## 🎓 对于大学和教育工作者
+
+**将专业级财务分析带入您的课堂。**
+
+-   **$799/月**20 个帐户
+-   完全访问 Fincept 数据和 API
+-   非常适合金融、经济学和数据科学课程
+-   内置 CFA 课程分析
+
+**感兴趣的？**电子邮件**[support@fincept.in](mailto:support@fincept.in)**与您的机构名称。
+
+[大学许可详情](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 * * *
 
@@ -245,24 +259,19 @@ xattr -cr /Applications/FinceptTerminal.app
 
 ### 开源 (AGPL-3.0)
 
--   ✅ 免费供个人、教育和非商业用途
--   ✅ 分发或用作网络服务时需要共享修改
--   ✅ 源代码完全透明
+-   免费供个人、教育和非商业用途
+-   分发或用作网络服务时需要共享修改
+-   源代码完全透明
 
 ### 商业许可
 
--   💼 专有/SaaS 使用所需，无需开源修改
--   📞 联系方式：**[support@fincept.in](mailto:support@fincept.in)**
--   📄 详情：[商业许可指南](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+-   商业用途或商业访问 Fincept 数据/API 所需
+-   接触：**[support@fincept.in](mailto:support@fincept.in)**
+-   细节：[Commercial License Guide](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ### 商标
 
 “Fincept Terminal”和“Fincept”是Fincept Corporation 的商标。
-看[商标指南](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
-
-### 贡献者
-
-通过贡献，您同意我们的[贡献者许可协议](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
 
 © 2025-2026 Fincept 公司。版权所有。
 
@@ -284,6 +293,6 @@ xattr -cr /Applications/FinceptTerminal.app
 
 [![Email](https://img.shields.io/badge/Email-support@fincept.in-blue)](mailto:support@fincept.in)
 
-⭐**星星**• 🔄**分享**• 🤝**贡献**
+⭐ **星星**• 🔄**分享**• 🤝**贡献**
 
 </div>

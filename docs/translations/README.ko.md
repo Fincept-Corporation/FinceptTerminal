@@ -12,7 +12,7 @@
 
 CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
 
-[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 불화](https://discord.gg/ae87a8ygbN)
+[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 불화](https://discord.gg/ae87a8ygbN)•[🤝 파트너](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
@@ -24,15 +24,15 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 
 ## 최신 릴리스 다운로드
 
-**버전:**`v3.2.1`
+**버전:**`v3.3.0`
 
 | 플랫폼       | 건축학       | 다운로드                                                                                                                              |
 | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS** | 애플실리콘     | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-arm64.dmg)    |
-| **macOS** | 인텔        | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-x64.dmg)      |
-| **리눅스**   | x64(앱이미지) | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.AppImage) |
-| **리눅스**   | x64(데비안)  | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.deb)      |
-| **윈도우**   | 쉿         | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Windows-x64.msi)    |
+| **macOS** | 애플실리콘     | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
+| **macOS** | 인텔        | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
+| **리눅스**   | x64(앱이미지) | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
+| **리눅스**   | x64(데비안)  | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
+| **윈도우**   | 쉿         | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
 
 [모든 릴리스 보기](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -50,7 +50,7 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 | 🤖**AI 에이전트** | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham) • 헤지펀드 전략(Bridgewater, Citadel, Renaissance) • 현지 LLM 지원 | [AI 에이전트](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                            |
 | 🌐**데이터 액세스** | 100개 이상의 커넥터(DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • 맞춤형 API 매퍼 • 데이터 제한 없음               | [데이터 어댑터](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                     |
 | 🔗**교차 도메인**  | 공급망 통합 → 포트폴리오 • 지정학 → 형평성 • 해양 → 거시적 • 귀하의 데이터를 귀하의 방식으로                                         | [워크플로우 시스템](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                             |
-| 🎨**워크플로우**   | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     | [사용자 정의 노드](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP 서버](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
+| 🎨**워크플로**    | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     | [사용자 정의 노드](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP 서버](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢**지능**      | 3D 해상 추적 • 위성 모니터링 • 지정학적 프레임워크 • 무역 경로 분석                                                        | [해양 탭](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                              |
 | 💰**가격**      | 무료 및 오픈 소스(AGPL-3.0) • 상용 라이센스 사용 가능                                                              | [전체 저장소](https://github.com/Fincept-Corporation/FinceptTerminal)•[상업용 라이센스](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                           |
 
@@ -233,9 +233,22 @@ xattr -cr /Applications/FinceptTerminal.app
 
 **기여하다:**새로운 데이터 커넥터 • AI 에이전트 • 분석 모듈 • 문서 • 번역
 
-**프로젝트를 처음 접하시나요?**우리의 것부터 시작하세요[개발자 연습](docs/DEVELOPER_WALKTHROUGH.md)코드베이스에 대한 완전한 가이드를 보려면
+[기여 가이드](docs/CONTRIBUTING.md)•[버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
-[기여 가이드](docs/CONTRIBUTING.md)•[개발자 연습](docs/DEVELOPER_WALKTHROUGH.md)•[버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+* * *
+
+## 🎓 대학 및 교육자용
+
+**전문가 수준의 재무 분석을 교실에 도입하세요.**
+
+-   **$799/월**20개 계정용
+-   Fincept 데이터 및 API에 대한 전체 액세스
+-   금융, 경제, 데이터 과학 과정에 적합
+-   CFA 커리큘럼 분석 내장
+
+**관심 있는?**이메일**[support@fincept.in](mailto:support@fincept.in)**귀하의 기관 이름으로.
+
+[대학 라이센스 세부정보](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 * * *
 
@@ -245,24 +258,19 @@ xattr -cr /Applications/FinceptTerminal.app
 
 ### 오픈 소스(AGPL-3.0)
 
--   ✅ 개인, 교육 및 비상업적 용도로는 무료입니다.
--   ✅ 네트워크 서비스로 배포 또는 사용 시 공유 수정 필요
--   ✅ 전체 소스 코드 투명성
+-   개인적, 교육적, 비상업적 용도로는 무료입니다.
+-   네트워크 서비스로 배포 또는 사용 시 공유 수정 필요
+-   전체 소스 코드 투명성
 
 ### 상업용 라이센스
 
--   💼 오픈 소스 수정 없이 독점/SaaS 사용에 필요
--   📞 연락처:**[support@fincept.in](mailto:support@fincept.in)**
--   📄 세부정보:[상용 라이센스 가이드](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+-   업무용으로 사용하거나 Fincept 데이터/API에 상업적으로 액세스하는 데 필요합니다.
+-   연락하다:**[support@fincept.in](mailto:support@fincept.in)**
+-   세부:[상용 라이센스 가이드](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ### 상표
 
 "Fincept Terminal" 및 "Fincept"는 Fincept Corporation의 상표입니다.
-보다[상표 지침](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
-
-### 기여자
-
-기여함으로써 귀하는 당사에 동의하게 됩니다.[기여자 라이센스 계약](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
 
 © 2025-2026 핀셉트 코퍼레이션. 모든 권리 보유.
 

@@ -12,7 +12,7 @@
 
 Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Automatisierung und unbegrenzter Datenkonnektivität.
 
-[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 Zwietracht](https://discord.gg/ae87a8ygbN)
+[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 Zwietracht](https://discord.gg/ae87a8ygbN)•[🤝 Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
@@ -24,15 +24,15 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 ## Laden Sie die neueste Version herunter
 
-**Version:**`v3.2.1`
+**Version:**`v3.3.0`
 
 | Plattform   | Architektur    | Herunterladen                                                                                                                              |
 | ----------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **macOS**   | Apple Silicon  | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-arm64.dmg)    |
-| **macOS**   | Intel          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-macOS-x64.dmg)      |
-| **Linux**   | x64 (AppImage) | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.AppImage) |
-| **Linux**   | x64 (Debian)   | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Linux-x64.deb)      |
-| **Windows** | hshch          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.2.1/FinceptTerminal-v3.2.1-Windows-x64.msi)    |
+| **macOS**   | Apple Silicon  | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-arm64.dmg)    |
+| **macOS**   | Intel          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-macOS-x64.dmg)      |
+| **Linux**   | x64 (AppImage) | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.AppImage) |
+| **Linux**   | x64 (Debian)   | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Linux-x64.deb)      |
+| **Windows** | hshch          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.3.0/FinceptTerminal-v3.3.0-Windows-x64.msi)    |
 
 [Alle Veröffentlichungen anzeigen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -233,9 +233,22 @@ Wir gestalten die Zukunft der Finanzanalyse – gemeinsam.
 
 **Beitragen:**Neue Datenkonnektoren • KI-Agenten • Analysemodule • Dokumentation • Übersetzungen
 
-**Neu im Projekt?**Beginnen Sie mit unserem[Komplettlösung für Entwickler](docs/DEVELOPER_WALKTHROUGH.md)für eine vollständige Anleitung zur Codebasis.
+[Mitwirkender Leitfaden](docs/CONTRIBUTING.md)•[Fehler melden](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[Anforderungsfunktion](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
-[Mitwirkender Leitfaden](docs/CONTRIBUTING.md)•[Komplettlösung für Entwickler](docs/DEVELOPER_WALKTHROUGH.md)•[Fehler melden](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[Anforderungsfunktion](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+* * *
+
+## 🎓 Für Universitäten und Pädagogen
+
+**Bringen Sie professionelle Finanzanalysen in Ihren Unterricht.**
+
+-   **799 $/Monat**für 20 Konten
+-   Voller Zugriff auf Fincept-Daten und APIs
+-   Perfekt für Finanz-, Wirtschafts- und Datenwissenschaftskurse
+-   Integrierte CFA-Lehrplananalyse
+
+**Interessiert?**E-Mail**[support@fincept.in](mailto:support@fincept.in)**mit dem Namen Ihrer Institution.
+
+[Details zur Universitätslizenzierung](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 * * *
 
@@ -245,24 +258,19 @@ Wir gestalten die Zukunft der Finanzanalyse – gemeinsam.
 
 ### Open Source (AGPL-3.0)
 
--   ✅ Kostenlos für den persönlichen, pädagogischen und nichtkommerziellen Gebrauch
--   ✅ Erfordert Freigabeänderungen, wenn es verteilt oder als Netzwerkdienst verwendet wird
--   ✅ Volle Transparenz des Quellcodes
+-   Kostenlos für den persönlichen, pädagogischen und nichtkommerziellen Gebrauch
+-   Requires sharing modifications when distributed or used as network service
+-   Volle Transparenz des Quellcodes
 
 ### Kommerzielle Lizenz
 
--   💼 Erforderlich für proprietäre/SaaS-Nutzung ohne Open-Source-Änderungen
--   📞 Kontakt:**[support@fincept.in](mailto:support@fincept.in)**
--   📄 Einzelheiten:[Leitfaden für kommerzielle Lizenzen](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+-   Erforderlich für die geschäftliche Nutzung oder den kommerziellen Zugriff auf Fincept-Daten/APIs
+-   Kontakt:**[support@fincept.in](mailto:support@fincept.in)**
+-   Einzelheiten:[Leitfaden für kommerzielle Lizenzen](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ### Marken
 
 „Fincept Terminal“ und „Fincept“ sind Marken der Fincept Corporation.
-Sehen[Markenrichtlinien](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
-
-### Mitwirkende
-
-Indem Sie einen Beitrag leisten, stimmen Sie unserem zu[Lizenzvereinbarung für Mitwirkende](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
 
 © 2025-2026 Fincept Corporation. Alle Rechte vorbehalten.
 
