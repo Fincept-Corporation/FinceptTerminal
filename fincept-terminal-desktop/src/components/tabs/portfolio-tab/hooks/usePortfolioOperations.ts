@@ -140,6 +140,24 @@ export const usePortfolioOperations = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Update transaction
+  const updateTransaction = async (
+    transactionId: string,
+    quantity: number,
+    price: number,
+    transactionDate: string,
+    notes?: string
+  ) => {
+    await portfolioService.updateTransaction(transactionId, quantity, price, transactionDate, notes);
+    await refreshPortfolioData();
+  };
+
+  // Delete transaction
+  const deleteTransaction = async (transactionId: string) => {
+    await portfolioService.deleteTransaction(transactionId);
+    await refreshPortfolioData();
+  };
+
   // ==================== EFFECTS (use functions declared above) ====================
 
   // Initialize service and load portfolios
@@ -240,6 +258,8 @@ export const usePortfolioOperations = () => {
     sellAsset,
     deletePortfolio,
     refreshPortfolioData,
-    exportToCSV
+    exportToCSV,
+    updateTransaction,
+    deleteTransaction
   };
 };

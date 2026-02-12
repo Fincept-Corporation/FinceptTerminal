@@ -125,3 +125,33 @@ pub async fn portfolio_get_transactions(
 ) -> Result<Vec<Value>, String> {
     operations::get_portfolio_transactions(&portfolio_id, limit).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn portfolio_update_transaction(
+    transaction_id: String,
+    quantity: f64,
+    price: f64,
+    transaction_date: String,
+    notes: Option<String>,
+) -> Result<(), String> {
+    operations::update_portfolio_transaction(
+        &transaction_id,
+        quantity,
+        price,
+        &transaction_date,
+        notes.as_deref(),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn portfolio_delete_transaction(transaction_id: String) -> Result<(), String> {
+    operations::delete_portfolio_transaction(&transaction_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn portfolio_get_transaction_by_id(
+    transaction_id: String,
+) -> Result<Option<Value>, String> {
+    operations::get_portfolio_transaction_by_id(&transaction_id).map_err(|e| e.to_string())
+}

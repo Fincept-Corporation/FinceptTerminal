@@ -81,7 +81,9 @@ const PortfolioTab: React.FC = () => {
     sellAsset,
     deletePortfolio,
     refreshPortfolioData,
-    exportToCSV
+    exportToCSV,
+    updateTransaction,
+    deleteTransaction
   } = usePortfolioOperations();
 
   // Workspace tab state
@@ -598,7 +600,7 @@ const PortfolioTab: React.FC = () => {
           ) : (
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {activeSubTab === 'positions' && <div id="positions-view" style={{ height: '100%' }}><PositionsView portfolioSummary={portfolioSummary} /></div>}
-              {activeSubTab === 'history' && <div id="history-view" style={{ height: '100%' }}><HistoryView transactions={transactions} currency={currency} /></div>}
+              {activeSubTab === 'history' && <div id="history-view" style={{ height: '100%' }}><HistoryView transactions={transactions} currency={currency} onUpdateTransaction={updateTransaction} onDeleteTransaction={deleteTransaction} /></div>}
               {activeSubTab === 'analytics' && <div id="analytics-view" style={{ height: '100%' }}><AnalyticsView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'sectors' && <div id="sectors-view" style={{ height: '100%' }}><SectorsView portfolioSummary={portfolioSummary} /></div>}
               {activeSubTab === 'performance' && <div id="performance-view" style={{ height: '100%' }}><PerformanceView portfolioSummary={portfolioSummary} /></div>}

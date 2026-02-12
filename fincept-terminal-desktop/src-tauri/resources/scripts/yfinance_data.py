@@ -77,6 +77,59 @@ def get_historical(symbol, start_date, end_date, interval='1d'):
     except Exception as e:
         return {"error": str(e), "symbol": symbol}
 
+def get_historical_price(symbol, target_date):
+    """Fetch closing price for a specific date
+
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL')
+        target_date: Target date (YYYY-MM-DD)
+
+    Returns:
+        dict with price info or error
+    """
+    try:
+        from datetime import datetime, timedelta
+
+        # Parse target date
+        target = datetime.strptime(target_date, '%Y-%m-%d')
+
+        # Fetch a range around the target date (to handle weekends/holidays)
+        start = target - timedelta(days=5)
+        end = target + timedelta(days=1)
+
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'), interval='1d')
+
+        if hist.empty:
+            return {"found": False, "error": "No data available for this date range", "symbol": symbol}
+
+        # Find the closest date <= target_date
+        target_ts = target.replace(hour=23, minute=59, second=59)
+        closest_date = None
+        closest_price = None
+
+        for index, row in hist.iterrows():
+            idx_date = index.to_pydatetime().replace(tzinfo=None)
+            if idx_date.date() <= target.date():
+                closest_date = idx_date
+                closest_price = round(float(row['Close']), 2)
+
+        if closest_price is None:
+            # If no date before or on target, take the first available
+            first_row = hist.iloc[0]
+            closest_date = hist.index[0].to_pydatetime()
+            closest_price = round(float(first_row['Close']), 2)
+
+        return {
+            "found": True,
+            "symbol": symbol,
+            "price": closest_price,
+            "date": closest_date.strftime('%Y-%m-%d'),
+            "requested_date": target_date
+        }
+    except Exception as e:
+        return {"found": False, "error": str(e), "symbol": symbol}
+
 def get_info(symbol):
     """Fetch company info for a symbol"""
     try:
@@ -541,6 +594,15 @@ def main(args=None):
         else:
             symbol = args[1]
             result = resolve_symbol(symbol)
+
+    elif command == "historical_price":
+        # Get closing price for a specific date
+        if len(args) < 3:
+            result = {"error": "Usage: python yfinance_data.py historical_price <symbol> <date>"}
+        else:
+            symbol = args[1]
+            target_date = args[2]  # Format: YYYY-MM-DD
+            result = get_historical_price(symbol, target_date)
 
     else:
         result = {"error": f"Unknown command: {command}"}

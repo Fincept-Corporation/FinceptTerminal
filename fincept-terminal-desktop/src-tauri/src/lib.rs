@@ -1429,6 +1429,9 @@ pub fn run() {
             commands::portfolio_management::portfolio_get_assets,
             commands::portfolio_management::portfolio_update_asset_symbol,
             commands::portfolio_management::portfolio_get_transactions,
+            commands::portfolio_management::portfolio_update_transaction,
+            commands::portfolio_management::portfolio_delete_transaction,
+            commands::portfolio_management::portfolio_get_transaction_by_id,
             // Custom Index Commands (Aggregate Index Feature)
             commands::custom_index::custom_index_create,
             commands::custom_index::custom_index_get_all,

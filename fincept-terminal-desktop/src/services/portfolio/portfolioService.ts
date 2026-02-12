@@ -264,6 +264,34 @@ class PortfolioService {
     return allTransactions.filter(t => t.symbol === symbol.toUpperCase());
   }
 
+  async updateTransaction(
+    transactionId: string,
+    quantity: number,
+    price: number,
+    transactionDate: string,
+    notes?: string
+  ): Promise<void> {
+    portfolioLogger.info(`Updating transaction: ${transactionId}`);
+    await invoke('portfolio_update_transaction', {
+      transactionId,
+      quantity,
+      price,
+      transactionDate,
+      notes,
+    });
+  }
+
+  async deleteTransaction(transactionId: string): Promise<void> {
+    portfolioLogger.info(`Deleting transaction: ${transactionId}`);
+    await invoke('portfolio_delete_transaction', { transactionId });
+  }
+
+  async getTransactionById(transactionId: string): Promise<Transaction | null> {
+    portfolioLogger.info(`Fetching transaction: ${transactionId}`);
+    const transaction = await invoke<Transaction | null>('portfolio_get_transaction_by_id', { transactionId });
+    return transaction;
+  }
+
   async getPortfolioSummary(portfolioId: string): Promise<PortfolioSummary> {
     portfolioLogger.info(`Calculating portfolio summary: ${portfolioId}`);
 

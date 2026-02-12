@@ -1,4 +1,4 @@
-# Commercial Licensing
+# Commercial & Educational Licensing
 
 ## Overview
 

@@ -891,6 +891,68 @@ pub fn get_portfolio_transactions(portfolio_id: &str, limit: Option<i32>) -> Res
     Ok(transactions)
 }
 
+pub fn update_portfolio_transaction(
+    transaction_id: &str,
+    quantity: f64,
+    price: f64,
+    transaction_date: &str,
+    notes: Option<&str>,
+) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let total_value = quantity * price;
+
+    conn.execute(
+        "UPDATE portfolio_transactions
+         SET quantity = ?1, price = ?2, total_value = ?3, transaction_date = ?4, notes = ?5
+         WHERE id = ?6",
+        params![quantity, price, total_value, transaction_date, notes, transaction_id],
+    )?;
+
+    Ok(())
+}
+
+pub fn delete_portfolio_transaction(transaction_id: &str) -> Result<()> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    conn.execute(
+        "DELETE FROM portfolio_transactions WHERE id = ?1",
+        params![transaction_id],
+    )?;
+
+    Ok(())
+}
+
+pub fn get_portfolio_transaction_by_id(transaction_id: &str) -> Result<Option<serde_json::Value>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let result = conn
+        .query_row(
+            "SELECT id, portfolio_id, symbol, transaction_type, quantity, price, total_value, transaction_date, notes
+             FROM portfolio_transactions WHERE id = ?1",
+            params![transaction_id],
+            |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, String>(0)?,
+                    "portfolio_id": row.get::<_, String>(1)?,
+                    "symbol": row.get::<_, String>(2)?,
+                    "transaction_type": row.get::<_, String>(3)?,
+                    "quantity": row.get::<_, f64>(4)?,
+                    "price": row.get::<_, f64>(5)?,
+                    "total_value": row.get::<_, f64>(6)?,
+                    "transaction_date": row.get::<_, String>(7)?,
+                    "notes": row.get::<_, Option<String>>(8)?
+                }))
+            },
+        )
+        .optional()?;
+
+    Ok(result)
+}
+
 // ============================================================================
 // Custom Index Operations (Aggregate Index Feature)
 // ============================================================================

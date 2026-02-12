@@ -18,7 +18,7 @@
 
 State-of-the-art financial intelligence platform with CFA-level analytics, AI automation, and unlimited data connectivity.
 
-[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) • [📚 Docs](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs) • [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) • [💬 Discord](https://discord.gg/ae87a8ygbN)
+[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) • [📚 Docs](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs) • [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) • [💬 Discord](https://discord.gg/ae87a8ygbN) • [🤝 Partner](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png)
 
@@ -229,9 +229,22 @@ We're building the future of financial analysis—together.
 
 **Contribute:** New data connectors • AI agents • Analytics modules • Documentation • Translations
 
-**New to the project?** Start with our [Developer Walkthrough](docs/DEVELOPER_WALKTHROUGH.md) for a complete guide to the codebase.
+[Contributing Guide](docs/CONTRIBUTING.md) • [Report Bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues) • [Request Feature](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
-[Contributing Guide](docs/CONTRIBUTING.md) • [Developer Walkthrough](docs/DEVELOPER_WALKTHROUGH.md) • [Report Bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues) • [Request Feature](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+---
+
+## 🎓 For Universities & Educators
+
+**Bring professional-grade financial analytics to your classroom.**
+
+- **$799/month** for 20 accounts
+- Full access to Fincept Data & APIs
+- Perfect for finance, economics, and data science courses
+- CFA curriculum analytics built-in
+
+**Interested?** Email **support@fincept.in** with your institution name.
+
+[University Licensing Details](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ---
 
@@ -240,21 +253,17 @@ We're building the future of financial analysis—together.
 **Dual Licensed: AGPL-3.0 (Open Source) + Commercial**
 
 ### Open Source (AGPL-3.0)
-- ✅ Free for personal, educational, and non-commercial use
-- ✅ Requires sharing modifications when distributed or used as network service
-- ✅ Full source code transparency
+- Free for personal, educational, and non-commercial use
+- Requires sharing modifications when distributed or used as network service
+- Full source code transparency
 
 ### Commercial License
-- 💼 Required for proprietary/SaaS use without open-sourcing modifications
-- 📞 Contact: **support@fincept.in**
-- 📄 Details: [Commercial License Guide](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+- Required for business use or to access Fincept Data/APIs commercially
+- Contact: **support@fincept.in**
+- Details: [Commercial License Guide](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 
 ### Trademarks
 "Fincept Terminal" and "Fincept" are trademarks of Fincept Corporation.
-See [Trademark Guidelines](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
-
-### Contributors
-By contributing, you agree to our [Contributor License Agreement](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
 
 © 2025-2026 Fincept Corporation. All rights reserved.
 

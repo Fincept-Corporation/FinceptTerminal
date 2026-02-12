@@ -1,17 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { Transaction } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatNumber, formatDateTime } from './utils';
+import { Edit2, Trash2 } from 'lucide-react';
+import EditTransactionModal from '../modals/EditTransactionModal';
 
 interface HistoryViewProps {
   transactions: Transaction[];
   currency: string;
+  onUpdateTransaction?: (transactionId: string, quantity: number, price: number, transactionDate: string, notes?: string) => void;
+  onDeleteTransaction?: (transactionId: string) => void;
 }
 
-const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => {
+const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency, onUpdateTransaction, onDeleteTransaction }) => {
   const { t } = useTranslation('portfolio');
   const { colors, fontSize, fontFamily } = useTerminalTheme();
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   return (
     <div style={{
@@ -57,7 +62,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
           {/* Table Header */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1.5fr 1fr 0.8fr 1fr 1fr 1fr 2fr',
+            gridTemplateColumns: '1.5fr 1fr 0.8fr 1fr 1fr 1fr 1.5fr 0.5fr',
             gap: '8px',
             padding: '8px 12px',
             backgroundColor: 'var(--ft-color-header, #1A1A1A)',
@@ -76,6 +81,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
             <div style={{ color: colors.primary, textAlign: 'right' }}>{t('history.price', 'PRICE')}</div>
             <div style={{ color: colors.primary, textAlign: 'right' }}>{t('history.total', 'TOTAL')}</div>
             <div style={{ color: colors.primary }}>{t('history.notes', 'NOTES')}</div>
+            <div style={{ color: colors.primary, textAlign: 'center' }}>{t('history.actions', 'ACTIONS')}</div>
           </div>
 
           {/* Transaction Rows */}
@@ -84,7 +90,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
               key={txn.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1.5fr 1fr 0.8fr 1fr 1fr 1fr 2fr',
+                gridTemplateColumns: '1.5fr 1fr 0.8fr 1fr 1fr 1fr 1.5fr 0.5fr',
                 gap: '8px',
                 padding: '8px 12px',
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
@@ -120,11 +126,78 @@ const HistoryView: React.FC<HistoryViewProps> = ({ transactions, currency }) => 
               <div style={{ color: 'var(--ft-color-warning, #FFD700)', textAlign: 'right', fontWeight: 600 }}>
                 {formatCurrency(txn.total_value, currency)}
               </div>
-              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>{txn.notes || '-'}</div>
+              <div style={{ color: colors.textMuted, fontSize: fontSize.tiny, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{txn.notes || '-'}</div>
+              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                {onUpdateTransaction && (
+                  <button
+                    onClick={() => setEditingTransaction(txn)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: colors.textMuted,
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = colors.primary; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; }}
+                    title={t('history.edit', 'Edit transaction')}
+                  >
+                    <Edit2 size={12} />
+                  </button>
+                )}
+                {onDeleteTransaction && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm(t('history.confirmDelete', 'Are you sure you want to delete this transaction?'))) {
+                        onDeleteTransaction(txn.id);
+                      }
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: colors.textMuted,
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = colors.alert; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; }}
+                    title={t('history.delete', 'Delete transaction')}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Edit Transaction Modal */}
+      <EditTransactionModal
+        show={!!editingTransaction}
+        transaction={editingTransaction}
+        onClose={() => setEditingTransaction(null)}
+        onSave={(transactionId, quantity, price, transactionDate, notes) => {
+          if (onUpdateTransaction) {
+            onUpdateTransaction(transactionId, quantity, price, transactionDate, notes);
+          }
+          setEditingTransaction(null);
+        }}
+        onDelete={(transactionId) => {
+          if (onDeleteTransaction) {
+            onDeleteTransaction(transactionId);
+          }
+          setEditingTransaction(null);
+        }}
+      />
     </div>
   );
 };
