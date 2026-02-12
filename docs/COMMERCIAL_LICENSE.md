@@ -2,83 +2,37 @@
 
 ## Overview
 
-Fincept Terminal is dual-licensed:
-- **AGPL-3.0** - Free for personal and educational use
-- **Commercial License** - Required for business/commercial use
+Fincept Terminal is dual-licensed under **AGPL-3.0** (free for personal/educational use) and **Commercial License** (required for business use).
 
-**Commercial licensing is required to access Fincept Data Sources and APIs for business use.**
+Commercial licensing is required to access Fincept Data Sources and APIs for business use.
 
 ---
 
 ## Do I Need a Commercial License?
 
-### Free (No License Needed)
+**Free (No License Needed):** Personal use & learning, Individual students, Open source contributions, Using your own data sources
 
-| Use Case | Cost |
-|----------|------|
-| Personal use & learning | Free |
-| Individual students | Free |
-| Open source contributions | Free |
-| Using your own data sources | Free |
-
-### Commercial License Required
-
-| Use Case | License |
-|----------|---------|
-| Any business use | Commercial |
-| Startups (even $0 revenue) | Commercial |
-| Internal company use | Commercial |
-| Using Fincept Data/APIs commercially | Commercial |
-| SaaS / Cloud platforms | Commercial |
-| White-label / Reselling | Commercial |
+**Commercial License Required:** Any business use, Startups (even $0 revenue), Internal company use, Using Fincept Data/APIs commercially, SaaS/Cloud platforms, White-label/Reselling
 
 ---
 
 ## Pricing
 
-### Commercial License
+**Commercial License - $10,200/year**
+- Fincept Data & API Access (Full access)
+- 65,000 credits/month (resets monthly)
+- Additional credits available for purchase
 
-**$10,200 / year**
+**Technical Support (Optional) - $149/month**
+- Priority support, Direct technical assistance, Faster response times
 
-| Included | Details |
-|----------|---------|
-| Fincept Data & API Access | Full access |
-| Monthly Credits | 80,000 credits/month |
-| Credit Reset | Monthly |
-| Additional Credits | Available for purchase |
-| License Type | Annual |
+**University & Academic - $799/month**
+- 20 accounts for teaching & research
+- Fincept Data Access included
+- For accredited educational institutions only
 
-### Technical Support (Optional)
-
-**$149 / month**
-
-- Priority support
-- Direct technical assistance
-- Faster response times
-
-### Custom Enterprise
-
-**Contact for pricing**
-
-- Tailored to your requirements
-- Custom integrations
-- Higher credit limits
-- Dedicated support
-- Custom SLAs
-
----
-
-## University & Academic
-
-**$799 / month**
-
-| Included | Details |
-|----------|---------|
-| Accounts | 20 accounts |
-| Use | Teaching & research |
-| Fincept Data Access | Included |
-
-*For accredited educational institutions only.*
+**Custom Enterprise - Contact for pricing**
+- Tailored requirements, Custom integrations, Higher credit limits, Dedicated support, Custom SLAs
 
 ---
 
@@ -86,54 +40,31 @@ Fincept Terminal is dual-licensed:
 
 Credits are used for Fincept Data Sources and API calls.
 
-| Plan | Monthly Credits |
-|------|-----------------|
-| Commercial | 80,000 |
-| University | Included in plan |
-| Custom | Based on agreement |
+- **Commercial:** 65,000/month
+- **University:** Included in plan
+- **Custom:** Based on agreement
 
-**When credits run out:**
-- Purchase additional credits, OR
-- Wait for monthly reset
+When credits run out: Purchase additional credits OR wait for monthly reset.
 
 ---
 
 ## How to Get Started
 
-### Step 1: Contact Us
-Email **support@fincept.in** with:
-- Company/Institution name
-- Intended use case
-- Number of users
-
-### Step 2: Agreement
-- Review and sign license agreement
-- Complete payment
-
-### Step 3: Access
-- Receive license credentials
-- Access Fincept Data & APIs
+1. **Contact Us** - Email support@fincept.in with company name, use case, and number of users
+2. **Agreement** - Review and sign license agreement, complete payment
+3. **Access** - Receive credentials and access Fincept Data & APIs
 
 ---
 
 ## Contact
 
-| | |
-|--|--|
-| **Email** | support@fincept.in |
-| **Phone** | +91-9773034108 |
-| **Website** | https://fincept.in |
+**Email:** support@fincept.in | **Phone:** +91-9773034108 | **Website:** https://fincept.in
 
 ---
 
 ## Terms
 
-- Licenses are non-transferable
-- Annual licenses renew yearly
-- Refunds within 30 days if any of the credits are unused
-- Fincept Corporation reserves right to modify pricing
-
----
+Licenses are non-transferable. Annual licenses renew yearly. Refunds within 30 days if credits are unused. Fincept Corporation reserves right to modify pricing.
 
 ## Trademark
 
