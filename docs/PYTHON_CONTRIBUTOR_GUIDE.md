@@ -1,212 +1,322 @@
-# Python Contributor Guide for Fincept Terminal
+# Python Contributor Guide
 
-## Quick Start Guide for Absolute Beginners
+This guide covers Python development for Fincept Terminal - 119 scripts including 34 Analytics modules and 80+ data fetchers.
 
-Welcome! This guide helps you contribute Python code to Fincept Terminal, even if you're new to programming.
-
----
-
-## 📋 Table of Contents
-
-1. [What You Need](#what-you-need)
-2. [Project Structure](#project-structure)
-3. [Your First Contribution](#your-first-contribution)
-4. [Python Basics](#python-basics)
-5. [How to Test](#how-to-test)
-6. [Common Tasks](#common-tasks)
-7. [Get Help](#get-help)
+> **Prerequisites**: Read the [Contributing Guide](./CONTRIBUTING.md) first for setup and workflow.
 
 ---
 
-## What You Need
+## Table of Contents
 
-### Essential Tools:
-- **Python 3.8+** - Download from python.org
-- **Code Editor** - VS Code (recommended) or PyCharm
-- **Git** - Download from git-scm.com
+- [Overview](#overview)
+- [Project Structure](#project-structure)
+- [Analytics Modules](#analytics-modules)
+- [Data Fetcher Scripts](#data-fetcher-scripts)
+- [Script Standards](#script-standards)
+- [Integration with Rust](#integration-with-rust)
+- [Testing](#testing)
+- [Resources](#resources)
 
-### Setup:
-```bash
-# Install Python packages
-pip install requests pandas
+---
 
-# Clone the project
-git clone [project-url]
-cd fincept_terminal
-```
+## Overview
+
+Python powers Fincept Terminal's analytics and data capabilities:
+- **34 Analytics modules** - Financial calculations, portfolio optimization, ML models
+- **80+ Data fetchers** - APIs for market data, economics, government sources
+- **AI Agents** - Geopolitical analysis, trading strategies
+- **Technical Analysis** - Indicators and chart patterns
+
+**Related Guides:**
+- [Rust Guide](./RUST_CONTRIBUTOR_GUIDE.md) - How Rust executes Python
+- [TypeScript Guide](./TYPESCRIPT_CONTRIBUTOR_GUIDE.md) - Frontend that displays results
 
 ---
 
 ## Project Structure
 
 ```
-fincept_terminal/
-├── Agents/                 # AI hedge fund agents
-│   ├── Trader_Investors_agent/   # Famous investor strategies
-│   └── src/               # Shared utilities
-├── Analytics/economics/    # Economic analysis tools
-└── docs/                   # Documentation (you're here!)
-```
-
-**Where you'll work:** `Agents/` folder, adding comments and simple functions.
-
----
-
-## Your First Contribution
-
-### Easy Start: Add Comments
-
-1. **Pick a file** in `Agents/Trader_Investors_agent/`
-2. **Add data source comments** at the top:
-
-```python
-# ===== DATA SOURCES REQUIRED =====
-# INPUT:
-#   - ticker symbols (array)
-#   - end_date (string)
-#   - API_KEY (string)
-
-# OUTPUT:
-#   - Financial metrics (ROE, P/E ratio, etc.)
-#   - Analysis results (signals, confidence)
-
-# PARAMETERS:
-#   - period: "annual" or "quarterly"
-#   - limit: Number of years of data
-```
-
-3. **Save the file** (Ctrl+S)
-
-That's it! You've made your first contribution.
-
----
-
-## Python Basics
-
-### Comments (Explain Your Code)
-```python
-# This is a single-line comment
-'''
-This is a multi-line comment
-Can span multiple lines
-'''
-```
-
-### Variables (Store Data)
-```python
-agent_name = "Warren Buffett"
-confidence = 85.5
-is_bullish = True
-```
-
-### Functions (Reusable Code)
-```python
-def analyze_stock(ticker):
-    """Analyze a stock and return signal"""
-    return "bullish"
-```
-
-### Lists and Dictionaries (Collections)
-```python
-tickers = ["AAPL", "GOOGL", "MSFT"]
-result = {"signal": "buy", "confidence": 90}
+src-tauri/resources/scripts/           # 119 Python scripts
+│
+├── Analytics/                         # 34 analytics modules
+│   ├── equityInvestment/              # Stock valuation, DCF
+│   ├── portfolioManagement/           # Portfolio optimization
+│   ├── derivatives/                   # Options pricing, Greeks
+│   ├── fixedIncome/                   # Bond analytics
+│   ├── corporateFinance/              # M&A, valuation
+│   ├── economics/                     # Economic models
+│   ├── quant/                         # Quantitative analysis
+│   ├── alternateInvestment/           # Alternative assets
+│   ├── backtesting/                   # Strategy backtesting
+│   ├── finanicalanalysis/             # Financial statements
+│   ├── technical_analysis/            # Technical indicators
+│   │
+│   ├── pyportfolioopt_wrapper/        # Portfolio optimization
+│   ├── quantstats_analytics.py        # Portfolio metrics
+│   ├── skfolio_wrapper.py             # Scikit-portfolio
+│   ├── riskfoliolib_wrapper.py        # Risk-folio lib
+│   ├── talipp_wrapper/                # Technical indicators
+│   ├── gs_quant_wrapper/              # Goldman Sachs Quant
+│   ├── gluonts_wrapper/               # Time series forecasting
+│   ├── statsmodels_wrapper/           # Statistical models
+│   ├── finrl/                         # Reinforcement learning
+│   └── vnpy_wrapper/                  # VN.PY trading
+│
+├── agents/                            # AI agents
+│   ├── geopolitics/                   # Geopolitical analysis
+│   └── trading/                       # Trading agents
+│
+├── strategies/                        # Trading strategies
+├── technicals/                        # Technical analysis
+│
+├── yfinance_data.py                   # Yahoo Finance
+├── fred_data.py                       # Federal Reserve
+├── imf_data.py                        # IMF data
+├── worldbank_data.py                  # World Bank
+├── oecd_data.py                       # OECD data
+├── ecb_data.py                        # European Central Bank
+├── bis_data.py                        # Bank for Intl Settlements
+├── nasdaq_data.py                     # NASDAQ data
+├── sec_data.py                        # SEC filings
+├── edgar_tools.py                     # EDGAR database
+├── fmp_data.py                        # Financial Modeling Prep
+├── databento_provider.py              # Databento market data
+│
+├── akshare_*.py                       # 20+ Chinese market scripts
+├── *_gov_api.py                       # Government data APIs
+└── ...                                # 40+ more data fetchers
 ```
 
 ---
 
-## How to Test
+## Analytics Modules
 
-### Simple Test:
-```python
-# Test your function
-result = analyze_stock("AAPL")
-print(result)  # Should print "bullish"
-```
+### Core Financial Modules
 
-### How to Run:
-- **VS Code**: Press F5
-- **Command Line**: `python your_file.py`
-- **PyCharm**: Right-click → Run
+| Module | Purpose | Key Functions |
+|--------|---------|---------------|
+| `equityInvestment/` | Stock analysis | DCF, comparables, valuation |
+| `portfolioManagement/` | Portfolio optimization | Mean-variance, Black-Litterman |
+| `derivatives/` | Options & futures | Black-Scholes, Greeks, pricing |
+| `fixedIncome/` | Bond analytics | Duration, convexity, yields |
+| `corporateFinance/` | Corporate valuation | M&A, LBO, WACC |
+| `economics/` | Economic models | GDP, inflation, policy |
+| `quant/` | Quantitative analysis | Factor models, risk |
 
-### Test Checklist:
-✅ Code runs without errors
-✅ Output looks correct
-✅ Comments explain what code does
+### Library Wrappers
 
----
-
-## Common Tasks
-
-### 1. Add Comments
-```python
-# ===== DATA SOURCES REQUIRED =====
-# INPUT: ticker symbols, end_date, API_KEY
-# OUTPUT: financial metrics, analysis results
-# PARAMETERS: period, limit
-```
-
-### 2. Fix Typos
-- Read through code
-- Fix spelling errors in comments
-- Correct variable names
-
-### 3. Add Simple Functions
-```python
-def calculate_simple_moving_average(prices, period=20):
-    """Calculate moving average"""
-    if len(prices) < period:
-        return None
-    return sum(prices[-period:]) / period
-```
-
-### 4. Improve Error Messages
-```python
-# Before: return "Error"
-# After: return "Invalid ticker symbol format"
-```
+| Wrapper | Library | Purpose |
+|---------|---------|---------|
+| `pyportfolioopt_wrapper/` | PyPortfolioOpt | Portfolio optimization |
+| `quantstats_analytics.py` | QuantStats | Performance metrics |
+| `skfolio_wrapper.py` | Skfolio | Scikit-learn portfolios |
+| `riskfoliolib_wrapper.py` | Riskfolio-Lib | Risk management |
+| `talipp_wrapper/` | Talipp | Technical indicators |
+| `statsmodels_wrapper/` | Statsmodels | Statistical models |
+| `gluonts_wrapper/` | GluonTS | Time series forecasting |
+| `gs_quant_wrapper/` | GS Quant | Goldman Sachs library |
+| `finrl/` | FinRL | Reinforcement learning |
 
 ---
 
-## Get Help
+## Data Fetcher Scripts
 
-### Where to Ask:
-- **GitHub Issues**: For bugs/questions
-- **Discord/Slack**: Community chat (if available)
-- **Stack Overflow**: General Python questions
+### Market Data
 
-### What to Include:
-1. What you're trying to do
-2. Code you've written
-3. Error messages (copy full text)
-4. What you've tried already
+| Script | Source | Data Types |
+|--------|--------|------------|
+| `yfinance_data.py` | Yahoo Finance | Stocks, ETFs, options |
+| `databento_provider.py` | Databento | Real-time market data |
+| `nasdaq_data.py` | NASDAQ | US equities |
+| `fmp_data.py` | Financial Modeling Prep | Fundamentals |
+| `coingecko.py` | CoinGecko | Cryptocurrency |
 
-### Best Practices:
-✅ Start with small changes
-✅ Ask questions if stuck
-✅ Celebrate small wins
-✅ Learn from existing code
+### Economic Data
 
-❌ Don't delete existing code
-❌ Don't commit broken code
-❌ Don't worry about mistakes!
+| Script | Source | Data Types |
+|--------|--------|------------|
+| `fred_data.py` | Federal Reserve | US economic indicators |
+| `imf_data.py` | IMF | Global economic data |
+| `worldbank_data.py` | World Bank | Development indicators |
+| `oecd_data.py` | OECD | OECD statistics |
+| `ecb_data.py` | ECB | European data |
+| `bis_data.py` | BIS | Banking statistics |
+| `bls_data.py` | Bureau of Labor | Employment, CPI |
+| `bea_data.py` | Bureau of Economic Analysis | GDP, trade |
+
+### Chinese Market (AkShare)
+
+20+ scripts for Chinese market data:
+- `akshare_stocks_*.py` - A-shares data
+- `akshare_futures.py` - Futures data
+- `akshare_funds_*.py` - Fund data
+- `akshare_macro.py` - Macro indicators
+- `akshare_index.py` - Index data
+
+### Government & Regulatory
+
+| Script | Source |
+|--------|--------|
+| `sec_data.py` | SEC filings |
+| `edgar_tools.py` | EDGAR database |
+| `congress_gov_data.py` | US Congress |
+| `cftc_data.py` | CFTC positions |
+| `government_us_data.py` | US government |
 
 ---
 
-## Quick Reference
+## Script Standards
 
-### File Locations:
-- **Agents**: `Agents/Trader_Investors_agent/`
-- **Analytics**: `Analytics/economics/`
-- **Tools**: `Agents/src/tools/`
+### Input/Output Format
 
-### Common Commands:
-- Run code: `python filename.py`
-- Install packages: `pip install package_name`
-- Check Python version: `python --version`
+All scripts use JSON for communication:
 
-### Remember:
-Every contribution helps! Even fixing a typo makes the project better. Welcome aboard! 🎉
+```python
+import sys
+import json
+
+def main():
+    if len(sys.argv) < 2:
+        print(json.dumps({"success": False, "error": "Usage: script.py <command>"}))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        result = process_command(command)
+        print(json.dumps({"success": True, "data": result}))
+    except Exception as e:
+        print(json.dumps({"success": False, "error": str(e)}))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Type Hints
+
+Always use type hints:
+
+```python
+from typing import List, Dict, Any, Optional
+
+def calculate_returns(prices: List[float], period: int = 1) -> Dict[str, Any]:
+    """Calculate returns from price series."""
+    ...
+```
+
+### Error Handling
+
+```python
+def safe_fetch(symbol: str) -> Dict[str, Any]:
+    try:
+        if not symbol:
+            return {"success": False, "error": "Symbol required"}
+
+        data = fetch_data(symbol)
+        return {"success": True, "data": data}
+
+    except ValueError as e:
+        return {"success": False, "error": f"Invalid input: {e}"}
+    except Exception as e:
+        return {"success": False, "error": f"Unexpected error: {e}"}
+```
 
 ---
 
-**Happy coding! 🚀**
+## Integration with Rust
+
+Python scripts are called from Rust:
+
+```
+Frontend (React)
+    ↓ invoke('calculate_portfolio')
+Rust (Tauri Command)
+    ↓ Command::new("python").arg("script.py")
+Python Script
+    ↓ JSON to stdout
+Rust
+    ↓ parse JSON, return to frontend
+Frontend
+    ↓ display results
+```
+
+### Script Execution
+
+```bash
+# Scripts are called as:
+python Analytics/portfolioManagement/optimize.py '{"symbols":["AAPL","MSFT"]}'
+
+# Expected output:
+{"success": true, "data": {"weights": [0.6, 0.4], "sharpe": 1.23}}
+```
+
+---
+
+## Testing
+
+### Manual Testing
+
+```bash
+cd src-tauri/resources/scripts
+
+# Test a data fetcher
+python yfinance_data.py quote AAPL
+
+# Test an analytics module
+python Analytics/quantstats_analytics.py metrics '{"returns":[0.01,0.02,-0.01]}'
+```
+
+### Test Pattern
+
+```python
+def test_calculate_returns():
+    prices = [100, 102, 101, 105]
+    result = calculate_returns(prices)
+
+    assert result["success"] == True
+    assert "returns" in result["data"]
+    assert len(result["data"]["returns"]) == 3
+
+if __name__ == "__main__":
+    test_calculate_returns()
+    print("Tests passed!")
+```
+
+---
+
+## Resources
+
+### Key Libraries
+
+| Library | Purpose |
+|---------|---------|
+| `pandas` | Data manipulation |
+| `numpy` | Numerical computing |
+| `scipy` | Scientific computing |
+| `yfinance` | Yahoo Finance API |
+| `akshare` | Chinese market data |
+| `pyportfolioopt` | Portfolio optimization |
+| `quantstats` | Performance analytics |
+| `ta-lib` / `talipp` | Technical indicators |
+| `statsmodels` | Statistical models |
+| `scikit-learn` | Machine learning |
+| `langchain` | LLM integration |
+
+### Documentation
+
+- [Pandas Docs](https://pandas.pydata.org/docs/)
+- [NumPy Docs](https://numpy.org/doc/)
+- [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/)
+- [QuantStats](https://github.com/ranaroussi/quantstats)
+- [AkShare](https://akshare.readthedocs.io/)
+
+### Related Guides
+
+- [Contributing Guide](./CONTRIBUTING.md) - General workflow
+- [Rust Guide](./RUST_CONTRIBUTOR_GUIDE.md) - How Rust calls Python
+- [TypeScript Guide](./TYPESCRIPT_CONTRIBUTOR_GUIDE.md) - Frontend integration
+
+---
+
+**Questions?** Open an issue on [GitHub](https://github.com/Fincept-Corporation/FinceptTerminal).

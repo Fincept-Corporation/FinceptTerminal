@@ -34,6 +34,7 @@
     "@langchain/google-genai": "^2.1.10",
     "@langchain/ollama": "^0.2.4",
     "@langchain/openai": "^1.2.2",
+    "@loaders.gl/draco": "^4.3.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.7",

@@ -23,18 +23,29 @@ DUAL LICENSING NOTICE
 Fincept Terminal is available under two licensing options:
 
 1. AGPL-3.0 License (Open Source)
-   - Free for personal, educational, and non-commercial use
+   - Free for personal and educational use
+   - Free to use with your own data sources
    - Requires sharing modifications if you distribute or provide as a network service
    - Full source code must remain available under AGPL-3.0
    - See full license text at: https://www.gnu.org/licenses/agpl-3.0.html
 
-2. Commercial License (Proprietary)
-   - Required if you want to use Fincept Terminal in commercial products/services
-     without open-sourcing your modifications
-   - Allows integration into proprietary software
+2. Commercial License
+   - Required for any business/commercial use
+   - Required to access Fincept Data Sources and APIs for commercial purposes
    - No obligation to share source code
-   - Priority support and custom features available
-   - Contact: support@fincept.in for pricing and terms
+   - Priority support available
+   - See docs/COMMERCIAL_LICENSE.md for pricing and terms
+
+================================================================================
+FINCEPT DATA & API
+================================================================================
+
+The Fincept Terminal software is free under AGPL-3.0.
+
+Fincept Data Sources and APIs are separate services that require:
+- Commercial License for business use ($10,200/year)
+- University License for academic institutions ($799/month)
+- Free for personal/educational individual use
 
 ================================================================================
 TRADEMARK NOTICE
@@ -48,8 +59,6 @@ except as necessary to comply with the AGPL-3.0 attribution requirements.
 
 Use of the trademarks to promote derivative works or competing products
 is strictly prohibited without a trademark license agreement.
-
-For trademark licensing inquiries, contact: support@fincept.in
 
 ================================================================================
 ADDITIONAL RESTRICTIONS
@@ -73,12 +82,8 @@ While the AGPL-3.0 grants broad freedoms, the following restrictions apply:
    - Must clearly differentiate derivative works from the official version
    - Cannot imply endorsement by Fincept Corporation
 
-4. PATENT GRANT
-   Contributors grant a patent license for their contributions, but this
-   does not extend to combinations with other software.
-
 ================================================================================
-CONTRIBUTOR LICENSE AGREEMENT (CLA)
+CONTRIBUTOR LICENSE AGREEMENT
 ================================================================================
 
 By contributing to Fincept Terminal, you agree that:
@@ -92,40 +97,38 @@ By contributing to Fincept Terminal, you agree that:
 
 3. Your contributions are provided "as-is" without warranties.
 
-4. You agree to the terms in CONTRIBUTING.md and CLA.md (if present).
-
-See CLA.md for the complete Contributor License Agreement.
+4. Contributing does not grant you commercial rights to use Fincept
+   Data Sources and APIs.
 
 ================================================================================
-COMMERCIAL USE EXAMPLES
+COMMERCIAL USE
 ================================================================================
 
 You NEED a commercial license if you:
-- Embed Fincept Terminal in a proprietary financial platform
-- Offer Fincept Terminal as a managed SaaS without open-sourcing modifications
-- White-label Fincept Terminal for enterprise clients
-- Integrate Fincept Terminal into commercial trading systems
+- Use Fincept Terminal for any business purpose
+- Use Fincept Data Sources or APIs commercially
+- Are a startup (even with $0 revenue)
+- Use internally at a company
+- Offer as SaaS or cloud platform
+- White-label or resell
 
 You DON'T need a commercial license if you:
-- Use Fincept Terminal internally without distribution
-- Contribute improvements back to the open-source project
-- Fork and modify while keeping source code public under AGPL-3.0
-- Run it as a network service while providing source code to all users
+- Use for personal learning
+- Are an individual student
+- Use with your own data sources (non-commercial)
+- Contribute to the open-source project
 
 ================================================================================
 CONTACT INFORMATION
 ================================================================================
 
-General Inquiries: support@fincept.in
-Commercial Licensing: support@fincept.in
-Trademark Licensing: support@fincept.in
-Security Issues: support@fincept.in
-
+Email: support@fincept.in
+Phone: +91-9773034108
 Website: https://fincept.in
 Repository: https://github.com/Fincept-Corporation/FinceptTerminal
 Documentation: https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs
 
 ================================================================================
 
-Last Updated: January 5, 2026
-Version: 3.0.15
+Last Updated: February 2026
+Version: 3.3.1

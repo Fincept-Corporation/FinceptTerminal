@@ -2,239 +2,145 @@
 
 ## Overview
 
-Fincept Terminal is dual-licensed under AGPL-3.0 (open source) and a proprietary commercial license. This document explains when you need a commercial license and how to obtain one.
+Fincept Terminal is dual-licensed:
+- **AGPL-3.0** - Free for personal and educational use
+- **Commercial License** - Required for business/commercial use
+
+**Commercial licensing is required to access Fincept Data Sources and APIs for business use.**
+
+---
 
 ## Do I Need a Commercial License?
 
-### ✅ You DON'T Need a Commercial License If:
+### Free (No License Needed)
 
-- **Personal Use**: Using Fincept Terminal for your own trading/analysis
-- **Open Source Contributions**: Contributing improvements back to the project
-- **Internal Business Use**: Using it internally without distribution or network service
-- **AGPL Compliance**: Distributing modifications under AGPL-3.0 with source code
-- **Network Service with Source**: Running as SaaS while providing source to all users
+| Use Case | Cost |
+|----------|------|
+| Personal use & learning | Free |
+| Individual students | Free |
+| Open source contributions | Free |
+| Using your own data sources | Free |
 
-### ⚠️ You NEED a Commercial License If:
+### Commercial License Required
 
-- **Proprietary Integration**: Embedding Fincept Terminal in commercial software without open-sourcing
-- **SaaS/Cloud Platform**: Offering as a managed service without providing source code
-- **White-Label Solutions**: Rebranding for enterprise clients
-- **Closed-Source Modifications**: Making proprietary modifications you don't want to release
-- **OEM Distribution**: Bundling with hardware or other commercial products
-- **Competitive Products**: Using Fincept code in competing financial terminals
+| Use Case | License |
+|----------|---------|
+| Any business use | Commercial |
+| Startups (even $0 revenue) | Commercial |
+| Internal company use | Commercial |
+| Using Fincept Data/APIs commercially | Commercial |
+| SaaS / Cloud platforms | Commercial |
+| White-label / Reselling | Commercial |
 
-## Commercial License Benefits
+---
 
-### What You Get:
+## Pricing
 
-1. **Proprietary Use Rights**
-   - No obligation to open-source your modifications
-   - Freedom to integrate into closed-source products
-   - Private customization and white-labeling
+### Commercial License
 
-2. **Trademark License**
-   - Right to use Fincept branding (subject to guidelines)
-   - Co-marketing opportunities
-   - Official partner status
+**$10,200 / year**
 
-3. **Priority Support**
-   - Dedicated support channel
-   - SLA-backed response times
-   - Direct access to engineering team
+| Included | Details |
+|----------|---------|
+| Fincept Data & API Access | Full access |
+| Monthly Credits | 80,000 credits/month |
+| Credit Reset | Monthly |
+| Additional Credits | Available for purchase |
+| License Type | Annual |
 
-4. **Custom Development**
-   - Feature requests prioritization
-   - Custom integrations and adapters
-   - Tailored analytics modules
+### Technical Support (Optional)
 
-5. **Legal Protection**
-   - Indemnification coverage
-   - IP warranty
-   - Compliance assistance
+**$149 / month**
 
-## Pricing Tiers
+- Priority support
+- Direct technical assistance
+- Faster response times
 
-### Startup License
-**$2,999/year**
+### Custom Enterprise
 
-- Up to 10 developers
-- Basic priority support (48h response)
-- Proprietary deployment rights
-- Standard trademark usage
-- Quarterly updates
+**Contact for pricing**
 
-**Best for:** Early-stage companies, MVPs, pilot projects
+- Tailored to your requirements
+- Custom integrations
+- Higher credit limits
+- Dedicated support
+- Custom SLAs
 
-### Business License
-**$9,999/year**
+---
 
-- Up to 50 developers
-- Priority support (24h response)
-- All Startup features
-- Custom integrations (2 per year)
-- Monthly updates
-- Partner badge
+## University & Academic
 
-**Best for:** Growing companies, established platforms
+**$799 / month**
 
-### Enterprise License
-**Custom Pricing**
+| Included | Details |
+|----------|---------|
+| Accounts | 20 accounts |
+| Use | Teaching & research |
+| Fincept Data Access | Included |
 
-- Unlimited developers
-- Premium support (4h response)
-- All Business features
-- Unlimited custom integrations
-- Dedicated account manager
-- On-premise deployment assistance
-- Custom SLA terms
-- Source code escrow option
+*For accredited educational institutions only.*
 
-**Best for:** Large organizations, financial institutions, white-label providers
+---
 
-### OEM License
-**Custom Pricing**
+## Credits
 
-- Hardware bundling rights
-- Embedded device distribution
-- Custom branding package
-- Volume discounts available
-- Technical integration support
+Credits are used for Fincept Data Sources and API calls.
 
-**Best for:** Hardware manufacturers, device vendors
+| Plan | Monthly Credits |
+|------|-----------------|
+| Commercial | 80,000 |
+| University | Included in plan |
+| Custom | Based on agreement |
 
-## Licensing Process
+**When credits run out:**
+- Purchase additional credits, OR
+- Wait for monthly reset
 
-### Step 1: Initial Inquiry
-Contact us at **support@fincept.in** with:
-- Company name and website
+---
+
+## How to Get Started
+
+### Step 1: Contact Us
+Email **support@fincept.in** with:
+- Company/Institution name
 - Intended use case
-- Estimated number of developers/users
-- Deployment model (SaaS, on-premise, embedded, etc.)
-- Timeline and requirements
+- Number of users
 
-### Step 2: Consultation
-We'll schedule a call to:
-- Understand your specific needs
-- Recommend appropriate license tier
-- Discuss customization requirements
-- Provide detailed pricing quote
+### Step 2: Agreement
+- Review and sign license agreement
+- Complete payment
 
-### Step 3: Agreement
-- Review and sign Commercial License Agreement
-- Set up payment terms (annual or multi-year)
-- Receive license certificate and credentials
-
-### Step 4: Onboarding
-- Technical kickoff call
-- Access to private support channels
-- Documentation and integration guides
-- Feature roadmap alignment
-
-## Frequently Asked Questions
-
-### Can I trial the commercial license?
-Yes, we offer 30-day evaluation licenses for qualified businesses. Contact us to apply.
-
-### What if I'm already using AGPL version?
-You can migrate to commercial license at any time. Previous usage under AGPL remains compliant.
-
-### Can I downgrade back to AGPL?
-Yes, but only for new code going forward. Code developed under commercial license cannot retroactively become AGPL.
-
-### Do you offer academic/nonprofit discounts?
-Yes, we provide discounted commercial licenses for educational institutions and registered nonprofits. Contact us for details.
-
-### What happens if my license expires?
-You can continue using the version licensed during your term, but won't receive updates or support. Renewals available at current pricing.
-
-### Can I redistribute the commercial version?
-Redistribution rights depend on your license tier. Generally, distribution is allowed only within your organization unless you have an OEM/reseller agreement.
-
-### Is training included?
-Enterprise tier includes onboarding training. Additional training sessions available for all tiers at extra cost.
-
-### Can I customize the UI/features?
-All commercial licenses allow customization. Enterprise tier includes development assistance.
-
-## Volume Licensing
-
-For organizations needing multiple deployments or sites:
-
-- **10+ seats**: 15% discount
-- **50+ seats**: 25% discount
-- **100+ seats**: 35% discount
-- **500+ seats**: Custom pricing
-
-## Support Channels
-
-### Commercial License Holders Get:
-
-- **Private Slack/Discord Channel**: Direct communication with team
-- **Email Support**: support@fincept.in
-- **Emergency Hotline**: +1 (555) 123-4567 (Enterprise only)
-- **Quarterly Business Reviews**: Enterprise tier
-- **GitHub Private Repository**: Access to commercial-only features
-
-## Terms & Conditions
-
-### License Grant
-Commercial license grants you the right to use, modify, and distribute Fincept Terminal in proprietary applications without AGPL obligations.
-
-### Term Length
-- Standard: 12 months (annual renewal)
-- Multi-year: 2-3 year terms (10-20% discount)
-- Perpetual: Available for Enterprise tier
-
-### Payment Terms
-- Annual: Paid upfront
-- Quarterly: Available for Enterprise (subject to approval)
-- Multi-year: Upfront or structured payments
-
-### Refund Policy
-- 30-day money-back guarantee
-- Pro-rated refunds for annual plans (first 90 days)
-- No refunds after 90 days
-
-### Termination
-- Either party can terminate with 30 days notice
-- Upon termination, revert to AGPL or cease usage
-- No refunds for early termination
-
-## Contact Information
-
-**Sales Inquiries**: support@fincept.in
-**Technical Questions**: support@fincept.in
-**Legal/Compliance**: support@fincept.in
-
-**Phone**: +1 (555) FINCEPT
-**Website**: https://fincept.in/commercial
-**Schedule Demo**: https://fincept.in/demo
+### Step 3: Access
+- Receive license credentials
+- Access Fincept Data & APIs
 
 ---
 
-## Special Programs
+## Contact
 
-### Startup Accelerator Program
-If you're part of a recognized accelerator (Y Combinator, Techstars, etc.):
-- 50% discount on Startup License (first year)
-- Extended 90-day trial
-- Dedicated startup mentor
-
-### Open Source Contributor Program
-Active contributors to Fincept Terminal (10+ merged PRs):
-- Free Startup License (1 year)
-- Recognition in documentation
-- Early access to new features
-
-### Academic Research Program
-Researchers at accredited institutions:
-- Free commercial license for research projects
-- Co-publication opportunities
-- Access to enterprise features for research purposes
+| | |
+|--|--|
+| **Email** | support@fincept.in |
+| **Phone** | +91-9773034108 |
+| **Website** | https://fincept.in |
 
 ---
 
-**Last Updated**: January 5, 2026
-**Version**: 1.0
+## Terms
 
-For the latest information, visit: https://fincept.in/licensing
+- Licenses are non-transferable
+- Annual licenses renew yearly
+- Refunds within 30 days if any of the credits are unused
+- Fincept Corporation reserves right to modify pricing
+
+---
+
+## Trademark
+
+"Fincept", "Fincept Terminal", and the Fincept logo are trademarks of Fincept Corporation. Use requires written permission.
+
+---
+
+**Last Updated:** February 2026
+
+For full license terms, see [LICENSE](../LICENSE).

@@ -672,7 +672,7 @@ function FinxeptTerminalContent() {
         minHeight: '28px'
       }}>
         {/* Left: Menus */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
           <DropdownMenu label="File" items={fileMenuItems} onItemClick={handleMenuAction} />
           <DropdownMenu label="Navigate" items={navigateMenuItems} onItemClick={handleMenuAction} />
           <DropdownMenu label="View" items={viewMenuItems} onItemClick={handleMenuAction} />
@@ -680,20 +680,20 @@ function FinxeptTerminalContent() {
         </div>
 
         {/* Center: Command Bar + Info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, justifyContent: 'center', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center', minWidth: 0, overflow: 'hidden' }}>
           <CommandBar onExecuteCommand={setActiveTab} />
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
-          <HeaderTimeDisplay />
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
-          <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>v{APP_VERSION}</span>
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
-          <span style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>FINCEPT PROFESSIONAL</span>
+          <div className="hidden-on-small" style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
+          <div className="hidden-on-small"><HeaderTimeDisplay /></div>
+          <div className="hidden-on-medium" style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
+          <span className="hidden-on-medium" style={{ color: '#10b981', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>v{APP_VERSION}</span>
+          <div className="hidden-on-small" style={{ width: '1px', height: '14px', backgroundColor: '#525252', flexShrink: 0 }}></div>
+          <span className="hidden-on-small" style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>FINCEPT</span>
         </div>
 
         {/* Right: Session + Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-          {getClickableSessionDisplay()}
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <div className="hidden-on-small">{getClickableSessionDisplay()}</div>
+          <div className="hidden-on-small" style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
           <button
             onClick={toggleMode}
             style={{
@@ -728,12 +728,12 @@ function FinxeptTerminalContent() {
             {mode === 'chat' ? (
               <>
                 <Terminal size={12} />
-                <span>TERMINAL</span>
+                <span className="hidden-on-small">TERMINAL</span>
               </>
             ) : (
               <>
                 <MessageSquare size={12} />
-                <span>CHAT</span>
+                <span className="hidden-on-small">CHAT</span>
               </>
             )}
           </button>
@@ -800,7 +800,7 @@ function FinxeptTerminalContent() {
             title={isLoggingOut ? "Logging out..." : "Logout"}
           >
             <LogOut size={12} className={isLoggingOut ? 'animate-pulse' : ''} />
-            {isLoggingOut ? 'LOGGING OUT...' : 'LOGOUT'}
+            <span className="hidden-on-small">{isLoggingOut ? 'LOGGING OUT...' : 'LOGOUT'}</span>
           </button>
         </div>
       </div>
@@ -833,6 +833,12 @@ function FinxeptTerminalContent() {
             <style>{`
             .hide-scrollbar::-webkit-scrollbar {
               display: none;
+            }
+            @media (max-width: 1200px) {
+              .hidden-on-medium { display: none !important; }
+            }
+            @media (max-width: 900px) {
+              .hidden-on-small { display: none !important; }
             }
           `}</style>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">

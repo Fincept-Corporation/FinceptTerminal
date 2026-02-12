@@ -107,7 +107,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onExecuteCommand }) => {
   }, []);
 
   return (
-    <div style={{ position: 'relative', width: '200px', flexShrink: 0 }}>
+    <div style={{ position: 'relative', width: '180px', minWidth: '120px', maxWidth: '200px', flex: '0 1 180px' }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
